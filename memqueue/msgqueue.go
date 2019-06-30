@@ -6,65 +6,83 @@ import (
 )
 
 type MQ struct {
-	chanlen     int
-	out         chan unsafe.Pointer
-	buffer      []unsafe.Pointer
+	out chan unsafe.Pointer
+
+	//ring buffer
+	mincap    int
+	length    int
+	buffer    []unsafe.Pointer
+	headindex int
+	tailindex int
+	num       int
+
 	closestatus bool
 	sync.Mutex
 }
 
 func New(mincap int) *MQ {
 	instance := new(MQ)
-	if mincap <= 0 {
-		mincap = 128
+	if mincap < 64 {
+		instance.mincap = 64
+	} else {
+		instance.mincap = mincap
 	}
-	instance.chanlen = mincap
-	instance.out = make(chan unsafe.Pointer, mincap)
-	instance.buffer = make([]unsafe.Pointer, 0)
+	instance.length = mincap
+	instance.out = make(chan unsafe.Pointer, 1)
+	instance.buffer = make([]unsafe.Pointer, mincap)
+	instance.headindex = 0
+	instance.tailindex = 0
 	return instance
 }
-func (this *MQ) check() {
-	if len(this.buffer) == 0 {
-		return
-	}
-	need := this.chanlen - len(this.out)
-	if need == 0 {
-		return
-	}
-	if need >= len(this.buffer) {
-		for _, v := range this.buffer {
-			this.out <- v
-		}
-		this.buffer = make([]unsafe.Pointer, 0)
-	} else {
-		for i, v := range this.buffer {
-			if i+1 > need {
-				break
-			}
-			this.out <- v
-		}
-		this.buffer = this.buffer[need:]
-	}
-}
+
 func (this *MQ) Put(data unsafe.Pointer) int {
 	this.Lock()
 	if this.closestatus {
 		this.Unlock()
-		return len(this.out) + len(this.buffer)
+		return -1
 	}
-	if len(this.buffer) == 0 {
-		if len(this.out) == this.chanlen {
-			this.buffer = append(this.buffer, data)
-		} else {
-			this.out <- data
+	if this.headindex == this.tailindex {
+		//no buffer
+		select {
+		case this.out <- data:
+		default:
+			this.buffer[this.tailindex] = data
+			this.tailindex++
+			if this.tailindex >= this.length {
+				this.tailindex = 0
+			}
+			this.num++
 		}
 	} else {
-		this.buffer = append(this.buffer, data)
-		this.check()
+		//has buffer
+		this.buffer[this.tailindex] = data
+		this.tailindex++
+		if this.tailindex >= this.length {
+			this.tailindex = 0
+		}
+		//grow buffer
+		if this.tailindex == this.headindex {
+			tempbuffer := make([]unsafe.Pointer, this.length+this.mincap)
+			for i := 0; i < this.length; i++ {
+				tempbuffer[0] = this.buffer[this.headindex]
+				this.headindex++
+				if this.headindex >= this.length {
+					this.headindex = 0
+				}
+			}
+			this.buffer = tempbuffer
+			this.headindex = 0
+			this.tailindex = this.length
+			this.length += this.mincap
+		}
+		this.num++
 	}
+	curnum := len(this.out) + this.num
 	this.Unlock()
-	return len(this.out) + len(this.buffer)
+	return curnum
 }
+
+//return nil and 0 means closed
 func (this *MQ) Get(notice chan int) (unsafe.Pointer, int) {
 	if len(notice) > 0 {
 		return nil, <-notice
@@ -76,20 +94,27 @@ func (this *MQ) Get(notice chan int) (unsafe.Pointer, int) {
 		if !ok {
 			return nil, 0
 		}
+		curnum := this.num
 		this.Lock()
-		if len(this.out) == 0 {
-			this.check()
+		if len(this.buffer) != 0 {
+			this.out <- this.buffer[this.headindex]
+			this.headindex++
+			if this.headindex >= this.length {
+				this.headindex = 0
+			}
+			this.num--
+			if this.closestatus && this.num == 0 {
+				close(this.out)
+			}
+		} else if this.closestatus {
+			close(this.out)
 		}
 		this.Unlock()
-		return v, len(this.out) + len(this.buffer)
+		return v, curnum
 	}
-}
-func (this *MQ) Num() int {
-	return len(this.out) + len(this.buffer)
 }
 func (this *MQ) Close() {
 	this.Lock()
-	close(this.out)
 	this.closestatus = true
 	this.Unlock()
 }
