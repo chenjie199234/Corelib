@@ -1,7 +1,7 @@
 package logger
 
 import (
-	"core/memqueue"
+	"Corelib/memqueue"
 	"fmt"
 	"net"
 	"strings"

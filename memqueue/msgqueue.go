@@ -118,3 +118,6 @@ func (this *MQ) Close() {
 	this.closestatus = true
 	this.Unlock()
 }
+func (this *MQ) Num() int {
+	return len(this.out) + this.num
+}

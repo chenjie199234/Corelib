@@ -1,8 +1,9 @@
 package logger
 
 import (
+	"Corelib/memqueue"
+	"bufio"
 	"context"
-	"core/memqueue"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -43,9 +44,10 @@ type Logger struct {
 	finfos       []os.FileInfo
 	fileindex    int
 
-	netinfofile *os.File
-	netlogfile  *os.File
-	nmq         *memqueue.MQ
+	netinfofile  *os.File
+	netlogfile   *os.File
+	netlogreader *bufio.Reader
+	nmq          *memqueue.MQ
 
 	update       chan struct{}
 	refresh      chan struct{}
@@ -302,6 +304,7 @@ func (l *Logger) newNet() {
 		l.netlogfile.Close()
 		panic(fmt.Sprintf("seek logfile before net read error:%s\n", e))
 	}
+	l.netlogreader = bufio.NewReader(l.netlogfile)
 	//check heart
 	l.wg.Add(1)
 	go func() {
@@ -427,6 +430,7 @@ func (l *Logger) newNet() {
 									}
 									go l.netlogfile.Close()
 									l.netlogfile = tempfile
+									l.netlogreader = bufio.NewReader(l.netlogfile)
 									l.flker.Unlock()
 									if l.msgcount < l.c.BufNum {
 										continue
