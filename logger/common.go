@@ -1,7 +1,7 @@
 package logger
 
 import (
-	"Corelib/memqueue"
+	"Corelib/mq"
 	"net"
 	"time"
 	"unsafe"
@@ -13,7 +13,7 @@ type remote struct {
 	tcpConn   *net.TCPConn
 	notice    chan int
 	lastHeart int64
-	mq        *memqueue.MQ
+	mq        *mq.MQ
 }
 
 var DefaultLocalDir string = "./log"

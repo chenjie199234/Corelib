@@ -1,7 +1,7 @@
 package logger
 
 import (
-	"Corelib/memqueue"
+	"Corelib/mq"
 	"fmt"
 	"net"
 	"strings"
@@ -35,7 +35,7 @@ type Collector struct {
 //param 4 line num(start from 0)
 type LogCallBack func(int64, string, []byte, string, uint32)
 
-func NewCollector(c *CollectorConfig, cb LogCallBack, mq *memqueue.MQ) *Collector {
+func NewCollector(c *CollectorConfig, cb LogCallBack, mq *mq.MQ) *Collector {
 	if c.Proto != "tcp" && c.Proto != "unix" {
 		panic("net proto unknown!\n")
 	}

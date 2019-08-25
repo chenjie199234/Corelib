@@ -1,4 +1,4 @@
-package memqueue
+package mq
 
 import (
 	"math/rand"
@@ -12,7 +12,7 @@ import (
 func Test_mq(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	rand.Seed(time.Now().Unix())
-	mq := New(128)
+	mq := New("test", 128, 128*100)
 	wg := new(sync.WaitGroup)
 	for count := 0; count < 10; count++ {
 		wg.Add(1)
