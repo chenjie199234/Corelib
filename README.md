@@ -7,7 +7,7 @@
 	这是一个基于本地文件的日志系统，包括logger和collector。
 	logger用于打印日志，支持打印到标准输出，文件，以及socket（tcp/unix）。
 	collecotr用于收集logger打印到socket的日志。
-## memquque
+## mq
 	这是一个简单的内存消息队列。
 ## bitfilter
 	这是一个位过滤器。
