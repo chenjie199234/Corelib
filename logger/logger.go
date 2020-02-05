@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"Corelib/mq"
 	"bufio"
 	"context"
 	"encoding/binary"
@@ -39,7 +38,7 @@ type Logger struct {
 	closech chan struct{}
 
 	locallogfile *os.File //local log file
-	fmq          *mq.MQ   //mem message queue for local log
+	fmq          *MQ      //mem message queue for local log
 	flker        *sync.Mutex
 	finfos       []os.FileInfo
 	fileindex    int
@@ -47,7 +46,7 @@ type Logger struct {
 	netinfofile  *os.File
 	netlogfile   *os.File
 	netlogreader *bufio.Reader
-	nmq          *mq.MQ
+	nmq          *MQ
 
 	update       chan struct{}
 	refresh      chan struct{}
@@ -73,7 +72,7 @@ type msg struct {
 
 //first memmq is for local log
 //second memmq is for net log
-func NewLogger(c *LoggerConfig, mqs ...*mq.MQ) *Logger {
+func NewLogger(c *LoggerConfig, mqs ...*MQ) *Logger {
 	context.Background()
 	//check config
 	if c == nil || (c.TcpAddr == "" && c.UnixAddr == "" && c.LocalDir == "" && !c.Std) {
