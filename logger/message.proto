@@ -24,13 +24,15 @@ message LogMsg{
 	int64 serverid=1;
 	bytes content=2;
 	string filename=3;
-	uint32 line=4;
+	uint32 offset=4;
 	uint32 memindex=5;
+	int64 synctime=6;
 }
 message ConfirmMsg{
 	string filename=1;
-	uint32 line=2;
+	uint32 offset=2;
 	uint32 memindex=3;
+	int64 synctime=4;
 }
 message RemoveMsg{
 	int32 year=1;

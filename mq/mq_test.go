@@ -1,46 +1,46 @@
 package mq
 
 import (
-	"math/rand"
-	"runtime"
-	"sync"
 	"testing"
-	"time"
 	"unsafe"
 )
 
 func Test_mq(t *testing.T) {
-	runtime.GOMAXPROCS(runtime.NumCPU())
-	rand.Seed(time.Now().Unix())
-	mq := New("test", 128, 128*100)
-	wg := new(sync.WaitGroup)
-	for count := 0; count < 10; count++ {
-		wg.Add(1)
-		go putf(mq, wg)
+	mq := New(128, 1280)
+	for i := 0; i < 128*3+1; i++ {
+		temp := "123"
+		if left, e := mq.Put(unsafe.Pointer(&temp)); e != nil || left != i+1 {
+			panic("msg num in mq after put error!")
+		}
 	}
-	wg.Wait()
-	runtime.GC()
-	udata, n := mq.Get(nil)
-	if n != 9999 {
-		panic("count error")
+	if mq.length != 128*4 {
+		panic("buffer length in mq after put error!")
 	}
-	if *(*string)(udata) != "123456789" {
-		panic("content error")
+	for i := 0; i < 128*3+1; i++ {
+		data, left := mq.Get(nil)
+		if *(*string)(data) != "123" {
+			panic("msg changed!")
+		}
+		if left != 128*3+1-(i+1) {
+			panic("msg num left after get error!")
+		}
 	}
-	runtime.GC()
-	udata, n = mq.Get(nil)
-	if n != 9998 {
-		panic("count error")
+	if mq.length != 128 {
+		panic("buffer length in mq after getall error!")
 	}
-	if *(*string)(udata) != "123456789" {
-		panic("content error")
+	notice := make(chan uint, 1)
+	notice <- 1
+	data, left := mq.Get(notice)
+	if data != nil || left != 1 {
+		panic("notice error!")
 	}
-}
-func putf(mq *MQ, wg *sync.WaitGroup) {
-	defer wg.Done()
-	for count := 0; count < 1000; count++ {
-		str := "123456789"
-		mq.Put(unsafe.Pointer(&str))
-		time.Sleep(time.Duration(rand.Int()%20) * time.Millisecond)
+	mq.Close()
+	temp := "123"
+	if left, e := mq.Put(unsafe.Pointer(&temp)); e == nil || left != 0 {
+		panic("mq close error!")
+	}
+	data, left = mq.Get(nil)
+	if data != nil || left != -1 {
+		panic("mq close error!")
 	}
 }

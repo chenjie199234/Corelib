@@ -24,7 +24,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
 type MsgType int32
 
@@ -57,7 +57,7 @@ func (MsgType) EnumDescriptor() ([]byte, []int) {
 }
 
 type TotalMsg struct {
-	Type    MsgType     `protobuf:"varint,1,opt,name=type,proto3,enum=nothing.MsgType" json:"type,omitempty"`
+	Type    MsgType     `protobuf:"varint,1,opt,name=type,proto3,enum=logger.MsgType" json:"type,omitempty"`
 	Verify  *VerifyMsg  `protobuf:"bytes,2,opt,name=verify,proto3" json:"verify,omitempty"`
 	Log     *LogMsg     `protobuf:"bytes,3,opt,name=log,proto3" json:"log,omitempty"`
 	Confirm *ConfirmMsg `protobuf:"bytes,4,opt,name=confirm,proto3" json:"confirm,omitempty"`
@@ -77,7 +77,7 @@ func (m *TotalMsg) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_TotalMsg.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -147,7 +147,7 @@ func (m *VerifyMsg) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_VerifyMsg.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -170,8 +170,9 @@ type LogMsg struct {
 	Serverid int64  `protobuf:"varint,1,opt,name=serverid,proto3" json:"serverid,omitempty"`
 	Content  []byte `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
 	Filename string `protobuf:"bytes,3,opt,name=filename,proto3" json:"filename,omitempty"`
-	Line     uint32 `protobuf:"varint,4,opt,name=line,proto3" json:"line,omitempty"`
+	Offset   uint32 `protobuf:"varint,4,opt,name=offset,proto3" json:"offset,omitempty"`
 	Memindex uint32 `protobuf:"varint,5,opt,name=memindex,proto3" json:"memindex,omitempty"`
+	Synctime int64  `protobuf:"varint,6,opt,name=synctime,proto3" json:"synctime,omitempty"`
 }
 
 func (m *LogMsg) Reset()      { *m = LogMsg{} }
@@ -187,7 +188,7 @@ func (m *LogMsg) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_LogMsg.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -227,9 +228,9 @@ func (m *LogMsg) GetFilename() string {
 	return ""
 }
 
-func (m *LogMsg) GetLine() uint32 {
+func (m *LogMsg) GetOffset() uint32 {
 	if m != nil {
-		return m.Line
+		return m.Offset
 	}
 	return 0
 }
@@ -241,10 +242,18 @@ func (m *LogMsg) GetMemindex() uint32 {
 	return 0
 }
 
+func (m *LogMsg) GetSynctime() int64 {
+	if m != nil {
+		return m.Synctime
+	}
+	return 0
+}
+
 type ConfirmMsg struct {
 	Filename string `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
-	Line     uint32 `protobuf:"varint,2,opt,name=line,proto3" json:"line,omitempty"`
+	Offset   uint32 `protobuf:"varint,2,opt,name=offset,proto3" json:"offset,omitempty"`
 	Memindex uint32 `protobuf:"varint,3,opt,name=memindex,proto3" json:"memindex,omitempty"`
+	Synctime int64  `protobuf:"varint,4,opt,name=synctime,proto3" json:"synctime,omitempty"`
 }
 
 func (m *ConfirmMsg) Reset()      { *m = ConfirmMsg{} }
@@ -260,7 +269,7 @@ func (m *ConfirmMsg) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_ConfirmMsg.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -286,9 +295,9 @@ func (m *ConfirmMsg) GetFilename() string {
 	return ""
 }
 
-func (m *ConfirmMsg) GetLine() uint32 {
+func (m *ConfirmMsg) GetOffset() uint32 {
 	if m != nil {
-		return m.Line
+		return m.Offset
 	}
 	return 0
 }
@@ -296,6 +305,13 @@ func (m *ConfirmMsg) GetLine() uint32 {
 func (m *ConfirmMsg) GetMemindex() uint32 {
 	if m != nil {
 		return m.Memindex
+	}
+	return 0
+}
+
+func (m *ConfirmMsg) GetSynctime() int64 {
+	if m != nil {
+		return m.Synctime
 	}
 	return 0
 }
@@ -320,7 +336,7 @@ func (m *RemoveMsg) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_RemoveMsg.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -368,46 +384,48 @@ func (m *RemoveMsg) GetHour() int32 {
 }
 
 func init() {
-	proto.RegisterEnum("nothing.MsgType", MsgType_name, MsgType_value)
-	proto.RegisterType((*TotalMsg)(nil), "nothing.TotalMsg")
-	proto.RegisterType((*VerifyMsg)(nil), "nothing.VerifyMsg")
-	proto.RegisterType((*LogMsg)(nil), "nothing.LogMsg")
-	proto.RegisterType((*ConfirmMsg)(nil), "nothing.ConfirmMsg")
-	proto.RegisterType((*RemoveMsg)(nil), "nothing.RemoveMsg")
+	proto.RegisterEnum("logger.MsgType", MsgType_name, MsgType_value)
+	proto.RegisterType((*TotalMsg)(nil), "logger.TotalMsg")
+	proto.RegisterType((*VerifyMsg)(nil), "logger.VerifyMsg")
+	proto.RegisterType((*LogMsg)(nil), "logger.LogMsg")
+	proto.RegisterType((*ConfirmMsg)(nil), "logger.ConfirmMsg")
+	proto.RegisterType((*RemoveMsg)(nil), "logger.RemoveMsg")
 }
 
 func init() { proto.RegisterFile("message.proto", fileDescriptor_33c57e4bae7b9afd) }
 
 var fileDescriptor_33c57e4bae7b9afd = []byte{
-	// 448 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x92, 0x31, 0x6f, 0xd3, 0x50,
-	0x10, 0xc7, 0xfd, 0xe2, 0x38, 0x6e, 0x2e, 0x04, 0xac, 0x83, 0xc1, 0x62, 0x78, 0x2a, 0x11, 0x43,
-	0x55, 0x89, 0x0c, 0x85, 0x2f, 0x40, 0xab, 0x14, 0x2a, 0xd5, 0x44, 0x3a, 0x45, 0x11, 0x88, 0xc9,
-	0x90, 0x17, 0xc7, 0x52, 0xec, 0x17, 0xd9, 0xa6, 0xc2, 0x1b, 0x33, 0x13, 0x1f, 0x83, 0x8f, 0xc2,
-	0x98, 0xb1, 0x62, 0x22, 0xce, 0xc2, 0xd8, 0x8f, 0x80, 0xde, 0x39, 0x35, 0x6a, 0xa5, 0x6c, 0xf7,
-	0x3f, 0xff, 0xee, 0x7f, 0xf7, 0xb7, 0x1e, 0xf4, 0x13, 0x95, 0xe7, 0x61, 0xa4, 0x86, 0xab, 0x4c,
-	0x17, 0x1a, 0xdd, 0x54, 0x17, 0x8b, 0x38, 0x8d, 0x06, 0xbf, 0x05, 0x1c, 0x4c, 0x74, 0x11, 0x2e,
-	0x83, 0x3c, 0xc2, 0xe7, 0xd0, 0x2e, 0xca, 0x95, 0xf2, 0xc5, 0xa1, 0x38, 0x7a, 0x78, 0xe2, 0x0d,
-	0x77, 0xd0, 0x30, 0xc8, 0xa3, 0x49, 0xb9, 0x52, 0xc4, 0x5f, 0xf1, 0x18, 0x3a, 0x57, 0x2a, 0x8b,
-	0xe7, 0xa5, 0xdf, 0x3a, 0x14, 0x47, 0xbd, 0x13, 0x6c, 0xb8, 0x29, 0xb7, 0x83, 0x3c, 0xa2, 0x1d,
-	0x81, 0xcf, 0xc0, 0x5e, 0xea, 0xc8, 0xb7, 0x19, 0x7c, 0xd4, 0x80, 0x97, 0x3a, 0x32, 0x94, 0xf9,
-	0x86, 0x2f, 0xc0, 0xfd, 0xac, 0xd3, 0x79, 0x9c, 0x25, 0x7e, 0x9b, 0xb1, 0xc7, 0x0d, 0x76, 0x56,
-	0xf7, 0x0d, 0x7a, 0xcb, 0x98, 0xed, 0x99, 0x4a, 0xf4, 0x95, 0xf2, 0x9d, 0x7b, 0xdb, 0x89, 0xdb,
-	0xbc, 0xbd, 0x26, 0x06, 0x3d, 0xe8, 0x36, 0x27, 0x0d, 0xbe, 0x0b, 0xe8, 0xd4, 0x7b, 0xf1, 0x29,
-	0x1c, 0xe4, 0x2a, 0x33, 0x27, 0xce, 0x38, 0xab, 0x4d, 0x8d, 0x46, 0x9f, 0xcf, 0x29, 0x54, 0x5a,
-	0x70, 0xbc, 0x07, 0x74, 0x2b, 0xcd, 0xd4, 0x3c, 0x5e, 0xaa, 0x34, 0x4c, 0x14, 0x07, 0xea, 0x52,
-	0xa3, 0x11, 0xa1, 0xbd, 0x8c, 0x53, 0xc5, 0x09, 0xfa, 0xc4, 0xb5, 0xe1, 0x13, 0x95, 0xc4, 0xe9,
-	0x4c, 0x7d, 0xe5, 0x5b, 0xfb, 0xd4, 0xe8, 0xc1, 0x7b, 0x80, 0xff, 0xe1, 0xee, 0x38, 0x8b, 0x3d,
-	0xce, 0xad, 0x3d, 0xce, 0xf6, 0x3d, 0xe7, 0x8f, 0xd0, 0x6d, 0x7e, 0x84, 0x19, 0x2e, 0x55, 0x98,
-	0xb1, 0xa9, 0x43, 0x5c, 0xe3, 0x13, 0x70, 0x12, 0x9d, 0x16, 0x0b, 0x76, 0x74, 0xa8, 0x16, 0xe8,
-	0x81, 0x3d, 0x0b, 0x4b, 0x76, 0x73, 0xc8, 0x94, 0x66, 0x76, 0xa1, 0xbf, 0x64, 0x1c, 0xc9, 0x21,
-	0xae, 0x8f, 0x4f, 0xc1, 0xdd, 0xbd, 0x05, 0xec, 0x82, 0xf3, 0x76, 0xf4, 0x9a, 0x26, 0x9e, 0x85,
-	0x00, 0x9d, 0xe9, 0x88, 0x2e, 0xce, 0x3f, 0x78, 0x02, 0x5d, 0xb0, 0x2f, 0xc7, 0x6f, 0xbc, 0x16,
-	0xf6, 0xc0, 0x3d, 0x1b, 0xbf, 0x3b, 0xbf, 0xa0, 0xc0, 0xb3, 0x0d, 0x41, 0xa3, 0x60, 0x3c, 0x1d,
-	0x79, 0xed, 0xd3, 0x57, 0xeb, 0x8d, 0xb4, 0xae, 0x37, 0xd2, 0xba, 0xd9, 0x48, 0xf1, 0xad, 0x92,
-	0xe2, 0x67, 0x25, 0xc5, 0xaf, 0x4a, 0x8a, 0x75, 0x25, 0xc5, 0x9f, 0x4a, 0x8a, 0xbf, 0x95, 0xb4,
-	0x6e, 0x2a, 0x29, 0x7e, 0x6c, 0xa5, 0xb5, 0xde, 0x4a, 0xeb, 0x7a, 0x2b, 0xad, 0x4f, 0x1d, 0x7e,
-	0xb7, 0x2f, 0xff, 0x05, 0x00, 0x00, 0xff, 0xff, 0x48, 0x9e, 0xa6, 0x52, 0xc8, 0x02, 0x00, 0x00,
+	// 465 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x92, 0xcb, 0x6e, 0xd3, 0x40,
+	0x14, 0x86, 0x3d, 0xf5, 0x25, 0xcd, 0x09, 0x29, 0x66, 0x84, 0x90, 0xc5, 0x62, 0x14, 0x85, 0x4d,
+	0x41, 0x28, 0x8b, 0xc2, 0x0b, 0xd0, 0x2a, 0x85, 0x4a, 0x35, 0x91, 0x46, 0x51, 0x24, 0xc4, 0xca,
+	0x34, 0xc7, 0xae, 0xa5, 0xd8, 0x13, 0xd9, 0xa6, 0xaa, 0x77, 0x3c, 0x02, 0x8f, 0x81, 0x78, 0x12,
+	0x96, 0xd9, 0x20, 0x75, 0x49, 0x9c, 0x0d, 0xcb, 0x3e, 0x02, 0x9a, 0xe3, 0x0b, 0x2a, 0x52, 0xd9,
+	0xcd, 0x3f, 0xfe, 0x8e, 0xbe, 0xff, 0x58, 0x03, 0xc3, 0x04, 0xf3, 0x3c, 0x88, 0x70, 0xb2, 0xce,
+	0x54, 0xa1, 0xb8, 0xb3, 0x52, 0x51, 0x84, 0xd9, 0xf8, 0x27, 0x83, 0xfd, 0xb9, 0x2a, 0x82, 0x95,
+	0x9f, 0x47, 0xfc, 0x19, 0x58, 0x45, 0xb9, 0x46, 0x8f, 0x8d, 0xd8, 0xe1, 0xc1, 0xd1, 0xc3, 0x49,
+	0xcd, 0x4c, 0xfc, 0x3c, 0x9a, 0x97, 0x6b, 0x94, 0xf4, 0x91, 0x3f, 0x07, 0xe7, 0x0a, 0xb3, 0x38,
+	0x2c, 0xbd, 0xbd, 0x11, 0x3b, 0x1c, 0x1c, 0x3d, 0x6a, 0xb1, 0x05, 0xdd, 0xfa, 0x79, 0x24, 0x1b,
+	0x80, 0x8f, 0xc0, 0x5c, 0xa9, 0xc8, 0x33, 0x89, 0x3b, 0x68, 0xb9, 0x73, 0x15, 0x69, 0x48, 0x7f,
+	0xe2, 0x2f, 0xa1, 0x77, 0xa1, 0xd2, 0x30, 0xce, 0x12, 0xcf, 0x22, 0x8a, 0xb7, 0xd4, 0x49, 0x7d,
+	0xad, 0xc9, 0x16, 0xd1, 0xea, 0x0c, 0x13, 0x75, 0x85, 0x9e, 0x7d, 0x57, 0x2d, 0xe9, 0x96, 0xd4,
+	0x35, 0x30, 0x1e, 0x40, 0xbf, 0xeb, 0x33, 0xfe, 0xce, 0xc0, 0xa9, 0xad, 0xfc, 0x29, 0xec, 0xe7,
+	0x98, 0xe9, 0x7e, 0x4b, 0x5a, 0xd3, 0x94, 0x5d, 0xe6, 0x1e, 0x95, 0x29, 0x30, 0x2d, 0x68, 0xb5,
+	0x07, 0xb2, 0x8d, 0x7a, 0x2a, 0x8c, 0x57, 0x98, 0x06, 0x09, 0xd2, 0x36, 0x7d, 0xd9, 0x65, 0xfe,
+	0x04, 0x1c, 0x15, 0x86, 0x39, 0x16, 0xb4, 0xc1, 0x50, 0x36, 0x49, 0xcf, 0x24, 0x98, 0xc4, 0xe9,
+	0x12, 0xaf, 0xa9, 0xee, 0x50, 0x76, 0x99, 0x5a, 0x94, 0xe9, 0x45, 0x11, 0x27, 0xe8, 0x39, 0x4d,
+	0x8b, 0x26, 0x8f, 0xaf, 0x01, 0xfe, 0xee, 0x7e, 0xc7, 0xcc, 0xee, 0x35, 0xef, 0xdd, 0x6b, 0x36,
+	0xff, 0x63, 0xb6, 0xfe, 0x31, 0x7f, 0x84, 0x7e, 0xf7, 0x23, 0x39, 0x07, 0xab, 0xc4, 0x20, 0x23,
+	0xa9, 0x2d, 0xe9, 0xcc, 0x1f, 0x83, 0x9d, 0xa8, 0xb4, 0xb8, 0x24, 0x9f, 0x2d, 0xeb, 0xc0, 0x5d,
+	0x30, 0x97, 0x41, 0x49, 0x26, 0x5b, 0xea, 0xa3, 0x9e, 0xbd, 0x54, 0x9f, 0x33, 0x12, 0xd8, 0x92,
+	0xce, 0x2f, 0x8e, 0xa1, 0xd7, 0xbc, 0x23, 0xde, 0x07, 0xfb, 0xdd, 0xf4, 0x8d, 0x9c, 0xbb, 0x06,
+	0x07, 0x70, 0x16, 0x53, 0x79, 0x76, 0xfa, 0xc1, 0x65, 0xbc, 0x07, 0xe6, 0xf9, 0xec, 0xad, 0xbb,
+	0xc7, 0x07, 0xd0, 0x3b, 0x99, 0xbd, 0x3f, 0x3d, 0x93, 0xbe, 0x6b, 0x6a, 0x42, 0x4e, 0xfd, 0xd9,
+	0x62, 0xea, 0x5a, 0xc7, 0xaf, 0x37, 0x5b, 0x61, 0xdc, 0x6c, 0x85, 0x71, 0xbb, 0x15, 0xec, 0x4b,
+	0x25, 0xd8, 0xb7, 0x4a, 0xb0, 0x1f, 0x95, 0x60, 0x9b, 0x4a, 0xb0, 0x5f, 0x95, 0x60, 0xbf, 0x2b,
+	0x61, 0xdc, 0x56, 0x82, 0x7d, 0xdd, 0x09, 0x63, 0xb3, 0x13, 0xc6, 0xcd, 0x4e, 0x18, 0x9f, 0x1c,
+	0x7a, 0xf1, 0xaf, 0xfe, 0x04, 0x00, 0x00, 0xff, 0xff, 0x63, 0x8c, 0xf0, 0x04, 0x02, 0x03, 0x00,
+	0x00,
 }
 
 func (x MsgType) String() string {
@@ -502,10 +520,13 @@ func (this *LogMsg) Equal(that interface{}) bool {
 	if this.Filename != that1.Filename {
 		return false
 	}
-	if this.Line != that1.Line {
+	if this.Offset != that1.Offset {
 		return false
 	}
 	if this.Memindex != that1.Memindex {
+		return false
+	}
+	if this.Synctime != that1.Synctime {
 		return false
 	}
 	return true
@@ -532,10 +553,13 @@ func (this *ConfirmMsg) Equal(that interface{}) bool {
 	if this.Filename != that1.Filename {
 		return false
 	}
-	if this.Line != that1.Line {
+	if this.Offset != that1.Offset {
 		return false
 	}
 	if this.Memindex != that1.Memindex {
+		return false
+	}
+	if this.Synctime != that1.Synctime {
 		return false
 	}
 	return true
@@ -578,7 +602,7 @@ func (this *TotalMsg) GoString() string {
 		return "nil"
 	}
 	s := make([]string, 0, 9)
-	s = append(s, "&nothing.TotalMsg{")
+	s = append(s, "&logger.TotalMsg{")
 	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
 	if this.Verify != nil {
 		s = append(s, "Verify: "+fmt.Sprintf("%#v", this.Verify)+",\n")
@@ -600,7 +624,7 @@ func (this *VerifyMsg) GoString() string {
 		return "nil"
 	}
 	s := make([]string, 0, 4)
-	s = append(s, "&nothing.VerifyMsg{")
+	s = append(s, "&logger.VerifyMsg{")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -608,13 +632,14 @@ func (this *LogMsg) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 9)
-	s = append(s, "&nothing.LogMsg{")
+	s := make([]string, 0, 10)
+	s = append(s, "&logger.LogMsg{")
 	s = append(s, "Serverid: "+fmt.Sprintf("%#v", this.Serverid)+",\n")
 	s = append(s, "Content: "+fmt.Sprintf("%#v", this.Content)+",\n")
 	s = append(s, "Filename: "+fmt.Sprintf("%#v", this.Filename)+",\n")
-	s = append(s, "Line: "+fmt.Sprintf("%#v", this.Line)+",\n")
+	s = append(s, "Offset: "+fmt.Sprintf("%#v", this.Offset)+",\n")
 	s = append(s, "Memindex: "+fmt.Sprintf("%#v", this.Memindex)+",\n")
+	s = append(s, "Synctime: "+fmt.Sprintf("%#v", this.Synctime)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -622,11 +647,12 @@ func (this *ConfirmMsg) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 7)
-	s = append(s, "&nothing.ConfirmMsg{")
+	s := make([]string, 0, 8)
+	s = append(s, "&logger.ConfirmMsg{")
 	s = append(s, "Filename: "+fmt.Sprintf("%#v", this.Filename)+",\n")
-	s = append(s, "Line: "+fmt.Sprintf("%#v", this.Line)+",\n")
+	s = append(s, "Offset: "+fmt.Sprintf("%#v", this.Offset)+",\n")
 	s = append(s, "Memindex: "+fmt.Sprintf("%#v", this.Memindex)+",\n")
+	s = append(s, "Synctime: "+fmt.Sprintf("%#v", this.Synctime)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -635,7 +661,7 @@ func (this *RemoveMsg) GoString() string {
 		return "nil"
 	}
 	s := make([]string, 0, 8)
-	s = append(s, "&nothing.RemoveMsg{")
+	s = append(s, "&logger.RemoveMsg{")
 	s = append(s, "Year: "+fmt.Sprintf("%#v", this.Year)+",\n")
 	s = append(s, "Month: "+fmt.Sprintf("%#v", this.Month)+",\n")
 	s = append(s, "Day: "+fmt.Sprintf("%#v", this.Day)+",\n")
@@ -654,7 +680,7 @@ func valueToGoStringMessage(v interface{}, typ string) string {
 func (m *TotalMsg) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -662,62 +688,75 @@ func (m *TotalMsg) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TotalMsg) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *TotalMsg) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Type != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintMessage(dAtA, i, uint64(m.Type))
-	}
-	if m.Verify != nil {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintMessage(dAtA, i, uint64(m.Verify.Size()))
-		n1, err1 := m.Verify.MarshalTo(dAtA[i:])
-		if err1 != nil {
-			return 0, err1
+	if m.Remove != nil {
+		{
+			size, err := m.Remove.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintMessage(dAtA, i, uint64(size))
 		}
-		i += n1
-	}
-	if m.Log != nil {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintMessage(dAtA, i, uint64(m.Log.Size()))
-		n2, err2 := m.Log.MarshalTo(dAtA[i:])
-		if err2 != nil {
-			return 0, err2
-		}
-		i += n2
+		i--
+		dAtA[i] = 0x2a
 	}
 	if m.Confirm != nil {
+		{
+			size, err := m.Confirm.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintMessage(dAtA, i, uint64(size))
+		}
+		i--
 		dAtA[i] = 0x22
-		i++
-		i = encodeVarintMessage(dAtA, i, uint64(m.Confirm.Size()))
-		n3, err3 := m.Confirm.MarshalTo(dAtA[i:])
-		if err3 != nil {
-			return 0, err3
-		}
-		i += n3
 	}
-	if m.Remove != nil {
-		dAtA[i] = 0x2a
-		i++
-		i = encodeVarintMessage(dAtA, i, uint64(m.Remove.Size()))
-		n4, err4 := m.Remove.MarshalTo(dAtA[i:])
-		if err4 != nil {
-			return 0, err4
+	if m.Log != nil {
+		{
+			size, err := m.Log.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintMessage(dAtA, i, uint64(size))
 		}
-		i += n4
+		i--
+		dAtA[i] = 0x1a
 	}
-	return i, nil
+	if m.Verify != nil {
+		{
+			size, err := m.Verify.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintMessage(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.Type != 0 {
+		i = encodeVarintMessage(dAtA, i, uint64(m.Type))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *VerifyMsg) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -725,17 +764,22 @@ func (m *VerifyMsg) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *VerifyMsg) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *VerifyMsg) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *LogMsg) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -743,44 +787,56 @@ func (m *LogMsg) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *LogMsg) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LogMsg) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Serverid != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintMessage(dAtA, i, uint64(m.Serverid))
-	}
-	if len(m.Content) > 0 {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintMessage(dAtA, i, uint64(len(m.Content)))
-		i += copy(dAtA[i:], m.Content)
-	}
-	if len(m.Filename) > 0 {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintMessage(dAtA, i, uint64(len(m.Filename)))
-		i += copy(dAtA[i:], m.Filename)
-	}
-	if m.Line != 0 {
-		dAtA[i] = 0x20
-		i++
-		i = encodeVarintMessage(dAtA, i, uint64(m.Line))
+	if m.Synctime != 0 {
+		i = encodeVarintMessage(dAtA, i, uint64(m.Synctime))
+		i--
+		dAtA[i] = 0x30
 	}
 	if m.Memindex != 0 {
-		dAtA[i] = 0x28
-		i++
 		i = encodeVarintMessage(dAtA, i, uint64(m.Memindex))
+		i--
+		dAtA[i] = 0x28
 	}
-	return i, nil
+	if m.Offset != 0 {
+		i = encodeVarintMessage(dAtA, i, uint64(m.Offset))
+		i--
+		dAtA[i] = 0x20
+	}
+	if len(m.Filename) > 0 {
+		i -= len(m.Filename)
+		copy(dAtA[i:], m.Filename)
+		i = encodeVarintMessage(dAtA, i, uint64(len(m.Filename)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Content) > 0 {
+		i -= len(m.Content)
+		copy(dAtA[i:], m.Content)
+		i = encodeVarintMessage(dAtA, i, uint64(len(m.Content)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.Serverid != 0 {
+		i = encodeVarintMessage(dAtA, i, uint64(m.Serverid))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *ConfirmMsg) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -788,33 +844,44 @@ func (m *ConfirmMsg) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ConfirmMsg) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ConfirmMsg) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Filename) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintMessage(dAtA, i, uint64(len(m.Filename)))
-		i += copy(dAtA[i:], m.Filename)
-	}
-	if m.Line != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintMessage(dAtA, i, uint64(m.Line))
+	if m.Synctime != 0 {
+		i = encodeVarintMessage(dAtA, i, uint64(m.Synctime))
+		i--
+		dAtA[i] = 0x20
 	}
 	if m.Memindex != 0 {
-		dAtA[i] = 0x18
-		i++
 		i = encodeVarintMessage(dAtA, i, uint64(m.Memindex))
+		i--
+		dAtA[i] = 0x18
 	}
-	return i, nil
+	if m.Offset != 0 {
+		i = encodeVarintMessage(dAtA, i, uint64(m.Offset))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Filename) > 0 {
+		i -= len(m.Filename)
+		copy(dAtA[i:], m.Filename)
+		i = encodeVarintMessage(dAtA, i, uint64(len(m.Filename)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *RemoveMsg) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -822,41 +889,48 @@ func (m *RemoveMsg) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *RemoveMsg) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *RemoveMsg) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Year != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintMessage(dAtA, i, uint64(m.Year))
-	}
-	if m.Month != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintMessage(dAtA, i, uint64(m.Month))
+	if m.Hour != 0 {
+		i = encodeVarintMessage(dAtA, i, uint64(m.Hour))
+		i--
+		dAtA[i] = 0x20
 	}
 	if m.Day != 0 {
-		dAtA[i] = 0x18
-		i++
 		i = encodeVarintMessage(dAtA, i, uint64(m.Day))
+		i--
+		dAtA[i] = 0x18
 	}
-	if m.Hour != 0 {
-		dAtA[i] = 0x20
-		i++
-		i = encodeVarintMessage(dAtA, i, uint64(m.Hour))
+	if m.Month != 0 {
+		i = encodeVarintMessage(dAtA, i, uint64(m.Month))
+		i--
+		dAtA[i] = 0x10
 	}
-	return i, nil
+	if m.Year != 0 {
+		i = encodeVarintMessage(dAtA, i, uint64(m.Year))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func encodeVarintMessage(dAtA []byte, offset int, v uint64) int {
+	offset -= sovMessage(v)
+	base := offset
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
 	dAtA[offset] = uint8(v)
-	return offset + 1
+	return base
 }
 func (m *TotalMsg) Size() (n int) {
 	if m == nil {
@@ -912,11 +986,14 @@ func (m *LogMsg) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovMessage(uint64(l))
 	}
-	if m.Line != 0 {
-		n += 1 + sovMessage(uint64(m.Line))
+	if m.Offset != 0 {
+		n += 1 + sovMessage(uint64(m.Offset))
 	}
 	if m.Memindex != 0 {
 		n += 1 + sovMessage(uint64(m.Memindex))
+	}
+	if m.Synctime != 0 {
+		n += 1 + sovMessage(uint64(m.Synctime))
 	}
 	return n
 }
@@ -931,11 +1008,14 @@ func (m *ConfirmMsg) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovMessage(uint64(l))
 	}
-	if m.Line != 0 {
-		n += 1 + sovMessage(uint64(m.Line))
+	if m.Offset != 0 {
+		n += 1 + sovMessage(uint64(m.Offset))
 	}
 	if m.Memindex != 0 {
 		n += 1 + sovMessage(uint64(m.Memindex))
+	}
+	if m.Synctime != 0 {
+		n += 1 + sovMessage(uint64(m.Synctime))
 	}
 	return n
 }
@@ -998,8 +1078,9 @@ func (this *LogMsg) String() string {
 		`Serverid:` + fmt.Sprintf("%v", this.Serverid) + `,`,
 		`Content:` + fmt.Sprintf("%v", this.Content) + `,`,
 		`Filename:` + fmt.Sprintf("%v", this.Filename) + `,`,
-		`Line:` + fmt.Sprintf("%v", this.Line) + `,`,
+		`Offset:` + fmt.Sprintf("%v", this.Offset) + `,`,
 		`Memindex:` + fmt.Sprintf("%v", this.Memindex) + `,`,
+		`Synctime:` + fmt.Sprintf("%v", this.Synctime) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1010,8 +1091,9 @@ func (this *ConfirmMsg) String() string {
 	}
 	s := strings.Join([]string{`&ConfirmMsg{`,
 		`Filename:` + fmt.Sprintf("%v", this.Filename) + `,`,
-		`Line:` + fmt.Sprintf("%v", this.Line) + `,`,
+		`Offset:` + fmt.Sprintf("%v", this.Offset) + `,`,
 		`Memindex:` + fmt.Sprintf("%v", this.Memindex) + `,`,
+		`Synctime:` + fmt.Sprintf("%v", this.Synctime) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1422,9 +1504,9 @@ func (m *LogMsg) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 4:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Line", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Offset", wireType)
 			}
-			m.Line = 0
+			m.Offset = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowMessage
@@ -1434,7 +1516,7 @@ func (m *LogMsg) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Line |= uint32(b&0x7F) << shift
+				m.Offset |= uint32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1454,6 +1536,25 @@ func (m *LogMsg) Unmarshal(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.Memindex |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Synctime", wireType)
+			}
+			m.Synctime = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessage
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Synctime |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1545,9 +1646,9 @@ func (m *ConfirmMsg) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Line", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Offset", wireType)
 			}
-			m.Line = 0
+			m.Offset = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowMessage
@@ -1557,7 +1658,7 @@ func (m *ConfirmMsg) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Line |= uint32(b&0x7F) << shift
+				m.Offset |= uint32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1577,6 +1678,25 @@ func (m *ConfirmMsg) Unmarshal(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.Memindex |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Synctime", wireType)
+			}
+			m.Synctime = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessage
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Synctime |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1737,6 +1857,7 @@ func (m *RemoveMsg) Unmarshal(dAtA []byte) error {
 func skipMessage(dAtA []byte) (n int, err error) {
 	l := len(dAtA)
 	iNdEx := 0
+	depth := 0
 	for iNdEx < l {
 		var wire uint64
 		for shift := uint(0); ; shift += 7 {
@@ -1768,10 +1889,8 @@ func skipMessage(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
-			return iNdEx, nil
 		case 1:
 			iNdEx += 8
-			return iNdEx, nil
 		case 2:
 			var length int
 			for shift := uint(0); ; shift += 7 {
@@ -1792,55 +1911,30 @@ func skipMessage(dAtA []byte) (n int, err error) {
 				return 0, ErrInvalidLengthMessage
 			}
 			iNdEx += length
-			if iNdEx < 0 {
-				return 0, ErrInvalidLengthMessage
-			}
-			return iNdEx, nil
 		case 3:
-			for {
-				var innerWire uint64
-				var start int = iNdEx
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return 0, ErrIntOverflowMessage
-					}
-					if iNdEx >= l {
-						return 0, io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					innerWire |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				innerWireType := int(innerWire & 0x7)
-				if innerWireType == 4 {
-					break
-				}
-				next, err := skipMessage(dAtA[start:])
-				if err != nil {
-					return 0, err
-				}
-				iNdEx = start + next
-				if iNdEx < 0 {
-					return 0, ErrInvalidLengthMessage
-				}
-			}
-			return iNdEx, nil
+			depth++
 		case 4:
-			return iNdEx, nil
+			if depth == 0 {
+				return 0, ErrUnexpectedEndOfGroupMessage
+			}
+			depth--
 		case 5:
 			iNdEx += 4
-			return iNdEx, nil
 		default:
 			return 0, fmt.Errorf("proto: illegal wireType %d", wireType)
 		}
+		if iNdEx < 0 {
+			return 0, ErrInvalidLengthMessage
+		}
+		if depth == 0 {
+			return iNdEx, nil
+		}
 	}
-	panic("unreachable")
+	return 0, io.ErrUnexpectedEOF
 }
 
 var (
-	ErrInvalidLengthMessage = fmt.Errorf("proto: negative length found during unmarshaling")
-	ErrIntOverflowMessage   = fmt.Errorf("proto: integer overflow")
+	ErrInvalidLengthMessage        = fmt.Errorf("proto: negative length found during unmarshaling")
+	ErrIntOverflowMessage          = fmt.Errorf("proto: integer overflow")
+	ErrUnexpectedEndOfGroupMessage = fmt.Errorf("proto: unexpected end of group")
 )

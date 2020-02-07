@@ -19,26 +19,28 @@ func makeVerifyMsg() []byte {
 	})
 	return makeFinalMsg(d)
 }
-func makeLogMsg(serverid int64, log []byte, filename string, line uint32, memindex uint32) []byte {
+func makeLogMsg(serverid int64, log []byte, filename string, offset, memindex uint32, synctime int64) []byte {
 	d, _ := proto.Marshal(&TotalMsg{
 		Type: LOG,
 		Log: &LogMsg{
 			Serverid: serverid,
 			Content:  log,
 			Filename: filename,
-			Line:     line,
+			Offset:   offset,
 			Memindex: memindex,
+			Synctime: synctime,
 		},
 	})
 	return makeFinalMsg(d)
 }
-func makeConfirmMsg(filename string, line uint32, memindex uint32) []byte {
+func makeConfirmMsg(filename string, offset, memindex uint32, synctime int64) []byte {
 	d, _ := proto.Marshal(&TotalMsg{
 		Type: CONFIRM,
 		Confirm: &ConfirmMsg{
 			Filename: filename,
-			Line:     line,
+			Offset:   offset,
 			Memindex: memindex,
+			Synctime: synctime,
 		},
 	})
 	return makeFinalMsg(d)

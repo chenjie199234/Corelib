@@ -7,18 +7,20 @@ import (
 )
 
 type remote struct {
-	remoteid  int64
-	unixConn  *net.UnixConn
-	tcpConn   *net.TCPConn
-	notice    chan int
-	lastHeart int64
-	mq        *MQ
+	netkind      string
+	remoteid     int64
+	unixConn     *net.UnixConn
+	tcpConn      *net.TCPConn
+	lastHeart    int64
+	timeoutcount int
+	notice       chan uint
+	mq           *nofullMQ
 }
 
 var DefaultLocalDir string = "./log"
 var DefaultSplitSize int64 = 100 //unit M
 var DefaultTimeout int64 = 1000  //unit millisecond
-var DefaultNetLogNum uint32 = 512
+var DefaultNetLogNum uint32 = 256
 
 var timeformat string = "2006-01-02-15_04_05-UTC"
 
@@ -36,8 +38,6 @@ func level(lv int32) string {
 		return "Warn:  "
 	case 4:
 		return "Error: "
-	case 5:
-		return "Panic: "
 	default:
 		return ""
 	}
