@@ -4,7 +4,6 @@ import (
 	"unsafe"
 	"sync"
 	"time"
-	"fmt"
 )
 
 type kv struct {
@@ -149,11 +148,3 @@ func (l *LruCache)putPool(n *node) {
 	l.pool.Put(n)
 }
 
-func (l *LruCache)debug() {
-	temp := l.head
-	fmt.Println("len:",l.curcap)
-	for temp != nil{
-		fmt.Printf("key:%s,value:%s,ttl:%d\n",temp.data.key,*(*string)(temp.data.value),temp.data.ttl)
-		temp = temp.next
-	}
-}

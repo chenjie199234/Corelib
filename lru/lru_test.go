@@ -16,19 +16,28 @@ func Test_lru(t *testing.T) {
 		d:=fmt.Sprintf("%d",i)
 		l.Set(d,unsafe.Pointer(&d))
 	}
-	l.debug()
+	debug(l)
 	data := l.Get("11")
 	if data == nil{
 		fmt.Println("nil")
 	}else{
 		panic("should be bil")
 	}
-	l.debug()
+	debug(l)
 	data = l.Get("18")
 	if data == nil{
 		panic("should not be nil")
 	}else{
 		fmt.Println(*(*string)(data))
 	}
-	l.debug()
+	debug(l)
+}
+
+func debug(l *LruCache) {
+	temp := l.head
+	fmt.Println("len:",l.curcap)
+	for temp != nil{
+		fmt.Printf("key:%s,value:%s,ttl:%d\n",temp.data.key,*(*string)(temp.data.value),temp.data.ttl)
+		temp = temp.next
+	}
 }
