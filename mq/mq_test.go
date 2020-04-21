@@ -6,18 +6,19 @@ import (
 )
 
 func Test_mq(t *testing.T) {
-	mq := New(128, 1280)
+	mq := NewMQ(128, 1280)
+	mq.Reset()
 	for i := 0; i < 128*3+1; i++ {
 		temp := "123"
-		if left, e := mq.Put(unsafe.Pointer(&temp)); e != nil || left != i+1 {
+		if e := mq.Put(unsafe.Pointer(&temp)); e != nil {
 			panic("msg num in mq after put error!")
 		}
 	}
-	if mq.length != 128*4 {
+	if mq.maxlen != 128*2*2 && mq.curlen != 128*3 {
 		panic("buffer length in mq after put error!")
 	}
 	for i := 0; i < 128*3+1; i++ {
-		data, left := mq.Get(nil)
+		data, left := mq.Get()
 		if *(*string)(data) != "123" {
 			panic("msg changed!")
 		}
@@ -25,21 +26,12 @@ func Test_mq(t *testing.T) {
 			panic("msg num left after get error!")
 		}
 	}
-	if mq.length != 128 {
-		panic("buffer length in mq after getall error!")
-	}
-	notice := make(chan uint, 1)
-	notice <- 1
-	data, left := mq.Get(notice)
-	if data != nil || left != 1 {
-		panic("notice error!")
-	}
 	mq.Close()
 	temp := "123"
-	if left, e := mq.Put(unsafe.Pointer(&temp)); e == nil || left != 0 {
+	if e := mq.Put(unsafe.Pointer(&temp)); e == nil {
 		panic("mq close error!")
 	}
-	data, left = mq.Get(nil)
+	data, left := mq.Get()
 	if data != nil || left != -1 {
 		panic("mq close error!")
 	}

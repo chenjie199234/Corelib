@@ -1,3 +1,4 @@
+//memory message queue,doesn't have data race for function Get and Put
 package mq
 
 import (
@@ -14,154 +15,206 @@ var (
 type MQ struct {
 	out chan unsafe.Pointer
 
-	//ring buffer
-	mincap    int
-	maxcap    int
-	length    int
-	buffer    []unsafe.Pointer
-	headindex int
-	tailindex int
-	num       int
+	minbuflen int
+	maxbuflen int
+	maxlen    int
+	curlen    int
+	data      []unsafe.Pointer
+	head      int
+	tail      int
+
+	shirnkcount int
 
 	closestatus bool
 	sync.Mutex
 }
 
-//maxcap is better to set as n * mincap
-//if buffer is overflow,the msg will be drop
-func New(mincap, maxcap int) *MQ {
-	instance := new(MQ)
-	if mincap < 64 {
-		instance.mincap = 64
-	} else {
-		instance.mincap = mincap
+//mq is closed by default after be created,please reset it
+func NewMQPool(minbuflen, maxbuflen int) *sync.Pool {
+	if minbuflen <= 0 {
+		minbuflen = 64
 	}
-	if maxcap <= instance.mincap*2 {
-		instance.maxcap = instance.mincap * 2
-	} else {
-		instance.maxcap = maxcap
+	if maxbuflen < minbuflen {
+		maxbuflen = minbuflen * 2
 	}
-	instance.out = make(chan unsafe.Pointer, 1)
-	instance.buffer = make([]unsafe.Pointer, instance.mincap)
-	instance.length = instance.mincap
-	instance.headindex = 0
-	instance.tailindex = 0
-	return instance
+	return &sync.Pool{
+		New: func() interface{} {
+			mq := &MQ{
+				out: make(chan unsafe.Pointer, 1),
+
+				minbuflen: minbuflen,
+				maxbuflen: maxbuflen,
+				maxlen:    minbuflen,
+				curlen:    0,
+				data:      make([]unsafe.Pointer, minbuflen),
+				head:      0,
+				tail:      0,
+
+				closestatus: true,
+			}
+			close(mq.out)
+			return mq
+		},
+	}
 }
 
-func (this *MQ) Put(data unsafe.Pointer) (left int, e error) {
+//mq is closed by default after be created,please reset it
+func NewMQ(minbuflen, maxbuflen int) *MQ {
+	if minbuflen <= 0 {
+		minbuflen = 64
+	}
+	if maxbuflen < minbuflen {
+		maxbuflen = minbuflen * 2
+	}
+	mq := &MQ{
+		out: make(chan unsafe.Pointer, 1),
+
+		minbuflen: minbuflen,
+		maxbuflen: maxbuflen,
+		maxlen:    minbuflen,
+		curlen:    0,
+		data:      make([]unsafe.Pointer, minbuflen),
+		head:      0,
+		tail:      0,
+
+		closestatus: true,
+	}
+	close(mq.out)
+	return mq
+}
+func (this *MQ) Put(data unsafe.Pointer) (e error) {
 	this.Lock()
 	if this.closestatus {
 		e = ERRCLOSED
-		left = this.num
 		this.Unlock()
 		return
 	}
-	if this.num == 0 {
-		//no buffer
-		this.out <- data
-	} else {
-		//check free buffer(+1 for the space in chan)
-		if int(this.num) == this.length+1 {
-			//no enough free buffer,this message will be drop
-			e = ERRFULL
-			left = this.num
+	if this.Rest() == 0 {
+		e = ERRFULL
+		this.Unlock()
+		return
+	}
+	if this.curlen == 0 {
+		select {
+		case this.out <- data:
+			//shirnk
+			this.shirnkcount++
+			this.shirnk()
 			this.Unlock()
-			return
-		}
-		//has free buffer
-		this.buffer[this.tailindex] = data
-		this.tailindex++
-		if this.tailindex >= this.length {
-			this.tailindex = 0
-		}
-		//grow buffer
-		if this.tailindex == this.headindex && this.length != this.maxcap {
-			targetlength := 0
-			if this.length+this.mincap > this.maxcap {
-				targetlength = this.maxcap
-			} else {
-				targetlength = this.length + this.mincap
-			}
-			tempbuffer := make([]unsafe.Pointer, targetlength)
-			for i := 0; i < this.length; i++ {
-				tempbuffer[i] = this.buffer[this.headindex]
-				this.headindex++
-				if this.headindex >= this.length {
-					this.headindex = 0
-				}
-			}
-			this.buffer = tempbuffer
-			this.headindex = 0
-			this.tailindex = this.length
-			this.length = targetlength
+			return nil
+		default:
 		}
 	}
-	this.num++
-	left = this.num
+	//grow
+	this.grow()
+	//input
+	this.data[this.tail] = data
+	this.curlen++
+	this.tail++
+	if this.tail >= this.maxlen {
+		this.tail = 0
+	}
+	//shirnk
+	if float64(this.curlen) < float64(this.maxlen)/3.0 {
+		this.shirnkcount++
+	} else {
+		this.shirnkcount = 0
+	}
+	this.shirnk()
 	this.Unlock()
-	return
+	return nil
 }
-
-//'data' == nil make 'leftornotice' to notice,value of 'leftornotice' decide the meaning of the notice,'-1' means this mq is closed
-//'data' != nil make 'leftornotice' to left,value of 'leftornotice' means the left message num in this mq
-func (this *MQ) Get(notice chan uint) (data unsafe.Pointer, leftornotice int) {
-	if len(notice) > 0 {
-		return nil, int(<-notice)
+func (this *MQ) grow() {
+	if this.curlen == this.maxlen {
+		var tempdata []unsafe.Pointer
+		if this.maxlen*2 >= this.maxbuflen {
+			tempdata = make([]unsafe.Pointer, this.maxbuflen)
+		} else {
+			tempdata = make([]unsafe.Pointer, this.maxlen*2)
+		}
+		for i := 0; i < this.curlen; i++ {
+			if this.head+i >= this.maxlen {
+				tempdata[i] = this.data[this.head+i-this.maxlen]
+			} else {
+				tempdata[i] = this.data[this.head+i]
+			}
+		}
+		this.data = tempdata
+		this.head = 0
+		this.tail = this.curlen
+		this.maxlen = len(tempdata)
 	}
+}
+func (this *MQ) shirnk() {
+	if this.shirnkcount >= 50 && this.maxlen > this.minbuflen {
+		this.shirnkcount = 0
+		var tempdata []unsafe.Pointer
+		if this.maxlen/2 <= this.minbuflen {
+			tempdata = make([]unsafe.Pointer, this.minbuflen)
+		} else {
+			tempdata = make([]unsafe.Pointer, this.maxlen/2)
+		}
+		for i := 0; i < this.curlen; i++ {
+			if this.head+i >= this.maxlen {
+				tempdata[i] = this.data[this.head+i-this.maxlen]
+			} else {
+				tempdata[i] = this.data[this.head+i]
+			}
+		}
+		this.data = tempdata
+		this.head = 0
+		this.tail = this.curlen
+		this.maxlen = len(tempdata)
+	}
+}
+func (this *MQ) Get() (data unsafe.Pointer, rest int) {
 	select {
-	case v := <-notice:
-		return nil, int(v)
 	case v, ok := <-this.out:
 		if !ok {
 			return nil, -1
 		}
 		this.Lock()
-		this.num--
-		if this.num > 0 {
-			this.out <- this.buffer[this.headindex]
-			this.headindex++
-			if this.headindex >= this.length {
-				this.headindex = 0
+		if this.curlen > 0 {
+			this.out <- this.data[this.head]
+			this.curlen--
+			this.head++
+			if this.head >= this.maxlen {
+				this.head = 0
 			}
 		} else if this.closestatus {
 			close(this.out)
 		}
-		//shirnk buffer
-		if !this.closestatus && this.num <= (this.length/3) && this.length > this.mincap {
-			targetlength := 0
-			if this.length-this.mincap < this.mincap {
-				targetlength = this.mincap
-			} else {
-				targetlength = this.length - this.mincap
-			}
-			tempbuffer := make([]unsafe.Pointer, targetlength)
-			for i := 0; i < this.num; i++ {
-				tempbuffer[i] = this.buffer[this.headindex]
-				this.headindex++
-				if this.headindex >= this.length {
-					this.headindex = 0
-				}
-			}
-			this.buffer = tempbuffer
-			this.headindex = 0
-			this.tailindex = this.num
-			this.length = targetlength
-		}
-		data = v
-		leftornotice = this.num
+		rest = this.curlen + len(this.out)
 		this.Unlock()
+		data = v
 		return
 	}
 }
 func (this *MQ) Close() {
 	this.Lock()
 	this.closestatus = true
-	if this.num == 0 {
+	if this.curlen == 0 {
 		close(this.out)
 	}
 	this.Unlock()
 }
 func (this *MQ) Num() int {
-	return this.num
+	return this.curlen + len(this.out)
+}
+func (this *MQ) Rest() int {
+	return this.maxbuflen - this.curlen + 1 - len(this.out)
+}
+
+//this shouldn't be used before put back into the pool
+//this should be used after new mq or get from pool
+func (this *MQ) Reset() {
+	this.out = make(chan unsafe.Pointer, 1)
+
+	this.maxlen = this.minbuflen
+	this.curlen = 0
+	this.data = this.data[:this.minbuflen]
+	this.head = 0
+	this.tail = 0
+
+	this.closestatus = false
 }
