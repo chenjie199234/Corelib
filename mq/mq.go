@@ -1,4 +1,6 @@
-//memory message queue,doesn't have data race for function Get and Put
+//memory message queue
+//Get,Put,Close function doesn't have data race
+//Num,Rest have data race
 package mq
 
 import (
@@ -82,7 +84,9 @@ func NewMQ(minbuflen, maxbuflen int) *MQ {
 	close(mq.out)
 	return mq
 }
-func (this *MQ) Put(data unsafe.Pointer) (e error) {
+
+//free means you can put how many elements into this mq continue
+func (this *MQ) Put(data unsafe.Pointer) (free int, e error) {
 	this.Lock()
 	if this.closestatus {
 		e = ERRCLOSED
@@ -100,8 +104,9 @@ func (this *MQ) Put(data unsafe.Pointer) (e error) {
 			//shirnk
 			this.shirnkcount++
 			this.shirnk()
+			free = this.maxbuflen - this.curlen
 			this.Unlock()
-			return nil
+			return
 		default:
 		}
 	}
@@ -122,7 +127,8 @@ func (this *MQ) Put(data unsafe.Pointer) (e error) {
 	}
 	this.shirnk()
 	this.Unlock()
-	return nil
+	free = this.maxbuflen - this.curlen
+	return
 }
 func (this *MQ) grow() {
 	if this.curlen == this.maxlen {
@@ -167,12 +173,16 @@ func (this *MQ) shirnk() {
 		this.maxlen = len(tempdata)
 	}
 }
+
+//rest means you can get how many elements from this mq continue
 func (this *MQ) Get() (data unsafe.Pointer, rest int) {
 	select {
 	case v, ok := <-this.out:
 		if !ok {
 			return nil, -1
 		}
+		rest = this.curlen
+		data = v
 		this.Lock()
 		if this.curlen > 0 {
 			this.out <- this.data[this.head]
@@ -184,9 +194,7 @@ func (this *MQ) Get() (data unsafe.Pointer, rest int) {
 		} else if this.closestatus {
 			close(this.out)
 		}
-		rest = this.curlen + len(this.out)
 		this.Unlock()
-		data = v
 		return
 	}
 }
@@ -198,11 +206,15 @@ func (this *MQ) Close() {
 	}
 	this.Unlock()
 }
+
+//have data race
 func (this *MQ) Num() int {
 	return this.curlen + len(this.out)
 }
+
+//have data race
 func (this *MQ) Rest() int {
-	return this.maxbuflen - this.curlen + 1 - len(this.out)
+	return this.maxbuflen + 1 - this.curlen - len(this.out)
 }
 
 //this shouldn't be used before put back into the pool
