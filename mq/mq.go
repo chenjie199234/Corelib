@@ -220,6 +220,7 @@ func (this *MQ) Rest() int {
 //this shouldn't be used before put back into the pool
 //this should be used after new mq or get from pool
 func (this *MQ) Reset() {
+	this.Lock()
 	this.out = make(chan unsafe.Pointer, 1)
 
 	this.maxlen = this.minbuflen
@@ -229,4 +230,5 @@ func (this *MQ) Reset() {
 	this.tail = 0
 
 	this.closestatus = false
+	this.Unlock()
 }
