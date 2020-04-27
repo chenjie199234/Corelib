@@ -13,5 +13,5 @@ type Config struct {
 	//split connections into pieces
 	//every piece will have an independence RWMutex to control online and offline
 	//every piece will have an independence goruntine to check heart timeout
-	splitnum int //default 1
+	Splitnum int //default 1
 }

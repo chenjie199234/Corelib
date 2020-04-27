@@ -123,8 +123,8 @@ func NewInstance(c *Config, verify HandleVerifyFunc, online HandleOnlineFunc, us
 	if c.MaxWriteBufferNum == 0 {
 		c.MaxWriteBufferNum = 256
 	}
-	if c.splitnum == 0 {
-		c.splitnum = 1
+	if c.Splitnum == 0 {
+		c.Splitnum = 1
 	}
 	stream := &Instance{
 		conf:         c,
@@ -149,7 +149,7 @@ func NewInstance(c *Config, verify HandleVerifyFunc, online HandleOnlineFunc, us
 				}
 			},
 		},
-		peernodes: make([]*peernode, c.splitnum),
+		peernodes: make([]*peernode, c.Splitnum),
 	}
 	for i := range stream.peernodes {
 		stream.peernodes[i] = &peernode{
@@ -201,7 +201,7 @@ func (this *Instance) getindex(peername string) int {
 	for _, v := range md5.Sum(str2byte(peername)) {
 		result += int(v)
 	}
-	return result % this.conf.splitnum
+	return result % this.conf.Splitnum
 }
 func str2byte(data string) []byte {
 	temp := (*[2]uintptr)(unsafe.Pointer(&data))
