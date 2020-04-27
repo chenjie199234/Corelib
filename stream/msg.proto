@@ -1,0 +1,28 @@
+syntax="proto3";
+package stream;
+option go_package=".;stream";
+
+enum TotalMsgType{
+	HEART = 0;
+	VERIFY = 1;
+	USER = 2;
+}
+message TotalMsg {
+	TotalMsgType totaltype = 1;
+	string sender = 2;
+	int64 starttime = 3;
+	oneof msg {
+		HeartMsg heart = 4;
+		VerifyMsg verify = 5;
+		UserMsg user = 6;
+	}
+}
+message HeartMsg {
+	int64 timestamp = 1;
+}
+message VerifyMsg {
+	bytes verifydata = 1;
+}
+message UserMsg {
+	bytes userdata = 1;
+}
