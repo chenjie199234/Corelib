@@ -76,7 +76,7 @@ func (b *Buffer) Get(num int) []byte {
 	return result
 }
 func (b *Buffer) Peek(offset, num int) []byte {
-	if num <= 0 || offset <= 0 || offset+num > b.curlen {
+	if num <= 0 || offset < 0 || offset+num > b.curlen {
 		return nil
 	}
 	result := make([]byte, num)
