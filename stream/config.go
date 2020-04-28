@@ -1,9 +1,8 @@
 package stream
 
 type Config struct {
-	SelfName      string
+	//two peers need to verify each other,before they can communicate
 	VerifyTimeout int64
-	VerifyData    []byte
 	HeartInterval int64
 	//read buffer can auto grow and shirnk within min and max
 	MinReadBufferLen int //the num of byte,default 1024

@@ -12,21 +12,24 @@ import (
 )
 
 //Warning!!Don't write block logic in these callback,live for{}
-type HandleOnlineFunc func(p *Peer, uniqueid int64)
-type HandleVerifyFunc func(selfVerifyData, peerVerifyData []byte, peername string) bool
-type HandleUserdataFunc func(p *Peer, uniqueid int64, data []byte)
-type HandleOfflineFunc func(p *Peer, uniqueid int64)
+type HandleOnlineFunc func(p *Peer, peername string, uniqueid int64)
+type HandleVerifyFunc func(selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool
+type HandleUserdataFunc func(p *Peer, peername string, uniqueid int64, data []byte)
+type HandleOfflineFunc func(p *Peer, peername string, uniqueid int64)
 
 const (
-	PEERTCP = iota + 1
-	PEERWEBSOCKET
-	PEERUNIXSOCKET
+	TCP = iota + 1
+	WEBSOCKET
+	UNIXSOCKET
+)
+const (
+	CLIENT = iota + 1
+	SERVER
 )
 
 var (
-	ERRCONNCLOSED   = errors.New("connection is closed")
-	ERRSERVERCLOSED = errors.New("server is closed")
-	ERRFULL         = errors.New("write buffer is full")
+	ERRCONNCLOSED = errors.New("connection is closed")
+	ERRFULL       = errors.New("write buffer is full")
 )
 
 type peernode struct {
@@ -34,9 +37,12 @@ type peernode struct {
 	peers map[string]*Peer
 }
 type Peer struct {
+	sync.Mutex
 	parentnode    *peernode
-	name          string
-	peertype      int
+	clientname    string
+	servername    string
+	selftype      int
+	protocoltype  int
 	starttime     int64
 	readbuffer    *buffer.Buffer
 	tempbuffer    []byte
@@ -47,30 +53,73 @@ type Peer struct {
 	status        bool //true-working,false-closing
 }
 
-func (p *Peer) Close() {
-	p.parentnode.RLock()
-	p.closeconn()
-	p.status = false
-	p.parentnode.RUnlock()
-}
 func (p *Peer) closeconn() {
 	if p.conn != nil {
-		switch p.peertype {
-		case PEERTCP:
+		switch p.protocoltype {
+		case TCP:
 			(*net.TCPConn)(p.conn).Close()
-		case PEERWEBSOCKET:
-		case PEERUNIXSOCKET:
+		case WEBSOCKET:
+		case UNIXSOCKET:
+		}
+	}
+}
+func (p *Peer) closeconnread() {
+	if p.conn != nil {
+		switch p.protocoltype {
+		case TCP:
+			(*net.TCPConn)(p.conn).CloseRead()
+		case WEBSOCKET:
+		case UNIXSOCKET:
+		}
+	}
+}
+func (p *Peer) closeconnwrite() {
+	if p.conn != nil {
+		switch p.protocoltype {
+		case TCP:
+			(*net.TCPConn)(p.conn).CloseWrite()
+		case WEBSOCKET:
+		case UNIXSOCKET:
 		}
 	}
 }
 func (p *Peer) setbuffer(num int) {
-	switch p.peertype {
-	case PEERTCP:
+	switch p.protocoltype {
+	case TCP:
 		(*net.TCPConn)(p.conn).SetNoDelay(true)
 		(*net.TCPConn)(p.conn).SetReadBuffer(num)
 		(*net.TCPConn)(p.conn).SetWriteBuffer(num)
-	case PEERWEBSOCKET:
-	case PEERUNIXSOCKET:
+	case WEBSOCKET:
+	case UNIXSOCKET:
+	}
+}
+func (p *Peer) Close() {
+	p.parentnode.RLock()
+	p.Lock()
+	p.closeconn()
+	p.status = false
+	p.Unlock()
+	p.parentnode.RUnlock()
+}
+func (p *Peer) SendMessage(userdata []byte, uniqueid int64) error {
+	if !p.status || p.starttime != uniqueid {
+		//status for close check
+		//uniqueid for ABA check
+		return ERRCONNCLOSED
+	}
+	//here has little data race,but the message package will be dropped by peer,because of different uniqueid
+	var data []byte
+	switch p.selftype {
+	case CLIENT:
+		data = makeUserMsg(p.clientname, userdata, uniqueid)
+	case SERVER:
+		data = makeUserMsg(p.servername, userdata, uniqueid)
+	}
+	select {
+	case p.writerbuffer <- data:
+		return nil
+	default:
+		return ERRFULL
 	}
 }
 
@@ -90,8 +139,11 @@ func (this *Instance) getpeer() *Peer {
 	return this.peerPool.Get().(*Peer)
 }
 func (this *Instance) putpeer(p *Peer) {
-	p.name = ""
-	p.peertype = 0
+	p.parentnode = nil
+	p.clientname = ""
+	p.servername = ""
+	p.selftype = 0
+	p.protocoltype = 0
 	p.starttime = 0
 	p.readbuffer.Reset()
 	p.tempbuffernum = 0
@@ -99,6 +151,7 @@ func (this *Instance) putpeer(p *Peer) {
 		<-p.writerbuffer
 	}
 	p.closeconn()
+	p.lastactive = 0
 	p.status = false
 	this.peerPool.Put(p)
 }
@@ -136,8 +189,10 @@ func NewInstance(c *Config, verify HandleVerifyFunc, online HandleOnlineFunc, us
 		peerPool: &sync.Pool{
 			New: func() interface{} {
 				return &Peer{
-					name:          "",
-					peertype:      0,
+					clientname:    "",
+					servername:    "",
+					selftype:      0,
+					protocoltype:  0,
 					starttime:     0,
 					readbuffer:    buffer.NewBuf(c.MinReadBufferLen, c.MaxReadBufferLen),
 					tempbuffer:    make([]byte, c.MinReadBufferLen),
@@ -159,23 +214,7 @@ func NewInstance(c *Config, verify HandleVerifyFunc, online HandleOnlineFunc, us
 	}
 	return stream
 }
-func (this *Instance) SendMessage(p *Peer, userdata []byte, uniqueid int64) error {
-	if !this.status {
-		return ERRSERVERCLOSED
-	}
-	if !p.status || p.starttime != uniqueid {
-		//status for close check
-		//uniqueid for ABA check
-		return ERRCONNCLOSED
-	}
-	//here has little data race,but the message package will be dropped by peer,because of different uniqueid
-	select {
-	case p.writerbuffer <- makeUserMsg(this.conf.SelfName, userdata, uniqueid):
-		return nil
-	default:
-		return ERRFULL
-	}
-}
+
 func (this *Instance) heart(node *peernode) {
 	tker := time.NewTicker(time.Duration(this.conf.HeartInterval/2) * time.Millisecond)
 	for {
@@ -183,15 +222,24 @@ func (this *Instance) heart(node *peernode) {
 		now := time.Now().UnixNano()
 		node.RLock()
 		for _, p := range node.peers {
+			p.Lock()
+			if !p.status {
+				p.Unlock()
+				continue
+			}
 			if now-p.lastactive > this.conf.HeartInterval*1000*1000 {
 				//heartbeat timeout
-				if p.conn != nil {
-					//peer.conn.Close()
-				}
+				p.closeconnread()
 				p.status = false
 			} else {
-				p.writerbuffer <- makeHeartMsg(this.conf.SelfName, time.Now().UnixNano(), p.starttime)
+				switch p.selftype {
+				case CLIENT:
+					p.writerbuffer <- makeHeartMsg(p.clientname, time.Now().UnixNano(), p.starttime)
+				case SERVER:
+					p.writerbuffer <- makeHeartMsg(p.servername, time.Now().UnixNano(), p.starttime)
+				}
 			}
+			p.Unlock()
 		}
 		node.RUnlock()
 	}

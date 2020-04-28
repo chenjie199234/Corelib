@@ -2,32 +2,43 @@ package stream
 
 import (
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
+	"runtime"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 var serverinstance *Instance
+var count int64
 
 func Test_Tcpserver(t *testing.T) {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	serverinstance = NewInstance(&Config{
-		SelfName:      "test1",
 		VerifyTimeout: 250,
-		VerifyData:    []byte{},
 		HeartInterval: 500,
-	}, server_HandleVerifyFunc, server_HandleOnlineFunc, server_HandleUserdataFunc, server_HandleOfflineFunc)
-	serverinstance.StartTcpServer("127.0.0.1:9234")
-	select {}
+		Splitnum:      1024,
+	}, serverhandleVerify, serverhandleonline, serverhandleuserdata, serverhandleoffline)
+	serverinstance.StartTcpServer("server", []byte{}, "127.0.0.1:9234")
+	go func() {
+		for {
+			time.Sleep(time.Second)
+			fmt.Println("client num:", count)
+		}
+	}()
+	http.ListenAndServe(":8080", nil)
 }
-
-func server_HandleOnlineFunc(p *Peer, uniqueid int64) {
-	fmt.Println("online")
-}
-func server_HandleVerifyFunc(selfVerifyData, peerVerifyData []byte, peername string) bool {
+func serverhandleVerify(selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
 	return true
 }
-func server_HandleUserdataFunc(p *Peer, uniqueid int64, data []byte) {
-	fmt.Printf("%s\n", data)
-	serverinstance.SendMessage(p, data, uniqueid)
+func serverhandleonline(p *Peer, peername string, uniqueid int64) {
+	atomic.AddInt64(&count, 1)
 }
-func server_HandleOfflineFunc(p *Peer, uniqueid int64) {
-	fmt.Println("offline")
+func serverhandleuserdata(p *Peer, peername string, uniqueid int64, data []byte) {
+	fmt.Printf("%s:%s\n", peername, data)
+	p.SendMessage(data, uniqueid)
+}
+func serverhandleoffline(p *Peer, peername string, uniqueid int64) {
+	atomic.AddInt64(&count, -1)
 }

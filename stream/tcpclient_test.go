@@ -2,43 +2,47 @@ package stream
 
 import (
 	"fmt"
-	"sync"
+	"net/http"
+	_ "net/http/pprof"
+	"runtime"
 	"testing"
 	"time"
 )
 
 var clientinstance *Instance
-var wg *sync.WaitGroup
 
 func Test_Tcpclient(t *testing.T) {
-	wg = new(sync.WaitGroup)
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	clientinstance = NewInstance(&Config{
-		SelfName:      "test2",
 		VerifyTimeout: 250,
-		VerifyData:    []byte{},
 		HeartInterval: 500,
-	}, client_HandleVerifyFunc, client_HandleOnlineFunc, client_HandleUserdataFunc, client_HandleOfflineFunc)
-	clientinstance.StartTcpClient("127.0.0.1:9234")
-	wg.Wait()
-}
-
-func client_HandleOnlineFunc(p *Peer, uniqueid int64) {
-	fmt.Println("online")
-	wg.Add(1)
+		Splitnum:      1024,
+	}, clienthandleVerify, clienthandleonline, clienthandleuserdata, clienthandleoffline)
 	go func() {
-		for {
-			time.Sleep(time.Second)
-			clientinstance.SendMessage(p, []byte("hello world!"), uniqueid)
+		for count := 0; count < 10000; count++ {
+			clientinstance.StartTcpClient(fmt.Sprintf("client%d", count), []byte{}, "127.0.0.1:9234")
+			time.Sleep(time.Millisecond)
 		}
 	}()
+	http.ListenAndServe(":8081", nil)
 }
-func client_HandleVerifyFunc(selfVerifyData, peerVerifyData []byte, peername string) bool {
+func clienthandleVerify(selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
 	return true
 }
-func client_HandleUserdataFunc(p *Peer, uniqueid int64, data []byte) {
+
+func clienthandleonline(p *Peer, peername string, uniqueid int64) {
+	//go func() {
+	//        for {
+	//                fmt.Println(peername)
+	//                time.Sleep(time.Second)
+	//                p.SendMessage([]byte("hello world!"), uniqueid)
+	//        }
+	//}()
+}
+
+func clienthandleuserdata(p *Peer, peername string, uniqueid int64, data []byte) {
 	fmt.Printf("%s\n", data)
 }
-func client_HandleOfflineFunc(p *Peer, uniqueid int64) {
-	wg.Done()
-	fmt.Println("offline")
+
+func clienthandleoffline(p *Peer, peername string, uniqueid int64) {
 }
