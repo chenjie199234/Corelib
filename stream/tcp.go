@@ -3,6 +3,7 @@ package stream
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"time"
 	"unsafe"
@@ -255,7 +256,9 @@ func (this *Instance) read(p *Peer) {
 			p.tempbuffernum, e = conn.Read(p.tempbuffer[:p.readbuffer.Rest()])
 		}
 		if e != nil {
-			fmt.Printf("[Stream.TCP.read] read data error:%s from ip:%s\n", e, conn.RemoteAddr().String())
+			if e != io.EOF {
+				fmt.Printf("[Stream.TCP.read] read data error:%s from ip:%s\n", e, conn.RemoteAddr().String())
+			}
 			return
 		}
 		p.readbuffer.Put(p.tempbuffer[:p.tempbuffernum])
@@ -351,7 +354,9 @@ func (this *Instance) write(p *Peer) {
 		for send < len(data) {
 			num, e = conn.Write(data[send:])
 			if e != nil {
-				fmt.Printf("[Stream.TCP.write] write data error:%s to ip:%s\n", e, conn.RemoteAddr().String())
+				if e != io.EOF {
+					fmt.Printf("[Stream.TCP.write] write data error:%s to ip:%s\n", e, conn.RemoteAddr().String())
+				}
 				return
 			}
 			send += num

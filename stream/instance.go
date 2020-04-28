@@ -3,6 +3,7 @@ package stream
 import (
 	"crypto/md5"
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -229,6 +230,12 @@ func (this *Instance) heart(node *peernode) {
 			}
 			if now-p.lastactive > this.conf.HeartInterval*1000*1000 {
 				//heartbeat timeout
+				switch p.selftype {
+				case CLIENT:
+					fmt.Printf("[Stream.heart] timeout client:%s", p.clientname)
+				case SERVER:
+					fmt.Printf("[Stream.heart] timeout server:%s", p.servername)
+				}
 				p.closeconnread()
 				p.status = false
 			} else {
