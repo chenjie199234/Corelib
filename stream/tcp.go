@@ -159,6 +159,7 @@ func (this *Instance) verifypeer(p *Peer, verifydata []byte) {
 				}
 				return
 			}
+			//first message must be verify message
 			if msg.Totaltype != TotalMsgType_VERIFY {
 				continue
 			}
@@ -166,12 +167,12 @@ func (this *Instance) verifypeer(p *Peer, verifydata []byte) {
 			var ok bool
 			switch p.selftype {
 			case CLIENT:
+				//client drop data race message
+				if p.starttime != msg.Starttime {
+					continue
+				}
 				if msg.Sender == "" || msg.Sender == p.clientname {
 					fmt.Printf("[Stream.TCP.cworker] name check error from ip:%s\n", conn.RemoteAddr().String())
-					return
-				}
-				if p.starttime != msg.Starttime {
-					fmt.Printf("[Stream.TCP.cworker] connection starttime error from ip:%s\n", conn.RemoteAddr().String())
 					return
 				}
 				if !this.verifyfunc(p.clientname, verifydata, msg.Sender, msg.GetVerify().Verifydata) {
@@ -257,7 +258,12 @@ func (this *Instance) read(p *Peer) {
 		}
 		if e != nil {
 			if e != io.EOF {
-				fmt.Printf("[Stream.TCP.read] read data error:%s from ip:%s\n", e, conn.RemoteAddr().String())
+				switch p.selftype {
+				case CLIENT:
+					fmt.Printf("[Stream.TCP.read] read data error:%s from server:%s ip:%s\n", e, p.servername, conn.RemoteAddr().String())
+				case SERVER:
+					fmt.Printf("[Stream.TCP.read] read data error:%s from client:%s ip:%s\n", e, p.clientname, conn.RemoteAddr().String())
+				}
 			}
 			return
 		}
@@ -269,14 +275,24 @@ func (this *Instance) read(p *Peer) {
 			msglen := binary.BigEndian.Uint16(p.readbuffer.Peek(0, 2))
 			if p.readbuffer.Num() < int(msglen+2) {
 				if p.readbuffer.Rest() == 0 {
-					fmt.Printf("[Stream.TCP.read] message too large form ip:%s\n", conn.RemoteAddr().String())
+					switch p.selftype {
+					case CLIENT:
+						fmt.Printf("[Stream.TCP.read] message too large form server:%s ip:%s\n", p.servername, conn.RemoteAddr().String())
+					case SERVER:
+						fmt.Printf("[Stream.TCP.read] message too large form client:%s ip:%s\n", p.clientname, conn.RemoteAddr().String())
+					}
 					return
 				}
 				break
 			}
 			msg := &TotalMsg{}
 			if e = proto.Unmarshal(p.readbuffer.Get(int(msglen + 2))[2:], msg); e != nil {
-				fmt.Printf("[Stream.TCP.read] message wrong form ip:%s\n", conn.RemoteAddr().String())
+				switch p.selftype {
+				case CLIENT:
+					fmt.Printf("[Stream.TCP.read] message wrong form server:%s ip:%s\n", p.servername, conn.RemoteAddr().String())
+				case SERVER:
+					fmt.Printf("[Stream.TCP.read] message wrong form client:%s ip:%s\n", p.clientname, conn.RemoteAddr().String())
+				}
 				return
 			}
 			//drop data race message
@@ -355,7 +371,12 @@ func (this *Instance) write(p *Peer) {
 			num, e = conn.Write(data[send:])
 			if e != nil {
 				if e != io.EOF {
-					fmt.Printf("[Stream.TCP.write] write data error:%s to ip:%s\n", e, conn.RemoteAddr().String())
+					switch p.selftype {
+					case CLIENT:
+						fmt.Printf("[Stream.TCP.write] write data error:%s to server:%s ip:%s\n", e, p.servername, conn.RemoteAddr().String())
+					case SERVER:
+						fmt.Printf("[Stream.TCP.write] write data error:%s to client:%s ip:%s\n", e, p.clientname, conn.RemoteAddr().String())
+					}
 				}
 				return
 			}
