@@ -204,11 +204,10 @@ func (this *Instance) verifypeer(p *Peer, verifydata []byte) {
 			switch p.selftype {
 			case CLIENT:
 				p.servername = msg.Sender
-				node.peers[p.clientname+p.servername] = p
 			case SERVER:
 				p.clientname = msg.Sender
-				node.peers[p.clientname+p.clientname] = p
 			}
+			node.peers[p.clientname+p.servername] = p
 			node.Unlock()
 			return
 		}
@@ -217,23 +216,20 @@ func (this *Instance) verifypeer(p *Peer, verifydata []byte) {
 func (this *Instance) read(p *Peer) {
 	conn := (*net.TCPConn)(p.conn)
 	defer func() {
-		p.Lock()
+		if p.parentnode == nil {
+			fmt.Println("nil")
+		}
+		p.parentnode.Lock()
 		//every connection will have two goruntine to work for it
-		if p.parentnode != nil {
+		if _, ok := p.parentnode.peers[p.clientname+p.servername]; ok {
 			//when first goruntine return,delete this connection from the map
-			p.parentnode.Lock()
-			switch p.selftype {
-			case CLIENT:
-				delete(p.parentnode.peers, p.servername)
-			case SERVER:
-				delete(p.parentnode.peers, p.clientname)
-			}
-			p.parentnode.Unlock()
-			p.parentnode = nil
+			delete(p.parentnode.peers, p.clientname+p.servername)
 			//cause write goruntine return,this will be useful when there is nothing in writebuffer
 			p.writerbuffer <- []byte{}
 			p.status = false
+			p.parentnode.Unlock()
 		} else {
+			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
 			if this.offlinefunc != nil {
 				switch p.selftype {
@@ -245,7 +241,6 @@ func (this *Instance) read(p *Peer) {
 			}
 			this.putpeer(p)
 		}
-		p.Unlock()
 	}()
 	//after verify,the read timeout is useless,heartbeat will work for this
 	conn.SetReadDeadline(time.Time{})
@@ -328,23 +323,20 @@ func (this *Instance) read(p *Peer) {
 func (this *Instance) write(p *Peer) {
 	conn := (*net.TCPConn)(p.conn)
 	defer func() {
-		p.Lock()
+		if p.parentnode == nil {
+			fmt.Println("nil")
+		}
+		p.parentnode.Lock()
 		//every connection will have two goruntine to work for it
-		if p.parentnode != nil {
+		if _, ok := p.parentnode.peers[p.clientname+p.servername]; ok {
 			//when first goruntine return,delete this connection from the map
-			p.parentnode.Lock()
-			switch p.selftype {
-			case CLIENT:
-				delete(p.parentnode.peers, p.servername)
-			case SERVER:
-				delete(p.parentnode.peers, p.clientname)
-			}
-			p.parentnode.Unlock()
-			p.parentnode = nil
+			delete(p.parentnode.peers, p.clientname+p.servername)
 			//close the connection,cause read goruntine return
 			p.closeconn()
 			p.status = false
+			p.parentnode.Unlock()
 		} else {
+			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
 			if this.offlinefunc != nil {
 				switch p.selftype {
@@ -356,7 +348,6 @@ func (this *Instance) write(p *Peer) {
 			}
 			this.putpeer(p)
 		}
-		p.Unlock()
 	}()
 	send := 0
 	num := 0

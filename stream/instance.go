@@ -38,7 +38,6 @@ type peernode struct {
 	peers map[string]*Peer
 }
 type Peer struct {
-	sync.Mutex
 	parentnode    *peernode
 	clientname    string
 	servername    string
@@ -96,10 +95,8 @@ func (p *Peer) setbuffer(num int) {
 }
 func (p *Peer) Close() {
 	p.parentnode.RLock()
-	p.Lock()
 	p.closeconn()
 	p.status = false
-	p.Unlock()
 	p.parentnode.RUnlock()
 }
 func (p *Peer) SendMessage(userdata []byte, uniqueid int64) error {
@@ -209,7 +206,7 @@ func NewInstance(c *Config, verify HandleVerifyFunc, online HandleOnlineFunc, us
 	}
 	for i := range stream.peernodes {
 		stream.peernodes[i] = &peernode{
-			peers: make(map[string]*Peer),
+			peers: make(map[string]*Peer, 10),
 		}
 		go stream.heart(stream.peernodes[i])
 	}
@@ -217,24 +214,22 @@ func NewInstance(c *Config, verify HandleVerifyFunc, online HandleOnlineFunc, us
 }
 
 func (this *Instance) heart(node *peernode) {
-	tker := time.NewTicker(time.Duration(this.conf.HeartInterval/2) * time.Millisecond)
+	tker := time.NewTicker(time.Duration(this.conf.HeartInterval/3) * time.Millisecond)
 	for {
 		<-tker.C
 		now := time.Now().UnixNano()
 		node.RLock()
 		for _, p := range node.peers {
-			p.Lock()
 			if !p.status {
-				p.Unlock()
 				continue
 			}
 			if now-p.lastactive > this.conf.HeartInterval*1000*1000 {
 				//heartbeat timeout
 				switch p.selftype {
 				case CLIENT:
-					fmt.Printf("[Stream.heart] timeout client:%s", p.clientname)
+					fmt.Printf("[Stream.heart] timeout server:%s\n", p.servername)
 				case SERVER:
-					fmt.Printf("[Stream.heart] timeout server:%s", p.servername)
+					fmt.Printf("[Stream.heart] timeout client:%s\n", p.clientname)
 				}
 				p.closeconnread()
 				p.status = false
@@ -246,8 +241,8 @@ func (this *Instance) heart(node *peernode) {
 					p.writerbuffer <- makeHeartMsg(p.servername, time.Now().UnixNano(), p.starttime)
 				}
 			}
-			p.Unlock()
 		}
+		//fmt.Println(len(node.peers))
 		node.RUnlock()
 	}
 }
