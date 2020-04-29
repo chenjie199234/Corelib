@@ -186,6 +186,7 @@ func (this *MQ) Get() (data unsafe.Pointer, rest int) {
 		this.Lock()
 		if this.curlen > 0 {
 			this.out <- this.data[this.head]
+			this.data[this.head] = nil
 			this.curlen--
 			this.head++
 			if this.head >= this.maxlen {
@@ -221,13 +222,30 @@ func (this *MQ) Rest() int {
 //this should be used after new mq or get from pool
 func (this *MQ) Reset() {
 	this.Lock()
-	this.out = make(chan unsafe.Pointer, 1)
-
+	select {
+	case <-this.out:
+	default:
+	}
+	if this.maxlen >= this.minbuflen*4 {
+		this.data = make([]unsafe.Pointer, this.minbuflen) //free old data and slice mem
+	} else {
+		for i := 0; i < this.curlen; i++ {
+			if this.head+i >= this.maxlen {
+				this.data[this.head+i-this.maxlen] = nil
+			} else {
+				this.data[this.head+i] = nil
+			}
+			this.curlen--
+		} //free old data mem
+		this.data = this.data[:this.minbuflen] //hold old slice mem as it's cap
+	}
 	this.maxlen = this.minbuflen
 	this.curlen = 0
-	this.data = this.data[:this.minbuflen]
+
 	this.head = 0
 	this.tail = 0
+
+	this.shirnkcount = 0
 
 	this.closestatus = false
 	this.Unlock()

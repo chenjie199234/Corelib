@@ -161,7 +161,12 @@ func (b *Buffer) Rest() int {
 func (b *Buffer) Reset() {
 	b.head = 0
 	b.tail = 0
-	b.data = b.data[:b.minbuflen]
+	if b.maxlen >= b.minbuflen*4 {
+		b.data = make([]byte, b.minbuflen) //free old mem
+	} else {
+		b.data = b.data[:b.minbuflen] //hold old mem as it's cap
+	}
 	b.maxlen = b.minbuflen
 	b.curlen = 0
+	b.shirnkcount = 0
 }

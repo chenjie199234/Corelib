@@ -43,9 +43,25 @@ func (this *Instance) sworker(p *Peer, verifydata []byte) bool {
 	//read first verify message from client
 	this.verifypeer(p, verifydata)
 	if p.clientname != "" {
+		conn := (*net.TCPConn)(p.conn)
 		//verify client success,send self's verify message to client
 		verifymsg := makeVerifyMsg(p.servername, verifydata, p.starttime)
-		p.writerbuffer <- verifymsg
+		send := 0
+		for send < len(verifymsg) {
+			num, e := conn.Write(verifymsg[send:])
+			if e != nil {
+				fmt.Printf("[Stream.TCP.sworker] write first verify message error:%s to ip:%s\n", e, conn.RemoteAddr().String())
+				p.parentnode.Lock()
+				delete(p.parentnode.peers, p.clientname+p.servername)
+				p.closeconn()
+				p.status = false
+				p.parentnode.Unlock()
+				this.putpeer(p)
+				return false
+			}
+			send += num
+		}
+		//p.writerbuffer <- verifymsg
 		if this.onlinefunc != nil {
 			switch p.selftype {
 			case CLIENT:
