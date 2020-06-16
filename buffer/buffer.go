@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	ERRFULL = errors.New("mq is full,new msg will be dropped")
+	ERRFULL = errors.New("buffer is full,new msg will be dropped")
 )
 
 type Buffer struct {
