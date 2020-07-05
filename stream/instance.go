@@ -49,7 +49,9 @@ type Peer struct {
 	tempbuffernum int
 	writerbuffer  chan []byte
 	conn          unsafe.Pointer
-	lastactive    int64
+	lastactive    int64   //unixnano timestamp
+	netlag        []int64 //unixnano timeoffset
+	netlagindex   int
 	status        bool //true-working,false-closing
 }
 
@@ -58,8 +60,9 @@ func (p *Peer) closeconn() {
 		switch p.protocoltype {
 		case TCP:
 			(*net.TCPConn)(p.conn).Close()
-		case WEBSOCKET:
 		case UNIXSOCKET:
+			(*net.UnixConn)(p.conn).Close()
+		case WEBSOCKET:
 		}
 	}
 }
@@ -68,8 +71,9 @@ func (p *Peer) closeconnread() {
 		switch p.protocoltype {
 		case TCP:
 			(*net.TCPConn)(p.conn).CloseRead()
-		case WEBSOCKET:
 		case UNIXSOCKET:
+			(*net.UnixConn)(p.conn).CloseRead()
+		case WEBSOCKET:
 		}
 	}
 }
@@ -78,8 +82,9 @@ func (p *Peer) closeconnwrite() {
 		switch p.protocoltype {
 		case TCP:
 			(*net.TCPConn)(p.conn).CloseWrite()
-		case WEBSOCKET:
 		case UNIXSOCKET:
+			(*net.UnixConn)(p.conn).CloseWrite()
+		case WEBSOCKET:
 		}
 	}
 }
@@ -89,8 +94,10 @@ func (p *Peer) setbuffer(num int) {
 		(*net.TCPConn)(p.conn).SetNoDelay(true)
 		(*net.TCPConn)(p.conn).SetReadBuffer(num)
 		(*net.TCPConn)(p.conn).SetWriteBuffer(num)
-	case WEBSOCKET:
 	case UNIXSOCKET:
+		(*net.UnixConn)(p.conn).SetReadBuffer(num)
+		(*net.UnixConn)(p.conn).SetWriteBuffer(num)
+	case WEBSOCKET:
 	}
 }
 func (p *Peer) Close() {
@@ -98,6 +105,30 @@ func (p *Peer) Close() {
 	p.closeconn()
 	p.status = false
 	p.parentnode.RUnlock()
+}
+
+//get the average netlag within the sample collect cycle
+func (p *Peer) GetAverageNetLag() int64 {
+	total := int64(0)
+	count := int64(0)
+	for _, v := range p.netlag {
+		if v != 0 {
+			total += v
+			count++
+		}
+	}
+	return total / count
+}
+
+//get the max netlag within the sample collect cycle
+func (p *Peer) GetPeekNetLag() int64 {
+	max := p.netlag[0]
+	for _, v := range p.netlag {
+		if max < v {
+			max = v
+		}
+	}
+	return max
 }
 func (p *Peer) SendMessage(userdata []byte, uniqueid int64) error {
 	if !p.status || p.starttime != uniqueid {
@@ -150,6 +181,10 @@ func (this *Instance) putpeer(p *Peer) {
 	}
 	p.closeconn()
 	p.lastactive = 0
+	for i := range p.netlag {
+		p.netlag[i] = 0
+	}
+	p.netlagindex = 0
 	p.status = false
 	this.peerPool.Put(p)
 }
@@ -198,6 +233,8 @@ func NewInstance(c *Config, verify HandleVerifyFunc, online HandleOnlineFunc, us
 					writerbuffer:  make(chan []byte, c.MaxWriteBufferNum),
 					conn:          nil,
 					lastactive:    0,
+					netlag:        make([]int64, c.NetLagSampleNum),
+					netlagindex:   0,
 					status:        false,
 				}
 			},
@@ -227,22 +264,53 @@ func (this *Instance) heart(node *peernode) {
 				//heartbeat timeout
 				switch p.selftype {
 				case CLIENT:
-					fmt.Printf("[Stream.heart] timeout server:%s\n", p.servername)
+					switch p.protocoltype {
+					case TCP:
+						fmt.Printf("[Stream.TCP.heart] timeout server:%s addr:%s\n", p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
+					case UNIXSOCKET:
+						fmt.Printf("[Stream.UNIX.heart] timeout server:%s addr:%s\n", p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
+					}
 				case SERVER:
-					fmt.Printf("[Stream.heart] timeout client:%s\n", p.clientname)
+					switch p.protocoltype {
+					case TCP:
+						fmt.Printf("[Stream.TCP.heart] timeout client:%s addr:%s\n", p.clientname, (*net.TCPConn)(p.conn).RemoteAddr().String())
+					case UNIXSOCKET:
+						fmt.Printf("[Stream.TCP.heart] timeout client:%s addr:%s\n", p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String())
+					}
 				}
 				p.closeconnread()
 				p.status = false
 			} else {
 				switch p.selftype {
 				case CLIENT:
-					p.writerbuffer <- makeHeartMsg(p.clientname, time.Now().UnixNano(), p.starttime)
+					select {
+					case p.writerbuffer <- makeHeartMsg(p.clientname, time.Now().UnixNano(), p.starttime):
+					default:
+						switch p.protocoltype {
+						case TCP:
+							fmt.Printf("[Stream.TCP.heart] send heart msg to server:%s addr:%s failed:write buffer is full",
+								p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
+						case UNIXSOCKET:
+							fmt.Printf("[Stream.UNIX.heart] send heart msg to server:%s addr:%s failed:write buffer is full",
+								p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
+						}
+					}
 				case SERVER:
-					p.writerbuffer <- makeHeartMsg(p.servername, time.Now().UnixNano(), p.starttime)
+					select {
+					case p.writerbuffer <- makeHeartMsg(p.servername, time.Now().UnixNano(), p.starttime):
+					default:
+						switch p.protocoltype {
+						case TCP:
+							fmt.Printf("[Stream.TCP.heart] send heart msg to client:%s addr:%s failed:write buffer is full",
+								p.clientname, (*net.TCPConn)(p.conn).RemoteAddr().String())
+						case UNIXSOCKET:
+							fmt.Printf("[Stream.UNIX.heart] send heart msg to client:%s addr:%s failed:write buffer is full",
+								p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String())
+						}
+					}
 				}
 			}
 		}
-		//fmt.Println(len(node.peers))
 		node.RUnlock()
 	}
 }
