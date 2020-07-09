@@ -6,7 +6,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func makeHeartMsg(sender string, timestamp int64, starttime int64) []byte {
+func makeHeartMsg(sender string, timestamp int64, starttime int64, needprefix bool) []byte {
 	data, _ := proto.Marshal(&TotalMsg{
 		Totaltype: TotalMsgType_HEART,
 		Sender:    sender,
@@ -17,9 +17,12 @@ func makeHeartMsg(sender string, timestamp int64, starttime int64) []byte {
 			},
 		},
 	})
-	return addPrefix(data)
+	if needprefix {
+		return addPrefix(data)
+	}
+	return data
 }
-func makeVerifyMsg(sender string, verifydata []byte, starttime int64) []byte {
+func makeVerifyMsg(sender string, verifydata []byte, starttime int64, needprefix bool) []byte {
 	data, _ := proto.Marshal(&TotalMsg{
 		Totaltype: TotalMsgType_VERIFY,
 		Sender:    sender,
@@ -30,12 +33,15 @@ func makeVerifyMsg(sender string, verifydata []byte, starttime int64) []byte {
 			},
 		},
 	})
-	return addPrefix(data)
+	if needprefix {
+		return addPrefix(data)
+	}
+	return data
+
 }
-func makeUserMsg(sender string, userdata []byte, starttime int64) []byte {
+func makeUserMsg(userdata []byte, starttime int64, needprefix bool) []byte {
 	data, _ := proto.Marshal(&TotalMsg{
 		Totaltype: TotalMsgType_USER,
-		Sender:    sender,
 		Starttime: starttime,
 		Msg: &TotalMsg_User{
 			User: &UserMsg{
@@ -43,7 +49,10 @@ func makeUserMsg(sender string, userdata []byte, starttime int64) []byte {
 			},
 		},
 	})
-	return addPrefix(data)
+	if needprefix {
+		return addPrefix(data)
+	}
+	return data
 }
 func addPrefix(data []byte) []byte {
 	prefix := make([]byte, 2)

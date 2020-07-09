@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/buffer"
+	"github.com/gorilla/websocket"
 )
 
 //Warning!!Don't write block logic in these callback,live for{}
@@ -63,6 +64,7 @@ func (p *Peer) closeconn() {
 		case UNIXSOCKET:
 			(*net.UnixConn)(p.conn).Close()
 		case WEBSOCKET:
+			(*websocket.Conn)(p.conn).Close()
 		}
 	}
 }
@@ -74,6 +76,13 @@ func (p *Peer) closeconnread() {
 		case UNIXSOCKET:
 			(*net.UnixConn)(p.conn).CloseRead()
 		case WEBSOCKET:
+			if t, ok := (*websocket.Conn)(p.conn).UnderlyingConn().(*net.TCPConn); ok {
+				if e := t.CloseRead(); e != nil {
+					fmt.Printf("can't closeread tcpconn for websocket,error:%s\n", e)
+				}
+			} else {
+				fmt.Println("can't change websocket conn to tcp conn")
+			}
 		}
 	}
 }
@@ -85,19 +94,35 @@ func (p *Peer) closeconnwrite() {
 		case UNIXSOCKET:
 			(*net.UnixConn)(p.conn).CloseWrite()
 		case WEBSOCKET:
+			if t, ok := (*websocket.Conn)(p.conn).UnderlyingConn().(*net.TCPConn); ok {
+				if e := t.CloseWrite(); e != nil {
+					fmt.Printf("can't closewrite tcpconn for websocket,error:%s\n", e)
+				}
+			} else {
+				fmt.Println("can't change webcosket conn to tcp conn")
+			}
 		}
 	}
 }
-func (p *Peer) setbuffer(num int) {
+func (p *Peer) setbuffer(readnum, writenum int) {
 	switch p.protocoltype {
 	case TCP:
-		(*net.TCPConn)(p.conn).SetNoDelay(true)
-		(*net.TCPConn)(p.conn).SetReadBuffer(num)
-		(*net.TCPConn)(p.conn).SetWriteBuffer(num)
+		(*net.TCPConn)(p.conn).SetReadBuffer(readnum)
+		(*net.TCPConn)(p.conn).SetWriteBuffer(writenum)
 	case UNIXSOCKET:
-		(*net.UnixConn)(p.conn).SetReadBuffer(num)
-		(*net.UnixConn)(p.conn).SetWriteBuffer(num)
+		(*net.UnixConn)(p.conn).SetReadBuffer(readnum)
+		(*net.UnixConn)(p.conn).SetWriteBuffer(writenum)
 	case WEBSOCKET:
+		if t, ok := (*websocket.Conn)(p.conn).UnderlyingConn().(*net.TCPConn); ok {
+			if e := t.SetReadBuffer(readnum); e != nil {
+				fmt.Printf("can't set readbuffer tcpconn for websocket,error:%s\n", e)
+			}
+			if e := t.SetWriteBuffer(writenum); e != nil {
+				fmt.Printf("can't set writebuffer tcpconn for websocket,error:%s\n", e)
+			}
+		} else {
+			fmt.Println("can't change webcosket conn to tcp conn")
+		}
 	}
 }
 func (p *Peer) Close() {
@@ -138,11 +163,13 @@ func (p *Peer) SendMessage(userdata []byte, uniqueid int64) error {
 	}
 	//here has little data race,but the message package will be dropped by peer,because of different uniqueid
 	var data []byte
-	switch p.selftype {
-	case CLIENT:
-		data = makeUserMsg(p.clientname, userdata, uniqueid)
-	case SERVER:
-		data = makeUserMsg(p.servername, userdata, uniqueid)
+	switch p.protocoltype {
+	case TCP:
+		fallthrough
+	case UNIXSOCKET:
+		data = makeUserMsg(userdata, uniqueid, true)
+	case WEBSOCKET:
+		data = makeUserMsg(userdata, uniqueid, false)
 	}
 	select {
 	case p.writerbuffer <- data:
@@ -153,21 +180,22 @@ func (p *Peer) SendMessage(userdata []byte, uniqueid int64) error {
 }
 
 type Instance struct {
-	conf         *Config
-	verifyfunc   HandleVerifyFunc
-	onlinefunc   HandleOnlineFunc
-	userdatafunc HandleUserdataFunc
-	offlinefunc  HandleOfflineFunc
-	status       bool //true-working,false-closing
-	peerPool     *sync.Pool
+	conf              *Config
+	verifyfunc        HandleVerifyFunc
+	onlinefunc        HandleOnlineFunc
+	userdatafunc      HandleUserdataFunc
+	offlinefunc       HandleOfflineFunc
+	status            bool //true-working,false-closing
+	peerPool          *sync.Pool
+	websocketPeerPool *sync.Pool
 	sync.RWMutex
 	peernodes []*peernode
 }
 
-func (this *Instance) getpeer() *Peer {
+func (this *Instance) getPeer() *Peer {
 	return this.peerPool.Get().(*Peer)
 }
-func (this *Instance) putpeer(p *Peer) {
+func (this *Instance) putPeer(p *Peer) {
 	p.parentnode = nil
 	p.clientname = ""
 	p.servername = ""
@@ -188,6 +216,31 @@ func (this *Instance) putpeer(p *Peer) {
 	p.status = false
 	this.peerPool.Put(p)
 }
+func (this *Instance) getWebsocketPeer() *Peer {
+	return this.websocketPeerPool.Get().(*Peer)
+}
+func (this *Instance) putWebSocketPeer(p *Peer) {
+	p.parentnode = nil
+	p.clientname = ""
+	p.servername = ""
+	p.selftype = 0
+	p.protocoltype = 0
+	p.starttime = 0
+	p.readbuffer = nil
+	p.tempbuffer = nil
+	p.tempbuffernum = 0
+	if len(p.writerbuffer) > 0 {
+		<-p.writerbuffer
+	}
+	p.closeconn()
+	p.lastactive = 0
+	for i := range p.netlag {
+		p.netlag[i] = 0
+	}
+	p.netlagindex = 0
+	p.status = false
+	this.websocketPeerPool.Put(p)
+}
 func NewInstance(c *Config, verify HandleVerifyFunc, online HandleOnlineFunc, userdata HandleUserdataFunc, offline HandleOfflineFunc) *Instance {
 	//online and offline can be nill
 	//verify and userdata can't be nill
@@ -197,21 +250,9 @@ func NewInstance(c *Config, verify HandleVerifyFunc, online HandleOnlineFunc, us
 	if userdata == nil {
 		return nil
 	}
-	if c.MinReadBufferLen == 0 {
-		c.MinReadBufferLen = 1024
-	}
-	if c.MaxReadBufferLen == 0 {
-		c.MaxReadBufferLen = 40960
-	}
-	if c.MaxReadBufferLen < c.MinReadBufferLen {
-		c.MaxReadBufferLen = c.MinReadBufferLen
-	}
-	if c.MaxWriteBufferNum == 0 {
-		c.MaxWriteBufferNum = 256
-	}
-	if c.Splitnum == 0 {
-		c.Splitnum = 1
-	}
+
+	checkConfig(c)
+
 	stream := &Instance{
 		conf:         c,
 		verifyfunc:   verify,
@@ -227,12 +268,31 @@ func NewInstance(c *Config, verify HandleVerifyFunc, online HandleOnlineFunc, us
 					selftype:      0,
 					protocoltype:  0,
 					starttime:     0,
-					readbuffer:    buffer.NewBuf(c.MinReadBufferLen, c.MaxReadBufferLen),
-					tempbuffer:    make([]byte, c.MinReadBufferLen),
+					readbuffer:    buffer.NewBuf(c.AppMinReadBufferLen, c.AppMaxReadBufferLen),
+					tempbuffer:    make([]byte, c.AppMinReadBufferLen),
 					tempbuffernum: 0,
-					writerbuffer:  make(chan []byte, c.MaxWriteBufferNum),
+					writerbuffer:  make(chan []byte, c.AppWriteBufferNum),
 					conn:          nil,
 					lastactive:    0,
+					netlag:        make([]int64, c.NetLagSampleNum),
+					netlagindex:   0,
+					status:        false,
+				}
+			},
+		},
+		websocketPeerPool: &sync.Pool{
+			New: func() interface{} {
+				return &Peer{
+					clientname:    "",
+					servername:    "",
+					selftype:      0,
+					protocoltype:  0,
+					starttime:     0,
+					readbuffer:    nil,
+					tempbuffer:    nil,
+					tempbuffernum: 0,
+					writerbuffer:  make(chan []byte, c.AppWriteBufferNum),
+					conn:          nil,
 					netlag:        make([]int64, c.NetLagSampleNum),
 					netlagindex:   0,
 					status:        false,
@@ -281,10 +341,20 @@ func (this *Instance) heart(node *peernode) {
 				p.closeconnread()
 				p.status = false
 			} else {
+				var data []byte
+
 				switch p.selftype {
 				case CLIENT:
+					switch p.protocoltype {
+					case TCP:
+						fallthrough
+					case UNIXSOCKET:
+						data = makeHeartMsg(p.clientname, time.Now().UnixNano(), p.starttime, true)
+					case WEBSOCKET:
+						data = makeHeartMsg(p.clientname, time.Now().UnixNano(), p.starttime, false)
+					}
 					select {
-					case p.writerbuffer <- makeHeartMsg(p.clientname, time.Now().UnixNano(), p.starttime):
+					case p.writerbuffer <- data:
 					default:
 						switch p.protocoltype {
 						case TCP:
@@ -296,8 +366,16 @@ func (this *Instance) heart(node *peernode) {
 						}
 					}
 				case SERVER:
+					switch p.protocoltype {
+					case TCP:
+						fallthrough
+					case UNIXSOCKET:
+						data = makeHeartMsg(p.servername, time.Now().UnixNano(), p.starttime, true)
+					case WEBSOCKET:
+						data = makeHeartMsg(p.servername, time.Now().UnixNano(), p.starttime, false)
+					}
 					select {
-					case p.writerbuffer <- makeHeartMsg(p.servername, time.Now().UnixNano(), p.starttime):
+					case p.writerbuffer <- data:
 					default:
 						switch p.protocoltype {
 						case TCP:

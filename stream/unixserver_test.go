@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"runtime"
 	"sync/atomic"
 	"testing"
@@ -16,11 +17,12 @@ var unixcount int64
 func Test_Unixserver(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	unixserverinstance = NewInstance(&Config{
-		VerifyTimeout:   250,
-		HeartInterval:   500,
+		VerifyTimeout:   500,
+		HeartInterval:   1000,
 		NetLagSampleNum: 10,
-		Splitnum:        128,
+		Splitnum:        10,
 	}, unixserverhandleVerify, unixserverhandleonline, unixserverhandleuserdata, unixserverhandleoffline)
+	os.Remove("./test.socket")
 	unixserverinstance.StartUnixsocketServer("server", []byte{}, "./test.socket")
 	go func() {
 		for {

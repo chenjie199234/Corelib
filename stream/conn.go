@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	//"net/http"
+	"syscall"
 	"time"
 	"unsafe"
 
-	//"golang.org/x/net/websocket"
+	//"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -25,7 +28,7 @@ func (this *Instance) StartTcpServer(selfname string, verifydata []byte, listena
 	}
 	go func() {
 		for {
-			p := this.getpeer()
+			p := this.getPeer()
 			p.protocoltype = TCP
 			p.servername = selfname
 			p.selftype = SERVER
@@ -34,7 +37,7 @@ func (this *Instance) StartTcpServer(selfname string, verifydata []byte, listena
 				return
 			}
 			p.conn = unsafe.Pointer(conn)
-			p.setbuffer(this.conf.MinReadBufferLen)
+			p.setbuffer(this.conf.TcpSocketReadBufferLen, this.conf.TcpSocketWriteBufferLen)
 			p.status = true
 			go this.sworker(p, verifydata)
 		}
@@ -53,7 +56,7 @@ func (this *Instance) StartUnixsocketServer(selfname string, verifydata []byte, 
 	}
 	go func() {
 		for {
-			p := this.getpeer()
+			p := this.getPeer()
 			p.protocoltype = UNIXSOCKET
 			p.servername = selfname
 			p.selftype = SERVER
@@ -62,21 +65,20 @@ func (this *Instance) StartUnixsocketServer(selfname string, verifydata []byte, 
 				return
 			}
 			p.conn = unsafe.Pointer(conn)
-			p.setbuffer(this.conf.MinReadBufferLen)
+			p.setbuffer(this.conf.UnixSocketReadBufferLen, this.conf.UnixSocketWriteBufferLen)
 			p.status = true
 			go this.sworker(p, verifydata)
 		}
 	}()
 }
 func (this *Instance) StartWebsocketServer(selfname string, verifydata []byte, listenaddr string) {
-
 }
 func (this *Instance) sworker(p *Peer, verifydata []byte) bool {
 	//read first verify message from client
 	this.verifypeer(p, verifydata)
 	if p.clientname != "" {
 		//verify client success,send self's verify message to client
-		verifymsg := makeVerifyMsg(p.servername, verifydata, p.starttime)
+		verifymsg := makeVerifyMsg(p.servername, verifydata, p.starttime, true)
 		send := 0
 		num := 0
 		var e error
@@ -101,7 +103,7 @@ func (this *Instance) sworker(p *Peer, verifydata []byte) bool {
 				p.closeconn()
 				p.status = false
 				p.parentnode.Unlock()
-				this.putpeer(p)
+				this.putPeer(p)
 				return false
 			}
 			send += num
@@ -118,7 +120,7 @@ func (this *Instance) sworker(p *Peer, verifydata []byte) bool {
 		go this.write(p)
 		return true
 	} else {
-		this.putpeer(p)
+		this.putPeer(p)
 		return false
 	}
 }
@@ -129,12 +131,12 @@ func (this *Instance) StartTcpClient(selfname string, verifydata []byte, servera
 		fmt.Printf("[Stream.TCP.StartTcpClient]tcp connect server addr:%s error:%s\n", serveraddr, e)
 		return false
 	}
-	p := this.getpeer()
+	p := this.getPeer()
 	p.protocoltype = TCP
 	p.clientname = selfname
 	p.selftype = CLIENT
 	p.conn = unsafe.Pointer(c.(*net.TCPConn))
-	p.setbuffer(this.conf.MinReadBufferLen)
+	p.setbuffer(this.conf.TcpSocketReadBufferLen, this.conf.TcpSocketWriteBufferLen)
 	p.status = true
 	return this.cworker(p, verifydata)
 }
@@ -145,12 +147,12 @@ func (this *Instance) StartUnixsocketClient(selfname string, verifydata []byte, 
 		fmt.Printf("[Stream.UNIX.StartUnixsocketClient]unix connect server addr:%s error:%s\n", serveraddr, e)
 		return false
 	}
-	p := this.getpeer()
+	p := this.getPeer()
 	p.protocoltype = UNIXSOCKET
 	p.clientname = selfname
 	p.selftype = CLIENT
 	p.conn = unsafe.Pointer(c.(*net.UnixConn))
-	p.setbuffer(this.conf.MinReadBufferLen)
+	p.setbuffer(this.conf.TcpSocketReadBufferLen, this.conf.TcpSocketWriteBufferLen)
 	p.status = true
 	return this.cworker(p, verifydata)
 }
@@ -160,7 +162,7 @@ func (this *Instance) StartUnixsocketClient(selfname string, verifydata []byte, 
 //}
 func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
 	//send self's verify message to server
-	verifymsg := makeVerifyMsg(p.clientname, verifydata, p.starttime)
+	verifymsg := makeVerifyMsg(p.clientname, verifydata, p.starttime, true)
 	send := 0
 	num := 0
 	var e error
@@ -200,7 +202,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
 		go this.write(p)
 		return true
 	} else {
-		this.putpeer(p)
+		this.putPeer(p)
 		return false
 	}
 }
@@ -453,7 +455,7 @@ func (this *Instance) read(p *Peer) {
 					this.offlinefunc(p, p.clientname, p.starttime)
 				}
 			}
-			this.putpeer(p)
+			this.putPeer(p)
 		}
 	}()
 	//after verify,the read timeout is useless,heartbeat will work for this
@@ -480,7 +482,20 @@ func (this *Instance) read(p *Peer) {
 				p.tempbuffernum, e = (*net.UnixConn)(p.conn).Read(p.tempbuffer[:p.readbuffer.Rest()])
 			}
 		}
-		if e != nil && e != io.EOF && e != io.ErrClosedPipe {
+		switch {
+		case e == nil: //don't print log when there is no error
+		case e == io.EOF: //don't print log when err is eof
+		case e == syscall.EINVAL: //don't print log when conn is already closed
+		default:
+			if operr, ok := e.(*net.OpError); ok && operr != nil {
+				if syserr, ok := operr.Err.(*os.SyscallError); ok && syserr != nil {
+					if syserr.Err.(syscall.Errno) == syscall.ECONNRESET || syserr.Err.(syscall.Errno) == syscall.EPIPE {
+						//don't print log when err is rst
+						//don't print log when err is broken pipe
+						break
+					}
+				}
+			}
 			switch p.selftype {
 			case CLIENT:
 				switch p.protocoltype {
@@ -640,34 +655,6 @@ func (this *Instance) read(p *Peer) {
 					}
 				}
 			case TotalMsgType_USER:
-				switch p.selftype {
-				case CLIENT:
-					if msg.Sender != p.servername {
-						//continue
-						switch p.protocoltype {
-						case TCP:
-							fmt.Printf("[Stream.TCP.read]user msg name:%s check failed from server:%s addr:%s\n",
-								msg.Sender, p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
-						case UNIXSOCKET:
-							fmt.Printf("[Stream.UNIX.read]user msg name:%s check failed from server:%s addr:%s\n",
-								msg.Sender, p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
-						}
-						return
-					}
-				case SERVER:
-					if msg.Sender != p.clientname {
-						//continue
-						switch p.protocoltype {
-						case TCP:
-							fmt.Printf("[Stream.TCP.read]msg name:%s check failed from client:%s addr:%s\n",
-								msg.Sender, p.clientname, (*net.TCPConn)(p.conn).RemoteAddr().String())
-						case UNIXSOCKET:
-							fmt.Printf("[Stream.UNIX.read]msg name:%s check failed from client:%s addr:%s\n",
-								msg.Sender, p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String())
-						}
-						return
-					}
-				}
 				p.lastactive = time.Now().UnixNano()
 				switch p.selftype {
 				case CLIENT:
@@ -705,7 +692,7 @@ func (this *Instance) write(p *Peer) {
 					this.offlinefunc(p, p.clientname, p.starttime)
 				}
 			}
-			this.putpeer(p)
+			this.putPeer(p)
 		}
 	}()
 	send := 0
@@ -724,7 +711,19 @@ func (this *Instance) write(p *Peer) {
 			case UNIXSOCKET:
 				num, e = (*net.UnixConn)(p.conn).Write(data[send:])
 			}
-			if e != nil && e != io.ErrClosedPipe {
+			switch {
+			case e == nil: //don't print log when there is no error
+			case e == syscall.EINVAL: //don't print log when conn is already closed
+			default:
+				if operr, ok := e.(*net.OpError); ok && operr != nil {
+					if syserr, ok := operr.Err.(*os.SyscallError); ok && syserr != nil {
+						if syserr.Err.(syscall.Errno) == syscall.ECONNRESET || syserr.Err.(syscall.Errno) == syscall.EPIPE {
+							//don't print log when err is rst
+							//don't print log when err is broken pipe
+							break
+						}
+					}
+				}
 				switch p.selftype {
 				case CLIENT:
 					switch p.protocoltype {

@@ -14,10 +14,10 @@ var tcpclientinstance *Instance
 func Test_Tcpclient(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	tcpclientinstance = NewInstance(&Config{
-		VerifyTimeout:   250,
-		HeartInterval:   500,
+		VerifyTimeout:   500,
+		HeartInterval:   1000,
 		NetLagSampleNum: 10,
-		Splitnum:        1,
+		Splitnum:        10,
 	}, tcpclienthandleVerify, tcpclienthandleonline, tcpclienthandleuserdata, tcpclienthandleoffline)
 	go func() {
 		for count := 0; count < 10000; count++ {
