@@ -17,13 +17,14 @@ var unixcount int64
 func Test_Unixserver(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	unixserverinstance = NewInstance(&Config{
+		SelfName:        "server",
 		VerifyTimeout:   500,
-		HeartInterval:   1000,
+		HeartTimeout:    1000,
 		NetLagSampleNum: 10,
 		Splitnum:        10,
 	}, unixserverhandleVerify, unixserverhandleonline, unixserverhandleuserdata, unixserverhandleoffline)
 	os.Remove("./test.socket")
-	unixserverinstance.StartUnixsocketServer("server", []byte{}, "./test.socket")
+	unixserverinstance.StartUnixsocketServer([]byte{}, "./test.socket")
 	go func() {
 		for {
 			time.Sleep(time.Second)

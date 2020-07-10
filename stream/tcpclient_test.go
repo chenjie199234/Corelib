@@ -9,19 +9,20 @@ import (
 	"time"
 )
 
-var tcpclientinstance *Instance
+//var tcpclientinstance *Instance
 
 func Test_Tcpclient(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	tcpclientinstance = NewInstance(&Config{
-		VerifyTimeout:   500,
-		HeartInterval:   1000,
-		NetLagSampleNum: 10,
-		Splitnum:        10,
-	}, tcpclienthandleVerify, tcpclienthandleonline, tcpclienthandleuserdata, tcpclienthandleoffline)
 	go func() {
 		for count := 0; count < 10000; count++ {
-			tcpclientinstance.StartTcpClient(fmt.Sprintf("tcpclient%d", count), []byte{}, "127.0.0.1:9234")
+			tcpclientinstance := NewInstance(&Config{
+				SelfName:        fmt.Sprintf("tcpclient%d", count),
+				VerifyTimeout:   500,
+				HeartTimeout:    1000,
+				NetLagSampleNum: 10,
+				Splitnum:        10,
+			}, tcpclienthandleVerify, tcpclienthandleonline, tcpclienthandleuserdata, tcpclienthandleoffline)
+			tcpclientinstance.StartTcpClient([]byte{}, "127.0.0.1:9234")
 			time.Sleep(time.Millisecond)
 		}
 	}()

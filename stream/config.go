@@ -1,11 +1,13 @@
 package stream
 
 type Config struct {
+	//the name of this instance
+	SelfName string
 	//two peers need to verify each other,before they can communicate
 	VerifyTimeout int64 //default 1000ms
 
 	//heartbeat timeout
-	HeartInterval int64 //default 5000ms
+	HeartTimeout int64 //default 5000ms
 
 	//how many samples a cycle
 	NetLagSampleNum int
@@ -62,8 +64,8 @@ func checkConfig(c *Config) {
 	if c.VerifyTimeout == 0 {
 		c.VerifyTimeout = 1000
 	}
-	if c.HeartInterval == 0 {
-		c.HeartInterval = 5000
+	if c.HeartTimeout == 0 {
+		c.HeartTimeout = 5000
 	}
 	if c.NetLagSampleNum == 0 {
 		c.NetLagSampleNum = 10

@@ -9,19 +9,20 @@ import (
 	"time"
 )
 
-var unixclientinstance *Instance
+//var unixclientinstance *Instance
 
 func Test_Unixclient(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	unixclientinstance = NewInstance(&Config{
-		VerifyTimeout:   500,
-		HeartInterval:   1000,
-		NetLagSampleNum: 10,
-		Splitnum:        10,
-	}, unixclienthandleVerify, unixclienthandleonline, unixclienthandleuserdata, unixclienthandleoffline)
 	go func() {
 		for count := 0; count < 10000; count++ {
-			unixclientinstance.StartUnixsocketClient(fmt.Sprintf("unixclient%d", count), []byte{}, "./test.socket")
+			unixclientinstance := NewInstance(&Config{
+				SelfName:        fmt.Sprintf("unixclient%d", count),
+				VerifyTimeout:   500,
+				HeartTimeout:    1000,
+				NetLagSampleNum: 10,
+				Splitnum:        10,
+			}, unixclienthandleVerify, unixclienthandleonline, unixclienthandleuserdata, unixclienthandleoffline)
+			unixclientinstance.StartUnixsocketClient([]byte{}, "./test.socket")
 			time.Sleep(time.Millisecond)
 		}
 	}()

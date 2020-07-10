@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func (this *Instance) StartTcpServer(selfname string, verifydata []byte, listenaddr string) {
+func (this *Instance) StartTcpServer(verifydata []byte, listenaddr string) {
 	var laddr *net.TCPAddr
 	var l *net.TCPListener
 	var e error
@@ -30,8 +30,8 @@ func (this *Instance) StartTcpServer(selfname string, verifydata []byte, listena
 		for {
 			p := this.getPeer()
 			p.protocoltype = TCP
-			p.servername = selfname
-			p.selftype = SERVER
+			p.servername = this.conf.SelfName
+			p.peertype = CLIENT
 			if conn, e = l.AcceptTCP(); e != nil {
 				fmt.Printf("[Stream.TCP.StartTcpServer]accept tcp connect error:%s\n", e)
 				return
@@ -43,7 +43,7 @@ func (this *Instance) StartTcpServer(selfname string, verifydata []byte, listena
 		}
 	}()
 }
-func (this *Instance) StartUnixsocketServer(selfname string, verifydata []byte, listenaddr string) {
+func (this *Instance) StartUnixsocketServer(verifydata []byte, listenaddr string) {
 	var laddr *net.UnixAddr
 	var l *net.UnixListener
 	var e error
@@ -58,8 +58,8 @@ func (this *Instance) StartUnixsocketServer(selfname string, verifydata []byte, 
 		for {
 			p := this.getPeer()
 			p.protocoltype = UNIXSOCKET
-			p.servername = selfname
-			p.selftype = SERVER
+			p.servername = this.conf.SelfName
+			p.peertype = CLIENT
 			if conn, e = l.AcceptUnix(); e != nil {
 				fmt.Printf("[Stream.UNIX.StartUnixsocketServer]accept unix connect error:%s\n", e)
 				return
@@ -71,8 +71,9 @@ func (this *Instance) StartUnixsocketServer(selfname string, verifydata []byte, 
 		}
 	}()
 }
-func (this *Instance) StartWebsocketServer(selfname string, verifydata []byte, listenaddr string) {
-}
+
+//func (this *Instance) StartWebsocketServer(selfname string, verifydata []byte, listenaddr string) {
+//}
 func (this *Instance) sworker(p *Peer, verifydata []byte) bool {
 	//read first verify message from client
 	this.verifypeer(p, verifydata)
@@ -89,43 +90,63 @@ func (this *Instance) sworker(p *Peer, verifydata []byte) bool {
 			case UNIXSOCKET:
 				num, e = (*net.UnixConn)(p.conn).Write(verifymsg[send:])
 			}
-			if e != nil {
+			switch {
+			case e == nil: //don't print log when there is no error
+			case e == syscall.EINVAL: //don't print log when conn is already closed
+			default:
+				if operr, ok := e.(*net.OpError); ok && operr != nil {
+					if syserr, ok := operr.Err.(*os.SyscallError); ok && syserr != nil {
+						if syserr.Err.(syscall.Errno) == syscall.ECONNRESET ||
+							syserr.Err.(syscall.Errno) == syscall.EPIPE ||
+							syserr.Err.(syscall.Errno) == syscall.EBADFD {
+							//don't print log when err is rst
+							//don't print log when err is broken pipe
+							//don't print log when err is badfd
+							break
+						}
+					}
+				}
 				switch p.protocoltype {
 				case TCP:
-					fmt.Printf("[Stream.TCP.sworker]write first verify msg error:%s to addr:%s\n",
+					fmt.Printf("[Stream.TCP.sworker]write first verify msg error:%s to client addr:%s\n",
 						e, (*net.TCPConn)(p.conn).RemoteAddr().String())
 				case UNIXSOCKET:
-					fmt.Printf("[Stream.UNIX.sworker]write first verify msg error:%s to addr:%s\n",
+					fmt.Printf("[Stream.UNIX.sworker]write first verify msg error:%s to client addr:%s\n",
 						e, (*net.UnixConn)(p.conn).RemoteAddr().String())
 				}
-				p.parentnode.Lock()
-				delete(p.parentnode.peers, p.clientname+p.servername)
+			}
+			if e != nil {
 				p.closeconn()
-				p.status = false
-				p.parentnode.Unlock()
 				this.putPeer(p)
 				return false
 			}
 			send += num
 		}
-		if this.onlinefunc != nil {
-			switch p.selftype {
-			case CLIENT:
-				this.onlinefunc(p, p.servername, p.starttime)
-			case SERVER:
-				this.onlinefunc(p, p.clientname, p.starttime)
+		if !this.addPeer(p) {
+			switch p.protocoltype {
+			case TCP:
+				fmt.Printf("[Stream.TCP.sworker] refuse reconnect from client:%s addr:%s\n",
+					p.clientname, (*net.TCPConn)(p.conn).RemoteAddr().String())
+			case UNIXSOCKET:
+				fmt.Printf("[Stream.UNIX.sworker] refuse reconnect from client:%s addr:%s\n",
+					p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String())
 			}
+			return false
+		}
+		if this.onlinefunc != nil {
+			this.onlinefunc(p, p.clientname, p.starttime)
 		}
 		go this.read(p)
 		go this.write(p)
 		return true
 	} else {
+		p.closeconn()
 		this.putPeer(p)
 		return false
 	}
 }
 
-func (this *Instance) StartTcpClient(selfname string, verifydata []byte, serveraddr string) bool {
+func (this *Instance) StartTcpClient(verifydata []byte, serveraddr string) bool {
 	c, e := net.DialTimeout("tcp", serveraddr, time.Second)
 	if e != nil {
 		fmt.Printf("[Stream.TCP.StartTcpClient]tcp connect server addr:%s error:%s\n", serveraddr, e)
@@ -133,15 +154,15 @@ func (this *Instance) StartTcpClient(selfname string, verifydata []byte, servera
 	}
 	p := this.getPeer()
 	p.protocoltype = TCP
-	p.clientname = selfname
-	p.selftype = CLIENT
+	p.clientname = this.conf.SelfName
+	p.peertype = SERVER
 	p.conn = unsafe.Pointer(c.(*net.TCPConn))
 	p.setbuffer(this.conf.TcpSocketReadBufferLen, this.conf.TcpSocketWriteBufferLen)
 	p.status = true
 	return this.cworker(p, verifydata)
 }
 
-func (this *Instance) StartUnixsocketClient(selfname string, verifydata []byte, serveraddr string) bool {
+func (this *Instance) StartUnixsocketClient(verifydata []byte, serveraddr string) bool {
 	c, e := net.DialTimeout("unix", serveraddr, time.Second)
 	if e != nil {
 		fmt.Printf("[Stream.UNIX.StartUnixsocketClient]unix connect server addr:%s error:%s\n", serveraddr, e)
@@ -149,10 +170,10 @@ func (this *Instance) StartUnixsocketClient(selfname string, verifydata []byte, 
 	}
 	p := this.getPeer()
 	p.protocoltype = UNIXSOCKET
-	p.clientname = selfname
-	p.selftype = CLIENT
+	p.clientname = this.conf.SelfName
+	p.peertype = SERVER
 	p.conn = unsafe.Pointer(c.(*net.UnixConn))
-	p.setbuffer(this.conf.TcpSocketReadBufferLen, this.conf.TcpSocketWriteBufferLen)
+	p.setbuffer(this.conf.UnixSocketReadBufferLen, this.conf.UnixSocketWriteBufferLen)
 	p.status = true
 	return this.cworker(p, verifydata)
 }
@@ -173,15 +194,34 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
 		case UNIXSOCKET:
 			num, e = (*net.UnixConn)(p.conn).Write(verifymsg[send:])
 		}
-		if e != nil {
+		switch {
+		case e == nil: //don't print log when there is no error
+		case e == syscall.EINVAL: //don't print log when conn is already closed
+		default:
+			if operr, ok := e.(*net.OpError); ok && operr != nil {
+				if syserr, ok := operr.Err.(*os.SyscallError); ok && syserr != nil {
+					if syserr.Err.(syscall.Errno) == syscall.ECONNRESET ||
+						syserr.Err.(syscall.Errno) == syscall.EPIPE ||
+						syserr.Err.(syscall.Errno) == syscall.EBADFD {
+						//don't print log when err is rst
+						//don't print log when err is broken pipe
+						//don't print log when err is badfd
+						break
+					}
+				}
+			}
 			switch p.protocoltype {
 			case TCP:
-				fmt.Printf("[Stream.TCP.cworker]write first verify msg error:%s to addr:%s\n",
+				fmt.Printf("[Stream.TCP.cworker]write first verify msg error:%s to server addr:%s\n",
 					e, (*net.TCPConn)(p.conn).RemoteAddr().String())
 			case UNIXSOCKET:
-				fmt.Printf("[Stream.UNIX.cworker]write first verify msg error:%s to addr:%s\n",
+				fmt.Printf("[Stream.UNIX.cworker]write first verify msg error:%s to server addr:%s\n",
 					e, (*net.UnixConn)(p.conn).RemoteAddr().String())
 			}
+		}
+		if e != nil {
+			p.closeconn()
+			this.putPeer(p)
 			return false
 		}
 		send += num
@@ -190,13 +230,19 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
 	this.verifypeer(p, verifydata)
 	if p.servername != "" {
 		//verify server success
-		if this.onlinefunc != nil {
-			switch p.selftype {
-			case CLIENT:
-				this.onlinefunc(p, p.servername, p.starttime)
-			case SERVER:
-				this.onlinefunc(p, p.clientname, p.starttime)
+		if !this.addPeer(p) {
+			switch p.protocoltype {
+			case TCP:
+				fmt.Printf("[Stream.TCP.cworker]refuse reconnect from server:%s addr:%s\n",
+					p.clientname, (*net.TCPConn)(p.conn).RemoteAddr().String())
+			case UNIXSOCKET:
+				fmt.Printf("[Stream.UNIX.cworker]refuse reconnect from server:%s addr:%s\n",
+					p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String())
 			}
+			return false
+		}
+		if this.onlinefunc != nil {
+			this.onlinefunc(p, p.servername, p.starttime)
 		}
 		go this.read(p)
 		go this.write(p)
@@ -230,24 +276,40 @@ func (this *Instance) verifypeer(p *Peer, verifydata []byte) {
 				p.tempbuffernum, e = (*net.UnixConn)(p.conn).Read(p.tempbuffer[:p.readbuffer.Rest()])
 			}
 		}
-		if e != nil && e != io.EOF {
-			switch p.selftype {
+		switch {
+		case e == nil: //don't print log when there is no error
+		case e == io.EOF: //don't print log when err is eof
+		case e == syscall.EINVAL: //don't print log when conn is already closed
+		default:
+			if operr, ok := e.(*net.OpError); ok && operr != nil {
+				if syserr, ok := operr.Err.(*os.SyscallError); ok && syserr != nil {
+					if syserr.Err.(syscall.Errno) == syscall.ECONNRESET ||
+						syserr.Err.(syscall.Errno) == syscall.EPIPE ||
+						syserr.Err.(syscall.Errno) == syscall.EBADFD {
+						//don't print log when err is rst
+						//don't print log when err is broken pipe
+						//don't print log when err is badfd
+						break
+					}
+				}
+			}
+			switch p.peertype {
 			case CLIENT:
 				switch p.protocoltype {
 				case TCP:
-					fmt.Printf("[Stream.TCP.cworker]read first verify msg error:%s from addr:%s\n",
+					fmt.Printf("[Stream.TCP.sworker]read first verify msg error:%s from client addr:%s\n",
 						e, (*net.TCPConn)(p.conn).RemoteAddr().String())
 				case UNIXSOCKET:
-					fmt.Printf("[Stream.UNIX.cworker]read first verify msg error:%s from addr:%s\n",
+					fmt.Printf("[Stream.UNIX.sworker]read first verify msg error:%s from client addr:%s\n",
 						e, (*net.UnixConn)(p.conn).RemoteAddr().String())
 				}
 			case SERVER:
 				switch p.protocoltype {
 				case TCP:
-					fmt.Printf("[Stream.TCP.sworker]read first verify msg error:%s from addr:%s\n",
+					fmt.Printf("[Stream.TCP.cworker]read first verify msg error:%s from server addr:%s\n",
 						e, (*net.TCPConn)(p.conn).RemoteAddr().String())
 				case UNIXSOCKET:
-					fmt.Printf("[Stream.UNIX.sworker]read first verify msg error:%s from addr:%s\n",
+					fmt.Printf("[Stream.UNIX.cworker]read first verify msg error:%s from server addr:%s\n",
 						e, (*net.UnixConn)(p.conn).RemoteAddr().String())
 				}
 			}
@@ -263,23 +325,23 @@ func (this *Instance) verifypeer(p *Peer, verifydata []byte) {
 			msglen := binary.BigEndian.Uint16(p.readbuffer.Peek(0, 2))
 			if p.readbuffer.Num() < int(msglen+2) {
 				if p.readbuffer.Rest() == 0 {
-					switch p.selftype {
+					switch p.peertype {
 					case CLIENT:
 						switch p.protocoltype {
 						case TCP:
-							fmt.Printf("[Stream.TCP.cworker]msg too long form addr:%s\n",
+							fmt.Printf("[Stream.TCP.sworker]first verify msg too long from client addr:%s\n",
 								(*net.TCPConn)(p.conn).RemoteAddr().String())
 						case UNIXSOCKET:
-							fmt.Printf("[Stream.UNIX.cworker]msg too long form addr:%s\n",
+							fmt.Printf("[Stream.UNIX.sworker]first verify msg too long from client addr:%s\n",
 								(*net.UnixConn)(p.conn).RemoteAddr().String())
 						}
 					case SERVER:
 						switch p.protocoltype {
 						case TCP:
-							fmt.Printf("[Stream.TCP.sworker]msg too long form addr:%s\n",
+							fmt.Printf("[Stream.TCP.cworker]first verify msg too long from server addr:%s\n",
 								(*net.TCPConn)(p.conn).RemoteAddr().String())
 						case UNIXSOCKET:
-							fmt.Printf("[Stream.UNIX.sworker]msg too long form addr:%s\n",
+							fmt.Printf("[Stream.UNIX.cworker]first verify msg too long from server addr:%s\n",
 								(*net.UnixConn)(p.conn).RemoteAddr().String())
 						}
 					}
@@ -289,100 +351,61 @@ func (this *Instance) verifypeer(p *Peer, verifydata []byte) {
 			}
 			msg := &TotalMsg{}
 			if e := proto.Unmarshal(p.readbuffer.Get(int(msglen + 2))[2:], msg); e != nil {
-				switch p.selftype {
+				switch p.peertype {
 				case CLIENT:
 					switch p.protocoltype {
 					case TCP:
-						fmt.Printf("[Stream.TCP.cworker]msg format wrong from addr:%s\n",
-							(*net.TCPConn)(p.conn).RemoteAddr().String())
+						fmt.Printf("[Stream.TCP.sworker]first verify msg format error:%s from client addr:%s\n",
+							e, (*net.TCPConn)(p.conn).RemoteAddr().String())
 					case UNIXSOCKET:
-						fmt.Printf("[Stream.UNIX.cworker]msg format wrong from addr:%s\n",
-							(*net.UnixConn)(p.conn).RemoteAddr().String())
+						fmt.Printf("[Stream.UNIX.sworker]first veridy msg format error:%s from client addr:%s\n",
+							e, (*net.UnixConn)(p.conn).RemoteAddr().String())
 					}
 				case SERVER:
 					switch p.protocoltype {
 					case TCP:
-						fmt.Printf("[Stream.TCP.sworker]msg format wrong from addr:%s\n",
-							(*net.TCPConn)(p.conn).RemoteAddr().String())
+						fmt.Printf("[Stream.TCP.cworker]first verify msg format error:%s from server addr:%s\n",
+							e, (*net.TCPConn)(p.conn).RemoteAddr().String())
 					case UNIXSOCKET:
-						fmt.Printf("[Stream.UNIX.sworker]msg wrong from addr:%s\n",
-							(*net.UnixConn)(p.conn).RemoteAddr().String())
+						fmt.Printf("[Stream.UNIX.cworker]first verify msg format error:%s from server addr:%s\n",
+							e, (*net.UnixConn)(p.conn).RemoteAddr().String())
 					}
 				}
 				return
 			}
 			//first message must be verify message
 			if msg.Totaltype != TotalMsgType_VERIFY {
-				switch p.selftype {
+				switch p.peertype {
 				case CLIENT:
 					switch p.protocoltype {
 					case TCP:
-						fmt.Printf("[Stream.TCP.cworker]first msg isn't verify msg from addr:%s\n",
+						fmt.Printf("[Stream.TCP.sworker]first msg isn't verify msg from client addr:%s\n",
 							(*net.TCPConn)(p.conn).RemoteAddr().String())
 					case UNIXSOCKET:
-						fmt.Printf("[Stream.UNIX.cworker]first msg isn't verify msg from addr:%s\n",
+						fmt.Printf("[Stream.UNIX.sworker]first msg isn't verify msg from client addr:%s\n",
 							(*net.UnixConn)(p.conn).RemoteAddr().String())
 					}
 				case SERVER:
 					switch p.protocoltype {
 					case TCP:
-						fmt.Printf("[Stream.TCP.sworker]first msg isn't verify msg from addr:%s\n",
+						fmt.Printf("[Stream.TCP.cworker]first msg isn't verify msg from server addr:%s\n",
 							(*net.TCPConn)(p.conn).RemoteAddr().String())
 					case UNIXSOCKET:
-						fmt.Printf("[Stream.UNIX.sworker]first msg isn't verify msg from addr:%s\n",
+						fmt.Printf("[Stream.UNIX.cworker]first msg isn't verify msg from server addr:%s\n",
 							(*net.UnixConn)(p.conn).RemoteAddr().String())
 					}
 				}
 				return
 			}
-			var node *peernode
-			var ok bool
-			switch p.selftype {
+			switch p.peertype {
 			case CLIENT:
-				if msg.Sender == "" || msg.Sender == p.clientname {
-					switch p.protocoltype {
-					case TCP:
-						fmt.Printf("[Stream.TCP.cworker]name check failed from addr:%s\n",
-							(*net.TCPConn)(p.conn).RemoteAddr().String())
-					case UNIXSOCKET:
-						fmt.Printf("[Stream.UNIX.cworker]name check failed from addr:%s\n",
-							(*net.UnixConn)(p.conn).RemoteAddr().String())
-					}
-					return
-				}
-				if msg.GetVerify() == nil {
-					switch p.protocoltype {
-					case TCP:
-						fmt.Printf("[Stream.TCP.cworker]verify data is empty from addr:%s\n",
-							(*net.TCPConn)(p.conn).RemoteAddr().String())
-					case UNIXSOCKET:
-						fmt.Printf("[Stream.UNIX.cworker]verify data is empty from addr:%s\n",
-							(*net.UnixConn)(p.conn).RemoteAddr().String())
-					}
-					return
-				}
-				if !this.verifyfunc(p.clientname, verifydata, msg.Sender, msg.GetVerify().Verifydata) {
-					switch p.protocoltype {
-					case TCP:
-						fmt.Printf("[Stream.TCP.cworker]verify failed with data:%s from addr:%s\n",
-							msg.GetVerify().Verifydata, (*net.TCPConn)(p.conn).RemoteAddr().String())
-					case UNIXSOCKET:
-						fmt.Printf("[Stream.UNIX.cworker]verify failed with data:%s from addr:%s\n",
-							msg.GetVerify().Verifydata, (*net.UnixConn)(p.conn).RemoteAddr().String())
-					}
-					return
-				}
-				node = this.peernodes[this.getindex(p.clientname+msg.Sender)]
-				node.Lock()
-				_, ok = node.peers[p.clientname+msg.Sender]
-			case SERVER:
 				if msg.Sender == "" || msg.Sender == p.servername {
 					switch p.protocoltype {
 					case TCP:
-						fmt.Printf("[Stream.TCP.sworker]name check failed from addr:%s\n",
+						fmt.Printf("[Stream.TCP.sworker]sender name check failed from client addr:%s\n",
 							(*net.TCPConn)(p.conn).RemoteAddr().String())
 					case UNIXSOCKET:
-						fmt.Printf("[Stream.UNIX.sworker]name check failed from addr:%s\n",
+						fmt.Printf("[Stream.UNIX.sworker]sender name check failed from client addr:%s\n",
 							(*net.UnixConn)(p.conn).RemoteAddr().String())
 					}
 					return
@@ -390,10 +413,10 @@ func (this *Instance) verifypeer(p *Peer, verifydata []byte) {
 				if msg.GetVerify() == nil {
 					switch p.protocoltype {
 					case TCP:
-						fmt.Printf("[Stream.TCP.sworker]verify data is empty from addr:%s\n",
+						fmt.Printf("[Stream.TCP.sworker]verify data is empty from client addr:%s\n",
 							(*net.TCPConn)(p.conn).RemoteAddr().String())
 					case UNIXSOCKET:
-						fmt.Printf("[Stream.UNIX.sworker]verify data is empty from addr:%s\n",
+						fmt.Printf("[Stream.UNIX.sworker]verify data is empty from client addr:%s\n",
 							(*net.UnixConn)(p.conn).RemoteAddr().String())
 					}
 					return
@@ -401,34 +424,58 @@ func (this *Instance) verifypeer(p *Peer, verifydata []byte) {
 				if !this.verifyfunc(p.servername, verifydata, msg.Sender, msg.GetVerify().Verifydata) {
 					switch p.protocoltype {
 					case TCP:
-						fmt.Printf("[Stream.TCP.sworker]verify failed with data:%s from addr:%s\n",
+						fmt.Printf("[Stream.TCP.sworker]verify failed with data:%s from client addr:%s\n",
 							msg.GetVerify().Verifydata, (*net.TCPConn)(p.conn).RemoteAddr().String())
 					case UNIXSOCKET:
-						fmt.Printf("[Stream.UNIX.sworker]verify failed with data:%s from addr:%s\n",
+						fmt.Printf("[Stream.UNIX.sworker]verify failed with data:%s from client addr:%s\n",
 							msg.GetVerify().Verifydata, (*net.UnixConn)(p.conn).RemoteAddr().String())
 					}
 					return
 				}
-				node = this.peernodes[this.getindex(msg.Sender+p.servername)]
-				node.Lock()
-				_, ok = node.peers[msg.Sender+p.servername]
-			}
-			if ok {
-				node.Unlock()
-				return
-			}
-			p.parentnode = node
-			p.lastactive = time.Now().UnixNano()
-			switch p.selftype {
-			case CLIENT:
-				p.starttime = msg.Starttime
-				p.servername = msg.Sender
 			case SERVER:
+				if msg.Sender == "" || msg.Sender == p.clientname {
+					switch p.protocoltype {
+					case TCP:
+						fmt.Printf("[Stream.TCP.cworker]sender name check failed from server addr:%s\n",
+							(*net.TCPConn)(p.conn).RemoteAddr().String())
+					case UNIXSOCKET:
+						fmt.Printf("[Stream.UNIX.cworker]sender name check failed from server addr:%s\n",
+							(*net.UnixConn)(p.conn).RemoteAddr().String())
+					}
+					return
+				}
+				if msg.GetVerify() == nil {
+					switch p.protocoltype {
+					case TCP:
+						fmt.Printf("[Stream.TCP.cworker]verify data is empty from server addr:%s\n",
+							(*net.TCPConn)(p.conn).RemoteAddr().String())
+					case UNIXSOCKET:
+						fmt.Printf("[Stream.UNIX.cworker]verify data is empty from server addr:%s\n",
+							(*net.UnixConn)(p.conn).RemoteAddr().String())
+					}
+					return
+				}
+				if !this.verifyfunc(p.clientname, verifydata, msg.Sender, msg.GetVerify().Verifydata) {
+					switch p.protocoltype {
+					case TCP:
+						fmt.Printf("[Stream.TCP.cworker]verify failed with data:%s from server addr:%s\n",
+							msg.GetVerify().Verifydata, (*net.TCPConn)(p.conn).RemoteAddr().String())
+					case UNIXSOCKET:
+						fmt.Printf("[Stream.UNIX.cworker]verify failed with data:%s from server addr:%s\n",
+							msg.GetVerify().Verifydata, (*net.UnixConn)(p.conn).RemoteAddr().String())
+					}
+					return
+				}
+			}
+			p.lastactive = time.Now().UnixNano()
+			switch p.peertype {
+			case CLIENT:
 				p.starttime = p.lastactive
 				p.clientname = msg.Sender
+			case SERVER:
+				p.starttime = msg.Starttime
+				p.servername = msg.Sender
 			}
-			node.peers[p.clientname+p.servername] = p
-			node.Unlock()
 			return
 		}
 	}
@@ -436,10 +483,22 @@ func (this *Instance) verifypeer(p *Peer, verifydata []byte) {
 func (this *Instance) read(p *Peer) {
 	defer func() {
 		p.parentnode.Lock()
+		var ok bool
+		switch p.peertype {
+		case CLIENT:
+			_, ok = p.parentnode.peers[p.clientname]
+		case SERVER:
+			_, ok = p.parentnode.peers[p.servername]
+		}
 		//every connection will have two goruntine to work for it
-		if _, ok := p.parentnode.peers[p.clientname+p.servername]; ok {
+		if ok {
 			//when first goruntine return,delete this connection from the map
-			delete(p.parentnode.peers, p.clientname+p.servername)
+			switch p.peertype {
+			case CLIENT:
+				delete(p.parentnode.peers, p.clientname)
+			case SERVER:
+				delete(p.parentnode.peers, p.servername)
+			}
 			//cause write goruntine return,this will be useful when there is nothing in writebuffer
 			p.status = false
 			p.writerbuffer <- []byte{}
@@ -448,11 +507,11 @@ func (this *Instance) read(p *Peer) {
 			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
 			if this.offlinefunc != nil {
-				switch p.selftype {
+				switch p.peertype {
 				case CLIENT:
-					this.offlinefunc(p, p.servername, p.starttime)
-				case SERVER:
 					this.offlinefunc(p, p.clientname, p.starttime)
+				case SERVER:
+					this.offlinefunc(p, p.servername, p.starttime)
 				}
 			}
 			this.putPeer(p)
@@ -489,24 +548,18 @@ func (this *Instance) read(p *Peer) {
 		default:
 			if operr, ok := e.(*net.OpError); ok && operr != nil {
 				if syserr, ok := operr.Err.(*os.SyscallError); ok && syserr != nil {
-					if syserr.Err.(syscall.Errno) == syscall.ECONNRESET || syserr.Err.(syscall.Errno) == syscall.EPIPE {
+					if syserr.Err.(syscall.Errno) == syscall.ECONNRESET ||
+						syserr.Err.(syscall.Errno) == syscall.EPIPE ||
+						syserr.Err.(syscall.Errno) == syscall.EBADFD {
 						//don't print log when err is rst
 						//don't print log when err is broken pipe
+						//don't print log when err is badfd
 						break
 					}
 				}
 			}
-			switch p.selftype {
+			switch p.peertype {
 			case CLIENT:
-				switch p.protocoltype {
-				case TCP:
-					fmt.Printf("[Stream.TCP.read]read msg error:%s from server:%s addr:%s\n",
-						e, p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
-				case UNIXSOCKET:
-					fmt.Printf("[Stream.UNIX.read]read msg error:%s from server:%s addr:%s\n",
-						e, p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
-				}
-			case SERVER:
 				switch p.protocoltype {
 				case TCP:
 					fmt.Printf("[Stream.TCP.read]read msg error:%s from client:%s addr:%s\n",
@@ -514,6 +567,15 @@ func (this *Instance) read(p *Peer) {
 				case UNIXSOCKET:
 					fmt.Printf("[Stream.UNIX.read]read msg error:%s from client:%s addr:%s\n",
 						e, p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String())
+				}
+			case SERVER:
+				switch p.protocoltype {
+				case TCP:
+					fmt.Printf("[Stream.TCP.read]read msg error:%s from server:%s addr:%s\n",
+						e, p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
+				case UNIXSOCKET:
+					fmt.Printf("[Stream.UNIX.read]read msg error:%s from server:%s addr:%s\n",
+						e, p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
 				}
 			}
 		}
@@ -528,17 +590,8 @@ func (this *Instance) read(p *Peer) {
 			msglen := binary.BigEndian.Uint16(p.readbuffer.Peek(0, 2))
 			if p.readbuffer.Num() < int(msglen+2) {
 				if p.readbuffer.Rest() == 0 {
-					switch p.selftype {
+					switch p.peertype {
 					case CLIENT:
-						switch p.protocoltype {
-						case TCP:
-							fmt.Printf("[Stream.TCP.read]msg too long from server:%s addr:%s\n",
-								p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
-						case UNIXSOCKET:
-							fmt.Printf("[Stream.UNIX.read]msg too long from server:%s addr:%s\n",
-								p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
-						}
-					case SERVER:
 						switch p.protocoltype {
 						case TCP:
 							fmt.Printf("[Stream.TCP.read]msg too long from client:%s addr:%s\n",
@@ -546,6 +599,15 @@ func (this *Instance) read(p *Peer) {
 						case UNIXSOCKET:
 							fmt.Printf("[Stream.UNIX.read]msg too long from client:%s addr:%s\n",
 								p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String())
+						}
+					case SERVER:
+						switch p.protocoltype {
+						case TCP:
+							fmt.Printf("[Stream.TCP.read]msg too long from server:%s addr:%s\n",
+								p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
+						case UNIXSOCKET:
+							fmt.Printf("[Stream.UNIX.read]msg too long from server:%s addr:%s\n",
+								p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
 						}
 					}
 					return
@@ -555,24 +617,24 @@ func (this *Instance) read(p *Peer) {
 			msg := &TotalMsg{}
 			data := p.readbuffer.Get(int(msglen + 2))
 			if e = proto.Unmarshal(data[2:], msg); e != nil {
-				switch p.selftype {
+				switch p.peertype {
 				case CLIENT:
 					switch p.protocoltype {
 					case TCP:
-						fmt.Printf("[Stream.TCP.read]msg format wrong from server:%s addr:%s\n",
-							p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
+						fmt.Printf("[Stream.TCP.read]msg format error:%s from client:%s addr:%s\n",
+							e, p.clientname, (*net.TCPConn)(p.conn).RemoteAddr().String())
 					case UNIXSOCKET:
-						fmt.Printf("[Stream.UNIX.read]msg format wrong from server:%s addr:%s\n",
-							p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
+						fmt.Printf("[Stream.UNIX.read]msg format error:%s from client:%s addr:%s\n",
+							e, p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String())
 					}
 				case SERVER:
 					switch p.protocoltype {
 					case TCP:
-						fmt.Printf("[Stream.TCP.read]msg format wrong from client:%s addr:%s\n",
-							p.clientname, (*net.TCPConn)(p.conn).RemoteAddr().String())
+						fmt.Printf("[Stream.TCP.read]msg format error:%s from server:%s addr:%s\n",
+							e, p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
 					case UNIXSOCKET:
-						fmt.Printf("[Stream.UNIX.read]msg format wrong from client:%s addr:%s\n",
-							p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String())
+						fmt.Printf("[Stream.UNIX.read]msg format error:%s from server:%s addr:%s\n",
+							e, p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
 					}
 				}
 				return
@@ -586,41 +648,8 @@ func (this *Instance) read(p *Peer) {
 			case TotalMsgType_HEART:
 				//update lastactive time
 				p.lastactive = time.Now().UnixNano()
-				switch p.selftype {
+				switch p.peertype {
 				case CLIENT:
-					switch msg.Sender {
-					case p.clientname:
-						if msg.GetHeart() == nil {
-							switch p.protocoltype {
-							case TCP:
-								fmt.Printf("[Stream.TCP.read]self heart msg empty return from server:%s addr:%s\n",
-									p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
-							case UNIXSOCKET:
-								fmt.Printf("[Stream.UNIX.read]self heart msg empty return from server:%s addr:%s\n",
-									p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
-							}
-							return
-						}
-						p.netlag[p.netlagindex] = p.lastactive - msg.GetHeart().Timestamp
-						p.netlagindex++
-						if p.netlagindex >= len(p.netlag) {
-							p.netlagindex = 0
-						}
-					case p.servername:
-						//sendback
-						p.writerbuffer <- data
-					default:
-						switch p.protocoltype {
-						case TCP:
-							fmt.Printf("[Stream.TCP.read]heart msg name:%s check failed from server:%s addr:%s selfname:%s\n",
-								msg.Sender, p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String(), p.clientname)
-						case UNIXSOCKET:
-							fmt.Printf("[Stream.UNIX.read]heart msg name:%s check failed from server:%s addr:%s selfname:%s\n",
-								msg.Sender, p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String(), p.clientname)
-						}
-						return
-					}
-				case SERVER:
 					switch msg.Sender {
 					case p.clientname:
 						//sendback
@@ -645,22 +674,55 @@ func (this *Instance) read(p *Peer) {
 					default:
 						switch p.protocoltype {
 						case TCP:
-							fmt.Printf("[Stream.TCP.read]heart msg name:%s check failed from client:%s addr:%s selfname:%s\n",
+							fmt.Printf("[Stream.TCP.read]heart msg sender name:%s check failed from client:%s addr:%s selfname:%s\n",
 								msg.Sender, p.clientname, (*net.TCPConn)(p.conn).RemoteAddr().String(), p.servername)
 						case UNIXSOCKET:
-							fmt.Printf("[Stream.UNIX.read]heart msg name:%s check failed from client:%s addr:%s selfname:%s\n",
+							fmt.Printf("[Stream.UNIX.read]heart msg sender name:%s check failed from client:%s addr:%s selfname:%s\n",
 								msg.Sender, p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String(), p.servername)
+						}
+						return
+					}
+				case SERVER:
+					switch msg.Sender {
+					case p.clientname:
+						if msg.GetHeart() == nil {
+							switch p.protocoltype {
+							case TCP:
+								fmt.Printf("[Stream.TCP.read]self heart msg empty return from server:%s addr:%s\n",
+									p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
+							case UNIXSOCKET:
+								fmt.Printf("[Stream.UNIX.read]self heart msg empty return from server:%s addr:%s\n",
+									p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
+							}
+							return
+						}
+						p.netlag[p.netlagindex] = p.lastactive - msg.GetHeart().Timestamp
+						p.netlagindex++
+						if p.netlagindex >= len(p.netlag) {
+							p.netlagindex = 0
+						}
+					case p.servername:
+						//sendback
+						p.writerbuffer <- data
+					default:
+						switch p.protocoltype {
+						case TCP:
+							fmt.Printf("[Stream.TCP.read]heart msg sender name:%s check failed from server:%s addr:%s selfname:%s\n",
+								msg.Sender, p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String(), p.clientname)
+						case UNIXSOCKET:
+							fmt.Printf("[Stream.UNIX.read]heart msg sender name:%s check failed from server:%s addr:%s selfname:%s\n",
+								msg.Sender, p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String(), p.clientname)
 						}
 						return
 					}
 				}
 			case TotalMsgType_USER:
 				p.lastactive = time.Now().UnixNano()
-				switch p.selftype {
+				switch p.peertype {
 				case CLIENT:
-					this.userdatafunc(p, p.servername, p.starttime, msg.GetUser().Userdata)
-				case SERVER:
 					this.userdatafunc(p, p.clientname, p.starttime, msg.GetUser().Userdata)
+				case SERVER:
+					this.userdatafunc(p, p.servername, p.starttime, msg.GetUser().Userdata)
 				}
 			}
 		}
@@ -673,8 +735,15 @@ func (this *Instance) write(p *Peer) {
 			<-p.writerbuffer
 		}
 		p.parentnode.Lock()
+		var ok bool
+		switch p.peertype {
+		case CLIENT:
+			_, ok = p.parentnode.peers[p.clientname]
+		case SERVER:
+			_, ok = p.parentnode.peers[p.servername]
+		}
 		//every connection will have two goruntine to work for it
-		if _, ok := p.parentnode.peers[p.clientname+p.servername]; ok {
+		if ok {
 			//when first goruntine return,delete this connection from the map
 			delete(p.parentnode.peers, p.clientname+p.servername)
 			//close the connection,cause read goruntine return
@@ -685,11 +754,11 @@ func (this *Instance) write(p *Peer) {
 			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
 			if this.offlinefunc != nil {
-				switch p.selftype {
+				switch p.peertype {
 				case CLIENT:
-					this.offlinefunc(p, p.servername, p.starttime)
-				case SERVER:
 					this.offlinefunc(p, p.clientname, p.starttime)
+				case SERVER:
+					this.offlinefunc(p, p.servername, p.starttime)
 				}
 			}
 			this.putPeer(p)
@@ -717,24 +786,18 @@ func (this *Instance) write(p *Peer) {
 			default:
 				if operr, ok := e.(*net.OpError); ok && operr != nil {
 					if syserr, ok := operr.Err.(*os.SyscallError); ok && syserr != nil {
-						if syserr.Err.(syscall.Errno) == syscall.ECONNRESET || syserr.Err.(syscall.Errno) == syscall.EPIPE {
+						if syserr.Err.(syscall.Errno) == syscall.ECONNRESET ||
+							syserr.Err.(syscall.Errno) == syscall.EPIPE ||
+							syserr.Err.(syscall.Errno) == syscall.EBADFD {
 							//don't print log when err is rst
 							//don't print log when err is broken pipe
+							//don't print log when err is badfd
 							break
 						}
 					}
 				}
-				switch p.selftype {
+				switch p.peertype {
 				case CLIENT:
-					switch p.protocoltype {
-					case TCP:
-						fmt.Printf("[Stream.TCP.write]write msg error:%s to server:%s addr:%s\n",
-							e, p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
-					case UNIXSOCKET:
-						fmt.Printf("[Stream.UNIX.write]write msg error:%s to server:%s addr:%s\n",
-							e, p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
-					}
-				case SERVER:
 					switch p.protocoltype {
 					case TCP:
 						fmt.Printf("[Stream.TCP.write]write msg error:%s to client:%s addr:%s\n",
@@ -742,6 +805,15 @@ func (this *Instance) write(p *Peer) {
 					case UNIXSOCKET:
 						fmt.Printf("[Stream.UNIX.write]write msg error:%s to client:%s addr:%s\n",
 							e, p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String())
+					}
+				case SERVER:
+					switch p.protocoltype {
+					case TCP:
+						fmt.Printf("[Stream.TCP.write]write msg error:%s to servername:%s addr:%s\n",
+							e, p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
+					case UNIXSOCKET:
+						fmt.Printf("[Stream.UNIX.write]write msg error:%s to servername:%s addr:%s\n",
+							e, p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
 					}
 				}
 			}

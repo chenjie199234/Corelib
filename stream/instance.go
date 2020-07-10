@@ -42,7 +42,7 @@ type Peer struct {
 	parentnode    *peernode
 	clientname    string
 	servername    string
-	selftype      int
+	peertype      int
 	protocoltype  int
 	starttime     int64
 	readbuffer    *buffer.Buffer
@@ -125,10 +125,13 @@ func (p *Peer) setbuffer(readnum, writenum int) {
 		}
 	}
 }
-func (p *Peer) Close() {
+
+func (p *Peer) Close(uniqueid int64) {
 	p.parentnode.RLock()
-	p.closeconn()
-	p.status = false
+	if uniqueid != 0 && p.starttime == uniqueid && p.status {
+		p.closeconn()
+		p.status = false
+	}
 	p.parentnode.RUnlock()
 }
 
@@ -155,8 +158,9 @@ func (p *Peer) GetPeekNetLag() int64 {
 	}
 	return max
 }
+
 func (p *Peer) SendMessage(userdata []byte, uniqueid int64) error {
-	if !p.status || p.starttime != uniqueid {
+	if !p.status || uniqueid == 0 || p.starttime != uniqueid {
 		//status for close check
 		//uniqueid for ABA check
 		return ERRCONNCLOSED
@@ -173,10 +177,77 @@ func (p *Peer) SendMessage(userdata []byte, uniqueid int64) error {
 	}
 	select {
 	case p.writerbuffer <- data:
-		return nil
 	default:
 		return ERRFULL
 	}
+	return nil
+}
+
+func (this *Instance) SendMessage(peername string, userdata []byte) error {
+	node := this.peernodes[this.getindex(peername)]
+	node.RLock()
+	p, ok := node.peers[peername]
+	if !ok {
+		node.RUnlock()
+		return ERRCONNCLOSED
+	}
+	var data []byte
+	switch p.protocoltype {
+	case TCP:
+		fallthrough
+	case UNIXSOCKET:
+		data = makeUserMsg(userdata, p.starttime, true)
+	case WEBSOCKET:
+		data = makeUserMsg(userdata, p.starttime, false)
+	}
+	select {
+	case p.writerbuffer <- data:
+	default:
+		node.RUnlock()
+		return ERRFULL
+	}
+	node.RUnlock()
+	return nil
+}
+
+func (this *Instance) GetAverageNetLag(peername string) (int64, error) {
+	node := this.peernodes[this.getindex(peername)]
+	node.RLock()
+	p, ok := node.peers[peername]
+	if !ok {
+		node.RUnlock()
+		return 0, ERRCONNCLOSED
+	}
+	lag := p.GetAverageNetLag()
+	node.RUnlock()
+	return lag, nil
+}
+
+func (this *Instance) GetPeekNetLag(peername string) (int64, error) {
+	node := this.peernodes[this.getindex(peername)]
+	node.RLock()
+	p, ok := node.peers[peername]
+	if !ok {
+		node.RUnlock()
+		return 0, ERRCONNCLOSED
+	}
+	lag := p.GetPeekNetLag()
+	node.RUnlock()
+	return lag, nil
+}
+
+func (this *Instance) Close(peername string) error {
+	node := this.peernodes[this.getindex(peername)]
+	node.RLock()
+	p, ok := node.peers[peername]
+	if !ok {
+		node.RUnlock()
+		return nil
+	}
+	p.closeconn()
+	p.status = false
+	node.RUnlock()
+	return nil
 }
 
 type Instance struct {
@@ -188,8 +259,7 @@ type Instance struct {
 	status            bool //true-working,false-closing
 	peerPool          *sync.Pool
 	websocketPeerPool *sync.Pool
-	sync.RWMutex
-	peernodes []*peernode
+	peernodes         []*peernode
 }
 
 func (this *Instance) getPeer() *Peer {
@@ -199,7 +269,7 @@ func (this *Instance) putPeer(p *Peer) {
 	p.parentnode = nil
 	p.clientname = ""
 	p.servername = ""
-	p.selftype = 0
+	p.peertype = 0
 	p.protocoltype = 0
 	p.starttime = 0
 	p.readbuffer.Reset()
@@ -223,7 +293,7 @@ func (this *Instance) putWebSocketPeer(p *Peer) {
 	p.parentnode = nil
 	p.clientname = ""
 	p.servername = ""
-	p.selftype = 0
+	p.peertype = 0
 	p.protocoltype = 0
 	p.starttime = 0
 	p.readbuffer = nil
@@ -240,6 +310,38 @@ func (this *Instance) putWebSocketPeer(p *Peer) {
 	p.netlagindex = 0
 	p.status = false
 	this.websocketPeerPool.Put(p)
+}
+func (this *Instance) addPeer(p *Peer) bool {
+	var node *peernode
+	var ok bool
+	switch p.peertype {
+	case CLIENT:
+		node = this.peernodes[this.getindex(p.clientname)]
+	case SERVER:
+		node = this.peernodes[this.getindex(p.servername)]
+	}
+	node.Lock()
+	switch p.peertype {
+	case CLIENT:
+		_, ok = node.peers[p.clientname]
+	case SERVER:
+		_, ok = node.peers[p.servername]
+	}
+	if ok {
+		p.closeconn()
+		this.putPeer(p)
+		node.Unlock()
+		return false
+	}
+	p.parentnode = node
+	switch p.peertype {
+	case CLIENT:
+		node.peers[p.clientname] = p
+	case SERVER:
+		node.peers[p.servername] = p
+	}
+	node.Unlock()
+	return true
 }
 func NewInstance(c *Config, verify HandleVerifyFunc, online HandleOnlineFunc, userdata HandleUserdataFunc, offline HandleOfflineFunc) *Instance {
 	//online and offline can be nill
@@ -265,7 +367,7 @@ func NewInstance(c *Config, verify HandleVerifyFunc, online HandleOnlineFunc, us
 				return &Peer{
 					clientname:    "",
 					servername:    "",
-					selftype:      0,
+					peertype:      0,
 					protocoltype:  0,
 					starttime:     0,
 					readbuffer:    buffer.NewBuf(c.AppMinReadBufferLen, c.AppMaxReadBufferLen),
@@ -285,7 +387,7 @@ func NewInstance(c *Config, verify HandleVerifyFunc, online HandleOnlineFunc, us
 				return &Peer{
 					clientname:    "",
 					servername:    "",
-					selftype:      0,
+					peertype:      0,
 					protocoltype:  0,
 					starttime:     0,
 					readbuffer:    nil,
@@ -311,7 +413,7 @@ func NewInstance(c *Config, verify HandleVerifyFunc, online HandleOnlineFunc, us
 }
 
 func (this *Instance) heart(node *peernode) {
-	tker := time.NewTicker(time.Duration(this.conf.HeartInterval/3) * time.Millisecond)
+	tker := time.NewTicker(time.Duration(this.conf.HeartTimeout/3) * time.Millisecond)
 	for {
 		<-tker.C
 		now := time.Now().UnixNano()
@@ -320,52 +422,34 @@ func (this *Instance) heart(node *peernode) {
 			if !p.status {
 				continue
 			}
-			if now-p.lastactive > this.conf.HeartInterval*1000*1000 {
+			if now-p.lastactive > this.conf.HeartTimeout*1000*1000 {
 				//heartbeat timeout
-				switch p.selftype {
+				switch p.peertype {
 				case CLIENT:
 					switch p.protocoltype {
 					case TCP:
-						fmt.Printf("[Stream.TCP.heart] timeout server:%s addr:%s\n", p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
+						fmt.Printf("[Stream.TCP.heart] timeout client:%s addr:%s\n",
+							p.clientname, (*net.TCPConn)(p.conn).RemoteAddr().String())
 					case UNIXSOCKET:
-						fmt.Printf("[Stream.UNIX.heart] timeout server:%s addr:%s\n", p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
+						fmt.Printf("[Stream.UNIX.heart] timeout client:%s addr:%s\n",
+							p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String())
 					}
 				case SERVER:
 					switch p.protocoltype {
 					case TCP:
-						fmt.Printf("[Stream.TCP.heart] timeout client:%s addr:%s\n", p.clientname, (*net.TCPConn)(p.conn).RemoteAddr().String())
+						fmt.Printf("[Stream.TCP.heart] timeout server:%s addr:%s\n",
+							p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
 					case UNIXSOCKET:
-						fmt.Printf("[Stream.TCP.heart] timeout client:%s addr:%s\n", p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String())
+						fmt.Printf("[Stream.TCP.heart] timeout server:%s addr:%s\n",
+							p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
 					}
 				}
 				p.closeconnread()
 				p.status = false
 			} else {
 				var data []byte
-
-				switch p.selftype {
+				switch p.peertype {
 				case CLIENT:
-					switch p.protocoltype {
-					case TCP:
-						fallthrough
-					case UNIXSOCKET:
-						data = makeHeartMsg(p.clientname, time.Now().UnixNano(), p.starttime, true)
-					case WEBSOCKET:
-						data = makeHeartMsg(p.clientname, time.Now().UnixNano(), p.starttime, false)
-					}
-					select {
-					case p.writerbuffer <- data:
-					default:
-						switch p.protocoltype {
-						case TCP:
-							fmt.Printf("[Stream.TCP.heart] send heart msg to server:%s addr:%s failed:write buffer is full",
-								p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
-						case UNIXSOCKET:
-							fmt.Printf("[Stream.UNIX.heart] send heart msg to server:%s addr:%s failed:write buffer is full",
-								p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
-						}
-					}
-				case SERVER:
 					switch p.protocoltype {
 					case TCP:
 						fallthrough
@@ -384,6 +468,27 @@ func (this *Instance) heart(node *peernode) {
 						case UNIXSOCKET:
 							fmt.Printf("[Stream.UNIX.heart] send heart msg to client:%s addr:%s failed:write buffer is full",
 								p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String())
+						}
+					}
+				case SERVER:
+					switch p.protocoltype {
+					case TCP:
+						fallthrough
+					case UNIXSOCKET:
+						data = makeHeartMsg(p.clientname, time.Now().UnixNano(), p.starttime, true)
+					case WEBSOCKET:
+						data = makeHeartMsg(p.clientname, time.Now().UnixNano(), p.starttime, false)
+					}
+					select {
+					case p.writerbuffer <- data:
+					default:
+						switch p.protocoltype {
+						case TCP:
+							fmt.Printf("[Stream.TCP.heart] send heart msg to server:%s addr:%s failed:write buffer is full",
+								p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
+						case UNIXSOCKET:
+							fmt.Printf("[Stream.UNIX.heart] send heart msg to server:%s addr:%s failed:write buffer is full",
+								p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
 						}
 					}
 				}
