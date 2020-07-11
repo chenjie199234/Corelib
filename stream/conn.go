@@ -666,6 +666,17 @@ func (this *Instance) read(p *Peer) {
 							}
 							return
 						}
+						if msg.GetHeart().Timestamp > p.lastactive {
+							switch p.protocoltype {
+							case TCP:
+								fmt.Printf("[Stream.TCP.read]self heart msg time check error return from client:%s addr:%s",
+									p.clientname, (*net.TCPConn)(p.conn).RemoteAddr().String())
+							case UNIXSOCKET:
+								fmt.Printf("[Stream.TCP.read]self heart msg time check error return from client:%s addr:%s",
+									p.clientname, (*net.UnixConn)(p.conn).RemoteAddr().String())
+							}
+							return
+						}
 						p.netlag[p.netlagindex] = p.lastactive - msg.GetHeart().Timestamp
 						p.netlagindex++
 						if p.netlagindex >= len(p.netlag) {
@@ -692,6 +703,17 @@ func (this *Instance) read(p *Peer) {
 									p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
 							case UNIXSOCKET:
 								fmt.Printf("[Stream.UNIX.read]self heart msg empty return from server:%s addr:%s\n",
+									p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
+							}
+							return
+						}
+						if msg.GetHeart().Timestamp > p.lastactive {
+							switch p.protocoltype {
+							case TCP:
+								fmt.Printf("[Stream.TCP.read]self heart msg time check error return from server:%s addr:%s",
+									p.servername, (*net.TCPConn)(p.conn).RemoteAddr().String())
+							case UNIXSOCKET:
+								fmt.Printf("[Stream.TCP.read]self heart msg time check error return from server:%s addr:%s",
 									p.servername, (*net.UnixConn)(p.conn).RemoteAddr().String())
 							}
 							return
