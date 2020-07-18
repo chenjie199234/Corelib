@@ -17,19 +17,31 @@ type Config struct {
 	//every piece will have an independence goruntine to check heart timeout nodes in this piece
 	Splitnum int //default 1
 
-	//for Tcp and Websocket server and client
+	//for Tcp server's and client's socket buffer
 	TcpSocketReadBufferLen  int //default 1024
 	TcpSocketWriteBufferLen int //default 1024
 
-	//for UnixSocket server and client
+	//for Unix server's and client's socket buffer
 	UnixSocketReadBufferLen  int //default 4096
 	UnixSocketWriteBufferLen int //default 4096
 
-	//app read buffer can auto grow and shirnk within min and max
+	//read buffer can auto grow and shirnk within min and max
 	AppMinReadBufferLen int //the num of byte,default 1024
 	AppMaxReadBufferLen int //the num of byte,default 65535
 	//write buffer can store the messages in buffer and send async in another goruntine
 	AppWriteBufferNum int //the num of message packages,default 256
+
+	//for websocket server and client
+	WebSocketReadheaderTimeout int //default 250ms
+	WebSocketHandshakeTimeout  int //default 500ms
+
+	//websocket's tcp server's and client's socket buffer
+	WebSocketMaxHeader      int //default 1024
+	WebSocketReadBufferLen  int //default 1024
+	WebSocketWriteBufferLen int //default 1024
+	WebSocketEnableCompress bool
+	TlsCertFile             string
+	TlsKeyFile              string
 }
 
 func checkConfig(c *Config) {
@@ -59,6 +71,22 @@ func checkConfig(c *Config) {
 	}
 	if c.AppMaxReadBufferLen < c.AppMinReadBufferLen {
 		c.AppMaxReadBufferLen = c.AppMinReadBufferLen
+	}
+	//web socket config
+	if c.WebSocketReadheaderTimeout == 0 {
+		c.WebSocketReadheaderTimeout = 250
+	}
+	if c.WebSocketHandshakeTimeout == 0 {
+		c.WebSocketHandshakeTimeout = 500
+	}
+	if c.WebSocketReadBufferLen == 0 {
+		c.WebSocketReadBufferLen = 1024
+	}
+	if c.WebSocketWriteBufferLen == 0 {
+		c.WebSocketWriteBufferLen = 1024
+	}
+	if c.WebSocketMaxHeader == 0 {
+		c.WebSocketMaxHeader = 1024
 	}
 	//global config
 	if c.VerifyTimeout == 0 {

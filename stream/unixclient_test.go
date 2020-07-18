@@ -23,6 +23,19 @@ func Test_Unixclient(t *testing.T) {
 				Splitnum:        10,
 			}, unixclienthandleVerify, unixclienthandleonline, unixclienthandleuserdata, unixclienthandleoffline)
 			unixclientinstance.StartUnixsocketClient([]byte{}, "./test.socket")
+			if count == 0 {
+				go func() {
+					for {
+						time.Sleep(time.Second)
+						lag, e := unixclientinstance.GetAverageNetLag("server")
+						if e != nil {
+							fmt.Println(e)
+						} else {
+							fmt.Println(float64(lag)/1000.0/1000.0, "ms")
+						}
+					}
+				}()
+			}
 			time.Sleep(time.Millisecond)
 		}
 	}()

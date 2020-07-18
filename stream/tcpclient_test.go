@@ -23,6 +23,19 @@ func Test_Tcpclient(t *testing.T) {
 				Splitnum:        10,
 			}, tcpclienthandleVerify, tcpclienthandleonline, tcpclienthandleuserdata, tcpclienthandleoffline)
 			tcpclientinstance.StartTcpClient([]byte{}, "127.0.0.1:9234")
+			if count == 0 {
+				go func() {
+					for {
+						time.Sleep(time.Second)
+						lag, e := tcpclientinstance.GetAverageNetLag("server")
+						if e != nil {
+							fmt.Println(e)
+						} else {
+							fmt.Println(float64(lag)/1000.0/1000.0, "ms")
+						}
+					}
+				}()
+			}
 			time.Sleep(time.Millisecond)
 		}
 	}()
