@@ -116,7 +116,7 @@ func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listena
 		go this.sworker(p)
 	}
 	for _, path := range paths {
-		(server.Handler).(*mux.Router).HandleFunc(path, connhandler)
+		(server.Handler).(*mux.Router).HandleFunc(path, connhandler).Methods("GET")
 	}
 	if c.TlsCertFile != "" && c.TlsKeyFile != "" {
 		go func() {
