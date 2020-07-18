@@ -12,11 +12,16 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
 )
 
-func (this *Instance) StartTcpServer(verifydata []byte, listenaddr string) {
+func (this *Instance) StartTcpServer(c *TcpConfig, listenaddr string) {
+	if c == nil {
+		c = &TcpConfig{}
+	}
+	checkTcpConfig(c)
 	var laddr *net.TCPAddr
 	var l *net.TCPListener
 	var e error
@@ -29,7 +34,7 @@ func (this *Instance) StartTcpServer(verifydata []byte, listenaddr string) {
 	}
 	go func() {
 		for {
-			p := this.getPeer(TCP)
+			p := this.getPeer(TCP, unsafe.Pointer(c))
 			p.protocoltype = TCP
 			p.servername = this.conf.SelfName
 			p.peertype = CLIENT
@@ -38,13 +43,17 @@ func (this *Instance) StartTcpServer(verifydata []byte, listenaddr string) {
 				return
 			}
 			p.conn = unsafe.Pointer(conn)
-			p.setbuffer(this.conf.TcpSocketReadBufferLen, this.conf.TcpSocketWriteBufferLen)
+			p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
 			p.status = true
-			go this.sworker(p, verifydata)
+			go this.sworker(p)
 		}
 	}()
 }
-func (this *Instance) StartUnixsocketServer(verifydata []byte, listenaddr string) {
+func (this *Instance) StartUnixsocketServer(c *UnixConfig, listenaddr string) {
+	if c == nil {
+		c = &UnixConfig{}
+	}
+	checkUnixConfig(c)
 	var laddr *net.UnixAddr
 	var l *net.UnixListener
 	var e error
@@ -57,7 +66,7 @@ func (this *Instance) StartUnixsocketServer(verifydata []byte, listenaddr string
 	}
 	go func() {
 		for {
-			p := this.getPeer(UNIXSOCKET)
+			p := this.getPeer(UNIXSOCKET, unsafe.Pointer(c))
 			p.protocoltype = UNIXSOCKET
 			p.servername = this.conf.SelfName
 			p.peertype = CLIENT
@@ -66,50 +75,52 @@ func (this *Instance) StartUnixsocketServer(verifydata []byte, listenaddr string
 				return
 			}
 			p.conn = unsafe.Pointer(conn)
-			p.setbuffer(this.conf.UnixSocketReadBufferLen, this.conf.UnixSocketWriteBufferLen)
+			p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
 			p.status = true
-			go this.sworker(p, verifydata)
+			go this.sworker(p)
 		}
 	}()
 }
-func (this *Instance) StartWebsocketServer(urls []string, verifydata []byte, listenaddr string, checkorigin func(*http.Request) bool) {
-	if this.websocketupgrader == nil {
-		this.websocketupgrader = &websocket.Upgrader{
-			HandshakeTimeout:  time.Duration(this.conf.WebSocketHandshakeTimeout) * time.Millisecond,
-			WriteBufferPool:   &sync.Pool{},
-			CheckOrigin:       checkorigin,
-			EnableCompression: this.conf.WebSocketEnableCompress,
-		}
+
+func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listenaddr string, checkorigin func(*http.Request) bool) {
+	if c == nil {
+		c = &WebConfig{}
 	}
-	mux := http.NewServeMux()
+	checkWebConfig(c)
+	upgrader := &websocket.Upgrader{
+		HandshakeTimeout:  time.Duration(c.ConnectTimeout) * time.Millisecond,
+		WriteBufferPool:   &sync.Pool{},
+		CheckOrigin:       checkorigin,
+		EnableCompression: c.EnableCompress,
+	}
+	server := &http.Server{
+		Addr:              listenaddr,
+		ReadHeaderTimeout: time.Duration(c.ConnectTimeout) * time.Millisecond,
+		ReadTimeout:       time.Duration(c.ConnectTimeout) * time.Millisecond,
+		MaxHeaderBytes:    c.HttpMaxHeaderLen,
+		Handler:           mux.NewRouter(),
+	}
 	connhandler := func(w http.ResponseWriter, r *http.Request) {
-		conn, e := this.websocketupgrader.Upgrade(w, r, nil)
+		conn, e := upgrader.Upgrade(w, r, nil)
 		if e != nil {
 			fmt.Printf("[Stream.WEB.StartWebsocketServer]upgrade error:%s\n", e)
 			return
 		}
-		p := this.getPeer(WEBSOCKET)
+		p := this.getPeer(WEBSOCKET, unsafe.Pointer(c))
 		p.protocoltype = WEBSOCKET
 		p.servername = this.conf.SelfName
 		p.peertype = CLIENT
 		p.conn = unsafe.Pointer(conn)
-		p.setbuffer(this.conf.WebSocketReadBufferLen, this.conf.WebSocketWriteBufferLen)
+		p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
 		p.status = true
-		go this.sworker(p, verifydata)
+		go this.sworker(p)
 	}
-	for _, url := range urls {
-		mux.HandleFunc(url, connhandler)
+	for _, path := range paths {
+		(server.Handler).(*mux.Router).HandleFunc(path, connhandler)
 	}
-	server := &http.Server{
-		Addr:              listenaddr,
-		ReadHeaderTimeout: time.Duration(this.conf.WebSocketReadheaderTimeout) * time.Millisecond,
-		ReadTimeout:       time.Duration(this.conf.WebSocketReadheaderTimeout) * time.Millisecond,
-		MaxHeaderBytes:    this.conf.WebSocketMaxHeader,
-		Handler:           mux,
-	}
-	if this.conf.TlsCertFile != "" && this.conf.TlsKeyFile != "" {
+	if c.TlsCertFile != "" && c.TlsKeyFile != "" {
 		go func() {
-			if e := server.ListenAndServeTLS(this.conf.TlsCertFile, this.conf.TlsKeyFile); e != nil {
+			if e := server.ListenAndServeTLS(c.TlsCertFile, c.TlsKeyFile); e != nil {
 				panic("[Stream.WEB.StartWebsocketServer]start wss server error:" + e.Error())
 			}
 		}()
@@ -121,9 +132,9 @@ func (this *Instance) StartWebsocketServer(urls []string, verifydata []byte, lis
 		}()
 	}
 }
-func (this *Instance) sworker(p *Peer, verifydata []byte) bool {
+func (this *Instance) sworker(p *Peer) bool {
 	//read first verify message from client
-	this.verifypeer(p, verifydata)
+	this.verifypeer(p)
 	if p.clientname != "" {
 		//verify client success,send self's verify message to client
 		var verifymsg []byte
@@ -131,9 +142,9 @@ func (this *Instance) sworker(p *Peer, verifydata []byte) bool {
 		case TCP:
 			fallthrough
 		case UNIXSOCKET:
-			verifymsg = makeVerifyMsg(p.servername, verifydata, p.starttime, true)
+			verifymsg = makeVerifyMsg(p.servername, this.conf.VerifyData, p.starttime, true)
 		case WEBSOCKET:
-			verifymsg = makeVerifyMsg(p.servername, verifydata, p.starttime, false)
+			verifymsg = makeVerifyMsg(p.servername, this.conf.VerifyData, p.starttime, false)
 		}
 		send := 0
 		num := 0
@@ -164,7 +175,7 @@ func (this *Instance) sworker(p *Peer, verifydata []byte) bool {
 					}
 				}
 				fmt.Printf("[Stream.%s.sworker]write first verify msg error:%s to client addr:%s\n",
-					PROTOCOLNAME[p.protocoltype], e, p.getpeeraddr())
+					p.getprotocolname(), e, p.getpeeraddr())
 			}
 			if e != nil {
 				p.closeconn()
@@ -184,7 +195,7 @@ func (this *Instance) sworker(p *Peer, verifydata []byte) bool {
 		}
 		if !this.addPeer(p) {
 			fmt.Printf("[Stream.%s.sworker]refuse reconnect from client:%s addr:%s\n",
-				PROTOCOLNAME[p.protocoltype], p.clientname, p.getpeeraddr())
+				p.getprotocolname(), p.clientname, p.getpeeraddr())
 			return false
 		}
 		//set websocket pong handler
@@ -193,8 +204,8 @@ func (this *Instance) sworker(p *Peer, verifydata []byte) bool {
 				return this.dealmsg(p, str2byte(data), true)
 			})
 		}
-		if this.onlinefunc != nil {
-			this.onlinefunc(p, p.clientname, p.starttime)
+		if this.conf.Onlinefunc != nil {
+			this.conf.Onlinefunc(p, p.clientname, p.starttime)
 		}
 		go this.read(p)
 		go this.write(p)
@@ -207,75 +218,81 @@ func (this *Instance) sworker(p *Peer, verifydata []byte) bool {
 	}
 }
 
-func (this *Instance) StartTcpClient(verifydata []byte, serveraddr string) bool {
-	c, e := net.DialTimeout("tcp", serveraddr, time.Second)
+func (this *Instance) StartTcpClient(c *TcpConfig, serveraddr string) bool {
+	if c == nil {
+		c = &TcpConfig{}
+	}
+	checkTcpConfig(c)
+	conn, e := net.DialTimeout("tcp", serveraddr, time.Duration(c.ConnectTimeout)*time.Millisecond)
 	if e != nil {
 		fmt.Printf("[Stream.TCP.StartTcpClient]tcp connect server addr:%s error:%s\n", serveraddr, e)
 		return false
 	}
-	p := this.getPeer(TCP)
+	p := this.getPeer(TCP, unsafe.Pointer(c))
 	p.protocoltype = TCP
 	p.clientname = this.conf.SelfName
 	p.peertype = SERVER
-	p.conn = unsafe.Pointer(c.(*net.TCPConn))
-	p.setbuffer(this.conf.TcpSocketReadBufferLen, this.conf.TcpSocketWriteBufferLen)
+	p.conn = unsafe.Pointer(conn.(*net.TCPConn))
+	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
 	p.status = true
-	return this.cworker(p, verifydata)
+	return this.cworker(p)
 }
 
-func (this *Instance) StartUnixsocketClient(verifydata []byte, serveraddr string) bool {
-	c, e := net.DialTimeout("unix", serveraddr, time.Second)
+func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string) bool {
+	if c == nil {
+		c = &UnixConfig{}
+	}
+	checkUnixConfig(c)
+	conn, e := net.DialTimeout("unix", serveraddr, time.Duration(c.ConnectTimeout)*time.Millisecond)
 	if e != nil {
 		fmt.Printf("[Stream.UNIX.StartUnixsocketClient]unix connect server addr:%s error:%s\n", serveraddr, e)
 		return false
 	}
-	p := this.getPeer(UNIXSOCKET)
+	p := this.getPeer(UNIXSOCKET, unsafe.Pointer(c))
 	p.protocoltype = UNIXSOCKET
 	p.clientname = this.conf.SelfName
 	p.peertype = SERVER
-	p.conn = unsafe.Pointer(c.(*net.UnixConn))
-	p.setbuffer(this.conf.UnixSocketReadBufferLen, this.conf.UnixSocketWriteBufferLen)
+	p.conn = unsafe.Pointer(conn.(*net.UnixConn))
+	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
 	p.status = true
-	return this.cworker(p, verifydata)
+	return this.cworker(p)
 }
 
-func (this *Instance) StartWebsocketClient(verifydata []byte, serveraddr string) bool {
-	if this.websocketdialer == nil {
-		this.websocketdialer = &websocket.Dialer{
-			NetDial: func(network, addr string) (net.Conn, error) {
-				return net.DialTimeout(network, addr, time.Second)
-			},
-			Proxy:             http.ProxyFromEnvironment,
-			HandshakeTimeout:  time.Duration(this.conf.WebSocketHandshakeTimeout) * time.Millisecond,
-			WriteBufferPool:   &sync.Pool{},
-			EnableCompression: this.conf.WebSocketEnableCompress,
-		}
+func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string) bool {
+	dialer := &websocket.Dialer{
+		NetDial: func(network, addr string) (net.Conn, error) {
+			return net.DialTimeout(network, addr, time.Duration(c.ConnectTimeout)*time.Millisecond)
+		},
+		Proxy:             http.ProxyFromEnvironment,
+		HandshakeTimeout:  time.Duration(c.ConnectTimeout) * time.Millisecond,
+		WriteBufferPool:   &sync.Pool{},
+		EnableCompression: c.EnableCompress,
 	}
-	c, _, e := this.websocketdialer.Dial(serveraddr, nil)
+	conn, _, e := dialer.Dial(serveraddr, nil)
 	if e != nil {
 		fmt.Printf("[Stream.WEB.StartWebsocketClient]websocket connect server addr:%s error:%s\n", serveraddr, e)
 		return false
 	}
-	p := this.getPeer(WEBSOCKET)
+	p := this.getPeer(WEBSOCKET, unsafe.Pointer(c))
 	p.protocoltype = WEBSOCKET
 	p.clientname = this.conf.SelfName
 	p.peertype = SERVER
-	p.conn = unsafe.Pointer(c)
-	p.setbuffer(this.conf.WebSocketReadBufferLen, this.conf.WebSocketWriteBufferLen)
+	p.conn = unsafe.Pointer(conn)
+	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
 	p.status = true
-	return this.cworker(p, verifydata)
+	return this.cworker(p)
 }
 
-func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
+func (this *Instance) cworker(p *Peer) bool {
 	//send self's verify message to server
 	var verifymsg []byte
 	switch p.protocoltype {
 	case TCP:
 		fallthrough
 	case UNIXSOCKET:
-		verifymsg = makeVerifyMsg(p.clientname, verifydata, p.starttime, true)
+		verifymsg = makeVerifyMsg(p.clientname, this.conf.VerifyData, p.starttime, true)
 	case WEBSOCKET:
-		verifymsg = makeVerifyMsg(p.clientname, verifydata, p.starttime, false)
+		verifymsg = makeVerifyMsg(p.clientname, this.conf.VerifyData, p.starttime, false)
 	}
 	send := 0
 	num := 0
@@ -306,7 +323,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
 				}
 			}
 			fmt.Printf("[Stream.%s.cworker]write first verify msg error:%s to server addr:%s\n",
-				PROTOCOLNAME[p.protocoltype], e, p.getpeeraddr())
+				p.getprotocolname(), e, p.getpeeraddr())
 		}
 		if e != nil {
 			p.closeconn()
@@ -323,12 +340,12 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
 		}
 	}
 	//read first verify message from server
-	this.verifypeer(p, verifydata)
+	this.verifypeer(p)
 	if p.servername != "" {
 		//verify server success
 		if !this.addPeer(p) {
 			fmt.Printf("[Stream.%s.cworker]refuse reconnect to server:%s addr:%s\n",
-				PROTOCOLNAME[p.protocoltype], p.getpeername(), p.getpeeraddr())
+				p.getprotocolname(), p.getpeername(), p.getpeeraddr())
 			return false
 		}
 		if p.protocoltype == WEBSOCKET {
@@ -336,8 +353,8 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
 				return this.dealmsg(p, str2byte(data), true)
 			})
 		}
-		if this.onlinefunc != nil {
-			this.onlinefunc(p, p.servername, p.starttime)
+		if this.conf.Onlinefunc != nil {
+			this.conf.Onlinefunc(p, p.servername, p.starttime)
 		}
 		go this.read(p)
 		go this.write(p)
@@ -349,7 +366,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
 		return false
 	}
 }
-func (this *Instance) verifypeer(p *Peer, verifydata []byte) {
+func (this *Instance) verifypeer(p *Peer) {
 	switch p.protocoltype {
 	case TCP:
 		(*net.TCPConn)(p.conn).SetReadDeadline(time.Now().Add(time.Duration(this.conf.VerifyTimeout) * time.Millisecond))
@@ -395,7 +412,7 @@ func (this *Instance) verifypeer(p *Peer, verifydata []byte) {
 				}
 			}
 			fmt.Printf("[Stream.%s.verifypeer]read first verify msg error:%s from %s addr:%s\n",
-				PROTOCOLNAME[p.protocoltype], e, PEERTYPENAME[p.peertype], p.getpeeraddr())
+				p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
 		}
 		if e != nil {
 			return
@@ -412,7 +429,7 @@ func (this *Instance) verifypeer(p *Peer, verifydata []byte) {
 			}
 			if p.readbuffer.Rest() == 0 {
 				fmt.Printf("[Stream.%s.verifypeer]first verify msg too long from %s addr:%s\n",
-					PROTOCOLNAME[p.protocoltype], PEERTYPENAME[p.peertype], p.getpeeraddr())
+					p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
 				return
 			}
 		} else {
@@ -422,42 +439,28 @@ func (this *Instance) verifypeer(p *Peer, verifydata []byte) {
 	msg := &TotalMsg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		fmt.Printf("[Stream.%s.verifypeer]first verify msg format error:%s from %s addr:%s\n",
-			PROTOCOLNAME[p.protocoltype], e, PEERTYPENAME[p.peertype], p.getpeeraddr())
+			p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
 		return
 	}
 	//first message must be verify message
 	if msg.Totaltype != TotalMsgType_VERIFY {
 		fmt.Printf("[Stream.%s.verifypeer]first msg isn't verify msg from %s addr:%s\n",
-			PROTOCOLNAME[p.protocoltype], PEERTYPENAME[p.peertype], p.getpeeraddr())
+			p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
 		return
 	}
-	var namecheck bool
-	switch p.peertype {
-	case CLIENT:
-		namecheck = (msg.Sender != "" && msg.Sender != p.servername)
-	case SERVER:
-		namecheck = (msg.Sender != "" && msg.Sender != p.clientname)
-	}
-	if !namecheck {
+	if msg.Sender == "" || msg.Sender == p.getselfname() {
 		fmt.Printf("[Stream.%s.verifypeer]sender name:%s check failed from %s addr:%s\n",
-			PROTOCOLNAME[p.protocoltype], msg.Sender, PEERTYPENAME[p.peertype], p.getpeeraddr())
+			p.getprotocolname(), msg.Sender, p.getpeertypename(), p.getpeeraddr())
 		return
 	}
 	if msg.GetVerify() == nil {
 		fmt.Printf("[Stream.%s.verifypeer]verify data is empty from %s addr:%s\n",
-			PROTOCOLNAME[p.protocoltype], PEERTYPENAME[p.peertype], p.getpeeraddr())
+			p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
 		return
 	}
-	var verifystatus bool
-	switch p.peertype {
-	case CLIENT:
-		verifystatus = this.verifyfunc(p.servername, verifydata, msg.Sender, msg.GetVerify().Verifydata)
-	case SERVER:
-		verifystatus = this.verifyfunc(p.clientname, verifydata, msg.Sender, msg.GetVerify().Verifydata)
-	}
-	if !verifystatus {
+	if !this.conf.Verifyfunc(p.getselfname(), this.conf.VerifyData, msg.Sender, msg.GetVerify().Verifydata) {
 		fmt.Printf("[Stream.%s.verifypeer]verify failed with data:%s from %s addr:%s\n",
-			PROTOCOLNAME[p.protocoltype], msg.GetVerify().Verifydata, PEERTYPENAME[p.peertype], p.getpeeraddr())
+			p.getprotocolname(), msg.GetVerify().Verifydata, p.getpeertypename(), p.getpeeraddr())
 		return
 	}
 	p.lastactive = time.Now().UnixNano()
@@ -486,8 +489,8 @@ func (this *Instance) read(p *Peer) {
 		} else {
 			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
-			if this.offlinefunc != nil {
-				this.offlinefunc(p, p.getpeername(), p.starttime)
+			if this.conf.Offlinefunc != nil {
+				this.conf.Offlinefunc(p, p.getpeername(), p.starttime)
 			}
 			this.putPeer(p)
 		}
@@ -538,7 +541,7 @@ func (this *Instance) read(p *Peer) {
 				}
 			}
 			fmt.Printf("[Stream.%s.read]read msg error:%s from %s:%s addr:%s\n",
-				PROTOCOLNAME[p.protocoltype], e, PEERTYPENAME[p.protocoltype], p.getpeername(), p.getpeeraddr())
+				p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 		}
 		if e != nil {
 			return
@@ -558,7 +561,7 @@ func (this *Instance) read(p *Peer) {
 				if p.readbuffer.Num() < int(msglen+2) {
 					if p.readbuffer.Rest() == 0 {
 						fmt.Printf("[Stream.%s.read]msg too long from %s:%s addr:%s\n",
-							PROTOCOLNAME[p.protocoltype], PEERTYPENAME[p.peertype], p.getpeername(), p.getpeeraddr())
+							p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 						return
 					}
 					break
@@ -586,26 +589,26 @@ func (this *Instance) dealmsg(p *Peer, data []byte, frompong bool) error {
 	case UNIXSOCKET:
 		if e = proto.Unmarshal(data[2:], msg); e != nil {
 			return fmt.Errorf("[Stream.%s.dealmsg]msg format error:%s from %s:%s addr:%s",
-				PROTOCOLNAME[p.protocoltype], e, PEERTYPENAME[p.peertype], p.getpeername(), p.getpeeraddr())
+				p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 		}
 	case WEBSOCKET:
 		if e = proto.Unmarshal(data, msg); e != nil {
-			return fmt.Errorf("[Stream.%s.dealmsg]msg format error:%s from %s:%s addr:%s",
-				PROTOCOLNAME[p.protocoltype], e, PEERTYPENAME[p.peertype], p.getpeername(), p.getpeeraddr())
+			return fmt.Errorf("[Stream.WEB.dealmsg]msg format error:%s from %s:%s addr:%s",
+				e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 		}
 		if !frompong {
 			if msg.Totaltype == TotalMsgType_HEART {
-				return fmt.Errorf("[Stream.%s.dealmsg]msg type error from %s:%s addr:%s",
-					PROTOCOLNAME[p.protocoltype], PEERTYPENAME[p.peertype], p.getpeername(), p.getpeeraddr())
+				return fmt.Errorf("[Stream.WEB.dealmsg]msg type error from %s:%s addr:%s",
+					p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 			}
 		} else {
 			if msg.Totaltype != TotalMsgType_HEART {
-				return fmt.Errorf("[Stream.%s.dealmsg]msg type error from %s:%s addr:%s",
-					PROTOCOLNAME[p.protocoltype], PEERTYPENAME[p.peertype], p.getpeername(), p.getpeeraddr())
+				return fmt.Errorf("[Stream.WEB.dealmsg]msg type error from %s:%s addr:%s",
+					p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 			}
 			if msg.Sender != p.getselfname() {
-				return fmt.Errorf("[Stream.%s.dealmsg]pong msg sender:%s isn't self:%s from %s:%s addr:%s",
-					PROTOCOLNAME[p.protocoltype], msg.Sender, p.getselfname(), PEERTYPENAME[p.peertype], p.getpeername(), p.getpeeraddr())
+				return fmt.Errorf("[Stream.WEB.dealmsg]pong msg sender:%s isn't self:%s from %s:%s addr:%s",
+					msg.Sender, p.getselfname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 			}
 		}
 	}
@@ -621,7 +624,7 @@ func (this *Instance) dealmsg(p *Peer, data []byte, frompong bool) error {
 		return this.dealuser(p, msg)
 	default:
 		return fmt.Errorf("[Stream.%s.dealmsg]get unknown type msg from %s:%s addr:%s",
-			PROTOCOLNAME[p.protocoltype], PEERTYPENAME[p.peertype], p.getpeername(), p.getpeeraddr())
+			p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 	}
 }
 func (this *Instance) dealheart(p *Peer, msg *TotalMsg, data []byte) error {
@@ -635,11 +638,11 @@ func (this *Instance) dealheart(p *Peer, msg *TotalMsg, data []byte) error {
 	case p.getselfname():
 		if msg.GetHeart() == nil {
 			return fmt.Errorf("[Stream.%s.dealheart]self heart msg empty return from %s:%s addr:%s",
-				PROTOCOLNAME[p.peertype], PEERTYPENAME[p.peertype], p.getpeername(), p.getpeeraddr())
+				p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 		}
 		if msg.GetHeart().Timestamp > p.lastactive {
 			return fmt.Errorf("[Stream.%s.dealheart]self heart msg time check error return from %s:%s addr:%s",
-				PROTOCOLNAME[p.protocoltype], PEERTYPENAME[p.peertype], p.getpeername(), p.getpeeraddr())
+				p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 		}
 		//update net lag
 		p.netlag[p.netlagindex] = p.lastactive - msg.GetHeart().Timestamp
@@ -650,18 +653,13 @@ func (this *Instance) dealheart(p *Peer, msg *TotalMsg, data []byte) error {
 		return nil
 	default:
 		return fmt.Errorf("[Stream.%s.dealheart]heart msg sender name:%s check failed from %s:%s addr:%s selfname:%s",
-			PROTOCOLNAME[p.protocoltype], msg.Sender, PEERTYPENAME[p.peertype], p.getpeername(), p.getpeeraddr(), p.getselfname())
+			p.getprotocolname(), msg.Sender, p.getpeertypename(), p.getpeername(), p.getpeeraddr(), p.getselfname())
 	}
 }
 func (this *Instance) dealuser(p *Peer, msg *TotalMsg) error {
 	//update lastactive time
 	p.lastactive = time.Now().UnixNano()
-	switch p.peertype {
-	case CLIENT:
-		this.userdatafunc(p, p.clientname, p.starttime, msg.GetUser().Userdata)
-	case SERVER:
-		this.userdatafunc(p, p.servername, p.starttime, msg.GetUser().Userdata)
-	}
+	this.conf.Userdatafunc(p, p.getpeername(), p.starttime, msg.GetUser().Userdata)
 	return nil
 }
 func (this *Instance) write(p *Peer) {
@@ -685,8 +683,8 @@ func (this *Instance) write(p *Peer) {
 		} else {
 			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
-			if this.offlinefunc != nil {
-				this.offlinefunc(p, p.getpeername(), p.starttime)
+			if this.conf.Offlinefunc != nil {
+				this.conf.Offlinefunc(p, p.getpeername(), p.starttime)
 			}
 			this.putPeer(p)
 		}
@@ -743,7 +741,7 @@ func (this *Instance) write(p *Peer) {
 					}
 				}
 				fmt.Printf("[Stream.%s.write]write msg error:%s to %s:%s addr:%s\n",
-					PROTOCOLNAME[p.protocoltype], e, PEERTYPENAME[p.peertype], p.getpeername(), p.getpeeraddr())
+					p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 			}
 			if e != nil {
 				return

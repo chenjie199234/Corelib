@@ -15,14 +15,27 @@ var tcpcount int64
 
 func Test_Tcpserver(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	tcpserverinstance = NewInstance(&Config{
-		SelfName:        "server",
-		VerifyTimeout:   500,
-		HeartTimeout:    1000,
-		NetLagSampleNum: 10,
-		Splitnum:        10,
-	}, tcpserverhandleVerify, tcpserverhandleonline, tcpserverhandleuserdata, tcpserverhandleoffline)
-	tcpserverinstance.StartTcpServer([]byte{}, "127.0.0.1:9234")
+	tcpserverinstance = NewInstance(&InstanceConfig{
+		SelfName:           "server",
+		VerifyTimeout:      500,
+		VerifyData:         []byte{'t', 'e', 's', 't'},
+		HeartbeatTimeout:   1500,
+		HeartprobeInterval: 500,
+		NetLagSampleNum:    10,
+		GroupNum:           10,
+		Verifyfunc:         tcpserverhandleVerify,
+		Onlinefunc:         tcpserverhandleonline,
+		Userdatafunc:       tcpserverhandleuserdata,
+		Offlinefunc:        tcpserverhandleoffline,
+	})
+	tcpserverinstance.StartTcpServer(&TcpConfig{
+		ConnectTimeout:       1000,
+		SocketReadBufferLen:  1024,
+		SocketWriteBufferLen: 1024,
+		AppMinReadBufferLen:  1024,
+		AppMaxReadBufferLen:  65535,
+		AppWriteBufferNum:    256,
+	}, "127.0.0.1:9234")
 	go func() {
 		for {
 			time.Sleep(time.Second)

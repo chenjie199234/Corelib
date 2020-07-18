@@ -16,15 +16,27 @@ var webcount int64
 
 func Test_Webserver(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	webserverinstance = NewInstance(&Config{
-		SelfName:        "server",
-		VerifyTimeout:   500,
-		HeartTimeout:    1000,
-		NetLagSampleNum: 10,
-		Splitnum:        10,
-	}, webserverhandleVerify, webserverhandleonline, webserverhandleuserdata, webserverhandleoffline)
+	webserverinstance = NewInstance(&InstanceConfig{
+		SelfName:           "server",
+		VerifyTimeout:      500,
+		VerifyData:         []byte{'t', 'e', 's', 't'},
+		HeartbeatTimeout:   1500,
+		HeartprobeInterval: 500,
+		NetLagSampleNum:    10,
+		GroupNum:           10,
+		Verifyfunc:         webserverhandleVerify,
+		Onlinefunc:         webserverhandleonline,
+		Userdatafunc:       webserverhandleuserdata,
+		Offlinefunc:        webserverhandleoffline,
+	})
 	os.Remove("./test.socket")
-	webserverinstance.StartWebsocketServer([]string{"/test"}, []byte{}, "127.0.0.1:9234", func(*http.Request) bool { return true })
+	webserverinstance.StartWebsocketServer(&WebConfig{
+		ConnectTimeout:       1000,
+		HttpMaxHeaderLen:     1024,
+		SocketReadBufferLen:  1024,
+		SocketWriteBufferLen: 1024,
+		AppWriteBufferNum:    256,
+	}, []string{"/test"}, "127.0.0.1:9234", func(*http.Request) bool { return true })
 	go func() {
 		for {
 			time.Sleep(time.Second)

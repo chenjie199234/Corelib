@@ -15,14 +15,27 @@ func Test_Tcpclient(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	go func() {
 		for count := 0; count < 10000; count++ {
-			tcpclientinstance := NewInstance(&Config{
-				SelfName:        fmt.Sprintf("tcpclient%d", count),
-				VerifyTimeout:   500,
-				HeartTimeout:    1000,
-				NetLagSampleNum: 10,
-				Splitnum:        10,
-			}, tcpclienthandleVerify, tcpclienthandleonline, tcpclienthandleuserdata, tcpclienthandleoffline)
-			tcpclientinstance.StartTcpClient([]byte{}, "127.0.0.1:9234")
+			tcpclientinstance := NewInstance(&InstanceConfig{
+				SelfName:           fmt.Sprintf("tcpclient%d", count),
+				VerifyTimeout:      500,
+				VerifyData:         []byte{'t', 'e', 's', 't'},
+				HeartbeatTimeout:   1500,
+				HeartprobeInterval: 500,
+				NetLagSampleNum:    10,
+				GroupNum:           10,
+				Verifyfunc:         tcpclienthandleVerify,
+				Onlinefunc:         tcpclienthandleonline,
+				Userdatafunc:       tcpclienthandleuserdata,
+				Offlinefunc:        tcpclienthandleoffline,
+			})
+			tcpclientinstance.StartTcpClient(&TcpConfig{
+				ConnectTimeout:       1000,
+				SocketReadBufferLen:  1024,
+				SocketWriteBufferLen: 1024,
+				AppMinReadBufferLen:  1024,
+				AppMaxReadBufferLen:  65535,
+				AppWriteBufferNum:    256,
+			}, "127.0.0.1:9234")
 			if count == 0 {
 				go func() {
 					for {

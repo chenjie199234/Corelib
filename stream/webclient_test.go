@@ -9,20 +9,32 @@ import (
 	"time"
 )
 
-//var webclientinstance *Instance
+var webclientinstance *Instance
 
 func Test_Webclient(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	go func() {
 		for count := 0; count < 10000; count++ {
-			webclientinstance := NewInstance(&Config{
-				SelfName:        fmt.Sprintf("webclient%d", count),
-				VerifyTimeout:   500,
-				HeartTimeout:    1000,
-				NetLagSampleNum: 10,
-				Splitnum:        10,
-			}, webclienthandleVerify, webclienthandleonline, webclienthandleuserdata, webclienthandleoffline)
-			webclientinstance.StartWebsocketClient([]byte{}, "ws://127.0.0.1:9234/test")
+			webclientinstance := NewInstance(&InstanceConfig{
+				SelfName:           fmt.Sprintf("webclient%d", count),
+				VerifyTimeout:      500,
+				VerifyData:         []byte{'t', 'e', 's', 't'},
+				HeartbeatTimeout:   1500,
+				HeartprobeInterval: 500,
+				NetLagSampleNum:    10,
+				GroupNum:           10,
+				Verifyfunc:         webclienthandleVerify,
+				Onlinefunc:         webclienthandleonline,
+				Userdatafunc:       webclienthandleuserdata,
+				Offlinefunc:        webclienthandleoffline,
+			})
+			webclientinstance.StartWebsocketClient(&WebConfig{
+				ConnectTimeout:       1000,
+				HttpMaxHeaderLen:     1024,
+				SocketReadBufferLen:  1024,
+				SocketWriteBufferLen: 1024,
+				AppWriteBufferNum:    256,
+			}, "ws://127.0.0.1:9234/test")
 			if count == 0 {
 				go func() {
 					for {
