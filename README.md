@@ -18,4 +18,4 @@
 	使用了golang自带的server。
 	用前缀树重写了router使之支持动态url参数和分组（主要参考了fasthttprouter）。
 ## stream
-	go模式的长链接框架
+	go模式的长链接框架,Tcp,UnixSocket,WebSocket
