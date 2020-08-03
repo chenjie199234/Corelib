@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
@@ -44,16 +45,16 @@ func Test_Tcpserver(t *testing.T) {
 	}()
 	http.ListenAndServe(":8080", nil)
 }
-func tcpserverhandleVerify(selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
+func tcpserverhandleVerify(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
 	return true
 }
-func tcpserverhandleonline(p *Peer, peername string, uniqueid int64) {
+func tcpserverhandleonline(ctx context.Context, p *Peer, peername string, uniqueid int64) {
 	atomic.AddInt64(&tcpcount, 1)
 }
-func tcpserverhandleuserdata(p *Peer, peername string, uniqueid int64, data []byte) {
+func tcpserverhandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid int64, data []byte) {
 	fmt.Printf("%s:%s\n", peername, data)
 	p.SendMessage(data, uniqueid)
 }
-func tcpserverhandleoffline(p *Peer, peername string, uniqueid int64) {
+func tcpserverhandleoffline(ctx context.Context, p *Peer, peername string, uniqueid int64) {
 	atomic.AddInt64(&tcpcount, -1)
 }

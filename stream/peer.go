@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -51,6 +52,8 @@ type Peer struct {
 	netlag          []int64 //unixnano timeoffset
 	netlagindex     int
 	status          bool //true-working,false-closing
+	ctx             context.Context
+	cancel          context.CancelFunc
 }
 
 func (p *Peer) getprotocolname() string {

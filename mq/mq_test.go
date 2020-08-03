@@ -10,7 +10,7 @@ func Test_mq(t *testing.T) {
 	mq.Reset()
 	for i := 0; i < 128*3+1; i++ {
 		temp := "123"
-		if e := mq.Put(unsafe.Pointer(&temp)); e != nil {
+		if _, e := mq.Put(unsafe.Pointer(&temp)); e != nil {
 			panic("msg num in mq after put error!")
 		}
 	}
@@ -28,7 +28,7 @@ func Test_mq(t *testing.T) {
 	}
 	mq.Close()
 	temp := "123"
-	if e := mq.Put(unsafe.Pointer(&temp)); e == nil {
+	if _, e := mq.Put(unsafe.Pointer(&temp)); e == nil {
 		panic("mq close error!")
 	}
 	data, left := mq.Get()

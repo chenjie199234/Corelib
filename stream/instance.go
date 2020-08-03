@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"crypto/md5"
 	"fmt"
 	"sync"
@@ -96,6 +97,7 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 		if p, ok := this.peerPool.Get().(*Peer); ok {
 			return p
 		}
+		tempctx, tempcancel := context.WithCancel(context.Background())
 		c := (*TcpConfig)(conf)
 		return &Peer{
 			clientname:      "",
@@ -113,11 +115,14 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			netlag:          make([]int64, this.conf.NetLagSampleNum),
 			netlagindex:     0,
 			status:          false,
+			ctx:             tempctx,
+			cancel:          tempcancel,
 		}
 	case UNIXSOCKET:
 		if p, ok := this.peerPool.Get().(*Peer); ok {
 			return p
 		}
+		tempctx, tempcancel := context.WithCancel(context.Background())
 		c := (*UnixConfig)(conf)
 		return &Peer{
 			clientname:      "",
@@ -135,11 +140,14 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			netlag:          make([]int64, this.conf.NetLagSampleNum),
 			netlagindex:     0,
 			status:          false,
+			ctx:             tempctx,
+			cancel:          tempcancel,
 		}
 	case WEBSOCKET:
 		if p, ok := this.websocketPeerPool.Get().(*Peer); ok {
 			return p
 		}
+		tempctx, tempcancel := context.WithCancel(context.Background())
 		c := (*WebConfig)(conf)
 		return &Peer{
 			clientname:      "",
@@ -157,12 +165,17 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			netlag:          make([]int64, this.conf.NetLagSampleNum),
 			netlagindex:     0,
 			status:          false,
+			ctx:             tempctx,
+			cancel:          tempcancel,
 		}
 	default:
 		return nil
 	}
 }
 func (this *Instance) putPeer(p *Peer) {
+	p.cancel()
+	p.cancel = nil
+	p.ctx = nil
 	p.parentnode = nil
 	p.clientname = ""
 	p.servername = ""

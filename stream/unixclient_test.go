@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
@@ -54,11 +55,11 @@ func Test_Unixclient(t *testing.T) {
 	}()
 	http.ListenAndServe(":8081", nil)
 }
-func unixclienthandleVerify(selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
+func unixclienthandleVerify(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
 	return true
 }
 
-func unixclienthandleonline(p *Peer, peername string, uniqueid int64) {
+func unixclienthandleonline(ctx context.Context, p *Peer, peername string, uniqueid int64) {
 	//go func() {
 	//        for {
 	//                fmt.Println(peername)
@@ -68,9 +69,9 @@ func unixclienthandleonline(p *Peer, peername string, uniqueid int64) {
 	//}()
 }
 
-func unixclienthandleuserdata(p *Peer, peername string, uniqueid int64, data []byte) {
+func unixclienthandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid int64, data []byte) {
 	fmt.Printf("%s\n", data)
 }
 
-func unixclienthandleoffline(p *Peer, peername string, uniqueid int64) {
+func unixclienthandleoffline(ctx context.Context, p *Peer, peername string, uniqueid int64) {
 }

@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
@@ -45,16 +46,16 @@ func Test_Webserver(t *testing.T) {
 	}()
 	http.ListenAndServe(":8080", nil)
 }
-func webserverhandleVerify(selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
+func webserverhandleVerify(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
 	return true
 }
-func webserverhandleonline(p *Peer, peername string, uniqueid int64) {
+func webserverhandleonline(ctx context.Context, p *Peer, peername string, uniqueid int64) {
 	atomic.AddInt64(&webcount, 1)
 }
-func webserverhandleuserdata(p *Peer, peername string, uniqueid int64, data []byte) {
+func webserverhandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid int64, data []byte) {
 	fmt.Printf("%s:%s\n", peername, data)
 	p.SendMessage(data, uniqueid)
 }
-func webserverhandleoffline(p *Peer, peername string, uniqueid int64) {
+func webserverhandleoffline(ctx context.Context, p *Peer, peername string, uniqueid int64) {
 	atomic.AddInt64(&webcount, -1)
 }

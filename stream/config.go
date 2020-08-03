@@ -1,14 +1,23 @@
 package stream
 
 import (
+	"context"
 	"fmt"
 )
 
 //Warning!!Don't write block logic in these callback,live for{}
-type HandleOnlineFunc func(p *Peer, peername string, uniqueid int64)
-type HandleVerifyFunc func(selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool
-type HandleUserdataFunc func(p *Peer, peername string, uniqueid int64, data []byte)
-type HandleOfflineFunc func(p *Peer, peername string, uniqueid int64)
+
+//HandleVerifyFunc has a timeout context
+type HandleVerifyFunc func(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool
+
+//HandleOnlineFunc has a cancel context,you should control the timeout by yourself through context.WithTimeout()
+type HandleOnlineFunc func(ctx context.Context, p *Peer, peername string, uniqueid int64)
+
+//HandleUserdataFunc has a cancel context,you should control the timeout by yourself through context.WithTimeout()
+type HandleUserdataFunc func(ctx context.Context, p *Peer, peername string, uniqueid int64, data []byte)
+
+//HandleOfflineFunc has a cancel context,you should control the timeout by yourself through context.WithTimeout()
+type HandleOfflineFunc func(ctx context.Context, p *Peer, peername string, uniqueid int64)
 
 type TcpConfig struct {
 	ConnectTimeout int `json:"connect_timeout"` //default 500ms,for client only

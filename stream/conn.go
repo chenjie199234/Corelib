@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -205,7 +206,7 @@ func (this *Instance) sworker(p *Peer) bool {
 			})
 		}
 		if this.conf.Onlinefunc != nil {
-			this.conf.Onlinefunc(p, p.clientname, p.starttime)
+			this.conf.Onlinefunc(p.ctx, p, p.clientname, p.starttime)
 		}
 		go this.read(p)
 		go this.write(p)
@@ -354,7 +355,7 @@ func (this *Instance) cworker(p *Peer) bool {
 			})
 		}
 		if this.conf.Onlinefunc != nil {
-			this.conf.Onlinefunc(p, p.servername, p.starttime)
+			this.conf.Onlinefunc(p.ctx, p, p.servername, p.starttime)
 		}
 		go this.read(p)
 		go this.write(p)
@@ -375,6 +376,8 @@ func (this *Instance) verifypeer(p *Peer) {
 	case WEBSOCKET:
 		(*websocket.Conn)(p.conn).SetReadDeadline(time.Now().Add(time.Duration(this.conf.VerifyTimeout) * time.Millisecond))
 	}
+	ctx, cancel := context.WithTimeout(p.ctx, time.Duration(this.conf.VerifyTimeout)*time.Millisecond)
+	defer cancel()
 	var e error
 	var data []byte
 	for {
@@ -458,7 +461,7 @@ func (this *Instance) verifypeer(p *Peer) {
 			p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
 		return
 	}
-	if !this.conf.Verifyfunc(p.getselfname(), this.conf.VerifyData, msg.Sender, msg.GetVerify().Verifydata) {
+	if !this.conf.Verifyfunc(ctx, p.getselfname(), this.conf.VerifyData, msg.Sender, msg.GetVerify().Verifydata) {
 		fmt.Printf("[Stream.%s.verifypeer]verify failed with data:%s from %s addr:%s\n",
 			p.getprotocolname(), msg.GetVerify().Verifydata, p.getpeertypename(), p.getpeeraddr())
 		return
@@ -490,7 +493,7 @@ func (this *Instance) read(p *Peer) {
 			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
 			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, p.getpeername(), p.starttime)
+				this.conf.Offlinefunc(p.ctx, p, p.getpeername(), p.starttime)
 			}
 			this.putPeer(p)
 		}
@@ -659,7 +662,7 @@ func (this *Instance) dealheart(p *Peer, msg *TotalMsg, data []byte) error {
 func (this *Instance) dealuser(p *Peer, msg *TotalMsg) error {
 	//update lastactive time
 	p.lastactive = time.Now().UnixNano()
-	this.conf.Userdatafunc(p, p.getpeername(), p.starttime, msg.GetUser().Userdata)
+	this.conf.Userdatafunc(p.ctx, p, p.getpeername(), p.starttime, msg.GetUser().Userdata)
 	return nil
 }
 func (this *Instance) write(p *Peer) {
@@ -684,7 +687,7 @@ func (this *Instance) write(p *Peer) {
 			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
 			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, p.getpeername(), p.starttime)
+				this.conf.Offlinefunc(p.ctx, p, p.getpeername(), p.starttime)
 			}
 			this.putPeer(p)
 		}
