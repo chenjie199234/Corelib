@@ -58,7 +58,7 @@ func webclienthandleVerify(ctx context.Context, selfname string, selfVerifyData 
 	return true
 }
 
-func webclienthandleonline(ctx context.Context, p *Peer, peername string, uniqueid int64) {
+func webclienthandleonline(p *Peer, peername string, uniqueid int64) {
 	//go func() {
 	//        for {
 	//                fmt.Println(peername)
@@ -72,5 +72,5 @@ func webclienthandleuserdata(ctx context.Context, p *Peer, peername string, uniq
 	fmt.Printf("%s\n", data)
 }
 
-func webclienthandleoffline(ctx context.Context, p *Peer, peername string, uniqueid int64) {
+func webclienthandleoffline(p *Peer, peername string, uniqueid int64) {
 }

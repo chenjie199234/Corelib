@@ -8,16 +8,17 @@ import (
 //Warning!!Don't write block logic in these callback,live for{}
 
 //HandleVerifyFunc has a timeout context
+//Before two peers can communicate with each other,they need to verify the identity first
 type HandleVerifyFunc func(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool
 
-//HandleOnlineFunc has a cancel context,you should control the timeout by yourself through context.WithTimeout()
-type HandleOnlineFunc func(ctx context.Context, p *Peer, peername string, uniqueid int64)
+//This is a notice after two peers verify identity pass
+type HandleOnlineFunc func(p *Peer, peername string, uniqueid int64)
 
 //HandleUserdataFunc has a cancel context,you should control the timeout by yourself through context.WithTimeout()
 type HandleUserdataFunc func(ctx context.Context, p *Peer, peername string, uniqueid int64, data []byte)
 
-//HandleOfflineFunc has a cancel context,you should control the timeout by yourself through context.WithTimeout()
-type HandleOfflineFunc func(ctx context.Context, p *Peer, peername string, uniqueid int64)
+//This is a notice after two peers disconnect with each other
+type HandleOfflineFunc func(p *Peer, peername string, uniqueid int64)
 
 type TcpConfig struct {
 	ConnectTimeout int `json:"connect_timeout"` //default 500ms,for client only

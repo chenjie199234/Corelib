@@ -50,13 +50,13 @@ func Test_Unixserver(t *testing.T) {
 func unixserverhandleVerify(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
 	return true
 }
-func unixserverhandleonline(ctx context.Context, p *Peer, peername string, uniqueid int64) {
+func unixserverhandleonline(p *Peer, peername string, uniqueid int64) {
 	atomic.AddInt64(&unixcount, 1)
 }
 func unixserverhandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid int64, data []byte) {
 	fmt.Printf("%s:%s\n", peername, data)
 	p.SendMessage(data, uniqueid)
 }
-func unixserverhandleoffline(ctx context.Context, p *Peer, peername string, uniqueid int64) {
+func unixserverhandleoffline(p *Peer, peername string, uniqueid int64) {
 	atomic.AddInt64(&unixcount, -1)
 }
