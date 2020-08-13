@@ -1,15 +1,16 @@
-package nobody
+package web
 
-type Config struct {
-	//common
+type WebConfig struct {
 	Addr              string
 	ReadHeaderTimeout int //millisecond
 	ReadTimeout       int //millisecond
 	WriteTimeout      int //millisecond
 	IdleTimeout       int //millisecond
 	MaxHeaderBytes    int
-	KeepAlive         bool
+	//socket
+	SocketReadBufferLen  int
+	SocketWriteBufferLen int
 	//https
-	CertFilePath string
-	KeyFilePath  string
+	TlsCertFile string
+	TlsKeyFile  string
 }

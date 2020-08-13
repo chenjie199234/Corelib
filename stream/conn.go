@@ -13,8 +13,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/julienschmidt/httprouter"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -99,9 +99,9 @@ func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listena
 		ReadHeaderTimeout: time.Duration(c.ConnectTimeout) * time.Millisecond,
 		ReadTimeout:       time.Duration(c.ConnectTimeout) * time.Millisecond,
 		MaxHeaderBytes:    c.HttpMaxHeaderLen,
-		Handler:           mux.NewRouter(),
+		Handler:           httprouter.New(),
 	}
-	connhandler := func(w http.ResponseWriter, r *http.Request) {
+	connhandler := func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		conn, e := upgrader.Upgrade(w, r, nil)
 		if e != nil {
 			fmt.Printf("[Stream.WEB.StartWebsocketServer]upgrade error:%s\n", e)
@@ -117,7 +117,7 @@ func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listena
 		go this.sworker(p)
 	}
 	for _, path := range paths {
-		(server.Handler).(*mux.Router).HandleFunc(path, connhandler).Methods("GET")
+		(server.Handler).(*httprouter.Router).GET(path, connhandler)
 	}
 	if c.TlsCertFile != "" && c.TlsKeyFile != "" {
 		go func() {
