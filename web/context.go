@@ -118,5 +118,5 @@ func (this *Context) Write(code int, data []byte) error {
 }
 
 func (this *Context) WriteString(code int, data string) error {
-	return this.Write(code, str2byte(data))
+	return this.Write(code, Str2byte(data))
 }

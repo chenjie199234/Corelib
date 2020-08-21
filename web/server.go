@@ -125,11 +125,11 @@ func (this *Web) Shudown() {
 	this.server.Shutdown(context.Background())
 }
 
-func str2byte(data string) []byte {
+func Str2byte(data string) []byte {
 	temp := (*[2]uintptr)(unsafe.Pointer(&data))
 	result := [3]uintptr{temp[0], temp[1], temp[1]}
 	return *(*[]byte)(unsafe.Pointer(&result))
 }
-func byte2str(data []byte) string {
+func Byte2str(data []byte) string {
 	return *(*string)(unsafe.Pointer(&data))
 }
