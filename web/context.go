@@ -89,11 +89,17 @@ func (this *Context) GetSession() *http.Cookie {
 
 //Form
 func (this *Context) GetForms() url.Values {
+	if len(this.r.Form) == 0 {
+		this.r.ParseForm()
+	}
 	return this.r.Form
 }
 
 //return "" means not exists
 func (this *Context) GetForm(key string) string {
+	if len(this.r.Form) == 0 {
+		this.r.ParseForm()
+	}
 	return this.r.Form.Get(key)
 }
 
