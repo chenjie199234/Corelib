@@ -15,7 +15,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
-	"google.golang.org/protobuf/proto"
 )
 
 func (this *Instance) StartTcpServer(c *TcpConfig, listenaddr string) {
@@ -139,13 +138,18 @@ func (this *Instance) sworker(p *Peer) bool {
 	if p.clientname != "" {
 		//verify client success,send self's verify message to client
 		var verifymsg []byte
+		msg := &verifyMsg{
+			uniqueid:   p.starttime,
+			sender:     p.servername,
+			verifydata: this.conf.VerifyData,
+		}
 		switch p.protocoltype {
 		case TCP:
 			fallthrough
 		case UNIXSOCKET:
-			verifymsg = makeVerifyMsg(p.servername, this.conf.VerifyData, p.starttime, true)
+			verifymsg = makeVerifyMsg(msg, true)
 		case WEBSOCKET:
-			verifymsg = makeVerifyMsg(p.servername, this.conf.VerifyData, p.starttime, false)
+			verifymsg = makeVerifyMsg(msg, false)
 		}
 		send := 0
 		num := 0
@@ -287,13 +291,18 @@ func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string) bool
 func (this *Instance) cworker(p *Peer) bool {
 	//send self's verify message to server
 	var verifymsg []byte
+	msg := &verifyMsg{
+		uniqueid:   p.starttime,
+		sender:     p.clientname,
+		verifydata: this.conf.VerifyData,
+	}
 	switch p.protocoltype {
 	case TCP:
 		fallthrough
 	case UNIXSOCKET:
-		verifymsg = makeVerifyMsg(p.clientname, this.conf.VerifyData, p.starttime, true)
+		verifymsg = makeVerifyMsg(msg, true)
 	case WEBSOCKET:
-		verifymsg = makeVerifyMsg(p.clientname, this.conf.VerifyData, p.starttime, false)
+		verifymsg = makeVerifyMsg(msg, false)
 	}
 	send := 0
 	num := 0
@@ -439,41 +448,46 @@ func (this *Instance) verifypeer(p *Peer) {
 			break
 		}
 	}
-	msg := &TotalMsg{}
-	if e := proto.Unmarshal(data, msg); e != nil {
+	msgtype, e := getMsgType(data)
+	if e != nil {
 		fmt.Printf("[Stream.%s.verifypeer]first verify msg format error:%s from %s addr:%s\n",
 			p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
 		return
 	}
 	//first message must be verify message
-	if msg.Totaltype != TotalMsgType_VERIFY {
+	if msgtype != VERIFY {
 		fmt.Printf("[Stream.%s.verifypeer]first msg isn't verify msg from %s addr:%s\n",
 			p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
 		return
 	}
-	if msg.Sender == "" || msg.Sender == p.getselfname() {
+	msg, e := getVerifyMsg(data)
+	if e != nil {
+		fmt.Printf("[Stream.%s.verifypeer]first verify msg format error:%s from %s addr:%s\n",
+			p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
+	}
+	if msg.sender == "" || msg.sender == p.getselfname() {
 		fmt.Printf("[Stream.%s.verifypeer]sender name:%s check failed from %s addr:%s\n",
-			p.getprotocolname(), msg.Sender, p.getpeertypename(), p.getpeeraddr())
+			p.getprotocolname(), msg.sender, p.getpeertypename(), p.getpeeraddr())
 		return
 	}
-	if msg.GetVerify() == nil {
+	if len(msg.verifydata) == 0 {
 		fmt.Printf("[Stream.%s.verifypeer]verify data is empty from %s addr:%s\n",
 			p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
 		return
 	}
-	if !this.conf.Verifyfunc(ctx, p.getselfname(), this.conf.VerifyData, msg.Sender, msg.GetVerify().Verifydata) {
+	if !this.conf.Verifyfunc(ctx, p.getselfname(), this.conf.VerifyData, msg.sender, msg.verifydata) {
 		fmt.Printf("[Stream.%s.verifypeer]verify failed with data:%s from %s addr:%s\n",
-			p.getprotocolname(), msg.GetVerify().Verifydata, p.getpeertypename(), p.getpeeraddr())
+			p.getprotocolname(), msg.verifydata, p.getpeertypename(), p.getpeeraddr())
 		return
 	}
-	p.lastactive = time.Now().UnixNano()
+	p.lastactive = uint64(time.Now().UnixNano())
 	switch p.peertype {
 	case CLIENT:
-		p.starttime = p.lastactive
-		p.clientname = msg.Sender
+		p.starttime = uint64(p.lastactive)
+		p.clientname = msg.sender
 	case SERVER:
-		p.starttime = msg.Starttime
-		p.servername = msg.Sender
+		p.starttime = uint64(msg.uniqueid)
+		p.servername = msg.sender
 	}
 	return
 }
@@ -585,71 +599,71 @@ func (this *Instance) read(p *Peer) {
 	}
 }
 func (this *Instance) dealmsg(p *Peer, data []byte, frompong bool) error {
+	var msgtype int
 	var e error
-	msg := &TotalMsg{}
-	switch p.protocoltype {
-	case TCP:
-		fallthrough
-	case UNIXSOCKET:
-		if e = proto.Unmarshal(data[2:], msg); e != nil {
+	if p.protocoltype == TCP || p.protocoltype == UNIXSOCKET {
+		msgtype, e = getMsgType(data[2:])
+	} else {
+		msgtype, e = getMsgType(data)
+	}
+	if e != nil {
+		return fmt.Errorf("[Stream.%s,dealmsg]msg format error:%s from %s:%s addr:%s",
+			p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
+	}
+	//deal message
+	switch msgtype {
+	case HEART:
+		if p.protocoltype == WEBSOCKET && !frompong {
+			return fmt.Errorf("[Stream.WEB.dealmsg]msg type error from %s:%s addr:%s",
+				p.getpeertypename(), p.getpeername(), p.getpeeraddr())
+		}
+		var msg *heartMsg
+		if p.protocoltype == TCP || p.protocoltype == UNIXSOCKET {
+			msg, e = getHeartMsg(data[2:])
+		} else {
+			msg, e = getHeartMsg(data)
+		}
+		if e != nil {
 			return fmt.Errorf("[Stream.%s.dealmsg]msg format error:%s from %s:%s addr:%s",
 				p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 		}
-	case WEBSOCKET:
-		if e = proto.Unmarshal(data, msg); e != nil {
-			return fmt.Errorf("[Stream.WEB.dealmsg]msg format error:%s from %s:%s addr:%s",
-				e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
+		if p.protocoltype == WEBSOCKET && msg.sender != p.getselfname() {
+			return fmt.Errorf("[Stream.WEB.dealmsg]pong msg sender:%s isn't self:%s from %s:%s addr:%s",
+				msg.sender, p.getselfname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 		}
-		if !frompong {
-			if msg.Totaltype == TotalMsgType_HEART {
-				return fmt.Errorf("[Stream.WEB.dealmsg]msg type error from %s:%s addr:%s",
-					p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-			}
-		} else {
-			if msg.Totaltype != TotalMsgType_HEART {
-				return fmt.Errorf("[Stream.WEB.dealmsg]msg type error from %s:%s addr:%s",
-					p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-			}
-			if msg.Sender != p.getselfname() {
-				return fmt.Errorf("[Stream.WEB.dealmsg]pong msg sender:%s isn't self:%s from %s:%s addr:%s",
-					msg.Sender, p.getselfname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-			}
-		}
-	}
-	//drop data race message
-	if msg.Starttime != p.starttime {
-		return nil
-	}
-	//deal message
-	switch msg.Totaltype {
-	case TotalMsgType_HEART:
 		return this.dealheart(p, msg, data)
-	case TotalMsgType_USER:
+	case USER:
+		var msg *userMsg
+		if p.protocoltype == TCP || p.protocoltype == UNIXSOCKET {
+			msg, e = getUserMsg(data[2:])
+		} else {
+			msg, e = getUserMsg(data)
+		}
+		if e != nil {
+			return fmt.Errorf("[Stream.%s.dealmsg]msg format error:%s from %s:%s addr:%s",
+				p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
+		}
 		return this.dealuser(p, msg)
 	default:
 		return fmt.Errorf("[Stream.%s.dealmsg]get unknown type msg from %s:%s addr:%s",
 			p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 	}
 }
-func (this *Instance) dealheart(p *Peer, msg *TotalMsg, data []byte) error {
+func (this *Instance) dealheart(p *Peer, msg *heartMsg, data []byte) error {
 	//update lastactive time
-	p.lastactive = time.Now().UnixNano()
-	switch msg.Sender {
+	p.lastactive = uint64(time.Now().UnixNano())
+	switch msg.sender {
 	case p.getpeername():
 		//send back
 		p.heartbeatbuffer <- data
 		return nil
 	case p.getselfname():
-		if msg.GetHeart() == nil {
-			return fmt.Errorf("[Stream.%s.dealheart]self heart msg empty return from %s:%s addr:%s",
-				p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-		}
-		if msg.GetHeart().Timestamp > p.lastactive {
+		if msg.timestamp > p.lastactive {
 			return fmt.Errorf("[Stream.%s.dealheart]self heart msg time check error return from %s:%s addr:%s",
 				p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 		}
 		//update net lag
-		p.netlag[p.netlagindex] = p.lastactive - msg.GetHeart().Timestamp
+		p.netlag[p.netlagindex] = p.lastactive - msg.timestamp
 		p.netlagindex++
 		if p.netlagindex >= len(p.netlag) {
 			p.netlagindex = 0
@@ -657,13 +671,13 @@ func (this *Instance) dealheart(p *Peer, msg *TotalMsg, data []byte) error {
 		return nil
 	default:
 		return fmt.Errorf("[Stream.%s.dealheart]heart msg sender name:%s check failed from %s:%s addr:%s selfname:%s",
-			p.getprotocolname(), msg.Sender, p.getpeertypename(), p.getpeername(), p.getpeeraddr(), p.getselfname())
+			p.getprotocolname(), msg.sender, p.getpeertypename(), p.getpeername(), p.getpeeraddr(), p.getselfname())
 	}
 }
-func (this *Instance) dealuser(p *Peer, msg *TotalMsg) error {
+func (this *Instance) dealuser(p *Peer, msg *userMsg) error {
 	//update lastactive time
-	p.lastactive = time.Now().UnixNano()
-	this.conf.Userdatafunc(p.ctx, p, p.getpeername(), p.starttime, msg.GetUser().Userdata)
+	p.lastactive = uint64(time.Now().UnixNano())
+	this.conf.Userdatafunc(p.ctx, p, p.getpeername(), p.starttime, msg.userdata)
 	return nil
 }
 func (this *Instance) write(p *Peer) {
@@ -702,10 +716,10 @@ func (this *Instance) write(p *Peer) {
 	var isheart bool
 	for {
 		isheart = false
-		select {
-		case data, ok = <-p.heartbeatbuffer:
+		if len(p.heartbeatbuffer) > 0 {
+			data, ok = <-p.heartbeatbuffer
 			isheart = true
-		default:
+		} else {
 			select {
 			case data, ok = <-p.writerbuffer:
 			case data, ok = <-p.heartbeatbuffer:
@@ -751,12 +765,11 @@ func (this *Instance) write(p *Peer) {
 			if e != nil {
 				return
 			}
-			switch p.protocoltype {
-			case TCP:
-				fallthrough
-			case UNIXSOCKET:
+			if p.protocoltype == TCP || p.protocoltype == UNIXSOCKET {
+				//tcp and unixsocket
 				send += num
-			case WEBSOCKET:
+			} else {
+				//websocket
 				send = len(data)
 			}
 		}

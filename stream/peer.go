@@ -41,15 +41,15 @@ type Peer struct {
 	servername      string
 	peertype        int
 	protocoltype    int
-	starttime       int64
+	starttime       uint64
 	readbuffer      *buffer.Buffer
 	tempbuffer      []byte
 	tempbuffernum   int
 	writerbuffer    chan []byte
 	heartbeatbuffer chan []byte
 	conn            unsafe.Pointer
-	lastactive      int64   //unixnano timestamp
-	netlag          []int64 //unixnano timeoffset
+	lastactive      uint64   //unixnano timestamp
+	netlag          []uint64 //unixnano timeoffset
 	netlagindex     int
 	status          bool //true-working,false-closing
 	ctx             context.Context
@@ -152,7 +152,7 @@ func (p *Peer) setbuffer(readnum, writenum int) {
 	}
 }
 
-func (p *Peer) Close(uniqueid int64) {
+func (p *Peer) Close(uniqueid uint64) {
 	p.parentnode.RLock()
 	if uniqueid != 0 && p.starttime == uniqueid && p.status {
 		p.closeconn()
@@ -162,20 +162,23 @@ func (p *Peer) Close(uniqueid int64) {
 }
 
 //unit nanosecond
-func (p *Peer) GetAverageNetLag() int64 {
-	total := int64(0)
-	count := int64(0)
+func (p *Peer) GetAverageNetLag() uint64 {
+	total := uint64(0)
+	count := uint64(0)
 	for _, v := range p.netlag {
 		if v != 0 {
 			total += v
 			count++
 		}
 	}
+	if count == 0 {
+		return 0
+	}
 	return total / count
 }
 
 //unit nanosecond
-func (p *Peer) GetPeekNetLag() int64 {
+func (p *Peer) GetPeekNetLag() uint64 {
 	max := p.netlag[0]
 	for _, v := range p.netlag {
 		if max < v {
@@ -185,7 +188,7 @@ func (p *Peer) GetPeekNetLag() int64 {
 	return max
 }
 
-func (p *Peer) SendMessage(userdata []byte, uniqueid int64) error {
+func (p *Peer) SendMessage(userdata []byte, uniqueid uint64) error {
 	if !p.status || uniqueid == 0 || p.starttime != uniqueid {
 		//status for close check
 		//uniqueid for ABA check
@@ -193,13 +196,18 @@ func (p *Peer) SendMessage(userdata []byte, uniqueid int64) error {
 	}
 	//here has little data race,but the message package will be dropped by peer,because of different uniqueid
 	var data []byte
+	msg := &userMsg{
+		uniqueid: uniqueid,
+		sender:   p.getselfname(),
+		userdata: userdata,
+	}
 	switch p.protocoltype {
 	case TCP:
 		fallthrough
 	case UNIXSOCKET:
-		data = makeUserMsg(userdata, uniqueid, true)
+		data = makeUserMsg(msg, true)
 	case WEBSOCKET:
-		data = makeUserMsg(userdata, uniqueid, false)
+		data = makeUserMsg(msg, false)
 	}
 	select {
 	case p.writerbuffer <- data:

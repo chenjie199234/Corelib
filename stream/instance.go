@@ -20,13 +20,18 @@ func (this *Instance) SendMessage(peername string, userdata []byte) error {
 		return ERRCONNCLOSED
 	}
 	var data []byte
+	msg := &userMsg{
+		uniqueid: p.starttime,
+		sender:   p.getselfname(),
+		userdata: userdata,
+	}
 	switch p.protocoltype {
 	case TCP:
 		fallthrough
 	case UNIXSOCKET:
-		data = makeUserMsg(userdata, p.starttime, true)
+		data = makeUserMsg(msg, true)
 	case WEBSOCKET:
-		data = makeUserMsg(userdata, p.starttime, false)
+		data = makeUserMsg(msg, false)
 	}
 	select {
 	case p.writerbuffer <- data:
@@ -39,7 +44,7 @@ func (this *Instance) SendMessage(peername string, userdata []byte) error {
 }
 
 //unit nanosecond
-func (this *Instance) GetAverageNetLag(peername string) (int64, error) {
+func (this *Instance) GetAverageNetLag(peername string) (uint64, error) {
 	node := this.peernodes[this.getindex(peername)]
 	node.RLock()
 	p, ok := node.peers[peername]
@@ -53,7 +58,7 @@ func (this *Instance) GetAverageNetLag(peername string) (int64, error) {
 }
 
 //unit nanosecond
-func (this *Instance) GetPeekNetLag(peername string) (int64, error) {
+func (this *Instance) GetPeekNetLag(peername string) (uint64, error) {
 	node := this.peernodes[this.getindex(peername)]
 	node.RLock()
 	p, ok := node.peers[peername]
@@ -112,7 +117,7 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			heartbeatbuffer: make(chan []byte, 3),
 			conn:            nil,
 			lastactive:      0,
-			netlag:          make([]int64, this.conf.NetLagSampleNum),
+			netlag:          make([]uint64, this.conf.NetLagSampleNum),
 			netlagindex:     0,
 			status:          false,
 			ctx:             tempctx,
@@ -137,7 +142,7 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			heartbeatbuffer: make(chan []byte, 3),
 			conn:            nil,
 			lastactive:      0,
-			netlag:          make([]int64, this.conf.NetLagSampleNum),
+			netlag:          make([]uint64, this.conf.NetLagSampleNum),
 			netlagindex:     0,
 			status:          false,
 			ctx:             tempctx,
@@ -162,7 +167,7 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			heartbeatbuffer: make(chan []byte, 3),
 			conn:            nil,
 			lastactive:      0,
-			netlag:          make([]int64, this.conf.NetLagSampleNum),
+			netlag:          make([]uint64, this.conf.NetLagSampleNum),
 			netlagindex:     0,
 			status:          false,
 			ctx:             tempctx,
@@ -244,13 +249,14 @@ func (this *Instance) heart(node *peernode) {
 	tker := time.NewTicker(time.Duration(this.conf.HeartprobeInterval) * time.Millisecond)
 	for {
 		<-tker.C
-		now := time.Now().UnixNano()
+		now := uint64(time.Now().UnixNano())
 		node.RLock()
 		for _, p := range node.peers {
 			if !p.status {
 				continue
 			}
-			if now-p.lastactive > this.conf.HeartbeatTimeout*1000*1000 {
+			templastactive := p.lastactive
+			if now >= templastactive && now-templastactive > this.conf.HeartbeatTimeout*1000*1000 {
 				//heartbeat timeout
 				fmt.Printf("[Stream.%s.heart] timeout %s:%s addr:%s\n",
 					p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
@@ -258,13 +264,18 @@ func (this *Instance) heart(node *peernode) {
 				p.status = false
 			} else {
 				var data []byte
+				msg := &heartMsg{
+					uniqueid:  p.starttime,
+					sender:    p.getselfname(),
+					timestamp: uint64(time.Now().UnixNano()),
+				}
 				switch p.protocoltype {
 				case TCP:
 					fallthrough
 				case UNIXSOCKET:
-					data = makeHeartMsg(p.getselfname(), time.Now().UnixNano(), p.starttime, true)
+					data = makeHeartMsg(msg, true)
 				case WEBSOCKET:
-					data = makeHeartMsg(p.getselfname(), time.Now().UnixNano(), p.starttime, false)
+					data = makeHeartMsg(msg, false)
 				}
 				select {
 				case p.heartbeatbuffer <- data:
@@ -277,18 +288,10 @@ func (this *Instance) heart(node *peernode) {
 		node.RUnlock()
 	}
 }
-func (this *Instance) getindex(peername string) int {
-	result := 0
+func (this *Instance) getindex(peername string) uint {
+	result := uint(0)
 	for _, v := range md5.Sum(str2byte(peername)) {
-		result += int(v)
+		result += uint(v)
 	}
 	return result % this.conf.GroupNum
-}
-func str2byte(data string) []byte {
-	temp := (*[2]uintptr)(unsafe.Pointer(&data))
-	result := [3]uintptr{temp[0], temp[1], temp[1]}
-	return *(*[]byte)(unsafe.Pointer(&result))
-}
-func byte2str(data []byte) string {
-	return *(*string)(unsafe.Pointer(&data))
 }

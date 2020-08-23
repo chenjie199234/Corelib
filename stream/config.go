@@ -12,13 +12,13 @@ import (
 type HandleVerifyFunc func(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool
 
 //This is a notice after two peers verify identity pass
-type HandleOnlineFunc func(p *Peer, peername string, uniqueid int64)
+type HandleOnlineFunc func(p *Peer, peername string, uniqueid uint64)
 
 //HandleUserdataFunc has a cancel context,you should control the timeout by yourself through context.WithTimeout()
-type HandleUserdataFunc func(ctx context.Context, p *Peer, peername string, uniqueid int64, data []byte)
+type HandleUserdataFunc func(ctx context.Context, p *Peer, peername string, uniqueid uint64, data []byte)
 
 //This is a notice after two peers disconnect with each other
-type HandleOfflineFunc func(p *Peer, peername string, uniqueid int64)
+type HandleOfflineFunc func(p *Peer, peername string, uniqueid uint64)
 
 type TcpConfig struct {
 	ConnectTimeout int `json:"connect_timeout"` //default 500ms,for client only
@@ -181,20 +181,20 @@ type InstanceConfig struct {
 	//the name of this instance
 	SelfName string `json:"self_name"`
 	//two peers need to verify each other,before they can communicate
-	VerifyTimeout int64  `json:"verify_timeout"` //default 1000ms
+	VerifyTimeout uint64 `json:"verify_timeout"` //default 1000ms
 	VerifyData    []byte `json:"verify_data"`
 
 	//heartbeat timeout
-	HeartbeatTimeout   int64 `json:"heartbeat_timeout"`   //default 5000ms
-	HeartprobeInterval int64 `json:"heartprobe_interval"` //default 1500ms
+	HeartbeatTimeout   uint64 `json:"heartbeat_timeout"`   //default 5000ms
+	HeartprobeInterval uint64 `json:"heartprobe_interval"` //default 1500ms
 
 	//how many samples a cycle
-	NetLagSampleNum int `json:"netlag_sample_num"` //default 10 num
+	NetLagSampleNum uint `json:"netlag_sample_num"` //default 10 num
 
 	//split connections into groups
 	//every group will have an independence RWMutex to control online and offline
 	//every group will have an independence goruntine to check heart timeout nodes in this piece
-	GroupNum int `json:"group_num"` //default 1 num
+	GroupNum uint `json:"group_num"` //default 1 num
 
 	//before peer and peer confirm connection,they need to verify each other
 	//after tcp connected,this function will be called
@@ -210,6 +210,9 @@ type InstanceConfig struct {
 func checkInstanceConfig(c *InstanceConfig) error {
 	if c.SelfName == "" {
 		return fmt.Errorf("[Stream.checkInstanceConfig]missing instance name")
+	}
+	if len(c.SelfName) > 64 {
+		return fmt.Errorf("[Stream.checkInstanceConfig]instance name too long")
 	}
 	if c.VerifyTimeout == 0 {
 		fmt.Println("[Stream.checkInstanceConfig]missing verify timeout,default will be used:1000ms")

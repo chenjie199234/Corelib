@@ -59,7 +59,7 @@ func tcpclienthandleVerify(ctx context.Context, selfname string, selfVerifyData 
 	return true
 }
 
-func tcpclienthandleonline(p *Peer, peername string, uniqueid int64) {
+func tcpclienthandleonline(p *Peer, peername string, uniqueid uint64) {
 	//go func() {
 	//        for {
 	//                fmt.Println(peername)
@@ -69,9 +69,9 @@ func tcpclienthandleonline(p *Peer, peername string, uniqueid int64) {
 	//}()
 }
 
-func tcpclienthandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid int64, data []byte) {
+func tcpclienthandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid uint64, data []byte) {
 	fmt.Printf("%s\n", data)
 }
 
-func tcpclienthandleoffline(p *Peer, peername string, uniqueid int64) {
+func tcpclienthandleoffline(p *Peer, peername string, uniqueid uint64) {
 }

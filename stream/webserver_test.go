@@ -37,25 +37,25 @@ func Test_Webserver(t *testing.T) {
 		SocketReadBufferLen:  1024,
 		SocketWriteBufferLen: 1024,
 		AppWriteBufferNum:    256,
-	}, []string{"/test"}, "127.0.0.1:9234", func(*http.Request) bool { return true })
+	}, []string{"/test"}, "127.0.0.1:9235", func(*http.Request) bool { return true })
 	go func() {
 		for {
 			time.Sleep(time.Second)
 			fmt.Println("client num:", webcount)
 		}
 	}()
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":8084", nil)
 }
 func webserverhandleVerify(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
 	return true
 }
-func webserverhandleonline(p *Peer, peername string, uniqueid int64) {
+func webserverhandleonline(p *Peer, peername string, uniqueid uint64) {
 	atomic.AddInt64(&webcount, 1)
 }
-func webserverhandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid int64, data []byte) {
+func webserverhandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid uint64, data []byte) {
 	fmt.Printf("%s:%s\n", peername, data)
 	p.SendMessage(data, uniqueid)
 }
-func webserverhandleoffline(p *Peer, peername string, uniqueid int64) {
+func webserverhandleoffline(p *Peer, peername string, uniqueid uint64) {
 	atomic.AddInt64(&webcount, -1)
 }

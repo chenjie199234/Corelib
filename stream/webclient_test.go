@@ -35,7 +35,7 @@ func Test_Webclient(t *testing.T) {
 				SocketReadBufferLen:  1024,
 				SocketWriteBufferLen: 1024,
 				AppWriteBufferNum:    256,
-			}, "ws://127.0.0.1:9234/test")
+			}, "ws://127.0.0.1:9235/test")
 			if count == 0 {
 				go func() {
 					for {
@@ -52,13 +52,13 @@ func Test_Webclient(t *testing.T) {
 			time.Sleep(time.Millisecond)
 		}
 	}()
-	http.ListenAndServe(":8081", nil)
+	http.ListenAndServe(":8085", nil)
 }
 func webclienthandleVerify(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
 	return true
 }
 
-func webclienthandleonline(p *Peer, peername string, uniqueid int64) {
+func webclienthandleonline(p *Peer, peername string, uniqueid uint64) {
 	//go func() {
 	//        for {
 	//                fmt.Println(peername)
@@ -68,9 +68,9 @@ func webclienthandleonline(p *Peer, peername string, uniqueid int64) {
 	//}()
 }
 
-func webclienthandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid int64, data []byte) {
+func webclienthandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid uint64, data []byte) {
 	fmt.Printf("%s\n", data)
 }
 
-func webclienthandleoffline(p *Peer, peername string, uniqueid int64) {
+func webclienthandleoffline(p *Peer, peername string, uniqueid uint64) {
 }

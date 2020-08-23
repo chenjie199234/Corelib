@@ -48,13 +48,13 @@ func Test_Tcpserver(t *testing.T) {
 func tcpserverhandleVerify(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
 	return true
 }
-func tcpserverhandleonline(p *Peer, peername string, uniqueid int64) {
+func tcpserverhandleonline(p *Peer, peername string, uniqueid uint64) {
 	atomic.AddInt64(&tcpcount, 1)
 }
-func tcpserverhandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid int64, data []byte) {
+func tcpserverhandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid uint64, data []byte) {
 	fmt.Printf("%s:%s\n", peername, data)
 	p.SendMessage(data, uniqueid)
 }
-func tcpserverhandleoffline(p *Peer, peername string, uniqueid int64) {
+func tcpserverhandleoffline(p *Peer, peername string, uniqueid uint64) {
 	atomic.AddInt64(&tcpcount, -1)
 }

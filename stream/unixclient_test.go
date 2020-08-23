@@ -53,13 +53,13 @@ func Test_Unixclient(t *testing.T) {
 			time.Sleep(time.Millisecond)
 		}
 	}()
-	http.ListenAndServe(":8081", nil)
+	http.ListenAndServe(":8083", nil)
 }
 func unixclienthandleVerify(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
 	return true
 }
 
-func unixclienthandleonline(p *Peer, peername string, uniqueid int64) {
+func unixclienthandleonline(p *Peer, peername string, uniqueid uint64) {
 	//go func() {
 	//        for {
 	//                fmt.Println(peername)
@@ -69,9 +69,9 @@ func unixclienthandleonline(p *Peer, peername string, uniqueid int64) {
 	//}()
 }
 
-func unixclienthandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid int64, data []byte) {
+func unixclienthandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid uint64, data []byte) {
 	fmt.Printf("%s\n", data)
 }
 
-func unixclienthandleoffline(p *Peer, peername string, uniqueid int64) {
+func unixclienthandleoffline(p *Peer, peername string, uniqueid uint64) {
 }
