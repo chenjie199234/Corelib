@@ -112,6 +112,9 @@ func getUserMsg(data []byte) (*userMsg, error) {
 	return msg, nil
 }
 func getMsgType(data []byte) (int, error) {
+	if len(data) == 0 {
+		return -1, fmt.Errorf("empty message")
+	}
 	switch {
 	case ((HEART << 6) | data[0]) == data[0]:
 		return HEART, nil
@@ -124,8 +127,8 @@ func getMsgType(data []byte) (int, error) {
 	}
 }
 func addPrefix(data []byte) []byte {
-	prefix := make([]byte, 2)
-	binary.BigEndian.PutUint16(prefix, uint16(len(data)))
+	prefix := make([]byte, 4)
+	binary.BigEndian.PutUint32(prefix, uint32(len(data)))
 	return append(prefix, data...)
 }
 func str2byte(data string) []byte {

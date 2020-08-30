@@ -260,7 +260,7 @@ func (this *Instance) heart(node *peernode) {
 				//heartbeat timeout
 				fmt.Printf("[Stream.%s.heart] timeout %s:%s addr:%s\n",
 					p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-				p.closeconnread()
+				p.closeconn()
 				p.status = false
 			} else {
 				var data []byte

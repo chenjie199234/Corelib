@@ -431,12 +431,12 @@ func (this *Instance) verifypeer(p *Peer) {
 		}
 		if p.protocoltype != WEBSOCKET {
 			p.readbuffer.Put(p.tempbuffer[:p.tempbuffernum])
-			if p.readbuffer.Num() <= 2 {
+			if p.readbuffer.Num() <= 4 {
 				continue
 			}
-			msglen := binary.BigEndian.Uint16(p.readbuffer.Peek(0, 2))
-			if p.readbuffer.Num() >= int(msglen+2) {
-				data = p.readbuffer.Get(int(msglen + 2))[2:]
+			msglen := binary.BigEndian.Uint32(p.readbuffer.Peek(0, 4))
+			if p.readbuffer.Num() >= int(msglen+4) {
+				data = p.readbuffer.Get(int(msglen + 4))[4:]
 				break
 			}
 			if p.readbuffer.Rest() == 0 {
@@ -568,15 +568,15 @@ func (this *Instance) read(p *Peer) {
 			//tcp and unix socket
 			p.readbuffer.Put(p.tempbuffer[:p.tempbuffernum])
 			for {
-				if p.readbuffer.Num() <= 2 {
+				if p.readbuffer.Num() <= 4 {
 					break
 				}
-				msglen := binary.BigEndian.Uint16(p.readbuffer.Peek(0, 2))
+				msglen := binary.BigEndian.Uint32(p.readbuffer.Peek(0, 4))
 				if msglen == 0 {
-					p.readbuffer.Get(2)
+					p.readbuffer.Get(4)
 					continue
 				}
-				if p.readbuffer.Num() < int(msglen+2) {
+				if p.readbuffer.Num() < int(msglen+4) {
 					if p.readbuffer.Rest() == 0 {
 						fmt.Printf("[Stream.%s.read]msg too long from %s:%s addr:%s\n",
 							p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
@@ -584,7 +584,7 @@ func (this *Instance) read(p *Peer) {
 					}
 					break
 				}
-				data = p.readbuffer.Get(int(msglen + 2))
+				data = p.readbuffer.Get(int(msglen + 4))
 				if e := this.dealmsg(p, data, false); e != nil {
 					fmt.Println(e)
 					return
@@ -602,7 +602,7 @@ func (this *Instance) dealmsg(p *Peer, data []byte, frompong bool) error {
 	var msgtype int
 	var e error
 	if p.protocoltype == TCP || p.protocoltype == UNIXSOCKET {
-		msgtype, e = getMsgType(data[2:])
+		msgtype, e = getMsgType(data[4:])
 	} else {
 		msgtype, e = getMsgType(data)
 	}
@@ -619,7 +619,7 @@ func (this *Instance) dealmsg(p *Peer, data []byte, frompong bool) error {
 		}
 		var msg *heartMsg
 		if p.protocoltype == TCP || p.protocoltype == UNIXSOCKET {
-			msg, e = getHeartMsg(data[2:])
+			msg, e = getHeartMsg(data[4:])
 		} else {
 			msg, e = getHeartMsg(data)
 		}
@@ -635,7 +635,7 @@ func (this *Instance) dealmsg(p *Peer, data []byte, frompong bool) error {
 	case USER:
 		var msg *userMsg
 		if p.protocoltype == TCP || p.protocoltype == UNIXSOCKET {
-			msg, e = getUserMsg(data[2:])
+			msg, e = getUserMsg(data[4:])
 		} else {
 			msg, e = getUserMsg(data)
 		}
@@ -682,6 +682,7 @@ func (this *Instance) dealuser(p *Peer, msg *userMsg) error {
 }
 func (this *Instance) write(p *Peer) {
 	defer func() {
+		p.parentnode.Lock()
 		//drop all data
 		for len(p.writerbuffer) > 0 {
 			<-p.writerbuffer
@@ -689,7 +690,6 @@ func (this *Instance) write(p *Peer) {
 		for len(p.heartbeatbuffer) > 0 {
 			<-p.heartbeatbuffer
 		}
-		p.parentnode.Lock()
 		//every connection will have two goruntine to work for it
 		if _, ok := p.parentnode.peers[p.getpeername()]; ok {
 			//when first goruntine return,delete this connection from the map
