@@ -115,30 +115,6 @@ func (p *Peer) closeconn() {
 	}
 }
 
-//func (p *Peer) closeconnread() {
-//        if p.conn != nil {
-//                switch p.protocoltype {
-//                case TCP:
-//                        (*net.TCPConn)(p.conn).CloseRead()
-//                case UNIXSOCKET:
-//                        (*net.UnixConn)(p.conn).CloseRead()
-//                case WEBSOCKET:
-//                        (*websocket.Conn)(p.conn).UnderlyingConn().(*net.TCPConn).CloseRead()
-//                }
-//        }
-//}
-//func (p *Peer) closeconnwrite() {
-//        if p.conn != nil {
-//                switch p.protocoltype {
-//                case TCP:
-//                        (*net.TCPConn)(p.conn).CloseWrite()
-//                case UNIXSOCKET:
-//                        (*net.UnixConn)(p.conn).CloseWrite()
-//                case WEBSOCKET:
-//                        (*websocket.Conn)(p.conn).UnderlyingConn().(*net.TCPConn).CloseWrite()
-//                }
-//        }
-//}
 func (p *Peer) setbuffer(readnum, writenum int) {
 	switch p.protocoltype {
 	case TCP:

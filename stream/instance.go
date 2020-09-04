@@ -92,14 +92,18 @@ type Instance struct {
 
 	peerPool          *sync.Pool
 	websocketPeerPool *sync.Pool
-	//websocketupgrader *websocket.Upgrader
-	//websocketdialer   *websocket.Dialer
 }
 
 func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 	switch t {
 	case TCP:
 		if p, ok := this.peerPool.Get().(*Peer); ok {
+			if len(p.writerbuffer) > 0 {
+				<-p.writerbuffer
+			}
+			if len(p.heartbeatbuffer) > 0 {
+				<-p.heartbeatbuffer
+			}
 			return p
 		}
 		tempctx, tempcancel := context.WithCancel(context.Background())
@@ -125,6 +129,12 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 		}
 	case UNIXSOCKET:
 		if p, ok := this.peerPool.Get().(*Peer); ok {
+			if len(p.writerbuffer) > 0 {
+				<-p.writerbuffer
+			}
+			if len(p.heartbeatbuffer) > 0 {
+				<-p.heartbeatbuffer
+			}
 			return p
 		}
 		tempctx, tempcancel := context.WithCancel(context.Background())
@@ -150,6 +160,12 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 		}
 	case WEBSOCKET:
 		if p, ok := this.websocketPeerPool.Get().(*Peer); ok {
+			if len(p.writerbuffer) > 0 {
+				<-p.writerbuffer
+			}
+			if len(p.heartbeatbuffer) > 0 {
+				<-p.heartbeatbuffer
+			}
 			return p
 		}
 		tempctx, tempcancel := context.WithCancel(context.Background())
