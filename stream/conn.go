@@ -44,7 +44,6 @@ func (this *Instance) StartTcpServer(c *TcpConfig, listenaddr string) {
 			}
 			p.conn = unsafe.Pointer(conn)
 			p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-			p.status = true
 			go this.sworker(p)
 		}
 	}()
@@ -76,7 +75,6 @@ func (this *Instance) StartUnixsocketServer(c *UnixConfig, listenaddr string) {
 			}
 			p.conn = unsafe.Pointer(conn)
 			p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-			p.status = true
 			go this.sworker(p)
 		}
 	}()
@@ -112,7 +110,6 @@ func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listena
 		p.peertype = CLIENT
 		p.conn = unsafe.Pointer(conn)
 		p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-		p.status = true
 		go this.sworker(p)
 	}
 	for _, path := range paths {
@@ -184,7 +181,6 @@ func (this *Instance) sworker(p *Peer) bool {
 			}
 			if e != nil {
 				p.closeconn()
-				p.status = false
 				this.putPeer(p)
 				return false
 			}
@@ -217,7 +213,6 @@ func (this *Instance) sworker(p *Peer) bool {
 		return true
 	} else {
 		p.closeconn()
-		p.status = false
 		this.putPeer(p)
 		return false
 	}
@@ -239,7 +234,6 @@ func (this *Instance) StartTcpClient(c *TcpConfig, serveraddr string) bool {
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn.(*net.TCPConn))
 	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-	p.status = true
 	return this.cworker(p)
 }
 
@@ -259,7 +253,6 @@ func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string) bo
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn.(*net.UnixConn))
 	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-	p.status = true
 	return this.cworker(p)
 }
 
@@ -284,7 +277,6 @@ func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string) bool
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn)
 	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-	p.status = true
 	return this.cworker(p)
 }
 
@@ -371,7 +363,6 @@ func (this *Instance) cworker(p *Peer) bool {
 		return true
 	} else {
 		p.closeconn()
-		p.status = false
 		this.putPeer(p)
 		return false
 	}
@@ -500,7 +491,6 @@ func (this *Instance) read(p *Peer) {
 			delete(p.parentnode.peers, p.getpeername())
 			//cause write goruntine return,this will be useful when there is nothing in writebuffer
 			p.cancel()
-			p.status = false
 			p.writerbuffer <- []byte{}
 			p.heartbeatbuffer <- []byte{}
 			p.parentnode.Unlock()
@@ -697,7 +687,6 @@ func (this *Instance) write(p *Peer) {
 			//close the connection,cause read goruntine return
 			p.closeconn()
 			p.cancel()
-			p.status = false
 			p.parentnode.Unlock()
 		} else {
 			p.parentnode.Unlock()

@@ -80,7 +80,6 @@ func (this *Instance) Close(peername string) error {
 		return nil
 	}
 	p.closeconn()
-	p.status = false
 	node.RUnlock()
 	return nil
 }
@@ -123,7 +122,6 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			lastactive:      0,
 			netlag:          make([]uint64, this.conf.NetLagSampleNum),
 			netlagindex:     0,
-			status:          false,
 			ctx:             tempctx,
 			cancel:          tempcancel,
 		}
@@ -154,7 +152,6 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			lastactive:      0,
 			netlag:          make([]uint64, this.conf.NetLagSampleNum),
 			netlagindex:     0,
-			status:          false,
 			ctx:             tempctx,
 			cancel:          tempcancel,
 		}
@@ -185,7 +182,6 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			lastactive:      0,
 			netlag:          make([]uint64, this.conf.NetLagSampleNum),
 			netlagindex:     0,
-			status:          false,
 			ctx:             tempctx,
 			cancel:          tempcancel,
 		}
@@ -216,7 +212,6 @@ func (this *Instance) putPeer(p *Peer) {
 		p.netlag[i] = 0
 	}
 	p.netlagindex = 0
-	p.status = false
 	switch p.protocoltype {
 	case TCP:
 		fallthrough
@@ -268,7 +263,7 @@ func (this *Instance) heart(node *peernode) {
 		now := uint64(time.Now().UnixNano())
 		node.RLock()
 		for _, p := range node.peers {
-			if !p.status {
+			if p.starttime == 0 {
 				continue
 			}
 			templastactive := p.lastactive
@@ -277,7 +272,6 @@ func (this *Instance) heart(node *peernode) {
 				fmt.Printf("[Stream.%s.heart] timeout %s:%s addr:%s\n",
 					p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 				p.closeconn()
-				p.status = false
 			} else {
 				var data []byte
 				msg := &heartMsg{

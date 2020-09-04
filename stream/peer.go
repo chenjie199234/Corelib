@@ -41,7 +41,7 @@ type Peer struct {
 	servername      string
 	peertype        int
 	protocoltype    int
-	starttime       uint64
+	starttime       uint64 //0---(closed or closing),not 0---(start time)
 	readbuffer      *buffer.Buffer
 	tempbuffer      []byte
 	tempbuffernum   int
@@ -51,7 +51,6 @@ type Peer struct {
 	lastactive      uint64   //unixnano timestamp
 	netlag          []uint64 //unixnano timeoffset
 	netlagindex     int
-	status          bool //true-working,false-closing
 	ctx             context.Context
 	cancel          context.CancelFunc
 }
@@ -113,6 +112,7 @@ func (p *Peer) closeconn() {
 			(*websocket.Conn)(p.conn).Close()
 		}
 	}
+	p.starttime = 0
 }
 
 func (p *Peer) setbuffer(readnum, writenum int) {
@@ -131,9 +131,8 @@ func (p *Peer) setbuffer(readnum, writenum int) {
 
 func (p *Peer) Close(uniqueid uint64) {
 	p.parentnode.RLock()
-	if uniqueid != 0 && p.starttime == uniqueid && p.status {
+	if uniqueid != 0 && p.starttime == uniqueid {
 		p.closeconn()
-		p.status = false
 	}
 	p.parentnode.RUnlock()
 }
@@ -166,9 +165,8 @@ func (p *Peer) GetPeekNetLag() uint64 {
 }
 
 func (p *Peer) SendMessage(userdata []byte, uniqueid uint64) error {
-	if !p.status || uniqueid == 0 || p.starttime != uniqueid {
-		//status for close check
-		//uniqueid for ABA check
+	if uniqueid == 0 || p.starttime != uniqueid {
+		//uniqueid for close check and ABA check
 		return ERRCONNCLOSED
 	}
 	//here has little data race,but the message package will be dropped by peer,because of different uniqueid
