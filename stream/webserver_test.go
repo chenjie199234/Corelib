@@ -45,7 +45,7 @@ func Test_Webserver(t *testing.T) {
 	}()
 	http.ListenAndServe(":8084", nil)
 }
-func webserverhandleVerify(ctx context.Context, peername string, peerVerifyData []byte) []byte {
+func webserverhandleVerify(ctx context.Context, peername string, uniqueid uint64, peerVerifyData []byte) []byte {
 	if len(peerVerifyData) != 0 {
 		return nil
 	}

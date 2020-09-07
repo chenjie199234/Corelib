@@ -46,7 +46,7 @@ func Test_Unixserver(t *testing.T) {
 	}()
 	http.ListenAndServe(":8082", nil)
 }
-func unixserverhandleVerify(ctx context.Context, peername string, peerVerifyData []byte) []byte {
+func unixserverhandleVerify(ctx context.Context, peername string, uniqueid uint64, peerVerifyData []byte) []byte {
 	if len(peerVerifyData) != 0 {
 		return nil
 	}

@@ -53,7 +53,7 @@ func Test_Tcpclient(t *testing.T) {
 	}()
 	http.ListenAndServe(":8081", nil)
 }
-func tcpclienthandleVerify(ctx context.Context, peername string, peerVerifyData []byte) []byte {
+func tcpclienthandleVerify(ctx context.Context, peername string, uniqueid uint64, peerVerifyData []byte) []byte {
 	if !bytes.Equal([]byte{'t', 'e', 's', 't'}, peerVerifyData) {
 		fmt.Println("verify error")
 	}

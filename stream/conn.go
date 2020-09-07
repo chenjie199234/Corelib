@@ -471,19 +471,23 @@ func (this *Instance) verifypeer(p *Peer, needresponse bool) (response []byte) {
 	//                p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
 	//        return
 	//}
-	response = this.conf.Verifyfunc(ctx, msg.sender, msg.verifydata)
+	p.lastactive = uint64(time.Now().UnixNano())
+	switch p.peertype {
+	case CLIENT:
+		p.starttime = uint64(p.lastactive)
+	case SERVER:
+		p.starttime = uint64(msg.uniqueid)
+	}
+	response = this.conf.Verifyfunc(ctx, msg.sender, p.starttime, msg.verifydata)
 	if needresponse && len(response) == 0 {
 		fmt.Printf("[Stream.%s.verifypeer]verify failed with data:%s from %s addr:%s\n",
 			p.getprotocolname(), msg.verifydata, p.getpeertypename(), p.getpeeraddr())
 		return
 	}
-	p.lastactive = uint64(time.Now().UnixNano())
 	switch p.peertype {
 	case CLIENT:
-		p.starttime = uint64(p.lastactive)
 		p.clientname = msg.sender
 	case SERVER:
-		p.starttime = uint64(msg.uniqueid)
 		p.servername = msg.sender
 	}
 	return

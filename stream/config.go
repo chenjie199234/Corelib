@@ -11,7 +11,7 @@ import (
 //Before two peers can communicate with each other,they need to verify the identity first
 //server's response empty means didn't pass the verify,the response will write back to the client for client to verify the server
 //client's response is useless
-type HandleVerifyFunc func(ctx context.Context, peername string, peerVerifyData []byte) (response []byte)
+type HandleVerifyFunc func(ctx context.Context, peername string, uniqueid uint64, peerVerifyData []byte) (response []byte)
 
 //This is a notice after two peers verify identity pass
 type HandleOnlineFunc func(p *Peer, peername string, uniqueid uint64)
