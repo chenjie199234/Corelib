@@ -1,7 +1,7 @@
 syntax = "proto3";
 package first;
-option go_package="protoc-gen-web/first;first";
-import "protoc-gen-web/second/second.proto";
+option go_package="protoc-gen-go-web/first;first";
+import "protoc-gen-go-web/second/second.proto";
 service test {
 	rpc hello(hello_req)returns(hello_resp);//get
 	rpc kiss(second.kiss_req)returns(second.kiss_resp);//post
