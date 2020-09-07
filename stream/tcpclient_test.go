@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -10,8 +11,6 @@ import (
 	"time"
 )
 
-//var tcpclientinstance *Instance
-
 func Test_Tcpclient(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	go func() {
@@ -19,7 +18,6 @@ func Test_Tcpclient(t *testing.T) {
 			tcpclientinstance := NewInstance(&InstanceConfig{
 				SelfName:           fmt.Sprintf("tcpclient%d", count),
 				VerifyTimeout:      500,
-				VerifyData:         []byte{'t', 'e', 's', 't'},
 				HeartbeatTimeout:   1500,
 				HeartprobeInterval: 500,
 				NetLagSampleNum:    10,
@@ -55,8 +53,11 @@ func Test_Tcpclient(t *testing.T) {
 	}()
 	http.ListenAndServe(":8081", nil)
 }
-func tcpclienthandleVerify(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
-	return true
+func tcpclienthandleVerify(ctx context.Context, peername string, peerVerifyData []byte) []byte {
+	if !bytes.Equal([]byte{'t', 'e', 's', 't'}, peerVerifyData) {
+		fmt.Println("verify error")
+	}
+	return nil
 }
 
 func tcpclienthandleonline(p *Peer, peername string, uniqueid uint64) {

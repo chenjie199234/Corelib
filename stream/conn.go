@@ -131,14 +131,14 @@ func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listena
 }
 func (this *Instance) sworker(p *Peer) bool {
 	//read first verify message from client
-	this.verifypeer(p)
+	verifydata := this.verifypeer(p, true)
 	if p.clientname != "" {
 		//verify client success,send self's verify message to client
 		var verifymsg []byte
 		msg := &verifyMsg{
 			uniqueid:   p.starttime,
 			sender:     p.servername,
-			verifydata: this.conf.VerifyData,
+			verifydata: verifydata,
 		}
 		switch p.protocoltype {
 		case TCP:
@@ -234,7 +234,7 @@ func (this *Instance) StartTcpClient(c *TcpConfig, serveraddr string) bool {
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn.(*net.TCPConn))
 	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-	return this.cworker(p)
+	return this.cworker(p, c.VerifyData)
 }
 
 func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string) bool {
@@ -253,10 +253,14 @@ func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string) bo
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn.(*net.UnixConn))
 	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-	return this.cworker(p)
+	return this.cworker(p, c.VerifyData)
 }
 
 func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string) bool {
+	if c == nil {
+		c = &WebConfig{}
+	}
+	checkWebConfig(c)
 	dialer := &websocket.Dialer{
 		NetDial: func(network, addr string) (net.Conn, error) {
 			return net.DialTimeout(network, addr, time.Duration(c.ConnectTimeout)*time.Millisecond)
@@ -277,16 +281,16 @@ func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string) bool
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn)
 	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-	return this.cworker(p)
+	return this.cworker(p, c.VerifyData)
 }
 
-func (this *Instance) cworker(p *Peer) bool {
+func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
 	//send self's verify message to server
 	var verifymsg []byte
 	msg := &verifyMsg{
 		uniqueid:   p.starttime,
 		sender:     p.clientname,
-		verifydata: this.conf.VerifyData,
+		verifydata: verifydata,
 	}
 	switch p.protocoltype {
 	case TCP:
@@ -342,7 +346,7 @@ func (this *Instance) cworker(p *Peer) bool {
 		}
 	}
 	//read first verify message from server
-	this.verifypeer(p)
+	_ = this.verifypeer(p, false)
 	if p.servername != "" {
 		//verify server success
 		if !this.addPeer(p) {
@@ -367,7 +371,7 @@ func (this *Instance) cworker(p *Peer) bool {
 		return false
 	}
 }
-func (this *Instance) verifypeer(p *Peer) {
+func (this *Instance) verifypeer(p *Peer, needresponse bool) (response []byte) {
 	switch p.protocoltype {
 	case TCP:
 		(*net.TCPConn)(p.conn).SetReadDeadline(time.Now().Add(time.Duration(this.conf.VerifyTimeout) * time.Millisecond))
@@ -455,18 +459,20 @@ func (this *Instance) verifypeer(p *Peer) {
 	if e != nil {
 		fmt.Printf("[Stream.%s.verifypeer]first verify msg format error:%s from %s addr:%s\n",
 			p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
+		return
 	}
 	if msg.sender == "" || msg.sender == p.getselfname() {
 		fmt.Printf("[Stream.%s.verifypeer]sender name:%s check failed from %s addr:%s\n",
 			p.getprotocolname(), msg.sender, p.getpeertypename(), p.getpeeraddr())
 		return
 	}
-	if len(msg.verifydata) == 0 {
-		fmt.Printf("[Stream.%s.verifypeer]verify data is empty from %s addr:%s\n",
-			p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
-		return
-	}
-	if !this.conf.Verifyfunc(ctx, p.getselfname(), this.conf.VerifyData, msg.sender, msg.verifydata) {
+	//if len(msg.verifydata) == 0 {
+	//        fmt.Printf("[Stream.%s.verifypeer]verify data is empty from %s addr:%s\n",
+	//                p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
+	//        return
+	//}
+	response = this.conf.Verifyfunc(ctx, msg.sender, msg.verifydata)
+	if needresponse && len(response) == 0 {
 		fmt.Printf("[Stream.%s.verifypeer]verify failed with data:%s from %s addr:%s\n",
 			p.getprotocolname(), msg.verifydata, p.getpeertypename(), p.getpeeraddr())
 		return

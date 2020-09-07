@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -19,7 +20,6 @@ func Test_Webclient(t *testing.T) {
 			webclientinstance := NewInstance(&InstanceConfig{
 				SelfName:           fmt.Sprintf("webclient%d", count),
 				VerifyTimeout:      500,
-				VerifyData:         []byte{'t', 'e', 's', 't'},
 				HeartbeatTimeout:   1500,
 				HeartprobeInterval: 500,
 				NetLagSampleNum:    10,
@@ -54,8 +54,11 @@ func Test_Webclient(t *testing.T) {
 	}()
 	http.ListenAndServe(":8085", nil)
 }
-func webclienthandleVerify(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
-	return true
+func webclienthandleVerify(ctx context.Context, peername string, peerVerifyData []byte) []byte {
+	if !bytes.Equal([]byte{'t', 'e', 's', 't'}, peerVerifyData) {
+		fmt.Println("verify error")
+	}
+	return nil
 }
 
 func webclienthandleonline(p *Peer, peername string, uniqueid uint64) {

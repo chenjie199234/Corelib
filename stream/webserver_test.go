@@ -20,7 +20,6 @@ func Test_Webserver(t *testing.T) {
 	webserverinstance = NewInstance(&InstanceConfig{
 		SelfName:           "server",
 		VerifyTimeout:      500,
-		VerifyData:         []byte{'t', 'e', 's', 't'},
 		HeartbeatTimeout:   1500,
 		HeartprobeInterval: 500,
 		NetLagSampleNum:    10,
@@ -46,8 +45,11 @@ func Test_Webserver(t *testing.T) {
 	}()
 	http.ListenAndServe(":8084", nil)
 }
-func webserverhandleVerify(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
-	return true
+func webserverhandleVerify(ctx context.Context, peername string, peerVerifyData []byte) []byte {
+	if len(peerVerifyData) != 0 {
+		return nil
+	}
+	return []byte{'t', 'e', 's', 't'}
 }
 func webserverhandleonline(p *Peer, peername string, uniqueid uint64) {
 	atomic.AddInt64(&webcount, 1)

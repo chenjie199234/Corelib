@@ -20,7 +20,6 @@ func Test_Unixserver(t *testing.T) {
 	unixserverinstance = NewInstance(&InstanceConfig{
 		SelfName:           "server",
 		VerifyTimeout:      500,
-		VerifyData:         []byte{'t', 'e', 's', 't'},
 		HeartbeatTimeout:   1500,
 		HeartprobeInterval: 500,
 		NetLagSampleNum:    10,
@@ -47,8 +46,11 @@ func Test_Unixserver(t *testing.T) {
 	}()
 	http.ListenAndServe(":8082", nil)
 }
-func unixserverhandleVerify(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
-	return true
+func unixserverhandleVerify(ctx context.Context, peername string, peerVerifyData []byte) []byte {
+	if len(peerVerifyData) != 0 {
+		return nil
+	}
+	return []byte{'t', 'e', 's', 't'}
 }
 func unixserverhandleonline(p *Peer, peername string, uniqueid uint64) {
 	atomic.AddInt64(&unixcount, 1)

@@ -71,7 +71,9 @@ func makeVerifyMsg(msg *verifyMsg, needprefix bool) []byte {
 	data[0] = byte((VERIFY << 6) | len(msg.sender))
 	binary.BigEndian.PutUint64(data[1:9], msg.uniqueid)
 	copy(data[9:], msg.sender)
-	copy(data[9+len(msg.sender):], msg.verifydata)
+	if len(msg.verifydata) > 0 {
+		copy(data[9+len(msg.sender):], msg.verifydata)
+	}
 	if needprefix {
 		return addPrefix(data)
 	}
@@ -80,7 +82,7 @@ func makeVerifyMsg(msg *verifyMsg, needprefix bool) []byte {
 }
 func getVerifyMsg(data []byte) (*verifyMsg, error) {
 	senderlen := int(data[0] ^ (VERIFY << 6))
-	if len(data) < (9 + senderlen + 1) {
+	if len(data) < (9 + senderlen) {
 		return nil, fmt.Errorf("bad verify message")
 	}
 	msg := &verifyMsg{}

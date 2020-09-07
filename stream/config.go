@@ -9,7 +9,9 @@ import (
 
 //HandleVerifyFunc has a timeout context
 //Before two peers can communicate with each other,they need to verify the identity first
-type HandleVerifyFunc func(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool
+//server's response empty means didn't pass the verify,the response will write back to the client for client to verify the server
+//client's response is useless
+type HandleVerifyFunc func(ctx context.Context, peername string, peerVerifyData []byte) (response []byte)
 
 //This is a notice after two peers verify identity pass
 type HandleOnlineFunc func(p *Peer, peername string, uniqueid uint64)
@@ -31,6 +33,8 @@ type TcpConfig struct {
 	AppMaxReadBufferLen int `json:"app_max_write_buffer_len"` //default 65535 byte,max 65535 byte
 	//write buffer can store the messages in buffer and send async in another goruntine
 	AppWriteBufferNum int `json:"app_write_buffer_num"` //default 256 num(not the byte)
+
+	VerifyData []byte `json:"verify_data"`
 }
 
 func checkTcpConfig(c *TcpConfig) {
@@ -91,6 +95,8 @@ type UnixConfig struct {
 	AppMaxReadBufferLen int `json:"app_max_write_buffer_len"` //default 65535 byte,max 65535 byte
 	//write buffer can store the messages in buffer and send async in another goruntine
 	AppWriteBufferNum int `json:"app_write_buffer_num"` //default 256 num(not the byte)
+
+	VerifyData []byte `json:"verify_data"`
 }
 
 func checkUnixConfig(c *UnixConfig) {
@@ -152,6 +158,8 @@ type WebConfig struct {
 	EnableCompress    bool   `json:"enable_compress"`      //default false
 	TlsCertFile       string `json:"tls_cert_file"`        //default don't use tls
 	TlsKeyFile        string `json:"tls_key_file"`         //default don't use tls
+
+	VerifyData []byte `json:"verify_data"`
 }
 
 func checkWebConfig(c *WebConfig) {
@@ -182,7 +190,6 @@ type InstanceConfig struct {
 	SelfName string `json:"self_name"`
 	//two peers need to verify each other,before they can communicate
 	VerifyTimeout uint64 `json:"verify_timeout"` //default 1000ms
-	VerifyData    []byte `json:"verify_data"`
 
 	//heartbeat timeout
 	HeartbeatTimeout   uint64 `json:"heartbeat_timeout"`   //default 5000ms
@@ -217,9 +224,6 @@ func checkInstanceConfig(c *InstanceConfig) error {
 	if c.VerifyTimeout == 0 {
 		fmt.Println("[Stream.checkInstanceConfig]missing verify timeout,default will be used:1000ms")
 		c.VerifyTimeout = 1000
-	}
-	if len(c.VerifyData) == 0 {
-		return fmt.Errorf("[Stream.checkInstanceConfig]missing verify data")
 	}
 	if c.HeartbeatTimeout == 0 {
 		fmt.Println("[Stream.checkInstanceConfig]missing heartbeat timeout,default will be used:5000ms")

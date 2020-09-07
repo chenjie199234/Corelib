@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -19,7 +20,6 @@ func Test_Unixclient(t *testing.T) {
 			unixclientinstance := NewInstance(&InstanceConfig{
 				SelfName:           fmt.Sprintf("unixclient%d", count),
 				VerifyTimeout:      500,
-				VerifyData:         []byte{'t', 'e', 's', 't'},
 				HeartbeatTimeout:   1500,
 				HeartprobeInterval: 500,
 				NetLagSampleNum:    10,
@@ -55,8 +55,11 @@ func Test_Unixclient(t *testing.T) {
 	}()
 	http.ListenAndServe(":8083", nil)
 }
-func unixclienthandleVerify(ctx context.Context, selfname string, selfVerifyData []byte, peername string, peerVerifyData []byte) bool {
-	return true
+func unixclienthandleVerify(ctx context.Context, peername string, peerVerifyData []byte) []byte {
+	if !bytes.Equal([]byte{'t', 'e', 's', 't'}, peerVerifyData) {
+		fmt.Println("verify error")
+	}
+	return nil
 }
 
 func unixclienthandleonline(p *Peer, peername string, uniqueid uint64) {
