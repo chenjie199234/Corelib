@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -46,8 +47,8 @@ func Test_Webserver(t *testing.T) {
 	http.ListenAndServe(":8084", nil)
 }
 func webserverhandleVerify(ctx context.Context, peername string, uniqueid uint64, peerVerifyData []byte) []byte {
-	if len(peerVerifyData) != 0 {
-		return nil
+	if !bytes.Equal([]byte{'t', 'e', 's', 't', 'c'}, peerVerifyData) {
+		fmt.Println("verify error")
 	}
 	return []byte{'t', 'e', 's', 't'}
 }

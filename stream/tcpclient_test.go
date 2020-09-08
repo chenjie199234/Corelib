@@ -27,6 +27,7 @@ func Test_Tcpclient(t *testing.T) {
 				Userdatafunc:       tcpclienthandleuserdata,
 				Offlinefunc:        tcpclienthandleoffline,
 			})
+
 			tcpclientinstance.StartTcpClient(&TcpConfig{
 				ConnectTimeout:       1000,
 				SocketReadBufferLen:  1024,
@@ -34,7 +35,7 @@ func Test_Tcpclient(t *testing.T) {
 				AppMinReadBufferLen:  1024,
 				AppMaxReadBufferLen:  65535,
 				AppWriteBufferNum:    256,
-			}, "127.0.0.1:9234")
+			}, "127.0.0.1:9234", []byte{'t', 'e', 's', 't', 'c'})
 			if count == 0 {
 				go func() {
 					for {

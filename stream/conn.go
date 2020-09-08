@@ -210,7 +210,7 @@ func (this *Instance) sworker(p *Peer) bool {
 	}
 }
 
-func (this *Instance) StartTcpClient(c *TcpConfig, serveraddr string) bool {
+func (this *Instance) StartTcpClient(c *TcpConfig, serveraddr string, verifydata []byte) bool {
 	if c == nil {
 		c = &TcpConfig{}
 	}
@@ -226,10 +226,10 @@ func (this *Instance) StartTcpClient(c *TcpConfig, serveraddr string) bool {
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn.(*net.TCPConn))
 	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-	return this.cworker(p, c.VerifyData)
+	return this.cworker(p, verifydata)
 }
 
-func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string) bool {
+func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string, verifydata []byte) bool {
 	if c == nil {
 		c = &UnixConfig{}
 	}
@@ -245,10 +245,10 @@ func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string) bo
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn.(*net.UnixConn))
 	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-	return this.cworker(p, c.VerifyData)
+	return this.cworker(p, verifydata)
 }
 
-func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string) bool {
+func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string, verifydata []byte) bool {
 	if c == nil {
 		c = &WebConfig{}
 	}
@@ -273,7 +273,7 @@ func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string) bool
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn)
 	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-	return this.cworker(p, c.VerifyData)
+	return this.cworker(p, verifydata)
 }
 
 func (this *Instance) cworker(p *Peer, verifydata []byte) bool {

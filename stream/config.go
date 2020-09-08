@@ -33,8 +33,6 @@ type TcpConfig struct {
 	AppMaxReadBufferLen int `json:"app_max_write_buffer_len"` //default 65535 byte,max 65535 byte
 	//write buffer can store the messages in buffer and send async in another goruntine
 	AppWriteBufferNum int `json:"app_write_buffer_num"` //default 256 num(not the byte)
-
-	VerifyData []byte `json:"verify_data"`
 }
 
 func checkTcpConfig(c *TcpConfig) {
@@ -95,8 +93,6 @@ type UnixConfig struct {
 	AppMaxReadBufferLen int `json:"app_max_write_buffer_len"` //default 65535 byte,max 65535 byte
 	//write buffer can store the messages in buffer and send async in another goruntine
 	AppWriteBufferNum int `json:"app_write_buffer_num"` //default 256 num(not the byte)
-
-	VerifyData []byte `json:"verify_data"`
 }
 
 func checkUnixConfig(c *UnixConfig) {
@@ -158,8 +154,6 @@ type WebConfig struct {
 	EnableCompress    bool   `json:"enable_compress"`      //default false
 	TlsCertFile       string `json:"tls_cert_file"`        //default don't use tls
 	TlsKeyFile        string `json:"tls_key_file"`         //default don't use tls
-
-	VerifyData []byte `json:"verify_data"`
 }
 
 func checkWebConfig(c *WebConfig) {

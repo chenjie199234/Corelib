@@ -36,7 +36,7 @@ func Test_Unixclient(t *testing.T) {
 				AppMinReadBufferLen:  1024,
 				AppMaxReadBufferLen:  65535,
 				AppWriteBufferNum:    256,
-			}, "./test.socket")
+			}, "./test.socket", []byte{'t', 'e', 's', 't', 'c'})
 			if count == 0 {
 				go func() {
 					for {

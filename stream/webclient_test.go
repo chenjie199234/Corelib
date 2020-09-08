@@ -35,7 +35,7 @@ func Test_Webclient(t *testing.T) {
 				SocketReadBufferLen:  1024,
 				SocketWriteBufferLen: 1024,
 				AppWriteBufferNum:    256,
-			}, "ws://127.0.0.1:9235/test")
+			}, "ws://127.0.0.1:9235/test", []byte{'t', 'e', 's', 't', 'c'})
 			if count == 0 {
 				go func() {
 					for {
