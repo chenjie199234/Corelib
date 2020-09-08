@@ -223,16 +223,17 @@ func (this *Instance) putPeer(p *Peer) {
 	}
 }
 func (this *Instance) addPeer(p *Peer) bool {
-	node := this.peernodes[this.getindex(p.getpeername())]
+	uniquename := p.getpeeruniquename()
+	node := this.peernodes[this.getindex(uniquename)]
 	node.Lock()
-	if _, ok := node.peers[p.getpeername()]; ok {
+	if _, ok := node.peers[uniquename]; ok {
 		p.closeconn()
 		this.putPeer(p)
 		node.Unlock()
 		return false
 	}
 	p.parentnode = node
-	node.peers[p.getpeername()] = p
+	node.peers[uniquename] = p
 	node.Unlock()
 	return true
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -36,19 +37,6 @@ func Test_Tcpclient(t *testing.T) {
 				AppMaxReadBufferLen:  65535,
 				AppWriteBufferNum:    256,
 			}, "127.0.0.1:9234", []byte{'t', 'e', 's', 't', 'c'})
-			if count == 0 {
-				go func() {
-					for {
-						time.Sleep(time.Second)
-						lag, e := tcpclientinstance.GetAverageNetLag("server")
-						if e != nil {
-							fmt.Println(e)
-						} else {
-							fmt.Println(float64(lag)/1000.0/1000.0, "ms")
-						}
-					}
-				}()
-			}
 			time.Sleep(time.Millisecond)
 		}
 	}()
@@ -62,14 +50,19 @@ func tcpclienthandleVerify(ctx context.Context, peername string, uniqueid uint64
 	return nil, true
 }
 
+var tcp int64
+
 func tcpclienthandleonline(p *Peer, peername string, uniqueid uint64) {
-	//go func() {
-	//        for {
-	//                fmt.Println(peername)
-	//                time.Sleep(time.Second)
-	//                p.SendMessage([]byte("hello world!"), uniqueid)
-	//        }
-	//}()
+	old := atomic.SwapInt64(&tcp, 1)
+	if old == 0 {
+		go func() {
+			for {
+				time.Sleep(time.Second)
+				lag := p.GetAverageNetLag()
+				fmt.Println(float64(lag)/1000.0/1000.0, "ms")
+			}
+		}()
+	}
 }
 
 func tcpclienthandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid uint64, data []byte) {

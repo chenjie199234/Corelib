@@ -7,6 +7,8 @@ import (
 
 //Warning!!Don't write block logic in these callback,live for{}
 
+//all peername is "name,ip",e.g. "gamegate,127.0.0.1"
+
 //HandleVerifyFunc has a timeout context
 //Before two peers can communicate with each other,they need to verify the identity first
 //server's response will write back to the client for client to verify the server
