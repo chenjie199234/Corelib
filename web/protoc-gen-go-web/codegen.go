@@ -79,8 +79,10 @@ func dealImports(f *protogen.GeneratedFile, file *protogen.File) {
 	f.P("//third")
 	deal(importsTHIRD)
 	f.P()
-	f.P("//project")
-	deal(importsSELF)
+	if len(importsSELF) > 0 {
+		f.P("//project")
+		deal(importsSELF)
+	}
 	f.P(")")
 	f.P()
 }
