@@ -28,7 +28,7 @@ func Test_Tcpserver(t *testing.T) {
 		Userdatafunc:       tcpserverhandleuserdata,
 		Offlinefunc:        tcpserverhandleoffline,
 	})
-	tcpserverinstance.StartTcpServer(&TcpConfig{
+	go tcpserverinstance.StartTcpServer(&TcpConfig{
 		ConnectTimeout:       1000,
 		SocketReadBufferLen:  1024,
 		SocketWriteBufferLen: 1024,

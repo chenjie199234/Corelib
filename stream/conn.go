@@ -32,21 +32,19 @@ func (this *Instance) StartTcpServer(c *TcpConfig, listenaddr string) {
 	if l, e = net.ListenTCP(laddr.Network(), laddr); e != nil {
 		panic("[Stream.TCP.StartTcpServer]listening self addr error:" + e.Error())
 	}
-	go func() {
-		for {
-			p := this.getPeer(TCP, unsafe.Pointer(c))
-			p.protocoltype = TCP
-			p.servername = this.conf.SelfName
-			p.peertype = CLIENT
-			if conn, e = l.AcceptTCP(); e != nil {
-				fmt.Printf("[Stream.TCP.StartTcpServer]accept tcp connect error:%s\n", e)
-				return
-			}
-			p.conn = unsafe.Pointer(conn)
-			p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-			go this.sworker(p)
+	for {
+		p := this.getPeer(TCP, unsafe.Pointer(c))
+		p.protocoltype = TCP
+		p.servername = this.conf.SelfName
+		p.peertype = CLIENT
+		if conn, e = l.AcceptTCP(); e != nil {
+			fmt.Printf("[Stream.TCP.StartTcpServer]accept tcp connect error:%s\n", e)
+			return
 		}
-	}()
+		p.conn = unsafe.Pointer(conn)
+		p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
+		go this.sworker(p)
+	}
 }
 func (this *Instance) StartUnixsocketServer(c *UnixConfig, listenaddr string) {
 	if c == nil {
@@ -63,21 +61,19 @@ func (this *Instance) StartUnixsocketServer(c *UnixConfig, listenaddr string) {
 	if l, e = net.ListenUnix("unix", laddr); e != nil {
 		panic("[Stream.UNIX.StartUnixsocketServer]listening self addr error:" + e.Error())
 	}
-	go func() {
-		for {
-			p := this.getPeer(UNIXSOCKET, unsafe.Pointer(c))
-			p.protocoltype = UNIXSOCKET
-			p.servername = this.conf.SelfName
-			p.peertype = CLIENT
-			if conn, e = l.AcceptUnix(); e != nil {
-				fmt.Printf("[Stream.UNIX.StartUnixsocketServer]accept unix connect error:%s\n", e)
-				return
-			}
-			p.conn = unsafe.Pointer(conn)
-			p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-			go this.sworker(p)
+	for {
+		p := this.getPeer(UNIXSOCKET, unsafe.Pointer(c))
+		p.protocoltype = UNIXSOCKET
+		p.servername = this.conf.SelfName
+		p.peertype = CLIENT
+		if conn, e = l.AcceptUnix(); e != nil {
+			fmt.Printf("[Stream.UNIX.StartUnixsocketServer]accept unix connect error:%s\n", e)
+			return
 		}
-	}()
+		p.conn = unsafe.Pointer(conn)
+		p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
+		go this.sworker(p)
+	}
 }
 
 func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listenaddr string, checkorigin func(*http.Request) bool) {
@@ -116,17 +112,13 @@ func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listena
 		(server.Handler).(*httprouter.Router).GET(path, connhandler)
 	}
 	if c.TlsCertFile != "" && c.TlsKeyFile != "" {
-		go func() {
-			if e := server.ListenAndServeTLS(c.TlsCertFile, c.TlsKeyFile); e != nil {
-				panic("[Stream.WEB.StartWebsocketServer]start wss server error:" + e.Error())
-			}
-		}()
+		if e := server.ListenAndServeTLS(c.TlsCertFile, c.TlsKeyFile); e != nil {
+			panic("[Stream.WEB.StartWebsocketServer]start wss server error:" + e.Error())
+		}
 	} else {
-		go func() {
-			if e := server.ListenAndServe(); e != nil {
-				panic("[Stream.WEB.StartWebsocketServer]start ws server error:" + e.Error())
-			}
-		}()
+		if e := server.ListenAndServe(); e != nil {
+			panic("[Stream.WEB.StartWebsocketServer]start ws server error:" + e.Error())
+		}
 	}
 }
 func (this *Instance) sworker(p *Peer) bool {

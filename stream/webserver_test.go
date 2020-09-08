@@ -30,7 +30,7 @@ func Test_Webserver(t *testing.T) {
 		Offlinefunc:        webserverhandleoffline,
 	})
 	os.Remove("./test.socket")
-	webserverinstance.StartWebsocketServer(&WebConfig{
+	go webserverinstance.StartWebsocketServer(&WebConfig{
 		ConnectTimeout:       1000,
 		HttpMaxHeaderLen:     1024,
 		SocketReadBufferLen:  1024,

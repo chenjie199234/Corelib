@@ -30,7 +30,7 @@ func Test_Unixserver(t *testing.T) {
 		Offlinefunc:        unixclienthandleoffline,
 	})
 	os.Remove("./test.socket")
-	unixserverinstance.StartUnixsocketServer(&UnixConfig{
+	go unixserverinstance.StartUnixsocketServer(&UnixConfig{
 		ConnectTimeout:       1000,
 		SocketReadBufferLen:  1024,
 		SocketWriteBufferLen: 1024,
