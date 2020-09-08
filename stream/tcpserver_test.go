@@ -45,11 +45,12 @@ func Test_Tcpserver(t *testing.T) {
 	}()
 	http.ListenAndServe(":8080", nil)
 }
-func tcpserverhandleVerify(ctx context.Context, peername string, uniqueid uint64, peerVerifyData []byte) []byte {
+func tcpserverhandleVerify(ctx context.Context, peername string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal([]byte{'t', 'e', 's', 't', 'c'}, peerVerifyData) {
 		fmt.Println("verify error")
+		return nil, false
 	}
-	return []byte{'t', 'e', 's', 't'}
+	return []byte{'t', 'e', 's', 't'}, true
 }
 func tcpserverhandleonline(p *Peer, peername string, uniqueid uint64) {
 	atomic.AddInt64(&tcpcount, 1)

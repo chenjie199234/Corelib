@@ -123,7 +123,7 @@ func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listena
 }
 func (this *Instance) sworker(p *Peer) bool {
 	//read first verify message from client
-	verifydata := this.verifypeer(p, true)
+	verifydata := this.verifypeer(p)
 	if p.clientname != "" {
 		//verify client success,send self's verify message to client
 		var verifymsg []byte
@@ -338,7 +338,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
 		}
 	}
 	//read first verify message from server
-	_ = this.verifypeer(p, false)
+	_ = this.verifypeer(p)
 	if p.servername != "" {
 		//verify server success
 		if !this.addPeer(p) {
@@ -363,7 +363,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
 		return false
 	}
 }
-func (this *Instance) verifypeer(p *Peer, needresponse bool) (response []byte) {
+func (this *Instance) verifypeer(p *Peer) []byte {
 	switch p.protocoltype {
 	case TCP:
 		(*net.TCPConn)(p.conn).SetReadDeadline(time.Now().Add(time.Duration(this.conf.VerifyTimeout) * time.Millisecond))
@@ -414,7 +414,7 @@ func (this *Instance) verifypeer(p *Peer, needresponse bool) (response []byte) {
 				p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
 		}
 		if e != nil {
-			return
+			return nil
 		}
 		if p.protocoltype != WEBSOCKET {
 			p.readbuffer.Put(p.tempbuffer[:p.tempbuffernum])
@@ -429,7 +429,7 @@ func (this *Instance) verifypeer(p *Peer, needresponse bool) (response []byte) {
 			if p.readbuffer.Rest() == 0 {
 				fmt.Printf("[Stream.%s.verifypeer]first verify msg too long from %s addr:%s\n",
 					p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
-				return
+				return nil
 			}
 		} else {
 			break
@@ -439,50 +439,43 @@ func (this *Instance) verifypeer(p *Peer, needresponse bool) (response []byte) {
 	if e != nil {
 		fmt.Printf("[Stream.%s.verifypeer]first verify msg format error:%s from %s addr:%s\n",
 			p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
-		return
+		return nil
 	}
 	//first message must be verify message
 	if msgtype != VERIFY {
 		fmt.Printf("[Stream.%s.verifypeer]first msg isn't verify msg from %s addr:%s\n",
 			p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
-		return
+		return nil
 	}
 	msg, e := getVerifyMsg(data)
 	if e != nil {
 		fmt.Printf("[Stream.%s.verifypeer]first verify msg format error:%s from %s addr:%s\n",
 			p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
-		return
+		return nil
 	}
 	if msg.sender == "" || msg.sender == p.getselfname() {
 		fmt.Printf("[Stream.%s.verifypeer]sender name:%s check failed from %s addr:%s\n",
 			p.getprotocolname(), msg.sender, p.getpeertypename(), p.getpeeraddr())
-		return
+		return nil
 	}
-	//if len(msg.verifydata) == 0 {
-	//        fmt.Printf("[Stream.%s.verifypeer]verify data is empty from %s addr:%s\n",
-	//                p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
-	//        return
-	//}
 	p.lastactive = uint64(time.Now().UnixNano())
 	switch p.peertype {
 	case CLIENT:
+		p.clientname = msg.sender
 		p.starttime = uint64(p.lastactive)
 	case SERVER:
+		p.servername = msg.sender
 		p.starttime = uint64(msg.uniqueid)
 	}
-	response = this.conf.Verifyfunc(ctx, msg.sender, p.starttime, msg.verifydata)
-	if needresponse && len(response) == 0 {
+	response, success := this.conf.Verifyfunc(ctx, p.getpeername(), p.starttime, msg.verifydata)
+	if !success {
 		fmt.Printf("[Stream.%s.verifypeer]verify failed with data:%s from %s addr:%s\n",
 			p.getprotocolname(), msg.verifydata, p.getpeertypename(), p.getpeeraddr())
-		return
+		p.clientname = ""
+		p.servername = ""
+		return nil
 	}
-	switch p.peertype {
-	case CLIENT:
-		p.clientname = msg.sender
-	case SERVER:
-		p.servername = msg.sender
-	}
-	return
+	return response
 }
 func (this *Instance) read(p *Peer) {
 	defer func() {

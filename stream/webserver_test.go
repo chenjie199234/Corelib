@@ -46,11 +46,12 @@ func Test_Webserver(t *testing.T) {
 	}()
 	http.ListenAndServe(":8084", nil)
 }
-func webserverhandleVerify(ctx context.Context, peername string, uniqueid uint64, peerVerifyData []byte) []byte {
+func webserverhandleVerify(ctx context.Context, peername string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal([]byte{'t', 'e', 's', 't', 'c'}, peerVerifyData) {
 		fmt.Println("verify error")
+		return nil, false
 	}
-	return []byte{'t', 'e', 's', 't'}
+	return []byte{'t', 'e', 's', 't'}, true
 }
 func webserverhandleonline(p *Peer, peername string, uniqueid uint64) {
 	atomic.AddInt64(&webcount, 1)
