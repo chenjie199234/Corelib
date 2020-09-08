@@ -173,7 +173,7 @@ func (b *BucketTree) UpdateBatch(newHashs map[uint64][]byte) {
 		}
 	}
 	temp := make(map[uint64]*bucket, len(split))
-	for i, _ := range split {
+	for i := range split {
 		tempParent := b.buckets[i*b.treeWidth].parent
 		if tempParent != nil {
 			s := []byte{}
@@ -259,7 +259,7 @@ func compare(local *bucket, other *bucket, index *[]uint64) {
 	if len(local.children) == 0 && len(other.children) == 0 {
 		*index = append(*index, local.index)
 	} else {
-		for i, _ := range local.children {
+		for i := range local.children {
 			if bytes.Compare(local.children[i].hashStr, other.children[i].hashStr) != 0 {
 				compare(local.children[i], other.children[i], index)
 			}

@@ -1,0 +1,30 @@
+syntax = "proto3";
+package msg;
+enum MSGTYPE {
+	ONLINE=0;
+	OFFLINE=1;
+	PULL=2;
+	PUSH=3;
+}
+message totalmsg {
+	MSGTYPE mtype=1;
+	oneof specialmsg{
+		onlinemsg online=2;
+		offlinemsg offline=3;
+		pullmsg pull=4;
+		pushmsg push=5;
+	};
+}
+message onlinemsg {
+	string name=1;
+	bytes newhash=2;
+}
+message offlinemsg {
+	string name=1;
+	bytes newhash=2;
+}
+message pullmsg {
+}
+message pushmsg {
+	repeated string addrs=1;
+}
