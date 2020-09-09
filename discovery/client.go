@@ -3,53 +3,120 @@ package discovery
 import (
 	"bytes"
 	"context"
-	"strings"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
 	"sync"
+	"time"
 
+	"github.com/chenjie199234/Corelib/buckettree"
 	"github.com/chenjie199234/Corelib/stream"
 )
 
 type client struct {
-	nodepool    *sync.Pool
-	serveraddrs []string
-	verifydata  []byte
-	instance    *stream.Instance
+	lker       *sync.RWMutex
+	servers    map[string]*servernode
+	nodepool   *sync.Pool
+	verifydata []byte
+	instance   *stream.Instance
+	httpclient *http.Client
+}
+
+type servernode struct {
+	peer     *stream.Peer
+	name     string
+	uniqueid uint64
+	addr     string
+	hashtree *buckettree.BucketTree
+	clients  [][]string
 }
 
 var clientinstance *client
 
-func (c *client) getnode(peer *stream.Peer, name string, uniqueid uint64) *node {
-	result := c.nodepool.Get().(*node)
-	result.n = name
-	result.p = peer
-	result.u = uniqueid
-	return result
-}
-func (c *client) putnode(n *node) {
-	n.p = nil
-	n.n = ""
-	n.u = 0
-	c.nodepool.Put(n)
-}
-
-func StartDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, serveraddrs []string, vdata []byte) {
+func updateserver(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []byte, url string) {
 	clientinstance = &client{
 		nodepool: &sync.Pool{
 			New: func() interface{} {
-				return &node{}
+				return &servernode{}
 			},
 		},
-		serveraddrs: serveraddrs,
-		verifydata:  vdata,
+		lker:       &sync.RWMutex{},
+		servers:    make(map[string]*servernode, 10),
+		verifydata: vdata,
+		httpclient: &http.Client{
+			Timeout: 500 * time.Millisecond,
+		},
 	}
 	c.Verifyfunc = clientinstance.verifyfunc
 	c.Onlinefunc = clientinstance.onlinefunc
 	c.Userdatafunc = clientinstance.userfunc
 	c.Offlinefunc = clientinstance.offlinefunc
 	clientinstance.instance = stream.NewInstance(c)
-	//clientinstance.instance.StartTcpServer(cc, listenaddr)
-	for _, serveraddr := range serveraddrs {
-		clientinstance.instance.StartTcpClient(cc, serveraddr, clientinstance.verifydata)
+	go clientinstance.updateserver(cc, url)
+}
+func (c *client) updateserver(cc *stream.TcpConfig, url string) {
+	tker := time.NewTicker(time.Second)
+	first := true
+	for {
+		if !first {
+			<-tker.C
+		}
+		first = false
+		//get server addrs
+		resp, e := c.httpclient.Get(url)
+		if e != nil {
+			fmt.Printf("[Discovery.client.updateserver]get discovery server addr error:%s\n", e)
+			continue
+		}
+		data, e := ioutil.ReadAll(resp.Body)
+		if e != nil {
+			fmt.Printf("[Discovery.client.updateserver]read response data error:%s\n", e)
+			continue
+		}
+		serveraddrs := make([]string, 0)
+		if e := json.Unmarshal(data, &serveraddrs); e != nil {
+			fmt.Printf("[Discovery.client.updateserver]response data:%s format error:%s\n", data, e)
+			continue
+		}
+		c.lker.Lock()
+		//delete offline server
+		for k, v := range c.servers {
+			find := false
+			for _, saddr := range serveraddrs {
+				if saddr == v.addr {
+					find = true
+					break
+				}
+			}
+			if !find {
+				delete(c.servers, k)
+				v.peer.Close(v.uniqueid)
+			}
+		}
+		//online new server
+		for _, saddr := range serveraddrs {
+			find := false
+			for _, v := range c.servers {
+				if v.addr == saddr {
+					find = true
+					break
+				}
+			}
+			if !find {
+				go func(saddr string) {
+					if peernameip := c.instance.StartTcpClient(cc, saddr, c.verifydata); peernameip != "" {
+						c.lker.RLock()
+						if v, ok := c.servers[peernameip]; ok {
+							v.addr = saddr
+						}
+						c.lker.RUnlock()
+					}
+
+				}(saddr)
+			}
+		}
+		c.lker.Unlock()
 	}
 }
 func (c *client) verifyfunc(ctx context.Context, peernameip string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
@@ -59,9 +126,52 @@ func (c *client) verifyfunc(ctx context.Context, peernameip string, uniqueid uin
 	return nil, true
 }
 func (c *client) onlinefunc(p *stream.Peer, peernameip string, uniqueid uint64) {
+	c.lker.Lock()
+	if _, ok := c.servers[peernameip]; ok {
+		fmt.Printf("[Discovery.client.onlinefunc]reconnect to discovery server")
+		p.Close(uniqueid)
+		c.lker.Unlock()
+		return
+	}
+	newserver := &servernode{
+		peer:     p,
+		name:     peernameip,
+		uniqueid: uniqueid,
+		hashtree: buckettree.New(10, 2),
+	}
+	newserver.clients = make([][]string, newserver.hashtree.GetBucketNum())
+	c.servers[peernameip] = newserver
+	c.lker.Unlock()
 }
 func (c *client) userfunc(ctx context.Context, p *stream.Peer, peernameip string, uniqueid uint64, data []byte) {
-
+	if len(data) <= 1 {
+		return
+	}
+	switch data[0] {
+	case MSGONLINE:
+		onlinepeer, newhash, e := getOnlineMsg(data)
+		if e != nil {
+			fmt.Printf("[Discovery.client.userfunc]online message broken,error:%s", e)
+			return
+		}
+	case MSGOFFLINE:
+		offlinepeer, newhash, e := getOfflineMsg(data)
+		if e != nil {
+			fmt.Printf("[Discovery.client.userfunc]offline message broken,error:%s", e)
+			return
+		}
+	case MSGPUSH:
+		all := getPushMsg(data)
+	default:
+	}
 }
 func (c *client) offlinefunc(p *stream.Peer, peernameip string, uniqueid uint64) {
+	c.lker.Lock()
+	if v, ok := c.servers[peernameip]; !ok {
+		c.lker.Unlock()
+		return
+	} else {
+		v.uniqueid = 0
+	}
+	c.lker.Unlock()
 }

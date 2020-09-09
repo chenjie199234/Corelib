@@ -7,22 +7,24 @@ import (
 
 //Warning!!Don't write block logic in these callback,live for{}
 
-//all peername is "name,ip",e.g. "gamegate,127.0.0.1"
+//all peernameip param is "name,ip",e.g. "gamegate,127.0.0.1"
+
+//peernameip should be unique,can't run two same server on one ip
 
 //HandleVerifyFunc has a timeout context
 //Before two peers can communicate with each other,they need to verify the identity first
 //server's response will write back to the client for client to verify the server
 //client's response is useless,you can return nil
-type HandleVerifyFunc func(ctx context.Context, peername string, uniqueid uint64, peerVerifyData []byte) (response []byte, success bool)
+type HandleVerifyFunc func(ctx context.Context, peernameandip string, uniqueid uint64, peerVerifyData []byte) (response []byte, success bool)
 
 //This is a notice after two peers verify identity pass
-type HandleOnlineFunc func(p *Peer, peername string, uniqueid uint64)
+type HandleOnlineFunc func(p *Peer, peernameandip string, uniqueid uint64)
 
 //HandleUserdataFunc has a cancel context,you should control the timeout by yourself through context.WithTimeout()
-type HandleUserdataFunc func(ctx context.Context, p *Peer, peername string, uniqueid uint64, data []byte)
+type HandleUserdataFunc func(ctx context.Context, p *Peer, peernameandip string, uniqueid uint64, data []byte)
 
 //This is a notice after two peers disconnect with each other
-type HandleOfflineFunc func(p *Peer, peername string, uniqueid uint64)
+type HandleOfflineFunc func(p *Peer, peernameandip string, uniqueid uint64)
 
 type TcpConfig struct {
 	ConnectTimeout int `json:"connect_timeout"` //default 500ms,for client only

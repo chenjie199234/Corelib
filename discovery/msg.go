@@ -80,6 +80,9 @@ func makePushMsg(peernameips []string) []byte {
 	return data
 }
 func getPushMsg(data []byte) [][]byte {
+	if len(data) <= 1 {
+		return nil
+	}
 	result := bytes.Split(data[1:], []byte{SPLIT})
 	return result
 }

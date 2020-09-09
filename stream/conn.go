@@ -4,12 +4,9 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
-	"os"
 	"sync"
-	"syscall"
 	"time"
 	"unsafe"
 
@@ -152,26 +149,9 @@ func (this *Instance) sworker(p *Peer) bool {
 			case WEBSOCKET:
 				e = (*websocket.Conn)(p.conn).WriteMessage(websocket.BinaryMessage, verifymsg)
 			}
-			switch {
-			case e == nil: //don't print log when there is no error
-			case e == syscall.EINVAL: //don't print log when conn is already closed
-			default:
-				if operr, ok := e.(*net.OpError); ok && operr != nil {
-					if syserr, ok := operr.Err.(*os.SyscallError); ok && syserr != nil {
-						if syserr.Err.(syscall.Errno) == syscall.ECONNRESET ||
-							syserr.Err.(syscall.Errno) == syscall.EPIPE ||
-							syserr.Err.(syscall.Errno) == syscall.EBADFD {
-							//don't print log when err is rst
-							//don't print log when err is broken pipe
-							//don't print log when err is badfd
-							break
-						}
-					}
-				}
+			if e != nil {
 				fmt.Printf("[Stream.%s.sworker]write first verify msg error:%s to client addr:%s\n",
 					p.getprotocolname(), e, p.getpeeraddr())
-			}
-			if e != nil {
 				p.closeconn()
 				this.putPeer(p)
 				return false
@@ -210,7 +190,7 @@ func (this *Instance) sworker(p *Peer) bool {
 	}
 }
 
-func (this *Instance) StartTcpClient(c *TcpConfig, serveraddr string, verifydata []byte) bool {
+func (this *Instance) StartTcpClient(c *TcpConfig, serveraddr string, verifydata []byte) string {
 	if c == nil {
 		c = &TcpConfig{}
 	}
@@ -218,7 +198,7 @@ func (this *Instance) StartTcpClient(c *TcpConfig, serveraddr string, verifydata
 	conn, e := net.DialTimeout("tcp", serveraddr, time.Duration(c.ConnectTimeout)*time.Millisecond)
 	if e != nil {
 		fmt.Printf("[Stream.TCP.StartTcpClient]tcp connect server addr:%s error:%s\n", serveraddr, e)
-		return false
+		return ""
 	}
 	p := this.getPeer(TCP, unsafe.Pointer(c))
 	p.protocoltype = TCP
@@ -229,7 +209,7 @@ func (this *Instance) StartTcpClient(c *TcpConfig, serveraddr string, verifydata
 	return this.cworker(p, verifydata)
 }
 
-func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string, verifydata []byte) bool {
+func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string, verifydata []byte) string {
 	if c == nil {
 		c = &UnixConfig{}
 	}
@@ -237,7 +217,7 @@ func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string, ve
 	conn, e := net.DialTimeout("unix", serveraddr, time.Duration(c.ConnectTimeout)*time.Millisecond)
 	if e != nil {
 		fmt.Printf("[Stream.UNIX.StartUnixsocketClient]unix connect server addr:%s error:%s\n", serveraddr, e)
-		return false
+		return ""
 	}
 	p := this.getPeer(UNIXSOCKET, unsafe.Pointer(c))
 	p.protocoltype = UNIXSOCKET
@@ -248,7 +228,7 @@ func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string, ve
 	return this.cworker(p, verifydata)
 }
 
-func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string, verifydata []byte) bool {
+func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string, verifydata []byte) string {
 	if c == nil {
 		c = &WebConfig{}
 	}
@@ -265,7 +245,7 @@ func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string, veri
 	conn, _, e := dialer.Dial(serveraddr, nil)
 	if e != nil {
 		fmt.Printf("[Stream.WEB.StartWebsocketClient]websocket connect server addr:%s error:%s\n", serveraddr, e)
-		return false
+		return ""
 	}
 	p := this.getPeer(WEBSOCKET, unsafe.Pointer(c))
 	p.protocoltype = WEBSOCKET
@@ -276,7 +256,7 @@ func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string, veri
 	return this.cworker(p, verifydata)
 }
 
-func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
+func (this *Instance) cworker(p *Peer, verifydata []byte) string {
 	//send self's verify message to server
 	var verifymsg []byte
 	msg := &verifyMsg{
@@ -304,29 +284,12 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
 		case WEBSOCKET:
 			e = (*websocket.Conn)(p.conn).WriteMessage(websocket.BinaryMessage, verifymsg)
 		}
-		switch {
-		case e == nil: //don't print log when there is no error
-		case e == syscall.EINVAL: //don't print log when conn is already closed
-		default:
-			if operr, ok := e.(*net.OpError); ok && operr != nil {
-				if syserr, ok := operr.Err.(*os.SyscallError); ok && syserr != nil {
-					if syserr.Err.(syscall.Errno) == syscall.ECONNRESET ||
-						syserr.Err.(syscall.Errno) == syscall.EPIPE ||
-						syserr.Err.(syscall.Errno) == syscall.EBADFD {
-						//don't print log when err is rst
-						//don't print log when err is broken pipe
-						//don't print log when err is badfd
-						break
-					}
-				}
-			}
+		if e != nil {
 			fmt.Printf("[Stream.%s.cworker]write first verify msg error:%s to server addr:%s\n",
 				p.getprotocolname(), e, p.getpeeraddr())
-		}
-		if e != nil {
 			p.closeconn()
 			this.putPeer(p)
-			return false
+			return ""
 		}
 		switch p.protocoltype {
 		case TCP:
@@ -344,7 +307,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
 		if !this.addPeer(p) {
 			fmt.Printf("[Stream.%s.cworker]refuse reconnect to server:%s addr:%s\n",
 				p.getprotocolname(), p.getpeername(), p.getpeeraddr())
-			return false
+			return ""
 		}
 		if p.protocoltype == WEBSOCKET {
 			(*websocket.Conn)(p.conn).SetPongHandler(func(data string) error {
@@ -356,11 +319,11 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) bool {
 		}
 		go this.read(p)
 		go this.write(p)
-		return true
+		return p.getpeeruniquename()
 	} else {
 		p.closeconn()
 		this.putPeer(p)
-		return false
+		return ""
 	}
 }
 func (this *Instance) verifypeer(p *Peer) []byte {
@@ -393,27 +356,9 @@ func (this *Instance) verifypeer(p *Peer) []byte {
 		case WEBSOCKET:
 			_, data, e = (*websocket.Conn)(p.conn).ReadMessage()
 		}
-		switch {
-		case e == nil: //don't print log when there is no error
-		case e == io.EOF: //don't print log when err is eof
-		case e == syscall.EINVAL: //don't print log when conn is already closed
-		default:
-			if operr, ok := e.(*net.OpError); ok && operr != nil {
-				if syserr, ok := operr.Err.(*os.SyscallError); ok && syserr != nil {
-					if syserr.Err.(syscall.Errno) == syscall.ECONNRESET ||
-						syserr.Err.(syscall.Errno) == syscall.EPIPE ||
-						syserr.Err.(syscall.Errno) == syscall.EBADFD {
-						//don't print log when err is rst
-						//don't print log when err is broken pipe
-						//don't print log when err is badfd
-						break
-					}
-				}
-			}
+		if e != nil {
 			fmt.Printf("[Stream.%s.verifypeer]read first verify msg error:%s from %s addr:%s\n",
 				p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
-		}
-		if e != nil {
 			return nil
 		}
 		if p.protocoltype != WEBSOCKET {
@@ -483,6 +428,9 @@ func (this *Instance) read(p *Peer) {
 		p.parentnode.Lock()
 		uniquename := p.getpeeruniquename()
 		if _, ok := p.parentnode.peers[uniquename]; ok {
+			if this.conf.Offlinefunc != nil {
+				this.conf.Offlinefunc(p, uniquename, p.starttime)
+			}
 			//when first goruntine return,delete this connection from the map
 			delete(p.parentnode.peers, uniquename)
 			//cause write goruntine return,this will be useful when there is nothing in writebuffer
@@ -493,9 +441,6 @@ func (this *Instance) read(p *Peer) {
 		} else {
 			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
-			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, uniquename, p.starttime)
-			}
 			this.putPeer(p)
 		}
 	}()
@@ -527,27 +472,9 @@ func (this *Instance) read(p *Peer) {
 		case WEBSOCKET:
 			_, data, e = (*websocket.Conn)(p.conn).ReadMessage()
 		}
-		switch {
-		case e == nil: //don't print log when there is no error
-		case e == io.EOF: //don't print log when err is eof
-		case e == syscall.EINVAL: //don't print log when conn is already closed
-		default:
-			if operr, ok := e.(*net.OpError); ok && operr != nil {
-				if syserr, ok := operr.Err.(*os.SyscallError); ok && syserr != nil {
-					if syserr.Err.(syscall.Errno) == syscall.ECONNRESET ||
-						syserr.Err.(syscall.Errno) == syscall.EPIPE ||
-						syserr.Err.(syscall.Errno) == syscall.EBADFD {
-						//don't print log when err is rst
-						//don't print log when err is broken pipe
-						//don't print log when err is badfd
-						break
-					}
-				}
-			}
+		if e != nil {
 			fmt.Printf("[Stream.%s.read]read msg error:%s from %s:%s addr:%s\n",
 				p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-		}
-		if e != nil {
 			return
 		}
 		if p.protocoltype != WEBSOCKET {
@@ -679,6 +606,9 @@ func (this *Instance) write(p *Peer) {
 		uniquename := p.getpeeruniquename()
 		//every connection will have two goruntine to work for it
 		if _, ok := p.parentnode.peers[uniquename]; ok {
+			if this.conf.Offlinefunc != nil {
+				this.conf.Offlinefunc(p, uniquename, p.starttime)
+			}
 			//when first goruntine return,delete this connection from the map
 			delete(p.parentnode.peers, uniquename)
 			//close the connection,cause read goruntine return
@@ -688,9 +618,6 @@ func (this *Instance) write(p *Peer) {
 		} else {
 			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
-			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, uniquename, p.starttime)
-			}
 			this.putPeer(p)
 		}
 	}()
@@ -729,26 +656,9 @@ func (this *Instance) write(p *Peer) {
 					e = (*websocket.Conn)(p.conn).WriteMessage(websocket.BinaryMessage, data)
 				}
 			}
-			switch {
-			case e == nil: //don't print log when there is no error
-			case e == syscall.EINVAL: //don't print log when conn is already closed
-			default:
-				if operr, ok := e.(*net.OpError); ok && operr != nil {
-					if syserr, ok := operr.Err.(*os.SyscallError); ok && syserr != nil {
-						if syserr.Err.(syscall.Errno) == syscall.ECONNRESET ||
-							syserr.Err.(syscall.Errno) == syscall.EPIPE ||
-							syserr.Err.(syscall.Errno) == syscall.EBADFD {
-							//don't print log when err is rst
-							//don't print log when err is broken pipe
-							//don't print log when err is badfd
-							break
-						}
-					}
-				}
+			if e != nil {
 				fmt.Printf("[Stream.%s.write]write msg error:%s to %s:%s addr:%s\n",
 					p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-			}
-			if e != nil {
 				return
 			}
 			if p.protocoltype == TCP || p.protocoltype == UNIXSOCKET {
