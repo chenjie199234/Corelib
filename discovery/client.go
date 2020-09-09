@@ -24,12 +24,14 @@ type client struct {
 }
 
 type servernode struct {
-	peer     *stream.Peer
-	name     string
-	uniqueid uint64
-	addr     string
-	hashtree *buckettree.BucketTree
-	clients  [][]string
+	peer         *stream.Peer
+	name         string
+	uniqueid     uint64
+	addr         string
+	hashtree     *buckettree.BucketTree
+	lker         *sync.RWMutex
+	clients      [][]string
+	clientsindex map[string]struct{}
 }
 
 var clientinstance *client
@@ -134,10 +136,12 @@ func (c *client) onlinefunc(p *stream.Peer, peernameip string, uniqueid uint64) 
 		return
 	}
 	newserver := &servernode{
-		peer:     p,
-		name:     peernameip,
-		uniqueid: uniqueid,
-		hashtree: buckettree.New(10, 2),
+		peer:         p,
+		name:         peernameip,
+		uniqueid:     uniqueid,
+		hashtree:     buckettree.New(10, 2),
+		lker:         &sync.RWMutex{},
+		clientsindex: make(map[string]struct{}, 10),
 	}
 	newserver.clients = make([][]string, newserver.hashtree.GetBucketNum())
 	c.servers[peernameip] = newserver
