@@ -428,9 +428,7 @@ func (this *Instance) read(p *Peer) {
 		p.parentnode.Lock()
 		uniquename := p.getpeeruniquename()
 		if _, ok := p.parentnode.peers[uniquename]; ok {
-			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, uniquename, p.starttime)
-			}
+
 			//when first goruntine return,delete this connection from the map
 			delete(p.parentnode.peers, uniquename)
 			//cause write goruntine return,this will be useful when there is nothing in writebuffer
@@ -439,6 +437,9 @@ func (this *Instance) read(p *Peer) {
 			p.heartbeatbuffer <- []byte{}
 			p.parentnode.Unlock()
 		} else {
+			if this.conf.Offlinefunc != nil {
+				this.conf.Offlinefunc(p, uniquename, p.starttime)
+			}
 			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
 			this.putPeer(p)
@@ -606,9 +607,6 @@ func (this *Instance) write(p *Peer) {
 		uniquename := p.getpeeruniquename()
 		//every connection will have two goruntine to work for it
 		if _, ok := p.parentnode.peers[uniquename]; ok {
-			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, uniquename, p.starttime)
-			}
 			//when first goruntine return,delete this connection from the map
 			delete(p.parentnode.peers, uniquename)
 			//close the connection,cause read goruntine return
@@ -616,6 +614,9 @@ func (this *Instance) write(p *Peer) {
 			p.cancel()
 			p.parentnode.Unlock()
 		} else {
+			if this.conf.Offlinefunc != nil {
+				this.conf.Offlinefunc(p, uniquename, p.starttime)
+			}
 			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
 			this.putPeer(p)

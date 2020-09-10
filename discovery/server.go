@@ -16,8 +16,8 @@ type server struct {
 	lker       *sync.RWMutex
 	hashtree   *buckettree.BucketTree
 	clients    [][]*clientnode
-	nodepool   *sync.Pool
 	verifydata []byte
+	nodepool   *sync.Pool
 	instance   *stream.Instance
 }
 
@@ -140,7 +140,7 @@ func (s *server) offlinefunc(p *stream.Peer, peernameip string, uniqueid uint64)
 	where := bkdrhash(peernameip, s.hashtree.GetBucketNum())
 	s.lker.Lock()
 	for i, v := range s.clients[where] {
-		if v.name == peernameip {
+		if v.name == peernameip && v.uniqueid == uniqueid {
 			s.clients[where] = append(s.clients[where][:i], s.clients[where][i+1:]...)
 			s.putnode(v)
 			break

@@ -17,8 +17,8 @@ import (
 type client struct {
 	lker       *sync.RWMutex
 	servers    map[string]*servernode
-	nodepool   *sync.Pool
 	verifydata []byte
+	nodepool   *sync.Pool
 	instance   *stream.Instance
 	httpclient *http.Client
 }
@@ -101,7 +101,9 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 			find := false
 			for _, v := range c.servers {
 				if v.addr == saddr {
-					find = true
+					if v.uniqueid != 0 {
+						find = true
+					}
 					break
 				}
 			}
@@ -114,7 +116,6 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 						}
 						c.lker.RUnlock()
 					}
-
 				}(saddr)
 			}
 		}
@@ -129,23 +130,29 @@ func (c *client) verifyfunc(ctx context.Context, peernameip string, uniqueid uin
 }
 func (c *client) onlinefunc(p *stream.Peer, peernameip string, uniqueid uint64) {
 	c.lker.Lock()
-	if _, ok := c.servers[peernameip]; ok {
-		fmt.Printf("[Discovery.client.onlinefunc]reconnect to discovery server")
-		p.Close(uniqueid)
+	v, ok := c.servers[peernameip]
+	if !ok {
+		newserver := &servernode{
+			peer:         p,
+			name:         peernameip,
+			uniqueid:     uniqueid,
+			hashtree:     buckettree.New(10, 2),
+			lker:         &sync.RWMutex{},
+			clientsindex: make(map[string]struct{}, 10),
+		}
+		newserver.clients = make([][]string, newserver.hashtree.GetBucketNum())
+		c.servers[peernameip] = newserver
 		c.lker.Unlock()
 		return
 	}
-	newserver := &servernode{
-		peer:         p,
-		name:         peernameip,
-		uniqueid:     uniqueid,
-		hashtree:     buckettree.New(10, 2),
-		lker:         &sync.RWMutex{},
-		clientsindex: make(map[string]struct{}, 10),
-	}
-	newserver.clients = make([][]string, newserver.hashtree.GetBucketNum())
-	c.servers[peernameip] = newserver
 	c.lker.Unlock()
+	if v.uniqueid == 0 {
+		v.uniqueid = uniqueid
+		return
+	}
+	fmt.Printf("[Discovery.client.onlinefunc]reconnect to discovery server")
+	p.Close(uniqueid)
+	return
 }
 func (c *client) userfunc(ctx context.Context, p *stream.Peer, peernameip string, uniqueid uint64, data []byte) {
 	if len(data) <= 1 {
@@ -170,12 +177,18 @@ func (c *client) userfunc(ctx context.Context, p *stream.Peer, peernameip string
 	}
 }
 func (c *client) offlinefunc(p *stream.Peer, peernameip string, uniqueid uint64) {
-	c.lker.Lock()
+	c.lker.RLock()
 	if v, ok := c.servers[peernameip]; !ok {
-		c.lker.Unlock()
+		c.lker.RUnlock()
 		return
 	} else {
+		v.lker.Lock()
+		c.lker.RUnlock()
+		v.clients = v.clients[:0]
+		for k := range v.clientsindex {
+			delete(v.clientsindex, k)
+		}
 		v.uniqueid = 0
+		v.lker.Unlock()
 	}
-	c.lker.Unlock()
 }
