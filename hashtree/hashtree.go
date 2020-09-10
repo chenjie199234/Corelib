@@ -151,11 +151,17 @@ func (h *Hashtree) caculate(pindex int) []byte {
 	h.encoder.Write(bytes.Join(piece, nil))
 	return h.encoder.Sum(nil)
 }
-func (h *Hashtree) GetLeaf(index int) (unsafe.Pointer, error) {
+func (h *Hashtree) GetLeaf(index int) (*LeafData, error) {
 	if index >= len(h.leaves) {
 		return nil, ERROUTOFRANGE
 	}
-	return h.leaves[index].value, nil
+	if h.leaves[index].value == nil {
+		return nil, nil
+	}
+	return &LeafData{
+		Hashstr: h.leaves[index].hashstr,
+		Value:   h.leaves[index].value,
+	}, nil
 }
 func (h *Hashtree) getStartIndexInPiece(index int) int {
 	return (((index + h.width - 1) / h.width) * h.width)
@@ -197,4 +203,16 @@ func (h *Hashtree) Different(other *Hashtree) (map[int]*LeafData, error) {
 		}
 	}
 	return result, nil
+}
+func (h *Hashtree) GetAllLeaf() map[int]*LeafData {
+	result := make(map[int]*LeafData)
+	for i, v := range h.leaves {
+		if v != nil {
+			result[i] = &LeafData{
+				Hashstr: v.hashstr,
+				Value:   v.value,
+			}
+		}
+	}
+	return result
 }

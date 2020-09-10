@@ -7,15 +7,15 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unsafe"
 
-	"github.com/chenjie199234/Corelib/buckettree"
+	"github.com/chenjie199234/Corelib/hashtree"
 	"github.com/chenjie199234/Corelib/stream"
 )
 
 type server struct {
 	lker       *sync.RWMutex
-	hashtree   *buckettree.BucketTree
-	clients    [][]*clientnode
+	htree      *hashtree.Hashtree
 	verifydata []byte
 	nodepool   *sync.Pool
 	instance   *stream.Instance
@@ -45,19 +45,14 @@ func (s *server) putnode(n *clientnode) {
 
 func StartDiscoveryServer(c *stream.InstanceConfig, cc *stream.TcpConfig, listenaddr string, vdata []byte) {
 	serverinstance = &server{
-		lker:     &sync.RWMutex{},
-		hashtree: buckettree.New(10, 2),
+		lker:  &sync.RWMutex{},
+		htree: hashtree.New(10, 2),
 		nodepool: &sync.Pool{
 			New: func() interface{} {
 				return &clientnode{}
 			},
 		},
 		verifydata: vdata,
-	}
-	//hash
-	serverinstance.clients = make([][]*clientnode, serverinstance.hashtree.GetBucketNum())
-	for i := range serverinstance.clients {
-		serverinstance.clients[i] = make([]*clientnode, 0)
 	}
 	//instance
 	c.Verifyfunc = serverinstance.verifyfunc
@@ -74,36 +69,50 @@ func (s *server) verifyfunc(ctx context.Context, peername string, uniqueid uint6
 	return s.verifydata, true
 }
 func (s *server) onlinefunc(p *stream.Peer, peernameip string, uniqueid uint64) {
-	where := bkdrhash(peernameip, s.hashtree.GetBucketNum())
+	leafindex := int(bkdrhash(peernameip, uint64(s.htree.GetLeavesNum())))
 	s.lker.Lock()
-	s.clients[where] = append(s.clients[where], s.getnode(p, peernameip, uniqueid))
-	sort.Slice(s.clients[where], func(i, j int) bool {
-		return s.clients[where][i].name < s.clients[where][j].name
-	})
-	all := make([]string, len(s.clients[where]))
-	for i, v := range s.clients[where] {
-		all[i] = v.name
+	leaf, _ := s.htree.GetLeaf(leafindex)
+	if leaf != nil {
+		data := make([]*clientnode, 1)
+		data[0] = s.getnode(p, peernameip, uniqueid)
+		s.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
+			Hashstr: str2byte(peernameip),
+			Value:   unsafe.Pointer(&data),
+		})
+	} else {
+		data := *((*[]*clientnode)(leaf.Value))
+		data = append(data, s.getnode(p, peernameip, uniqueid))
+		sort.Slice(data, func(i, j int) bool {
+			return data[i].name < data[j].name
+		})
+		all := make([]string, len(data))
+		for i, v := range data {
+			all[i] = v.name
+		}
+		s.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
+			Hashstr: str2byte(strings.Join(all, "")),
+			Value:   unsafe.Pointer(&data),
+		})
 	}
-	s.hashtree.UpdateSingle(where, str2byte(strings.Join(all, "")))
+	leaves := s.htree.GetAllLeaf()
+	count := 0
 	//notice all other peer
-	onlinedata := makeOnlineMsg(peernameip, s.hashtree.GetRootHash())
-	for _, v := range s.clients {
-		for _, vv := range v {
-			if vv.name != peernameip {
-				vv.peer.SendMessage(onlinedata, vv.uniqueid)
+	onlinedata := makeOnlineMsg(peernameip, s.htree.GetRootHash())
+	for _, leaf := range leaves {
+		clients := *(*[]*clientnode)(leaf.Value)
+		count += len(clients)
+		for _, client := range clients {
+			if client.name != peernameip {
+				client.peer.SendMessage(onlinedata, client.uniqueid)
 			}
 		}
 	}
 	//push all data to this new peer
-	count := 0
-	for _, v := range s.clients {
-		count += len(v)
-	}
 	result := make([]string, count)
 	count = 0
-	for _, v := range s.clients {
-		for _, vv := range v {
-			result[count] = vv.name
+	for _, leaf := range leaves {
+		for _, client := range *(*[]*clientnode)(leaf.Value) {
+			result[count] = client.name
 			count++
 		}
 	}
