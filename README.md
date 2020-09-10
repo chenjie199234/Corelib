@@ -1,7 +1,7 @@
 # Corelib
 ## bitfilter
 	这是一个位过滤器。
-## buckettree
+## hashtree
 	这是一颗固定桶个数的一致性树。
 ## buffer
 	这是长链接应用层缓存

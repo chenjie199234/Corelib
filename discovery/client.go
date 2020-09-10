@@ -96,7 +96,7 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 				v.peer.Close(v.uniqueid)
 			}
 		}
-		//online new server
+		//online new server or reconnect to offline server
 		for _, saddr := range serveraddrs {
 			find := false
 			for _, v := range c.servers {
@@ -173,6 +173,10 @@ func (c *client) userfunc(ctx context.Context, p *stream.Peer, peernameip string
 		}
 	case MSGPUSH:
 		all := getPushMsg(data)
+		v, ok := c.servers[peernameip]
+		if !ok {
+			return
+		}
 	default:
 	}
 }
