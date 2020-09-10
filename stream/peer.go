@@ -51,10 +51,41 @@ type Peer struct {
 	lastactive      uint64   //unixnano timestamp
 	netlag          []uint64 //unixnano timeoffset
 	netlagindex     int
-	ctx             context.Context
-	cancel          context.CancelFunc
+	context.Context
+	context.CancelFunc
+	Data unsafe.Pointer //user data
 }
 
+func (p *Peer) reset() {
+	p.parentnode = nil
+	p.clientname = ""
+	p.servername = ""
+	p.peertype = 0
+	p.protocoltype = 0
+	p.starttime = 0
+	if p.readbuffer != nil {
+		p.readbuffer.Reset()
+	}
+	p.tempbuffernum = 0
+	for len(p.writerbuffer) > 0 {
+		<-p.writerbuffer
+	}
+	for len(p.heartbeatbuffer) > 0 {
+		<-p.heartbeatbuffer
+	}
+	p.conn = nil
+	p.lastactive = 0
+	for i := range p.netlag {
+		p.netlag[i] = 0
+	}
+	p.netlagindex = 0
+	if p.CancelFunc != nil {
+		p.CancelFunc()
+		p.CancelFunc = nil
+	}
+	p.Context = nil
+	p.Data = nil
+}
 func (p *Peer) getprotocolname() string {
 	return PROTOCOLNAME[p.protocoltype]
 }
@@ -124,7 +155,6 @@ func (p *Peer) closeconn() {
 	}
 	p.starttime = 0
 }
-
 func (p *Peer) setbuffer(readnum, writenum int) {
 	switch p.protocoltype {
 	case TCP:
@@ -139,12 +169,12 @@ func (p *Peer) setbuffer(readnum, writenum int) {
 	}
 }
 
-func (p *Peer) Close(uniqueid uint64) {
-	p.parentnode.RLock()
-	if uniqueid != 0 && p.starttime == uniqueid {
-		p.closeconn()
-	}
-	p.parentnode.RUnlock()
+func (p *Peer) GetData() unsafe.Pointer {
+	return p.Data
+}
+
+func (p *Peer) SetData(data unsafe.Pointer) {
+	p.Data = data
 }
 
 //unit nanosecond
@@ -200,4 +230,12 @@ func (p *Peer) SendMessage(userdata []byte, uniqueid uint64) error {
 		return ERRFULL
 	}
 	return nil
+}
+
+func (p *Peer) Close(uniqueid uint64) {
+	p.parentnode.RLock()
+	if uniqueid != 0 && p.starttime == uniqueid {
+		p.closeconn()
+	}
+	p.parentnode.RUnlock()
 }

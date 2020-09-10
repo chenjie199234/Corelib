@@ -11,6 +11,34 @@ import (
 	"github.com/chenjie199234/Corelib/buffer"
 )
 
+//unit nanosecond
+func (this *Instance) GetAverageNetLag(peername string) (uint64, error) {
+	node := this.peernodes[this.getindex(peername)]
+	node.RLock()
+	p, ok := node.peers[peername]
+	if !ok {
+		node.RUnlock()
+		return 0, ERRCONNCLOSED
+	}
+	lag := p.GetAverageNetLag()
+	node.RUnlock()
+	return lag, nil
+}
+
+//unit nanosecond
+func (this *Instance) GetPeekNetLag(peername string) (uint64, error) {
+	node := this.peernodes[this.getindex(peername)]
+	node.RLock()
+	p, ok := node.peers[peername]
+	if !ok {
+		node.RUnlock()
+		return 0, ERRCONNCLOSED
+	}
+	lag := p.GetPeekNetLag()
+	node.RUnlock()
+	return lag, nil
+}
+
 func (this *Instance) SendMessage(peername string, userdata []byte) error {
 	node := this.peernodes[this.getindex(peername)]
 	node.RLock()
@@ -43,34 +71,6 @@ func (this *Instance) SendMessage(peername string, userdata []byte) error {
 	return nil
 }
 
-//unit nanosecond
-func (this *Instance) GetAverageNetLag(peername string) (uint64, error) {
-	node := this.peernodes[this.getindex(peername)]
-	node.RLock()
-	p, ok := node.peers[peername]
-	if !ok {
-		node.RUnlock()
-		return 0, ERRCONNCLOSED
-	}
-	lag := p.GetAverageNetLag()
-	node.RUnlock()
-	return lag, nil
-}
-
-//unit nanosecond
-func (this *Instance) GetPeekNetLag(peername string) (uint64, error) {
-	node := this.peernodes[this.getindex(peername)]
-	node.RLock()
-	p, ok := node.peers[peername]
-	if !ok {
-		node.RUnlock()
-		return 0, ERRCONNCLOSED
-	}
-	lag := p.GetPeekNetLag()
-	node.RUnlock()
-	return lag, nil
-}
-
 func (this *Instance) Close(peername string) error {
 	node := this.peernodes[this.getindex(peername)]
 	node.RLock()
@@ -86,7 +86,6 @@ func (this *Instance) Close(peername string) error {
 
 type Instance struct {
 	conf      *InstanceConfig
-	status    bool //true-working,false-closing
 	peernodes []*peernode
 
 	peerPool          *sync.Pool
@@ -97,17 +96,13 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 	switch t {
 	case TCP:
 		if p, ok := this.peerPool.Get().(*Peer); ok {
-			if len(p.writerbuffer) > 0 {
-				<-p.writerbuffer
-			}
-			if len(p.heartbeatbuffer) > 0 {
-				<-p.heartbeatbuffer
-			}
+			p.reset()
 			return p
 		}
 		tempctx, tempcancel := context.WithCancel(context.Background())
 		c := (*TcpConfig)(conf)
 		return &Peer{
+			parentnode:      nil,
 			clientname:      "",
 			servername:      "",
 			peertype:        0,
@@ -122,22 +117,19 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			lastactive:      0,
 			netlag:          make([]uint64, this.conf.NetLagSampleNum),
 			netlagindex:     0,
-			ctx:             tempctx,
-			cancel:          tempcancel,
+			Context:         tempctx,
+			CancelFunc:      tempcancel,
+			Data:            nil,
 		}
 	case UNIXSOCKET:
 		if p, ok := this.peerPool.Get().(*Peer); ok {
-			if len(p.writerbuffer) > 0 {
-				<-p.writerbuffer
-			}
-			if len(p.heartbeatbuffer) > 0 {
-				<-p.heartbeatbuffer
-			}
+			p.reset()
 			return p
 		}
 		tempctx, tempcancel := context.WithCancel(context.Background())
 		c := (*UnixConfig)(conf)
 		return &Peer{
+			parentnode:      nil,
 			clientname:      "",
 			servername:      "",
 			peertype:        0,
@@ -152,22 +144,19 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			lastactive:      0,
 			netlag:          make([]uint64, this.conf.NetLagSampleNum),
 			netlagindex:     0,
-			ctx:             tempctx,
-			cancel:          tempcancel,
+			Context:         tempctx,
+			CancelFunc:      tempcancel,
+			Data:            nil,
 		}
 	case WEBSOCKET:
 		if p, ok := this.websocketPeerPool.Get().(*Peer); ok {
-			if len(p.writerbuffer) > 0 {
-				<-p.writerbuffer
-			}
-			if len(p.heartbeatbuffer) > 0 {
-				<-p.heartbeatbuffer
-			}
+			p.reset()
 			return p
 		}
 		tempctx, tempcancel := context.WithCancel(context.Background())
 		c := (*WebConfig)(conf)
 		return &Peer{
+			parentnode:      nil,
 			clientname:      "",
 			servername:      "",
 			peertype:        0,
@@ -182,41 +171,21 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			lastactive:      0,
 			netlag:          make([]uint64, this.conf.NetLagSampleNum),
 			netlagindex:     0,
-			ctx:             tempctx,
-			cancel:          tempcancel,
+			Context:         tempctx,
+			CancelFunc:      tempcancel,
+			Data:            nil,
 		}
 	default:
 		return nil
 	}
 }
 func (this *Instance) putPeer(p *Peer) {
-	p.cancel()
-	p.cancel = nil
-	p.ctx = nil
-	p.parentnode = nil
-	p.clientname = ""
-	p.servername = ""
-	p.peertype = 0
-	p.protocoltype = 0
-	p.starttime = 0
-	p.tempbuffernum = 0
-	if len(p.writerbuffer) > 0 {
-		<-p.writerbuffer
-	}
-	if len(p.heartbeatbuffer) > 0 {
-		<-p.heartbeatbuffer
-	}
-	p.closeconn()
-	p.lastactive = 0
-	for i := range p.netlag {
-		p.netlag[i] = 0
-	}
-	p.netlagindex = 0
-	switch p.protocoltype {
+	tempprotocoltype := p.protocoltype
+	p.reset()
+	switch tempprotocoltype {
 	case TCP:
 		fallthrough
 	case UNIXSOCKET:
-		p.readbuffer.Reset()
 		this.peerPool.Put(p)
 	case WEBSOCKET:
 		this.websocketPeerPool.Put(p)
@@ -243,7 +212,6 @@ func NewInstance(c *InstanceConfig) *Instance {
 	}
 	stream := &Instance{
 		conf:              c,
-		status:            true,
 		peernodes:         make([]*peernode, c.GroupNum),
 		peerPool:          &sync.Pool{},
 		websocketPeerPool: &sync.Pool{},

@@ -3,7 +3,6 @@ package discovery
 import (
 	"bytes"
 	"fmt"
-	"unsafe"
 )
 
 const (
@@ -85,12 +84,4 @@ func getPushMsg(data []byte) [][]byte {
 	}
 	result := bytes.Split(data[1:], []byte{SPLIT})
 	return result
-}
-func str2byte(data string) []byte {
-	temp := (*[2]uintptr)(unsafe.Pointer(&data))
-	result := [3]uintptr{temp[0], temp[1], temp[1]}
-	return *(*[]byte)(unsafe.Pointer(&result))
-}
-func byte2str(data []byte) string {
-	return *(*string)(unsafe.Pointer(&data))
 }

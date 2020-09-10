@@ -55,7 +55,7 @@ func tcpserverhandleVerify(ctx context.Context, peername string, uniqueid uint64
 func tcpserverhandleonline(p *Peer, peername string, uniqueid uint64) {
 	atomic.AddInt64(&tcpcount, 1)
 }
-func tcpserverhandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid uint64, data []byte) {
+func tcpserverhandleuserdata(p *Peer, peername string, uniqueid uint64, data []byte) {
 	fmt.Printf("%s:%s\n", peername, data)
 	p.SendMessage(data, uniqueid)
 }

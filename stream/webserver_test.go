@@ -56,7 +56,7 @@ func webserverhandleVerify(ctx context.Context, peername string, uniqueid uint64
 func webserverhandleonline(p *Peer, peername string, uniqueid uint64) {
 	atomic.AddInt64(&webcount, 1)
 }
-func webserverhandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid uint64, data []byte) {
+func webserverhandleuserdata(p *Peer, peername string, uniqueid uint64, data []byte) {
 	fmt.Printf("%s:%s\n", peername, data)
 	p.SendMessage(data, uniqueid)
 }

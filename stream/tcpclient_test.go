@@ -65,7 +65,7 @@ func tcpclienthandleonline(p *Peer, peername string, uniqueid uint64) {
 	}
 }
 
-func tcpclienthandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid uint64, data []byte) {
+func tcpclienthandleuserdata(p *Peer, peername string, uniqueid uint64, data []byte) {
 	fmt.Printf("%s\n", data)
 }
 

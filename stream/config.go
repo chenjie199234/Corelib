@@ -9,21 +9,24 @@ import (
 
 //all peernameip param is "name,ip",e.g. "gamegate,127.0.0.1"
 
-//peernameip should be unique,can't run two same server on one ip
+//peernameip is unique,can't run two same server on one ip
 
 //HandleVerifyFunc has a timeout context
 //Before two peers can communicate with each other,they need to verify the identity first
 //server's response will write back to the client for client to verify the server
-//client's response is useless,you can return nil
+//client's response is useless and it will be dropped,you can just return nil
 type HandleVerifyFunc func(ctx context.Context, peernameandip string, uniqueid uint64, peerVerifyData []byte) (response []byte, success bool)
 
-//This is a notice after two peers verify identity pass
+//This is a notice after two peers verify each other success
+//Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
 type HandleOnlineFunc func(p *Peer, peernameandip string, uniqueid uint64)
 
-//HandleUserdataFunc has a cancel context,you should control the timeout by yourself through context.WithTimeout()
-type HandleUserdataFunc func(ctx context.Context, p *Peer, peernameandip string, uniqueid uint64, data []byte)
+//This is a func to deal the user message
+//Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
+type HandleUserdataFunc func(p *Peer, peernameandip string, uniqueid uint64, data []byte)
 
 //This is a notice after two peers disconnect with each other
+//Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
 type HandleOfflineFunc func(p *Peer, peernameandip string, uniqueid uint64)
 
 type TcpConfig struct {

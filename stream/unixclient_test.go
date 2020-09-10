@@ -66,7 +66,7 @@ func unixclienthandleonline(p *Peer, peername string, uniqueid uint64) {
 	}
 }
 
-func unixclienthandleuserdata(ctx context.Context, p *Peer, peername string, uniqueid uint64, data []byte) {
+func unixclienthandleuserdata(p *Peer, peername string, uniqueid uint64, data []byte) {
 	fmt.Printf("%s\n", data)
 }
 

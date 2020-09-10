@@ -317,9 +317,10 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) string {
 		if this.conf.Onlinefunc != nil {
 			this.conf.Onlinefunc(p, p.getpeeruniquename(), p.starttime)
 		}
+		uniquename := p.getpeeruniquename()
 		go this.read(p)
 		go this.write(p)
-		return p.getpeeruniquename()
+		return uniquename
 	} else {
 		p.closeconn()
 		this.putPeer(p)
@@ -335,7 +336,7 @@ func (this *Instance) verifypeer(p *Peer) []byte {
 	case WEBSOCKET:
 		(*websocket.Conn)(p.conn).SetReadDeadline(time.Now().Add(time.Duration(this.conf.VerifyTimeout) * time.Millisecond))
 	}
-	ctx, cancel := context.WithTimeout(p.ctx, time.Duration(this.conf.VerifyTimeout)*time.Millisecond)
+	ctx, cancel := context.WithTimeout(p, time.Duration(this.conf.VerifyTimeout)*time.Millisecond)
 	defer cancel()
 	var e error
 	var data []byte
@@ -428,11 +429,10 @@ func (this *Instance) read(p *Peer) {
 		p.parentnode.Lock()
 		uniquename := p.getpeeruniquename()
 		if _, ok := p.parentnode.peers[uniquename]; ok {
-
 			//when first goruntine return,delete this connection from the map
 			delete(p.parentnode.peers, uniquename)
 			//cause write goruntine return,this will be useful when there is nothing in writebuffer
-			p.cancel()
+			p.CancelFunc()
 			p.writerbuffer <- []byte{}
 			p.heartbeatbuffer <- []byte{}
 			p.parentnode.Unlock()
@@ -591,7 +591,7 @@ func (this *Instance) dealheart(p *Peer, msg *heartMsg, data []byte) error {
 func (this *Instance) dealuser(p *Peer, msg *userMsg) error {
 	//update lastactive time
 	p.lastactive = uint64(time.Now().UnixNano())
-	this.conf.Userdatafunc(p.ctx, p, p.getpeeruniquename(), p.starttime, msg.userdata)
+	this.conf.Userdatafunc(p, p.getpeeruniquename(), p.starttime, msg.userdata)
 	return nil
 }
 func (this *Instance) write(p *Peer) {
@@ -611,7 +611,7 @@ func (this *Instance) write(p *Peer) {
 			delete(p.parentnode.peers, uniquename)
 			//close the connection,cause read goruntine return
 			p.closeconn()
-			p.cancel()
+			p.CancelFunc()
 			p.parentnode.Unlock()
 		} else {
 			if this.conf.Offlinefunc != nil {

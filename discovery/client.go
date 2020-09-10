@@ -10,41 +10,34 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chenjie199234/Corelib/buckettree"
+	"github.com/chenjie199234/Corelib/hashtree"
 	"github.com/chenjie199234/Corelib/stream"
 )
 
 type client struct {
 	lker       *sync.RWMutex
 	servers    map[string]*servernode
+	nodes      map[string]map[string]int //first key is peername,second key is peer ip,value is the rigister count on discovery server
 	verifydata []byte
-	nodepool   *sync.Pool
 	instance   *stream.Instance
 	httpclient *http.Client
 }
 
 type servernode struct {
-	peer         *stream.Peer
-	name         string
-	uniqueid     uint64
-	addr         string
-	hashtree     *buckettree.BucketTree
-	lker         *sync.RWMutex
-	clients      [][]string
-	clientsindex map[string]struct{}
+	peer     *stream.Peer
+	name     string
+	uniqueid uint64
+	addr     string
+	lker     *sync.Mutex
+	htree    *hashtree.Hashtree
 }
 
 var clientinstance *client
 
-func updateserver(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []byte, url string) {
+func StartDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []byte, url string) {
 	clientinstance = &client{
-		nodepool: &sync.Pool{
-			New: func() interface{} {
-				return &servernode{}
-			},
-		},
-		lker:       &sync.RWMutex{},
-		servers:    make(map[string]*servernode, 10),
+		lker: &sync.RWMutex{},
+		//servers:    make(map[string]*servernode, 10),
 		verifydata: vdata,
 		httpclient: &http.Client{
 			Timeout: 500 * time.Millisecond,
@@ -93,7 +86,6 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 			}
 			if !find {
 				delete(c.servers, k)
-				v.peer.Close(v.uniqueid)
 			}
 		}
 		//online new server or reconnect to offline server
@@ -132,16 +124,13 @@ func (c *client) onlinefunc(p *stream.Peer, peernameip string, uniqueid uint64) 
 	c.lker.Lock()
 	v, ok := c.servers[peernameip]
 	if !ok {
-		newserver := &servernode{
-			peer:         p,
-			name:         peernameip,
-			uniqueid:     uniqueid,
-			hashtree:     buckettree.New(10, 2),
-			lker:         &sync.RWMutex{},
-			clientsindex: make(map[string]struct{}, 10),
+		c.servers[peernameip] = &servernode{
+			peer:     p,
+			name:     peernameip,
+			uniqueid: uniqueid,
+			htree:    hashtree.New(10, 2),
+			lker:     &sync.Mutex{},
 		}
-		newserver.clients = make([][]string, newserver.hashtree.GetBucketNum())
-		c.servers[peernameip] = newserver
 		c.lker.Unlock()
 		return
 	}
@@ -150,11 +139,12 @@ func (c *client) onlinefunc(p *stream.Peer, peernameip string, uniqueid uint64) 
 		v.uniqueid = uniqueid
 		return
 	}
+	//this is impossible
 	fmt.Printf("[Discovery.client.onlinefunc]reconnect to discovery server")
 	p.Close(uniqueid)
 	return
 }
-func (c *client) userfunc(ctx context.Context, p *stream.Peer, peernameip string, uniqueid uint64, data []byte) {
+func (c *client) userfunc(p *stream.Peer, peernameip string, uniqueid uint64, data []byte) {
 	if len(data) <= 1 {
 		return
 	}
@@ -173,11 +163,21 @@ func (c *client) userfunc(ctx context.Context, p *stream.Peer, peernameip string
 		}
 	case MSGPUSH:
 		all := getPushMsg(data)
-		v, ok := c.servers[peernameip]
+		c.lker.RLock()
+		server, ok := c.servers[peernameip]
 		if !ok {
+			c.lker.RUnlock()
 			return
 		}
+		data := make([]*hashtree.LeafData, server.htree.GetLeavesNum())
+		for _, peernameip := range all {
+			where := int(bkdrhash(byte2str(peernameip), uint64(server.htree.GetLeavesNum())))
+		}
+		server.htree.Rebuild()
+		c.lker.RUnlock()
 	default:
+		fmt.Printf("[Discovery.client.userfunc]unknown message type")
+		p.Close(uniqueid)
 	}
 }
 func (c *client) offlinefunc(p *stream.Peer, peernameip string, uniqueid uint64) {
@@ -188,11 +188,8 @@ func (c *client) offlinefunc(p *stream.Peer, peernameip string, uniqueid uint64)
 	} else {
 		v.lker.Lock()
 		c.lker.RUnlock()
-		v.clients = v.clients[:0]
-		for k := range v.clientsindex {
-			delete(v.clientsindex, k)
-		}
 		v.uniqueid = 0
+		v.htree.Reset()
 		v.lker.Unlock()
 	}
 }
