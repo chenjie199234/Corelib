@@ -53,7 +53,7 @@ type Peer struct {
 	netlagindex     int
 	context.Context
 	context.CancelFunc
-	Data unsafe.Pointer //user data
+	data unsafe.Pointer //user data
 }
 
 func (p *Peer) reset() {
@@ -82,7 +82,7 @@ func (p *Peer) reset() {
 		p.netlag[i] = 0
 	}
 	p.netlagindex = 0
-	p.Data = nil
+	p.data = nil
 }
 func (p *Peer) getprotocolname() string {
 	return PROTOCOLNAME[p.protocoltype]
@@ -169,14 +169,14 @@ func (p *Peer) setbuffer(readnum, writenum int) {
 
 func (p *Peer) GetData(uniqueid uint64) (unsafe.Pointer, error) {
 	if uniqueid == p.starttime {
-		return p.Data, nil
+		return p.data, nil
 	}
 	return nil, ERRCONNCLOSED
 }
 
 func (p *Peer) SetData(data unsafe.Pointer, uniqueid uint64) error {
 	if uniqueid == p.starttime {
-		p.Data = data
+		p.data = data
 		return nil
 	}
 	return ERRCONNCLOSED

@@ -121,7 +121,7 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			netlagindex:     0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
-			Data:            nil,
+			data:            nil,
 		}
 	case UNIXSOCKET:
 		tempctx, tempcancel := context.WithCancel(context.Background())
@@ -150,7 +150,7 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			netlagindex:     0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
-			Data:            nil,
+			data:            nil,
 		}
 	case WEBSOCKET:
 		tempctx, tempcancel := context.WithCancel(context.Background())
@@ -179,7 +179,7 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			netlagindex:     0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
-			Data:            nil,
+			data:            nil,
 		}
 	default:
 		return nil
