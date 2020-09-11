@@ -153,7 +153,6 @@ func (p *Peer) closeconn() {
 			(*websocket.Conn)(p.conn).Close()
 		}
 	}
-	p.starttime = 0
 }
 func (p *Peer) setbuffer(readnum, writenum int) {
 	switch p.protocoltype {
