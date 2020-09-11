@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -425,21 +426,21 @@ func (this *Instance) verifypeer(p *Peer) []byte {
 }
 func (this *Instance) read(p *Peer) {
 	defer func() {
-		//every connection will have two goruntine to work for it
-		p.parentnode.Lock()
 		uniquename := p.getpeeruniquename()
-		if _, ok := p.parentnode.peers[uniquename]; ok {
-			//when first goruntine return,delete this connection from the map
-			delete(p.parentnode.peers, uniquename)
+		//every connection will have two goruntine to work for it
+		if old := atomic.SwapUint64(&p.starttime, 0); old > 0 {
 			//cause write goruntine return,this will be useful when there is nothing in writebuffer
 			p.CancelFunc()
+			p.closeconn()
+			//prevent write goruntine block on read channel
 			p.writerbuffer <- []byte{}
 			p.heartbeatbuffer <- []byte{}
-			p.parentnode.Unlock()
 		} else {
 			if this.conf.Offlinefunc != nil {
 				this.conf.Offlinefunc(p, uniquename, p.starttime)
 			}
+			p.parentnode.Lock()
+			delete(p.parentnode.peers, uniquename)
 			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
 			this.putPeer(p)
@@ -596,27 +597,25 @@ func (this *Instance) dealuser(p *Peer, msg *userMsg) error {
 }
 func (this *Instance) write(p *Peer) {
 	defer func() {
-		p.parentnode.Lock()
-		//drop all data
+		//drop all data,prevent close read goruntine block on send empty data to these channel
 		for len(p.writerbuffer) > 0 {
 			<-p.writerbuffer
 		}
 		for len(p.heartbeatbuffer) > 0 {
 			<-p.heartbeatbuffer
 		}
-		uniquename := p.getpeeruniquename()
 		//every connection will have two goruntine to work for it
-		if _, ok := p.parentnode.peers[uniquename]; ok {
-			//when first goruntine return,delete this connection from the map
-			delete(p.parentnode.peers, uniquename)
-			//close the connection,cause read goruntine return
-			p.closeconn()
+		if old := atomic.SwapUint64(&p.starttime, 0); old > 0 {
+			//when first goruntine return,close the connection,cause read goruntine return
 			p.CancelFunc()
-			p.parentnode.Unlock()
+			p.closeconn()
 		} else {
+			uniquename := p.getpeeruniquename()
 			if this.conf.Offlinefunc != nil {
 				this.conf.Offlinefunc(p, uniquename, p.starttime)
 			}
+			p.parentnode.Lock()
+			delete(p.parentnode.peers, uniquename)
 			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
 			this.putPeer(p)

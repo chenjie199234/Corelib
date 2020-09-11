@@ -57,6 +57,10 @@ type Peer struct {
 }
 
 func (p *Peer) reset() {
+	if p.CancelFunc != nil {
+		p.CancelFunc()
+	}
+	p.closeconn()
 	p.parentnode = nil
 	p.clientname = ""
 	p.servername = ""
@@ -73,17 +77,11 @@ func (p *Peer) reset() {
 	for len(p.heartbeatbuffer) > 0 {
 		<-p.heartbeatbuffer
 	}
-	p.conn = nil
 	p.lastactive = 0
 	for i := range p.netlag {
 		p.netlag[i] = 0
 	}
 	p.netlagindex = 0
-	if p.CancelFunc != nil {
-		p.CancelFunc()
-		p.CancelFunc = nil
-	}
-	p.Context = nil
 	p.Data = nil
 }
 func (p *Peer) getprotocolname() string {
@@ -169,12 +167,19 @@ func (p *Peer) setbuffer(readnum, writenum int) {
 	}
 }
 
-func (p *Peer) GetData() unsafe.Pointer {
-	return p.Data
+func (p *Peer) GetData(uniqueid uint64) (unsafe.Pointer, error) {
+	if uniqueid == p.starttime {
+		return p.Data, nil
+	}
+	return nil, ERRCONNCLOSED
 }
 
-func (p *Peer) SetData(data unsafe.Pointer) {
-	p.Data = data
+func (p *Peer) SetData(data unsafe.Pointer, uniqueid uint64) error {
+	if uniqueid == p.starttime {
+		p.Data = data
+		return nil
+	}
+	return ERRCONNCLOSED
 }
 
 //unit nanosecond
