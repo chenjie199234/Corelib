@@ -95,11 +95,13 @@ type Instance struct {
 func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 	switch t {
 	case TCP:
+		tempctx, tempcancel := context.WithCancel(context.Background())
 		if p, ok := this.peerPool.Get().(*Peer); ok {
 			p.reset()
+			p.Context = tempctx
+			p.CancelFunc = tempcancel
 			return p
 		}
-		tempctx, tempcancel := context.WithCancel(context.Background())
 		c := (*TcpConfig)(conf)
 		return &Peer{
 			parentnode:      nil,
@@ -119,14 +121,16 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			netlagindex:     0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
-			Data:            nil,
+			data:            nil,
 		}
 	case UNIXSOCKET:
+		tempctx, tempcancel := context.WithCancel(context.Background())
 		if p, ok := this.peerPool.Get().(*Peer); ok {
 			p.reset()
+			p.Context = tempctx
+			p.CancelFunc = tempcancel
 			return p
 		}
-		tempctx, tempcancel := context.WithCancel(context.Background())
 		c := (*UnixConfig)(conf)
 		return &Peer{
 			parentnode:      nil,
@@ -146,14 +150,16 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			netlagindex:     0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
-			Data:            nil,
+			data:            nil,
 		}
 	case WEBSOCKET:
+		tempctx, tempcancel := context.WithCancel(context.Background())
 		if p, ok := this.websocketPeerPool.Get().(*Peer); ok {
 			p.reset()
+			p.Context = tempctx
+			p.CancelFunc = tempcancel
 			return p
 		}
-		tempctx, tempcancel := context.WithCancel(context.Background())
 		c := (*WebConfig)(conf)
 		return &Peer{
 			parentnode:      nil,
@@ -173,7 +179,7 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			netlagindex:     0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
-			Data:            nil,
+			data:            nil,
 		}
 	default:
 		return nil
