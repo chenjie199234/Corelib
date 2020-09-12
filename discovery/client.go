@@ -17,7 +17,6 @@ import (
 type client struct {
 	lker       *sync.RWMutex
 	servers    map[string]*servernode
-	nodes      map[string]map[string]int //first key is peername,second key is peer ip,value is the rigister count on discovery server
 	verifydata []byte
 	instance   *stream.Instance
 	httpclient *http.Client
@@ -36,8 +35,8 @@ var clientinstance *client
 
 func StartDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []byte, url string) {
 	clientinstance = &client{
-		lker: &sync.RWMutex{},
-		//servers:    make(map[string]*servernode, 10),
+		lker:       &sync.RWMutex{},
+		servers:    make(map[string]*servernode, 10),
 		verifydata: vdata,
 		httpclient: &http.Client{
 			Timeout: 500 * time.Millisecond,
@@ -48,7 +47,7 @@ func StartDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata 
 	c.Userdatafunc = clientinstance.userfunc
 	c.Offlinefunc = clientinstance.offlinefunc
 	clientinstance.instance = stream.NewInstance(c)
-	go clientinstance.updateserver(cc, url)
+	clientinstance.updateserver(cc, url)
 }
 func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 	tker := time.NewTicker(time.Second)

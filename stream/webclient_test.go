@@ -42,7 +42,7 @@ func Test_Webclient(t *testing.T) {
 	}()
 	http.ListenAndServe(":8085", nil)
 }
-func webclienthandleVerify(ctx context.Context, peername string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
+func webclienthandleVerify(ctx context.Context, peeruniquename string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal([]byte{'t', 'e', 's', 't'}, peerVerifyData) {
 		fmt.Println("verify error")
 		return nil, false
@@ -52,7 +52,7 @@ func webclienthandleVerify(ctx context.Context, peername string, uniqueid uint64
 
 var web int64
 
-func webclienthandleonline(p *Peer, peername string, uniqueid uint64) {
+func webclienthandleonline(p *Peer, peeruniquename string, uniqueid uint64) {
 	old := atomic.SwapInt64(&web, 1)
 	if old == 0 {
 		go func() {
@@ -65,9 +65,9 @@ func webclienthandleonline(p *Peer, peername string, uniqueid uint64) {
 	}
 }
 
-func webclienthandleuserdata(p *Peer, peername string, uniqueid uint64, data []byte) {
+func webclienthandleuserdata(p *Peer, peeruniquename string, uniqueid uint64, data []byte) {
 	fmt.Printf("%s\n", data)
 }
 
-func webclienthandleoffline(p *Peer, peername string, uniqueid uint64) {
+func webclienthandleoffline(p *Peer, peeruniquename string, uniqueid uint64) {
 }

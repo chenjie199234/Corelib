@@ -7,7 +7,7 @@ import (
 
 //Warning!!Don't write block logic in these callback,live for{}
 
-//all peernameip param is "name,ip",e.g. "gamegate,127.0.0.1"
+//all peeruniquename is peerinstancename + ":" + peeraddr,e.g. "gamegate:127.0.0.1:1234"
 
 //peernameip is unique,can't run two same server on one ip
 
@@ -15,19 +15,19 @@ import (
 //Before two peers can communicate with each other,they need to verify the identity first
 //server's response will write back to the client for client to verify the server
 //client's response is useless and it will be dropped,you can just return nil
-type HandleVerifyFunc func(ctx context.Context, peernameandip string, uniqueid uint64, peerVerifyData []byte) (response []byte, success bool)
+type HandleVerifyFunc func(ctx context.Context, peeruniquename string, uniqueid uint64, peerVerifyData []byte) (response []byte, success bool)
 
 //This is a notice after two peers verify each other success
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
-type HandleOnlineFunc func(p *Peer, peernameandip string, uniqueid uint64)
+type HandleOnlineFunc func(p *Peer, peeruniquename string, uniqueid uint64)
 
 //This is a func to deal the user message
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
-type HandleUserdataFunc func(p *Peer, peernameandip string, uniqueid uint64, data []byte)
+type HandleUserdataFunc func(p *Peer, peeruniquename string, uniqueid uint64, data []byte)
 
 //This is a notice after two peers disconnect with each other
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
-type HandleOfflineFunc func(p *Peer, peernameandip string, uniqueid uint64)
+type HandleOfflineFunc func(p *Peer, peeruniquename string, uniqueid uint64)
 
 type TcpConfig struct {
 	ConnectTimeout int `json:"connect_timeout"` //default 500ms,for client only
@@ -221,6 +221,11 @@ func checkInstanceConfig(c *InstanceConfig) error {
 	}
 	if len(c.SelfName) > 64 {
 		return fmt.Errorf("[Stream.checkInstanceConfig]instance name too long")
+	}
+	for _, v := range c.SelfName {
+		if int(v) < 48 || (int(v) > 57 && int(v) < 65) || (int(v) > 90 && int(v) < 97) || int(v) > 122 {
+			return fmt.Errorf("[Stream.checkInstanceConfig]instance name contains illegal character which is not in [0-9],[a-z],[A-Z]")
+		}
 	}
 	if c.VerifyTimeout == 0 {
 		fmt.Println("[Stream.checkInstanceConfig]missing verify timeout,default will be used:1000ms")

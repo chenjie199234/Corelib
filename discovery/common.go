@@ -2,6 +2,17 @@ package discovery
 
 import "unsafe"
 
+type hashtreeleafdata struct {
+	clientsindex []string
+	clients      map[string]*clientnode
+}
+
+type RegMsg struct {
+	GrpcAddr string `json:"g"`
+	HttpAddr string `json:"h"`
+	TcpAddr  string `json:"t"`
+}
+
 func bkdrhash(nameip string, total uint64) uint64 {
 	seed := uint64(131313)
 	hash := uint64(0)

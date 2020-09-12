@@ -91,7 +91,7 @@ func (p *Peer) getpeertypename() string {
 	return PEERTYPENAME[p.peertype]
 }
 func (p *Peer) getpeeruniquename() string {
-	return p.getpeername() + "," + p.getpeeraddr()
+	return p.getpeername() + ":" + p.getpeeraddr()
 }
 func (p *Peer) getpeername() string {
 	switch p.peertype {
@@ -103,7 +103,7 @@ func (p *Peer) getpeername() string {
 	return ""
 }
 func (p *Peer) getselfuniquename() string {
-	return p.getselfname() + "," + p.getselfaddr()
+	return p.getselfname() + ":" + p.getselfaddr()
 }
 func (p *Peer) getselfname() string {
 	switch p.peertype {
@@ -117,26 +117,22 @@ func (p *Peer) getselfname() string {
 func (p *Peer) getpeeraddr() string {
 	switch p.protocoltype {
 	case TCP:
-		host, _, _ := net.SplitHostPort((*net.TCPConn)(p.conn).RemoteAddr().String())
-		return host
+		return (*net.TCPConn)(p.conn).RemoteAddr().String()
 	case UNIXSOCKET:
 		return (*net.UnixConn)(p.conn).RemoteAddr().String()
 	case WEBSOCKET:
-		host, _, _ := net.SplitHostPort((*websocket.Conn)(p.conn).RemoteAddr().String())
-		return host
+		return (*websocket.Conn)(p.conn).RemoteAddr().String()
 	}
 	return ""
 }
 func (p *Peer) getselfaddr() string {
 	switch p.protocoltype {
 	case TCP:
-		host, _, _ := net.SplitHostPort((*net.TCPConn)(p.conn).LocalAddr().String())
-		return host
+		return (*net.TCPConn)(p.conn).LocalAddr().String()
 	case UNIXSOCKET:
 		return (*net.UnixConn)(p.conn).LocalAddr().String()
 	case WEBSOCKET:
-		host, _, _ := net.SplitHostPort((*websocket.Conn)(p.conn).LocalAddr().String())
-		return host
+		return (*websocket.Conn)(p.conn).LocalAddr().String()
 	}
 	return ""
 }
