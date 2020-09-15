@@ -25,7 +25,7 @@ type HandleOnlineFunc func(p *Peer, peeruniquename string, uniqueid uint64)
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
 type HandleUserdataFunc func(p *Peer, peeruniquename string, uniqueid uint64, data []byte)
 
-//This is a notice after two peers disconnect with each other
+//This is a notice before two peers disconnect with each other
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
 type HandleOfflineFunc func(p *Peer, peeruniquename string, uniqueid uint64)
 
