@@ -31,26 +31,22 @@ type hashtreeleafdata struct {
 type clientnode struct {
 	peer     *stream.Peer
 	uniqueid uint64
-	msg.RegMsg
+	regdata  []byte
 }
 
 var instance *server
 
-func (s *server) getnode(peer *stream.Peer, grpcaddr, httpaddr, tcpaddr string, uniqueid uint64) *clientnode {
+func (s *server) getnode(peer *stream.Peer, regdata []byte, uniqueid uint64) *clientnode {
 	node := s.nodepool.Get().(*clientnode)
 	node.peer = peer
 	node.uniqueid = uniqueid
-	node.GrpcAddr = grpcaddr
-	node.HttpAddr = httpaddr
-	node.TcpAddr = tcpaddr
+	node.regdata = regdata
 	return node
 }
 func (s *server) putnode(n *clientnode) {
 	n.peer = nil
 	n.uniqueid = 0
-	n.GrpcAddr = ""
-	n.HttpAddr = ""
-	n.TcpAddr = ""
+	n.regdata = nil
 	s.nodepool.Put(n)
 }
 
@@ -91,10 +87,10 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 		return
 	}
 	switch data[0] {
-	case msg.MSGREG:
-		regmsg, e := msg.GetRegMsg(data)
+	case msg.MSGONLINE:
+		_, regmsg, _, e := msg.GetOnlineMsg(data)
 		if e != nil {
-			fmt.Printf("[Discovery.server.userfunc]reg message broken,error:%s\n", e)
+			fmt.Printf("[Discovery.server.userfunc]online message broken,error:%s\n", e)
 			p.Close(uniqueid)
 			return
 		}
@@ -104,12 +100,11 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 		if leaf == nil {
 			leafdata := &hashtreeleafdata{
 				clientsindex: []string{peeruniquename},
-				clients:      map[string]*clientnode{},
+				clients:      map[string]*clientnode{peeruniquename: s.getnode(p, regmsg, uniqueid)},
 			}
 			name := peeruniquename[:strings.Index(peeruniquename, ":")]
-			leafdata.clients[peeruniquename] = s.getnode(p, regmsg.GrpcAddr, regmsg.HttpAddr, regmsg.TcpAddr, uniqueid)
 			s.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
-				Hashstr: msg.Str2byte(name + regmsg.GrpcAddr + regmsg.HttpAddr + regmsg.TcpAddr),
+				Hashstr: msg.Str2byte(name + msg.Byte2str(regmsg)),
 				Value:   unsafe.Pointer(leafdata),
 			})
 		} else {
@@ -121,13 +116,13 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 				p.Close(uniqueid)
 				return
 			}
-			leafdata.clients[peeruniquename] = s.getnode(p, regmsg.GrpcAddr, regmsg.HttpAddr, regmsg.TcpAddr, uniqueid)
+			leafdata.clients[peeruniquename] = s.getnode(p, regmsg, uniqueid)
 			leafdata.clientsindex = append(leafdata.clientsindex, peeruniquename)
 			sort.Strings(leafdata.clientsindex)
 			all := make([]string, len(leafdata.clientsindex))
 			for i, indexname := range leafdata.clientsindex {
 				client := leafdata.clients[indexname]
-				all[i] = indexname[:strings.Index(indexname, ":")] + client.GrpcAddr + client.HttpAddr + client.TcpAddr
+				all[i] = indexname[:strings.Index(indexname, ":")] + msg.Byte2str(client.regdata)
 			}
 			s.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
 				Hashstr: msg.Str2byte(strings.Join(all, "")),
@@ -148,15 +143,11 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 	case msg.MSGPULL:
 		s.lker.RLock()
 		leaves := s.htree.GetAllLeaf()
-		all := make(map[string]*msg.RegMsg, int(float64(s.count)*1.3))
+		all := make(map[string][]byte, int(float64(s.count)*1.3))
 		for _, leaf := range leaves {
 			leafdata := (*hashtreeleafdata)(leaf.Value)
 			for peeruniquename, client := range leafdata.clients {
-				all[peeruniquename] = &msg.RegMsg{
-					GrpcAddr: client.GrpcAddr,
-					HttpAddr: client.HttpAddr,
-					TcpAddr:  client.TcpAddr,
-				}
+				all[peeruniquename] = client.regdata
 			}
 		}
 		p.SendMessage(msg.MakePushMsg(all), uniqueid)
@@ -193,7 +184,7 @@ func (s *server) offlinefunc(p *stream.Peer, peeruniquename string, uniqueid uin
 	all := make([]string, len(leafdata.clientsindex))
 	for i, indexname := range leafdata.clientsindex {
 		client, _ := leafdata.clients[indexname]
-		all[i] = indexname[:strings.Index(indexname, ":")] + client.GrpcAddr + client.HttpAddr + client.TcpAddr
+		all[i] = indexname[:strings.Index(indexname, ":")] + msg.Byte2str(client.regdata)
 	}
 	s.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
 		Hashstr: msg.Str2byte(strings.Join(all, "")),
