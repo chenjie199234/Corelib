@@ -338,6 +338,7 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 				leafdata = nil
 			case 3:
 				//origin peers offline
+				index := len(leafdata.peersindex) - 1
 				for originpeer, originregmsg := range leafdata.peers {
 					find := false
 					for newpeer, newregmsg := range datas {
@@ -346,13 +347,25 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 							if !bytes.Equal(originregmsg, newregmsg) {
 								//this is impossible
 								leafdata.peers[originpeer] = newregmsg
+								fmt.Printf("[Discovery.client.userfunc]peer:%s reg message conflict,new reg msg replace the old\n", originpeer)
 							}
 							break
 						}
 					}
 					if !find {
 						//offline
+						delete(leafdata.peers, originpeer)
+						for i, v := range leafdata.peersindex {
+							if v == originpeer {
+								leafdata.peersindex[i], leafdata.peersindex[index] = leafdata.peersindex[index], leafdata.peersindex[i]
+								index--
+								break
+							}
+						}
 					}
+				}
+				if index != len(leafdata.peersindex)-1 {
+					leafdata.peersindex = leafdata.peersindex[:index+1]
 				}
 				//new peers online
 				for newpeer, newregmsg := range datas {
@@ -363,12 +376,15 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 							if !bytes.Equal(newregmsg, originregmsg) {
 								//this is impossible
 								leafdata.peers[originpeer] = newregmsg
+								fmt.Printf("[Discovery.client.userfunc]peer:%s reg message conflict,new reg msg replace the old\n", originpeer)
 							}
 							break
 						}
 					}
 					if !find {
 						//online
+						leafdata.peers[newpeer] = newregmsg
+						leafdata.peersindex = append(leafdata.peersindex, newpeer)
 					}
 				}
 			}
