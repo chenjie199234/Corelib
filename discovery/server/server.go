@@ -90,7 +90,7 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 	case msg.MSGONLINE:
 		_, regmsg, _, e := msg.GetOnlineMsg(data)
 		if e != nil {
-			fmt.Printf("[Discovery.server.userfunc]online message broken,error:%s\n", e)
+			fmt.Printf("[Discovery.server.userfunc]online message:%s broken\n", data)
 			p.Close(uniqueid)
 			return
 		}
@@ -129,7 +129,7 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 				Value:   unsafe.Pointer(leafdata),
 			})
 		}
-		onlinemsg := msg.MakeOnlineMsg(peeruniquename, data[1:], s.htree.GetRootHash())
+		onlinemsg := msg.MakeOnlineMsg(peeruniquename, regmsg, s.htree.GetRootHash())
 		leaves := s.htree.GetAllLeaf()
 		//notice all other peers
 		for _, leaf := range leaves {

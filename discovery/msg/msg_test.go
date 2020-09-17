@@ -7,6 +7,7 @@ import (
 )
 
 func Test_Msg(t *testing.T) {
+	testonline("", []byte{'b'}, nil)
 	testonline("a", []byte{'b'}, nil)
 	testonline("a", []byte{'b'}, []byte{'c'})
 	testoffline("a", nil)

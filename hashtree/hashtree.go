@@ -15,6 +15,8 @@ var (
 	ERRDIFFERENTLENGTH = fmt.Errorf("length not equal")
 )
 
+var Emptyhash = md5.Sum(nil)
+
 type Hashtree struct {
 	encoder hash.Hash
 	nodes   []*node
@@ -44,7 +46,7 @@ func New(width, tall int) *Hashtree {
 		width:   width,
 		tall:    tall,
 	}
-	emptyhash := instance.encoder.Sum(nil)
+	//emptyhash := instance.encoder.Sum(nil)
 	instance.leaves = instance.nodes[len(instance.nodes)-leavesnum:]
 	for i := range instance.nodes {
 		instance.nodes[i] = &node{
@@ -52,7 +54,7 @@ func New(width, tall int) *Hashtree {
 		}
 	}
 	for i := range instance.leaves {
-		instance.leaves[i].hashstr = emptyhash
+		instance.leaves[i].hashstr = Emptyhash[:]
 		instance.leaves[i].leafindex = i
 	}
 	instance.UpdateAll()
