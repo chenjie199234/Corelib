@@ -15,7 +15,7 @@ import (
 func Test_Tcpclient(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	go func() {
-		for count := 0; count < 10; count++ {
+		for count := 0; count < 10000; count++ {
 			tcpclientinstance := NewInstance(&InstanceConfig{
 				SelfName:           fmt.Sprintf("tcpclient%d", count),
 				VerifyTimeout:      500,

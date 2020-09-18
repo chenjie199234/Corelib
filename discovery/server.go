@@ -180,17 +180,17 @@ func (s *server) offlinefunc(p *stream.Peer, peeruniquename string) {
 			}
 		}
 	}
-	all := make([]string, len(leafdata.clientsindex))
-	for i, indexname := range leafdata.clientsindex {
-		client, _ := leafdata.clients[indexname]
-		all[i] = indexname[:strings.Index(indexname, ":")] + byte2str(client.regdata)
-	}
-	if len(all) == 0 {
+	if len(leafdata.clients) == 0 {
 		s.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
 			Hashstr: hashtree.Emptyhash[:],
 			Value:   nil,
 		})
 	} else {
+		all := make([]string, len(leafdata.clientsindex))
+		for i, indexname := range leafdata.clientsindex {
+			client, _ := leafdata.clients[indexname]
+			all[i] = indexname[:strings.Index(indexname, ":")] + byte2str(client.regdata)
+		}
 		s.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
 			Hashstr: str2byte(strings.Join(all, "")),
 			Value:   unsafe.Pointer(leafdata),

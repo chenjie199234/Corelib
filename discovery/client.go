@@ -260,14 +260,21 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 				break
 			}
 		}
-		all := make([]string, len(leafdata.peersindex))
-		for i, indexname := range leafdata.peersindex {
-			all[i] = indexname[:strings.Index(indexname, ":")] + byte2str(leafdata.peers[indexname])
+		if len(leafdata.peers) == 0 {
+			server.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
+				Hashstr: hashtree.Emptyhash[:],
+				Value:   nil,
+			})
+		} else {
+			all := make([]string, len(leafdata.peersindex))
+			for i, indexname := range leafdata.peersindex {
+				all[i] = indexname[:strings.Index(indexname, ":")] + byte2str(leafdata.peers[indexname])
+			}
+			server.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
+				Hashstr: str2byte(strings.Join(all, "")),
+				Value:   unsafe.Pointer(leafdata),
+			})
 		}
-		server.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
-			Hashstr: str2byte(strings.Join(all, "")),
-			Value:   unsafe.Pointer(leafdata),
-		})
 		if !bytes.Equal(server.htree.GetRootHash(), newhash) {
 			p.SendMessage(makePullMsg(), uniqueid)
 		}

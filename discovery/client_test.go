@@ -2,9 +2,7 @@ package discovery
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"testing"
 	"time"
 
@@ -13,22 +11,16 @@ import (
 
 func Test_Client(t *testing.T) {
 	go func() {
-		http.HandleFunc("/discoveryservers", func(w http.ResponseWriter, r *http.Request) {
-			d, _ := json.Marshal([]string{"server:127.0.0.1:9234"})
-			w.WriteHeader(200)
-			w.Write(d)
-			return
-		})
-		http.ListenAndServe("127.0.0.1:8080", nil)
-	}()
-	go func() {
 		tker := time.NewTicker(time.Second)
 		for {
 			<-tker.C
 			if clientinstance != nil {
 				clientinstance.lker.RLock()
-				if server, ok := clientinstance.servers["server:127.0.0.1:9234"]; ok {
-					fmt.Println(hex.EncodeToString(server.htree.GetRootHash()))
+				if server, ok := clientinstance.servers["server1:127.0.0.1:9234"]; ok {
+					fmt.Println("server1:" + hex.EncodeToString(server.htree.GetRootHash()))
+				}
+				if server, ok := clientinstance.servers["server2:127.0.0.1:9235"]; ok {
+					fmt.Println("server2:" + hex.EncodeToString(server.htree.GetRootHash()))
 				}
 				clientinstance.lker.RUnlock()
 			}
