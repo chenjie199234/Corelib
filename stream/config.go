@@ -7,9 +7,7 @@ import (
 
 //Warning!!Don't write block logic in these callback,live for{}
 
-//all peeruniquename is peerinstancename + ":" + peeraddr,e.g. "gamegate:127.0.0.1:1234"
-
-//peernameip is unique,can't run two same server on one ip
+//peeruniquename = peername:peeraddr,e.g. "gamegate:127.0.0.1:1234"
 
 //HandleVerifyFunc has a timeout context
 //Before two peers can communicate with each other,they need to verify the identity first

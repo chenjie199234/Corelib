@@ -19,12 +19,23 @@ import (
 )
 
 type client struct {
-	lker       *sync.RWMutex
+	slker      *sync.RWMutex
 	servers    map[string]*servernode
 	verifydata []byte
 	instance   *stream.Instance
 	httpclient *http.Client
 	regmsg     *RegMsg
+	ilker      *sync.Mutex
+	//key peername(not the peeruniquename),value info
+	//peeruniquename=peername:ip:port
+	grpc map[string]*info
+	http map[string]*info
+	tcp  map[string]*info
+}
+type info struct {
+	//key ip:port,value discovery server peeruniquename
+	//key means a unique peer,value means registered on how many discovery servers
+	addrs map[string][]string
 }
 
 type servernode struct {
@@ -50,7 +61,7 @@ func StartDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata 
 		panic("[Discovery.client.StartDiscoveryClient]regmsg contains illegal character '|'")
 	}
 	clientinstance = &client{
-		lker:       &sync.RWMutex{},
+		slker:      &sync.RWMutex{},
 		servers:    make(map[string]*servernode, 10),
 		verifydata: vdata,
 		httpclient: &http.Client{
@@ -89,7 +100,7 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 			fmt.Printf("[Discovery.client.updateserver]response data:%s format error:%s\n", data, e)
 			continue
 		}
-		c.lker.Lock()
+		c.slker.Lock()
 		//delete offline server
 		for k, v := range c.servers {
 			find := false
@@ -134,7 +145,7 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 				go c.instance.StartTcpClient(cc, saddr[findex+1:], c.verifydata)
 			}
 		}
-		c.lker.Unlock()
+		c.slker.Unlock()
 	}
 }
 func (c *client) verifyfunc(ctx context.Context, peeruniquename string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
@@ -144,9 +155,9 @@ func (c *client) verifyfunc(ctx context.Context, peeruniquename string, uniqueid
 	return nil, true
 }
 func (c *client) onlinefunc(p *stream.Peer, peeruniquename string, uniqueid uint64) {
-	c.lker.RLock()
+	c.slker.RLock()
 	v, ok := c.servers[peeruniquename]
-	c.lker.RUnlock()
+	c.slker.RUnlock()
 	if !ok {
 		//this discovery server had already been unregistered
 		return
@@ -167,9 +178,9 @@ func (c *client) onlinefunc(p *stream.Peer, peeruniquename string, uniqueid uint
 	return
 }
 func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64, data []byte) {
-	c.lker.RLock()
+	c.slker.RLock()
 	server, ok := c.servers[peeruniquename]
-	c.lker.RUnlock()
+	c.slker.RUnlock()
 	if !ok {
 		//this discovery server had already been unregistered,the offlinefunc will be called later
 		return
@@ -412,13 +423,17 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 	}
 }
 func (c *client) offlinefunc(p *stream.Peer, peeruniquename string) {
-	c.lker.RLock()
-	v, ok := c.servers[peeruniquename]
-	c.lker.RUnlock()
+	c.slker.RLock()
+	server, ok := c.servers[peeruniquename]
+	c.slker.RUnlock()
 	if !ok {
 		return
 	}
-	v.peer = nil
-	v.uniqueid = 0
-	v.htree.Reset()
+	server.peer = nil
+	server.uniqueid = 0
+	//leaves := server.htree.GetAllLeaf()
+	//for _, leaf := range leaves {
+
+	//}
+	server.htree.Reset()
 }

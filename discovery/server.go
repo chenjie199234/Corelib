@@ -23,8 +23,10 @@ type server struct {
 }
 
 type serverhashtreeleafdata struct {
-	clientsindex []string
+	//key peeruniquename,value clientnode
+	//peeruniquename=peername:ip:port
 	clients      map[string]*clientnode
+	clientsindex []string
 }
 
 type clientnode struct {
