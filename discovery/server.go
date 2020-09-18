@@ -1,4 +1,4 @@
-package server
+package discovery
 
 import (
 	"bytes"
@@ -9,7 +9,6 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/discovery/msg"
 	"github.com/chenjie199234/Corelib/hashtree"
 	"github.com/chenjie199234/Corelib/stream"
 )
@@ -23,7 +22,7 @@ type server struct {
 	count      uint64
 }
 
-type hashtreeleafdata struct {
+type serverhashtreeleafdata struct {
 	clientsindex []string
 	clients      map[string]*clientnode
 }
@@ -34,7 +33,7 @@ type clientnode struct {
 	regdata  []byte
 }
 
-var instance *server
+var serverinstance *server
 
 func (s *server) getnode(peer *stream.Peer, regdata []byte, uniqueid uint64) *clientnode {
 	node := s.nodepool.Get().(*clientnode)
@@ -51,12 +50,12 @@ func (s *server) putnode(n *clientnode) {
 }
 
 func StartDiscoveryServer(c *stream.InstanceConfig, cc *stream.TcpConfig, listenaddr string, vdata []byte) {
-	if instance != nil {
+	if serverinstance != nil {
 		return
 	}
-	instance = &server{
+	serverinstance = &server{
 		lker:  &sync.RWMutex{},
-		htree: hashtree.New(10, 2),
+		htree: hashtree.New(10, 3),
 		nodepool: &sync.Pool{
 			New: func() interface{} {
 				return &clientnode{}
@@ -65,12 +64,12 @@ func StartDiscoveryServer(c *stream.InstanceConfig, cc *stream.TcpConfig, listen
 		verifydata: vdata,
 	}
 	//instance
-	c.Verifyfunc = instance.verifyfunc
+	c.Verifyfunc = serverinstance.verifyfunc
 	//c.Onlinefunc = instance.onlinefunc
-	c.Userdatafunc = instance.userfunc
-	c.Offlinefunc = instance.offlinefunc
-	instance.instance = stream.NewInstance(c)
-	instance.instance.StartTcpServer(cc, listenaddr)
+	c.Userdatafunc = serverinstance.userfunc
+	c.Offlinefunc = serverinstance.offlinefunc
+	serverinstance.instance = stream.NewInstance(c)
+	serverinstance.instance.StartTcpServer(cc, listenaddr)
 }
 
 func (s *server) verifyfunc(ctx context.Context, peeruniquename string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
@@ -87,28 +86,28 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 		return
 	}
 	switch data[0] {
-	case msg.MSGONLINE:
-		_, regmsg, _, e := msg.GetOnlineMsg(data)
+	case mSGONLINE:
+		_, regmsg, _, e := getOnlineMsg(data)
 		if e != nil {
 			fmt.Printf("[Discovery.server.userfunc]online message:%s broken\n", data)
 			p.Close(uniqueid)
 			return
 		}
-		leafindex := int(msg.Bkdrhash(peeruniquename, uint64(s.htree.GetLeavesNum())))
+		leafindex := int(bkdrhash(peeruniquename, uint64(s.htree.GetLeavesNum())))
 		s.lker.Lock()
 		leaf, _ := s.htree.GetLeaf(leafindex)
 		if leaf == nil {
-			leafdata := &hashtreeleafdata{
+			leafdata := &serverhashtreeleafdata{
 				clientsindex: []string{peeruniquename},
 				clients:      map[string]*clientnode{peeruniquename: s.getnode(p, regmsg, uniqueid)},
 			}
 			name := peeruniquename[:strings.Index(peeruniquename, ":")]
 			s.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
-				Hashstr: msg.Str2byte(name + msg.Byte2str(regmsg)),
+				Hashstr: str2byte(name + byte2str(regmsg)),
 				Value:   unsafe.Pointer(leafdata),
 			})
 		} else {
-			leafdata := (*hashtreeleafdata)(leaf.Value)
+			leafdata := (*serverhashtreeleafdata)(leaf.Value)
 			if _, ok := leafdata.clients[peeruniquename]; ok {
 				s.lker.Unlock()
 				//this is impossible
@@ -122,51 +121,51 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 			all := make([]string, len(leafdata.clientsindex))
 			for i, indexname := range leafdata.clientsindex {
 				client := leafdata.clients[indexname]
-				all[i] = indexname[:strings.Index(indexname, ":")] + msg.Byte2str(client.regdata)
+				all[i] = indexname[:strings.Index(indexname, ":")] + byte2str(client.regdata)
 			}
 			s.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
-				Hashstr: msg.Str2byte(strings.Join(all, "")),
+				Hashstr: str2byte(strings.Join(all, "")),
 				Value:   unsafe.Pointer(leafdata),
 			})
 		}
-		onlinemsg := msg.MakeOnlineMsg(peeruniquename, regmsg, s.htree.GetRootHash())
+		onlinemsg := makeOnlineMsg(peeruniquename, regmsg, s.htree.GetRootHash())
 		leaves := s.htree.GetAllLeaf()
 		//notice all other peers
 		for _, leaf := range leaves {
-			leafdata := (*hashtreeleafdata)(leaf.Value)
+			leafdata := (*serverhashtreeleafdata)(leaf.Value)
 			for _, client := range leafdata.clients {
 				client.peer.SendMessage(onlinemsg, client.uniqueid)
 			}
 		}
 		s.count++
 		s.lker.Unlock()
-	case msg.MSGPULL:
+	case mSGPULL:
 		s.lker.RLock()
 		leaves := s.htree.GetAllLeaf()
 		all := make(map[string][]byte, int(float64(s.count)*1.3))
 		for _, leaf := range leaves {
-			leafdata := (*hashtreeleafdata)(leaf.Value)
+			leafdata := (*serverhashtreeleafdata)(leaf.Value)
 			for peeruniquename, client := range leafdata.clients {
 				all[peeruniquename] = client.regdata
 			}
 		}
-		p.SendMessage(msg.MakePushMsg(all), uniqueid)
+		p.SendMessage(makePushMsg(all), uniqueid)
 		s.lker.RUnlock()
 	default:
 		fmt.Printf("[Discovery.server.userfunc]unknown message type\n")
 		p.Close(uniqueid)
 	}
 }
-func (s *server) offlinefunc(p *stream.Peer, peeruniquename string, uniqueid uint64) {
-	leafindex := int(msg.Bkdrhash(peeruniquename, uint64(s.htree.GetLeavesNum())))
+func (s *server) offlinefunc(p *stream.Peer, peeruniquename string) {
+	leafindex := int(bkdrhash(peeruniquename, uint64(s.htree.GetLeavesNum())))
 	s.lker.Lock()
 	leaf, _ := s.htree.GetLeaf(leafindex)
 	if leaf == nil {
 		s.lker.Unlock()
 		return
 	}
-	leafdata := (*hashtreeleafdata)(leaf.Value)
-	if client, ok := leafdata.clients[peeruniquename]; !ok || client.uniqueid != uniqueid {
+	leafdata := (*serverhashtreeleafdata)(leaf.Value)
+	if client, ok := leafdata.clients[peeruniquename]; !ok {
 		s.lker.Unlock()
 		//this is impossible
 		fmt.Printf("[Discovery.server.offlinefunc]duplicate connection,peeruniquename:%s\n", peeruniquename)
@@ -184,17 +183,25 @@ func (s *server) offlinefunc(p *stream.Peer, peeruniquename string, uniqueid uin
 	all := make([]string, len(leafdata.clientsindex))
 	for i, indexname := range leafdata.clientsindex {
 		client, _ := leafdata.clients[indexname]
-		all[i] = indexname[:strings.Index(indexname, ":")] + msg.Byte2str(client.regdata)
+		all[i] = indexname[:strings.Index(indexname, ":")] + byte2str(client.regdata)
 	}
-	s.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
-		Hashstr: msg.Str2byte(strings.Join(all, "")),
-		Value:   unsafe.Pointer(leafdata),
-	})
+	if len(all) == 0 {
+		s.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
+			Hashstr: hashtree.Emptyhash[:],
+			Value:   nil,
+		})
+	} else {
+		s.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
+			Hashstr: str2byte(strings.Join(all, "")),
+			Value:   unsafe.Pointer(leafdata),
+		})
+	}
+	s.count--
 	//notice all other peer
-	offlinemsg := msg.MakeOfflineMsg(peeruniquename, s.htree.GetRootHash())
+	offlinemsg := makeOfflineMsg(peeruniquename, s.htree.GetRootHash())
 	leaves := s.htree.GetAllLeaf()
 	for _, leaf := range leaves {
-		leafdata := (*hashtreeleafdata)(leaf.Value)
+		leafdata := (*serverhashtreeleafdata)(leaf.Value)
 		for _, client := range leafdata.clients {
 			client.peer.SendMessage(offlinemsg, client.uniqueid)
 		}

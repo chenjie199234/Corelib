@@ -437,7 +437,7 @@ func (this *Instance) read(p *Peer) {
 			p.heartbeatbuffer <- []byte{}
 		} else {
 			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, uniquename, p.starttime)
+				this.conf.Offlinefunc(p, uniquename)
 			}
 			p.parentnode.Lock()
 			delete(p.parentnode.peers, uniquename)
@@ -560,8 +560,8 @@ func (this *Instance) dealmsg(p *Peer, data []byte, frompong bool) error {
 		}
 		return this.dealuser(p, msg)
 	default:
-		return fmt.Errorf("[Stream.%s.dealmsg]get unknown type msg from %s:%s addr:%s",
-			p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
+		return fmt.Errorf("[Stream.%s.dealmsg]get unknown type msg type:%d from %s:%s addr:%s",
+			p.getprotocolname(), msgtype, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 	}
 }
 func (this *Instance) dealheart(p *Peer, msg *heartMsg, data []byte) error {
@@ -612,7 +612,7 @@ func (this *Instance) write(p *Peer) {
 		} else {
 			uniquename := p.getpeeruniquename()
 			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, uniquename, p.starttime)
+				this.conf.Offlinefunc(p, uniquename)
 			}
 			p.parentnode.Lock()
 			delete(p.parentnode.peers, uniquename)

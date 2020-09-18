@@ -1,4 +1,4 @@
-package client
+package discovery
 
 import (
 	"encoding/hex"
@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chenjie199234/Corelib/discovery/msg"
 	"github.com/chenjie199234/Corelib/stream"
 )
 
@@ -26,12 +25,12 @@ func Test_Client(t *testing.T) {
 		tker := time.NewTicker(time.Second)
 		for {
 			<-tker.C
-			if instance != nil {
-				instance.lker.RLock()
-				if server, ok := instance.servers["server:127.0.0.1:9234"]; ok {
+			if clientinstance != nil {
+				clientinstance.lker.RLock()
+				if server, ok := clientinstance.servers["server:127.0.0.1:9234"]; ok {
 					fmt.Println(hex.EncodeToString(server.htree.GetRootHash()))
 				}
-				instance.lker.RUnlock()
+				clientinstance.lker.RUnlock()
 			}
 		}
 	}()
@@ -49,7 +48,7 @@ func Test_Client(t *testing.T) {
 		AppMinReadBufferLen:  1024,
 		AppMaxReadBufferLen:  65535,
 		AppWriteBufferNum:    256,
-	}, []byte{'t', 'e', 's', 't'}, &msg.RegMsg{
+	}, []byte{'t', 'e', 's', 't'}, &RegMsg{
 		GrpcAddr: "127.0.0.1:9000",
 		HttpAddr: "127.0.0.1:8000",
 		TcpAddr:  "127.0.0.1:7000",

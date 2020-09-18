@@ -29,6 +29,7 @@ var PEERTYPENAME = []string{CLIENT: "client", SERVER: "server"}
 var (
 	ERRCONNCLOSED = fmt.Errorf("connection is closed")
 	ERRFULL       = fmt.Errorf("write buffer is full")
+	ERREMPTYMSG   = fmt.Errorf("send empty message")
 )
 
 type peernode struct {
@@ -208,6 +209,9 @@ func (p *Peer) SendMessage(userdata []byte, uniqueid uint64) error {
 	if uniqueid == 0 || p.starttime != uniqueid {
 		//uniqueid for close check and ABA check
 		return ERRCONNCLOSED
+	}
+	if len(userdata) == 0 {
+		return ERREMPTYMSG
 	}
 	//here has little data race,but the message package will be dropped by peer,because of different uniqueid
 	var data []byte

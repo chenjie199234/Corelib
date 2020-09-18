@@ -209,7 +209,7 @@ func (h *Hashtree) Different(other *Hashtree) (map[int]*LeafData, error) {
 func (h *Hashtree) GetAllLeaf() map[int]*LeafData {
 	result := make(map[int]*LeafData)
 	for i, v := range h.leaves {
-		if v != nil {
+		if v.value != nil {
 			result[i] = &LeafData{
 				Hashstr: v.hashstr,
 				Value:   v.value,

@@ -1,4 +1,4 @@
-package msg
+package discovery
 
 import (
 	"bytes"
@@ -14,19 +14,19 @@ func Test_Msg(t *testing.T) {
 	testoffline("a", []byte{'b'})
 }
 func testonline(a string, b, c []byte) {
-	data := MakeOnlineMsg(a, b, c)
-	result := []byte{MSGONLINE}
+	data := makeOnlineMsg(a, b, c)
+	result := []byte{mSGONLINE}
 	result = append(result, []byte(a)...)
-	result = append(result, SPLIT)
+	result = append(result, sPLIT)
 	result = append(result, b...)
-	result = append(result, SPLIT)
+	result = append(result, sPLIT)
 	if len(c) != 0 {
 		result = append(result, c...)
 	}
 	if !bytes.Equal(data, result) {
 		panic("make online msg error")
 	}
-	aa, bb, cc, e := GetOnlineMsg(data)
+	aa, bb, cc, e := getOnlineMsg(data)
 	if e != nil {
 		panic("get online msg error:" + e.Error())
 	}
@@ -35,17 +35,17 @@ func testonline(a string, b, c []byte) {
 	}
 }
 func testoffline(a string, b []byte) {
-	data := MakeOfflineMsg(a, b)
-	result := []byte{MSGOFFLINE}
+	data := makeOfflineMsg(a, b)
+	result := []byte{mSGOFFLINE}
 	result = append(result, []byte(a)...)
-	result = append(result, SPLIT)
+	result = append(result, sPLIT)
 	if len(b) != 0 {
 		result = append(result, b...)
 	}
 	if !bytes.Equal(data, result) {
 		panic("make offline msg error")
 	}
-	aa, bb, e := GetOfflineMsg(data)
+	aa, bb, e := getOfflineMsg(data)
 	if e != nil {
 		panic("get offline msg error:" + e.Error())
 	}
@@ -56,13 +56,13 @@ func testoffline(a string, b []byte) {
 func testpush() {
 	temp := make(map[string][]byte)
 	temp["a"] = []byte{'b'}
-	data := MakePushMsg(temp)
-	result := []byte{MSGPUSH}
-	result = append(result, 'a', SPLIT, 'b')
+	data := makePushMsg(temp)
+	result := []byte{mSGPUSH}
+	result = append(result, 'a', sPLIT, 'b')
 	if !bytes.Equal(data, result) {
 		panic("make push msg error")
 	}
-	a, e := GetPushMsg(data)
+	a, e := getPushMsg(data)
 	if e != nil {
 		panic("get push msg error:" + e.Error())
 	}

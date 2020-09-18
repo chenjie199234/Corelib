@@ -61,6 +61,6 @@ func unixserverhandleuserdata(ctx context.Context, p *Peer, peeruniquename strin
 	fmt.Printf("%s:%s\n", peeruniquename, data)
 	p.SendMessage(data, uniqueid)
 }
-func unixserverhandleoffline(p *Peer, peeruniquename string, uniqueid uint64) {
+func unixserverhandleoffline(p *Peer, peeruniquename string) {
 	atomic.AddInt64(&unixcount, -1)
 }

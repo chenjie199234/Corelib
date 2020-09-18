@@ -1,4 +1,4 @@
-package server
+package discovery
 
 import (
 	"encoding/hex"
@@ -14,8 +14,8 @@ func Test_Server(t *testing.T) {
 		tker := time.NewTicker(time.Second)
 		for {
 			<-tker.C
-			if instance != nil {
-				fmt.Println(hex.EncodeToString(instance.htree.GetRootHash()))
+			if serverinstance != nil {
+				fmt.Println(hex.EncodeToString(serverinstance.htree.GetRootHash()))
 			}
 		}
 	}()

@@ -93,7 +93,7 @@ func getVerifyMsg(data []byte) (*verifyMsg, error) {
 }
 func makeUserMsg(msg *userMsg, needprefix bool) []byte {
 	data := make([]byte, 9+len(msg.sender)+len(msg.userdata))
-	data[0] = byte((VERIFY << 6) | len(msg.sender))
+	data[0] = byte((USER << 6) | len(msg.sender))
 	binary.BigEndian.PutUint64(data[1:9], msg.uniqueid)
 	copy(data[9:], msg.sender)
 	copy(data[9+len(msg.sender):], msg.userdata)
@@ -118,11 +118,11 @@ func getMsgType(data []byte) (int, error) {
 		return -1, fmt.Errorf("empty message")
 	}
 	switch {
-	case ((HEART << 6) | data[0]) == data[0]:
+	case (data[0] >> 6) == HEART:
 		return HEART, nil
-	case ((VERIFY << 6) | data[0]) == data[0]:
+	case (data[0] >> 6) == VERIFY:
 		return VERIFY, nil
-	case ((USER << 6) | data[0]) == data[0]:
+	case (data[0] >> 6) == USER:
 		return USER, nil
 	default:
 		return -1, fmt.Errorf("unknown message type")
