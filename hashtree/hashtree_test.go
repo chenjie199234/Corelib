@@ -13,13 +13,11 @@ func Test_Hashtree(t *testing.T) {
 		panic(fmt.Sprintf("leave num error:%d", htree.GetLeavesNum()))
 	}
 	encoder := md5.New()
-	emptyhash := encoder.Sum(nil)
 	for i := 0; i < 100; i++ {
-		if !bytes.Equal(emptyhash, htree.leaves[i].hashstr) {
+		if !bytes.Equal(nil, htree.leaves[i].hashstr) {
 			panic("level 3 hash not equal")
 		}
 	}
-	encoder.Write(bytes.Repeat(emptyhash, 10))
 	level2hash := encoder.Sum(nil)
 	for i := 1; i <= 10; i++ {
 		if !bytes.Equal(htree.nodes[i].hashstr, level2hash) {
@@ -36,7 +34,7 @@ func Test_Hashtree(t *testing.T) {
 		Hashstr: []byte("123"),
 	})
 	encoder.Reset()
-	encoder.Write(append([]byte("123"), bytes.Repeat(emptyhash, 9)...))
+	encoder.Write([]byte("123"))
 	newlevel2hash := encoder.Sum(nil)
 	if !bytes.Equal(htree.nodes[1].hashstr, newlevel2hash) {
 		panic("new level 2 hash not equal")

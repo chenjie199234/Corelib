@@ -16,10 +16,10 @@ func Test_Client(t *testing.T) {
 			<-tker.C
 			if clientinstance != nil {
 				clientinstance.slker.RLock()
-				if server, ok := clientinstance.servers["server1:127.0.0.1:9234"]; ok {
+				if server, ok := clientinstance.servers["server1:127.0.0.1:9234"]; ok && server.uniqueid != 0 {
 					fmt.Println("server1:" + hex.EncodeToString(server.htree.GetRootHash()))
 				}
-				if server, ok := clientinstance.servers["server2:127.0.0.1:9235"]; ok {
+				if server, ok := clientinstance.servers["server2:127.0.0.1:9235"]; ok && server.uniqueid != 0 {
 					fmt.Println("server2:" + hex.EncodeToString(server.htree.GetRootHash()))
 				}
 				clientinstance.slker.RUnlock()
@@ -45,4 +45,5 @@ func Test_Client(t *testing.T) {
 		HttpAddr: "127.0.0.1:8000",
 		TcpAddr:  "127.0.0.1:7000",
 	}, "http://127.0.0.1:8080/discoveryservers")
+	select {}
 }

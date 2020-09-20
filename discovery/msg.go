@@ -15,9 +15,15 @@ const (
 )
 
 type RegMsg struct {
-	GrpcAddr string `json:"g"`
-	HttpAddr string `json:"h"`
-	TcpAddr  string `json:"t"`
+	GrpcAddr      string `json:"g,omitempty"`
+	HttpAddr      string `json:"h,omitempty"`
+	TcpAddr       string `json:"t,omitempty"`
+	WebSocketAddr string `json:"w,omitempty"`
+}
+type NoticeMsg struct {
+	PeerAddr        string `json:"p"` //peer's addr
+	Status          bool   `json:"s"` //true-online,false-offline
+	DiscoveryServer string `json:"d"` //happened on which discovery server
 }
 
 func makeOnlineMsg(peeruniquename string, data []byte, hash []byte) []byte {

@@ -45,6 +45,7 @@ func Test_Server1(t *testing.T) {
 		AppMaxReadBufferLen:  65535,
 		AppWriteBufferNum:    256,
 	}, "127.0.0.1:9234", []byte{'t', 'e', 's', 't'})
+	select {}
 }
 func Test_Server2(t *testing.T) {
 	go func() {
@@ -80,4 +81,5 @@ func Test_Server2(t *testing.T) {
 		AppMaxReadBufferLen:  65535,
 		AppWriteBufferNum:    256,
 	}, "127.0.0.1:9235", []byte{'t', 'e', 's', 't'})
+	select {}
 }

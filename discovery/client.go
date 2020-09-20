@@ -18,24 +18,24 @@ import (
 	"github.com/chenjie199234/Corelib/stream"
 )
 
+var (
+	ERRSTARTED = fmt.Errorf("discovery client already started,can't register new notice after started")
+	ERREXISTS  = fmt.Errorf("already register this peer's notice")
+)
+
 type client struct {
-	slker      *sync.RWMutex
-	servers    map[string]*servernode
-	verifydata []byte
-	instance   *stream.Instance
-	httpclient *http.Client
-	regmsg     *RegMsg
-	ilker      *sync.Mutex
-	//key peername(not the peeruniquename),value info
-	//peeruniquename=peername:ip:port
-	grpc map[string]*info
-	http map[string]*info
-	tcp  map[string]*info
-}
-type info struct {
-	//key ip:port,value discovery server peeruniquename
-	//key means a unique peer,value means registered on how many discovery servers
-	addrs map[string][]string
+	slker       *sync.RWMutex
+	servers     map[string]*servernode
+	verifydata  []byte
+	instance    *stream.Instance
+	httpclient  *http.Client
+	regmsg      *RegMsg
+	nlker       *sync.Mutex
+	grpcnotices map[string]chan *NoticeMsg
+	httpnotices map[string]chan *NoticeMsg
+	tcpnotices  map[string]chan *NoticeMsg
+	webnotices  map[string]chan *NoticeMsg
+	status      bool //true started,false not started,notices can't be registered after started
 }
 
 type servernode struct {
@@ -53,28 +53,79 @@ type clienthashtreeleafdata struct {
 var clientinstance *client
 
 func StartDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []byte, regmsg *RegMsg, url string) {
-	if clientinstance != nil {
-		return
-	}
 	d, _ := json.Marshal(regmsg)
 	if bytes.Contains(d, []byte{sPLIT}) {
 		panic("[Discovery.client.StartDiscoveryClient]regmsg contains illegal character '|'")
 	}
-	clientinstance = &client{
-		slker:      &sync.RWMutex{},
-		servers:    make(map[string]*servernode, 10),
-		verifydata: vdata,
-		httpclient: &http.Client{
-			Timeout: 500 * time.Millisecond,
-		},
-		regmsg: regmsg,
-	}
+	clientinstance.verifydata = vdata
+	clientinstance.regmsg = regmsg
+
 	c.Verifyfunc = clientinstance.verifyfunc
 	c.Onlinefunc = clientinstance.onlinefunc
 	c.Userdatafunc = clientinstance.userfunc
 	c.Offlinefunc = clientinstance.offlinefunc
 	clientinstance.instance = stream.NewInstance(c)
-	clientinstance.updateserver(cc, url)
+
+	clientinstance.nlker.Lock()
+	clientinstance.status = true
+	clientinstance.nlker.Unlock()
+	go clientinstance.updateserver(cc, url)
+}
+func GrpcNotice(peername string) (chan *NoticeMsg, error) {
+	clientinstance.nlker.Lock()
+	if clientinstance.status {
+		clientinstance.nlker.Unlock()
+		return nil, ERRSTARTED
+	}
+	if _, ok := clientinstance.grpcnotices[peername]; ok {
+		return nil, ERREXISTS
+	}
+	ch := make(chan *NoticeMsg, 10)
+	clientinstance.grpcnotices[peername] = ch
+	clientinstance.nlker.Unlock()
+	return ch, nil
+}
+func HttpNotice(peername string) (chan *NoticeMsg, error) {
+	clientinstance.nlker.Lock()
+	if clientinstance.status {
+		clientinstance.nlker.Unlock()
+		return nil, ERRSTARTED
+	}
+	if _, ok := clientinstance.httpnotices[peername]; ok {
+		return nil, ERREXISTS
+	}
+	ch := make(chan *NoticeMsg, 10)
+	clientinstance.httpnotices[peername] = ch
+	clientinstance.nlker.Unlock()
+	return ch, nil
+}
+func TcpNotice(peername string) (chan *NoticeMsg, error) {
+	clientinstance.nlker.Lock()
+	if clientinstance.status {
+		clientinstance.nlker.Unlock()
+		return nil, ERRSTARTED
+	}
+	if _, ok := clientinstance.tcpnotices[peername]; ok {
+		return nil, ERREXISTS
+	}
+	ch := make(chan *NoticeMsg, 10)
+	clientinstance.tcpnotices[peername] = ch
+	clientinstance.nlker.Unlock()
+	return ch, nil
+}
+func WebSocketNotice(peername string) (chan *NoticeMsg, error) {
+	clientinstance.nlker.Lock()
+	if clientinstance.status {
+		clientinstance.nlker.Unlock()
+		return nil, ERRSTARTED
+	}
+	if _, ok := clientinstance.webnotices[peername]; ok {
+		return nil, ERREXISTS
+	}
+	ch := make(chan *NoticeMsg, 10)
+	clientinstance.webnotices[peername] = ch
+	clientinstance.nlker.Unlock()
+	return ch, nil
 }
 func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 	tker := time.NewTicker(time.Second)
@@ -273,7 +324,7 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 		}
 		if len(leafdata.peers) == 0 {
 			server.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
-				Hashstr: hashtree.Emptyhash[:],
+				Hashstr: nil,
 				Value:   nil,
 			})
 		} else {
@@ -307,7 +358,7 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 		allleaves := make([]*hashtree.LeafData, server.htree.GetLeavesNum())
 		for i := range allleaves {
 			allleaves[i] = &hashtree.LeafData{
-				Hashstr: hashtree.Emptyhash[:],
+				Hashstr: nil,
 				Value:   nil,
 			}
 			leaf, _ := server.htree.GetLeaf(i)

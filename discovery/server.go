@@ -20,6 +20,7 @@ type server struct {
 	nodepool   *sync.Pool
 	instance   *stream.Instance
 	count      uint64
+	status     bool //true started,false not started
 }
 
 type serverhashtreeleafdata struct {
@@ -52,26 +53,15 @@ func (s *server) putnode(n *clientnode) {
 }
 
 func StartDiscoveryServer(c *stream.InstanceConfig, cc *stream.TcpConfig, listenaddr string, vdata []byte) {
-	if serverinstance != nil {
-		return
-	}
-	serverinstance = &server{
-		lker:  &sync.RWMutex{},
-		htree: hashtree.New(10, 3),
-		nodepool: &sync.Pool{
-			New: func() interface{} {
-				return &clientnode{}
-			},
-		},
-		verifydata: vdata,
-	}
+	serverinstance.verifydata = vdata
 	//instance
 	c.Verifyfunc = serverinstance.verifyfunc
 	//c.Onlinefunc = instance.onlinefunc
 	c.Userdatafunc = serverinstance.userfunc
 	c.Offlinefunc = serverinstance.offlinefunc
 	serverinstance.instance = stream.NewInstance(c)
-	serverinstance.instance.StartTcpServer(cc, listenaddr)
+	serverinstance.status = true
+	go serverinstance.instance.StartTcpServer(cc, listenaddr)
 }
 
 func (s *server) verifyfunc(ctx context.Context, peeruniquename string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
@@ -184,7 +174,7 @@ func (s *server) offlinefunc(p *stream.Peer, peeruniquename string) {
 	}
 	if len(leafdata.clients) == 0 {
 		s.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
-			Hashstr: hashtree.Emptyhash[:],
+			Hashstr: nil,
 			Value:   nil,
 		})
 	} else {
