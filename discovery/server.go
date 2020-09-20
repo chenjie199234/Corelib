@@ -3,6 +3,7 @@ package discovery
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -81,7 +82,13 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 	case mSGONLINE:
 		_, regmsg, _, e := getOnlineMsg(data)
 		if e != nil {
-			fmt.Printf("[Discovery.server.userfunc]online message:%s broken\n", data)
+			fmt.Printf("[Discovery.server.userfunc]peer:%s online message:%s broken\n", peeruniquename, data)
+			p.Close(uniqueid)
+			return
+		}
+		temp := &RegMsg{}
+		if e := json.Unmarshal(regmsg, temp); e != nil {
+			fmt.Printf("[Discovery.server.userfunc]peer:%s online message:%s broken\n", peeruniquename, regmsg)
 			p.Close(uniqueid)
 			return
 		}
@@ -103,7 +110,7 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 			if _, ok := leafdata.clients[peeruniquename]; ok {
 				s.lker.Unlock()
 				//this is impossible
-				fmt.Printf("[Discovery.server.userfunc]duplicate connection,peeruniquename:%s\n", peeruniquename)
+				fmt.Printf("[Discovery.server.userfunc.imposible]duplicate connection from peer:%s\n", peeruniquename)
 				p.Close(uniqueid)
 				return
 			}
@@ -144,7 +151,7 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 		p.SendMessage(makePushMsg(all), uniqueid)
 		s.lker.RUnlock()
 	default:
-		fmt.Printf("[Discovery.server.userfunc]unknown message type\n")
+		fmt.Printf("[Discovery.server.userfunc]unknown message type from peer:%s\n", peeruniquename)
 		p.Close(uniqueid)
 	}
 }
@@ -160,7 +167,7 @@ func (s *server) offlinefunc(p *stream.Peer, peeruniquename string) {
 	if client, ok := leafdata.clients[peeruniquename]; !ok {
 		s.lker.Unlock()
 		//this is impossible
-		fmt.Printf("[Discovery.server.offlinefunc]duplicate connection,peeruniquename:%s\n", peeruniquename)
+		fmt.Printf("[Discovery.server.offlinefunc.impossible]peer:%s already offline before offlinefunc\n", peeruniquename)
 		return
 	} else {
 		delete(leafdata.clients, peeruniquename)

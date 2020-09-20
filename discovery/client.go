@@ -20,7 +20,7 @@ import (
 
 var (
 	ERRSTARTED = fmt.Errorf("discovery client already started,can't register new notice after started")
-	ERREXISTS  = fmt.Errorf("already register this peer's notice")
+	ERREXISTS  = fmt.Errorf("already exists this peer's notice")
 )
 
 type client struct {
@@ -80,7 +80,7 @@ func GrpcNotice(peername string) (chan *NoticeMsg, error) {
 	if _, ok := clientinstance.grpcnotices[peername]; ok {
 		return nil, ERREXISTS
 	}
-	ch := make(chan *NoticeMsg, 10)
+	ch := make(chan *NoticeMsg, 1024)
 	clientinstance.grpcnotices[peername] = ch
 	clientinstance.nlker.Unlock()
 	return ch, nil
@@ -94,7 +94,7 @@ func HttpNotice(peername string) (chan *NoticeMsg, error) {
 	if _, ok := clientinstance.httpnotices[peername]; ok {
 		return nil, ERREXISTS
 	}
-	ch := make(chan *NoticeMsg, 10)
+	ch := make(chan *NoticeMsg, 1024)
 	clientinstance.httpnotices[peername] = ch
 	clientinstance.nlker.Unlock()
 	return ch, nil
@@ -108,7 +108,7 @@ func TcpNotice(peername string) (chan *NoticeMsg, error) {
 	if _, ok := clientinstance.tcpnotices[peername]; ok {
 		return nil, ERREXISTS
 	}
-	ch := make(chan *NoticeMsg, 10)
+	ch := make(chan *NoticeMsg, 1024)
 	clientinstance.tcpnotices[peername] = ch
 	clientinstance.nlker.Unlock()
 	return ch, nil
@@ -122,7 +122,7 @@ func WebSocketNotice(peername string) (chan *NoticeMsg, error) {
 	if _, ok := clientinstance.webnotices[peername]; ok {
 		return nil, ERREXISTS
 	}
-	ch := make(chan *NoticeMsg, 10)
+	ch := make(chan *NoticeMsg, 1024)
 	clientinstance.webnotices[peername] = ch
 	clientinstance.nlker.Unlock()
 	return ch, nil
@@ -199,15 +199,15 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 		c.slker.Unlock()
 	}
 }
-func (c *client) verifyfunc(ctx context.Context, peeruniquename string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
+func (c *client) verifyfunc(ctx context.Context, discoveryserveruniquename string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal(peerVerifyData, c.verifydata) {
 		return nil, false
 	}
 	return nil, true
 }
-func (c *client) onlinefunc(p *stream.Peer, peeruniquename string, uniqueid uint64) {
+func (c *client) onlinefunc(p *stream.Peer, discoveryserveruniquename string, uniqueid uint64) {
 	c.slker.RLock()
-	v, ok := c.servers[peeruniquename]
+	v, ok := c.servers[discoveryserveruniquename]
 	c.slker.RUnlock()
 	if !ok {
 		//this discovery server had already been unregistered
@@ -215,7 +215,7 @@ func (c *client) onlinefunc(p *stream.Peer, peeruniquename string, uniqueid uint
 	}
 	if v.uniqueid != 0 || v.peer != nil {
 		//this is impossible
-		fmt.Printf("[Discovery.client.onlinefunc]reconnect to discovery server:%s", peeruniquename)
+		fmt.Printf("[Discovery.client.onlinefunc.impossible]duplicate discovery server:%s reconnected", discoveryserveruniquename)
 		p.Close(uniqueid)
 		return
 	}
@@ -228,9 +228,9 @@ func (c *client) onlinefunc(p *stream.Peer, peeruniquename string, uniqueid uint
 	p.SendMessage(makeOnlineMsg("", regmsg, nil), uniqueid)
 	return
 }
-func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64, data []byte) {
+func (c *client) userfunc(p *stream.Peer, discoveryserveruniquename string, uniqueid uint64, data []byte) {
 	c.slker.RLock()
-	server, ok := c.servers[peeruniquename]
+	server, ok := c.servers[discoveryserveruniquename]
 	c.slker.RUnlock()
 	if !ok {
 		//this discovery server had already been unregistered,the offlinefunc will be called later
@@ -238,7 +238,7 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 	}
 	if (server.peer != nil) && (server.uniqueid != uniqueid) {
 		//this is impossible
-		fmt.Printf("[Discovery.client.userfunc]online peer:%s has different uniqueid\n", peeruniquename)
+		fmt.Printf("[Discovery.client.userfunc.impossible]online discovery server:%s has different uniqueid\n", discoveryserveruniquename)
 		p.Close(uniqueid)
 		return
 	}
@@ -246,13 +246,13 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 	case mSGONLINE:
 		onlinepeer, regmsg, newhash, e := getOnlineMsg(data)
 		if e != nil {
-			fmt.Printf("[Discovery.client.userfunc]online message:%s broken\n", data)
+			fmt.Printf("[Discovery.client.userfunc.impossible]online peer:%s message:%s broken from discovery server:%s\n", onlinepeer, data, discoveryserveruniquename)
 			p.Close(uniqueid)
 			return
 		}
 		findex := strings.Index(onlinepeer, ":")
 		if findex == -1 || len(onlinepeer) == findex+1 {
-			fmt.Printf("[Discovery.client.userfunc]online peer addr:%s format error\n", onlinepeer)
+			fmt.Printf("[Discovery.client.userfunc.impossible]online peer:%s name broken from discovery server:%s\n", onlinepeer, discoveryserveruniquename)
 			p.Close(uniqueid)
 			return
 		}
@@ -263,16 +263,15 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 				peers:      map[string][]byte{onlinepeer: regmsg},
 				peersindex: []string{onlinepeer},
 			}
-			name := onlinepeer[:findex]
 			server.htree.SetSingleLeaf(leafindex, &hashtree.LeafData{
-				Hashstr: str2byte(name + byte2str(regmsg)),
+				Hashstr: str2byte(onlinepeer[:findex] + byte2str(regmsg)),
 				Value:   unsafe.Pointer(leafdata),
 			})
 		} else {
 			leafdata := (*clienthashtreeleafdata)(leaf.Value)
 			if _, ok := leafdata.peers[onlinepeer]; ok {
 				//this is impossible
-				fmt.Printf("[Discovery.client.userfunc]duplicate peer:%s reg online\n", onlinepeer)
+				fmt.Printf("[Discovery.client.userfunc.impossible]duplicate peer:%s rereg online\n", onlinepeer)
 				leafdata.peers[onlinepeer] = regmsg
 			} else {
 				leafdata.peers[onlinepeer] = regmsg
@@ -290,17 +289,19 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 		}
 		if !bytes.Equal(server.htree.GetRootHash(), newhash) {
 			p.SendMessage(makePullMsg(), uniqueid)
+		} else {
+			c.notice(onlinepeer, regmsg, true, discoveryserveruniquename)
 		}
 	case mSGOFFLINE:
 		offlinepeer, newhash, e := getOfflineMsg(data)
 		if e != nil {
-			fmt.Printf("[Discovery.client.userfunc]offline message:%s broken\n", data)
+			fmt.Printf("[Discovery.client.userfunc.impossible]offline peer:%s message:%s broken from discovery server:%s\n", offlinepeer, data, discoveryserveruniquename)
 			p.Close(uniqueid)
 			return
 		}
 		findex := strings.Index(offlinepeer, ":")
 		if findex == -1 || len(offlinepeer) == findex+1 {
-			fmt.Printf("[Discovery.client.userfunc]offline peer addr:%s format error\n", offlinepeer)
+			fmt.Printf("[Discovery.client.userfunc.impossible]offline peer:%s name broken from discovery server:%s\n", offlinepeer, discoveryserveruniquename)
 			p.Close(uniqueid)
 			return
 		}
@@ -311,7 +312,8 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 			return
 		}
 		leafdata := (*clienthashtreeleafdata)(leaf.Value)
-		if _, ok := leafdata.peers[offlinepeer]; !ok {
+		regmsg, ok := leafdata.peers[offlinepeer]
+		if !ok {
 			//this is impossible,but don't need to do anything
 			return
 		}
@@ -339,11 +341,13 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 		}
 		if !bytes.Equal(server.htree.GetRootHash(), newhash) {
 			p.SendMessage(makePullMsg(), uniqueid)
+		} else {
+			c.notice(offlinepeer, regmsg, false, discoveryserveruniquename)
 		}
 	case mSGPUSH:
 		all, e := getPushMsg(data)
 		if e != nil {
-			fmt.Printf("[Discovery.client.userfunc]push message:%d broken\n", data)
+			fmt.Printf("[Discovery.client.userfunc.impossible]push message:%d broken from discovery server:%s\n", data, discoveryserveruniquename)
 			p.Close(uniqueid)
 			return
 		}
@@ -401,9 +405,13 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 				for onlinepeer, regmsg := range datas {
 					leafdata.peers[onlinepeer] = regmsg
 					leafdata.peersindex = append(leafdata.peersindex, onlinepeer)
+					c.notice(onlinepeer, regmsg, true, discoveryserveruniquename)
 				}
 			case 2:
 				//origin peers offline
+				for offlinepeer, regmsg := range leafdata.peers {
+					c.notice(offlinepeer, regmsg, false, discoveryserveruniquename)
+				}
 				leafdata = nil
 			case 3:
 				//origin peers offline
@@ -416,7 +424,7 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 							if !bytes.Equal(originregmsg, newregmsg) {
 								//this is impossible
 								leafdata.peers[originpeer] = newregmsg
-								fmt.Printf("[Discovery.client.userfunc]peer:%s reg message conflict,new reg msg replace the old\n", originpeer)
+								fmt.Printf("[Discovery.client.userfunc.impossible]peer:%s reg message conflict\n", originpeer)
 							}
 							break
 						}
@@ -431,6 +439,7 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 								break
 							}
 						}
+						c.notice(originpeer, originregmsg, false, discoveryserveruniquename)
 					}
 				}
 				if index != len(leafdata.peersindex)-1 {
@@ -454,6 +463,7 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 						//online
 						leafdata.peers[newpeer] = newregmsg
 						leafdata.peersindex = append(leafdata.peersindex, newpeer)
+						c.notice(newpeer, newregmsg, true, discoveryserveruniquename)
 					}
 				}
 			}
@@ -469,7 +479,7 @@ func (c *client) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 		}
 		server.htree.Rebuild(allleaves)
 	default:
-		fmt.Printf("[Discovery.client.userfunc]unknown message type")
+		fmt.Printf("[Discovery.client.userfunc.impossible]unknown message type")
 		p.Close(uniqueid)
 	}
 }
@@ -482,9 +492,49 @@ func (c *client) offlinefunc(p *stream.Peer, peeruniquename string) {
 	}
 	server.peer = nil
 	server.uniqueid = 0
-	//leaves := server.htree.GetAllLeaf()
-	//for _, leaf := range leaves {
-
-	//}
+	leaves := server.htree.GetAllLeaf()
+	for _, leaf := range leaves {
+		leafdata := (*clienthashtreeleafdata)(leaf.Value)
+		for offlinepeer, regmsg := range leafdata.peers {
+			c.notice(offlinepeer, regmsg, false, peeruniquename)
+		}
+	}
 	server.htree.Reset()
+}
+func (c *client) notice(peeruniquename string, regmsg []byte, status bool, discoveryserveruniquename string) {
+	msg := &RegMsg{}
+	e := json.Unmarshal(regmsg, msg)
+	if e != nil {
+		fmt.Printf("[Discovery.client.notice.impossible]peer:%s regmsg message:%s broken from discovery server:%s\n", peeruniquename, regmsg, discoveryserveruniquename)
+		return
+	}
+	name := peeruniquename[:strings.Index(peeruniquename, ":")]
+	if notice, ok := c.grpcnotices[name]; ok && msg.GrpcAddr != "" {
+		notice <- &NoticeMsg{
+			PeerAddr:        msg.GrpcAddr,
+			Status:          status,
+			DiscoveryServer: discoveryserveruniquename,
+		}
+	}
+	if notice, ok := c.httpnotices[name]; ok && msg.HttpAddr != "" {
+		notice <- &NoticeMsg{
+			PeerAddr:        msg.HttpAddr,
+			Status:          status,
+			DiscoveryServer: discoveryserveruniquename,
+		}
+	}
+	if notice, ok := c.tcpnotices[name]; ok && msg.TcpAddr != "" {
+		notice <- &NoticeMsg{
+			PeerAddr:        msg.TcpAddr,
+			Status:          status,
+			DiscoveryServer: discoveryserveruniquename,
+		}
+	}
+	if notice, ok := c.webnotices[name]; ok && msg.WebSocketAddr != "" {
+		notice <- &NoticeMsg{
+			PeerAddr:        msg.WebSocketAddr,
+			Status:          status,
+			DiscoveryServer: discoveryserveruniquename,
+		}
+	}
 }

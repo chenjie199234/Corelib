@@ -592,7 +592,10 @@ func (this *Instance) dealheart(p *Peer, msg *heartMsg, data []byte) error {
 func (this *Instance) dealuser(p *Peer, msg *userMsg) error {
 	//update lastactive time
 	p.lastactive = uint64(time.Now().UnixNano())
-	this.conf.Userdatafunc(p, p.getpeeruniquename(), p.starttime, msg.userdata)
+	temp := p.starttime
+	if temp != 0 {
+		this.conf.Userdatafunc(p, p.getpeeruniquename(), temp, msg.userdata)
+	}
 	return nil
 }
 func (this *Instance) write(p *Peer) {
