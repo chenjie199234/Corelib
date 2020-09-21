@@ -81,7 +81,9 @@ func RegisterSelf() {
 	clientinstance.slker.RLock()
 	regmsg, _ := json.Marshal(clientinstance.regmsg)
 	for _, server := range clientinstance.servers {
-		server.peer.SendMessage(makeOnlineMsg("", regmsg, nil), server.uniqueid)
+		if server.peer != nil && server.uniqueid != 0 {
+			server.peer.SendMessage(makeOnlineMsg("", regmsg, nil), server.uniqueid)
+		}
 	}
 	clientinstance.slker.RUnlock()
 }
