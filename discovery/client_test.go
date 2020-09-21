@@ -3,6 +3,7 @@ package discovery
 import (
 	"encoding/hex"
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -10,46 +11,47 @@ import (
 )
 
 func Test_Client(t *testing.T) {
-	gch, _ := GrpcNotice("client")
-	hch, _ := HttpNotice("client")
-	tch, _ := TcpNotice("client")
-	wch, _ := WebSocketNotice("client")
-	go func() {
-		for {
-			var noticemsg *NoticeMsg
-			select {
-			case noticemsg = <-gch:
-				if noticemsg.PeerAddr != "127.0.0.1:9000" {
-					panic("reg message broken")
-				}
-				if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
-					panic("reg message broken")
-				}
-			case noticemsg = <-hch:
-				if noticemsg.PeerAddr != "127.0.0.1:8000" {
-					panic("reg message broken")
-				}
-				if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
-					panic("reg message broken")
-				}
-			case noticemsg = <-tch:
-				if noticemsg.PeerAddr != "127.0.0.1:7000" {
-					panic("reg message broken")
-				}
-				if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
-					panic("reg message broken")
-				}
-			case noticemsg = <-wch:
-				if noticemsg.PeerAddr != "https://127.0.0.1:6000/socket" {
-					panic("reg message broken")
-				}
-				if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
-					panic("reg message broken")
-				}
-			}
-			fmt.Printf("get notice msg:%+v\n", noticemsg)
-		}
-	}()
+	rand.Seed(time.Now().UnixNano())
+	//gch, _ := GrpcNotice("client")
+	//hch, _ := HttpNotice("client")
+	//tch, _ := TcpNotice("client")
+	//wch, _ := WebSocketNotice("client")
+	//go func() {
+	//        for {
+	//                var noticemsg *NoticeMsg
+	//                select {
+	//                case noticemsg = <-gch:
+	//                        if noticemsg.PeerAddr != "127.0.0.1:9000" {
+	//                                panic("reg message broken")
+	//                        }
+	//                        if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
+	//                                panic("reg message broken")
+	//                        }
+	//                case noticemsg = <-hch:
+	//                        if noticemsg.PeerAddr != "127.0.0.1:8000" {
+	//                                panic("reg message broken")
+	//                        }
+	//                        if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
+	//                                panic("reg message broken")
+	//                        }
+	//                case noticemsg = <-tch:
+	//                        if noticemsg.PeerAddr != "127.0.0.1:7000" {
+	//                                panic("reg message broken")
+	//                        }
+	//                        if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
+	//                                panic("reg message broken")
+	//                        }
+	//                case noticemsg = <-wch:
+	//                        if noticemsg.PeerAddr != "https://127.0.0.1:6000/socket" {
+	//                                panic("reg message broken")
+	//                        }
+	//                        if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
+	//                                panic("reg message broken")
+	//                        }
+	//                }
+	//                fmt.Printf("get notice msg:%+v\n", noticemsg)
+	//        }
+	//}()
 	go func() {
 		tker := time.NewTicker(time.Second)
 		for {
@@ -66,6 +68,7 @@ func Test_Client(t *testing.T) {
 			}
 		}
 	}()
+	port := rand.Int63() % 10000
 	StartDiscoveryClient(&stream.InstanceConfig{
 		SelfName:           "client",
 		VerifyTimeout:      500,
@@ -81,10 +84,10 @@ func Test_Client(t *testing.T) {
 		AppMaxReadBufferLen:  65535,
 		AppWriteBufferNum:    256,
 	}, []byte{'t', 'e', 's', 't'}, &RegMsg{
-		GrpcAddr:      "127.0.0.1:9000",
-		HttpAddr:      "127.0.0.1:8000",
-		TcpAddr:       "127.0.0.1:7000",
-		WebSocketAddr: "https://127.0.0.1:6000/socket",
+		GrpcAddr:      fmt.Sprintf("127.0.0.1:%d", port),
+		HttpAddr:      fmt.Sprintf("127.0.0.1:%d", port+1),
+		TcpAddr:       fmt.Sprintf("127.0.0.1:%d", port+2),
+		WebSocketAddr: fmt.Sprintf("https://127.0.0.1:%d/socket", port+3),
 	}, "http://127.0.0.1:8080/discoveryservers")
 	select {}
 }

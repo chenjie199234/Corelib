@@ -110,6 +110,9 @@ func (h *Hashtree) SetSingleLeaf(index int, data *LeafData) error {
 	return nil
 }
 func (h *Hashtree) SetMultiLeaves(datas map[int]*LeafData) error {
+	if len(datas) == 0 {
+		return nil
+	}
 	for index := range datas {
 		if index >= len(h.leaves) {
 			return ERROUTOFRANGE
