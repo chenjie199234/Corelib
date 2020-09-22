@@ -89,6 +89,8 @@ func RegisterSelf() {
 	clientinstance.canregister = true
 }
 
+//first return:key addr,value discovery servers
+//second return:peer update notice channel
 func GrpcNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMsg, error) {
 	clientinstance.nlker.Lock()
 	if _, ok := clientinstance.grpcnotices[peername]; ok {
@@ -125,6 +127,9 @@ func GrpcNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMs
 	clientinstance.slker.RUnlock()
 	return result, ch, nil
 }
+
+//first return:key addr,value discovery servers
+//second return:peer update notice channel
 func HttpNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMsg, error) {
 	clientinstance.nlker.Lock()
 	if _, ok := clientinstance.httpnotices[peername]; ok {
@@ -200,6 +205,9 @@ func TcpNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMsg
 	clientinstance.slker.RUnlock()
 	return result, ch, nil
 }
+
+//first return:key addr,value discovery servers
+//second return:peer update notice channel
 func WebSocketNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMsg, error) {
 	clientinstance.nlker.Lock()
 	if _, ok := clientinstance.webnotices[peername]; ok {
@@ -236,6 +244,7 @@ func WebSocketNotice(peername string) (map[string]map[string]struct{}, chan *Not
 	clientinstance.slker.RUnlock()
 	return result, ch, nil
 }
+
 func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 	tker := time.NewTicker(time.Second)
 	first := true
@@ -329,13 +338,6 @@ func (c *client) onlinefunc(p *stream.Peer, discoveryserveruniquename string, un
 		return
 	}
 	server.lker.Lock()
-	if server.uniqueid != 0 || server.peer != nil {
-		server.lker.Unlock()
-		//this is impossible
-		fmt.Printf("[Discovery.client.onlinefunc.impossible]duplicate connection from discovery server:%s", discoveryserveruniquename)
-		p.Close(uniqueid)
-		return
-	}
 	server.peer = p
 	server.uniqueid = uniqueid
 	server.status = 1
