@@ -15,10 +15,14 @@ const (
 )
 
 type RegMsg struct {
-	GrpcAddr      string `json:"g,omitempty"`
-	HttpAddr      string `json:"h,omitempty"`
-	TcpAddr       string `json:"t,omitempty"`
-	WebSocketAddr string `json:"w,omitempty"`
+	GrpcIp      string `json:"gi,omitempty"`
+	GrpcPort    int    `json:"gp,omitempty"`
+	HttpIp      string `json:"hi,omitempty"`
+	HttpPort    int    `json:"hp,omitempty"`
+	TcpIp       string `json:"ti,omitempty"`
+	TcpPort     int    `json:"tp,omitempty"`
+	WebSockIp   string `json:"wi,omitempty"`
+	WebSockPort int    `json:"wp,omitempty"`
 }
 type NoticeMsg struct {
 	PeerAddr        string `json:"p"` //peer's addr

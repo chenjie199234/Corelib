@@ -93,6 +93,28 @@ type LeafData struct {
 	Value   unsafe.Pointer
 }
 
+func (h *Hashtree) SetSingleLeafHash(index int, hashstr []byte) error {
+	if index >= len(h.leaves) {
+		return ERROUTOFRANGE
+	}
+	h.leaves[index].hashstr = hashstr
+	pindex := h.getparentindex(h.leaves[index].nodeindex)
+	for {
+		h.nodes[pindex].hashstr = h.caculate(pindex)
+		if pindex == 0 {
+			break
+		}
+		pindex = h.getparentindex(pindex)
+	}
+	return nil
+}
+func (h *Hashtree) SetSingleLeafValue(index int, value unsafe.Pointer) error {
+	if index >= len(h.leaves) {
+		return ERROUTOFRANGE
+	}
+	h.leaves[index].value = value
+	return nil
+}
 func (h *Hashtree) SetSingleLeaf(index int, data *LeafData) error {
 	if index >= len(h.leaves) {
 		return ERROUTOFRANGE
@@ -109,6 +131,52 @@ func (h *Hashtree) SetSingleLeaf(index int, data *LeafData) error {
 	}
 	return nil
 }
+func (h *Hashtree) SetMultiLeavesHash(datas map[int][]byte) error {
+	if len(datas) == 0 {
+		return nil
+	}
+	for index := range datas {
+		if index >= len(h.leaves) {
+			return ERROUTOFRANGE
+		}
+	}
+	pindexs := make(map[int]struct{}, 10)
+	for index, hashstr := range datas {
+		h.leaves[index].hashstr = hashstr
+		pindexs[h.getparentindex(h.leaves[index].nodeindex)] = struct{}{}
+	}
+	finish := false
+	for {
+		newpindex := make(map[int]struct{}, 0)
+		for pindex := range pindexs {
+			h.nodes[pindex].hashstr = h.caculate(pindex)
+			if pindex == 0 {
+				finish = true
+				break
+			}
+			newpindex[h.getparentindex(pindex)] = struct{}{}
+		}
+		if finish {
+			break
+		}
+		pindexs = newpindex
+	}
+	return nil
+}
+func (h *Hashtree) SetMultiLeavesValue(datas map[int]unsafe.Pointer) error {
+	if len(datas) == 0 {
+		return nil
+	}
+	for index := range datas {
+		if index >= len(h.leaves) {
+			return ERROUTOFRANGE
+		}
+	}
+	for index, value := range datas {
+		h.leaves[index].value = value
+	}
+	return nil
+}
 func (h *Hashtree) SetMultiLeaves(datas map[int]*LeafData) error {
 	if len(datas) == 0 {
 		return nil
@@ -119,9 +187,9 @@ func (h *Hashtree) SetMultiLeaves(datas map[int]*LeafData) error {
 		}
 	}
 	pindexs := make(map[int]struct{}, 10)
-	for index, data := range datas {
-		h.leaves[index].hashstr = data.Hashstr
-		h.leaves[index].value = data.Value
+	for index, leafdata := range datas {
+		h.leaves[index].hashstr = leafdata.Hashstr
+		h.leaves[index].value = leafdata.Value
 		pindexs[h.getparentindex(h.leaves[index].nodeindex)] = struct{}{}
 	}
 	finish := false
@@ -151,17 +219,17 @@ func (h *Hashtree) caculate(pindex int) []byte {
 	h.encoder.Write(bytes.Join(piece, nil))
 	return h.encoder.Sum(nil)
 }
-func (h *Hashtree) GetLeaf(index int) (*LeafData, error) {
+func (h *Hashtree) GetLeafValue(index int) (unsafe.Pointer, error) {
 	if index >= len(h.leaves) {
 		return nil, ERROUTOFRANGE
 	}
-	if h.leaves[index].value == nil {
-		return nil, nil
+	return h.leaves[index].value, nil
+}
+func (h *Hashtree) GetLeafHash(index int) ([]byte, error) {
+	if index >= len(h.leaves) {
+		return nil, ERROUTOFRANGE
 	}
-	return &LeafData{
-		Hashstr: h.leaves[index].hashstr,
-		Value:   h.leaves[index].value,
-	}, nil
+	return h.leaves[index].hashstr, nil
 }
 func (h *Hashtree) getStartIndexInPiece(index int) int {
 	return (((index + h.width - 1) / h.width) * h.width)

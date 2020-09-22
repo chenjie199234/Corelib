@@ -1,7 +1,7 @@
 package discovery
 
 import (
-	//"encoding/hex"
+	"encoding/hex"
 	"fmt"
 	"testing"
 	"time"
@@ -10,22 +10,22 @@ import (
 )
 
 func Test_Client1(t *testing.T) {
-	//go func() {
-	//        tker := time.NewTicker(time.Second)
-	//        for {
-	//                <-tker.C
-	//                if clientinstance != nil {
-	//                        clientinstance.slker.RLock()
-	//                        if server, ok := clientinstance.servers["server1:127.0.0.1:9234"]; ok && server.uniqueid != 0 {
-	//                                fmt.Println("server1:" + hex.EncodeToString(server.htree.GetRootHash()))
-	//                        }
-	//                        if server, ok := clientinstance.servers["server2:127.0.0.1:9235"]; ok && server.uniqueid != 0 {
-	//                                fmt.Println("server2:" + hex.EncodeToString(server.htree.GetRootHash()))
-	//                        }
-	//                        clientinstance.slker.RUnlock()
-	//                }
-	//        }
-	//}()
+	go func() {
+		tker := time.NewTicker(time.Second)
+		for {
+			<-tker.C
+			if clientinstance != nil {
+				clientinstance.slker.RLock()
+				if server, ok := clientinstance.servers["server1:127.0.0.1:9234"]; ok && server.uniqueid != 0 {
+					fmt.Println("server1:" + hex.EncodeToString(server.htree.GetRootHash()))
+				}
+				if server, ok := clientinstance.servers["server2:127.0.0.1:9235"]; ok && server.uniqueid != 0 {
+					fmt.Println("server2:" + hex.EncodeToString(server.htree.GetRootHash()))
+				}
+				clientinstance.slker.RUnlock()
+			}
+		}
+	}()
 	StartDiscoveryClient(&stream.InstanceConfig{
 		SelfName:           "client",
 		VerifyTimeout:      500,
@@ -41,10 +41,14 @@ func Test_Client1(t *testing.T) {
 		AppMaxReadBufferLen:  65535,
 		AppWriteBufferNum:    256,
 	}, []byte{'t', 'e', 's', 't'}, &RegMsg{
-		GrpcAddr:      fmt.Sprintf("127.0.0.1:9000"),
-		HttpAddr:      fmt.Sprintf("127.0.0.1:8000"),
-		TcpAddr:       fmt.Sprintf("127.0.0.1:7000"),
-		WebSocketAddr: fmt.Sprintf("https://127.0.0.1:6000/socket"),
+		GrpcIp:      "",
+		GrpcPort:    9000,
+		HttpIp:      "",
+		HttpPort:    8000,
+		TcpIp:       "",
+		TcpPort:     7000,
+		WebSockIp:   "",
+		WebSockPort: 6000,
 	}, "http://127.0.0.1:8080/discoveryservers")
 	time.Sleep(time.Second)
 	gexists, gch, _ := GrpcNotice("client")
@@ -60,28 +64,28 @@ func Test_Client1(t *testing.T) {
 			var noticemsg *NoticeMsg
 			select {
 			case noticemsg = <-gch:
-				if noticemsg.PeerAddr != fmt.Sprintf("127.0.0.1:9000") {
+				if noticemsg.PeerAddr != "127.0.0.1:9000" && noticemsg.PeerAddr != "0.0.0.0:9000" {
 					panic("reg message broken")
 				}
 				if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
 					panic("reg message broken")
 				}
 			case noticemsg = <-hch:
-				if noticemsg.PeerAddr != fmt.Sprintf("127.0.0.1:8000") {
+				if noticemsg.PeerAddr != "127.0.0.1:8000" && noticemsg.PeerAddr != "0.0.0.0:8000" {
 					panic("reg message broken")
 				}
 				if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
 					panic("reg message broken")
 				}
 			case noticemsg = <-tch:
-				if noticemsg.PeerAddr != fmt.Sprintf("127.0.0.1:7000") {
+				if noticemsg.PeerAddr != "127.0.0.1:7000" && noticemsg.PeerAddr != "0.0.0.0:7000" {
 					panic("reg message broken")
 				}
 				if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
 					panic("reg message broken")
 				}
 			case noticemsg = <-wch:
-				if noticemsg.PeerAddr != fmt.Sprintf("https://127.0.0.1:6000/socket") {
+				if noticemsg.PeerAddr != "127.0.0.1:6000" && noticemsg.PeerAddr != "0.0.0.0:6000" {
 					panic("reg message broken")
 				}
 				if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {

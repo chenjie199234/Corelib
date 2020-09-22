@@ -30,9 +30,7 @@ func Test_Hashtree(t *testing.T) {
 	if !bytes.Equal(htree.nodes[0].hashstr, level1hash) {
 		panic("level 1 hash not equal")
 	}
-	htree.SetSingleLeaf(0, &LeafData{
-		Hashstr: []byte("123"),
-	})
+	htree.SetSingleLeafHash(0, []byte("123"))
 	encoder.Reset()
 	encoder.Write([]byte("123"))
 	newlevel2hash := encoder.Sum(nil)
@@ -49,14 +47,10 @@ func Test_Hashtree(t *testing.T) {
 	if !bytes.Equal(htree.nodes[0].hashstr, level1hash) {
 		panic("reset hash not equal")
 	}
-	datas := make(map[int]*LeafData)
-	datas[0] = &LeafData{
-		Hashstr: []byte("123"),
-	}
-	datas[10] = &LeafData{
-		Hashstr: []byte("123"),
-	}
-	htree.SetMultiLeaves(datas)
+	datas := make(map[int][]byte)
+	datas[0] = []byte("123")
+	datas[10] = []byte("123")
+	htree.SetMultiLeavesHash(datas)
 	encoder.Reset()
 	encoder.Write(append(append(newlevel2hash, newlevel2hash...), bytes.Repeat(level2hash, 8)...))
 	newlevel1hash = encoder.Sum(nil)
