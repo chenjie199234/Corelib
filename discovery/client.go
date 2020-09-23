@@ -112,7 +112,7 @@ func RegisterSelf() {
 
 //first return:key addr,value discovery servers
 //second return:peer update notice channel
-func GrpcNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMsg, error) {
+func GrpcNotice(peername string) (map[string]map[string][]byte, chan *NoticeMsg, error) {
 	clientinstance.nlker.Lock()
 	if _, ok := clientinstance.grpcnotices[peername]; ok {
 		clientinstance.nlker.Unlock()
@@ -121,7 +121,7 @@ func GrpcNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMs
 	ch := make(chan *NoticeMsg, 1024)
 	clientinstance.grpcnotices[peername] = ch
 	clientinstance.nlker.Unlock()
-	result := make(map[string]map[string]struct{}, 5)
+	result := make(map[string]map[string][]byte, 5)
 	clientinstance.slker.RLock()
 	for discoveryserveruniquename, server := range clientinstance.servers {
 		server.lker.Lock()
@@ -140,9 +140,9 @@ func GrpcNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMs
 			}
 			addr := fmt.Sprintf("%s:%d", msg.GrpcIp, msg.GrpcPort)
 			if _, ok := result[addr]; !ok {
-				result[addr] = make(map[string]struct{}, 5)
+				result[addr] = make(map[string][]byte, 5)
 			}
-			result[addr][discoveryserveruniquename] = struct{}{}
+			result[addr][discoveryserveruniquename] = msg.Addition
 		}
 		server.lker.Unlock()
 	}
@@ -152,7 +152,7 @@ func GrpcNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMs
 
 //first return:key addr,value discovery servers
 //second return:peer update notice channel
-func HttpNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMsg, error) {
+func HttpNotice(peername string) (map[string]map[string][]byte, chan *NoticeMsg, error) {
 	clientinstance.nlker.Lock()
 	if _, ok := clientinstance.httpnotices[peername]; ok {
 		clientinstance.nlker.Unlock()
@@ -161,7 +161,7 @@ func HttpNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMs
 	ch := make(chan *NoticeMsg, 1024)
 	clientinstance.httpnotices[peername] = ch
 	clientinstance.nlker.Unlock()
-	result := make(map[string]map[string]struct{}, 5)
+	result := make(map[string]map[string][]byte, 5)
 	clientinstance.slker.RLock()
 	for discoveryserveruniquename, server := range clientinstance.servers {
 		server.lker.Lock()
@@ -180,9 +180,9 @@ func HttpNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMs
 			}
 			addr := fmt.Sprintf("%s:%d", msg.HttpIp, msg.HttpPort)
 			if _, ok := result[addr]; !ok {
-				result[addr] = make(map[string]struct{}, 5)
+				result[addr] = make(map[string][]byte, 5)
 			}
-			result[addr][discoveryserveruniquename] = struct{}{}
+			result[addr][discoveryserveruniquename] = msg.Addition
 		}
 		server.lker.Unlock()
 	}
@@ -192,7 +192,7 @@ func HttpNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMs
 
 //first return:key addr,value discovery servers
 //second return:peer update notice channel
-func TcpNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMsg, error) {
+func TcpNotice(peername string) (map[string]map[string][]byte, chan *NoticeMsg, error) {
 	clientinstance.nlker.Lock()
 	if _, ok := clientinstance.tcpnotices[peername]; ok {
 		clientinstance.nlker.Unlock()
@@ -201,7 +201,7 @@ func TcpNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMsg
 	ch := make(chan *NoticeMsg, 1024)
 	clientinstance.tcpnotices[peername] = ch
 	clientinstance.nlker.Unlock()
-	result := make(map[string]map[string]struct{}, 5)
+	result := make(map[string]map[string][]byte, 5)
 	clientinstance.slker.RLock()
 	for discoveryserveruniquename, server := range clientinstance.servers {
 		server.lker.Lock()
@@ -220,9 +220,9 @@ func TcpNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMsg
 			}
 			addr := fmt.Sprintf("%s:%d", msg.TcpIp, msg.TcpPort)
 			if _, ok := result[addr]; !ok {
-				result[addr] = make(map[string]struct{}, 5)
+				result[addr] = make(map[string][]byte, 5)
 			}
-			result[addr][discoveryserveruniquename] = struct{}{}
+			result[addr][discoveryserveruniquename] = msg.Addition
 		}
 		server.lker.Unlock()
 	}
@@ -232,7 +232,7 @@ func TcpNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMsg
 
 //first return:key addr,value discovery servers
 //second return:peer update notice channel
-func WebSocketNotice(peername string) (map[string]map[string]struct{}, chan *NoticeMsg, error) {
+func WebSocketNotice(peername string) (map[string]map[string][]byte, chan *NoticeMsg, error) {
 	clientinstance.nlker.Lock()
 	if _, ok := clientinstance.webnotices[peername]; ok {
 		clientinstance.nlker.Unlock()
@@ -241,7 +241,7 @@ func WebSocketNotice(peername string) (map[string]map[string]struct{}, chan *Not
 	ch := make(chan *NoticeMsg, 1024)
 	clientinstance.webnotices[peername] = ch
 	clientinstance.nlker.Unlock()
-	result := make(map[string]map[string]struct{}, 5)
+	result := make(map[string]map[string][]byte, 5)
 	clientinstance.slker.RLock()
 	for discoveryserveruniquename, server := range clientinstance.servers {
 		server.lker.Lock()
@@ -260,9 +260,9 @@ func WebSocketNotice(peername string) (map[string]map[string]struct{}, chan *Not
 			}
 			addr := fmt.Sprintf("%s:%d", msg.WebSockIp, msg.WebSockPort)
 			if _, ok := result[addr]; !ok {
-				result[addr] = make(map[string]struct{}, 5)
+				result[addr] = make(map[string][]byte, 5)
 			}
-			result[addr][discoveryserveruniquename] = struct{}{}
+			result[addr][discoveryserveruniquename] = msg.Addition
 		}
 		server.lker.Unlock()
 	}
@@ -658,6 +658,7 @@ func (c *client) notice(peeruniquename string, regmsg []byte, status bool, serve
 			PeerAddr:        fmt.Sprintf("%s:%d", msg.GrpcIp, msg.GrpcPort),
 			Status:          status,
 			DiscoveryServer: servername,
+			Addition:        msg.Addition,
 		}
 	}
 	if notice, ok := c.httpnotices[name]; ok && msg.HttpPort != 0 {
@@ -665,6 +666,7 @@ func (c *client) notice(peeruniquename string, regmsg []byte, status bool, serve
 			PeerAddr:        fmt.Sprintf("%s:%d", msg.HttpIp, msg.HttpPort),
 			Status:          status,
 			DiscoveryServer: servername,
+			Addition:        msg.Addition,
 		}
 	}
 	if notice, ok := c.tcpnotices[name]; ok && msg.TcpPort != 0 {
@@ -672,6 +674,7 @@ func (c *client) notice(peeruniquename string, regmsg []byte, status bool, serve
 			PeerAddr:        fmt.Sprintf("%s:%d", msg.TcpIp, msg.TcpPort),
 			Status:          status,
 			DiscoveryServer: servername,
+			Addition:        msg.Addition,
 		}
 	}
 	if notice, ok := c.webnotices[name]; ok && msg.WebSockPort != 0 {
@@ -679,6 +682,7 @@ func (c *client) notice(peeruniquename string, regmsg []byte, status bool, serve
 			PeerAddr:        fmt.Sprintf("%s:%d", msg.WebSockIp, msg.WebSockPort),
 			Status:          status,
 			DiscoveryServer: servername,
+			Addition:        msg.Addition,
 		}
 	}
 }
