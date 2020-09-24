@@ -26,7 +26,7 @@ func Test_Client1(t *testing.T) {
 			}
 		}
 	}()
-	StartDiscoveryClient(&stream.InstanceConfig{
+	NewDiscoveryClient(&stream.InstanceConfig{
 		SelfName:           "client",
 		VerifyTimeout:      500,
 		HeartbeatTimeout:   5000,
@@ -40,16 +40,7 @@ func Test_Client1(t *testing.T) {
 		AppMinReadBufferLen:  1024,
 		AppMaxReadBufferLen:  65535,
 		AppWriteBufferNum:    256,
-	}, []byte{'t', 'e', 's', 't'}, &RegMsg{
-		GrpcIp:      "",
-		GrpcPort:    9000,
-		HttpIp:      "",
-		HttpPort:    8000,
-		TcpIp:       "",
-		TcpPort:     7000,
-		WebSockIp:   "",
-		WebSockPort: 6000,
-	}, "http://127.0.0.1:8080/discoveryservers")
+	}, []byte{'t', 'e', 's', 't'}, "http://127.0.0.1:8080/discoveryservers")
 	time.Sleep(time.Second)
 	gexists, gch, _ := GrpcNotice("client")
 	fmt.Println(gexists)
@@ -95,6 +86,15 @@ func Test_Client1(t *testing.T) {
 			fmt.Printf("get notice msg:%+v\n", noticemsg)
 		}
 	}()
-	RegisterSelf()
+	RegisterSelf(&RegMsg{
+		GrpcIp:      "",
+		GrpcPort:    9000,
+		HttpIp:      "",
+		HttpPort:    8000,
+		TcpIp:       "",
+		TcpPort:     7000,
+		WebSockIp:   "",
+		WebSockPort: 6000,
+	})
 	select {}
 }

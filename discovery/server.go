@@ -31,8 +31,6 @@ type clientnode struct {
 	status         int //1 connected,2 preparing,3 registered
 }
 
-var serverinstance *server
-
 func (s *server) getnode(peer *stream.Peer, peeruniquename string, uniqueid uint64) *clientnode {
 	node := s.nodepool.Get().(*clientnode)
 	node.peeruniquename = peeruniquename
@@ -49,6 +47,8 @@ func (s *server) putnode(n *clientnode) {
 	n.status = 0
 	s.nodepool.Put(n)
 }
+
+var serverinstance *server
 
 func StartDiscoveryServer(c *stream.InstanceConfig, cc *stream.TcpConfig, listenaddr string, vdata []byte) {
 	serverinstance = &server{
@@ -94,7 +94,7 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 		return
 	}
 	switch data[0] {
-	case mSGONLINE:
+	case msgonline:
 		_, regmsg, _, e := getOnlineMsg(data)
 		if e != nil {
 			//this is impossible
@@ -161,7 +161,7 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 			}
 		}
 		s.lker.Unlock()
-	case mSGPULL:
+	case msgpull:
 		s.lker.RLock()
 		node, ok := s.allclients[peeruniquename]
 		if !ok {

@@ -1,0 +1,15 @@
+syntax="proto3";
+package mrpc;
+
+message msg {
+	uint64 uniqueid=1;
+	string path=2;
+	int64 deadline=3;
+	bytes body=4;
+	err error=5;
+	map<string,string> metadata=6;
+	message err {
+		uint64 code=1;
+		string msg=2;
+	}
+}

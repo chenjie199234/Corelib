@@ -15,11 +15,11 @@ func Test_Msg(t *testing.T) {
 }
 func testonline(a string, b, c []byte) {
 	data := makeOnlineMsg(a, b, c)
-	result := []byte{mSGONLINE}
+	result := []byte{msgonline}
 	result = append(result, []byte(a)...)
-	result = append(result, sPLIT)
+	result = append(result, split)
 	result = append(result, b...)
-	result = append(result, sPLIT)
+	result = append(result, split)
 	if len(c) != 0 {
 		result = append(result, c...)
 	}
@@ -36,9 +36,9 @@ func testonline(a string, b, c []byte) {
 }
 func testoffline(a string, b []byte) {
 	data := makeOfflineMsg(a, b)
-	result := []byte{mSGOFFLINE}
+	result := []byte{msgoffline}
 	result = append(result, []byte(a)...)
-	result = append(result, sPLIT)
+	result = append(result, split)
 	if len(b) != 0 {
 		result = append(result, b...)
 	}
@@ -57,8 +57,8 @@ func testpush() {
 	temp := make(map[string][]byte)
 	temp["a"] = []byte{'b'}
 	data := makePushMsg(temp)
-	result := []byte{mSGPUSH}
-	result = append(result, 'a', sPLIT, 'b')
+	result := []byte{msgpush}
+	result = append(result, 'a', split, 'b')
 	if !bytes.Equal(data, result) {
 		panic("make push msg error")
 	}

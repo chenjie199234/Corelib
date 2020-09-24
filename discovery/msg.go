@@ -7,11 +7,11 @@ import (
 )
 
 const (
-	mSGONLINE  = 'a'
-	mSGOFFLINE = 'b'
-	mSGPULL    = 'c'
-	mSGPUSH    = 'd'
-	sPLIT      = '|'
+	msgonline  = 'a'
+	msgoffline = 'b'
+	msgpull    = 'c'
+	msgpush    = 'd'
+	split      = '|'
 )
 
 type RegMsg struct {
@@ -34,11 +34,11 @@ type NoticeMsg struct {
 
 func makeOnlineMsg(peeruniquename string, data []byte, hash []byte) []byte {
 	result := make([]byte, len(peeruniquename)+len(data)+len(hash)+3)
-	result[0] = mSGONLINE
+	result[0] = msgonline
 	copy(result[1:len(peeruniquename)+1], peeruniquename)
-	result[len(peeruniquename)+1] = sPLIT
+	result[len(peeruniquename)+1] = split
 	copy(result[len(peeruniquename)+2:len(peeruniquename)+2+len(data)], data)
-	result[len(peeruniquename)+2+len(data)] = sPLIT
+	result[len(peeruniquename)+2+len(data)] = split
 	copy(result[len(peeruniquename)+len(data)+3:], hash)
 	return result
 }
@@ -46,18 +46,18 @@ func getOnlineMsg(data []byte) (string, []byte, []byte, error) {
 	if len(data) <= 1 {
 		return "", nil, nil, nil
 	}
-	if bytes.Count(data, []byte{sPLIT}) < 2 {
+	if bytes.Count(data, []byte{split}) < 2 {
 		return "", nil, nil, fmt.Errorf("[Discovery.msg.getOnlineMsg]error:format unknwon")
 	}
-	firstindex := bytes.Index(data, []byte{sPLIT})
-	secondindex := bytes.Index(data[firstindex+1:], []byte{sPLIT}) + firstindex + 1
+	firstindex := bytes.Index(data, []byte{split})
+	secondindex := bytes.Index(data[firstindex+1:], []byte{split}) + firstindex + 1
 	return byte2str(data[1:firstindex]), data[firstindex+1 : secondindex], data[secondindex+1:], nil
 }
 func makeOfflineMsg(peeruniquename string, hash []byte) []byte {
 	result := make([]byte, len(peeruniquename)+len(hash)+2)
-	result[0] = mSGOFFLINE
+	result[0] = msgoffline
 	copy(result[1:len(peeruniquename)+1], peeruniquename)
-	result[1+len(peeruniquename)] = sPLIT
+	result[1+len(peeruniquename)] = split
 	copy(result[len(peeruniquename)+2:], hash)
 	return result
 }
@@ -65,14 +65,14 @@ func getOfflineMsg(data []byte) (string, []byte, error) {
 	if len(data) <= 1 {
 		return "", nil, nil
 	}
-	if bytes.Count(data, []byte{sPLIT}) < 1 {
+	if bytes.Count(data, []byte{split}) < 1 {
 		return "", nil, fmt.Errorf("[Discovery.msg.GetOfflineMsg]error:format unknown")
 	}
-	index := bytes.Index(data, []byte{sPLIT})
+	index := bytes.Index(data, []byte{split})
 	return byte2str(data[1:index]), data[index+1:], nil
 }
 func makePullMsg() []byte {
-	return []byte{mSGPULL}
+	return []byte{msgpull}
 }
 func makePushMsg(data map[string][]byte) []byte {
 	count := 0
@@ -81,20 +81,20 @@ func makePushMsg(data map[string][]byte) []byte {
 		count += len(v) + 1
 	}
 	if count == 0 {
-		return []byte{mSGPUSH}
+		return []byte{msgpush}
 	}
 	result := make([]byte, count)
 	index := 0
 	for k, v := range data {
 		if index == 0 {
-			result[index] = mSGPUSH
+			result[index] = msgpush
 		} else {
-			result[index] = sPLIT
+			result[index] = split
 		}
 		index++
 		copy(result[index:len(k)+index], k)
 		index += len(k)
-		result[index] = sPLIT
+		result[index] = split
 		index++
 		copy(result[index:len(v)+index], v)
 		index += len(v)
@@ -105,7 +105,7 @@ func getPushMsg(data []byte) (map[string][]byte, error) {
 	if len(data) <= 1 {
 		return nil, nil
 	}
-	datas := bytes.Split(data[1:], []byte{sPLIT})
+	datas := bytes.Split(data[1:], []byte{split})
 	if len(datas)%2 != 0 {
 		return nil, fmt.Errorf("[Discovery.msg.GetPushMsg]error:format unknown")
 	}

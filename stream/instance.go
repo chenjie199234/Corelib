@@ -61,12 +61,7 @@ func (this *Instance) SendMessage(peername string, userdata []byte) error {
 	case WEBSOCKET:
 		data = makeUserMsg(msg, false)
 	}
-	select {
-	case p.writerbuffer <- data:
-	default:
-		node.RUnlock()
-		return ERRFULL
-	}
+	p.writerbuffer <- data
 	node.RUnlock()
 	return nil
 }

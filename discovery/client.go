@@ -57,7 +57,33 @@ var clientinstance *client
 //this just start the client and sync the peers in the net
 //this will not register self into the net
 //please call the RegisterSelf() func to register self into the net
-func StartDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []byte, regmsg *RegMsg, url string) {
+func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []byte, url string) {
+	if clientinstance != nil {
+		return
+	}
+	clientinstance = &client{
+		slker:      &sync.RWMutex{},
+		servers:    make(map[string]*servernode, 5),
+		verifydata: vdata,
+		httpclient: &http.Client{
+			Timeout: 500 * time.Millisecond,
+		},
+		grpcnotices: make(map[string]chan *NoticeMsg, 5),
+		httpnotices: make(map[string]chan *NoticeMsg, 5),
+		tcpnotices:  make(map[string]chan *NoticeMsg, 5),
+		webnotices:  make(map[string]chan *NoticeMsg, 5),
+		nlker:       &sync.RWMutex{},
+	}
+	//tcp instance
+	c.Verifyfunc = clientinstance.verifyfunc
+	c.Onlinefunc = clientinstance.onlinefunc
+	c.Userdatafunc = clientinstance.userfunc
+	c.Offlinefunc = clientinstance.offlinefunc
+	clientinstance.instance = stream.NewInstance(c)
+
+	go clientinstance.updateserver(cc, url)
+}
+func RegisterSelf(regmsg *RegMsg) error {
 	temp := make(map[int]struct{})
 	count := 0
 	if regmsg.GrpcPort != 0 {
@@ -77,37 +103,15 @@ func StartDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata 
 		count++
 	}
 	if count == 0 || len(temp) != count {
-		panic("[Discovery.client.StartDiscoveryClient]regmsg port conflict")
+		return fmt.Errorf("[Discovery.client.StartDiscoveryClient]regmsg port conflict")
 	}
 	d, _ := json.Marshal(regmsg)
-	if bytes.Contains(d, []byte{sPLIT}) {
-		panic("[Discovery.client.StartDiscoveryClient]regmsg contains illegal character '|'")
+	if bytes.Contains(d, []byte{split}) {
+		return fmt.Errorf("[Discovery.client.StartDiscoveryClient]regmsg contains illegal character '|'")
 	}
-	clientinstance = &client{
-		slker:      &sync.RWMutex{},
-		servers:    make(map[string]*servernode, 5),
-		verifydata: vdata,
-		httpclient: &http.Client{
-			Timeout: 500 * time.Millisecond,
-		},
-		regmsg:      regmsg,
-		grpcnotices: make(map[string]chan *NoticeMsg, 5),
-		httpnotices: make(map[string]chan *NoticeMsg, 5),
-		tcpnotices:  make(map[string]chan *NoticeMsg, 5),
-		webnotices:  make(map[string]chan *NoticeMsg, 5),
-		nlker:       &sync.RWMutex{},
-	}
-	//tcp instance
-	c.Verifyfunc = clientinstance.verifyfunc
-	c.Onlinefunc = clientinstance.onlinefunc
-	c.Userdatafunc = clientinstance.userfunc
-	c.Offlinefunc = clientinstance.offlinefunc
-	clientinstance.instance = stream.NewInstance(c)
-
-	go clientinstance.updateserver(cc, url)
-}
-func RegisterSelf() {
+	clientinstance.regmsg = regmsg
 	clientinstance.canregister = true
+	return nil
 }
 
 //first return:key addr,value discovery servers
@@ -382,7 +386,7 @@ func (c *client) userfunc(p *stream.Peer, discoveryserveruniquename string, uniq
 	server.lker.Lock()
 	defer server.lker.Unlock()
 	switch data[0] {
-	case mSGONLINE:
+	case msgonline:
 		onlinepeer, regmsg, newhash, e := getOnlineMsg(data)
 		if e != nil {
 			//this is impossible
@@ -429,7 +433,7 @@ func (c *client) userfunc(p *stream.Peer, discoveryserveruniquename string, uniq
 			c.notice(onlinepeer, regmsg, true, discoveryserveruniquename)
 			c.nlker.RUnlock()
 		}
-	case mSGOFFLINE:
+	case msgoffline:
 		offlinepeer, newhash, e := getOfflineMsg(data)
 		if e != nil {
 			//this is impossible
@@ -469,7 +473,7 @@ func (c *client) userfunc(p *stream.Peer, discoveryserveruniquename string, uniq
 			c.notice(offlinepeer, regmsg, false, discoveryserveruniquename)
 			c.nlker.RUnlock()
 		}
-	case mSGPUSH:
+	case msgpush:
 		all, e := getPushMsg(data)
 		if e != nil {
 			//this is impossible

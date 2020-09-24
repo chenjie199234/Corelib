@@ -28,7 +28,6 @@ var PEERTYPENAME = []string{CLIENT: "client", SERVER: "server"}
 
 var (
 	ERRCONNCLOSED = fmt.Errorf("connection is closed")
-	ERRFULL       = fmt.Errorf("write buffer is full")
 	ERREMPTYMSG   = fmt.Errorf("send empty message")
 )
 
@@ -228,11 +227,7 @@ func (p *Peer) SendMessage(userdata []byte, uniqueid uint64) error {
 	case WEBSOCKET:
 		data = makeUserMsg(msg, false)
 	}
-	select {
-	case p.writerbuffer <- data:
-	default:
-		return ERRFULL
-	}
+	p.writerbuffer <- data
 	return nil
 }
 
