@@ -21,6 +21,8 @@ type Web struct {
 
 type cancelfunckey struct{}
 
+var defaulttimeout = 200
+
 func NewInstance(c *WebConfig) *Web {
 	instance := &Web{
 		conf: c,
@@ -51,7 +53,7 @@ func NewInstance(c *WebConfig) *Web {
 			ctx = context.WithValue(ctx, cancelfunckey{}, f)
 			return ctx
 		} else {
-			ctx, f := context.WithTimeout(ctx, 200*time.Millisecond)
+			ctx, f := context.WithTimeout(ctx, time.Duration(defaulttimeout)*time.Millisecond)
 			ctx = context.WithValue(ctx, cancelfunckey{}, f)
 			return ctx
 		}
