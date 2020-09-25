@@ -19,6 +19,8 @@ type Web struct {
 	contextpool *sync.Pool
 }
 
+type cancelfunckey struct{}
+
 func NewInstance(c *WebConfig) *Web {
 	instance := &Web{
 		conf: c,
@@ -37,10 +39,21 @@ func NewInstance(c *WebConfig) *Web {
 			},
 		},
 	}
-	instance.server.ConnState = func(conn net.Conn, s http.ConnState) {
-		if s == http.StateNew {
-			conn.(*net.TCPConn).SetReadBuffer(c.SocketReadBufferLen)
-			conn.(*net.TCPConn).SetReadBuffer(c.SocketWriteBufferLen)
+	instance.server.ConnContext = func(ctx context.Context, conn net.Conn) context.Context {
+		conn.(*net.TCPConn).SetReadBuffer(c.SocketReadBufferLen)
+		conn.(*net.TCPConn).SetWriteBuffer(c.SocketWriteBufferLen)
+		if c.WriteTimeout != 0 {
+			ctx, f := context.WithTimeout(ctx, time.Duration(c.WriteTimeout)*time.Millisecond)
+			ctx = context.WithValue(ctx, cancelfunckey{}, f)
+			return ctx
+		} else if c.ReadTimeout != 0 {
+			ctx, f := context.WithTimeout(ctx, time.Duration(c.ReadTimeout)*time.Millisecond)
+			ctx = context.WithValue(ctx, cancelfunckey{}, f)
+			return ctx
+		} else {
+			ctx, f := context.WithTimeout(ctx, 200*time.Millisecond)
+			ctx = context.WithValue(ctx, cancelfunckey{}, f)
+			return ctx
 		}
 	}
 	instance.router.PanicHandler = func(w http.ResponseWriter, r *http.Request, i interface{}) {
@@ -63,6 +76,7 @@ func (this *Web) putContext(ctx *Context) {
 	ctx.r = nil
 	ctx.p = nil
 	ctx.s = false
+	ctx.Context = nil
 	this.contextpool.Put(ctx)
 }
 
@@ -83,6 +97,13 @@ func (this *Web) insideHandler(handlers ...OutsideHandler) func(http.ResponseWri
 		if ctx.s {
 			ctx.w.WriteHeader(http.StatusOK)
 			ctx.w.Write(emptydata)
+		}
+		tempf := ctx.Value(cancelfunckey{})
+		if tempf != nil {
+			f, ok := tempf.(context.CancelFunc)
+			if ok {
+				f()
+			}
 		}
 		this.putContext(ctx)
 	}
