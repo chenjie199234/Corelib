@@ -1,10 +1,9 @@
 package web
 
 import (
-	"context"
+	"fmt"
 	"net/http"
 	"testing"
-	"time"
 )
 
 func Test_Server(t *testing.T) {
@@ -22,8 +21,7 @@ func Test_Server(t *testing.T) {
 	instance.StartWebServer()
 }
 func handleroot(ctx *Context) {
-	c, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
-	defer cancel()
-	<-c.Done()
+	<-ctx.Done()
+	fmt.Println("123")
 	ctx.WriteString(http.StatusOK, "123")
 }
