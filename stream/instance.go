@@ -93,12 +93,14 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 		tempctx, tempcancel := context.WithCancel(context.Background())
 		if p, ok := this.peerPool.Get().(*Peer); ok {
 			p.reset()
+			p.status = 1
 			p.Context = tempctx
 			p.CancelFunc = tempcancel
 			return p
 		}
 		c := (*TcpConfig)(conf)
 		return &Peer{
+			status:          1,
 			parentnode:      nil,
 			clientname:      "",
 			servername:      "",
@@ -122,12 +124,14 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 		tempctx, tempcancel := context.WithCancel(context.Background())
 		if p, ok := this.peerPool.Get().(*Peer); ok {
 			p.reset()
+			p.status = 1
 			p.Context = tempctx
 			p.CancelFunc = tempcancel
 			return p
 		}
 		c := (*UnixConfig)(conf)
 		return &Peer{
+			status:          1,
 			parentnode:      nil,
 			clientname:      "",
 			servername:      "",
@@ -151,12 +155,14 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 		tempctx, tempcancel := context.WithCancel(context.Background())
 		if p, ok := this.websocketPeerPool.Get().(*Peer); ok {
 			p.reset()
+			p.status = 1
 			p.Context = tempctx
 			p.CancelFunc = tempcancel
 			return p
 		}
 		c := (*WebConfig)(conf)
 		return &Peer{
+			status:          1,
 			parentnode:      nil,
 			clientname:      "",
 			servername:      "",
@@ -233,7 +239,7 @@ func (this *Instance) heart(node *peernode) {
 		now := uint64(time.Now().UnixNano())
 		node.RLock()
 		for _, p := range node.peers {
-			if p.starttime == 0 {
+			if p.status == 0 {
 				continue
 			}
 			templastactive := p.lastactive

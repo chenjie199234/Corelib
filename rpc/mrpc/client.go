@@ -52,7 +52,9 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 	if e != nil {
 		return nil
 	}
-	clientinstance.odata(odata)
+	if len(odata) > 0 {
+		clientinstance.odata(odata)
+	}
 	go func() {
 		for {
 			ndata := <-notice
@@ -77,5 +79,5 @@ func (c *client) onlinefunc(p *stream.Peer, appuniquename string, uniqueid uint6
 }
 func (c *client) userfunc(p *stream.Peer, appuniquename string, uniqueid uint64, data []byte) {
 }
-func (c *client) offlinefunc(p *stream.Peer, appuniquename string) {
+func (c *client) offlinefunc(p *stream.Peer, appuniquename string, uniqueid uint64) {
 }

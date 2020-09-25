@@ -428,7 +428,7 @@ func (this *Instance) read(p *Peer) {
 	defer func() {
 		uniquename := p.getpeeruniquename()
 		//every connection will have two goruntine to work for it
-		if old := atomic.SwapUint64(&p.starttime, 0); old > 0 {
+		if old := atomic.SwapInt32(&p.status, 0); old > 0 {
 			//cause write goruntine return,this will be useful when there is nothing in writebuffer
 			p.CancelFunc()
 			p.closeconn()
@@ -437,7 +437,7 @@ func (this *Instance) read(p *Peer) {
 			p.heartbeatbuffer <- []byte{}
 		} else {
 			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, uniquename)
+				this.conf.Offlinefunc(p, uniquename, p.starttime)
 			}
 			p.parentnode.Lock()
 			delete(p.parentnode.peers, uniquename)
@@ -592,10 +592,7 @@ func (this *Instance) dealheart(p *Peer, msg *heartMsg, data []byte) error {
 func (this *Instance) dealuser(p *Peer, msg *userMsg) error {
 	//update lastactive time
 	p.lastactive = uint64(time.Now().UnixNano())
-	temp := p.starttime
-	if temp != 0 {
-		this.conf.Userdatafunc(p, p.getpeeruniquename(), temp, msg.userdata)
-	}
+	this.conf.Userdatafunc(p, p.getpeeruniquename(), p.starttime, msg.userdata)
 	return nil
 }
 func (this *Instance) write(p *Peer) {
@@ -608,14 +605,14 @@ func (this *Instance) write(p *Peer) {
 			<-p.heartbeatbuffer
 		}
 		//every connection will have two goruntine to work for it
-		if old := atomic.SwapUint64(&p.starttime, 0); old > 0 {
+		if old := atomic.SwapInt32(&p.status, 0); old > 0 {
 			//when first goruntine return,close the connection,cause read goruntine return
 			p.CancelFunc()
 			p.closeconn()
 		} else {
 			uniquename := p.getpeeruniquename()
 			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, uniquename)
+				this.conf.Offlinefunc(p, uniquename, p.starttime)
 			}
 			p.parentnode.Lock()
 			delete(p.parentnode.peers, uniquename)

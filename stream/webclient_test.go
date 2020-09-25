@@ -70,5 +70,5 @@ func webclienthandleuserdata(p *Peer, peeruniquename string, uniqueid uint64, da
 	fmt.Printf("%s\n", data)
 }
 
-func webclienthandleoffline(p *Peer, peeruniquename string) {
+func webclienthandleoffline(p *Peer, peeruniquename string, uniqueid uint64) {
 }

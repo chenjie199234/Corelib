@@ -36,12 +36,13 @@ type peernode struct {
 	peers map[string]*Peer
 }
 type Peer struct {
+	status          int32
 	parentnode      *peernode
 	clientname      string
 	servername      string
 	peertype        int
 	protocoltype    int
-	starttime       uint64 //0---(closed or closing),not 0---(start time)
+	starttime       uint64 //0---(closed),not 0---(start time)
 	readbuffer      *buffer.Buffer
 	tempbuffer      []byte
 	tempbuffernum   int
@@ -61,6 +62,7 @@ func (p *Peer) reset() {
 		p.CancelFunc()
 	}
 	p.closeconn()
+	p.status = 0
 	p.parentnode = nil
 	p.clientname = ""
 	p.servername = ""

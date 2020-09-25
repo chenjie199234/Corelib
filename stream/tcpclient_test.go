@@ -70,5 +70,5 @@ func tcpclienthandleuserdata(p *Peer, peeruniquename string, uniqueid uint64, da
 	fmt.Printf("%s\n", data)
 }
 
-func tcpclienthandleoffline(p *Peer, peeruniquename string) {
+func tcpclienthandleoffline(p *Peer, peeruniquename string, uniqueid uint64) {
 }

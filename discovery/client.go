@@ -662,14 +662,16 @@ func (c *client) userfunc(p *stream.Peer, serveruniquename string, uniqueid uint
 		p.Close(uniqueid)
 	}
 }
-func (c *client) offlinefunc(p *stream.Peer, serveruniquename string) {
-	c.lker.RLock()
-	server, ok := c.servers[serveruniquename]
-	c.lker.RUnlock()
-	if !ok {
+func (c *client) offlinefunc(p *stream.Peer, serveruniquename string, uniqueid uint64) {
+	tempserver, e := p.GetData(uniqueid)
+	if e != nil {
+		//server closed,this is impossible
+		fmt.Printf("[Discovery.client.offlinefunc.impossible]server offline before offlinefunc called\n")
 		return
 	}
+	server := (*servernode)(tempserver)
 	server.lker.Lock()
+	defer server.lker.Unlock()
 	server.peer = nil
 	server.uniqueid = 0
 	server.htree.Reset()
@@ -680,7 +682,6 @@ func (c *client) offlinefunc(p *stream.Peer, serveruniquename string) {
 	c.nlker.RUnlock()
 	server.allclients = make(map[string]*clientinfo)
 	server.status = 0
-	server.lker.Unlock()
 }
 func (c *client) notice(clientuniquename string, regmsg []byte, status bool, servername string) {
 	msg := &RegMsg{}
