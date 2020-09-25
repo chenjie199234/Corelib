@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/stream"
@@ -16,42 +15,67 @@ type OutsideHandler func(ctx context.Context, req []byte) (resp []byte, e *MsgEr
 
 const defaulttimeout = 200
 
+var (
+	ERRSINIT    = fmt.Errorf("[Mrpc.server]not init,call NewMrpcServer first")
+	ERRSSTARTED = fmt.Errorf("[Mrpc.server]already started")
+	ERRSREG     = fmt.Errorf("[Mrpc.server]already registered")
+)
+
 type server struct {
-	verifydata []byte
-	instance   *stream.Instance
 	lker       *sync.Mutex
 	handler    map[string]OutsideHandler
 	timeout    map[string]int //unit millisecond
+	instance   *stream.Instance
+	verifydata []byte
 	status     int32
 }
 
-func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *server {
-	serverinstance := &server{
+var serverinstance *server
+
+func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) {
+	if serverinstance != nil {
+		return
+	}
+	serverinstance = &server{
 		verifydata: vdata,
 		lker:       &sync.Mutex{},
 	}
 	c.Verifyfunc = serverinstance.verifyfunc
 	c.Userdatafunc = serverinstance.userfunc
 	serverinstance.instance = stream.NewInstance(c)
-	return serverinstance
+	return
 }
-func (s *server) StartMrpcServer(cc *stream.TcpConfig, listenaddr string) {
-	if atomic.AddInt32(&s.status, 1) > 1 {
-		return
+func StartMrpcServer(cc *stream.TcpConfig, listenaddr string) error {
+	if serverinstance == nil {
+		return ERRSINIT
 	}
-	s.instance.StartTcpServer(cc, listenaddr)
+	serverinstance.lker.Lock()
+	if serverinstance.status >= 1 {
+		serverinstance.lker.Unlock()
+		return ERRSSTARTED
+	}
+	serverinstance.status = 1
+	serverinstance.lker.Unlock()
+	serverinstance.instance.StartTcpServer(cc, listenaddr)
+	return nil
 }
-func (s *server) RegisterHandler(path string, handler OutsideHandler) error {
-	if atomic.LoadInt32(&s.status) >= 1 {
-		return fmt.Errorf("[Mrpc.RegisterHandler]server already started")
+func RegisterHandler(path string, handler OutsideHandler, timeout int) error {
+	serverinstance.lker.Lock()
+	if serverinstance.status >= 1 {
+		serverinstance.lker.Unlock()
+		return ERRSSTARTED
 	}
-	s.lker.Lock()
-	if _, ok := s.handler[path]; ok {
-		s.lker.Unlock()
-		return fmt.Errorf("[Mrpc.RegisterHandler]path:%s already registered", path)
+	if _, ok := serverinstance.handler[path]; ok {
+		serverinstance.lker.Unlock()
+		return ERRSREG
 	}
-	s.handler[path] = handler
-	s.lker.Unlock()
+	if _, ok := serverinstance.timeout[path]; ok {
+		serverinstance.lker.Unlock()
+		return ERRSREG
+	}
+	serverinstance.handler[path] = handler
+	serverinstance.timeout[path] = timeout
+	serverinstance.lker.Unlock()
 	return nil
 }
 
@@ -65,19 +89,9 @@ func (s *server) verifyfunc(ctx context.Context, peeruniquename string, uniqueid
 func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64, data []byte) {
 	go func() {
 		msg := &Msg{}
-		e := proto.Unmarshal(data, msg)
-		if e != nil {
-			fmt.Printf("[Mrpc.userfunc]unmarshal data error:%s\n", e)
-			msg.Metadata = nil
-			msg.Body = nil
-			msg.Error = &MsgErr{
-				Code: ERRDATA,
-				Msg:  ERRMESSAGE[ERRDATA],
-			}
-			d, _ := proto.Marshal(msg)
-			if e = p.SendMessage(d, uniqueid); e != nil {
-				fmt.Printf("[Mrpc.userfunc]error:%s\n", e)
-			}
+		if e := proto.Unmarshal(data, msg); e != nil {
+			//this is impossible
+			fmt.Printf("[Mrpc.userfunc.impossible]unmarshal data error:%s\n", e)
 			return
 		}
 		handler, ok := s.handler[msg.Path]
@@ -90,14 +104,14 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 				Msg:  ERRMESSAGE[ERRNOAPI],
 			}
 			d, _ := proto.Marshal(msg)
-			if e = p.SendMessage(d, uniqueid); e != nil {
+			if e := p.SendMessage(d, uniqueid); e != nil {
 				fmt.Printf("[Mrpc.userfunc]error:%s\n", e)
 			}
 			return
 		}
 		var ctx context.Context
 		var dl time.Time
-		if timeout, ok := s.timeout[msg.Path]; !ok {
+		if timeout, ok := s.timeout[msg.Path]; !ok || timeout == 0 {
 			dl = time.Now().Add(defaulttimeout * time.Millisecond)
 		} else {
 			dl = time.Now().Add(time.Duration(timeout) * time.Millisecond)
@@ -112,21 +126,23 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 		}
 		resp, err := handler(ctx, msg.Body)
 		if err != nil {
+			msg.Deadline = 0
 			msg.Body = nil
 			msg.Error = err
 			msg.Metadata = nil
 			d, _ := proto.Marshal(msg)
-			if e = p.SendMessage(d, uniqueid); e != nil {
+			if e := p.SendMessage(d, uniqueid); e != nil {
 				fmt.Printf("[Mrpc.userfunc]error:%s\n", e)
 			}
-			return
-		}
-		msg.Body = resp
-		msg.Error = nil
-		msg.Metadata = GetAllOutMetadata(ctx)
-		d, _ := proto.Marshal(msg)
-		if e = p.SendMessage(d, uniqueid); e != nil {
-			fmt.Printf("[Mrpc.userfunc]error:%s\n", e)
+		} else {
+			msg.Deadline = 0
+			msg.Body = resp
+			msg.Error = nil
+			msg.Metadata = GetAllOutMetadata(ctx)
+			d, _ := proto.Marshal(msg)
+			if e := p.SendMessage(d, uniqueid); e != nil {
+				fmt.Printf("[Mrpc.userfunc]error:%s\n", e)
+			}
 		}
 	}()
 }

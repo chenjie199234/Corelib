@@ -30,22 +30,22 @@ func Test_Server1(t *testing.T) {
 			}
 		}
 	}()
-	StartDiscoveryServer(&stream.InstanceConfig{
+	NewDiscoveryServer(&stream.InstanceConfig{
 		SelfName:           "server1",
 		VerifyTimeout:      500,
 		HeartbeatTimeout:   5000,
 		HeartprobeInterval: 2000,
 		NetLagSampleNum:    10,
 		GroupNum:           1,
-	}, &stream.TcpConfig{
+	}, []byte{'t', 'e', 's', 't'})
+	StartDiscoveryServer(&stream.TcpConfig{
 		ConnectTimeout:       500,
 		SocketReadBufferLen:  1024,
 		SocketWriteBufferLen: 1024,
 		AppMinReadBufferLen:  1024,
 		AppMaxReadBufferLen:  65535,
 		AppWriteBufferNum:    256,
-	}, "127.0.0.1:9234", []byte{'t', 'e', 's', 't'})
-	select {}
+	}, "127.0.0.1:9234")
 }
 func Test_Server2(t *testing.T) {
 	go func() {
@@ -66,20 +66,20 @@ func Test_Server2(t *testing.T) {
 			}
 		}
 	}()
-	StartDiscoveryServer(&stream.InstanceConfig{
+	NewDiscoveryServer(&stream.InstanceConfig{
 		SelfName:           "server2",
 		VerifyTimeout:      500,
 		HeartbeatTimeout:   5000,
 		HeartprobeInterval: 2000,
 		NetLagSampleNum:    10,
 		GroupNum:           1,
-	}, &stream.TcpConfig{
+	}, []byte{'t', 'e', 's', 't'})
+	StartDiscoveryServer(&stream.TcpConfig{
 		ConnectTimeout:       500,
 		SocketReadBufferLen:  1024,
 		SocketWriteBufferLen: 1024,
 		AppMinReadBufferLen:  1024,
 		AppMaxReadBufferLen:  65535,
 		AppWriteBufferNum:    256,
-	}, "127.0.0.1:9235", []byte{'t', 'e', 's', 't'})
-	select {}
+	}, "127.0.0.1:9235")
 }

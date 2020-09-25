@@ -15,14 +15,14 @@ func Test_Client1(t *testing.T) {
 		for {
 			<-tker.C
 			if clientinstance != nil {
-				clientinstance.slker.RLock()
+				clientinstance.lker.RLock()
 				if server, ok := clientinstance.servers["server1:127.0.0.1:9234"]; ok && server.uniqueid != 0 {
 					fmt.Println("server1:" + hex.EncodeToString(server.htree.GetRootHash()))
 				}
 				if server, ok := clientinstance.servers["server2:127.0.0.1:9235"]; ok && server.uniqueid != 0 {
 					fmt.Println("server2:" + hex.EncodeToString(server.htree.GetRootHash()))
 				}
-				clientinstance.slker.RUnlock()
+				clientinstance.lker.RUnlock()
 			}
 		}
 	}()

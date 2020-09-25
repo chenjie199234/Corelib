@@ -2,7 +2,7 @@ syntax="proto3";
 package mrpc;
 
 message msg {
-	uint64 uniqueid=1;
+	uint64 callid=1;
 	string path=2;
 	int64 deadline=3;
 	bytes body=4;
