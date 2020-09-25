@@ -96,16 +96,16 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 			return
 		}
 		var ctx context.Context
-		var dt time.Time
+		var dl time.Time
 		if timeout, ok := s.timeout[msg.Path]; !ok {
-			dt = time.Now().Add(defaulttimeout * time.Millisecond)
+			dl = time.Now().Add(defaulttimeout * time.Millisecond)
 		} else {
-			dt = time.Now().Add(time.Duration(timeout) * time.Millisecond)
+			dl = time.Now().Add(time.Duration(timeout) * time.Millisecond)
 		}
-		if msg.Deadline != 0 && dt.UnixNano() > msg.Deadline {
-			dt = time.Unix(0, msg.Deadline)
+		if msg.Deadline != 0 && dl.UnixNano() > msg.Deadline {
+			dl = time.Unix(0, msg.Deadline)
 		}
-		ctx, f := context.WithDeadline(context.Background(), dt)
+		ctx, f := context.WithDeadline(context.Background(), dl)
 		defer f()
 		for k, v := range msg.Metadata {
 			ctx = SetInMetadata(ctx, k, v)
@@ -113,8 +113,8 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 		resp, err := handler(ctx, msg.Body)
 		if err != nil {
 			msg.Body = nil
-			msg.Metadata = nil
 			msg.Error = err
+			msg.Metadata = nil
 			d, _ := proto.Marshal(msg)
 			if e = p.SendMessage(d, uniqueid); e != nil {
 				fmt.Printf("[Mrpc.userfunc]error:%s\n", e)
