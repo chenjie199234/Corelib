@@ -49,9 +49,7 @@ type Peer struct {
 	writerbuffer    chan []byte
 	heartbeatbuffer chan []byte
 	conn            unsafe.Pointer
-	lastactive      uint64   //unixnano timestamp
-	netlag          []uint64 //unixnano timeoffset
-	netlagindex     int
+	lastactive      uint64 //unixnano timestamp
 	context.Context
 	context.CancelFunc
 	data unsafe.Pointer //user data
@@ -80,10 +78,6 @@ func (p *Peer) reset() {
 		<-p.heartbeatbuffer
 	}
 	p.lastactive = 0
-	for i := range p.netlag {
-		p.netlag[i] = 0
-	}
-	p.netlagindex = 0
 	p.data = nil
 }
 func (p *Peer) getprotocolname() string {
@@ -163,58 +157,14 @@ func (p *Peer) setbuffer(readnum, writenum int) {
 		(*websocket.Conn)(p.conn).UnderlyingConn().(*net.TCPConn).SetWriteBuffer(writenum)
 	}
 }
-
-func (p *Peer) GetData(uniqueid uint64) (unsafe.Pointer, error) {
-	if uniqueid == p.starttime {
-		return p.data, nil
-	}
-	return nil, ERRCONNCLOSED
-}
-
-func (p *Peer) SetData(data unsafe.Pointer, uniqueid uint64) error {
-	if uniqueid == p.starttime {
-		p.data = data
-		return nil
-	}
-	return ERRCONNCLOSED
-}
-
-//unit nanosecond
-func (p *Peer) GetAverageNetLag() uint64 {
-	total := uint64(0)
-	count := uint64(0)
-	for _, v := range p.netlag {
-		if v != 0 {
-			total += v
-			count++
-		}
-	}
-	if count == 0 {
-		return 0
-	}
-	return total / count
-}
-
-//unit nanosecond
-func (p *Peer) GetPeekNetLag() uint64 {
-	max := p.netlag[0]
-	for _, v := range p.netlag {
-		if max < v {
-			max = v
-		}
-	}
-	return max
-}
-
 func (p *Peer) SendMessage(userdata []byte, uniqueid uint64) error {
-	if uniqueid == 0 || p.starttime != uniqueid {
+	if p.status == 0 || p.starttime != uniqueid {
 		//uniqueid for close check and ABA check
 		return ERRCONNCLOSED
 	}
 	if len(userdata) == 0 {
 		return ERREMPTYMSG
 	}
-	//here has little data race,but the message package will be dropped by peer,because of different uniqueid
 	var data []byte
 	msg := &userMsg{
 		uniqueid: uniqueid,
@@ -228,15 +178,40 @@ func (p *Peer) SendMessage(userdata []byte, uniqueid uint64) error {
 		data = makeUserMsg(msg, true)
 	case WEBSOCKET:
 		data = makeUserMsg(msg, false)
+	default:
+		return ERRCONNCLOSED
 	}
+	//here has little data race,but the message package will be dropped by peer,because of different uniqueid
 	p.writerbuffer <- data
 	return nil
 }
 
+//this function has data race
+//can only be sync called in onlinefunc,userfunc,offlinefunc
+//async called will cause problem
 func (p *Peer) Close(uniqueid uint64) {
-	p.parentnode.RLock()
-	if uniqueid != 0 && p.starttime == uniqueid {
+	if p.starttime == uniqueid {
 		p.closeconn()
 	}
-	p.parentnode.RUnlock()
+}
+
+//this function has data race
+//can only be sync called in onlinefunc,userfunc,offlinefunc
+//async called will cause problem
+func (p *Peer) GetData(uniqueid uint64) (unsafe.Pointer, error) {
+	if uniqueid == p.starttime {
+		return p.data, nil
+	}
+	return nil, ERRCONNCLOSED
+}
+
+//this function has data race
+//can only be sync called in onlinefunc,userfunc,offlinefunc
+//async called will cause problem
+func (p *Peer) SetData(data unsafe.Pointer, uniqueid uint64) error {
+	if uniqueid == p.starttime {
+		p.data = data
+		return nil
+	}
+	return ERRCONNCLOSED
 }

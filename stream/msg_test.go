@@ -14,9 +14,7 @@ func Test_Msg(t *testing.T) {
 func testheartmsg() {
 	heartmsg := &heartMsg{
 		uniqueid: uint64(time.Now().UnixNano()),
-		sender:   "test",
 	}
-	heartmsg.timestamp = heartmsg.uniqueid
 	data := makeHeartMsg(heartmsg, true)
 	msgtype, e := getMsgType(data[4:])
 	if e != nil {
@@ -29,7 +27,7 @@ func testheartmsg() {
 	if e != nil {
 		panic("get heart msg error:" + e.Error())
 	}
-	if temp.uniqueid != heartmsg.uniqueid || temp.sender != heartmsg.sender || temp.timestamp != heartmsg.timestamp {
+	if temp.uniqueid != heartmsg.uniqueid {
 		panic("get heart msg error:data wrong")
 	}
 }

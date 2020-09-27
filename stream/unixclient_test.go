@@ -59,8 +59,6 @@ func unixclienthandleonline(p *Peer, peeruniquename string, uniqueid uint64) {
 		go func() {
 			for {
 				time.Sleep(time.Second)
-				lag := p.GetAverageNetLag()
-				fmt.Println(float64(lag)/1000.0/1000.0, "ms")
 				p.SendMessage([]byte{'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd'}, uniqueid)
 			}
 		}()

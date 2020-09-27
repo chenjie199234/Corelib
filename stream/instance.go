@@ -11,34 +11,6 @@ import (
 	"github.com/chenjie199234/Corelib/buffer"
 )
 
-//unit nanosecond
-func (this *Instance) GetAverageNetLag(peername string) (uint64, error) {
-	node := this.peernodes[this.getindex(peername)]
-	node.RLock()
-	p, ok := node.peers[peername]
-	if !ok {
-		node.RUnlock()
-		return 0, ERRCONNCLOSED
-	}
-	lag := p.GetAverageNetLag()
-	node.RUnlock()
-	return lag, nil
-}
-
-//unit nanosecond
-func (this *Instance) GetPeekNetLag(peername string) (uint64, error) {
-	node := this.peernodes[this.getindex(peername)]
-	node.RLock()
-	p, ok := node.peers[peername]
-	if !ok {
-		node.RUnlock()
-		return 0, ERRCONNCLOSED
-	}
-	lag := p.GetPeekNetLag()
-	node.RUnlock()
-	return lag, nil
-}
-
 func (this *Instance) SendMessage(peername string, userdata []byte) error {
 	node := this.peernodes[this.getindex(peername)]
 	node.RLock()
@@ -66,11 +38,15 @@ func (this *Instance) SendMessage(peername string, userdata []byte) error {
 	return nil
 }
 
-func (this *Instance) Close(peername string) error {
+func (this *Instance) Close(peername string, uniqueid uint64) error {
 	node := this.peernodes[this.getindex(peername)]
 	node.RLock()
 	p, ok := node.peers[peername]
 	if !ok {
+		node.RUnlock()
+		return nil
+	}
+	if p.starttime != uniqueid {
 		node.RUnlock()
 		return nil
 	}
@@ -114,8 +90,6 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			heartbeatbuffer: make(chan []byte, 3),
 			conn:            nil,
 			lastactive:      0,
-			netlag:          make([]uint64, this.conf.NetLagSampleNum),
-			netlagindex:     0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
 			data:            nil,
@@ -145,8 +119,6 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			heartbeatbuffer: make(chan []byte, 3),
 			conn:            nil,
 			lastactive:      0,
-			netlag:          make([]uint64, this.conf.NetLagSampleNum),
-			netlagindex:     0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
 			data:            nil,
@@ -176,8 +148,6 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			heartbeatbuffer: make(chan []byte, 3),
 			conn:            nil,
 			lastactive:      0,
-			netlag:          make([]uint64, this.conf.NetLagSampleNum),
-			netlagindex:     0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
 			data:            nil,
@@ -248,12 +218,10 @@ func (this *Instance) heart(node *peernode) {
 				fmt.Printf("[Stream.%s.heart] timeout %s:%s addr:%s\n",
 					p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 				p.closeconn()
-			} else {
+			} else if now >= templastactive && now-templastactive >= this.conf.HeartprobeInterval {
 				var data []byte
 				msg := &heartMsg{
-					uniqueid:  p.starttime,
-					sender:    p.getselfname(),
-					timestamp: uint64(time.Now().UnixNano()),
+					uniqueid: p.starttime,
 				}
 				switch p.protocoltype {
 				case TCP:

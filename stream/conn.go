@@ -441,8 +441,8 @@ func (this *Instance) read(p *Peer) {
 			}
 			p.parentnode.Lock()
 			delete(p.parentnode.peers, uniquename)
-			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
+			p.parentnode.Unlock()
 			this.putPeer(p)
 		}
 	}()
@@ -542,11 +542,13 @@ func (this *Instance) dealmsg(p *Peer, data []byte, frompong bool) error {
 			return fmt.Errorf("[Stream.%s.dealmsg]msg format error:%s from %s:%s addr:%s",
 				p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 		}
-		if p.protocoltype == WEBSOCKET && msg.sender != p.getselfname() {
-			return fmt.Errorf("[Stream.WEB.dealmsg]pong msg sender:%s isn't self:%s from %s:%s addr:%s",
-				msg.sender, p.getselfname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
+		//drop race data
+		if msg.uniqueid != p.starttime {
+			return nil
 		}
-		return this.dealheart(p, msg, data)
+		//update lastactive time
+		p.lastactive = uint64(time.Now().UnixNano())
+		return nil
 	case USER:
 		var msg *userMsg
 		if p.protocoltype == TCP || p.protocoltype == UNIXSOCKET {
@@ -558,42 +560,18 @@ func (this *Instance) dealmsg(p *Peer, data []byte, frompong bool) error {
 			return fmt.Errorf("[Stream.%s.dealmsg]msg format error:%s from %s:%s addr:%s",
 				p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 		}
-		return this.dealuser(p, msg)
+		//drop race data
+		if msg.uniqueid != p.starttime {
+			return nil
+		}
+		//update lastactive time
+		p.lastactive = uint64(time.Now().UnixNano())
+		this.conf.Userdatafunc(p, p.getpeeruniquename(), p.starttime, msg.userdata)
+		return nil
 	default:
 		return fmt.Errorf("[Stream.%s.dealmsg]get unknown type msg type:%d from %s:%s addr:%s",
 			p.getprotocolname(), msgtype, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 	}
-}
-func (this *Instance) dealheart(p *Peer, msg *heartMsg, data []byte) error {
-	//update lastactive time
-	p.lastactive = uint64(time.Now().UnixNano())
-	switch msg.sender {
-	case p.getpeername():
-		//send back
-		p.heartbeatbuffer <- data
-		return nil
-	case p.getselfname():
-		if msg.timestamp > p.lastactive {
-			return fmt.Errorf("[Stream.%s.dealheart]self heart msg time check error return from %s:%s addr:%s",
-				p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-		}
-		//update net lag
-		p.netlag[p.netlagindex] = p.lastactive - msg.timestamp
-		p.netlagindex++
-		if p.netlagindex >= len(p.netlag) {
-			p.netlagindex = 0
-		}
-		return nil
-	default:
-		return fmt.Errorf("[Stream.%s.dealheart]heart msg sender name:%s check failed from %s:%s addr:%s selfname:%s",
-			p.getprotocolname(), msg.sender, p.getpeertypename(), p.getpeername(), p.getpeeraddr(), p.getselfname())
-	}
-}
-func (this *Instance) dealuser(p *Peer, msg *userMsg) error {
-	//update lastactive time
-	p.lastactive = uint64(time.Now().UnixNano())
-	this.conf.Userdatafunc(p, p.getpeeruniquename(), p.starttime, msg.userdata)
-	return nil
 }
 func (this *Instance) write(p *Peer) {
 	defer func() {
@@ -616,8 +594,8 @@ func (this *Instance) write(p *Peer) {
 			}
 			p.parentnode.Lock()
 			delete(p.parentnode.peers, uniquename)
-			p.parentnode.Unlock()
 			//when second goruntine return,put connection back to the pool
+			p.parentnode.Unlock()
 			this.putPeer(p)
 		}
 	}()

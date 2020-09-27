@@ -29,9 +29,7 @@ const (
 )
 
 type heartMsg struct {
-	uniqueid  uint64
-	sender    string
-	timestamp uint64
+	uniqueid uint64
 }
 type verifyMsg struct {
 	uniqueid   uint64
@@ -45,25 +43,20 @@ type userMsg struct {
 }
 
 func makeHeartMsg(msg *heartMsg, needprefix bool) []byte {
-	data := make([]byte, 9+len(msg.sender)+8)
-	data[0] = byte((HEART << 6) | len(msg.sender))
+	data := make([]byte, 9)
+	data[0] = byte(HEART << 6)
 	binary.BigEndian.PutUint64(data[1:9], msg.uniqueid)
-	copy(data[9:], msg.sender)
-	binary.BigEndian.PutUint64(data[9+len(msg.sender):], msg.timestamp)
 	if needprefix {
 		return addPrefix(data)
 	}
 	return data
 }
 func getHeartMsg(data []byte) (*heartMsg, error) {
-	senderlen := int(data[0] ^ (HEART << 6))
-	if len(data) != (9 + senderlen + 8) {
+	if len(data) != 9 {
 		return nil, fmt.Errorf("bad heart message")
 	}
 	msg := &heartMsg{}
 	msg.uniqueid = binary.BigEndian.Uint64(data[1:9])
-	msg.sender = byte2str(data[9 : 9+senderlen])
-	msg.timestamp = binary.BigEndian.Uint64(data[9+senderlen:])
 	return msg, nil
 }
 func makeVerifyMsg(msg *verifyMsg, needprefix bool) []byte {
