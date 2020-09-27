@@ -35,7 +35,6 @@ func Test_Server1(t *testing.T) {
 		VerifyTimeout:      500,
 		HeartbeatTimeout:   5000,
 		HeartprobeInterval: 2000,
-		NetLagSampleNum:    10,
 		GroupNum:           1,
 	}, []byte{'t', 'e', 's', 't'})
 	StartDiscoveryServer(&stream.TcpConfig{
@@ -71,7 +70,6 @@ func Test_Server2(t *testing.T) {
 		VerifyTimeout:      500,
 		HeartbeatTimeout:   5000,
 		HeartprobeInterval: 2000,
-		NetLagSampleNum:    10,
 		GroupNum:           1,
 	}, []byte{'t', 'e', 's', 't'})
 	StartDiscoveryServer(&stream.TcpConfig{

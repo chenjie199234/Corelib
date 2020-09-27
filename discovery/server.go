@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	//"sync/atomic"
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/hashtree"

@@ -23,7 +23,6 @@ func Test_Unixserver(t *testing.T) {
 		VerifyTimeout:      500,
 		HeartbeatTimeout:   1500,
 		HeartprobeInterval: 500,
-		NetLagSampleNum:    10,
 		GroupNum:           10,
 		Verifyfunc:         unixserverhandleVerify,
 		Onlinefunc:         unixserverhandleonline,

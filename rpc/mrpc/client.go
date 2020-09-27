@@ -22,18 +22,22 @@ type client struct {
 	callid     uint64
 	lker       *sync.RWMutex
 	servers    map[string]*serverinfo //key appuniquename
+	serverpool *sync.Pool
 	reqpool    *sync.Pool
 }
 
 type serverinfo struct {
-	discoveryserver map[string]struct{} //this app registered on which discovery server
-	cpu             float64             //cpu use percent
-	mem             float64             //men use percent
-	netlag          []int64             //the lastest net lag
-	netlaghead      int
-	netlagtail      int
+	appuniquename string
+	//key discoveryserver uniquename
+	discoveryserver map[string][]byte //this app registered on which discovery server
+	cpu             float64           //cpu use percent
+	mem             float64           //men use percent
+	netlag          []int64           //the net lag collect samples
+	netlagindex     int               //the
 	peer            *stream.Peer
 	uniqueid        uint64
+}
+type reqinfo struct {
 }
 
 func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname string, vdata []byte) *client {
@@ -42,6 +46,7 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 		callid:     0,
 		lker:       &sync.RWMutex{},
 		servers:    make(map[string]*serverinfo, 10),
+		serverpool: &sync.Pool{},
 	}
 	c.Verifyfunc = clientinstance.verifyfunc
 	c.Onlinefunc = clientinstance.onlinefunc
@@ -53,20 +58,68 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 		return nil
 	}
 	if len(odata) > 0 {
-		clientinstance.odata(odata)
+		clientinstance.odata(odata, cc)
 	}
 	go func() {
 		for {
 			ndata := <-notice
-			clientinstance.ndata(ndata)
+			clientinstance.ndata(ndata, cc)
 		}
 	}()
 	return clientinstance
 }
-func (c *client) odata(data map[string]map[string][]byte) {
+func (s *serverinfo) reset() {
+	s.discoveryserver = make(map[string][]byte)
+	s.cpu = 0
+	s.mem = 0
+	for i := 0; i < 30; i++ {
+		s.netlag[i] = 0
+	}
+	s.netlagindex = 0
+	s.peer = nil
+	s.uniqueid = 0
+}
+func (c *client) getserver() *serverinfo {
+	s, ok := c.serverpool.Get().(*serverinfo)
+	if ok {
+		s.reset()
+		return s
+	}
+	return &serverinfo{
+		discoveryserver: make(map[string][]byte),
+		cpu:             0,
+		mem:             0,
+		netlag:          make([]int64, 30),
+		netlagindex:     0,
+		peer:            nil,
+		uniqueid:        0,
+	}
+}
+func (c *client) putserver(s *serverinfo) {
+	s.reset()
+	c.serverpool.Put(s)
+}
+func (r *reqinfo) reset() {
 
 }
-func (c *client) ndata(data *discovery.NoticeMsg) {
+func (c *client) getreq() *reqinfo {
+	r, ok := c.reqpool.Get().(*reqinfo)
+	if ok {
+		r.reset()
+		return r
+	}
+	return &reqinfo{}
+}
+func (c *client) putreq(r *reqinfo) {
+	r.reset()
+	c.reqpool.Put(r)
+}
+func (c *client) odata(data map[string]map[string][]byte, cc *stream.TcpConfig) {
+	for addr, discoveryservers := range data {
+		c.instance.StartTcpClient(cc, addr, c.verifydata)
+	}
+}
+func (c *client) ndata(data *discovery.NoticeMsg, cc *stream.TcpConfig) {
 
 }
 func (c *client) verifyfunc(ctx context.Context, appuniquename string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {

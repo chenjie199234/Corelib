@@ -194,9 +194,6 @@ type InstanceConfig struct {
 	HeartbeatTimeout   uint64 `json:"heartbeat_timeout"`   //default 5000ms
 	HeartprobeInterval uint64 `json:"heartprobe_interval"` //default 1500ms
 
-	//how many samples a cycle
-	NetLagSampleNum uint `json:"netlag_sample_num"` //default 10 num
-
 	//split connections into groups
 	//every group will have an independence RWMutex to control online and offline
 	//every group will have an independence goruntine to check heart timeout nodes in this piece
@@ -240,10 +237,6 @@ func checkInstanceConfig(c *InstanceConfig) error {
 	if c.HeartprobeInterval >= c.HeartbeatTimeout {
 		fmt.Println("[Stream.checkInstanceConfig]'heartbeat timeout' >= 'heartprobe interval','heartprobe interval' will be set to 'heartbeat timeout / 3'")
 		c.HeartprobeInterval = c.HeartbeatTimeout / 3
-	}
-	if c.NetLagSampleNum == 0 {
-		fmt.Println("[Stream.checkInstanceConfig]missing netlag sample num,default will be used:10 num")
-		c.NetLagSampleNum = 10
 	}
 	if c.GroupNum == 0 {
 		fmt.Println("[Stream.checkInstanceConfig]missing group num,default will be used:1 num")

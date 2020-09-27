@@ -31,7 +31,6 @@ func Test_Client1(t *testing.T) {
 		VerifyTimeout:      500,
 		HeartbeatTimeout:   5000,
 		HeartprobeInterval: 2000,
-		NetLagSampleNum:    10,
 		GroupNum:           1,
 	}, &stream.TcpConfig{
 		ConnectTimeout:       500,
