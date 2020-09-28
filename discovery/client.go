@@ -51,7 +51,7 @@ type servernode struct {
 	uniqueid   uint64
 	htree      *hashtree.Hashtree
 	allclients map[string]*clientinfo //key clientuniquename
-	status     int                    //1 connected,2 preparing,3 registered
+	status     int                    //0-idle,1-start,2-verify,3-connected,4-preparing,5-registered
 }
 
 //clientuniquename = appname:addr
@@ -184,6 +184,29 @@ func GrpcNotice(appname string) (map[string]map[string][]byte, chan *NoticeMsg, 
 		server.lker.Unlock()
 	}
 	clientinstance.lker.RUnlock()
+	for len(ch) > 0 {
+		data := <-ch
+		if data.Status {
+			//register
+			if _, ok := result[data.PeerAddr]; ok {
+				result[data.PeerAddr][data.DiscoveryServer] = data.Addition
+			} else {
+				result[data.PeerAddr] = map[string][]byte{data.DiscoveryServer: data.Addition}
+			}
+		} else {
+			//unregister
+			if _, ok := result[data.PeerAddr]; ok {
+				delete(result[data.PeerAddr], data.DiscoveryServer)
+			} else {
+				//nothing need to do
+			}
+		}
+	}
+	for k, v := range result {
+		if len(v) == 0 {
+			delete(result, k)
+		}
+	}
 	return result, ch, nil
 }
 
@@ -227,6 +250,29 @@ func HttpNotice(appname string) (map[string]map[string][]byte, chan *NoticeMsg, 
 		server.lker.Unlock()
 	}
 	clientinstance.lker.RUnlock()
+	for len(ch) > 0 {
+		data := <-ch
+		if data.Status {
+			//register
+			if _, ok := result[data.PeerAddr]; ok {
+				result[data.PeerAddr][data.DiscoveryServer] = data.Addition
+			} else {
+				result[data.PeerAddr] = map[string][]byte{data.DiscoveryServer: data.Addition}
+			}
+		} else {
+			//unregister
+			if _, ok := result[data.PeerAddr]; ok {
+				delete(result[data.PeerAddr], data.DiscoveryServer)
+			} else {
+				//nothing need to do
+			}
+		}
+	}
+	for k, v := range result {
+		if len(v) == 0 {
+			delete(result, k)
+		}
+	}
 	return result, ch, nil
 }
 
@@ -270,6 +316,29 @@ func TcpNotice(appname string) (map[string]map[string][]byte, chan *NoticeMsg, e
 		server.lker.Unlock()
 	}
 	clientinstance.lker.RUnlock()
+	for len(ch) > 0 {
+		data := <-ch
+		if data.Status {
+			//register
+			if _, ok := result[data.PeerAddr]; ok {
+				result[data.PeerAddr][data.DiscoveryServer] = data.Addition
+			} else {
+				result[data.PeerAddr] = map[string][]byte{data.DiscoveryServer: data.Addition}
+			}
+		} else {
+			//unregister
+			if _, ok := result[data.PeerAddr]; ok {
+				delete(result[data.PeerAddr], data.DiscoveryServer)
+			} else {
+				//nothing need to do
+			}
+		}
+	}
+	for k, v := range result {
+		if len(v) == 0 {
+			delete(result, k)
+		}
+	}
 	return result, ch, nil
 }
 
@@ -313,6 +382,29 @@ func WebSocketNotice(peername string) (map[string]map[string][]byte, chan *Notic
 		server.lker.Unlock()
 	}
 	clientinstance.lker.RUnlock()
+	for len(ch) > 0 {
+		data := <-ch
+		if data.Status {
+			//register
+			if _, ok := result[data.PeerAddr]; ok {
+				result[data.PeerAddr][data.DiscoveryServer] = data.Addition
+			} else {
+				result[data.PeerAddr] = map[string][]byte{data.DiscoveryServer: data.Addition}
+			}
+		} else {
+			//unregister
+			if _, ok := result[data.PeerAddr]; ok {
+				delete(result[data.PeerAddr], data.DiscoveryServer)
+			} else {
+				//nothing need to do
+			}
+		}
+	}
+	for k, v := range result {
+		if len(v) == 0 {
+			delete(result, k)
+		}
+	}
 	return result, ch, nil
 }
 
@@ -335,54 +427,78 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 	}
 	c.lker.Lock()
 	//delete offline server
-	for k, v := range c.servers {
+	for serveruniquename, server := range c.servers {
 		find := false
 		for _, saddr := range serveraddrs {
-			if saddr == k {
+			if saddr == serveruniquename {
 				find = true
 				break
 			}
 		}
+		server.lker.Lock()
 		if !find {
-			delete(c.servers, k)
-			v.peer.Close(v.uniqueid)
-		} else if c.canregister && v.status == 2 {
+			delete(c.servers, serveruniquename)
+			if server.peer != nil {
+				server.peer.Close(server.uniqueid)
+			}
+		} else if c.canregister && server.status == 4 {
 			regmsg, _ := json.Marshal(c.regmsg)
-			v.peer.SendMessage(makeOnlineMsg("", regmsg, nil), v.uniqueid)
-			v.status = 3
+			server.peer.SendMessage(makeOnlineMsg("", regmsg, nil), server.uniqueid)
+			server.status = 5
 		}
+		server.lker.Unlock()
 	}
 	//online new server or reconnect to offline server
 	for _, saddr := range serveraddrs {
-		find := false
+		var server *servernode
 		for k, v := range c.servers {
 			if k == saddr {
-				if v.uniqueid != 0 {
-					find = true
-				}
+				server = v
 				break
 			}
 		}
-		//discovery server not registered or discovery server offline
-		if !find {
-			findex := strings.Index(saddr, ":")
-			if findex == -1 || len(saddr) == findex+1 {
-				fmt.Printf("[Discovery.client.updateserver]server addr:%s format error\n", saddr)
-				continue
-			}
-			if _, e := net.ResolveTCPAddr("tcp", saddr[findex+1:]); e != nil {
-				fmt.Printf("[Discovery.client.updateserver]server addr:%s tcp addr error\n", saddr)
-				continue
-			}
-			c.servers[saddr] = &servernode{
+		if server == nil {
+			//this server not in the serverlist before
+			server = &servernode{
 				lker:       &sync.Mutex{},
 				peer:       nil,
 				uniqueid:   0,
 				htree:      hashtree.New(10, 3),
 				allclients: make(map[string]*clientinfo, 5),
+				status:     0,
 			}
-			go c.instance.StartTcpClient(cc, saddr[findex+1:], c.verifydata)
+			c.servers[saddr] = server
 		}
+		server.lker.Lock()
+		if server.status == 0 {
+			findex := strings.Index(saddr, ":")
+			if findex == -1 || len(saddr) == findex+1 {
+				server.lker.Unlock()
+				fmt.Printf("[Discovery.client.updateserver]server addr:%s format error\n", saddr)
+				continue
+			}
+			if _, e := net.ResolveTCPAddr("tcp", saddr[findex+1:]); e != nil {
+				server.lker.Unlock()
+				fmt.Printf("[Discovery.client.updateserver]server addr:%s tcp addr error\n", saddr)
+				continue
+			}
+			server.status = 1
+			go func(saddr string, findex int) {
+				if r := c.instance.StartTcpClient(cc, saddr[findex+1:], c.verifydata); r == "" {
+					c.lker.RLock()
+					server, ok := c.servers[saddr]
+					if !ok {
+						c.lker.RUnlock()
+						return
+					}
+					server.lker.Lock()
+					c.lker.RUnlock()
+					server.status = 0
+					server.lker.Unlock()
+				}
+			}(saddr, findex)
+		}
+		server.lker.Unlock()
 	}
 	c.lker.Unlock()
 }
@@ -390,25 +506,44 @@ func (c *client) verifyfunc(ctx context.Context, serveruniquename string, unique
 	if !bytes.Equal(peerVerifyData, c.verifydata) {
 		return nil, false
 	}
+	c.lker.RLock()
+	server, ok := c.servers[serveruniquename]
+	if !ok || server.peer != nil || server.uniqueid != 0 {
+		c.lker.RUnlock()
+		return nil, false
+	}
+	server.lker.Lock()
+	c.lker.RUnlock()
+	if server.status != 1 {
+		server.lker.Unlock()
+		return nil, false
+	}
+	server.status = 2
+	server.lker.Unlock()
 	return nil, true
 }
 func (c *client) onlinefunc(p *stream.Peer, serveruniquename string, uniqueid uint64) {
 	c.lker.RLock()
 	server, ok := c.servers[serveruniquename]
-	c.lker.RUnlock()
 	if !ok {
+		c.lker.RUnlock()
 		//this discovery server had already been unregistered
 		return
 	}
 	server.lker.Lock()
-	server.peer = p
-	server.uniqueid = uniqueid
-	server.status = 1
-	p.SetData(unsafe.Pointer(server), uniqueid)
-	//after online the first message is pull all registered peers
-	p.SendMessage(makePullMsg(), uniqueid)
+	c.lker.RUnlock()
+	if server.status == 2 {
+		server.status = 3
+		server.peer = p
+		server.uniqueid = uniqueid
+		p.SetData(unsafe.Pointer(server), uniqueid)
+		//after online the first message is pull all registered peers
+		p.SendMessage(makePullMsg(), uniqueid)
+	} else {
+		//this is impossible
+		p.Close(uniqueid)
+	}
 	server.lker.Unlock()
-	return
 }
 func (c *client) userfunc(p *stream.Peer, serveruniquename string, uniqueid uint64, data []byte) {
 	tempserver, e := p.GetData(uniqueid)
@@ -515,7 +650,9 @@ func (c *client) userfunc(p *stream.Peer, serveruniquename string, uniqueid uint
 			p.Close(uniqueid)
 			return
 		}
-		server.status = 2
+		if server.status == 3 {
+			server.status = 4
+		}
 		deleted := make(map[int]map[string][]byte, 5)
 		added := make(map[int]map[string][]byte, 5)
 		replace := make(map[int]map[string][]byte)
@@ -671,7 +808,6 @@ func (c *client) offlinefunc(p *stream.Peer, serveruniquename string, uniqueid u
 	}
 	server := (*servernode)(tempserver)
 	server.lker.Lock()
-	defer server.lker.Unlock()
 	server.peer = nil
 	server.uniqueid = 0
 	server.htree.Reset()
@@ -682,6 +818,7 @@ func (c *client) offlinefunc(p *stream.Peer, serveruniquename string, uniqueid u
 	c.nlker.RUnlock()
 	server.allclients = make(map[string]*clientinfo)
 	server.status = 0
+	server.lker.Unlock()
 }
 func (c *client) notice(clientuniquename string, regmsg []byte, status bool, servername string) {
 	msg := &RegMsg{}
