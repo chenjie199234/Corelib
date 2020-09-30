@@ -29,19 +29,21 @@ var (
 
 //serveruniquename = discoveryservername:addr
 type client struct {
-	lker       *sync.RWMutex
-	servers    map[string]*servernode //key serveruniquename
-	verifydata []byte
-	instance   *stream.Instance
-	httpclient *http.Client
-	regmsg     *RegMsg
+	httpclient *http.Client //httpclient to get discovery server addrs
+
+	lker        *sync.RWMutex
+	verifydata  []byte
+	servers     map[string]*servernode //key serveruniquename
+	instance    *stream.Instance
+	regmsg      *RegMsg
+	canregister bool
+	stopch      chan struct{}
 	//key appname
 	grpcnotices map[string]chan *NoticeMsg
 	httpnotices map[string]chan *NoticeMsg
 	tcpnotices  map[string]chan *NoticeMsg
 	webnotices  map[string]chan *NoticeMsg
 	nlker       *sync.RWMutex
-	canregister bool
 }
 
 //clientuniquename = appname:addr
@@ -70,12 +72,13 @@ func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []
 		return
 	}
 	clientinstance = &client{
-		lker:       &sync.RWMutex{},
-		servers:    make(map[string]*servernode, 5),
-		verifydata: vdata,
 		httpclient: &http.Client{
 			Timeout: 500 * time.Millisecond,
 		},
+		lker:        &sync.RWMutex{},
+		verifydata:  vdata,
+		servers:     make(map[string]*servernode, 5),
+		stopch:      make(chan struct{}, 1),
 		grpcnotices: make(map[string]chan *NoticeMsg, 5),
 		httpnotices: make(map[string]chan *NoticeMsg, 5),
 		tcpnotices:  make(map[string]chan *NoticeMsg, 5),
@@ -93,14 +96,33 @@ func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []
 	tker := time.NewTicker(time.Second)
 	go func() {
 		for {
-			<-tker.C
-			clientinstance.updateserver(cc, url)
+			select {
+			case <-clientinstance.stopch:
+				tker.Stop()
+				for len(tker.C) > 0 {
+					<-tker.C
+				}
+				clientinstance.stop()
+			default:
+				select {
+				case <-clientinstance.stopch:
+					tker.Stop()
+					for len(tker.C) > 0 {
+						<-tker.C
+					}
+					clientinstance.stop()
+				case _, ok := <-tker.C:
+					if ok {
+						clientinstance.updateserver(cc, url)
+					}
+				}
+			}
 		}
 	}()
 }
 func RegisterSelf(regmsg *RegMsg) error {
 	if clientinstance == nil {
-		return ERRSINIT
+		return ERRCINIT
 	}
 	if regmsg == nil {
 		return ERRCREGMSG_NIL
@@ -141,6 +163,16 @@ func RegisterSelf(regmsg *RegMsg) error {
 	clientinstance.regmsg = regmsg
 	clientinstance.canregister = true
 	clientinstance.lker.Unlock()
+	return nil
+}
+func UnRegisterSelf() error {
+	if clientinstance == nil {
+		return ERRCINIT
+	}
+	select {
+	case clientinstance.stopch <- struct{}{}:
+	default:
+	}
 	return nil
 }
 
@@ -497,6 +529,18 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 					server.lker.Unlock()
 				}
 			}(saddr, findex)
+		}
+		server.lker.Unlock()
+	}
+	c.lker.Unlock()
+}
+func (c *client) stop() {
+	c.lker.Lock()
+	for k, server := range c.servers {
+		server.lker.Lock()
+		delete(c.servers, k)
+		if server.peer != nil {
+			server.peer.Close(server.uniqueid)
 		}
 		server.lker.Unlock()
 	}

@@ -5,8 +5,8 @@ import (
 )
 
 type inmetadatakey struct{}
-type outmetadatakey struct{}
 
+//in
 func GetAllInMetadata(ctx context.Context) map[string]string {
 	value := ctx.Value(inmetadatakey{})
 	if value == nil {
@@ -38,15 +38,10 @@ func SetInMetadata(ctx context.Context, key, value string) context.Context {
 	result[key] = value
 	return ctx
 }
-func SetOutMetadata(ctx context.Context, key, value string) context.Context {
-	tempresult := ctx.Value(outmetadatakey{})
-	if tempresult == nil {
-		return context.WithValue(ctx, outmetadatakey{}, map[string]string{key: value})
-	}
-	result := tempresult.(map[string]string)
-	result[key] = value
-	return ctx
-}
+
+type outmetadatakey struct{}
+
+//out
 func GetAllOutMetadata(ctx context.Context) map[string]string {
 	value := ctx.Value(outmetadatakey{})
 	if value == nil {
@@ -68,4 +63,13 @@ func GetOutMetadata(ctx context.Context, key string) string {
 		return ""
 	}
 	return result[key]
+}
+func SetOutMetadata(ctx context.Context, key, value string) context.Context {
+	tempresult := ctx.Value(outmetadatakey{})
+	if tempresult == nil {
+		return context.WithValue(ctx, outmetadatakey{}, map[string]string{key: value})
+	}
+	result := tempresult.(map[string]string)
+	result[key] = value
+	return ctx
 }

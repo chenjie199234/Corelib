@@ -1,25 +1,24 @@
 package mrpc
 
-import (
-	"fmt"
-)
-
 const (
-	ERRNOAPI = iota
+	ERRLARGE = iota
+	ERRNOAPI
 	ERRREQUEST
+	ERRCLOSING
+	ERRCTXCANCEL
 )
 
 var ERRMESSAGE = map[uint64]string{
-	ERRNOAPI:   "api not implement",
-	ERRREQUEST: "request data error",
+	ERRLARGE:     "msg too large",
+	ERRNOAPI:     "api not implement",
+	ERRREQUEST:   "request data error",
+	ERRCLOSING:   "connection is closed",
+	ERRCTXCANCEL: "context canceled",
 }
 
-func Errmaker(code uint64, msg string) (*MsgErr, error) {
-	if code < 1000 {
-		return nil, fmt.Errorf("[Mrpc.Errmaker]using rpc system error code")
-	}
+func Errmaker(code uint64, msg string) *MsgErr {
 	return &MsgErr{
 		Code: code,
 		Msg:  msg,
-	}, nil
+	}
 }

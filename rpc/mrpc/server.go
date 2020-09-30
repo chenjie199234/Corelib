@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/stream"
+
 	"google.golang.org/protobuf/proto"
 )
 
@@ -91,21 +92,18 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 		msg := &Msg{}
 		if e := proto.Unmarshal(data, msg); e != nil {
 			//this is impossible
-			fmt.Printf("[Mrpc.userfunc.impossible]unmarshal data error:%s\n", e)
+			fmt.Printf("[Mrpc.server.userfunc.impossible]unmarshal data error:%s\n", e)
 			return
 		}
 		handler, ok := s.handler[msg.Path]
 		if !ok {
-			fmt.Printf("[Mrpc.userfunc]api:%s not implement\n", msg.Path)
+			fmt.Printf("[Mrpc.server.userfunc]api:%s not implement\n", msg.Path)
 			msg.Metadata = nil
 			msg.Body = nil
-			msg.Error = &MsgErr{
-				Code: ERRNOAPI,
-				Msg:  ERRMESSAGE[ERRNOAPI],
-			}
+			msg.Error = Errmaker(ERRNOAPI, ERRMESSAGE[ERRNOAPI])
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(d, uniqueid); e != nil {
-				fmt.Printf("[Mrpc.userfunc]error:%s\n", e)
+				fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)
 			}
 			return
 		}
@@ -132,7 +130,7 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 			msg.Metadata = nil
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(d, uniqueid); e != nil {
-				fmt.Printf("[Mrpc.userfunc]error:%s\n", e)
+				fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)
 			}
 		} else {
 			msg.Deadline = 0
@@ -141,7 +139,7 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 			msg.Metadata = GetAllOutMetadata(ctx)
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(d, uniqueid); e != nil {
-				fmt.Printf("[Mrpc.userfunc]error:%s\n", e)
+				fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)
 			}
 		}
 	}()
