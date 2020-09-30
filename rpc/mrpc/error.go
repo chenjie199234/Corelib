@@ -6,6 +6,7 @@ const (
 	ERRREQUEST
 	ERRCLOSING
 	ERRCTXCANCEL
+	ERRNOSERVER
 )
 
 var ERRMESSAGE = map[uint64]string{
@@ -14,6 +15,7 @@ var ERRMESSAGE = map[uint64]string{
 	ERRREQUEST:   "request data error",
 	ERRCLOSING:   "connection is closed",
 	ERRCTXCANCEL: "context canceled",
+	ERRNOSERVER:  "no servers connected",
 }
 
 func Errmaker(code uint64, msg string) *MsgErr {

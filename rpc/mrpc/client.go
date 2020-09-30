@@ -36,7 +36,7 @@ type Client struct {
 
 	callid  uint64
 	reqpool *sync.Pool
-	pick    func(map[string]PickInfo) string
+	pick    func(map[*Serverinfo]PickInfo) *Serverinfo
 }
 
 type Serverinfo struct {
@@ -51,16 +51,13 @@ type Serverinfo struct {
 	//active calls
 	reqs map[uint64]*reqinfo //all reqs to this server
 
-	//addition       []byte    //addition info registered on discovery server
-	cpu            []float64 //cpu samples
-	cpuindex       int
-	cpusamplecount int
-	//cpuavg         float64
+	cpu               []float64 //cpu samples
+	cpuindex          int
+	cpusamplecount    int
 	netlag            []int64 //netlag samples
 	netlagindex       int
 	netlagsamplecount int
-	//netlagavg      int64
-	pickinfo *PickInfo
+	pickinfo          *PickInfo
 }
 type PickInfo struct {
 	Cpuavg, Cpulast       float64 //cpuinfo
@@ -140,7 +137,7 @@ func (c *Client) putserver(s *Serverinfo) {
 	c.serverpool.Put(s)
 }
 
-func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname string, vdata []byte, pick func(map[string]PickInfo) string) *Client {
+func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname string, vdata []byte, pick func(map[*Serverinfo]PickInfo) *Serverinfo) *Client {
 	clientinstance := &Client{
 		appname:    appname,
 		verifydata: vdata,
@@ -440,28 +437,38 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 	if len(d) >= 65535 {
 		return nil, Errmaker(ERRLARGE, ERRMESSAGE[ERRLARGE])
 	}
-	var r *reqinfo
+	var server *Serverinfo
 	//pick server
 	for {
 		c.lker.RLock()
-		pickinfo := make(map[string]PickInfo, int(float64(len(c.servers))*1.3))
-		for k, server := range c.servers {
+		if len(c.servers) == 0 {
+			c.lker.RUnlock()
+			return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
+		}
+		pickinfo := make(map[*Serverinfo]PickInfo, int(float64(len(c.servers))*1.3))
+		for _, server := range c.servers {
 			if server.status == 3 {
-				pickinfo[k] = *server.pickinfo
+				pickinfo[server] = *server.pickinfo
 			}
 		}
-		server := c.pick(pickinfo)
-		//server.lker.Lock()
-		//c.lker.RUnlock()
-		//if server.status == 3 {
-
-		//}
-		//r = c.getreq(msg.Callid)
-		//server.reqs[msg.Callid] = r
-		//server.pickinfo.Activecalls = len(server.reqs)
-		//server.lker.Unlock()
+		if len(pickinfo) == 0 {
+			c.lker.RUnlock()
+			return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
+		}
+		server = c.pick(pickinfo)
+		server.lker.Lock()
+		if server.status != 3 {
+			server.lker.Unlock()
+			c.lker.RUnlock()
+			continue
+		}
+		c.lker.RUnlock()
 		break
 	}
+	r := c.getreq(msg.Callid)
+	server.reqs[msg.Callid] = r
+	server.peer.SendMessage(d, server.uniqueid)
+	server.lker.Unlock()
 	select {
 	case <-r.finish:
 		resp := r.resp
