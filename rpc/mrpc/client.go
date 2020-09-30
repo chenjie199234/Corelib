@@ -447,9 +447,10 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 		}
 		pickinfo := make(map[*Serverinfo]PickInfo, int(float64(len(c.servers))*1.3))
 		for _, server := range c.servers {
-			if server.status == 3 {
-				pickinfo[server] = *server.pickinfo
+			if server.status == 0 {
+				continue
 			}
+			pickinfo[server] = *server.pickinfo
 		}
 		if len(pickinfo) == 0 {
 			c.lker.RUnlock()
@@ -463,11 +464,15 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 			continue
 		}
 		c.lker.RUnlock()
+		if e := server.peer.SendMessage(d, server.uniqueid); e != nil {
+			//TODO
+			server.lker.Unlock()
+			continue
+		}
 		break
 	}
 	r := c.getreq(msg.Callid)
 	server.reqs[msg.Callid] = r
-	server.peer.SendMessage(d, server.uniqueid)
 	server.lker.Unlock()
 	select {
 	case <-r.finish:
