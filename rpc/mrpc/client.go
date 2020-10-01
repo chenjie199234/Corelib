@@ -54,11 +54,12 @@ type Serverinfo struct {
 	pickinfo *PickInfo
 }
 type PickInfo struct {
-	Cpu              float64 //cpuinfo
-	Netlag           int64   //netlaginfo
-	Activecalls      int     //current active calls
-	DiscoveryServers int     //this server registered on how many discoveryservers
-	Addition         []byte  //addition info register on register center
+	Cpu                        float64 //cpuinfo
+	Netlag                     int64   //netlaginfo
+	Activecalls                int     //current active calls
+	DiscoveryServers           int     //this server registered on how many discoveryservers
+	DiscoveryServerOfflineTime int64   //
+	Addition                   []byte  //addition info register on register center
 }
 
 func (s *Serverinfo) reset() {
@@ -195,10 +196,12 @@ func (c *Client) notice() {
 				//this is impossible
 				delete(server.discoveryserver, data.DiscoveryServer)
 				server.pickinfo.DiscoveryServers = len(server.discoveryserver)
+				server.pickinfo.DiscoveryServerOfflineTime = time.Now().Unix()
 				fmt.Printf("[Mrpc.client.notice.impossible]app:%s addition info conflict\n", appuniquename)
 			} else {
 				delete(server.discoveryserver, data.DiscoveryServer)
 				server.pickinfo.DiscoveryServers = len(server.discoveryserver)
+				server.pickinfo.DiscoveryServerOfflineTime = time.Now().Unix()
 			}
 			needoffline := false
 			if len(server.discoveryserver) == 0 && server.status == 0 {
@@ -210,10 +213,13 @@ func (c *Client) notice() {
 			if needoffline {
 				//all req failed
 				for _, req := range server.reqs {
-					req.resp = nil
-					req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
-					req.endtime = time.Now().UnixNano()
-					req.finish <- struct{}{}
+					req.lker.Lock()
+					if req.callid != 0 {
+						req.resp = nil
+						req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
+						req.finish <- struct{}{}
+					}
+					req.lker.Unlock()
 				}
 				server.reqs = make(map[uint64]*reqinfo, 10)
 			}
@@ -277,10 +283,13 @@ func (c *Client) start(addr string) {
 		if needoffline {
 			//all req failed
 			for _, req := range server.reqs {
-				req.resp = nil
-				req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
-				req.endtime = time.Now().UnixNano()
-				req.finish <- struct{}{}
+				req.lker.Lock()
+				if req.callid != 0 {
+					req.resp = nil
+					req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
+					req.finish <- struct{}{}
+				}
+				req.lker.Unlock()
 			}
 			server.reqs = make(map[uint64]*reqinfo, 10)
 		}
@@ -345,12 +354,16 @@ func (c *Client) userfunc(p *stream.Peer, appuniquename string, data []byte, sta
 		return
 	}
 	delete(server.reqs, msg.Callid)
+	server.pickinfo.Activecalls = len(server.reqs)
+	server.pickinfo.Cpu = msg.Cpu
 	req.lker.Lock()
+	if req.callid == msg.Callid {
+		server.pickinfo.Netlag = time.Now().UnixNano() - req.starttime
+	}
 	server.lker.Unlock()
-	if req.callid != msg.Callid {
+	if req.callid == msg.Callid {
 		req.resp = msg.Body
 		req.err = msg.Error
-		req.endtime = time.Now().UnixNano()
 		req.finish <- struct{}{}
 	}
 	req.lker.Unlock()
@@ -370,10 +383,13 @@ func (c *Client) offlinefunc(p *stream.Peer, appuniquename string) {
 	if needoffline {
 		//all req failed
 		for _, req := range server.reqs {
-			req.resp = nil
-			req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
-			req.endtime = time.Now().UnixNano()
-			req.finish <- struct{}{}
+			req.lker.Lock()
+			if req.callid != 0 {
+				req.resp = nil
+				req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
+				req.finish <- struct{}{}
+			}
+			req.lker.Unlock()
 		}
 		server.reqs = make(map[uint64]*reqinfo, 10)
 	}
@@ -400,6 +416,7 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 		return nil, Errmaker(ERRLARGE, ERRMESSAGE[ERRLARGE])
 	}
 	var server *Serverinfo
+	var r *reqinfo
 	//pick server
 	for {
 		c.lker.RLock()
@@ -414,6 +431,7 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 			}
 			pickinfo[server] = *server.pickinfo
 		}
+		c.lker.RUnlock()
 		if len(pickinfo) == 0 {
 			c.lker.RUnlock()
 			return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
@@ -422,20 +440,20 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 		server.lker.Lock()
 		if server.status != 3 {
 			server.lker.Unlock()
-			c.lker.RUnlock()
 			continue
 		}
-		c.lker.RUnlock()
+		r = c.getreq(msg.Callid)
+		server.reqs[msg.Callid] = r
 		if e := server.peer.SendMessage(d, server.starttime); e != nil {
 			server.status = 4
+			delete(server.reqs, msg.Callid)
+			c.putreq(r)
 			server.lker.Unlock()
 			continue
 		}
+		server.lker.Unlock()
 		break
 	}
-	r := c.getreq(msg.Callid)
-	server.reqs[msg.Callid] = r
-	server.lker.Unlock()
 	select {
 	case <-r.finish:
 		resp := r.resp
@@ -459,7 +477,6 @@ type reqinfo struct {
 	resp      []byte
 	err       *MsgErr
 	starttime int64
-	endtime   int64
 }
 
 func (r *reqinfo) reset() {
@@ -470,7 +487,6 @@ func (r *reqinfo) reset() {
 	r.resp = nil
 	r.err = nil
 	r.starttime = 0
-	r.endtime = 0
 }
 func (c *Client) getreq(callid uint64) *reqinfo {
 	r, ok := c.reqpool.Get().(*reqinfo)
@@ -487,7 +503,6 @@ func (c *Client) getreq(callid uint64) *reqinfo {
 		resp:      nil,
 		err:       nil,
 		starttime: time.Now().UnixNano(),
-		endtime:   0,
 	}
 }
 func (c *Client) putreq(r *reqinfo) {
