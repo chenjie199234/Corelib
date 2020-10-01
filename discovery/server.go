@@ -34,16 +34,16 @@ type server struct {
 type clientnode struct {
 	clientuniquename string
 	peer             *stream.Peer
-	uniqueid         uint64
+	starttime        uint64
 	regdata          []byte
 	status           int //1 connected,2 preparing,3 registered
 }
 
-func (s *server) getnode(peer *stream.Peer, clientuniquename string, uniqueid uint64) *clientnode {
+func (s *server) getnode(peer *stream.Peer, clientuniquename string, starttime uint64) *clientnode {
 	node := s.nodepool.Get().(*clientnode)
 	node.clientuniquename = clientuniquename
 	node.peer = peer
-	node.uniqueid = uniqueid
+	node.starttime = starttime
 	node.status = 1
 	return node
 }
@@ -51,7 +51,7 @@ func (s *server) getnode(peer *stream.Peer, clientuniquename string, uniqueid ui
 func (s *server) putnode(n *clientnode) {
 	n.clientuniquename = ""
 	n.peer = nil
-	n.uniqueid = 0
+	n.starttime = 0
 	n.regdata = nil
 	n.status = 0
 	s.nodepool.Put(n)
@@ -96,14 +96,14 @@ func StartDiscoveryServer(cc *stream.TcpConfig, listenaddr string) error {
 	return nil
 }
 
-func (s *server) verifyfunc(ctx context.Context, clientuniquename string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
+func (s *server) verifyfunc(ctx context.Context, clientuniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal(peerVerifyData, s.verifydata) {
 		return nil, false
 	}
 	return s.verifydata, true
 }
 
-func (s *server) onlinefunc(p *stream.Peer, clientuniquename string, uniqueid uint64) {
+func (s *server) onlinefunc(p *stream.Peer, clientuniquename string, starttime uint64) {
 	s.lker.Lock()
 	if _, ok := s.allclients[clientuniquename]; ok {
 		s.lker.Unlock()
@@ -111,10 +111,10 @@ func (s *server) onlinefunc(p *stream.Peer, clientuniquename string, uniqueid ui
 		fmt.Printf("[Discovery.server.onlinefunc.impossible]duplicate connection from peer:%s\n", clientuniquename)
 		return
 	}
-	s.allclients[clientuniquename] = s.getnode(p, clientuniquename, uniqueid)
+	s.allclients[clientuniquename] = s.getnode(p, clientuniquename, starttime)
 	s.lker.Unlock()
 }
-func (s *server) userfunc(p *stream.Peer, clientuniquename string, uniqueid uint64, data []byte) {
+func (s *server) userfunc(p *stream.Peer, clientuniquename string, data []byte, starttime uint64) {
 	if len(data) == 0 {
 		return
 	}
@@ -124,14 +124,14 @@ func (s *server) userfunc(p *stream.Peer, clientuniquename string, uniqueid uint
 		if e != nil {
 			//this is impossible
 			fmt.Printf("[Discovery.server.userfunc.impossible]peer:%s online message:%s broken\n", clientuniquename, data)
-			p.Close(uniqueid)
+			p.Close()
 			return
 		}
 		reg := &RegMsg{}
 		if e := json.Unmarshal(regmsg, reg); e != nil {
 			//this is impossible
 			fmt.Printf("[Discovery.server.userfunc.impossible]peer:%s online message:%s broken\n", clientuniquename, regmsg)
-			p.Close(uniqueid)
+			p.Close()
 			return
 		}
 		ip := clientuniquename[strings.Index(clientuniquename, ":")+1 : strings.LastIndex(clientuniquename, ":")]
@@ -155,7 +155,7 @@ func (s *server) userfunc(p *stream.Peer, clientuniquename string, uniqueid uint
 			//this is impossible
 			s.lker.Unlock()
 			fmt.Printf("[Discovery.server.userfunc.impossible]peer:%s missing\n", clientuniquename)
-			p.Close(uniqueid)
+			p.Close()
 			return
 		}
 		node.regdata = regmsg
@@ -182,7 +182,7 @@ func (s *server) userfunc(p *stream.Peer, clientuniquename string, uniqueid uint
 		//notice all other peers
 		for _, client := range s.allclients {
 			if client.status > 1 {
-				client.peer.SendMessage(onlinemsg, client.uniqueid)
+				client.peer.SendMessage(onlinemsg, client.starttime)
 			}
 		}
 		s.lker.Unlock()
@@ -193,7 +193,7 @@ func (s *server) userfunc(p *stream.Peer, clientuniquename string, uniqueid uint
 			//this is impossible
 			s.lker.RUnlock()
 			fmt.Printf("[Discovery.server.userfunc.impossible]peer:%s missing\n", clientuniquename)
-			p.Close(uniqueid)
+			p.Close()
 			return
 		}
 		if node.status < 2 {
@@ -205,14 +205,14 @@ func (s *server) userfunc(p *stream.Peer, clientuniquename string, uniqueid uint
 				all[clientuniquename] = client.regdata
 			}
 		}
-		p.SendMessage(makePushMsg(all), uniqueid)
+		p.SendMessage(makePushMsg(all), starttime)
 		s.lker.RUnlock()
 	default:
 		fmt.Printf("[Discovery.server.userfunc.impossible]unknown message type from peer:%s\n", clientuniquename)
-		p.Close(uniqueid)
+		p.Close()
 	}
 }
-func (s *server) offlinefunc(p *stream.Peer, clientuniquename string, uniqueid uint64) {
+func (s *server) offlinefunc(p *stream.Peer, clientuniquename string) {
 	leafindex := int(bkdrhash(clientuniquename, uint64(s.htree.GetLeavesNum())))
 	s.lker.Lock()
 	node, ok := s.allclients[clientuniquename]
@@ -250,7 +250,7 @@ func (s *server) offlinefunc(p *stream.Peer, clientuniquename string, uniqueid u
 	offlinemsg := makeOfflineMsg(clientuniquename, s.htree.GetRootHash())
 	for _, client := range s.allclients {
 		if client.status > 1 {
-			client.peer.SendMessage(offlinemsg, client.uniqueid)
+			client.peer.SendMessage(offlinemsg, client.starttime)
 		}
 	}
 	s.lker.Unlock()

@@ -5,9 +5,10 @@ message msg {
 	uint64 callid=1;
 	string path=2;
 	int64 deadline=3;
-	bytes body=4;
-	err error=5;
-	map<string,string> metadata=6;
+	double cpu=4;
+	bytes body=5;
+	err error=6;
+	map<string,string> metadata=7;
 	message err {
 		uint64 code=1;
 		string msg=2;

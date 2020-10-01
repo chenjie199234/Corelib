@@ -125,18 +125,13 @@ func (this *Instance) sworker(p *Peer) bool {
 	if p.clientname != "" {
 		//verify client success,send self's verify message to client
 		var verifymsg []byte
-		msg := &verifyMsg{
-			uniqueid:   p.starttime,
-			sender:     p.servername,
-			verifydata: verifydata,
-		}
 		switch p.protocoltype {
 		case TCP:
 			fallthrough
 		case UNIXSOCKET:
-			verifymsg = makeVerifyMsg(msg, true)
+			verifymsg = makeVerifyMsg(p.servername, verifydata, p.starttime, true)
 		case WEBSOCKET:
-			verifymsg = makeVerifyMsg(msg, false)
+			verifymsg = makeVerifyMsg(p.servername, verifydata, p.starttime, false)
 		}
 		send := 0
 		num := 0
@@ -260,18 +255,13 @@ func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string, veri
 func (this *Instance) cworker(p *Peer, verifydata []byte) string {
 	//send self's verify message to server
 	var verifymsg []byte
-	msg := &verifyMsg{
-		uniqueid:   p.starttime,
-		sender:     p.clientname,
-		verifydata: verifydata,
-	}
 	switch p.protocoltype {
 	case TCP:
 		fallthrough
 	case UNIXSOCKET:
-		verifymsg = makeVerifyMsg(msg, true)
+		verifymsg = makeVerifyMsg(p.clientname, verifydata, 0, true)
 	case WEBSOCKET:
-		verifymsg = makeVerifyMsg(msg, false)
+		verifymsg = makeVerifyMsg(p.clientname, verifydata, 0, false)
 	}
 	send := 0
 	num := 0
@@ -394,30 +384,30 @@ func (this *Instance) verifypeer(p *Peer) []byte {
 			p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
 		return nil
 	}
-	msg, e := getVerifyMsg(data)
+	sender, peerverifydata, starttime, e := getVerifyMsg(data)
 	if e != nil {
 		fmt.Printf("[Stream.%s.verifypeer]first verify msg format error:%s from %s addr:%s\n",
 			p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
 		return nil
 	}
-	if msg.sender == "" || msg.sender == p.getselfname() {
+	if sender == "" || sender == p.getselfname() {
 		fmt.Printf("[Stream.%s.verifypeer]sender name:%s check failed from %s addr:%s\n",
-			p.getprotocolname(), msg.sender, p.getpeertypename(), p.getpeeraddr())
+			p.getprotocolname(), sender, p.getpeertypename(), p.getpeeraddr())
 		return nil
 	}
 	p.lastactive = uint64(time.Now().UnixNano())
 	switch p.peertype {
 	case CLIENT:
-		p.clientname = msg.sender
-		p.starttime = uint64(p.lastactive)
+		p.clientname = sender
+		p.starttime = p.lastactive
 	case SERVER:
-		p.servername = msg.sender
-		p.starttime = uint64(msg.uniqueid)
+		p.servername = sender
+		p.starttime = starttime
 	}
-	response, success := this.conf.Verifyfunc(ctx, p.getpeeruniquename(), p.starttime, msg.verifydata)
+	response, success := this.conf.Verifyfunc(ctx, p.getpeeruniquename(), peerverifydata)
 	if !success {
 		fmt.Printf("[Stream.%s.verifypeer]verify failed with data:%s from %s addr:%s\n",
-			p.getprotocolname(), msg.verifydata, p.getpeertypename(), p.getpeeraddr())
+			p.getprotocolname(), peerverifydata, p.getpeertypename(), p.getpeeraddr())
 		p.clientname = ""
 		p.servername = ""
 		return nil
@@ -428,16 +418,16 @@ func (this *Instance) read(p *Peer) {
 	defer func() {
 		uniquename := p.getpeeruniquename()
 		//every connection will have two goruntine to work for it
-		if old := atomic.SwapInt32(&p.status, 0); old > 0 {
+		if old := atomic.SwapUint32(&p.status, 0); old > 0 {
 			//cause write goruntine return,this will be useful when there is nothing in writebuffer
-			p.CancelFunc()
 			p.closeconn()
 			//prevent write goruntine block on read channel
 			p.writerbuffer <- []byte{}
 			p.heartbeatbuffer <- []byte{}
 		} else {
+			p.CancelFunc()
 			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, uniquename, p.starttime)
+				this.conf.Offlinefunc(p, uniquename)
 			}
 			p.parentnode.Lock()
 			delete(p.parentnode.peers, uniquename)
@@ -532,41 +522,28 @@ func (this *Instance) dealmsg(p *Peer, data []byte, frompong bool) error {
 			return fmt.Errorf("[Stream.WEB.dealmsg]msg type error from %s:%s addr:%s",
 				p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 		}
-		var msg *heartMsg
-		if p.protocoltype == TCP || p.protocoltype == UNIXSOCKET {
-			msg, e = getHeartMsg(data[4:])
-		} else {
-			msg, e = getHeartMsg(data)
-		}
-		if e != nil {
-			return fmt.Errorf("[Stream.%s.dealmsg]msg format error:%s from %s:%s addr:%s",
-				p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-		}
-		//drop race data
-		if msg.uniqueid != p.starttime {
-			return nil
-		}
 		//update lastactive time
 		p.lastactive = uint64(time.Now().UnixNano())
 		return nil
 	case USER:
-		var msg *userMsg
+		var userdata []byte
+		var starttime uint64
 		if p.protocoltype == TCP || p.protocoltype == UNIXSOCKET {
-			msg, e = getUserMsg(data[4:])
+			userdata, starttime, e = getUserMsg(data[4:])
 		} else {
-			msg, e = getUserMsg(data)
+			userdata, starttime, e = getUserMsg(data)
 		}
 		if e != nil {
 			return fmt.Errorf("[Stream.%s.dealmsg]msg format error:%s from %s:%s addr:%s",
 				p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 		}
-		//drop race data
-		if msg.uniqueid != p.starttime {
+		if starttime != p.starttime {
+			//drop race data
 			return nil
 		}
 		//update lastactive time
 		p.lastactive = uint64(time.Now().UnixNano())
-		this.conf.Userdatafunc(p, p.getpeeruniquename(), p.starttime, msg.userdata)
+		this.conf.Userdatafunc(p, p.getpeeruniquename(), userdata, starttime)
 		return nil
 	default:
 		return fmt.Errorf("[Stream.%s.dealmsg]get unknown type msg type:%d from %s:%s addr:%s",
@@ -583,14 +560,14 @@ func (this *Instance) write(p *Peer) {
 			<-p.heartbeatbuffer
 		}
 		//every connection will have two goruntine to work for it
-		if old := atomic.SwapInt32(&p.status, 0); old > 0 {
+		if old := atomic.SwapUint32(&p.status, 0); old > 0 {
 			//when first goruntine return,close the connection,cause read goruntine return
-			p.CancelFunc()
 			p.closeconn()
 		} else {
+			p.CancelFunc()
 			uniquename := p.getpeeruniquename()
 			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, uniquename, p.starttime)
+				this.conf.Offlinefunc(p, uniquename)
 			}
 			p.parentnode.Lock()
 			delete(p.parentnode.peers, uniquename)

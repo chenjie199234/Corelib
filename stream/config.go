@@ -13,19 +13,20 @@ import (
 //Before two peers can communicate with each other,they need to verify the identity first
 //server's response will write back to the client for client to verify the server
 //client's response is useless and it will be dropped,you can just return nil
-type HandleVerifyFunc func(ctx context.Context, peeruniquename string, uniqueid uint64, peerVerifyData []byte) (response []byte, success bool)
+type HandleVerifyFunc func(ctx context.Context, peeruniquename string, peerVerifyData []byte) (response []byte, success bool)
 
 //This is a notice after two peers verify each other success
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
-type HandleOnlineFunc func(p *Peer, peeruniquename string, uniqueid uint64)
+type HandleOnlineFunc func(p *Peer, peeruniquename string, starttime uint64)
 
 //This is a func to deal the user message
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
-type HandleUserdataFunc func(p *Peer, peeruniquename string, uniqueid uint64, data []byte)
+type HandleUserdataFunc func(p *Peer, peeruniquename string, data []byte, starttime uint64)
 
 //This is a notice before two peers disconnect with each other
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
-type HandleOfflineFunc func(p *Peer, peeruniquename string, uniqueid uint64)
+//After this notice the peer is unknown,dont't use it anymore
+type HandleOfflineFunc func(p *Peer, peeruniquename string)
 
 type TcpConfig struct {
 	ConnectTimeout int `json:"connect_timeout"` //default 500ms,for client only

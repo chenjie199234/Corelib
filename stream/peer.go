@@ -36,13 +36,13 @@ type peernode struct {
 	peers map[string]*Peer
 }
 type Peer struct {
-	status          int32
 	parentnode      *peernode
 	clientname      string
 	servername      string
 	peertype        int
 	protocoltype    int
-	starttime       uint64 //0---(closed),not 0---(start time)
+	starttime       uint64
+	status          uint32 //0--(closing),not 0--(connected)
 	readbuffer      *buffer.Buffer
 	tempbuffer      []byte
 	tempbuffernum   int
@@ -60,13 +60,13 @@ func (p *Peer) reset() {
 		p.CancelFunc()
 	}
 	p.closeconn()
-	p.status = 0
 	p.parentnode = nil
 	p.clientname = ""
 	p.servername = ""
 	p.peertype = 0
 	p.protocoltype = 0
 	p.starttime = 0
+	p.status = 0
 	if p.readbuffer != nil {
 		p.readbuffer.Reset()
 	}
@@ -157,61 +157,45 @@ func (p *Peer) setbuffer(readnum, writenum int) {
 		(*websocket.Conn)(p.conn).UnderlyingConn().(*net.TCPConn).SetWriteBuffer(writenum)
 	}
 }
-func (p *Peer) SendMessage(userdata []byte, uniqueid uint64) error {
-	if p.status == 0 || p.starttime != uniqueid {
-		//uniqueid for close check and ABA check
+
+func (p *Peer) SendMessage(userdata []byte, starttime uint64) error {
+	if p.status == 0 || p.starttime != starttime {
+		//starttime for aba check
 		return ERRCONNCLOSED
 	}
 	if len(userdata) == 0 {
 		return ERREMPTYMSG
 	}
 	var data []byte
-	msg := &userMsg{
-		uniqueid: uniqueid,
-		sender:   p.getselfname(),
-		userdata: userdata,
-	}
 	switch p.protocoltype {
 	case TCP:
 		fallthrough
 	case UNIXSOCKET:
-		data = makeUserMsg(msg, true)
+		data = makeUserMsg(userdata, starttime, true)
 	case WEBSOCKET:
-		data = makeUserMsg(msg, false)
+		data = makeUserMsg(userdata, starttime, false)
 	default:
 		return ERRCONNCLOSED
 	}
-	//here has little data race,but the message package will be dropped by peer,because of different uniqueid
+	//here has a little data race,but never mind,peer will drop the race data
 	p.writerbuffer <- data
 	return nil
 }
 
-//this function has data race
-//can only be sync called in onlinefunc,userfunc,offlinefunc
-//async called will cause problem
-func (p *Peer) Close(uniqueid uint64) {
-	if p.starttime == uniqueid {
-		p.closeconn()
-	}
+//warning!has data race with HandleOfflineFunc
+//this function can only be called before this peer's HandleOfflineFunc
+func (p *Peer) Close() {
+	p.closeconn()
 }
 
-//this function has data race
-//can only be sync called in onlinefunc,userfunc,offlinefunc
-//async called will cause problem
-func (p *Peer) GetData(uniqueid uint64) (unsafe.Pointer, error) {
-	if uniqueid == p.starttime {
-		return p.data, nil
-	}
-	return nil, ERRCONNCLOSED
+//warning!has data race with HandleOfflineFunc
+//this function can only be called before and in this peer's HandleOfflineFunc
+func (p *Peer) GetData() unsafe.Pointer {
+	return p.data
 }
 
-//this function has data race
-//can only be sync called in onlinefunc,userfunc,offlinefunc
-//async called will cause problem
-func (p *Peer) SetData(data unsafe.Pointer, uniqueid uint64) error {
-	if uniqueid == p.starttime {
-		p.data = data
-		return nil
-	}
-	return ERRCONNCLOSED
+//warning!has data race with HandleOfflineFunc
+//this function can only be called before this peer's HandleOfflineFunc
+func (p *Peer) SetData(data unsafe.Pointer) {
+	p.data = data
 }

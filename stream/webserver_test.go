@@ -45,20 +45,20 @@ func Test_Webserver(t *testing.T) {
 	}()
 	http.ListenAndServe(":8084", nil)
 }
-func webserverhandleVerify(ctx context.Context, peeruniquename string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
+func webserverhandleVerify(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal([]byte{'t', 'e', 's', 't', 'c'}, peerVerifyData) {
 		fmt.Println("verify error")
 		return nil, false
 	}
 	return []byte{'t', 'e', 's', 't'}, true
 }
-func webserverhandleonline(p *Peer, peeruniquename string, uniqueid uint64) {
+func webserverhandleonline(p *Peer, peeruniquename string, starttime uint64) {
 	atomic.AddInt64(&webcount, 1)
 }
-func webserverhandleuserdata(p *Peer, peeruniquename string, uniqueid uint64, data []byte) {
+func webserverhandleuserdata(p *Peer, peeruniquename string, data []byte, starttime uint64) {
 	fmt.Printf("%s:%s\n", peeruniquename, data)
-	p.SendMessage(data, uniqueid)
+	p.SendMessage(data, starttime)
 }
-func webserverhandleoffline(p *Peer, peeruniquename string, uniqueid uint64) {
+func webserverhandleoffline(p *Peer, peeruniquename string) {
 	atomic.AddInt64(&webcount, -1)
 }

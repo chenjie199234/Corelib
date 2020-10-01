@@ -11,50 +11,6 @@ import (
 	"github.com/chenjie199234/Corelib/buffer"
 )
 
-func (this *Instance) SendMessage(peername string, userdata []byte) error {
-	node := this.peernodes[this.getindex(peername)]
-	node.RLock()
-	p, ok := node.peers[peername]
-	if !ok {
-		node.RUnlock()
-		return ERRCONNCLOSED
-	}
-	var data []byte
-	msg := &userMsg{
-		uniqueid: p.starttime,
-		sender:   p.getselfname(),
-		userdata: userdata,
-	}
-	switch p.protocoltype {
-	case TCP:
-		fallthrough
-	case UNIXSOCKET:
-		data = makeUserMsg(msg, true)
-	case WEBSOCKET:
-		data = makeUserMsg(msg, false)
-	}
-	p.writerbuffer <- data
-	node.RUnlock()
-	return nil
-}
-
-func (this *Instance) Close(peername string, uniqueid uint64) error {
-	node := this.peernodes[this.getindex(peername)]
-	node.RLock()
-	p, ok := node.peers[peername]
-	if !ok {
-		node.RUnlock()
-		return nil
-	}
-	if p.starttime != uniqueid {
-		node.RUnlock()
-		return nil
-	}
-	p.closeconn()
-	node.RUnlock()
-	return nil
-}
-
 type Instance struct {
 	conf      *InstanceConfig
 	peernodes []*peernode
@@ -76,13 +32,13 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 		}
 		c := (*TcpConfig)(conf)
 		return &Peer{
-			status:          1,
 			parentnode:      nil,
 			clientname:      "",
 			servername:      "",
 			peertype:        0,
 			protocoltype:    0,
 			starttime:       0,
+			status:          1,
 			readbuffer:      buffer.NewBuf(c.AppMinReadBufferLen, c.AppMaxReadBufferLen),
 			tempbuffer:      make([]byte, c.AppMinReadBufferLen),
 			tempbuffernum:   0,
@@ -105,13 +61,13 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 		}
 		c := (*UnixConfig)(conf)
 		return &Peer{
-			status:          1,
 			parentnode:      nil,
 			clientname:      "",
 			servername:      "",
 			peertype:        0,
 			protocoltype:    0,
 			starttime:       0,
+			status:          1,
 			readbuffer:      buffer.NewBuf(c.AppMinReadBufferLen, c.AppMaxReadBufferLen),
 			tempbuffer:      make([]byte, c.AppMinReadBufferLen),
 			tempbuffernum:   0,
@@ -134,13 +90,13 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 		}
 		c := (*WebConfig)(conf)
 		return &Peer{
-			status:          1,
 			parentnode:      nil,
 			clientname:      "",
 			servername:      "",
 			peertype:        0,
 			protocoltype:    0,
 			starttime:       0,
+			status:          1,
 			readbuffer:      nil,
 			tempbuffer:      nil,
 			tempbuffernum:   0,
@@ -220,16 +176,13 @@ func (this *Instance) heart(node *peernode) {
 				p.closeconn()
 			} else if now >= templastactive && now-templastactive >= this.conf.HeartprobeInterval {
 				var data []byte
-				msg := &heartMsg{
-					uniqueid: p.starttime,
-				}
 				switch p.protocoltype {
 				case TCP:
 					fallthrough
 				case UNIXSOCKET:
-					data = makeHeartMsg(msg, true)
+					data = makeHeartMsg(true)
 				case WEBSOCKET:
-					data = makeHeartMsg(msg, false)
+					data = makeHeartMsg(false)
 				}
 				select {
 				case p.heartbeatbuffer <- data:

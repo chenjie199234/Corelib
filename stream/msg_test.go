@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
-	"time"
 )
 
 func Test_Msg(t *testing.T) {
@@ -12,10 +11,7 @@ func Test_Msg(t *testing.T) {
 	testusermsg()
 }
 func testheartmsg() {
-	heartmsg := &heartMsg{
-		uniqueid: uint64(time.Now().UnixNano()),
-	}
-	data := makeHeartMsg(heartmsg, true)
+	data := makeHeartMsg(true)
 	msgtype, e := getMsgType(data[4:])
 	if e != nil {
 		panic("get msg type error:" + e.Error())
@@ -23,21 +19,9 @@ func testheartmsg() {
 	if msgtype != HEART {
 		panic(fmt.Sprintf("get msg type error:type:%d wrong", msgtype))
 	}
-	temp, e := getHeartMsg(data[4:])
-	if e != nil {
-		panic("get heart msg error:" + e.Error())
-	}
-	if temp.uniqueid != heartmsg.uniqueid {
-		panic("get heart msg error:data wrong")
-	}
 }
 func testverifymsg() {
-	verifymsg := &verifyMsg{
-		uniqueid:   uint64(time.Now().UnixNano()),
-		sender:     "test",
-		verifydata: []byte{'t', 'e', 's', 't'},
-	}
-	data := makeVerifyMsg(verifymsg, true)
+	data := makeVerifyMsg("test", []byte{'t', 'e', 's', 't'}, 1654, true)
 	msgtype, e := getMsgType(data[4:])
 	if e != nil {
 		panic("get msg type error:" + e.Error())
@@ -45,21 +29,16 @@ func testverifymsg() {
 	if msgtype != VERIFY {
 		panic(fmt.Sprintf("get msg type error:type:%d wrong", msgtype))
 	}
-	temp, e := getVerifyMsg(data[4:])
+	sender, verifydata, starttime, e := getVerifyMsg(data[4:])
 	if e != nil {
 		panic("get verify msg error:" + e.Error())
 	}
-	if temp.uniqueid != verifymsg.uniqueid || temp.sender != verifymsg.sender || !bytes.Equal(temp.verifydata, verifymsg.verifydata) {
+	if sender != "test" || !bytes.Equal(verifydata, []byte{'t', 'e', 's', 't'}) || starttime != 1654 {
 		panic("get verify msg error:data wrong")
 	}
 }
 func testusermsg() {
-	usermsg := &userMsg{
-		uniqueid: uint64(time.Now().UnixNano()),
-		sender:   "test",
-		userdata: []byte("abcdefg"),
-	}
-	data := makeUserMsg(usermsg, true)
+	data := makeUserMsg([]byte{'a', 'b', 'c', 'd', 'e', 'f', 'g'}, 1654, true)
 	msgtype, e := getMsgType(data[4:])
 	if e != nil {
 		panic("get msg type error:" + e.Error())
@@ -67,11 +46,11 @@ func testusermsg() {
 	if msgtype != USER {
 		panic(fmt.Sprintf("get msg type error:type:%d wrong", msgtype))
 	}
-	temp, e := getUserMsg(data[4:])
+	temp, starttime, e := getUserMsg(data[4:])
 	if e != nil {
 		panic("get user msg error:" + e.Error())
 	}
-	if temp.uniqueid != usermsg.uniqueid || temp.sender != usermsg.sender || !bytes.Equal(temp.userdata, usermsg.userdata) {
+	if !bytes.Equal(temp, []byte{'a', 'b', 'c', 'd', 'e', 'f', 'g'}) || starttime != 1654 {
 		panic("get user msg error:data wrong")
 	}
 }

@@ -45,51 +45,33 @@ type Serverinfo struct {
 	//key discoveryserver uniquename
 	discoveryserver map[string]struct{} //this app registered on which discovery server
 	peer            *stream.Peer
-	uniqueid        uint64
-	status          int //0-idle,1-start,2-verify,3-connected
+	starttime       uint64
+	status          int //0-idle,1-start,2-verify,3-connected,4-closing
 
 	//active calls
 	reqs map[uint64]*reqinfo //all reqs to this server
 
-	cpu               []float64 //cpu samples
-	cpuindex          int
-	cpusamplecount    int
-	netlag            []int64 //netlag samples
-	netlagindex       int
-	netlagsamplecount int
-	pickinfo          *PickInfo
+	pickinfo *PickInfo
 }
 type PickInfo struct {
-	Cpuavg, Cpulast       float64 //cpuinfo
-	Netlagavg, Netlaglast int64   //netlaginfo
-	Activecalls           int     //current active calls
-	DiscoveryServers      int     //this server registered on how many discoveryservers
-	Addition              []byte  //addition info register on register center
+	Cpu              float64 //cpuinfo
+	Netlag           int64   //netlaginfo
+	Activecalls      int     //current active calls
+	DiscoveryServers int     //this server registered on how many discoveryservers
+	Addition         []byte  //addition info register on register center
 }
 
 func (s *Serverinfo) reset() {
 	s.appuniquename = ""
 	s.discoveryserver = make(map[string]struct{}, 2)
 	s.peer = nil
-	s.uniqueid = 0
+	s.starttime = 0
 	s.status = 0
 
 	s.reqs = make(map[uint64]*reqinfo, 10)
 
-	for i := range s.cpu {
-		s.cpu[i] = 0
-	}
-	s.cpuindex = 0
-	s.cpusamplecount = 0
-	for i := range s.netlag {
-		s.netlag[i] = 0
-	}
-	s.netlagindex = 0
-	s.netlagsamplecount = 0
-	s.pickinfo.Cpuavg = 0
-	s.pickinfo.Cpulast = 0
-	s.pickinfo.Netlagavg = 0
-	s.pickinfo.Netlaglast = 0
+	s.pickinfo.Cpu = 0
+	s.pickinfo.Netlag = 0
 	s.pickinfo.Activecalls = 0
 	s.pickinfo.DiscoveryServers = 0
 	s.pickinfo.Addition = nil
@@ -109,23 +91,14 @@ func (c *Client) getserver(appuniquename string, discoveryservers map[string]str
 		appuniquename:   appuniquename,
 		discoveryserver: discoveryservers,
 		peer:            nil,
-		uniqueid:        0,
+		starttime:       0,
 		status:          1,
 
 		reqs: make(map[uint64]*reqinfo, 10),
 
-		cpu:               make([]float64, 30),
-		cpuindex:          0,
-		cpusamplecount:    0,
-		netlag:            make([]int64, 30),
-		netlagindex:       0,
-		netlagsamplecount: 0,
-
 		pickinfo: &PickInfo{
-			Cpuavg:           0,
-			Cpulast:          0,
-			Netlagavg:        0,
-			Netlaglast:       0,
+			Cpu:              0,
+			Netlag:           0,
 			Activecalls:      0,
 			DiscoveryServers: len(discoveryservers),
 			Addition:         addition,
@@ -317,13 +290,13 @@ func (c *Client) start(addr string) {
 		}
 	}
 }
-func (c *Client) verifyfunc(ctx context.Context, appuniquename string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
+func (c *Client) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal(peerVerifyData, c.verifydata) {
 		return nil, false
 	}
 	c.lker.RLock()
 	server, ok := c.servers[appuniquename]
-	if !ok || server.peer != nil || server.uniqueid != 0 {
+	if !ok || server.peer != nil || server.starttime != 0 {
 		c.lker.RUnlock()
 		return nil, false
 	}
@@ -337,7 +310,7 @@ func (c *Client) verifyfunc(ctx context.Context, appuniquename string, uniqueid 
 	server.lker.Unlock()
 	return nil, true
 }
-func (c *Client) onlinefunc(p *stream.Peer, appuniquename string, uniqueid uint64) {
+func (c *Client) onlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
 	c.lker.RLock()
 	server, ok := c.servers[appuniquename]
 	if !ok {
@@ -348,22 +321,17 @@ func (c *Client) onlinefunc(p *stream.Peer, appuniquename string, uniqueid uint6
 	c.lker.RUnlock()
 	if server.status == 2 {
 		server.peer = p
-		server.uniqueid = uniqueid
+		server.starttime = starttime
 		server.status = 3
-		p.SetData(unsafe.Pointer(server), uniqueid)
+		p.SetData(unsafe.Pointer(server))
 	} else {
 		//this is impossible
-		p.Close(uniqueid)
+		p.Close()
 	}
 	server.lker.Unlock()
 }
-func (c *Client) userfunc(p *stream.Peer, appuniquename string, uniqueid uint64, data []byte) {
-	tempserver, e := p.GetData(uniqueid)
-	if e != nil {
-		//server closed
-		return
-	}
-	server := (*Serverinfo)(tempserver)
+func (c *Client) userfunc(p *stream.Peer, appuniquename string, data []byte, starttime uint64) {
+	server := (*Serverinfo)(p.GetData())
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
@@ -387,17 +355,11 @@ func (c *Client) userfunc(p *stream.Peer, appuniquename string, uniqueid uint64,
 	}
 	req.lker.Unlock()
 }
-func (c *Client) offlinefunc(p *stream.Peer, appuniquename string, uniqueid uint64) {
-	tempserver, e := p.GetData(uniqueid)
-	if e != nil {
-		//this is impossible
-		fmt.Printf("[Mrpc.client.offlinefunc.impossible]server offline before offlinefunc called\n")
-		return
-	}
-	server := (*Serverinfo)(tempserver)
+func (c *Client) offlinefunc(p *stream.Peer, appuniquename string) {
+	server := (*Serverinfo)(p.GetData())
 	server.lker.Lock()
 	server.peer = nil
-	server.uniqueid = 0
+	server.starttime = 0
 	needoffline := len(server.discoveryserver) == 0
 	if needoffline {
 		server.status = 0
@@ -447,7 +409,7 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 		}
 		pickinfo := make(map[*Serverinfo]PickInfo, int(float64(len(c.servers))*1.3))
 		for _, server := range c.servers {
-			if server.status == 0 {
+			if server.status != 3 {
 				continue
 			}
 			pickinfo[server] = *server.pickinfo
@@ -464,8 +426,8 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 			continue
 		}
 		c.lker.RUnlock()
-		if e := server.peer.SendMessage(d, server.uniqueid); e != nil {
-			//TODO
+		if e := server.peer.SendMessage(d, server.starttime); e != nil {
+			server.status = 4
 			server.lker.Unlock()
 			continue
 		}

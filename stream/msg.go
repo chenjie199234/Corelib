@@ -6,6 +6,23 @@ import (
 	"unsafe"
 )
 
+const (
+	HEART = iota
+	VERIFY
+	USER
+)
+
+//   each row is one byte
+//   |8      |7   |6   |5   |4   |3   |2   |1   |
+//1  |--------type|-----------------------------|
+func makeHeartMsg(needprefix bool) []byte {
+	data := []byte{byte(HEART << 6)}
+	if needprefix {
+		return addPrefix(data)
+	}
+	return data
+}
+
 //   each row is one byte
 //   |8      |7   |6   |5   |4   |3   |2   |1   |
 //1  |--------type|----------------sender length|
@@ -16,95 +33,61 @@ import (
 //6  |------------------------------------------|
 //7  |------------------------------------------|
 //8  |------------------------------------------|
-//9  |----------------------------------uniqueid|
-//10 |------------------------------------------|
-//...|------------------------------------sender|
-//x  |------------------------------------------|
-//...|-----------------------------specific data|
-
-const (
-	HEART = iota
-	VERIFY
-	USER
-)
-
-type heartMsg struct {
-	uniqueid uint64
-}
-type verifyMsg struct {
-	uniqueid   uint64
-	sender     string
-	verifydata []byte
-}
-type userMsg struct {
-	uniqueid uint64
-	sender   string
-	userdata []byte
-}
-
-func makeHeartMsg(msg *heartMsg, needprefix bool) []byte {
-	data := make([]byte, 9)
-	data[0] = byte(HEART << 6)
-	binary.BigEndian.PutUint64(data[1:9], msg.uniqueid)
-	if needprefix {
-		return addPrefix(data)
-	}
-	return data
-}
-func getHeartMsg(data []byte) (*heartMsg, error) {
-	if len(data) != 9 {
-		return nil, fmt.Errorf("bad heart message")
-	}
-	msg := &heartMsg{}
-	msg.uniqueid = binary.BigEndian.Uint64(data[1:9])
-	return msg, nil
-}
-func makeVerifyMsg(msg *verifyMsg, needprefix bool) []byte {
-	data := make([]byte, 9+len(msg.sender)+len(msg.verifydata))
-	data[0] = byte((VERIFY << 6) | len(msg.sender))
-	binary.BigEndian.PutUint64(data[1:9], msg.uniqueid)
-	copy(data[9:], msg.sender)
-	if len(msg.verifydata) > 0 {
-		copy(data[9+len(msg.sender):], msg.verifydata)
+//9  |---------------------------------starttime|
+//...|------------------------------------------|
+//x  |------------------------------------sender|
+//...|------------------------------------------|
+//y  |-----------------------------specific data|
+func makeVerifyMsg(sender string, verifydata []byte, starttime uint64, needprefix bool) []byte {
+	data := make([]byte, 9+len(sender)+len(verifydata))
+	data[0] = byte((VERIFY << 6) | len(sender))
+	binary.BigEndian.PutUint64(data[1:9], starttime)
+	copy(data[9:], sender)
+	if len(verifydata) > 0 {
+		copy(data[9+len(sender):], verifydata)
 	}
 	if needprefix {
 		return addPrefix(data)
 	}
 	return data
-
 }
-func getVerifyMsg(data []byte) (*verifyMsg, error) {
+func getVerifyMsg(data []byte) (string, []byte, uint64, error) {
 	senderlen := int(data[0] ^ (VERIFY << 6))
 	if len(data) < (9 + senderlen) {
-		return nil, fmt.Errorf("bad verify message")
+		return "", nil, 0, fmt.Errorf("empty message")
 	}
-	msg := &verifyMsg{}
-	msg.uniqueid = binary.BigEndian.Uint64(data[1:9])
-	msg.sender = byte2str(data[9 : 9+senderlen])
-	msg.verifydata = data[9+senderlen:]
-	return msg, nil
+
+	return byte2str(data[9 : 9+senderlen]), data[9+senderlen:], binary.BigEndian.Uint64(data[1:9]), nil
 }
-func makeUserMsg(msg *userMsg, needprefix bool) []byte {
-	data := make([]byte, 9+len(msg.sender)+len(msg.userdata))
-	data[0] = byte((USER << 6) | len(msg.sender))
-	binary.BigEndian.PutUint64(data[1:9], msg.uniqueid)
-	copy(data[9:], msg.sender)
-	copy(data[9+len(msg.sender):], msg.userdata)
+
+//   each row is one byte
+//   |8      |7   |6   |5   |4   |3   |2   |1   |
+//1  |--------type|-----------------------------|
+//2  |------------------------------------------|
+//3  |------------------------------------------|
+//4  |------------------------------------------|
+//5  |------------------------------------------|
+//6  |------------------------------------------|
+//7  |------------------------------------------|
+//8  |------------------------------------------|
+//9  |---------------------------------starttime|
+//...|------------------------------------------|
+//y  |-----------------------------specific data|
+func makeUserMsg(userdata []byte, starttime uint64, needprefix bool) []byte {
+	data := make([]byte, 9+len(userdata))
+	data[0] = byte(USER << 6)
+	binary.BigEndian.PutUint64(data[1:9], starttime)
+	copy(data[9:], userdata)
 	if needprefix {
 		return addPrefix(data)
 	}
 	return data
 }
-func getUserMsg(data []byte) (*userMsg, error) {
-	senderlen := int(data[0] ^ (USER << 6))
-	if len(data) < (9 + senderlen + 1) {
-		return nil, fmt.Errorf("bad user message")
+func getUserMsg(data []byte) ([]byte, uint64, error) {
+	if len(data) < 9 {
+		return nil, 0, fmt.Errorf("empty message")
 	}
-	msg := &userMsg{}
-	msg.uniqueid = binary.BigEndian.Uint64(data[1:9])
-	msg.sender = byte2str(data[9 : 9+senderlen])
-	msg.userdata = data[9+senderlen:]
-	return msg, nil
+	return data[9:], binary.BigEndian.Uint64(data[1:9]), nil
 }
 func getMsgType(data []byte) (int, error) {
 	if len(data) == 0 {

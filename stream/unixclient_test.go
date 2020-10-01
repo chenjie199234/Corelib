@@ -42,7 +42,7 @@ func Test_Unixclient(t *testing.T) {
 	}()
 	http.ListenAndServe(":8083", nil)
 }
-func unixclienthandleVerify(ctx context.Context, peeruniquename string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
+func unixclienthandleVerify(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal([]byte{'t', 'e', 's', 't'}, peerVerifyData) {
 		fmt.Println("verify error")
 		return nil, false
@@ -52,21 +52,21 @@ func unixclienthandleVerify(ctx context.Context, peeruniquename string, uniqueid
 
 var unix int64
 
-func unixclienthandleonline(p *Peer, peeruniquename string, uniqueid uint64) {
+func unixclienthandleonline(p *Peer, peeruniquename string, starttime uint64) {
 	old := atomic.SwapInt64(&unix, 1)
 	if old == 0 {
 		go func() {
 			for {
 				time.Sleep(time.Second)
-				p.SendMessage([]byte{'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd'}, uniqueid)
+				p.SendMessage([]byte{'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd'}, starttime)
 			}
 		}()
 	}
 }
 
-func unixclienthandleuserdata(p *Peer, peeruniquename string, uniqueid uint64, data []byte) {
+func unixclienthandleuserdata(p *Peer, peeruniquename string, data []byte, starttime uint64) {
 	fmt.Printf("%s\n", data)
 }
 
-func unixclienthandleoffline(p *Peer, peeruniquename string, uniqueid uint64) {
+func unixclienthandleoffline(p *Peer, peeruniquename string) {
 }

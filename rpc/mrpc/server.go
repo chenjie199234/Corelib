@@ -80,14 +80,14 @@ func RegisterHandler(path string, handler OutsideHandler, timeout int) error {
 	return nil
 }
 
-func (s *server) verifyfunc(ctx context.Context, peeruniquename string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
+func (s *server) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal(peerVerifyData, s.verifydata) {
 		return nil, false
 	}
 	return s.verifydata, true
 }
 
-func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64, data []byte) {
+func (s *server) userfunc(p *stream.Peer, peeruniquename string, data []byte, starttime uint64) {
 	go func() {
 		msg := &Msg{}
 		if e := proto.Unmarshal(data, msg); e != nil {
@@ -102,7 +102,7 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 			msg.Body = nil
 			msg.Error = Errmaker(ERRNOAPI, ERRMESSAGE[ERRNOAPI])
 			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(d, uniqueid); e != nil {
+			if e := p.SendMessage(d, starttime); e != nil {
 				fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)
 			}
 			return
@@ -129,7 +129,7 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 			msg.Error = err
 			msg.Metadata = nil
 			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(d, uniqueid); e != nil {
+			if e := p.SendMessage(d, starttime); e != nil {
 				fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)
 			}
 		} else {
@@ -138,7 +138,7 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, uniqueid uint64
 			msg.Error = nil
 			msg.Metadata = GetAllOutMetadata(ctx)
 			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(d, uniqueid); e != nil {
+			if e := p.SendMessage(d, starttime); e != nil {
 				fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)
 			}
 		}

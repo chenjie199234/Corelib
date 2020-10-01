@@ -50,7 +50,7 @@ type client struct {
 type servernode struct {
 	lker       *sync.Mutex
 	peer       *stream.Peer
-	uniqueid   uint64
+	starttime  uint64
 	htree      *hashtree.Hashtree
 	allclients map[string]*clientinfo //key clientuniquename
 	status     int                    //0-idle,1-start,2-verify,3-connected,4-preparing,5-registered
@@ -103,6 +103,7 @@ func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []
 					<-tker.C
 				}
 				clientinstance.stop()
+				return
 			default:
 				select {
 				case <-clientinstance.stopch:
@@ -111,6 +112,7 @@ func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []
 						<-tker.C
 					}
 					clientinstance.stop()
+					return
 				case _, ok := <-tker.C:
 					if ok {
 						clientinstance.updateserver(cc, url)
@@ -471,12 +473,12 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 		if !find {
 			delete(c.servers, serveruniquename)
 			if server.peer != nil {
-				server.peer.Close(server.uniqueid)
+				server.peer.Close()
 			}
 		} else if c.canregister && server.status == 4 {
 			regmsg, _ := json.Marshal(c.regmsg)
-			server.peer.SendMessage(makeOnlineMsg("", regmsg, nil), server.uniqueid)
 			server.status = 5
+			server.peer.SendMessage(makeOnlineMsg("", regmsg, nil), server.starttime)
 		}
 		server.lker.Unlock()
 	}
@@ -494,7 +496,7 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 			server = &servernode{
 				lker:       &sync.Mutex{},
 				peer:       nil,
-				uniqueid:   0,
+				starttime:  0,
 				htree:      hashtree.New(10, 3),
 				allclients: make(map[string]*clientinfo, 5),
 				status:     0,
@@ -540,19 +542,19 @@ func (c *client) stop() {
 		server.lker.Lock()
 		delete(c.servers, k)
 		if server.peer != nil {
-			server.peer.Close(server.uniqueid)
+			server.peer.Close()
 		}
 		server.lker.Unlock()
 	}
 	c.lker.Unlock()
 }
-func (c *client) verifyfunc(ctx context.Context, serveruniquename string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
+func (c *client) verifyfunc(ctx context.Context, serveruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal(peerVerifyData, c.verifydata) {
 		return nil, false
 	}
 	c.lker.RLock()
 	server, ok := c.servers[serveruniquename]
-	if !ok || server.peer != nil || server.uniqueid != 0 {
+	if !ok || server.peer != nil || server.starttime != 0 {
 		c.lker.RUnlock()
 		return nil, false
 	}
@@ -566,7 +568,7 @@ func (c *client) verifyfunc(ctx context.Context, serveruniquename string, unique
 	server.lker.Unlock()
 	return nil, true
 }
-func (c *client) onlinefunc(p *stream.Peer, serveruniquename string, uniqueid uint64) {
+func (c *client) onlinefunc(p *stream.Peer, serveruniquename string, starttime uint64) {
 	c.lker.RLock()
 	server, ok := c.servers[serveruniquename]
 	if !ok {
@@ -579,23 +581,18 @@ func (c *client) onlinefunc(p *stream.Peer, serveruniquename string, uniqueid ui
 	if server.status == 2 {
 		server.status = 3
 		server.peer = p
-		server.uniqueid = uniqueid
-		p.SetData(unsafe.Pointer(server), uniqueid)
+		server.starttime = starttime
+		p.SetData(unsafe.Pointer(server))
 		//after online the first message is pull all registered peers
-		p.SendMessage(makePullMsg(), uniqueid)
+		p.SendMessage(makePullMsg(), starttime)
 	} else {
 		//this is impossible
-		p.Close(uniqueid)
+		p.Close()
 	}
 	server.lker.Unlock()
 }
-func (c *client) userfunc(p *stream.Peer, serveruniquename string, uniqueid uint64, data []byte) {
-	tempserver, e := p.GetData(uniqueid)
-	if e != nil {
-		//server closed
-		return
-	}
-	server := (*servernode)(tempserver)
+func (c *client) userfunc(p *stream.Peer, serveruniquename string, data []byte, starttime uint64) {
+	server := (*servernode)(p.GetData())
 	server.lker.Lock()
 	defer server.lker.Unlock()
 	switch data[0] {
@@ -604,7 +601,7 @@ func (c *client) userfunc(p *stream.Peer, serveruniquename string, uniqueid uint
 		if e != nil {
 			//this is impossible
 			fmt.Printf("[Discovery.client.userfunc.impossible]online peer:%s message:%s broken from discovery server:%s\n", onlinepeer, data, serveruniquename)
-			p.Close(uniqueid)
+			p.Close()
 			return
 		}
 		leafindex := int(bkdrhash(onlinepeer, uint64(server.htree.GetLeavesNum())))
@@ -640,7 +637,7 @@ func (c *client) userfunc(p *stream.Peer, serveruniquename string, uniqueid uint
 		if !bytes.Equal(server.htree.GetRootHash(), newhash) {
 			//this is impossible
 			fmt.Printf("[Discovery.client.userfunc.impossible]data from discovery server:%s conflict\n", serveruniquename)
-			p.SendMessage(makePullMsg(), uniqueid)
+			p.SendMessage(makePullMsg(), server.starttime)
 		} else {
 			c.nlker.RLock()
 			c.notice(onlinepeer, regmsg, true, serveruniquename)
@@ -651,7 +648,7 @@ func (c *client) userfunc(p *stream.Peer, serveruniquename string, uniqueid uint
 		if e != nil {
 			//this is impossible
 			fmt.Printf("[Discovery.client.userfunc.impossible]offline peer:%s message:%s broken from discovery server:%s\n", offlinepeer, data, serveruniquename)
-			p.Close(uniqueid)
+			p.Close()
 			return
 		}
 		delete(server.allclients, offlinepeer)
@@ -680,7 +677,7 @@ func (c *client) userfunc(p *stream.Peer, serveruniquename string, uniqueid uint
 		if !bytes.Equal(server.htree.GetRootHash(), newhash) {
 			//this is impossible
 			fmt.Printf("[Discovery.client.userfunc.impossible]data from discovery server:%s conflict\n", serveruniquename)
-			p.SendMessage(makePullMsg(), uniqueid)
+			p.SendMessage(makePullMsg(), server.starttime)
 		} else {
 			c.nlker.RLock()
 			c.notice(offlinepeer, regmsg, false, serveruniquename)
@@ -691,7 +688,7 @@ func (c *client) userfunc(p *stream.Peer, serveruniquename string, uniqueid uint
 		if e != nil {
 			//this is impossible
 			fmt.Printf("[Discovery.client.userfunc.impossible]push message:%d broken from discovery server:%s\n", data, serveruniquename)
-			p.Close(uniqueid)
+			p.Close()
 			return
 		}
 		if server.status == 3 {
@@ -840,20 +837,13 @@ func (c *client) userfunc(p *stream.Peer, serveruniquename string, uniqueid uint
 		server.htree.SetMultiLeavesValue(updateleavesvalue)
 	default:
 		fmt.Printf("[Discovery.client.userfunc.impossible]unknown message type")
-		p.Close(uniqueid)
+		p.Close()
 	}
 }
-func (c *client) offlinefunc(p *stream.Peer, serveruniquename string, uniqueid uint64) {
-	tempserver, e := p.GetData(uniqueid)
-	if e != nil {
-		//server closed,this is impossible
-		fmt.Printf("[Discovery.client.offlinefunc.impossible]server offline before offlinefunc called\n")
-		return
-	}
-	server := (*servernode)(tempserver)
+func (c *client) offlinefunc(p *stream.Peer, serveruniquename string) {
+	server := (*servernode)(p.GetData())
 	server.lker.Lock()
 	server.peer = nil
-	server.uniqueid = 0
 	server.htree.Reset()
 	c.nlker.RLock()
 	for _, peer := range server.allclients {

@@ -46,20 +46,20 @@ func Test_Unixserver(t *testing.T) {
 	}()
 	http.ListenAndServe(":8082", nil)
 }
-func unixserverhandleVerify(ctx context.Context, peeruniquename string, uniqueid uint64, peerVerifyData []byte) ([]byte, bool) {
+func unixserverhandleVerify(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal([]byte{'t', 'e', 's', 't', 'c'}, peerVerifyData) {
 		fmt.Println("verify error")
 		return nil, false
 	}
 	return []byte{'t', 'e', 's', 't'}, true
 }
-func unixserverhandleonline(p *Peer, peeruniquename string, uniqueid uint64) {
+func unixserverhandleonline(p *Peer, peeruniquename string, starttime uint64) {
 	atomic.AddInt64(&unixcount, 1)
 }
-func unixserverhandleuserdata(ctx context.Context, p *Peer, peeruniquename string, uniqueid uint64, data []byte) {
+func unixserverhandleuserdata(ctx context.Context, p *Peer, peeruniquename string, data []byte, starttime uint64) {
 	fmt.Printf("%s:%s\n", peeruniquename, data)
-	p.SendMessage(data, uniqueid)
+	p.SendMessage(data, starttime)
 }
-func unixserverhandleoffline(p *Peer, peeruniquename string) {
+func unixserverhandleoffline(p *Peer, peeruniquename string, starttime uint64) {
 	atomic.AddInt64(&unixcount, -1)
 }
