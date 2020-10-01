@@ -213,13 +213,11 @@ func (c *Client) notice() {
 			if needoffline {
 				//all req failed
 				for _, req := range server.reqs {
-					req.lker.Lock()
 					if req.callid != 0 {
 						req.resp = nil
 						req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
 						req.finish <- struct{}{}
 					}
-					req.lker.Unlock()
 				}
 				server.reqs = make(map[uint64]*reqinfo, 10)
 			}
@@ -283,13 +281,11 @@ func (c *Client) start(addr string) {
 		if needoffline {
 			//all req failed
 			for _, req := range server.reqs {
-				req.lker.Lock()
 				if req.callid != 0 {
 					req.resp = nil
 					req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
 					req.finish <- struct{}{}
 				}
-				req.lker.Unlock()
 			}
 			server.reqs = make(map[uint64]*reqinfo, 10)
 		}
@@ -353,20 +349,15 @@ func (c *Client) userfunc(p *stream.Peer, appuniquename string, data []byte, sta
 		server.lker.Unlock()
 		return
 	}
-	delete(server.reqs, msg.Callid)
 	server.pickinfo.Activecalls = len(server.reqs)
 	server.pickinfo.Cpu = msg.Cpu
-	req.lker.Lock()
 	if req.callid == msg.Callid {
 		server.pickinfo.Netlag = time.Now().UnixNano() - req.starttime
-	}
-	server.lker.Unlock()
-	if req.callid == msg.Callid {
 		req.resp = msg.Body
 		req.err = msg.Error
 		req.finish <- struct{}{}
 	}
-	req.lker.Unlock()
+	server.lker.Unlock()
 }
 func (c *Client) offlinefunc(p *stream.Peer, appuniquename string) {
 	server := (*Serverinfo)(p.GetData())
@@ -383,13 +374,11 @@ func (c *Client) offlinefunc(p *stream.Peer, appuniquename string) {
 	if needoffline {
 		//all req failed
 		for _, req := range server.reqs {
-			req.lker.Lock()
 			if req.callid != 0 {
 				req.resp = nil
 				req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
 				req.finish <- struct{}{}
 			}
-			req.lker.Unlock()
 		}
 		server.reqs = make(map[uint64]*reqinfo, 10)
 	}
@@ -458,20 +447,21 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 	case <-r.finish:
 		resp := r.resp
 		err := r.err
-		r.lker.Lock()
+		server.lker.Lock()
+		delete(server.reqs, msg.Callid)
 		c.putreq(r)
-		r.lker.Unlock()
+		server.lker.Unlock()
 		return resp, err
 	case <-ctx.Done():
-		r.lker.Lock()
+		server.lker.Lock()
+		delete(server.reqs, msg.Callid)
 		c.putreq(r)
-		r.lker.Unlock()
+		server.lker.Unlock()
 		return nil, Errmaker(ERRCTXCANCEL, ERRMESSAGE[ERRCTXCANCEL])
 	}
 }
 
 type reqinfo struct {
-	lker      *sync.Mutex
 	callid    uint64
 	finish    chan struct{}
 	resp      []byte
@@ -497,7 +487,6 @@ func (c *Client) getreq(callid uint64) *reqinfo {
 		return r
 	}
 	return &reqinfo{
-		lker:      &sync.Mutex{},
 		callid:    callid,
 		finish:    make(chan struct{}),
 		resp:      nil,

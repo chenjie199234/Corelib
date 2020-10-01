@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/stream"
+	"github.com/chenjie199234/Corelib/sys/cpu"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -99,6 +100,7 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, data []byte, st
 		if !ok {
 			fmt.Printf("[Mrpc.server.userfunc]api:%s not implement\n", msg.Path)
 			msg.Metadata = nil
+			msg.Cpu = cpu.GetUse()
 			msg.Body = nil
 			msg.Error = Errmaker(ERRNOAPI, ERRMESSAGE[ERRNOAPI])
 			d, _ := proto.Marshal(msg)
@@ -126,6 +128,7 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, data []byte, st
 		if err != nil {
 			msg.Deadline = 0
 			msg.Body = nil
+			msg.Cpu = cpu.GetUse()
 			msg.Error = err
 			msg.Metadata = nil
 			d, _ := proto.Marshal(msg)
@@ -135,6 +138,7 @@ func (s *server) userfunc(p *stream.Peer, peeruniquename string, data []byte, st
 		} else {
 			msg.Deadline = 0
 			msg.Body = resp
+			msg.Cpu = cpu.GetUse()
 			msg.Error = nil
 			msg.Metadata = GetAllOutMetadata(ctx)
 			d, _ := proto.Marshal(msg)
