@@ -10,6 +10,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/chenjie199234/Corelib/sys/trace"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -113,6 +114,7 @@ func (this *Web) insideHandler(timeout int, handlers ...OutsideHandler) func(htt
 			ctx.Context, f = context.WithDeadline(ctx.Context, dl)
 			defer f()
 		}
+		ctx.Context = trace.SetTrace(ctx, trace.MakeTrace())
 		for _, handler := range handlers {
 			handler(ctx)
 			if !ctx.s {
@@ -132,6 +134,7 @@ func (this *Web) insideHandler(timeout int, handlers ...OutsideHandler) func(htt
 		this.putContext(ctx)
 	}
 }
+
 func (this *Web) GET(path string, timeout int, handlers ...OutsideHandler) {
 	this.router.GET(path, this.insideHandler(timeout, handlers...))
 }

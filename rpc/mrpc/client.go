@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/discovery"
 	"github.com/chenjie199234/Corelib/stream"
+	"github.com/chenjie199234/Corelib/sys/trace"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -29,10 +31,12 @@ var clients map[string]*Client
 func init() {
 	lker = &sync.Mutex{}
 	clients = make(map[string]*Client)
+	rand.Seed(time.Now().UnixNano())
 }
 
 //appuniquename = appname:addr
 type Client struct {
+	c          *stream.InstanceConfig
 	appname    string
 	verifydata []byte
 	instance   *stream.Instance
@@ -129,6 +133,7 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 		return c
 	}
 	clientinstance := &Client{
+		c:          c,
 		appname:    appname,
 		verifydata: vdata,
 		lker:       &sync.RWMutex{},
@@ -416,6 +421,12 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 	if ok {
 		msg.Deadline = dl.UnixNano()
 	}
+	traceid := trace.GetTrace(ctx)
+	if traceid == "" {
+		traceid = trace.MakeTrace()
+	}
+	traceid = trace.AppendTrace(traceid, c.c.SelfName)
+	msg.Trace = traceid
 	msg.Body = req
 	msg.Metadata = GetAllOutMetadata(ctx)
 	d, _ := proto.Marshal(msg)

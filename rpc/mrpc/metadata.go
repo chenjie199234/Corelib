@@ -36,6 +36,19 @@ func SetInMetadata(ctx context.Context, key, value string) context.Context {
 	}
 	result := tempresult.(map[string]string)
 	result[key] = value
+	ctx = context.WithValue(ctx, inmetadatakey{}, result)
+	return ctx
+}
+func SetAllInMetadata(ctx context.Context, data map[string]string) context.Context {
+	tempresult := ctx.Value(inmetadatakey{})
+	if tempresult == nil {
+		return context.WithValue(ctx, inmetadatakey{}, data)
+	}
+	result := tempresult.(map[string]string)
+	for k, v := range data {
+		result[k] = v
+	}
+	ctx = context.WithValue(ctx, inmetadatakey{}, result)
 	return ctx
 }
 
@@ -71,5 +84,18 @@ func SetOutMetadata(ctx context.Context, key, value string) context.Context {
 	}
 	result := tempresult.(map[string]string)
 	result[key] = value
+	ctx = context.WithValue(ctx, outmetadatakey{}, result)
+	return ctx
+}
+func SetAllOutMetadata(ctx context.Context, data map[string]string) context.Context {
+	tempresult := ctx.Value(outmetadatakey{})
+	if tempresult == nil {
+		return context.WithValue(ctx, outmetadatakey{}, data)
+	}
+	result := tempresult.(map[string]string)
+	for k, v := range data {
+		result[k] = v
+	}
+	ctx = context.WithValue(ctx, outmetadatakey{}, result)
 	return ctx
 }

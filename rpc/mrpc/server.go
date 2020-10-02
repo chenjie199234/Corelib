@@ -9,6 +9,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/sys/cpu"
+	"github.com/chenjie199234/Corelib/sys/trace"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -24,6 +25,7 @@ var (
 )
 
 type Server struct {
+	c          *stream.InstanceConfig
 	lker       *sync.Mutex
 	handler    map[string]func(*Msg)
 	instance   *stream.Instance
@@ -57,8 +59,13 @@ func (s *Server) insidehandler(timeout int, handlers ...OutsideHandler) func(*Ms
 		}
 		ctx, f := context.WithDeadline(context.Background(), dl)
 		defer f()
-		for k, v := range msg.Metadata {
-			ctx = SetInMetadata(ctx, k, v)
+		if len(msg.Metadata) > 0 {
+			ctx = SetAllInMetadata(ctx, msg.Metadata)
+		}
+		if msg.Trace == "" {
+			ctx = trace.SetTrace(ctx, trace.MakeTrace())
+		} else {
+			ctx = trace.SetTrace(ctx, msg.Trace)
 		}
 		var resp []byte
 		var err *MsgErr
