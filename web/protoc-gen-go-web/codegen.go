@@ -271,6 +271,9 @@ func commentTrail(trail string) (string, int64) {
 				unit = trails[1][i:]
 				break
 			}
+			if i == len(trails[1])-1 {
+				number = trails[1]
+			}
 		}
 		if number == "" {
 			return strings.TrimSpace(strings.TrimSuffix(strings.ToUpper(trails[0]), "\n")), 0
@@ -283,6 +286,7 @@ func commentTrail(trail string) (string, int64) {
 			panic("timeout can't < 0")
 		}
 		switch unit {
+		case "":
 		case "ms":
 		case "s":
 			timeout = timeout * 1000
