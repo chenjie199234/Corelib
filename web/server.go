@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 	"unsafe"
@@ -20,8 +19,6 @@ type Web struct {
 	router      *httprouter.Router
 	contextpool *sync.Pool
 }
-
-type cancelfunckey struct{}
 
 var defaulttimeout = 300
 
@@ -43,21 +40,10 @@ func NewInstance(c *WebConfig) *Web {
 			},
 		},
 	}
-	instance.server.ConnContext = func(ctx context.Context, conn net.Conn) context.Context {
-		conn.(*net.TCPConn).SetReadBuffer(c.SocketReadBufferLen)
-		conn.(*net.TCPConn).SetWriteBuffer(c.SocketWriteBufferLen)
-		if c.WriteTimeout != 0 {
-			ctx, f := context.WithTimeout(ctx, time.Duration(c.WriteTimeout)*time.Millisecond)
-			ctx = context.WithValue(ctx, cancelfunckey{}, f)
-			return ctx
-		} else if c.ReadTimeout != 0 {
-			ctx, f := context.WithTimeout(ctx, time.Duration(c.ReadTimeout)*time.Millisecond)
-			ctx = context.WithValue(ctx, cancelfunckey{}, f)
-			return ctx
-		} else {
-			ctx, f := context.WithTimeout(ctx, time.Duration(defaulttimeout)*time.Millisecond)
-			ctx = context.WithValue(ctx, cancelfunckey{}, f)
-			return ctx
+	instance.server.ConnState = func(conn net.Conn, s http.ConnState) {
+		if s == http.StateNew {
+			conn.(*net.TCPConn).SetReadBuffer(c.SocketReadBufferLen)
+			conn.(*net.TCPConn).SetWriteBuffer(c.SocketWriteBufferLen)
 		}
 	}
 	instance.router.PanicHandler = func(w http.ResponseWriter, r *http.Request, i interface{}) {
@@ -92,29 +78,19 @@ var emptydata = []byte{'{', '}'}
 func (this *Web) insideHandler(timeout int, handlers ...OutsideHandler) func(http.ResponseWriter, *http.Request, httprouter.Params) {
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		ctx := this.getContext(w, r, p)
-		dl, _ := ctx.Deadline()
-		changed := false
+		//set dead line
+		var dl time.Time
 		if timeout > 0 {
-			nowdl := time.Now().Add(time.Duration(timeout) * time.Millisecond)
-			if dl.UnixNano() > nowdl.UnixNano() {
-				changed = true
-				dl = nowdl
-			}
+			dl = time.Now().Add(time.Duration(timeout) * time.Millisecond)
+		} else {
+			dl = time.Now().Add(time.Duration(defaulttimeout) * time.Millisecond)
 		}
-		if value := ctx.GetHeader("Deadline"); value != "" {
-			if dltime, e := strconv.ParseInt(value, 10, 64); e == nil {
-				if dltime < dl.UnixNano() {
-					dl = time.Unix(0, dltime)
-					changed = true
-				}
-			}
-		}
-		if changed {
-			var f context.CancelFunc
-			ctx.Context, f = context.WithDeadline(ctx.Context, dl)
-			defer f()
-		}
-		ctx.Context = trace.SetTrace(ctx, trace.MakeTrace())
+		var f context.CancelFunc
+		ctx.Context, f = context.WithDeadline(ctx.Context, dl)
+		defer f()
+		//set traceid
+		ctx.Context = trace.SetTrace(ctx.Context, trace.MakeTrace())
+		//deal logic
 		for _, handler := range handlers {
 			handler(ctx)
 			if !ctx.s {
@@ -124,12 +100,6 @@ func (this *Web) insideHandler(timeout int, handlers ...OutsideHandler) func(htt
 		if ctx.s {
 			ctx.w.WriteHeader(http.StatusOK)
 			ctx.w.Write(emptydata)
-		}
-		tempf := ctx.Value(cancelfunckey{})
-		if tempf != nil {
-			if f, ok := tempf.(context.CancelFunc); ok {
-				f()
-			}
 		}
 		this.putContext(ctx)
 	}
