@@ -18,10 +18,10 @@ import (
 )
 
 type WebTestService struct {
-	RegisterMidware func() map[string][]web.OutsideHandler
-	Hello           func(*web.Context, *HelloReq) (*HelloResp, error)
-	Kiss            func(*web.Context, *second.KissReq) (*second.KissResp, error)
-	Bye             func(*web.Context, *second.ByeReq) (*second.ByeResp, error)
+	Midware func() map[string][]web.OutsideHandler
+	Hello   func(*web.Context, *HelloReq) (*HelloResp, error)
+	Kiss    func(*web.Context, *second.KissReq) (*second.KissResp, error)
+	Bye     func(*web.Context, *second.ByeReq) (*second.ByeResp, error)
 }
 
 func (s *WebTestService) hello(ctx *web.Context) {
@@ -252,32 +252,32 @@ var PathWebTestKiss = "/Test/Kiss"
 var PathWebTestBye = "/Test/Bye"
 
 func RegisterWebTestService(engine *web.Web, instance *WebTestService) {
-	var pathmids map[string][]web.OutsideHandler
-	if instance.RegisterMidware != nil {
-		pathmids = instance.RegisterMidware()
+	var allmids map[string][]web.OutsideHandler
+	if instance.Midware != nil {
+		allmids = instance.Midware()
 	}
 	//Hello
 	if instance.Hello == nil {
-		engine.GET(PathWebTestHello, func(ctx *web.Context) { ctx.WriteString(http.StatusNotFound, "method Hello not implemented") })
-	} else if mids, ok := pathmids[PathWebTestHello]; ok && len(mids) > 0 {
-		engine.GET(PathWebTestHello, append(mids, instance.hello)...)
+		engine.GET(PathWebTestHello, 200, func(ctx *web.Context) { ctx.WriteString(http.StatusNotFound, "method Hello not implemented") })
+	} else if mids, ok := allmids[PathWebTestHello]; ok && len(mids) != 0 {
+		engine.GET(PathWebTestHello, 200, append(mids, instance.hello)...)
 	} else {
-		engine.GET(PathWebTestHello, instance.hello)
+		engine.GET(PathWebTestHello, 200, instance.hello)
 	}
 	//Kiss
 	if instance.Kiss == nil {
-		engine.POST(PathWebTestKiss, func(ctx *web.Context) { ctx.WriteString(http.StatusNotFound, "method Kiss not implemented") })
-	} else if mids, ok := pathmids[PathWebTestKiss]; ok && len(mids) > 0 {
-		engine.POST(PathWebTestKiss, append(mids, instance.kiss)...)
+		engine.POST(PathWebTestKiss, 2000, func(ctx *web.Context) { ctx.WriteString(http.StatusNotFound, "method Kiss not implemented") })
+	} else if mids, ok := allmids[PathWebTestKiss]; ok && len(mids) != 0 {
+		engine.POST(PathWebTestKiss, 2000, append(mids, instance.kiss)...)
 	} else {
-		engine.POST(PathWebTestKiss, instance.kiss)
+		engine.POST(PathWebTestKiss, 2000, instance.kiss)
 	}
 	//Bye
 	if instance.Bye == nil {
-		engine.DELETE(PathWebTestBye, func(ctx *web.Context) { ctx.WriteString(http.StatusNotFound, "method Bye not implemented") })
-	} else if mids, ok := pathmids[PathWebTestBye]; ok && len(mids) > 0 {
-		engine.DELETE(PathWebTestBye, append(mids, instance.bye)...)
+		engine.GET(PathWebTestBye, 200, func(ctx *web.Context) { ctx.WriteString(http.StatusNotFound, "method Bye not implemented") })
+	} else if mids, ok := allmids[PathWebTestBye]; ok && len(mids) != 0 {
+		engine.GET(PathWebTestBye, 200, append(mids, instance.bye)...)
 	} else {
-		engine.DELETE(PathWebTestBye, instance.bye)
+		engine.GET(PathWebTestBye, 200, instance.bye)
 	}
 }

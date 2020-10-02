@@ -1,0 +1,21 @@
+syntax = "proto3";
+package first;
+option go_package="protoc-gen-go-mrpc/first;first";
+import "protoc-gen-go-mrpc/second/second.proto";
+service test {
+	rpc hello(hello_req)returns(hello_resp);//get
+	rpc kiss(second.kiss_req)returns(second.kiss_resp);//post
+	rpc bye(second.bye_req)returns(second.bye_resp);//delete
+}
+message hello_req{
+	string name=1;
+	int64 sex=2;
+	string addr=3;
+	string tel=4;
+}
+message hello_resp{
+	string name=1;
+	int64 sex=2;
+	string addr=3;
+	string tel=4;
+}

@@ -405,12 +405,13 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 		return nil, Errmaker(ERRLARGE, ERRMESSAGE[ERRLARGE])
 	}
 	var server *Serverinfo
-	var r *reqinfo
+	r := c.getreq(msg.Callid)
 	//pick server
 	for {
 		c.lker.RLock()
 		if len(c.servers) == 0 {
 			c.lker.RUnlock()
+			c.putreq(r)
 			return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
 		}
 		pickinfo := make(map[*Serverinfo]PickInfo, int(float64(len(c.servers))*1.3))
@@ -423,6 +424,7 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 		c.lker.RUnlock()
 		if len(pickinfo) == 0 {
 			c.lker.RUnlock()
+			c.putreq(r)
 			return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
 		}
 		server = c.pick(pickinfo)
@@ -431,12 +433,10 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 			server.lker.Unlock()
 			continue
 		}
-		r = c.getreq(msg.Callid)
 		server.reqs[msg.Callid] = r
 		if e := server.peer.SendMessage(d, server.starttime); e != nil {
 			server.status = 4
 			delete(server.reqs, msg.Callid)
-			c.putreq(r)
 			server.lker.Unlock()
 			continue
 		}

@@ -17,7 +17,7 @@ func Test_Server(t *testing.T) {
 		SocketReadBufferLen:  1024,
 		SocketWriteBufferLen: 1024,
 	})
-	instance.GET("/", handleroot)
+	instance.GET("/", 100, handleroot)
 	instance.StartWebServer()
 }
 func handleroot(ctx *Context) {

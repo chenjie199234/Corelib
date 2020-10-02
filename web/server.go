@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 	"unsafe"
@@ -21,7 +22,7 @@ type Web struct {
 
 type cancelfunckey struct{}
 
-var defaulttimeout = 200
+var defaulttimeout = 300
 
 func NewInstance(c *WebConfig) *Web {
 	instance := &Web{
@@ -87,9 +88,31 @@ type OutsideHandler func(*Context)
 
 var emptydata = []byte{'{', '}'}
 
-func (this *Web) insideHandler(handlers ...OutsideHandler) func(http.ResponseWriter, *http.Request, httprouter.Params) {
+func (this *Web) insideHandler(timeout int, handlers ...OutsideHandler) func(http.ResponseWriter, *http.Request, httprouter.Params) {
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		ctx := this.getContext(w, r, p)
+		dl, _ := ctx.Deadline()
+		changed := false
+		if timeout > 0 {
+			nowdl := time.Now().Add(time.Duration(timeout) * time.Millisecond)
+			if dl.UnixNano() > nowdl.UnixNano() {
+				changed = true
+				dl = nowdl
+			}
+		}
+		if value := ctx.GetHeader("Deadline"); value != "" {
+			if dltime, e := strconv.ParseInt(value, 10, 64); e == nil {
+				if dltime < dl.UnixNano() {
+					dl = time.Unix(0, dltime)
+					changed = true
+				}
+			}
+		}
+		if changed {
+			var f context.CancelFunc
+			ctx.Context, f = context.WithDeadline(ctx.Context, dl)
+			defer f()
+		}
 		for _, handler := range handlers {
 			handler(ctx)
 			if !ctx.s {
@@ -102,34 +125,18 @@ func (this *Web) insideHandler(handlers ...OutsideHandler) func(http.ResponseWri
 		}
 		tempf := ctx.Value(cancelfunckey{})
 		if tempf != nil {
-			f, ok := tempf.(context.CancelFunc)
-			if ok {
+			if f, ok := tempf.(context.CancelFunc); ok {
 				f()
 			}
 		}
 		this.putContext(ctx)
 	}
 }
-func (this *Web) GET(path string, handlers ...OutsideHandler) {
-	this.router.GET(path, this.insideHandler(handlers...))
+func (this *Web) GET(path string, timeout int, handlers ...OutsideHandler) {
+	this.router.GET(path, this.insideHandler(timeout, handlers...))
 }
-func (this *Web) POST(path string, handlers ...OutsideHandler) {
-	this.router.POST(path, this.insideHandler(handlers...))
-}
-func (this *Web) PUT(path string, handlers ...OutsideHandler) {
-	this.router.PUT(path, this.insideHandler(handlers...))
-}
-func (this *Web) PATCH(path string, handlers ...OutsideHandler) {
-	this.router.PATCH(path, this.insideHandler(handlers...))
-}
-func (this *Web) DELETE(path string, handlers ...OutsideHandler) {
-	this.router.DELETE(path, this.insideHandler(handlers...))
-}
-func (this *Web) HEAD(path string, handlers ...OutsideHandler) {
-	this.router.HEAD(path, this.insideHandler(handlers...))
-}
-func (this *Web) OPTIONS(path string, handlers ...OutsideHandler) {
-	this.router.OPTIONS(path, this.insideHandler(handlers...))
+func (this *Web) POST(path string, timeout int, handlers ...OutsideHandler) {
+	this.router.POST(path, this.insideHandler(timeout, handlers...))
 }
 func (this *Web) ServeFiles(path string, root http.FileSystem) {
 	this.router.ServeFiles(path, root)
