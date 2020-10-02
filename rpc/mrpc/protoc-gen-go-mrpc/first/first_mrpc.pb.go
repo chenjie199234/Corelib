@@ -14,27 +14,145 @@ import (
 	"protoc-gen-go-mrpc/second"
 )
 
-type MrpcTestService struct {
-	Hello func(context.Context, HelloReq) (HelloResp, *mrpc.MsgErr)
-	Kiss  func(context.Context, second.KissReq) (second.KissResp, *mrpc.MsgErr)
-	Bye   func(context.Context, second.ByeReq) (second.ByeResp, *mrpc.MsgErr)
-}
-
 var PathMrpcTestHello = "/Test/Hello"
 var PathMrpcTestKiss = "/Test/Kiss"
 var PathMrpcTestBye = "/Test/Bye"
 
+type MrpcTestClient struct {
+	c *mrpc.Client
+}
+
+func (c *MrpcTestClient) Hello(ctx context.Context, req *HelloReq) (*HelloResp, *mrpc.MsgErr) {
+	reqd, _ := proto.Marshal(req)
+	respd, err := c.c.Call(ctx, "/Test/Hello", reqd)
+	if err != nil {
+		return nil, err
+	}
+	if respd == nil {
+		return &HelloResp{}, nil
+	}
+	resp := new(HelloResp)
+	if e := proto.Unmarshal(respd, resp); e != nil {
+		//this is impossible
+		return nil, mrpc.Errmaker(mrpc.ERRRESPONSE, mrpc.ERRMESSAGE[mrpc.ERRRESPONSE])
+	}
+	return resp, nil
+}
+func (c *MrpcTestClient) Kiss(ctx context.Context, req *second.KissReq) (*second.KissResp, *mrpc.MsgErr) {
+	reqd, _ := proto.Marshal(req)
+	respd, err := c.c.Call(ctx, "/Test/Kiss", reqd)
+	if err != nil {
+		return nil, err
+	}
+	if respd == nil {
+		return &second.KissResp{}, nil
+	}
+	resp := new(second.KissResp)
+	if e := proto.Unmarshal(respd, resp); e != nil {
+		//this is impossible
+		return nil, mrpc.Errmaker(mrpc.ERRRESPONSE, mrpc.ERRMESSAGE[mrpc.ERRRESPONSE])
+	}
+	return resp, nil
+}
+func (c *MrpcTestClient) Bye(ctx context.Context, req *second.ByeReq) (*second.ByeResp, *mrpc.MsgErr) {
+	reqd, _ := proto.Marshal(req)
+	respd, err := c.c.Call(ctx, "/Test/Bye", reqd)
+	if err != nil {
+		return nil, err
+	}
+	if respd == nil {
+		return &second.ByeResp{}, nil
+	}
+	resp := new(second.ByeResp)
+	if e := proto.Unmarshal(respd, resp); e != nil {
+		//this is impossible
+		return nil, mrpc.Errmaker(mrpc.ERRRESPONSE, mrpc.ERRMESSAGE[mrpc.ERRRESPONSE])
+	}
+	return resp, nil
+}
+func NewMrpcTestClient(c *mrpc.Client) *MrpcTestClient {
+	return &MrpcTestClient{c: c}
+}
+
+type MrpcTestService struct {
+	Midware func() map[string][]mrpc.OutsideHandler
+	Hello   func(context.Context, *HelloReq) (*HelloResp, *mrpc.MsgErr)
+	Kiss    func(context.Context, *second.KissReq) (*second.KissResp, *mrpc.MsgErr)
+	Bye     func(context.Context, *second.ByeReq) (*second.ByeResp, *mrpc.MsgErr)
+}
+
+func (s *MrpcTestService) hello(ctx context.Context, in []byte) ([]byte, *mrpc.MsgErr) {
+	req := &HelloReq{}
+	if e := proto.Unmarshal(in, req); e != nil {
+		return nil, mrpc.Errmaker(mrpc.ERRREQUEST, mrpc.ERRMESSAGE[mrpc.ERRREQUEST])
+	}
+	resp, err := s.Hello(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if resp != nil {
+		d, _ := proto.Marshal(resp)
+		return d, err
+	}
+	return nil, nil
+}
+func (s *MrpcTestService) kiss(ctx context.Context, in []byte) ([]byte, *mrpc.MsgErr) {
+	req := &second.KissReq{}
+	if e := proto.Unmarshal(in, req); e != nil {
+		return nil, mrpc.Errmaker(mrpc.ERRREQUEST, mrpc.ERRMESSAGE[mrpc.ERRREQUEST])
+	}
+	resp, err := s.Kiss(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if resp != nil {
+		d, _ := proto.Marshal(resp)
+		return d, err
+	}
+	return nil, nil
+}
+func (s *MrpcTestService) bye(ctx context.Context, in []byte) ([]byte, *mrpc.MsgErr) {
+	req := &second.ByeReq{}
+	if e := proto.Unmarshal(in, req); e != nil {
+		return nil, mrpc.Errmaker(mrpc.ERRREQUEST, mrpc.ERRMESSAGE[mrpc.ERRREQUEST])
+	}
+	resp, err := s.Bye(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if resp != nil {
+		d, _ := proto.Marshal(resp)
+		return d, err
+	}
+	return nil, nil
+}
 func RegisterMrpcTestService(engine *mrpc.Server, instance *MrpcTestService) {
+	var allmids map[string][]mrpc.OutsideHandler
+	if instance.Midware != nil {
+		allmids = instance.Midware()
+	}
 	//Hello
-	if instance.Hello == nil {
-	} else {
+	if instance.Hello != nil {
+		if mids, ok := allmids[PathMrpcTestHello]; ok && len(mids) != 0 {
+			engine.RegisterHandler(PathMrpcTestHello, 200, append(mids, instance.hello)...)
+		} else {
+			engine.RegisterHandler(PathMrpcTestHello, 200, instance.hello)
+		}
 	}
 	//Kiss
-	if instance.Kiss == nil {
-	} else {
+	if instance.Kiss != nil {
+		if mids, ok := allmids[PathMrpcTestKiss]; ok && len(mids) != 0 {
+			engine.RegisterHandler(PathMrpcTestKiss, 200, append(mids, instance.kiss)...)
+		} else {
+			engine.RegisterHandler(PathMrpcTestKiss, 200, instance.kiss)
+		}
 	}
 	//Bye
-	if instance.Bye == nil {
-	} else {
+	if instance.Bye != nil {
+		if mids, ok := allmids[PathMrpcTestBye]; ok && len(mids) != 0 {
+			engine.RegisterHandler(PathMrpcTestBye, 200, append(mids, instance.bye)...)
+		} else {
+			engine.RegisterHandler(PathMrpcTestBye, 200, instance.bye)
+		}
 	}
 }

@@ -21,6 +21,16 @@ var (
 	ERRCADD  = fmt.Errorf("[Mrpc.client]already exist")
 )
 
+var lker *sync.Mutex
+
+//key appname
+var clients map[string]*Client
+
+func init() {
+	lker = &sync.Mutex{}
+	clients = make(map[string]*Client)
+}
+
 //appuniquename = appname:addr
 type Client struct {
 	appname    string
@@ -112,6 +122,12 @@ func (c *Client) putserver(s *Serverinfo) {
 }
 
 func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname string, vdata []byte, pick func(map[*Serverinfo]PickInfo) *Serverinfo) *Client {
+	//prevent duplicate create
+	lker.Lock()
+	if c, ok := clients[appname]; ok {
+		lker.Unlock()
+		return c
+	}
 	clientinstance := &Client{
 		appname:    appname,
 		verifydata: vdata,
@@ -137,6 +153,8 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 	clientinstance.noticech = noticech
 	clientinstance.first(odata)
 	go clientinstance.notice()
+	clients[appname] = clientinstance
+	lker.Unlock()
 	return clientinstance
 }
 func (c *Client) first(data map[string]map[string][]byte) {
@@ -451,6 +469,7 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 		delete(server.reqs, msg.Callid)
 		c.putreq(r)
 		server.lker.Unlock()
+		//resp and err maybe both nil
 		return resp, err
 	case <-ctx.Done():
 		server.lker.Lock()
