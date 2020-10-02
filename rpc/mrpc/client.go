@@ -439,7 +439,6 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 			}
 			pickinfo[server] = *server.pickinfo
 		}
-		c.lker.RUnlock()
 		if len(pickinfo) == 0 {
 			c.lker.RUnlock()
 			c.putreq(r)
@@ -447,6 +446,7 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 		}
 		server = c.pick(pickinfo)
 		server.lker.Lock()
+		c.lker.RUnlock()
 		if server.status != 3 {
 			server.lker.Unlock()
 			continue
