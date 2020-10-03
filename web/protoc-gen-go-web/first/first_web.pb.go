@@ -17,6 +17,10 @@ import (
 	"protoc-gen-go-web/second"
 )
 
+var PathWebTestHello = "/Test/Hello"
+var PathWebTestKiss = "/Test/Kiss"
+var PathWebTestBye = "/Test/Bye"
+
 type WebTestService struct {
 	Midware func() map[string][]web.OutsideHandler
 	Hello   func(*web.Context, *HelloReq) (*HelloResp, error)
@@ -246,11 +250,6 @@ func (s *WebTestService) bye(ctx *web.Context) {
 		ctx.Write(http.StatusOK, data)
 	}
 }
-
-var PathWebTestHello = "/Test/Hello"
-var PathWebTestKiss = "/Test/Kiss"
-var PathWebTestBye = "/Test/Bye"
-
 func RegisterWebTestService(engine *web.Web, instance *WebTestService) {
 	var allmids map[string][]web.OutsideHandler
 	if instance.Midware != nil {

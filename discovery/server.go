@@ -1,8 +1,8 @@
 package discovery
 
 import (
-	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -20,10 +20,11 @@ var (
 )
 
 //clientuniquename = appname:addr
-type server struct {
+type discoveryserver struct {
+	c          *stream.InstanceConfig
 	lker       *sync.RWMutex
 	htree      *hashtree.Hashtree
-	allclients map[string]*clientnode //key clientuniquename
+	allclients map[string]*discoveryclientnode //key clientuniquename
 	verifydata []byte
 	nodepool   *sync.Pool
 	instance   *stream.Instance
@@ -31,7 +32,7 @@ type server struct {
 }
 
 //clientuniquename = appname:addr
-type clientnode struct {
+type discoveryclientnode struct {
 	clientuniquename string
 	peer             *stream.Peer
 	starttime        uint64
@@ -39,8 +40,8 @@ type clientnode struct {
 	status           int //1 connected,2 preparing,3 registered
 }
 
-func (s *server) getnode(peer *stream.Peer, clientuniquename string, starttime uint64) *clientnode {
-	node := s.nodepool.Get().(*clientnode)
+func (s *discoveryserver) getnode(peer *stream.Peer, clientuniquename string, starttime uint64) *discoveryclientnode {
+	node := s.nodepool.Get().(*discoveryclientnode)
 	node.clientuniquename = clientuniquename
 	node.peer = peer
 	node.starttime = starttime
@@ -48,7 +49,7 @@ func (s *server) getnode(peer *stream.Peer, clientuniquename string, starttime u
 	return node
 }
 
-func (s *server) putnode(n *clientnode) {
+func (s *discoveryserver) putnode(n *discoveryclientnode) {
 	n.clientuniquename = ""
 	n.peer = nil
 	n.starttime = 0
@@ -57,29 +58,31 @@ func (s *server) putnode(n *clientnode) {
 	s.nodepool.Put(n)
 }
 
-var serverinstance *server
+var serverinstance *discoveryserver
 
 func NewDiscoveryServer(c *stream.InstanceConfig, vdata []byte) {
 	if serverinstance != nil {
 		return
 	}
-	serverinstance = &server{
+	serverinstance = &discoveryserver{
+		c:          c,
 		lker:       &sync.RWMutex{},
 		htree:      hashtree.New(10, 3),
-		allclients: make(map[string]*clientnode),
+		allclients: make(map[string]*discoveryclientnode),
 		verifydata: vdata,
 		nodepool: &sync.Pool{
 			New: func() interface{} {
-				return &clientnode{}
+				return &discoveryclientnode{}
 			},
 		},
 	}
 	//tcp instance
-	c.Verifyfunc = serverinstance.verifyfunc
-	c.Onlinefunc = serverinstance.onlinefunc
-	c.Userdatafunc = serverinstance.userfunc
-	c.Offlinefunc = serverinstance.offlinefunc
-	serverinstance.instance = stream.NewInstance(c)
+	dupc := *c //duplicate to remote the callback func race
+	dupc.Verifyfunc = serverinstance.verifyfunc
+	dupc.Onlinefunc = serverinstance.onlinefunc
+	dupc.Userdatafunc = serverinstance.userfunc
+	dupc.Offlinefunc = serverinstance.offlinefunc
+	serverinstance.instance = stream.NewInstance(&dupc)
 }
 func StartDiscoveryServer(cc *stream.TcpConfig, listenaddr string) error {
 	if serverinstance == nil {
@@ -96,14 +99,19 @@ func StartDiscoveryServer(cc *stream.TcpConfig, listenaddr string) error {
 	return nil
 }
 
-func (s *server) verifyfunc(ctx context.Context, clientuniquename string, peerVerifyData []byte) ([]byte, bool) {
-	if !bytes.Equal(peerVerifyData, s.verifydata) {
+func (s *discoveryserver) verifyfunc(ctx context.Context, clientuniquename string, peerVerifyData []byte) ([]byte, bool) {
+	//datas := bytes.Split(peerVerifyData, []byte{'|'})
+	datas := strings.Split(byte2str(peerVerifyData), "|")
+	if len(datas) != 2 {
+		return nil, false
+	}
+	if datas[1] != s.c.SelfName || datas[0] != hex.EncodeToString(s.verifydata) {
 		return nil, false
 	}
 	return s.verifydata, true
 }
 
-func (s *server) onlinefunc(p *stream.Peer, clientuniquename string, starttime uint64) {
+func (s *discoveryserver) onlinefunc(p *stream.Peer, clientuniquename string, starttime uint64) {
 	s.lker.Lock()
 	if _, ok := s.allclients[clientuniquename]; ok {
 		s.lker.Unlock()
@@ -114,7 +122,7 @@ func (s *server) onlinefunc(p *stream.Peer, clientuniquename string, starttime u
 	s.allclients[clientuniquename] = s.getnode(p, clientuniquename, starttime)
 	s.lker.Unlock()
 }
-func (s *server) userfunc(p *stream.Peer, clientuniquename string, data []byte, starttime uint64) {
+func (s *discoveryserver) userfunc(p *stream.Peer, clientuniquename string, data []byte, starttime uint64) {
 	if len(data) == 0 {
 		return
 	}
@@ -162,11 +170,11 @@ func (s *server) userfunc(p *stream.Peer, clientuniquename string, data []byte, 
 		node.status = 3
 		templeafdata, _ := s.htree.GetLeafValue(leafindex)
 		if templeafdata == nil {
-			leafdata := []*clientnode{node}
+			leafdata := []*discoveryclientnode{node}
 			s.htree.SetSingleLeafHash(leafindex, str2byte(clientuniquename[:strings.Index(clientuniquename, ":")]+byte2str(regmsg)))
 			s.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
 		} else {
-			leafdata := *(*[]*clientnode)(templeafdata)
+			leafdata := *(*[]*discoveryclientnode)(templeafdata)
 			leafdata = append(leafdata, node)
 			sort.Slice(leafdata, func(i, j int) bool {
 				return leafdata[i].clientuniquename < leafdata[j].clientuniquename
@@ -212,7 +220,7 @@ func (s *server) userfunc(p *stream.Peer, clientuniquename string, data []byte, 
 		p.Close()
 	}
 }
-func (s *server) offlinefunc(p *stream.Peer, clientuniquename string) {
+func (s *discoveryserver) offlinefunc(p *stream.Peer, clientuniquename string) {
 	leafindex := int(bkdrhash(clientuniquename, uint64(s.htree.GetLeavesNum())))
 	s.lker.Lock()
 	node, ok := s.allclients[clientuniquename]
@@ -224,17 +232,18 @@ func (s *server) offlinefunc(p *stream.Peer, clientuniquename string) {
 	delete(s.allclients, clientuniquename)
 	if node.status != 3 {
 		s.putnode(node)
+		s.lker.Unlock()
 		return
 	}
 	templeafdata, _ := s.htree.GetLeafValue(leafindex)
-	leafdata := *(*[]*clientnode)(templeafdata)
+	leafdata := *(*[]*discoveryclientnode)(templeafdata)
 	for i, client := range leafdata {
 		if client.clientuniquename == clientuniquename {
 			leafdata = append(leafdata[:i], leafdata[i+1:]...)
-			s.putnode(node)
 			break
 		}
 	}
+	s.putnode(node)
 	if len(leafdata) == 0 {
 		s.htree.SetSingleLeafHash(leafindex, nil)
 		s.htree.SetSingleLeafValue(leafindex, nil)

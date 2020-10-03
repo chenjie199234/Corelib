@@ -261,40 +261,50 @@ func commentTrail(trail string) (string, int64) {
 	if trail == "" {
 		return "GET", 0
 	}
+	httpmethod := ""
+	timeout := int64(0)
 	trails := strings.Split(trail, ",")
-	if len(trails) > 1 && trails[1] != "" {
-		var number string
-		var unit string
-		for i := 0; i < len(trails[1]); i++ {
-			if trails[1][i] < '0' || trails[1][i] > '9' {
-				number = trails[1][:i]
-				unit = trails[1][i:]
-				break
+	for _, t := range trails {
+		tt := strings.Split(t, ":")
+		if len(tt) != 2 {
+			panic("unknown trail comment")
+		}
+		switch tt[0] {
+		case "httpmethod":
+			httpmethod = strings.TrimSpace(strings.ToUpper(tt[1]))
+		case "timeout":
+			temptimeout := ""
+			temptimeoutunit := ""
+			for i, v := range tt[1] {
+				if v < '0' || v > '9' {
+					temptimeout = tt[1][:i]
+					temptimeoutunit = tt[1][i:]
+					break
+				}
+				if i == len(tt[1])-1 {
+					temptimeout = tt[1]
+				}
 			}
-			if i == len(trails[1])-1 {
-				number = trails[1]
+			if temptimeout == "" {
+				timeout = 0
+			} else {
+				timeout, _ = strconv.ParseInt(temptimeout, 10, 64)
+				if timeout < 0 {
+					panic("timeout less then 0")
+				}
+			}
+			switch temptimeoutunit {
+			case "":
+			case "ms":
+			case "s":
+				timeout = timeout * 1000
+			default:
+				panic("timeout unit only support 'ms' and 's'")
 			}
 		}
-		if number == "" {
-			return strings.TrimSpace(strings.TrimSuffix(strings.ToUpper(trails[0]), "\n")), 0
-		}
-		timeout, e := strconv.ParseInt(number, 10, 64)
-		if e != nil {
-			panic(fmt.Sprintf("trail comment %s format error", e))
-		}
-		if timeout < 0 {
-			panic("timeout can't < 0")
-		}
-		switch unit {
-		case "":
-		case "ms":
-		case "s":
-			timeout = timeout * 1000
-		default:
-			panic("timeout unit only support 'ms' and 's'")
-		}
-		return strings.TrimSpace(strings.TrimSuffix(strings.ToUpper(trails[0]), "\n")), timeout
-	} else {
-		return strings.TrimSpace(strings.TrimSuffix(strings.ToUpper(trails[0]), "\n")), 0
 	}
+	if httpmethod == "" {
+		httpmethod = "GET"
+	}
+	return httpmethod, timeout
 }

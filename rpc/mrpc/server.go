@@ -34,12 +34,17 @@ type Server struct {
 
 func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *Server {
 	serverinstance := &Server{
-		verifydata: vdata,
+		c:          c,
 		lker:       &sync.Mutex{},
+		handler:    make(map[string]func(*Msg), 10),
+		verifydata: vdata,
 	}
-	c.Verifyfunc = serverinstance.verifyfunc
-	c.Userdatafunc = serverinstance.userfunc
-	serverinstance.instance = stream.NewInstance(c)
+	dupc := *c //duplicate to remote the callback func race
+	dupc.Verifyfunc = serverinstance.verifyfunc
+	dupc.Onlinefunc = nil
+	dupc.Userdatafunc = serverinstance.userfunc
+	dupc.Offlinefunc = nil
+	serverinstance.instance = stream.NewInstance(&dupc)
 	return serverinstance
 }
 func (s *Server) StartMrpcServer(cc *stream.TcpConfig, listenaddr string) {
@@ -60,7 +65,7 @@ func (s *Server) insidehandler(timeout int, handlers ...OutsideHandler) func(*Ms
 		ctx, f := context.WithDeadline(context.Background(), dl)
 		defer f()
 		if len(msg.Metadata) > 0 {
-			ctx = SetAllInMetadata(ctx, msg.Metadata)
+			ctx = SetAllMetadata(ctx, msg.Metadata)
 		}
 		if msg.Trace == "" {
 			ctx = trace.SetTrace(ctx, trace.MakeTrace())
@@ -84,7 +89,7 @@ func (s *Server) insidehandler(timeout int, handlers ...OutsideHandler) func(*Ms
 		msg.Body = resp
 		msg.Cpu = cpu.GetUse()
 		msg.Error = nil
-		msg.Metadata = GetAllOutMetadata(ctx)
+		msg.Metadata = nil
 	}
 }
 func (s *Server) RegisterHandler(path string, timeout int, handlers ...OutsideHandler) {

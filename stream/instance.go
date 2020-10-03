@@ -139,6 +139,8 @@ func (this *Instance) addPeer(p *Peer) bool {
 	node.Unlock()
 	return true
 }
+
+//be careful about the callback func race
 func NewInstance(c *InstanceConfig) *Instance {
 	if e := checkInstanceConfig(c); e != nil {
 		panic(e)

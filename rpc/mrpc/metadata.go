@@ -4,11 +4,10 @@ import (
 	"context"
 )
 
-type inmetadatakey struct{}
+type metadatakey struct{}
 
-//in
-func GetAllInMetadata(ctx context.Context) map[string]string {
-	value := ctx.Value(inmetadatakey{})
+func GetAllMetadata(ctx context.Context) map[string]string {
+	value := ctx.Value(metadatakey{})
 	if value == nil {
 		return nil
 	}
@@ -18,8 +17,8 @@ func GetAllInMetadata(ctx context.Context) map[string]string {
 	}
 	return result
 }
-func GetInMetadata(ctx context.Context, key string) string {
-	value := ctx.Value(inmetadatakey{})
+func GetMetadata(ctx context.Context, key string) string {
+	value := ctx.Value(metadatakey{})
 	if value == nil {
 		return ""
 	}
@@ -29,73 +28,23 @@ func GetInMetadata(ctx context.Context, key string) string {
 	}
 	return result[key]
 }
-func SetInMetadata(ctx context.Context, key, value string) context.Context {
-	tempresult := ctx.Value(inmetadatakey{})
+func SetMetadata(ctx context.Context, key, value string) context.Context {
+	tempresult := ctx.Value(metadatakey{})
 	if tempresult == nil {
-		return context.WithValue(ctx, inmetadatakey{}, map[string]string{key: value})
+		return context.WithValue(ctx, metadatakey{}, map[string]string{key: value})
 	}
 	result := tempresult.(map[string]string)
 	result[key] = value
-	ctx = context.WithValue(ctx, inmetadatakey{}, result)
 	return ctx
 }
-func SetAllInMetadata(ctx context.Context, data map[string]string) context.Context {
-	tempresult := ctx.Value(inmetadatakey{})
+func SetAllMetadata(ctx context.Context, data map[string]string) context.Context {
+	tempresult := ctx.Value(metadatakey{})
 	if tempresult == nil {
-		return context.WithValue(ctx, inmetadatakey{}, data)
+		return context.WithValue(ctx, metadatakey{}, data)
 	}
 	result := tempresult.(map[string]string)
 	for k, v := range data {
 		result[k] = v
 	}
-	ctx = context.WithValue(ctx, inmetadatakey{}, result)
-	return ctx
-}
-
-type outmetadatakey struct{}
-
-//out
-func GetAllOutMetadata(ctx context.Context) map[string]string {
-	value := ctx.Value(outmetadatakey{})
-	if value == nil {
-		return nil
-	}
-	result, ok := value.(map[string]string)
-	if !ok {
-		return nil
-	}
-	return result
-}
-func GetOutMetadata(ctx context.Context, key string) string {
-	value := ctx.Value(outmetadatakey{})
-	if value == nil {
-		return ""
-	}
-	result, ok := value.(map[string]string)
-	if !ok {
-		return ""
-	}
-	return result[key]
-}
-func SetOutMetadata(ctx context.Context, key, value string) context.Context {
-	tempresult := ctx.Value(outmetadatakey{})
-	if tempresult == nil {
-		return context.WithValue(ctx, outmetadatakey{}, map[string]string{key: value})
-	}
-	result := tempresult.(map[string]string)
-	result[key] = value
-	ctx = context.WithValue(ctx, outmetadatakey{}, result)
-	return ctx
-}
-func SetAllOutMetadata(ctx context.Context, data map[string]string) context.Context {
-	tempresult := ctx.Value(outmetadatakey{})
-	if tempresult == nil {
-		return context.WithValue(ctx, outmetadatakey{}, data)
-	}
-	result := tempresult.(map[string]string)
-	for k, v := range data {
-		result[k] = v
-	}
-	ctx = context.WithValue(ctx, outmetadatakey{}, result)
 	return ctx
 }

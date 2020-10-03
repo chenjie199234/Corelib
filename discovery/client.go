@@ -3,6 +3,7 @@ package discovery
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -28,12 +29,12 @@ var (
 )
 
 //serveruniquename = discoveryservername:addr
-type client struct {
+type discoveryclient struct {
 	httpclient *http.Client //httpclient to get discovery server addrs
 
 	lker        *sync.RWMutex
 	verifydata  []byte
-	servers     map[string]*servernode //key serveruniquename
+	servers     map[string]*discoveryservernode //key serveruniquename
 	instance    *stream.Instance
 	regmsg      *RegMsg
 	canregister bool
@@ -47,22 +48,16 @@ type client struct {
 }
 
 //clientuniquename = appname:addr
-type servernode struct {
+type discoveryservernode struct {
 	lker       *sync.Mutex
 	peer       *stream.Peer
 	starttime  uint64
 	htree      *hashtree.Hashtree
-	allclients map[string]*clientinfo //key clientuniquename
-	status     int                    //0-idle,1-start,2-verify,3-connected,4-preparing,5-registered
+	allclients map[string]*discoveryclientnode //key clientuniquename
+	status     int                             //0-idle,1-start,2-verify,3-connected,4-preparing,5-registered
 }
 
-//clientuniquename = appname:addr
-type clientinfo struct {
-	clientuniquename string
-	regdata          []byte
-}
-
-var clientinstance *client
+var clientinstance *discoveryclient
 
 //this just start the client and sync the peers in the net
 //this will not register self into the net
@@ -71,13 +66,13 @@ func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []
 	if clientinstance != nil {
 		return
 	}
-	clientinstance = &client{
+	clientinstance = &discoveryclient{
 		httpclient: &http.Client{
 			Timeout: 500 * time.Millisecond,
 		},
 		lker:        &sync.RWMutex{},
 		verifydata:  vdata,
-		servers:     make(map[string]*servernode, 5),
+		servers:     make(map[string]*discoveryservernode, 5),
 		stopch:      make(chan struct{}, 1),
 		grpcnotices: make(map[string]chan *NoticeMsg, 5),
 		httpnotices: make(map[string]chan *NoticeMsg, 5),
@@ -86,11 +81,12 @@ func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []
 		nlker:       &sync.RWMutex{},
 	}
 	//tcp instance
-	c.Verifyfunc = clientinstance.verifyfunc
-	c.Onlinefunc = clientinstance.onlinefunc
-	c.Userdatafunc = clientinstance.userfunc
-	c.Offlinefunc = clientinstance.offlinefunc
-	clientinstance.instance = stream.NewInstance(c)
+	dupc := *c //duplicate to remote the callback func race
+	dupc.Verifyfunc = clientinstance.verifyfunc
+	dupc.Onlinefunc = clientinstance.onlinefunc
+	dupc.Userdatafunc = clientinstance.userfunc
+	dupc.Offlinefunc = clientinstance.offlinefunc
+	clientinstance.instance = stream.NewInstance(&dupc)
 
 	clientinstance.updateserver(cc, url)
 	tker := time.NewTicker(time.Second)
@@ -442,7 +438,7 @@ func WebSocketNotice(peername string) (map[string]map[string][]byte, chan *Notic
 	return result, ch, nil
 }
 
-func (c *client) updateserver(cc *stream.TcpConfig, url string) {
+func (c *discoveryclient) updateserver(cc *stream.TcpConfig, url string) {
 	//get server addrs
 	resp, e := c.httpclient.Get(url)
 	if e != nil {
@@ -484,7 +480,7 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 	}
 	//online new server or reconnect to offline server
 	for _, saddr := range serveraddrs {
-		var server *servernode
+		var server *discoveryservernode
 		for k, v := range c.servers {
 			if k == saddr {
 				server = v
@@ -493,12 +489,12 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 		}
 		if server == nil {
 			//this server not in the serverlist before
-			server = &servernode{
+			server = &discoveryservernode{
 				lker:       &sync.Mutex{},
 				peer:       nil,
 				starttime:  0,
 				htree:      hashtree.New(10, 3),
-				allclients: make(map[string]*clientinfo, 5),
+				allclients: make(map[string]*discoveryclientnode, 5),
 				status:     0,
 			}
 			c.servers[saddr] = server
@@ -518,7 +514,8 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 			}
 			server.status = 1
 			go func(saddr string, findex int) {
-				if r := c.instance.StartTcpClient(cc, saddr[findex+1:], c.verifydata); r == "" {
+				tempverifydata := hex.EncodeToString(c.verifydata) + "|" + saddr[:findex]
+				if r := c.instance.StartTcpClient(cc, saddr[findex+1:], str2byte(tempverifydata)); r == "" {
 					c.lker.RLock()
 					server, ok := c.servers[saddr]
 					if !ok {
@@ -536,7 +533,7 @@ func (c *client) updateserver(cc *stream.TcpConfig, url string) {
 	}
 	c.lker.Unlock()
 }
-func (c *client) stop() {
+func (c *discoveryclient) stop() {
 	c.lker.Lock()
 	for k, server := range c.servers {
 		server.lker.Lock()
@@ -548,7 +545,7 @@ func (c *client) stop() {
 	}
 	c.lker.Unlock()
 }
-func (c *client) verifyfunc(ctx context.Context, serveruniquename string, peerVerifyData []byte) ([]byte, bool) {
+func (c *discoveryclient) verifyfunc(ctx context.Context, serveruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal(peerVerifyData, c.verifydata) {
 		return nil, false
 	}
@@ -568,7 +565,7 @@ func (c *client) verifyfunc(ctx context.Context, serveruniquename string, peerVe
 	server.lker.Unlock()
 	return nil, true
 }
-func (c *client) onlinefunc(p *stream.Peer, serveruniquename string, starttime uint64) {
+func (c *discoveryclient) onlinefunc(p *stream.Peer, serveruniquename string, starttime uint64) {
 	c.lker.RLock()
 	server, ok := c.servers[serveruniquename]
 	if !ok {
@@ -591,8 +588,8 @@ func (c *client) onlinefunc(p *stream.Peer, serveruniquename string, starttime u
 	}
 	server.lker.Unlock()
 }
-func (c *client) userfunc(p *stream.Peer, serveruniquename string, data []byte, starttime uint64) {
-	server := (*servernode)(p.GetData())
+func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data []byte, starttime uint64) {
+	server := (*discoveryservernode)(p.GetData())
 	server.lker.Lock()
 	defer server.lker.Unlock()
 	switch data[0] {
@@ -607,8 +604,8 @@ func (c *client) userfunc(p *stream.Peer, serveruniquename string, data []byte, 
 		leafindex := int(bkdrhash(onlinepeer, uint64(server.htree.GetLeavesNum())))
 		templeafdata, _ := server.htree.GetLeafValue(leafindex)
 		if templeafdata == nil {
-			leafdata := make([]*clientinfo, 0, 5)
-			temppeer := &clientinfo{
+			leafdata := make([]*discoveryclientnode, 0, 5)
+			temppeer := &discoveryclientnode{
 				clientuniquename: onlinepeer,
 				regdata:          regmsg,
 			}
@@ -617,8 +614,8 @@ func (c *client) userfunc(p *stream.Peer, serveruniquename string, data []byte, 
 			server.htree.SetSingleLeafHash(leafindex, str2byte(onlinepeer[:strings.Index(onlinepeer, ":")]+byte2str(regmsg)))
 			server.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
 		} else {
-			leafdata := *(*[]*clientinfo)(templeafdata)
-			temppeer := &clientinfo{
+			leafdata := *(*[]*discoveryclientnode)(templeafdata)
+			temppeer := &discoveryclientnode{
 				clientuniquename: onlinepeer,
 				regdata:          regmsg,
 			}
@@ -654,7 +651,7 @@ func (c *client) userfunc(p *stream.Peer, serveruniquename string, data []byte, 
 		delete(server.allclients, offlinepeer)
 		leafindex := int(bkdrhash(offlinepeer, uint64(server.htree.GetLeavesNum())))
 		templeafdata, _ := server.htree.GetLeafValue(leafindex)
-		leafdata := *(*[]*clientinfo)(templeafdata)
+		leafdata := *(*[]*discoveryclientnode)(templeafdata)
 		var regmsg []byte
 		for i, peer := range leafdata {
 			if peer.clientuniquename == offlinepeer {
@@ -745,11 +742,11 @@ func (c *client) userfunc(p *stream.Peer, serveruniquename string, data []byte, 
 		}
 		for leafindex := range updateleaveshash {
 			templeafdata, _ := server.htree.GetLeafValue(leafindex)
-			var leafdata []*clientinfo
+			var leafdata []*discoveryclientnode
 			if templeafdata == nil {
-				leafdata = make([]*clientinfo, 0, 5)
+				leafdata = make([]*discoveryclientnode, 0, 5)
 			} else {
-				leafdata = *(*[]*clientinfo)(templeafdata)
+				leafdata = *(*[]*discoveryclientnode)(templeafdata)
 			}
 			//add
 			for newpeer, newmsg := range added[leafindex] {
@@ -768,7 +765,7 @@ func (c *client) userfunc(p *stream.Peer, serveruniquename string, data []byte, 
 					}
 				}
 				if !find {
-					newnode := &clientinfo{clientuniquename: newpeer, regdata: newmsg}
+					newnode := &discoveryclientnode{clientuniquename: newpeer, regdata: newmsg}
 					leafdata = append(leafdata, newnode)
 					server.allclients[newpeer] = newnode
 					c.nlker.RLock()
@@ -840,8 +837,8 @@ func (c *client) userfunc(p *stream.Peer, serveruniquename string, data []byte, 
 		p.Close()
 	}
 }
-func (c *client) offlinefunc(p *stream.Peer, serveruniquename string) {
-	server := (*servernode)(p.GetData())
+func (c *discoveryclient) offlinefunc(p *stream.Peer, serveruniquename string) {
+	server := (*discoveryservernode)(p.GetData())
 	server.lker.Lock()
 	server.peer = nil
 	server.htree.Reset()
@@ -850,11 +847,11 @@ func (c *client) offlinefunc(p *stream.Peer, serveruniquename string) {
 		c.notice(peer.clientuniquename, peer.regdata, false, serveruniquename)
 	}
 	c.nlker.RUnlock()
-	server.allclients = make(map[string]*clientinfo)
+	server.allclients = make(map[string]*discoveryclientnode)
 	server.status = 0
 	server.lker.Unlock()
 }
-func (c *client) notice(clientuniquename string, regmsg []byte, status bool, servername string) {
+func (c *discoveryclient) notice(clientuniquename string, regmsg []byte, status bool, servername string) {
 	msg := &RegMsg{}
 	e := json.Unmarshal(regmsg, msg)
 	if e != nil {

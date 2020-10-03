@@ -142,9 +142,9 @@ func RegisterMrpcTestService(engine *mrpc.Server, instance *MrpcTestService) {
 	//Kiss
 	if instance.Kiss != nil {
 		if mids, ok := allmids[PathMrpcTestKiss]; ok && len(mids) != 0 {
-			engine.RegisterHandler(PathMrpcTestKiss, 200, append(mids, instance.kiss)...)
+			engine.RegisterHandler(PathMrpcTestKiss, 2000, append(mids, instance.kiss)...)
 		} else {
-			engine.RegisterHandler(PathMrpcTestKiss, 200, instance.kiss)
+			engine.RegisterHandler(PathMrpcTestKiss, 2000, instance.kiss)
 		}
 	}
 	//Bye

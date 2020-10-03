@@ -132,7 +132,7 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 		lker.Unlock()
 		return c
 	}
-	clientinstance := &Client{
+	client := &Client{
 		c:          c,
 		appname:    appname,
 		verifydata: vdata,
@@ -145,22 +145,24 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 		reqpool:    &sync.Pool{},
 		pick:       pick,
 	}
-	c.Verifyfunc = clientinstance.verifyfunc
-	c.Onlinefunc = clientinstance.onlinefunc
-	c.Userdatafunc = clientinstance.userfunc
-	c.Offlinefunc = clientinstance.offlinefunc
-	clientinstance.instance = stream.NewInstance(c)
+	//tcp instalce
+	dupc := *c //duplicate to remote the callback func race
+	dupc.Verifyfunc = client.verifyfunc
+	dupc.Onlinefunc = client.onlinefunc
+	dupc.Userdatafunc = client.userfunc
+	dupc.Offlinefunc = client.offlinefunc
+	client.instance = stream.NewInstance(&dupc)
 	odata, noticech, e := discovery.TcpNotice(appname)
 	if e != nil {
 		fmt.Printf("[Mrpc.client.NewMrpcClient.impossible]add app:%s notice for register info error:%s\n", appname, e)
 		return nil
 	}
-	clientinstance.noticech = noticech
-	clientinstance.first(odata)
-	go clientinstance.notice()
-	clients[appname] = clientinstance
+	client.noticech = noticech
+	client.first(odata)
+	go client.notice()
+	clients[appname] = client
 	lker.Unlock()
-	return clientinstance
+	return client
 }
 func (c *Client) first(data map[string]map[string][]byte) {
 	for addr, discoveryservers := range data {
@@ -428,7 +430,7 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 	traceid = trace.AppendTrace(traceid, c.c.SelfName)
 	msg.Trace = traceid
 	msg.Body = req
-	msg.Metadata = GetAllOutMetadata(ctx)
+	msg.Metadata = GetAllMetadata(ctx)
 	d, _ := proto.Marshal(msg)
 	if len(d) >= 65535 {
 		return nil, Errmaker(ERRLARGE, ERRMESSAGE[ERRLARGE])
@@ -443,19 +445,43 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 			c.putreq(r)
 			return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
 		}
-		pickinfo := make(map[*Serverinfo]PickInfo, int(float64(len(c.servers))*1.3))
-		for _, server := range c.servers {
-			if server.status != 3 {
-				continue
+		if len(c.servers) == 1 {
+			for _, v := range c.servers {
+				server = v
+				break
 			}
-			pickinfo[server] = *server.pickinfo
+			if server.status != 3 {
+				c.lker.RUnlock()
+				c.putreq(r)
+				return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
+			}
+		} else {
+			pickinfo := make(map[*Serverinfo]PickInfo, int(float64(len(c.servers))*1.3))
+			for _, server := range c.servers {
+				if server.status != 3 {
+					continue
+				}
+				pickinfo[server] = *server.pickinfo
+			}
+			if len(pickinfo) == 0 {
+				c.lker.RUnlock()
+				c.putreq(r)
+				return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
+			}
+			if len(pickinfo) == 1 {
+				for k := range pickinfo {
+					server = k
+					break
+				}
+			} else {
+				server = c.pick(pickinfo)
+				if server == nil {
+					c.lker.RUnlock()
+					c.putreq(r)
+					return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
+				}
+			}
 		}
-		if len(pickinfo) == 0 {
-			c.lker.RUnlock()
-			c.putreq(r)
-			return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
-		}
-		server = c.pick(pickinfo)
 		server.lker.Lock()
 		c.lker.RUnlock()
 		if server.status != 3 {

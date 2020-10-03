@@ -159,7 +159,6 @@ func (this *Instance) sworker(p *Peer) bool {
 				send += num
 			case WEBSOCKET:
 				send = len(verifymsg)
-
 			}
 		}
 		if !this.addPeer(p) {
