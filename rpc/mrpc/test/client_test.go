@@ -35,6 +35,7 @@ func Test_Client(t *testing.T) {
 	discovery.NewDiscoveryClient(clientinstanceconfig, tcpconfig, verifydata, "http://127.0.0.1:8080/discoveryservers")
 	client := mrpc.NewMrpcClient(clientinstanceconfig, tcpconfig, "appserver", verifydata, pick)
 	api = NewMrpcTestClient(client)
+	time.Sleep(time.Second)
 	call()
 	select {}
 }
@@ -77,9 +78,11 @@ func call() {
 	fmt.Println(float64(end-start) / 1000.0 / 1000.0)
 	fmt.Println(float64(count) / (float64(end-start) / 1000.0 / 1000.0 / 1000.0))
 }
-func pick(pickinfos map[*mrpc.Serverinfo]mrpc.PickInfo) *mrpc.Serverinfo {
-	for k := range pickinfos {
-		return k
+func pick(servers map[string]*mrpc.Serverinfo) *mrpc.Serverinfo {
+	for _, server := range servers {
+		if server.Pickable() {
+			return server
+		}
 	}
 	return nil
 }

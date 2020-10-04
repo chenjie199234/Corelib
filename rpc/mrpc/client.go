@@ -42,7 +42,7 @@ type Client struct {
 	instance   *stream.Instance
 
 	lker       *sync.RWMutex
-	servers    map[string]*Serverinfo //key appuniquename
+	servers    map[string]*Serverinfo //all servers //key appuniquename
 	serverpool *sync.Pool
 	cc         *stream.TcpConfig
 	noticech   chan *discovery.NoticeMsg
@@ -50,7 +50,7 @@ type Client struct {
 
 	callid  uint64
 	reqpool *sync.Pool
-	pick    func(map[*Serverinfo]PickInfo) *Serverinfo
+	pick    func(map[string]*Serverinfo) *Serverinfo
 }
 
 type Serverinfo struct {
@@ -65,7 +65,7 @@ type Serverinfo struct {
 	//active calls
 	reqs map[uint64]*reqinfo //all reqs to this server
 
-	pickinfo *PickInfo
+	Pickinfo *PickInfo
 }
 type PickInfo struct {
 	Cpu                        float64 //cpuinfo
@@ -76,6 +76,9 @@ type PickInfo struct {
 	Addition                   []byte  //addition info register on register center
 }
 
+func (s *Serverinfo) Pickable() bool {
+	return s.status == 3
+}
 func (s *Serverinfo) reset() {
 	s.appuniquename = ""
 	s.discoveryserver = make(map[string]struct{}, 2)
@@ -85,11 +88,11 @@ func (s *Serverinfo) reset() {
 
 	s.reqs = make(map[uint64]*reqinfo, 10)
 
-	s.pickinfo.Cpu = 0
-	s.pickinfo.Netlag = 0
-	s.pickinfo.Activecalls = 0
-	s.pickinfo.DiscoveryServers = 0
-	s.pickinfo.Addition = nil
+	s.Pickinfo.Cpu = 0
+	s.Pickinfo.Netlag = 0
+	s.Pickinfo.Activecalls = 0
+	s.Pickinfo.DiscoveryServers = 0
+	s.Pickinfo.Addition = nil
 }
 func (c *Client) getserver(appuniquename string, discoveryservers map[string]struct{}, addition []byte) *Serverinfo {
 	s, ok := c.serverpool.Get().(*Serverinfo)
@@ -97,7 +100,7 @@ func (c *Client) getserver(appuniquename string, discoveryservers map[string]str
 		s.reset()
 		s.appuniquename = appuniquename
 		s.discoveryserver = discoveryservers
-		s.pickinfo.Addition = addition
+		s.Pickinfo.Addition = addition
 		s.status = 1
 		return s
 	}
@@ -111,7 +114,7 @@ func (c *Client) getserver(appuniquename string, discoveryservers map[string]str
 
 		reqs: make(map[uint64]*reqinfo, 10),
 
-		pickinfo: &PickInfo{
+		Pickinfo: &PickInfo{
 			Cpu:              0,
 			Netlag:           0,
 			Activecalls:      0,
@@ -125,7 +128,7 @@ func (c *Client) putserver(s *Serverinfo) {
 	c.serverpool.Put(s)
 }
 
-func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname string, vdata []byte, pick func(map[*Serverinfo]PickInfo) *Serverinfo) *Client {
+func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname string, vdata []byte, pick func(map[string]*Serverinfo) *Serverinfo) *Client {
 	//prevent duplicate create
 	lker.Lock()
 	if c, ok := clients[appname]; ok {
@@ -198,15 +201,15 @@ func (c *Client) notice() {
 				//already registered on this discovery server
 				//this is impossible
 				fmt.Printf("[Mrpc.client.notice.impossible]app:%s duplicate register on discoveryserver:%s\n", appuniquename, data.DiscoveryServer)
-			} else if !bytes.Equal(server.pickinfo.Addition, data.Addition) {
+			} else if !bytes.Equal(server.Pickinfo.Addition, data.Addition) {
 				//register with different registerinfo
 				//this is impossible
 				server.discoveryserver[data.DiscoveryServer] = struct{}{}
-				server.pickinfo.DiscoveryServers = len(server.discoveryserver)
+				server.Pickinfo.DiscoveryServers = len(server.discoveryserver)
 				fmt.Printf("[Mrpc.client.notice.impossible]app:%s addition info conflict\n", appuniquename)
 			} else {
 				server.discoveryserver[data.DiscoveryServer] = struct{}{}
-				server.pickinfo.DiscoveryServers = len(server.discoveryserver)
+				server.Pickinfo.DiscoveryServers = len(server.discoveryserver)
 			}
 			server.lker.Unlock()
 		} else if ok {
@@ -217,16 +220,16 @@ func (c *Client) notice() {
 				//didn't registered on this discovery server before
 				//this is impossible
 				fmt.Printf("[Mrpc.client.notice.impossible]app:%s duplicate unregister on discoveryserver:%s\n", appuniquename, data.DiscoveryServer)
-			} else if !bytes.Equal(server.pickinfo.Addition, data.Addition) {
+			} else if !bytes.Equal(server.Pickinfo.Addition, data.Addition) {
 				//this is impossible
 				delete(server.discoveryserver, data.DiscoveryServer)
-				server.pickinfo.DiscoveryServers = len(server.discoveryserver)
-				server.pickinfo.DiscoveryServerOfflineTime = time.Now().Unix()
+				server.Pickinfo.DiscoveryServers = len(server.discoveryserver)
+				server.Pickinfo.DiscoveryServerOfflineTime = time.Now().Unix()
 				fmt.Printf("[Mrpc.client.notice.impossible]app:%s addition info conflict\n", appuniquename)
 			} else {
 				delete(server.discoveryserver, data.DiscoveryServer)
-				server.pickinfo.DiscoveryServers = len(server.discoveryserver)
-				server.pickinfo.DiscoveryServerOfflineTime = time.Now().Unix()
+				server.Pickinfo.DiscoveryServers = len(server.discoveryserver)
+				server.Pickinfo.DiscoveryServerOfflineTime = time.Now().Unix()
 			}
 			needoffline := false
 			if len(server.discoveryserver) == 0 && server.status == 0 {
@@ -374,10 +377,9 @@ func (c *Client) userfunc(p *stream.Peer, appuniquename string, data []byte, sta
 		server.lker.Unlock()
 		return
 	}
-	server.pickinfo.Activecalls = len(server.reqs)
-	server.pickinfo.Cpu = msg.Cpu
+	server.Pickinfo.Cpu = msg.Cpu
 	if req.callid == msg.Callid {
-		server.pickinfo.Netlag = time.Now().UnixNano() - req.starttime
+		server.Pickinfo.Netlag = time.Now().UnixNano() - req.starttime
 		req.resp = msg.Body
 		req.err = msg.Error
 		req.finish <- struct{}{}
@@ -445,42 +447,11 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 			c.putreq(r)
 			return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
 		}
-		if len(c.servers) == 1 {
-			for _, v := range c.servers {
-				server = v
-				break
-			}
-			if server.status != 3 {
-				c.lker.RUnlock()
-				c.putreq(r)
-				return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
-			}
-		} else {
-			pickinfo := make(map[*Serverinfo]PickInfo, int(float64(len(c.servers))*1.3))
-			for _, server := range c.servers {
-				if server.status != 3 {
-					continue
-				}
-				pickinfo[server] = *server.pickinfo
-			}
-			if len(pickinfo) == 0 {
-				c.lker.RUnlock()
-				c.putreq(r)
-				return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
-			}
-			if len(pickinfo) == 1 {
-				for k := range pickinfo {
-					server = k
-					break
-				}
-			} else {
-				server = c.pick(pickinfo)
-				if server == nil {
-					c.lker.RUnlock()
-					c.putreq(r)
-					return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
-				}
-			}
+		server = c.pick(c.servers)
+		if server == nil {
+			c.lker.RUnlock()
+			c.putreq(r)
+			return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
 		}
 		server.lker.Lock()
 		c.lker.RUnlock()
@@ -504,6 +475,7 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 		err := r.err
 		server.lker.Lock()
 		delete(server.reqs, msg.Callid)
+		server.Pickinfo.Activecalls = len(server.reqs)
 		c.putreq(r)
 		server.lker.Unlock()
 		//resp and err maybe both nil
@@ -511,6 +483,7 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 	case <-ctx.Done():
 		server.lker.Lock()
 		delete(server.reqs, msg.Callid)
+		server.Pickinfo.Activecalls = len(server.reqs)
 		c.putreq(r)
 		server.lker.Unlock()
 		return nil, Errmaker(ERRCTXCANCEL, ERRMESSAGE[ERRCTXCANCEL])
