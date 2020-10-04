@@ -21,14 +21,14 @@ var (
 
 //clientuniquename = appname:addr
 type discoveryserver struct {
-	c          *stream.InstanceConfig
-	lker       *sync.RWMutex
-	htree      *hashtree.Hashtree
-	allclients map[string]*discoveryclientnode //key clientuniquename
-	verifydata []byte
-	nodepool   *sync.Pool
-	instance   *stream.Instance
-	status     int32
+	c              *stream.InstanceConfig
+	lker           *sync.RWMutex
+	htree          *hashtree.Hashtree
+	allclients     map[string]*discoveryclientnode //key clientuniquename
+	verifydata     []byte
+	clientnodepool *sync.Pool
+	instance       *stream.Instance
+	status         int32
 }
 
 //clientuniquename = appname:addr
@@ -41,7 +41,7 @@ type discoveryclientnode struct {
 }
 
 func (s *discoveryserver) getnode(peer *stream.Peer, clientuniquename string, starttime uint64) *discoveryclientnode {
-	node := s.nodepool.Get().(*discoveryclientnode)
+	node := s.clientnodepool.Get().(*discoveryclientnode)
 	node.clientuniquename = clientuniquename
 	node.peer = peer
 	node.starttime = starttime
@@ -55,7 +55,7 @@ func (s *discoveryserver) putnode(n *discoveryclientnode) {
 	n.starttime = 0
 	n.regdata = nil
 	n.status = 0
-	s.nodepool.Put(n)
+	s.clientnodepool.Put(n)
 }
 
 var serverinstance *discoveryserver
@@ -70,7 +70,7 @@ func NewDiscoveryServer(c *stream.InstanceConfig, vdata []byte) {
 		htree:      hashtree.New(10, 3),
 		allclients: make(map[string]*discoveryclientnode),
 		verifydata: vdata,
-		nodepool: &sync.Pool{
+		clientnodepool: &sync.Pool{
 			New: func() interface{} {
 				return &discoveryclientnode{}
 			},

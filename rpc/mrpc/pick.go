@@ -3,24 +3,10 @@ package mrpc
 import (
 	"math"
 	"math/rand"
-	"sync"
 	"time"
 )
 
-var defaultpickpool *sync.Pool
 var r *rand.Rand
-
-func getpickpool(length int) []int {
-	r, ok := defaultpickpool.Get().([]int)
-	if ok {
-		return r[:0]
-	} else {
-		return make([]int, 0, length)
-	}
-}
-func putpickpool(buf []int) {
-	defaultpickpool.Put(buf)
-}
 
 func defaultPicker(servers []*Serverinfo) *Serverinfo {
 	if len(servers) == 1 {
@@ -30,83 +16,74 @@ func defaultPicker(servers []*Serverinfo) *Serverinfo {
 			return nil
 		}
 	}
-	normal := getpickpool(len(servers))
-	danger := getpickpool(len(servers))
-	nigntmare := getpickpool(len(servers))
-	defer func() {
-		putpickpool(normal)
-		putpickpool(danger)
-		putpickpool(nigntmare)
-	}()
 	now := time.Now().Unix()
-	for i, server := range servers {
-		if server.Pickable() {
-			if server.Pickinfo.DiscoveryServers == 0 {
-				nigntmare = append(nigntmare, i)
-			} else if now-server.Pickinfo.DiscoveryServerOfflineTime <= 2 {
-				danger = append(danger, i)
-			} else {
-				normal = append(normal, i)
+	var normala, normalb, dangera, dangerb, nightmarea, nightmareb *Serverinfo
+	start := r.Intn(len(servers))
+	index := start
+	for {
+		if servers[index].Pickable() {
+			switch {
+			case servers[index].Pickinfo.DiscoveryServers == 0:
+				//nigntmare
+				if nightmarea == nil {
+					nightmarea = servers[index]
+				} else if nightmareb == nil {
+					nightmareb = servers[index]
+				}
+			case now-servers[index].Pickinfo.DiscoveryServerOfflineTime <= 2:
+				//danger
+				if dangera == nil {
+					dangera = servers[index]
+				} else if dangerb == nil {
+					dangerb = servers[index]
+				}
+			default:
+				//normal
+				if normala == nil {
+					normala = servers[index]
+				} else if normalb == nil {
+					normalb = servers[index]
+					break
+				}
 			}
 		}
+		index++
+		if index == len(servers) {
+			index = 0
+		}
+		if index == start {
+			break
+		}
 	}
-	var sa *Serverinfo
-	var sb *Serverinfo
-	if len(normal) == 1 {
-		return servers[normal[0]]
-	} else if len(normal) == 2 {
-		sa = servers[normal[0]]
-		sb = servers[normal[1]]
-	} else if len(normal) > 2 {
-		//rand pick two
-		a := r.Intn(len(normal))
-		b := r.Intn(len(normal) - 1)
-		if b >= a {
-			b++
-		}
-		sa = servers[normal[a]]
-		sb = servers[normal[b]]
-	} else if len(danger) == 1 {
-		return servers[danger[0]]
-	} else if len(danger) == 2 {
-		sa = servers[danger[0]]
-		sb = servers[danger[1]]
-	} else if len(danger) > 2 {
-		a := r.Intn(len(danger))
-		b := r.Intn(len(danger) - 1)
-		if b >= a {
-			b++
-		}
-		sa = servers[danger[a]]
-		sb = servers[danger[b]]
-	} else if len(nigntmare) == 1 {
-		return servers[nigntmare[0]]
-	} else if len(nigntmare) == 2 {
-		sa = servers[nigntmare[0]]
-		sb = servers[nigntmare[1]]
-	} else if len(nigntmare) > 2 {
-		a := r.Intn(len(nigntmare))
-		b := r.Intn(len(nigntmare) - 1)
-		if b >= a {
-			b++
-		}
-		sa = servers[nigntmare[a]]
-		sb = servers[nigntmare[b]]
+	if normala != nil && normalb != nil {
+
+	} else if normala != nil {
+		return normala
+	} else if dangera != nil && dangerb != nil {
+		normala = dangera
+		normalb = dangerb
+	} else if dangera != nil {
+		return dangera
+	} else if nightmarea != nil && nightmareb != nil {
+		normala = nightmarea
+		normalb = nightmareb
+	} else if nightmarea != nil {
+		return nightmarea
 	} else {
 		return nil
 	}
-	lsa := math.Sqrt(float64(sa.Pickinfo.Netlag)) * sa.Pickinfo.Cpu * float64(sa.Pickinfo.Activecalls)
-	lsb := math.Sqrt(float64(sb.Pickinfo.Netlag)) * sb.Pickinfo.Cpu * float64(sb.Pickinfo.Activecalls)
-	if lsa == lsb {
-		if sa.Pickinfo.DiscoveryServers < sb.Pickinfo.DiscoveryServers {
-			return sb
+	loada := math.Sqrt(float64(normala.Pickinfo.Netlag)) * normala.Pickinfo.Cpu * float64(normala.Pickinfo.Activecalls)
+	loadb := math.Sqrt(float64(normalb.Pickinfo.Netlag)) * normalb.Pickinfo.Cpu * float64(normalb.Pickinfo.Activecalls)
+	if loada == loadb {
+		if normala.Pickinfo.DiscoveryServers < normalb.Pickinfo.DiscoveryServers {
+			return normalb
 		}
-		return sa
+		return normala
 	}
-	lsa *= math.Sqrt(float64(uint8(-sa.Pickinfo.DiscoveryServers)))
-	lsb *= math.Sqrt(float64(uint8(-sb.Pickinfo.DiscoveryServers)))
-	if lsa < lsb {
-		return sa
+	loada *= math.Sqrt(float64(uint8(-normala.Pickinfo.DiscoveryServers)))
+	loadb *= math.Sqrt(float64(uint8(-normalb.Pickinfo.DiscoveryServers)))
+	if loada < loadb {
+		return normala
 	}
-	return sb
+	return normalb
 }

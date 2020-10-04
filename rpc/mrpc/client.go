@@ -32,7 +32,6 @@ func init() {
 	lker = &sync.Mutex{}
 	clients = make(map[string]*Client)
 	r = rand.New(rand.NewSource(time.Now().UnixNano()))
-	defaultpickpool = &sync.Pool{}
 }
 
 //appuniquename = appname:addr
@@ -523,16 +522,22 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 		resp := r.resp
 		err := r.err
 		server.lker.Lock()
-		delete(server.reqs, msg.Callid)
-		server.Pickinfo.Activecalls = len(server.reqs)
+		_, ok := server.reqs[msg.Callid]
+		if ok {
+			delete(server.reqs, msg.Callid)
+			server.Pickinfo.Activecalls = len(server.reqs)
+		}
 		c.putreq(r)
 		server.lker.Unlock()
 		//resp and err maybe both nil
 		return resp, err
 	case <-ctx.Done():
 		server.lker.Lock()
-		delete(server.reqs, msg.Callid)
-		server.Pickinfo.Activecalls = len(server.reqs)
+		_, ok := server.reqs[msg.Callid]
+		if ok {
+			delete(server.reqs, msg.Callid)
+			server.Pickinfo.Activecalls = len(server.reqs)
+		}
 		c.putreq(r)
 		server.lker.Unlock()
 		return nil, Errmaker(ERRCTXCANCEL, ERRMESSAGE[ERRCTXCANCEL])

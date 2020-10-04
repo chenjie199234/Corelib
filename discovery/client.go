@@ -45,6 +45,8 @@ type discoveryclient struct {
 	tcpnotices  map[string]chan *NoticeMsg
 	webnotices  map[string]chan *NoticeMsg
 	nlker       *sync.RWMutex
+
+	clientnodepool *sync.Pool
 }
 
 //clientuniquename = appname:addr
@@ -55,6 +57,19 @@ type discoveryservernode struct {
 	htree      *hashtree.Hashtree
 	allclients map[string]*discoveryclientnode //key clientuniquename
 	status     int                             //0-idle,1-start,2-verify,3-connected,4-preparing,5-registered
+}
+
+func (c *discoveryclient) getnode(clientuniquename string, regdata []byte) *discoveryclientnode {
+	node := c.clientnodepool.Get().(*discoveryclientnode)
+	node.clientuniquename = clientuniquename
+	node.regdata = regdata
+	return node
+}
+
+func (c *discoveryclient) putnode(n *discoveryclientnode) {
+	n.clientuniquename = ""
+	n.regdata = nil
+	c.clientnodepool.Put(n)
 }
 
 var clientinstance *discoveryclient
@@ -79,6 +94,11 @@ func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []
 		tcpnotices:  make(map[string]chan *NoticeMsg, 5),
 		webnotices:  make(map[string]chan *NoticeMsg, 5),
 		nlker:       &sync.RWMutex{},
+		clientnodepool: &sync.Pool{
+			New: func() interface{} {
+				return &discoveryclientnode{}
+			},
+		},
 	}
 	//tcp instance
 	dupc := *c //duplicate to remote the callback func race
@@ -605,20 +625,14 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 		templeafdata, _ := server.htree.GetLeafValue(leafindex)
 		if templeafdata == nil {
 			leafdata := make([]*discoveryclientnode, 0, 5)
-			temppeer := &discoveryclientnode{
-				clientuniquename: onlinepeer,
-				regdata:          regmsg,
-			}
+			temppeer := c.getnode(onlinepeer, regmsg)
 			leafdata = append(leafdata, temppeer)
 			server.allclients[onlinepeer] = temppeer
 			server.htree.SetSingleLeafHash(leafindex, str2byte(onlinepeer[:strings.Index(onlinepeer, ":")]+byte2str(regmsg)))
 			server.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
 		} else {
 			leafdata := *(*[]*discoveryclientnode)(templeafdata)
-			temppeer := &discoveryclientnode{
-				clientuniquename: onlinepeer,
-				regdata:          regmsg,
-			}
+			temppeer := c.getnode(onlinepeer, regmsg)
 			leafdata = append(leafdata, temppeer)
 			server.allclients[onlinepeer] = temppeer
 			sort.Slice(leafdata, func(i, j int) bool {
@@ -648,6 +662,12 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 			p.Close()
 			return
 		}
+		if _, ok := server.allclients[offlinepeer]; !ok {
+			//this is impossible
+			fmt.Printf("[Discovery.client.userfunc.impossible]offline peer:%s doesn't exist\n", offlinepeer)
+			p.SendMessage(makePullMsg(), server.starttime)
+			return
+		}
 		delete(server.allclients, offlinepeer)
 		leafindex := int(bkdrhash(offlinepeer, uint64(server.htree.GetLeavesNum())))
 		templeafdata, _ := server.htree.GetLeafValue(leafindex)
@@ -657,6 +677,7 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 			if peer.clientuniquename == offlinepeer {
 				leafdata = append(leafdata[:i], leafdata[i+1:]...)
 				regmsg = peer.regdata
+				c.putnode(peer)
 				break
 			}
 		}
@@ -765,7 +786,7 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 					}
 				}
 				if !find {
-					newnode := &discoveryclientnode{clientuniquename: newpeer, regdata: newmsg}
+					newnode := c.getnode(newpeer, newmsg)
 					leafdata = append(leafdata, newnode)
 					server.allclients[newpeer] = newnode
 					c.nlker.RLock()
@@ -801,11 +822,12 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 			pos := len(leafdata) - 1
 			for oldpeer, oldmsg := range deleted[leafindex] {
 				delete(server.allclients, oldpeer)
-				for i, v := range leafdata {
-					if v.clientuniquename == oldpeer {
+				for i, peer := range leafdata {
+					if peer.clientuniquename == oldpeer {
 						if i != pos {
 							leafdata[i], leafdata[pos] = leafdata[pos], leafdata[i]
 						}
+						c.putnode(peer)
 						pos--
 						break
 					}
@@ -841,10 +863,12 @@ func (c *discoveryclient) offlinefunc(p *stream.Peer, serveruniquename string) {
 	server := (*discoveryservernode)(p.GetData())
 	server.lker.Lock()
 	server.peer = nil
+	server.starttime = 0
 	server.htree.Reset()
 	c.nlker.RLock()
 	for _, peer := range server.allclients {
 		c.notice(peer.clientuniquename, peer.regdata, false, serveruniquename)
+		c.putnode(peer)
 	}
 	c.nlker.RUnlock()
 	server.allclients = make(map[string]*discoveryclientnode)
