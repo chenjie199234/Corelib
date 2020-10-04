@@ -81,7 +81,7 @@ func call() {
 	fmt.Println(float64(count) / (float64(end-start) / 1000.0 / 1000.0 / 1000.0))
 }
 func pick(servers []*mrpc.Serverinfo) *mrpc.Serverinfo {
-	start := rand.Int()
+	start := rand.Int() % len(servers)
 	i := start
 	for {
 		server := servers[i]
