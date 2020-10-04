@@ -31,7 +31,8 @@ var clients map[string]*Client
 func init() {
 	lker = &sync.Mutex{}
 	clients = make(map[string]*Client)
-	rand.Seed(time.Now().UnixNano())
+	r = rand.New(rand.NewSource(time.Now().UnixNano()))
+	defaultpickpool = &sync.Pool{}
 }
 
 //appuniquename = appname:addr
@@ -50,7 +51,8 @@ type Client struct {
 
 	callid  uint64
 	reqpool *sync.Pool
-	pick    func([]*Serverinfo) *Serverinfo
+
+	pick func([]*Serverinfo) *Serverinfo
 }
 
 type Serverinfo struct {
@@ -134,6 +136,10 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 	if c, ok := clients[appname]; ok {
 		lker.Unlock()
 		return c
+	}
+	//use default pick
+	if pick == nil {
+		pick = defaultPicker
 	}
 	client := &Client{
 		c:          c,
