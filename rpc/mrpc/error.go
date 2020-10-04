@@ -1,7 +1,7 @@
 package mrpc
 
 const (
-	ERRLARGE = iota
+	ERRLARGE = iota + 1
 	ERRNOAPI
 	ERRREQUEST
 	ERRRESPONSE

@@ -42,7 +42,7 @@ type Client struct {
 	instance   *stream.Instance
 
 	lker       *sync.RWMutex
-	servers    map[string]*Serverinfo //all servers //key appuniquename
+	servers    []*Serverinfo //all servers //key appuniquename
 	serverpool *sync.Pool
 	cc         *stream.TcpConfig
 	noticech   chan *discovery.NoticeMsg
@@ -50,7 +50,7 @@ type Client struct {
 
 	callid  uint64
 	reqpool *sync.Pool
-	pick    func(map[string]*Serverinfo) *Serverinfo
+	pick    func([]*Serverinfo) *Serverinfo
 }
 
 type Serverinfo struct {
@@ -128,7 +128,7 @@ func (c *Client) putserver(s *Serverinfo) {
 	c.serverpool.Put(s)
 }
 
-func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname string, vdata []byte, pick func(map[string]*Serverinfo) *Serverinfo) *Client {
+func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname string, vdata []byte, pick func([]*Serverinfo) *Serverinfo) *Client {
 	//prevent duplicate create
 	lker.Lock()
 	if c, ok := clients[appname]; ok {
@@ -140,7 +140,7 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 		appname:    appname,
 		verifydata: vdata,
 		lker:       &sync.RWMutex{},
-		servers:    make(map[string]*Serverinfo, 10),
+		servers:    make([]*Serverinfo, 0, 10),
 		serverpool: &sync.Pool{},
 		offlinech:  make(chan string, 5),
 		cc:         cc,
@@ -182,7 +182,7 @@ func (c *Client) first(data map[string]map[string][]byte) {
 			tempdiscoveryservers[discoveryserver] = struct{}{}
 		}
 		c.lker.Lock()
-		c.servers[appuniquename] = c.getserver(appuniquename, tempdiscoveryservers, tempaddition)
+		c.servers = append(c.servers, c.getserver(appuniquename, tempdiscoveryservers, tempaddition))
 		c.lker.Unlock()
 		go c.start(addr)
 	}
@@ -192,7 +192,15 @@ func (c *Client) notice() {
 		data := <-c.noticech
 		appuniquename := fmt.Sprintf("%s:%s", c.appname, data.PeerAddr)
 		c.lker.Lock()
-		server, ok := c.servers[appuniquename]
+		var server *Serverinfo
+		var ok bool
+		for _, v := range c.servers {
+			if v.appuniquename == appuniquename {
+				server = v
+				ok = true
+				break
+			}
+		}
 		if ok && data.Status {
 			//this peer exist,it register on another discovery server
 			server.lker.Lock()
@@ -257,7 +265,7 @@ func (c *Client) notice() {
 			//this peer not exist,it register on a discovery server
 			tempdiscoveryservers := make(map[string]struct{}, 2)
 			tempdiscoveryservers[data.DiscoveryServer] = struct{}{}
-			c.servers[appuniquename] = c.getserver(appuniquename, tempdiscoveryservers, data.Addition)
+			c.servers = append(c.servers, c.getserver(appuniquename, tempdiscoveryservers, data.Addition))
 			c.lker.Unlock()
 			go c.start(data.PeerAddr)
 		} else {
@@ -271,7 +279,17 @@ func (c *Client) notice() {
 }
 func (c *Client) unregister(appuniquename string) {
 	c.lker.Lock()
-	server, ok := c.servers[appuniquename]
+	var server *Serverinfo
+	var ok bool
+	var index int
+	for i, v := range c.servers {
+		if v.appuniquename == appuniquename {
+			server = v
+			ok = true
+			index = i
+			break
+		}
+	}
 	if !ok {
 		c.lker.Unlock()
 		return
@@ -279,7 +297,8 @@ func (c *Client) unregister(appuniquename string) {
 	//check again
 	server.lker.Lock()
 	if len(server.discoveryserver) == 0 && server.status == 0 {
-		delete(c.servers, appuniquename)
+		c.servers[index], c.servers[len(c.servers)-1] = c.servers[len(c.servers)-1], c.servers[index]
+		c.servers = c.servers[:len(c.servers)-1]
 		c.putserver(server)
 	} else if len(server.discoveryserver) != 0 && server.status == 0 {
 		server.status = 1
@@ -292,7 +311,15 @@ func (c *Client) start(addr string) {
 	if r := c.instance.StartTcpClient(c.cc, addr, c.verifydata); r == "" {
 		appuniquename := fmt.Sprintf("%s:%s", c.appname, addr)
 		c.lker.RLock()
-		server, ok := c.servers[appuniquename]
+		var server *Serverinfo
+		var ok bool
+		for _, v := range c.servers {
+			if v.appuniquename == appuniquename {
+				server = v
+				ok = true
+				break
+			}
+		}
 		if !ok {
 			c.lker.RUnlock()
 			return
@@ -328,7 +355,15 @@ func (c *Client) verifyfunc(ctx context.Context, appuniquename string, peerVerif
 		return nil, false
 	}
 	c.lker.RLock()
-	server, ok := c.servers[appuniquename]
+	var server *Serverinfo
+	var ok bool
+	for _, v := range c.servers {
+		if v.appuniquename == appuniquename {
+			server = v
+			ok = true
+			break
+		}
+	}
 	if !ok || server.peer != nil || server.starttime != 0 {
 		c.lker.RUnlock()
 		return nil, false
@@ -345,7 +380,15 @@ func (c *Client) verifyfunc(ctx context.Context, appuniquename string, peerVerif
 }
 func (c *Client) onlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
 	c.lker.RLock()
-	server, ok := c.servers[appuniquename]
+	var server *Serverinfo
+	var ok bool
+	for _, v := range c.servers {
+		if v.appuniquename == appuniquename {
+			server = v
+			ok = true
+			break
+		}
+	}
 	if !ok {
 		c.lker.RUnlock()
 		return

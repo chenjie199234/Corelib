@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -23,6 +24,7 @@ var clientinstanceconfig *stream.InstanceConfig = &stream.InstanceConfig{
 var api *MrpcTestClient
 
 func Test_Client(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
 	tcpconfig := &stream.TcpConfig{
 		ConnectTimeout:       1000,
 		SocketReadBufferLen:  1024,
@@ -78,11 +80,20 @@ func call() {
 	fmt.Println(float64(end-start) / 1000.0 / 1000.0)
 	fmt.Println(float64(count) / (float64(end-start) / 1000.0 / 1000.0 / 1000.0))
 }
-func pick(servers map[string]*mrpc.Serverinfo) *mrpc.Serverinfo {
-	for _, server := range servers {
+func pick(servers []*mrpc.Serverinfo) *mrpc.Serverinfo {
+	start := rand.Int()
+	i := start
+	for {
+		server := servers[i]
 		if server.Pickable() {
 			return server
 		}
+		i++
+		if i >= len(servers) {
+			i = 0
+		}
+		if i == start {
+			return nil
+		}
 	}
-	return nil
 }
