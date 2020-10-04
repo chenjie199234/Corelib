@@ -35,7 +35,7 @@ func Test_Client(t *testing.T) {
 	}
 	verifydata := []byte("test")
 	discovery.NewDiscoveryClient(clientinstanceconfig, tcpconfig, verifydata, "http://127.0.0.1:8080/discoveryservers")
-	client := mrpc.NewMrpcClient(clientinstanceconfig, tcpconfig, "appserver", verifydata, pick)
+	client := mrpc.NewMrpcClient(clientinstanceconfig, tcpconfig, "appserver", verifydata, nil)
 	api = NewMrpcTestClient(client)
 	time.Sleep(time.Second)
 	call()
@@ -80,20 +80,21 @@ func call() {
 	fmt.Println(float64(end-start) / 1000.0 / 1000.0)
 	fmt.Println(float64(count) / (float64(end-start) / 1000.0 / 1000.0 / 1000.0))
 }
-func pick(servers []*mrpc.Serverinfo) *mrpc.Serverinfo {
-	start := rand.Int() % len(servers)
-	i := start
-	for {
-		server := servers[i]
-		if server.Pickable() {
-			return server
-		}
-		i++
-		if i >= len(servers) {
-			i = 0
-		}
-		if i == start {
-			return nil
-		}
-	}
-}
+
+//func pick(servers []*mrpc.Serverinfo) *mrpc.Serverinfo {
+//        start := rand.Int() % len(servers)
+//        i := start
+//        for {
+//                server := servers[i]
+//                if server.Pickable() {
+//                        return server
+//                }
+//                i++
+//                if i >= len(servers) {
+//                        i = 0
+//                }
+//                if i == start {
+//                        return nil
+//                }
+//        }
+//}
