@@ -26,23 +26,23 @@ var (
 var lker *sync.Mutex
 
 //key appname
-var clients map[string]*Client
+var clients map[string]*MrpcClient
 
 func init() {
 	lker = &sync.Mutex{}
-	clients = make(map[string]*Client)
+	clients = make(map[string]*MrpcClient)
 	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 }
 
 //appuniquename = appname:addr
-type Client struct {
+type MrpcClient struct {
 	c          *stream.InstanceConfig
 	appname    string
 	verifydata []byte
 	instance   *stream.Instance
 
 	lker       *sync.RWMutex
-	servers    []*Serverinfo //all servers //key appuniquename
+	servers    []*Serverapp //all servers //key appuniquename
 	serverpool *sync.Pool
 	cc         *stream.TcpConfig
 	noticech   chan *discovery.NoticeMsg
@@ -51,10 +51,10 @@ type Client struct {
 	callid  uint64
 	reqpool *sync.Pool
 
-	pick func([]*Serverinfo) *Serverinfo
+	pick func([]*Serverapp) *Serverapp
 }
 
-type Serverinfo struct {
+type Serverapp struct {
 	lker          *sync.Mutex
 	appuniquename string
 	//key discoveryserver uniquename
@@ -64,7 +64,7 @@ type Serverinfo struct {
 	status          int //0-idle,1-start,2-verify,3-connected,4-closing
 
 	//active calls
-	reqs map[uint64]*reqinfo //all reqs to this server
+	reqs map[uint64]*req //all reqs to this server
 
 	Pickinfo *PickInfo
 }
@@ -77,17 +77,17 @@ type PickInfo struct {
 	Addition                   []byte  //addition info register on register center
 }
 
-func (s *Serverinfo) Pickable() bool {
+func (s *Serverapp) Pickable() bool {
 	return s.status == 3
 }
-func (s *Serverinfo) reset() {
+func (s *Serverapp) reset() {
 	s.appuniquename = ""
 	s.discoveryserver = make(map[string]struct{}, 2)
 	s.peer = nil
 	s.starttime = 0
 	s.status = 0
 
-	s.reqs = make(map[uint64]*reqinfo, 10)
+	s.reqs = make(map[uint64]*req, 10)
 
 	s.Pickinfo.Cpu = 0
 	s.Pickinfo.Netlag = 0
@@ -95,8 +95,8 @@ func (s *Serverinfo) reset() {
 	s.Pickinfo.DiscoveryServers = 0
 	s.Pickinfo.Addition = nil
 }
-func (c *Client) getserver(appuniquename string, discoveryservers map[string]struct{}, addition []byte) *Serverinfo {
-	s, ok := c.serverpool.Get().(*Serverinfo)
+func (c *MrpcClient) getserver(appuniquename string, discoveryservers map[string]struct{}, addition []byte) *Serverapp {
+	s, ok := c.serverpool.Get().(*Serverapp)
 	if ok {
 		s.reset()
 		s.appuniquename = appuniquename
@@ -105,7 +105,7 @@ func (c *Client) getserver(appuniquename string, discoveryservers map[string]str
 		s.status = 1
 		return s
 	}
-	return &Serverinfo{
+	return &Serverapp{
 		lker:            &sync.Mutex{},
 		appuniquename:   appuniquename,
 		discoveryserver: discoveryservers,
@@ -113,7 +113,7 @@ func (c *Client) getserver(appuniquename string, discoveryservers map[string]str
 		starttime:       0,
 		status:          1,
 
-		reqs: make(map[uint64]*reqinfo, 10),
+		reqs: make(map[uint64]*req, 10),
 
 		Pickinfo: &PickInfo{
 			Cpu:              0,
@@ -124,12 +124,12 @@ func (c *Client) getserver(appuniquename string, discoveryservers map[string]str
 		},
 	}
 }
-func (c *Client) putserver(s *Serverinfo) {
+func (c *MrpcClient) putserver(s *Serverapp) {
 	s.reset()
 	c.serverpool.Put(s)
 }
 
-func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname string, vdata []byte, pick func([]*Serverinfo) *Serverinfo) *Client {
+func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname string, vdata []byte, pick func([]*Serverapp) *Serverapp) *MrpcClient {
 	//prevent duplicate create
 	lker.Lock()
 	if c, ok := clients[appname]; ok {
@@ -140,12 +140,12 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 	if pick == nil {
 		pick = defaultPicker
 	}
-	client := &Client{
+	client := &MrpcClient{
 		c:          c,
 		appname:    appname,
 		verifydata: vdata,
 		lker:       &sync.RWMutex{},
-		servers:    make([]*Serverinfo, 0, 10),
+		servers:    make([]*Serverapp, 0, 10),
 		serverpool: &sync.Pool{},
 		offlinech:  make(chan string, 5),
 		cc:         cc,
@@ -172,7 +172,7 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 	lker.Unlock()
 	return client
 }
-func (c *Client) first(data map[string]map[string][]byte) {
+func (c *MrpcClient) first(data map[string]map[string][]byte) {
 	for addr, discoveryservers := range data {
 		appuniquename := fmt.Sprintf("%s:%s", c.appname, addr)
 		tempdiscoveryservers := make(map[string]struct{}, len(discoveryservers))
@@ -181,10 +181,11 @@ func (c *Client) first(data map[string]map[string][]byte) {
 			if len(tempaddition) == 0 {
 				tempaddition = addition
 			} else if !bytes.Equal(tempaddition, addition) {
-				fmt.Printf("[Mrpc.client.NewMrpcClient.impossible]peer:%s addition info conflict\n", appuniquename)
+				fmt.Printf("[Mrpc.client.first.impossible]peer:%s addition info conflict\n", appuniquename)
 				return
 			}
 			tempdiscoveryservers[discoveryserver] = struct{}{}
+			fmt.Printf("[Mrpc.client.first]app:%s registered on discovery server:%s\n", appuniquename, discoveryserver)
 		}
 		c.lker.Lock()
 		c.servers = append(c.servers, c.getserver(appuniquename, tempdiscoveryservers, tempaddition))
@@ -192,12 +193,12 @@ func (c *Client) first(data map[string]map[string][]byte) {
 		go c.start(addr)
 	}
 }
-func (c *Client) notice() {
+func (c *MrpcClient) notice() {
 	for {
 		data := <-c.noticech
 		appuniquename := fmt.Sprintf("%s:%s", c.appname, data.PeerAddr)
 		c.lker.Lock()
-		var server *Serverinfo
+		var server *Serverapp
 		var ok bool
 		for _, v := range c.servers {
 			if v.appuniquename == appuniquename {
@@ -224,6 +225,7 @@ func (c *Client) notice() {
 				server.discoveryserver[data.DiscoveryServer] = struct{}{}
 				server.Pickinfo.DiscoveryServers = len(server.discoveryserver)
 			}
+			fmt.Printf("[Mrpc.client.notice]app:%s registered on discovery server:%s\n", appuniquename, data.DiscoveryServer)
 			server.lker.Unlock()
 		} else if ok {
 			//this peer exist,it unregister on a discovery server
@@ -244,6 +246,7 @@ func (c *Client) notice() {
 				server.Pickinfo.DiscoveryServers = len(server.discoveryserver)
 				server.Pickinfo.DiscoveryServerOfflineTime = time.Now().Unix()
 			}
+			fmt.Printf("[Mrpc.client.notice]app:%s unregistered on discovery server:%s\n", appuniquename, data.DiscoveryServer)
 			needoffline := false
 			if len(server.discoveryserver) == 0 && server.status == 0 {
 				needoffline = true
@@ -251,22 +254,21 @@ func (c *Client) notice() {
 				server.status = 1
 				go c.start(data.PeerAddr)
 			}
-			if needoffline {
-				//all req failed
-				for _, req := range server.reqs {
-					if req.callid != 0 {
-						req.resp = nil
-						req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
-						req.finish <- struct{}{}
-					}
+			//all req failed
+			for _, req := range server.reqs {
+				if req.callid != 0 {
+					req.resp = nil
+					req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
+					req.finish <- struct{}{}
 				}
-				server.reqs = make(map[uint64]*reqinfo, 10)
 			}
+			server.reqs = make(map[uint64]*req, 10)
 			server.lker.Unlock()
 			if needoffline {
 				c.unregister(appuniquename)
 			}
 		} else if data.Status {
+			fmt.Printf("[Mrpc.client.notice]app:%s registered on discovery server:%s\n", appuniquename, data.DiscoveryServer)
 			//this peer not exist,it register on a discovery server
 			tempdiscoveryservers := make(map[string]struct{}, 2)
 			tempdiscoveryservers[data.DiscoveryServer] = struct{}{}
@@ -282,9 +284,9 @@ func (c *Client) notice() {
 		}
 	}
 }
-func (c *Client) unregister(appuniquename string) {
+func (c *MrpcClient) unregister(appuniquename string) {
 	c.lker.Lock()
-	var server *Serverinfo
+	var server *Serverapp
 	var ok bool
 	var index int
 	for i, v := range c.servers {
@@ -312,11 +314,11 @@ func (c *Client) unregister(appuniquename string) {
 	server.lker.Unlock()
 	c.lker.Unlock()
 }
-func (c *Client) start(addr string) {
+func (c *MrpcClient) start(addr string) {
 	if r := c.instance.StartTcpClient(c.cc, addr, c.verifydata); r == "" {
 		appuniquename := fmt.Sprintf("%s:%s", c.appname, addr)
 		c.lker.RLock()
-		var server *Serverinfo
+		var server *Serverapp
 		var ok bool
 		for _, v := range c.servers {
 			if v.appuniquename == appuniquename {
@@ -338,29 +340,27 @@ func (c *Client) start(addr string) {
 			server.status = 1
 			go c.start(addr)
 		}
-		if needoffline {
-			//all req failed
-			for _, req := range server.reqs {
-				if req.callid != 0 {
-					req.resp = nil
-					req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
-					req.finish <- struct{}{}
-				}
+		//all req failed
+		for _, req := range server.reqs {
+			if req.callid != 0 {
+				req.resp = nil
+				req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
+				req.finish <- struct{}{}
 			}
-			server.reqs = make(map[uint64]*reqinfo, 10)
 		}
+		server.reqs = make(map[uint64]*req, 10)
 		server.lker.Unlock()
 		if needoffline {
 			c.unregister(appuniquename)
 		}
 	}
 }
-func (c *Client) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
+func (c *MrpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal(peerVerifyData, c.verifydata) {
 		return nil, false
 	}
 	c.lker.RLock()
-	var server *Serverinfo
+	var server *Serverapp
 	var ok bool
 	for _, v := range c.servers {
 		if v.appuniquename == appuniquename {
@@ -383,9 +383,9 @@ func (c *Client) verifyfunc(ctx context.Context, appuniquename string, peerVerif
 	server.lker.Unlock()
 	return nil, true
 }
-func (c *Client) onlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
+func (c *MrpcClient) onlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
 	c.lker.RLock()
-	var server *Serverinfo
+	var server *Serverapp
 	var ok bool
 	for _, v := range c.servers {
 		if v.appuniquename == appuniquename {
@@ -405,14 +405,15 @@ func (c *Client) onlinefunc(p *stream.Peer, appuniquename string, starttime uint
 		server.starttime = starttime
 		server.status = 3
 		p.SetData(unsafe.Pointer(server))
+		fmt.Printf("[Mrpc.client.onlinefunc]app:%s online\n", appuniquename)
 	} else {
 		//this is impossible
 		p.Close()
 	}
 	server.lker.Unlock()
 }
-func (c *Client) userfunc(p *stream.Peer, appuniquename string, data []byte, starttime uint64) {
-	server := (*Serverinfo)(p.GetData())
+func (c *MrpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, starttime uint64) {
+	server := (*Serverapp)(p.GetData())
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
@@ -434,8 +435,8 @@ func (c *Client) userfunc(p *stream.Peer, appuniquename string, data []byte, sta
 	}
 	server.lker.Unlock()
 }
-func (c *Client) offlinefunc(p *stream.Peer, appuniquename string) {
-	server := (*Serverinfo)(p.GetData())
+func (c *MrpcClient) offlinefunc(p *stream.Peer, appuniquename string) {
+	server := (*Serverapp)(p.GetData())
 	server.lker.Lock()
 	server.peer = nil
 	server.starttime = 0
@@ -446,24 +447,23 @@ func (c *Client) offlinefunc(p *stream.Peer, appuniquename string) {
 		server.status = 1
 		go c.start(appuniquename[strings.Index(appuniquename, ":")+1:])
 	}
-	if needoffline {
-		//all req failed
-		for _, req := range server.reqs {
-			if req.callid != 0 {
-				req.resp = nil
-				req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
-				req.finish <- struct{}{}
-			}
+	//all req failed
+	for _, req := range server.reqs {
+		if req.callid != 0 {
+			req.resp = nil
+			req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
+			req.finish <- struct{}{}
 		}
-		server.reqs = make(map[uint64]*reqinfo, 10)
 	}
+	server.reqs = make(map[uint64]*req, 10)
+	fmt.Printf("[Mrpc.client.onlinefunc]app:%s offline\n", appuniquename)
 	server.lker.Unlock()
 	if needoffline {
 		c.unregister(appuniquename)
 	}
 }
 
-func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *MsgErr) {
+func (c *MrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, *MsgErr) {
 	//make mrpc system message
 	msg := &Msg{
 		Callid: atomic.AddUint64(&c.callid, 1),
@@ -479,13 +479,13 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 	}
 	traceid = trace.AppendTrace(traceid, c.c.SelfName)
 	msg.Trace = traceid
-	msg.Body = req
+	msg.Body = in
 	msg.Metadata = GetAllMetadata(ctx)
 	d, _ := proto.Marshal(msg)
 	if len(d) >= 65535 {
 		return nil, Errmaker(ERRLARGE, ERRMESSAGE[ERRLARGE])
 	}
-	var server *Serverinfo
+	var server *Serverapp
 	r := c.getreq(msg.Callid)
 	//pick server
 	for {
@@ -544,7 +544,7 @@ func (c *Client) Call(ctx context.Context, path string, req []byte) ([]byte, *Ms
 	}
 }
 
-type reqinfo struct {
+type req struct {
 	callid    uint64
 	finish    chan struct{}
 	resp      []byte
@@ -552,7 +552,7 @@ type reqinfo struct {
 	starttime int64
 }
 
-func (r *reqinfo) reset() {
+func (r *req) reset() {
 	r.callid = 0
 	for len(r.finish) > 0 {
 		<-r.finish
@@ -561,15 +561,15 @@ func (r *reqinfo) reset() {
 	r.err = nil
 	r.starttime = 0
 }
-func (c *Client) getreq(callid uint64) *reqinfo {
-	r, ok := c.reqpool.Get().(*reqinfo)
+func (c *MrpcClient) getreq(callid uint64) *req {
+	r, ok := c.reqpool.Get().(*req)
 	if ok {
 		r.reset()
 		r.callid = callid
 		r.starttime = time.Now().UnixNano()
 		return r
 	}
-	return &reqinfo{
+	return &req{
 		callid:    callid,
 		finish:    make(chan struct{}),
 		resp:      nil,
@@ -577,7 +577,7 @@ func (c *Client) getreq(callid uint64) *reqinfo {
 		starttime: time.Now().UnixNano(),
 	}
 }
-func (c *Client) putreq(r *reqinfo) {
+func (c *MrpcClient) putreq(r *req) {
 	r.reset()
 	c.reqpool.Put(r)
 }

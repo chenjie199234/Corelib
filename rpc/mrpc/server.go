@@ -24,7 +24,7 @@ var (
 	ERRSREG     = fmt.Errorf("[Mrpc.server]already registered")
 )
 
-type Server struct {
+type MrpcServer struct {
 	c          *stream.InstanceConfig
 	lker       *sync.Mutex
 	handler    map[string]func(*Msg)
@@ -32,8 +32,8 @@ type Server struct {
 	verifydata []byte
 }
 
-func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *Server {
-	serverinstance := &Server{
+func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *MrpcServer {
+	serverinstance := &MrpcServer{
 		c:          c,
 		lker:       &sync.Mutex{},
 		handler:    make(map[string]func(*Msg), 10),
@@ -47,10 +47,10 @@ func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *Server {
 	serverinstance.instance = stream.NewInstance(&dupc)
 	return serverinstance
 }
-func (s *Server) StartMrpcServer(cc *stream.TcpConfig, listenaddr string) {
+func (s *MrpcServer) StartMrpcServer(cc *stream.TcpConfig, listenaddr string) {
 	s.instance.StartTcpServer(cc, listenaddr)
 }
-func (s *Server) insidehandler(timeout int, handlers ...OutsideHandler) func(*Msg) {
+func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func(*Msg) {
 	return func(msg *Msg) {
 		var ctx context.Context
 		var dl time.Time
@@ -92,18 +92,18 @@ func (s *Server) insidehandler(timeout int, handlers ...OutsideHandler) func(*Ms
 		msg.Metadata = nil
 	}
 }
-func (s *Server) RegisterHandler(path string, timeout int, handlers ...OutsideHandler) {
+func (s *MrpcServer) RegisterHandler(path string, timeout int, handlers ...OutsideHandler) {
 	s.handler[path] = s.insidehandler(timeout, handlers...)
 }
 
-func (s *Server) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
+func (s *MrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal(peerVerifyData, s.verifydata) {
 		return nil, false
 	}
 	return s.verifydata, true
 }
 
-func (s *Server) userfunc(p *stream.Peer, peeruniquename string, data []byte, starttime uint64) {
+func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, starttime uint64) {
 	go func() {
 		defer func() {
 			if e := recover(); e != nil {

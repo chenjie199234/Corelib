@@ -8,7 +8,7 @@ import (
 
 var r *rand.Rand
 
-func defaultPicker(servers []*Serverinfo) *Serverinfo {
+func defaultPicker(servers []*Serverapp) *Serverapp {
 	if len(servers) == 1 {
 		if servers[0].Pickable() {
 			return servers[0]
@@ -17,7 +17,7 @@ func defaultPicker(servers []*Serverinfo) *Serverinfo {
 		}
 	}
 	now := time.Now().Unix()
-	var normala, normalb, dangera, dangerb, nightmarea, nightmareb *Serverinfo
+	var normala, normalb, dangera, dangerb, nightmarea, nightmareb *Serverapp
 	start := r.Intn(len(servers))
 	index := start
 	for {

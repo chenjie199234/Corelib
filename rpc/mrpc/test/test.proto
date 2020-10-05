@@ -1,7 +1,7 @@
 syntax="proto3";
 package test;
 service test {
-	rpc hello(hello_req)returns(hello_resp);//get,200ms
+	rpc hello(hello_req)returns(hello_resp);//timeout:200ms
 }
 message hello_req{
 	string name=1;

@@ -14,7 +14,7 @@ import (
 var PathMrpcTestHello = "/Test/Hello"
 
 type MrpcTestClient struct {
-	c *mrpc.Client
+	c *mrpc.MrpcClient
 }
 
 func (c *MrpcTestClient) Hello(ctx context.Context, req *HelloReq) (*HelloResp, *mrpc.MsgErr) {
@@ -33,7 +33,7 @@ func (c *MrpcTestClient) Hello(ctx context.Context, req *HelloReq) (*HelloResp, 
 	}
 	return resp, nil
 }
-func NewMrpcTestClient(c *mrpc.Client) *MrpcTestClient {
+func NewMrpcTestClient(c *mrpc.MrpcClient) *MrpcTestClient {
 	return &MrpcTestClient{c: c}
 }
 
@@ -57,7 +57,7 @@ func (s *MrpcTestService) hello(ctx context.Context, in []byte) ([]byte, *mrpc.M
 	}
 	return nil, nil
 }
-func RegisterMrpcTestService(engine *mrpc.Server, instance *MrpcTestService) {
+func RegisterMrpcTestService(engine *mrpc.MrpcServer, instance *MrpcTestService) {
 	var allmids map[string][]mrpc.OutsideHandler
 	if instance.Midware != nil {
 		allmids = instance.Midware()

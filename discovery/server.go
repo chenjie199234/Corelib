@@ -120,6 +120,7 @@ func (s *discoveryserver) onlinefunc(p *stream.Peer, clientuniquename string, st
 		return
 	}
 	s.allclients[clientuniquename] = s.getnode(p, clientuniquename, starttime)
+	fmt.Printf("[Discovery.server.onlinefunc]app:%s online\n", clientuniquename)
 	s.lker.Unlock()
 }
 func (s *discoveryserver) userfunc(p *stream.Peer, clientuniquename string, data []byte, starttime uint64) {
@@ -193,6 +194,7 @@ func (s *discoveryserver) userfunc(p *stream.Peer, clientuniquename string, data
 				client.peer.SendMessage(onlinemsg, client.starttime)
 			}
 		}
+		fmt.Printf("[Discovery.server.userfunc]app:%s registered with data:%s\n", clientuniquename, regmsg)
 		s.lker.Unlock()
 	case msgpull:
 		s.lker.RLock()
@@ -233,6 +235,7 @@ func (s *discoveryserver) offlinefunc(p *stream.Peer, clientuniquename string) {
 	if node.status != 3 {
 		s.putnode(node)
 		s.lker.Unlock()
+		fmt.Printf("[Discovery.server.offlinefunc]app:%s offline\n", clientuniquename)
 		return
 	}
 	templeafdata, _ := s.htree.GetLeafValue(leafindex)
@@ -262,5 +265,6 @@ func (s *discoveryserver) offlinefunc(p *stream.Peer, clientuniquename string) {
 			client.peer.SendMessage(offlinemsg, client.starttime)
 		}
 	}
+	fmt.Printf("[Discovery.server.offlinefunc]app:%s offline\n", clientuniquename)
 	s.lker.Unlock()
 }

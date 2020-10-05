@@ -30,13 +30,14 @@ var (
 
 //serveruniquename = discoveryservername:addr
 type discoveryclient struct {
+	c          *stream.InstanceConfig
 	httpclient *http.Client //httpclient to get discovery server addrs
 
 	lker        *sync.RWMutex
 	verifydata  []byte
 	servers     map[string]*discoveryservernode //key serveruniquename
 	instance    *stream.Instance
-	regmsg      *RegMsg
+	regmsg      []byte
 	canregister bool
 	stopch      chan struct{}
 	//key appname
@@ -82,6 +83,7 @@ func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []
 		return
 	}
 	clientinstance = &discoveryclient{
+		c: c,
 		httpclient: &http.Client{
 			Timeout: 500 * time.Millisecond,
 		},
@@ -178,7 +180,7 @@ func RegisterSelf(regmsg *RegMsg) error {
 		clientinstance.lker.Unlock()
 		return ERRCREG
 	}
-	clientinstance.regmsg = regmsg
+	clientinstance.regmsg = d
 	clientinstance.canregister = true
 	clientinstance.lker.Unlock()
 	return nil
@@ -492,9 +494,8 @@ func (c *discoveryclient) updateserver(cc *stream.TcpConfig, url string) {
 				server.peer.Close()
 			}
 		} else if c.canregister && server.status == 4 {
-			regmsg, _ := json.Marshal(c.regmsg)
 			server.status = 5
-			server.peer.SendMessage(makeOnlineMsg("", regmsg, nil), server.starttime)
+			server.peer.SendMessage(makeOnlineMsg("", c.regmsg, nil), server.starttime)
 		}
 		server.lker.Unlock()
 	}
@@ -653,6 +654,9 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 			c.nlker.RLock()
 			c.notice(onlinepeer, regmsg, true, serveruniquename)
 			c.nlker.RUnlock()
+			if onlinepeer[:strings.Index(onlinepeer, ":")] == c.c.SelfName && bytes.Equal(regmsg, c.regmsg) {
+				fmt.Printf("[Discovery.client.userfunc]self registered on discovery server:%s\n", serveruniquename)
+			}
 		}
 	case msgoffline:
 		offlinepeer, newhash, e := getOfflineMsg(data)
@@ -854,12 +858,14 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 		}
 		server.htree.SetMultiLeavesHash(updateleaveshash)
 		server.htree.SetMultiLeavesValue(updateleavesvalue)
+		fmt.Printf("[Discovery.client.userfunc]self prepared on discovery server:%s\n", serveruniquename)
 	default:
 		fmt.Printf("[Discovery.client.userfunc.impossible]unknown message type")
 		p.Close()
 	}
 }
 func (c *discoveryclient) offlinefunc(p *stream.Peer, serveruniquename string) {
+	fmt.Printf("[Discovery.client.offlinefunc]self unregistered on discovery server:%s\n", serveruniquename)
 	server := (*discoveryservernode)(p.GetData())
 	server.lker.Lock()
 	server.peer = nil

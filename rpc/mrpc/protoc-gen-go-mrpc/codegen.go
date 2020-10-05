@@ -101,7 +101,7 @@ func dealClientStruct(f *protogen.GeneratedFile, file *protogen.File) {
 	for _, service := range file.Services {
 		structname := fmt.Sprintf("Mrpc%sClient", service.GoName)
 		f.P(fmt.Sprintf("type %s struct{", structname))
-		f.P("c *mrpc.Client")
+		f.P("c *mrpc.MrpcClient")
 		f.P("}")
 	}
 }
@@ -146,7 +146,7 @@ func dealClientHandlefunc(f *protogen.GeneratedFile, file *protogen.File) {
 func dealClientNew(f *protogen.GeneratedFile, file *protogen.File) {
 	for _, service := range file.Services {
 		structname := fmt.Sprintf("Mrpc%sClient", service.GoName)
-		f.P(fmt.Sprintf("func New%s(c *mrpc.Client)*%s{", structname, structname))
+		f.P(fmt.Sprintf("func New%s(c *mrpc.MrpcClient)*%s{", structname, structname))
 		f.P(fmt.Sprintf("return &%s{c:c}", structname))
 		f.P("}")
 	}
@@ -208,7 +208,7 @@ func dealServerHandlefunc(f *protogen.GeneratedFile, file *protogen.File) {
 func dealServerRegister(f *protogen.GeneratedFile, file *protogen.File) {
 	for _, service := range file.Services {
 		structname := fmt.Sprintf("Mrpc%sService", service.GoName)
-		f.P(fmt.Sprintf("func Register%s(engine *mrpc.Server, instance *%s) {", structname, structname))
+		f.P(fmt.Sprintf("func Register%s(engine *mrpc.MrpcServer, instance *%s) {", structname, structname))
 		f.P("var allmids map[string][]mrpc.OutsideHandler")
 		f.P("if instance.Midware!=nil{allmids=instance.Midware()}")
 		for _, method := range service.Methods {
