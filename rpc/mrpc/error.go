@@ -1,5 +1,7 @@
 package mrpc
 
+import "fmt"
+
 const (
 	ERRLARGE = iota + 1
 	ERRNOAPI
@@ -25,4 +27,7 @@ func Errmaker(code uint64, msg string) *MsgErr {
 		Code: code,
 		Msg:  msg,
 	}
+}
+func (this *MsgErr) Error() string {
+	return fmt.Sprintf("code:%d,msg:%s", this.Code, this.Msg)
 }

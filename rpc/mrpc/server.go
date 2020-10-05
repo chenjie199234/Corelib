@@ -18,12 +18,6 @@ type OutsideHandler func(ctx context.Context, req []byte) (resp []byte, e *MsgEr
 
 const defaulttimeout = 200
 
-var (
-	ERRSINIT    = fmt.Errorf("[Mrpc.server]not init,call NewMrpcServer first")
-	ERRSSTARTED = fmt.Errorf("[Mrpc.server]already started")
-	ERRSREG     = fmt.Errorf("[Mrpc.server]already registered")
-)
-
 type MrpcServer struct {
 	c          *stream.InstanceConfig
 	lker       *sync.Mutex

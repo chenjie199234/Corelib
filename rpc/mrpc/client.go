@@ -18,11 +18,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var (
-	ERRCINIT = fmt.Errorf("[Mrpc.client]not init,call NewMrpcClient first")
-	ERRCADD  = fmt.Errorf("[Mrpc.client]already exist")
-)
-
 var lker *sync.Mutex
 
 //key appname
