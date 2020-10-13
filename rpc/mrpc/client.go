@@ -253,7 +253,7 @@ func (c *MrpcClient) notice() {
 			for _, req := range server.reqs {
 				if req.callid != 0 {
 					req.resp = nil
-					req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
+					req.err = Errmaker(ERRCLOSED, ERRMESSAGE[ERRCLOSED])
 					req.finish <- struct{}{}
 				}
 			}
@@ -339,7 +339,7 @@ func (c *MrpcClient) start(addr string) {
 		for _, req := range server.reqs {
 			if req.callid != 0 {
 				req.resp = nil
-				req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
+				req.err = Errmaker(ERRCLOSED, ERRMESSAGE[ERRCLOSED])
 				req.finish <- struct{}{}
 			}
 		}
@@ -422,6 +422,9 @@ func (c *MrpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte,
 		return
 	}
 	server.Pickinfo.Cpu = msg.Cpu
+	if msg.Error != nil && msg.Error.Code == ERRCLOSING {
+		server.status = 4
+	}
 	if req.callid == msg.Callid {
 		server.Pickinfo.Netlag = time.Now().UnixNano() - req.starttime
 		req.resp = msg.Body
@@ -446,7 +449,7 @@ func (c *MrpcClient) offlinefunc(p *stream.Peer, appuniquename string) {
 	for _, req := range server.reqs {
 		if req.callid != 0 {
 			req.resp = nil
-			req.err = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
+			req.err = Errmaker(ERRCLOSED, ERRMESSAGE[ERRCLOSED])
 			req.finish <- struct{}{}
 		}
 	}
@@ -482,60 +485,67 @@ func (c *MrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 	}
 	var server *Serverapp
 	r := c.getreq(msg.Callid)
-	//pick server
 	for {
-		c.lker.RLock()
-		if len(c.servers) == 0 {
+		//pick server
+		for {
+			c.lker.RLock()
+			if len(c.servers) == 0 {
+				c.lker.RUnlock()
+				c.putreq(r)
+				return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
+			}
+			server = c.pick(c.servers)
+			if server == nil {
+				c.lker.RUnlock()
+				c.putreq(r)
+				return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
+			}
+			server.lker.Lock()
 			c.lker.RUnlock()
-			c.putreq(r)
-			return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
-		}
-		server = c.pick(c.servers)
-		if server == nil {
-			c.lker.RUnlock()
-			c.putreq(r)
-			return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
-		}
-		server.lker.Lock()
-		c.lker.RUnlock()
-		if server.status != 3 {
+			if server.status != 3 {
+				server.lker.Unlock()
+				continue
+			}
+			server.reqs[msg.Callid] = r
+			if e := server.peer.SendMessage(d, server.starttime); e != nil {
+				server.status = 4
+				delete(server.reqs, msg.Callid)
+				server.lker.Unlock()
+				continue
+			}
 			server.lker.Unlock()
-			continue
+			break
 		}
-		server.reqs[msg.Callid] = r
-		if e := server.peer.SendMessage(d, server.starttime); e != nil {
-			server.status = 4
-			delete(server.reqs, msg.Callid)
+		select {
+		case <-r.finish:
+			if r.err != nil && r.err.Code == ERRCLOSING {
+				r.resp = nil
+				r.err = nil
+				continue
+			}
+			resp := r.resp
+			err := r.err
+			server.lker.Lock()
+			_, ok := server.reqs[msg.Callid]
+			if ok {
+				delete(server.reqs, msg.Callid)
+				server.Pickinfo.Activecalls = len(server.reqs)
+			}
+			c.putreq(r)
 			server.lker.Unlock()
-			continue
+			//resp and err maybe both nil
+			return resp, err
+		case <-ctx.Done():
+			server.lker.Lock()
+			_, ok := server.reqs[msg.Callid]
+			if ok {
+				delete(server.reqs, msg.Callid)
+				server.Pickinfo.Activecalls = len(server.reqs)
+			}
+			c.putreq(r)
+			server.lker.Unlock()
+			return nil, Errmaker(ERRCTXCANCEL, ERRMESSAGE[ERRCTXCANCEL])
 		}
-		server.lker.Unlock()
-		break
-	}
-	select {
-	case <-r.finish:
-		resp := r.resp
-		err := r.err
-		server.lker.Lock()
-		_, ok := server.reqs[msg.Callid]
-		if ok {
-			delete(server.reqs, msg.Callid)
-			server.Pickinfo.Activecalls = len(server.reqs)
-		}
-		c.putreq(r)
-		server.lker.Unlock()
-		//resp and err maybe both nil
-		return resp, err
-	case <-ctx.Done():
-		server.lker.Lock()
-		_, ok := server.reqs[msg.Callid]
-		if ok {
-			delete(server.reqs, msg.Callid)
-			server.Pickinfo.Activecalls = len(server.reqs)
-		}
-		c.putreq(r)
-		server.lker.Unlock()
-		return nil, Errmaker(ERRCTXCANCEL, ERRMESSAGE[ERRCTXCANCEL])
 	}
 }
 

@@ -24,6 +24,7 @@ type MrpcServer struct {
 	handler    map[string]func(*Msg)
 	instance   *stream.Instance
 	verifydata []byte
+	status     int64 //0--closind,1--running
 }
 
 func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *MrpcServer {
@@ -32,6 +33,7 @@ func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *MrpcServer {
 		lker:       &sync.Mutex{},
 		handler:    make(map[string]func(*Msg), 10),
 		verifydata: vdata,
+		status:     1,
 	}
 	dupc := *c //duplicate to remote the callback func race
 	dupc.Verifyfunc = serverinstance.verifyfunc
@@ -44,8 +46,20 @@ func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *MrpcServer {
 func (s *MrpcServer) StartMrpcServer(cc *stream.TcpConfig, listenaddr string) {
 	s.instance.StartTcpServer(cc, listenaddr)
 }
+func (s *MrpcServer) StopMrpcServer() {
+	s.status = 0
+}
 func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func(*Msg) {
 	return func(msg *Msg) {
+		defer func() {
+			if e := recover(); e != nil {
+				fmt.Printf("[Mrpc.server.insidehandler]panic:%s\n", e)
+				msg.Metadata = nil
+				msg.Cpu = cpu.GetUse()
+				msg.Body = nil
+				msg.Error = Errmaker(ERRPANIC, ERRMESSAGE[ERRPANIC])
+			}
+		}()
 		var ctx context.Context
 		var dl time.Time
 		if timeout == 0 {
@@ -99,15 +113,21 @@ func (s *MrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peer
 
 func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, starttime uint64) {
 	go func() {
-		defer func() {
-			if e := recover(); e != nil {
-				fmt.Printf("[Mrpc.server.userfunc]panic:%s\n", e)
-			}
-		}()
 		msg := &Msg{}
 		if e := proto.Unmarshal(data, msg); e != nil {
 			//this is impossible
 			fmt.Printf("[Mrpc.server.userfunc.impossible]unmarshal data error:%s\n", e)
+			return
+		}
+		if s.status == 0 {
+			msg.Metadata = nil
+			msg.Cpu = cpu.GetUse()
+			msg.Body = nil
+			msg.Error = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
+			d, _ := proto.Marshal(msg)
+			if e := p.SendMessage(d, starttime); e != nil {
+				fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)
+			}
 			return
 		}
 		handler, ok := s.handler[msg.Path]

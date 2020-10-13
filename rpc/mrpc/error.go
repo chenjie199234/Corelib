@@ -7,9 +7,11 @@ const (
 	ERRNOAPI
 	ERRREQUEST
 	ERRRESPONSE
-	ERRCLOSING
 	ERRCTXCANCEL
 	ERRNOSERVER
+	ERRCLOSING
+	ERRCLOSED
+	ERRPANIC
 )
 
 var ERRMESSAGE = map[uint64]string{
@@ -17,9 +19,11 @@ var ERRMESSAGE = map[uint64]string{
 	ERRNOAPI:     "api not implement",
 	ERRREQUEST:   "request data error",
 	ERRRESPONSE:  "response data error",
-	ERRCLOSING:   "connection is closed",
 	ERRCTXCANCEL: "context canceled",
 	ERRNOSERVER:  "no servers connected",
+	ERRCLOSING:   "connection is closing",
+	ERRCLOSED:    "connection is closed",
+	ERRPANIC:     "server panic",
 }
 
 func Errmaker(code uint64, msg string) *MsgErr {
