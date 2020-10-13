@@ -46,7 +46,6 @@ func (s *MrpcServer) StartMrpcServer(cc *stream.TcpConfig, listenaddr string) {
 func (s *MrpcServer) StopMrpcServer() {
 	d, _ := proto.Marshal(&Msg{
 		Callid: 0,
-		Cpu:    cpu.GetUse(),
 		Error:  Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING]),
 	})
 	s.instance.SendMessageAll(d)

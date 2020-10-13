@@ -416,15 +416,15 @@ func (c *MrpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte,
 		return
 	}
 	server.lker.Lock()
+	if msg.Error != nil && msg.Error.Code == ERRCLOSING {
+		server.status = 4
+	}
 	req, ok := server.reqs[msg.Callid]
 	if !ok {
 		server.lker.Unlock()
 		return
 	}
 	server.Pickinfo.Cpu = msg.Cpu
-	if msg.Error != nil && msg.Error.Code == ERRCLOSING {
-		server.status = 4
-	}
 	if req.callid == msg.Callid {
 		server.Pickinfo.Netlag = time.Now().UnixNano() - req.starttime
 		req.resp = msg.Body
