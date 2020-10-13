@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/chenjie199234/Corelib/stream"
@@ -20,20 +19,18 @@ const defaulttimeout = 200
 
 type MrpcServer struct {
 	c          *stream.InstanceConfig
-	lker       *sync.Mutex
 	handler    map[string]func(*Msg)
 	instance   *stream.Instance
 	verifydata []byte
-	status     int64 //0--closind,1--running
+	stoptimer  *time.Timer //if this is not nil,means this server is closing
+	stopch     chan struct{}
 }
 
 func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *MrpcServer {
 	serverinstance := &MrpcServer{
 		c:          c,
-		lker:       &sync.Mutex{},
 		handler:    make(map[string]func(*Msg), 10),
 		verifydata: vdata,
-		status:     1,
 	}
 	dupc := *c //duplicate to remote the callback func race
 	dupc.Verifyfunc = serverinstance.verifyfunc
@@ -47,7 +44,26 @@ func (s *MrpcServer) StartMrpcServer(cc *stream.TcpConfig, listenaddr string) {
 	s.instance.StartTcpServer(cc, listenaddr)
 }
 func (s *MrpcServer) StopMrpcServer() {
-	s.status = 0
+	d, _ := proto.Marshal(&Msg{
+		Callid: 0,
+		Cpu:    cpu.GetUse(),
+		Error:  Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING]),
+	})
+	s.instance.SendMessageAll(d)
+	s.stopch = make(chan struct{})
+	s.stoptimer = time.NewTimer(time.Second)
+	for {
+		select {
+		case <-s.stoptimer.C:
+			return
+		case <-s.stopch:
+			s.stoptimer.Reset(time.Second)
+			for len(s.stoptimer.C) > 0 {
+				<-s.stoptimer.C
+			}
+		}
+	}
+
 }
 func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func(*Msg) {
 	return func(msg *Msg) {
@@ -103,14 +119,12 @@ func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func
 func (s *MrpcServer) RegisterHandler(path string, timeout int, handlers ...OutsideHandler) {
 	s.handler[path] = s.insidehandler(timeout, handlers...)
 }
-
 func (s *MrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal(peerVerifyData, s.verifydata) {
 		return nil, false
 	}
 	return s.verifydata, true
 }
-
 func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, starttime uint64) {
 	go func() {
 		msg := &Msg{}
@@ -119,7 +133,11 @@ func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte
 			fmt.Printf("[Mrpc.server.userfunc.impossible]unmarshal data error:%s\n", e)
 			return
 		}
-		if s.status == 0 {
+		if s.stoptimer != nil {
+			select {
+			case s.stopch <- struct{}{}:
+			default:
+			}
 			msg.Metadata = nil
 			msg.Cpu = cpu.GetUse()
 			msg.Body = nil

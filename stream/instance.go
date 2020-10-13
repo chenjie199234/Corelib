@@ -160,6 +160,16 @@ func NewInstance(c *InstanceConfig) *Instance {
 	return stream
 }
 
+func (this *Instance) SendMessageAll(data []byte) {
+	for _, node := range this.peernodes {
+		node.RWMutex.RLock()
+		for _, peer := range node.peers {
+			peer.SendMessage(data, peer.starttime)
+		}
+		node.RWMutex.RUnlock()
+	}
+}
+
 func (this *Instance) heart(node *peernode) {
 	tker := time.NewTicker(time.Duration(this.conf.HeartprobeInterval) * time.Millisecond)
 	for {
