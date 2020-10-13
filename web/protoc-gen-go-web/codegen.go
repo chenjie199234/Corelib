@@ -66,7 +66,7 @@ func dealImports(f *protogen.GeneratedFile, file *protogen.File) {
 			if method.Input.GoIdent.GoImportPath.String() != "" && method.Input.GoIdent.GoImportPath.String() != file.GoImportPath.String() {
 				importsSELF[method.Input.GoIdent.GoImportPath.String()] = struct{}{}
 			}
-			if method.Output.GoIdent.GoImportPath.String() != "" && method.Input.GoIdent.GoImportPath.String() != file.GoImportPath.String() {
+			if method.Output.GoIdent.GoImportPath.String() != "" && method.Output.GoIdent.GoImportPath.String() != file.GoImportPath.String() {
 				importsSELF[method.Output.GoIdent.GoImportPath.String()] = struct{}{}
 			}
 		}
