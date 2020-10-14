@@ -72,18 +72,21 @@ func defaultPicker(servers []*Serverapp) *Serverapp {
 	} else {
 		return nil
 	}
-	loada := math.Sqrt(float64(normala.Pickinfo.Netlag)) * normala.Pickinfo.Cpu * float64(normala.Pickinfo.Activecalls)
-	loadb := math.Sqrt(float64(normalb.Pickinfo.Netlag)) * normalb.Pickinfo.Cpu * float64(normalb.Pickinfo.Activecalls)
-	if loada == loadb {
-		if normala.Pickinfo.DiscoveryServers < normalb.Pickinfo.DiscoveryServers {
-			return normalb
-		}
-		return normala
-	}
-	loada *= math.Sqrt(float64(uint8(-normala.Pickinfo.DiscoveryServers)))
-	loadb *= math.Sqrt(float64(uint8(-normalb.Pickinfo.DiscoveryServers)))
+	loada := math.Sqrt(float64(normala.Pickinfo.Netlag)) *
+		normala.Pickinfo.Cpu *
+		float64(normala.Pickinfo.Activecalls) *
+		math.Log1p(float64(normalb.Pickinfo.DiscoveryServers)) //more discoveryservers more safety,so a * b's discoveryserver num
+	loadb := math.Sqrt(float64(normalb.Pickinfo.Netlag)) *
+		normalb.Pickinfo.Cpu *
+		float64(normalb.Pickinfo.Activecalls) *
+		math.Log1p(float64(normala.Pickinfo.DiscoveryServers)) //more discoveryservers more safety,so b * a's discoveryserver num
 	if loada < loadb {
 		return normala
+	} else if loada > loadb {
+		return normalb
+	} else if rand.Intn(2) == 0 {
+		return normala
+	} else {
+		return normalb
 	}
-	return normalb
 }
