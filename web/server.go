@@ -23,6 +23,7 @@ type Web struct {
 var defaulttimeout = 300
 
 func NewInstance(c *WebConfig) *Web {
+	checkconfig(c)
 	instance := &Web{
 		conf: c,
 		server: &http.Server{

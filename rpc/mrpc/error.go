@@ -33,5 +33,5 @@ func Errmaker(code uint64, msg string) *MsgErr {
 	}
 }
 func (this *MsgErr) Error() string {
-	return fmt.Sprintf("code:%d,msg:%s", this.Code, this.Msg)
+	return fmt.Sprintf(`{"code":%d,"msg":"%s"}`, this.Code, this.Msg)
 }
