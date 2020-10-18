@@ -29,7 +29,6 @@ type MrpcServer struct {
 
 func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *MrpcServer {
 	serverinstance := &MrpcServer{
-		c:          c,
 		handler:    make(map[string]func(*Msg), 10),
 		verifydata: vdata,
 	}
@@ -38,6 +37,7 @@ func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *MrpcServer {
 	dupc.Onlinefunc = nil
 	dupc.Userdatafunc = serverinstance.userfunc
 	dupc.Offlinefunc = nil
+	serverinstance.c = &dupc
 	serverinstance.instance = stream.NewInstance(&dupc)
 	return serverinstance
 }

@@ -137,7 +137,6 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 		pick = defaultPicker
 	}
 	client := &MrpcClient{
-		c:          c,
 		appname:    appname,
 		verifydata: vdata,
 		lker:       &sync.RWMutex{},
@@ -155,6 +154,7 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 	dupc.Onlinefunc = client.onlinefunc
 	dupc.Userdatafunc = client.userfunc
 	dupc.Offlinefunc = client.offlinefunc
+	client.c = &dupc
 	client.instance = stream.NewInstance(&dupc)
 	odata, noticech, e := discovery.TcpNotice(appname)
 	if e != nil {

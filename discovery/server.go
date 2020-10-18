@@ -66,7 +66,6 @@ func NewDiscoveryServer(c *stream.InstanceConfig, vdata []byte) {
 		return
 	}
 	serverinstance = &discoveryserver{
-		c:          c,
 		lker:       &sync.RWMutex{},
 		htree:      hashtree.New(10, 3),
 		allclients: make(map[string]*discoveryclientnode),
@@ -83,6 +82,7 @@ func NewDiscoveryServer(c *stream.InstanceConfig, vdata []byte) {
 	dupc.Onlinefunc = serverinstance.onlinefunc
 	dupc.Userdatafunc = serverinstance.userfunc
 	dupc.Offlinefunc = serverinstance.offlinefunc
+	serverinstance.c = &dupc
 	serverinstance.instance = stream.NewInstance(&dupc)
 }
 func StartDiscoveryServer(cc *stream.TcpConfig, listenaddr string) error {
