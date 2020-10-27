@@ -1,9 +1,10 @@
 package mrpc
 
 import (
-	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/chenjie199234/Corelib/stream"
@@ -28,7 +29,6 @@ type MrpcServer struct {
 
 func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *MrpcServer {
 	serverinstance := &MrpcServer{
-		c:          c,
 		handler:    make(map[string]func(*Msg), 10),
 		verifydata: vdata,
 	}
@@ -37,6 +37,7 @@ func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *MrpcServer {
 	dupc.Onlinefunc = nil
 	dupc.Userdatafunc = serverinstance.userfunc
 	dupc.Offlinefunc = nil
+	serverinstance.c = &dupc
 	serverinstance.instance = stream.NewInstance(&dupc)
 	return serverinstance
 }
@@ -119,7 +120,11 @@ func (s *MrpcServer) RegisterHandler(path string, timeout int, handlers ...Outsi
 	s.handler[path] = s.insidehandler(timeout, handlers...)
 }
 func (s *MrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
-	if !bytes.Equal(peerVerifyData, s.verifydata) {
+	datas := strings.Split(byte2str(peerVerifyData), "|")
+	if len(datas) != 2 {
+		return nil, false
+	}
+	if datas[1] != s.c.SelfName || hex.EncodeToString(s.verifydata) != datas[0] {
 		return nil, false
 	}
 	return s.verifydata, true

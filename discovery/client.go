@@ -83,7 +83,6 @@ func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []
 		return
 	}
 	clientinstance = &discoveryclient{
-		c: c,
 		httpclient: &http.Client{
 			Timeout: 500 * time.Millisecond,
 		},
@@ -108,6 +107,7 @@ func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []
 	dupc.Onlinefunc = clientinstance.onlinefunc
 	dupc.Userdatafunc = clientinstance.userfunc
 	dupc.Offlinefunc = clientinstance.offlinefunc
+	clientinstance.c = &dupc
 	clientinstance.instance = stream.NewInstance(&dupc)
 
 	clientinstance.updateserver(cc, url)

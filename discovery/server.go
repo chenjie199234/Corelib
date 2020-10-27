@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/hashtree"
@@ -65,7 +66,6 @@ func NewDiscoveryServer(c *stream.InstanceConfig, vdata []byte) {
 		return
 	}
 	serverinstance = &discoveryserver{
-		c:          c,
 		lker:       &sync.RWMutex{},
 		htree:      hashtree.New(10, 3),
 		allclients: make(map[string]*discoveryclientnode),
@@ -82,19 +82,16 @@ func NewDiscoveryServer(c *stream.InstanceConfig, vdata []byte) {
 	dupc.Onlinefunc = serverinstance.onlinefunc
 	dupc.Userdatafunc = serverinstance.userfunc
 	dupc.Offlinefunc = serverinstance.offlinefunc
+	serverinstance.c = &dupc
 	serverinstance.instance = stream.NewInstance(&dupc)
 }
 func StartDiscoveryServer(cc *stream.TcpConfig, listenaddr string) error {
 	if serverinstance == nil {
 		return ERRSINIT
 	}
-	serverinstance.lker.Lock()
-	if serverinstance.status >= 1 {
-		serverinstance.lker.Unlock()
+	if old := atomic.SwapInt32(&serverinstance.status, 1); old == 1 {
 		return ERRSSTARTED
 	}
-	serverinstance.status = 1
-	serverinstance.lker.Unlock()
 	serverinstance.instance.StartTcpServer(cc, listenaddr)
 	return nil
 }

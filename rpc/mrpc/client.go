@@ -3,6 +3,7 @@ package mrpc
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -136,7 +137,6 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 		pick = defaultPicker
 	}
 	client := &MrpcClient{
-		c:          c,
 		appname:    appname,
 		verifydata: vdata,
 		lker:       &sync.RWMutex{},
@@ -154,6 +154,7 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 	dupc.Onlinefunc = client.onlinefunc
 	dupc.Userdatafunc = client.userfunc
 	dupc.Offlinefunc = client.offlinefunc
+	client.c = &dupc
 	client.instance = stream.NewInstance(&dupc)
 	odata, noticech, e := discovery.TcpNotice(appname)
 	if e != nil {
@@ -309,8 +310,10 @@ func (c *MrpcClient) unregister(appuniquename string) {
 	server.lker.Unlock()
 	c.lker.Unlock()
 }
+
 func (c *MrpcClient) start(addr string) {
-	if r := c.instance.StartTcpClient(c.cc, addr, c.verifydata); r == "" {
+	tempverifydata := hex.EncodeToString(c.verifydata) + "|" + c.appname
+	if r := c.instance.StartTcpClient(c.cc, addr, str2byte(tempverifydata)); r == "" {
 		appuniquename := fmt.Sprintf("%s:%s", c.appname, addr)
 		c.lker.RLock()
 		var server *Serverapp
