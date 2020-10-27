@@ -4,7 +4,10 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"net"
+	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -12,8 +15,12 @@ import (
 )
 
 type Instance struct {
-	conf      *InstanceConfig
-	peernodes []*peernode
+	conf         *InstanceConfig
+	peernodes    []*peernode
+	stop         int64
+	tcplistener  *net.TCPListener
+	unixlistener *net.UnixListener
+	webserver    *http.Server
 
 	peerPool          *sync.Pool
 	websocketPeerPool *sync.Pool
@@ -146,8 +153,10 @@ func NewInstance(c *InstanceConfig) *Instance {
 		panic(e)
 	}
 	stream := &Instance{
-		conf:              c,
-		peernodes:         make([]*peernode, c.GroupNum),
+		conf:      c,
+		peernodes: make([]*peernode, c.GroupNum),
+		stop:      0,
+
 		peerPool:          &sync.Pool{},
 		websocketPeerPool: &sync.Pool{},
 	}
@@ -158,6 +167,27 @@ func NewInstance(c *InstanceConfig) *Instance {
 		go stream.heart(stream.peernodes[i])
 	}
 	return stream
+}
+func (this *Instance) Stop() {
+	if atomic.SwapInt64(&this.stop, 1) == 1 {
+		return
+	}
+	if this.tcplistener != nil {
+		this.tcplistener.Close()
+	}
+	if this.unixlistener != nil {
+		this.unixlistener.Close()
+	}
+	if this.webserver != nil {
+		this.webserver.Shutdown(context.Background())
+	}
+	for _, node := range this.peernodes {
+		node.RLock()
+		for _, peer := range node.peers {
+			peer.closeconn()
+		}
+		node.RUnlock()
+	}
 }
 
 func (this *Instance) SendMessageAll(data []byte) {

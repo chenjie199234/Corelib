@@ -21,13 +21,12 @@ func (this *Instance) StartTcpServer(c *TcpConfig, listenaddr string) {
 	}
 	checkTcpConfig(c)
 	var laddr *net.TCPAddr
-	var l *net.TCPListener
 	var e error
 	var conn *net.TCPConn
 	if laddr, e = net.ResolveTCPAddr("tcp", listenaddr); e != nil {
 		panic("[Stream.TCP.StartTcpServer]resolve self addr error:" + e.Error())
 	}
-	if l, e = net.ListenTCP(laddr.Network(), laddr); e != nil {
+	if this.tcplistener, e = net.ListenTCP(laddr.Network(), laddr); e != nil {
 		panic("[Stream.TCP.StartTcpServer]listening self addr error:" + e.Error())
 	}
 	for {
@@ -35,8 +34,13 @@ func (this *Instance) StartTcpServer(c *TcpConfig, listenaddr string) {
 		p.protocoltype = TCP
 		p.servername = this.conf.SelfName
 		p.peertype = CLIENT
-		if conn, e = l.AcceptTCP(); e != nil {
+		if conn, e = this.tcplistener.AcceptTCP(); e != nil {
 			fmt.Printf("[Stream.TCP.StartTcpServer]accept tcp connect error:%s\n", e)
+			return
+		}
+		if atomic.LoadInt64(&this.stop) == 1 {
+			conn.Close()
+			this.tcplistener.Close()
 			return
 		}
 		p.conn = unsafe.Pointer(conn)
@@ -50,13 +54,12 @@ func (this *Instance) StartUnixsocketServer(c *UnixConfig, listenaddr string) {
 	}
 	checkUnixConfig(c)
 	var laddr *net.UnixAddr
-	var l *net.UnixListener
 	var e error
 	var conn *net.UnixConn
 	if laddr, e = net.ResolveUnixAddr("unix", listenaddr); e != nil {
 		panic("[Stream.UNIX.StartUnixsocketServer]resolve self addr error:" + e.Error())
 	}
-	if l, e = net.ListenUnix("unix", laddr); e != nil {
+	if this.unixlistener, e = net.ListenUnix("unix", laddr); e != nil {
 		panic("[Stream.UNIX.StartUnixsocketServer]listening self addr error:" + e.Error())
 	}
 	for {
@@ -64,8 +67,13 @@ func (this *Instance) StartUnixsocketServer(c *UnixConfig, listenaddr string) {
 		p.protocoltype = UNIXSOCKET
 		p.servername = this.conf.SelfName
 		p.peertype = CLIENT
-		if conn, e = l.AcceptUnix(); e != nil {
+		if conn, e = this.unixlistener.AcceptUnix(); e != nil {
 			fmt.Printf("[Stream.UNIX.StartUnixsocketServer]accept unix connect error:%s\n", e)
+			return
+		}
+		if atomic.LoadInt64(&this.stop) == 1 {
+			conn.Close()
+			this.unixlistener.Close()
 			return
 		}
 		p.conn = unsafe.Pointer(conn)
@@ -85,7 +93,7 @@ func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listena
 		CheckOrigin:       checkorigin,
 		EnableCompression: c.EnableCompress,
 	}
-	server := &http.Server{
+	this.webserver = &http.Server{
 		Addr:              listenaddr,
 		ReadHeaderTimeout: time.Duration(c.ConnectTimeout) * time.Millisecond,
 		ReadTimeout:       time.Duration(c.ConnectTimeout) * time.Millisecond,
@@ -93,6 +101,10 @@ func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listena
 		Handler:           httprouter.New(),
 	}
 	connhandler := func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+		if atomic.LoadInt64(&this.stop) == 1 {
+			this.webserver.Shutdown(context.Background())
+			return
+		}
 		conn, e := upgrader.Upgrade(w, r, nil)
 		if e != nil {
 			fmt.Printf("[Stream.WEB.StartWebsocketServer]upgrade error:%s\n", e)
@@ -107,14 +119,14 @@ func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listena
 		go this.sworker(p)
 	}
 	for _, path := range paths {
-		(server.Handler).(*httprouter.Router).GET(path, connhandler)
+		(this.webserver.Handler).(*httprouter.Router).GET(path, connhandler)
 	}
 	if c.TlsCertFile != "" && c.TlsKeyFile != "" {
-		if e := server.ListenAndServeTLS(c.TlsCertFile, c.TlsKeyFile); e != nil {
+		if e := this.webserver.ListenAndServeTLS(c.TlsCertFile, c.TlsKeyFile); e != nil {
 			panic("[Stream.WEB.StartWebsocketServer]start wss server error:" + e.Error())
 		}
 	} else {
-		if e := server.ListenAndServe(); e != nil {
+		if e := this.webserver.ListenAndServe(); e != nil {
 			panic("[Stream.WEB.StartWebsocketServer]start ws server error:" + e.Error())
 		}
 	}
@@ -186,6 +198,9 @@ func (this *Instance) sworker(p *Peer) bool {
 }
 
 func (this *Instance) StartTcpClient(c *TcpConfig, serveraddr string, verifydata []byte) string {
+	if atomic.LoadInt64(&this.stop) == 1 {
+		return ""
+	}
 	if c == nil {
 		c = &TcpConfig{}
 	}
@@ -205,6 +220,9 @@ func (this *Instance) StartTcpClient(c *TcpConfig, serveraddr string, verifydata
 }
 
 func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string, verifydata []byte) string {
+	if atomic.LoadInt64(&this.stop) == 1 {
+		return ""
+	}
 	if c == nil {
 		c = &UnixConfig{}
 	}
@@ -224,6 +242,9 @@ func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string, ve
 }
 
 func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string, verifydata []byte) string {
+	if atomic.LoadInt64(&this.stop) == 1 {
+		return ""
+	}
 	if c == nil {
 		c = &WebConfig{}
 	}
