@@ -120,7 +120,8 @@ func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []
 				for len(tker.C) > 0 {
 					<-tker.C
 				}
-				clientinstance.stop()
+				clientinstance.instance.Stop()
+				clientinstance.servers = make(map[string]*discoveryservernode, 0)
 				return
 			default:
 				select {
@@ -129,7 +130,8 @@ func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []
 					for len(tker.C) > 0 {
 						<-tker.C
 					}
-					clientinstance.stop()
+					clientinstance.instance.Stop()
+					clientinstance.servers = make(map[string]*discoveryservernode, 0)
 					return
 				case _, ok := <-tker.C:
 					if ok {
@@ -554,18 +556,7 @@ func (c *discoveryclient) updateserver(cc *stream.TcpConfig, url string) {
 	}
 	c.lker.Unlock()
 }
-func (c *discoveryclient) stop() {
-	c.lker.Lock()
-	for k, server := range c.servers {
-		server.lker.Lock()
-		delete(c.servers, k)
-		if server.peer != nil {
-			server.peer.Close()
-		}
-		server.lker.Unlock()
-	}
-	c.lker.Unlock()
-}
+
 func (c *discoveryclient) verifyfunc(ctx context.Context, serveruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal(peerVerifyData, c.verifydata) {
 		return nil, false
