@@ -178,6 +178,15 @@ func (this *Instance) sworker(p *Peer) bool {
 				p.getprotocolname(), p.clientname, p.getpeeraddr())
 			return false
 		}
+		if atomic.LoadInt64(&this.stop) == 1 {
+			p.CancelFunc()
+			p.closeconn()
+			p.parentnode.Lock()
+			delete(p.parentnode.peers, p.getpeeruniquename())
+			p.parentnode.Unlock()
+			this.putPeer(p)
+			return false
+		}
 		//set websocket pong handler
 		if p.protocoltype == WEBSOCKET {
 			(*websocket.Conn)(p.conn).SetPongHandler(func(data string) error {
@@ -318,6 +327,15 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) string {
 		if !this.addPeer(p) {
 			fmt.Printf("[Stream.%s.cworker]refuse reconnect to server:%s addr:%s\n",
 				p.getprotocolname(), p.getpeername(), p.getpeeraddr())
+			return ""
+		}
+		if atomic.LoadInt64(&this.stop) == 1 {
+			p.CancelFunc()
+			p.closeconn()
+			p.parentnode.Lock()
+			delete(p.parentnode.peers, p.getpeeruniquename())
+			p.parentnode.Unlock()
+			this.putPeer(p)
 			return ""
 		}
 		if p.protocoltype == WEBSOCKET {
