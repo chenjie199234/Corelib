@@ -465,7 +465,7 @@ func (this *Instance) read(p *Peer) {
 		} else {
 			p.CancelFunc()
 			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, uniquename)
+				this.conf.Offlinefunc(p, uniquename, p.starttime)
 			}
 			p.parentnode.Lock()
 			delete(p.parentnode.peers, uniquename)
@@ -605,7 +605,7 @@ func (this *Instance) write(p *Peer) {
 			p.CancelFunc()
 			uniquename := p.getpeeruniquename()
 			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, uniquename)
+				this.conf.Offlinefunc(p, uniquename, p.starttime)
 			}
 			p.parentnode.Lock()
 			delete(p.parentnode.peers, uniquename)

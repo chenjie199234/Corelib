@@ -68,5 +68,5 @@ func unixclienthandleuserdata(p *Peer, peeruniquename string, data []byte, start
 	fmt.Printf("%s\n", data)
 }
 
-func unixclienthandleoffline(p *Peer, peeruniquename string) {
+func unixclienthandleoffline(p *Peer, peeruniquename string, starttime uint64) {
 }

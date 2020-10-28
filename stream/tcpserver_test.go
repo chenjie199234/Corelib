@@ -58,6 +58,6 @@ func tcpserverhandleuserdata(p *Peer, peeruniquename string, data []byte, startt
 	fmt.Printf("%s:%s\n", peeruniquename, data)
 	p.SendMessage(data, starttime)
 }
-func tcpserverhandleoffline(p *Peer, peeruniquename string) {
+func tcpserverhandleoffline(p *Peer, peeruniquename string, starttime uint64) {
 	atomic.AddInt64(&tcpcount, -1)
 }

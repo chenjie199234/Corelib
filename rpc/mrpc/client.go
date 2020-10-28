@@ -436,7 +436,7 @@ func (c *MrpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte,
 	}
 	server.lker.Unlock()
 }
-func (c *MrpcClient) offlinefunc(p *stream.Peer, appuniquename string) {
+func (c *MrpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
 	server := (*Serverapp)(p.GetData())
 	server.lker.Lock()
 	server.peer = nil

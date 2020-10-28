@@ -59,6 +59,6 @@ func webserverhandleuserdata(p *Peer, peeruniquename string, data []byte, startt
 	fmt.Printf("%s:%s\n", peeruniquename, data)
 	p.SendMessage(data, starttime)
 }
-func webserverhandleoffline(p *Peer, peeruniquename string) {
+func webserverhandleoffline(p *Peer, peeruniquename string, starttime uint64) {
 	atomic.AddInt64(&webcount, -1)
 }

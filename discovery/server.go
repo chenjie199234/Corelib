@@ -219,7 +219,7 @@ func (s *discoveryserver) userfunc(p *stream.Peer, clientuniquename string, data
 		p.Close()
 	}
 }
-func (s *discoveryserver) offlinefunc(p *stream.Peer, clientuniquename string) {
+func (s *discoveryserver) offlinefunc(p *stream.Peer, clientuniquename string, starttime uint64) {
 	leafindex := int(bkdrhash(clientuniquename, uint64(s.htree.GetLeavesNum())))
 	s.lker.Lock()
 	node, ok := s.allclients[clientuniquename]

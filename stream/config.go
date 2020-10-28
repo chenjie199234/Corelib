@@ -26,7 +26,7 @@ type HandleUserdataFunc func(p *Peer, peeruniquename string, data []byte, startt
 //This is a notice before two peers disconnect with each other
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
 //After this notice the peer is unknown,dont't use it anymore
-type HandleOfflineFunc func(p *Peer, peeruniquename string)
+type HandleOfflineFunc func(p *Peer, peeruniquename string, starttime uint64)
 
 type TcpConfig struct {
 	ConnectTimeout int `json:"connect_timeout"` //default 500ms,for client only

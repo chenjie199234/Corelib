@@ -855,7 +855,7 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 		p.Close()
 	}
 }
-func (c *discoveryclient) offlinefunc(p *stream.Peer, serveruniquename string) {
+func (c *discoveryclient) offlinefunc(p *stream.Peer, serveruniquename string, starttime uint64) {
 	fmt.Printf("[Discovery.client.offlinefunc]self unregistered on discovery server:%s\n", serveruniquename)
 	server := (*discoveryservernode)(p.GetData())
 	server.lker.Lock()
