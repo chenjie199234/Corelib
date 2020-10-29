@@ -219,8 +219,8 @@ func checkInstanceConfig(c *InstanceConfig) error {
 		return fmt.Errorf("[Stream.checkInstanceConfig]instance name too long")
 	}
 	for _, v := range c.SelfName {
-		if int(v) < 48 || (int(v) > 57 && int(v) < 65) || (int(v) > 90 && int(v) < 97) || int(v) > 122 {
-			return fmt.Errorf("[Stream.checkInstanceConfig]instance name contains illegal character which is not in [0-9],[a-z],[A-Z]")
+		if (int(v) < 48 && int(v) != 46) || (int(v) > 57 && int(v) < 65) || (int(v) > 90 && int(v) < 97) || int(v) > 122 {
+			return fmt.Errorf("[Stream.checkInstanceConfig]instance name contains illegal character which is not in [0-9],[a-z],[A-Z],[.]")
 		}
 	}
 	if c.VerifyTimeout == 0 {
