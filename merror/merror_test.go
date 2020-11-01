@@ -1,6 +1,7 @@
 package merror
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -26,6 +27,25 @@ func Test_MError(t *testing.T) {
 		panic("translate error")
 	}
 	if temp := ErrorstrToMError(ee.Error()); temp.Code != me.Code || temp.Msg != me.Msg {
+		panic("translate error")
+	}
+	eee := fmt.Errorf("test")
+	if code := GetCodeFromError(eee); code != -1 {
+		panic("code error")
+	}
+	if code := GetCodeFromErrorstr(eee.Error()); code != -1 {
+		panic("code error")
+	}
+	if msg := GetMsgFromError(eee); msg != "test" {
+		panic("msg error")
+	}
+	if msg := GetMsgFromErrorstr(eee.Error()); msg != "test" {
+		panic("msg error")
+	}
+	if temp := ErrorToMError(eee); temp.Code != -1 || temp.Msg != "test" {
+		panic("translate error")
+	}
+	if temp := ErrorstrToMError(eee.Error()); temp.Code != -1 || temp.Msg != "test" {
 		panic("translate error")
 	}
 }
