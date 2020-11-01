@@ -124,7 +124,7 @@ func dealClientHandlefunc(f *protogen.GeneratedFile, file *protogen.File) {
 				output = fmt.Sprintf("%s.%s", outputpac, method.Output.GoIdent.GoName)
 			}
 			path := fmt.Sprintf("/%s/%s", service.GoName, method.GoName)
-			f.P(fmt.Sprintf("func (c *%s)%s(ctx context.Context,req *%s)(*%s,*mrpc.MsgErr){", structname, method.GoName, input, output))
+			f.P(fmt.Sprintf("func (c *%s)%s(ctx context.Context,req *%s)(*%s,error){", structname, method.GoName, input, output))
 			f.P("reqd,_:=proto.Marshal(req)")
 			f.P(fmt.Sprintf("respd,err:=c.c.Call(ctx,%s,reqd)", strconv.Quote(path)))
 			f.P("if err!=nil{")
@@ -136,7 +136,7 @@ func dealClientHandlefunc(f *protogen.GeneratedFile, file *protogen.File) {
 			f.P(fmt.Sprintf("resp:=new(%s)", output))
 			f.P("if e:=proto.Unmarshal(respd,resp);e!=nil{")
 			f.P("//this is impossible")
-			f.P("return nil,mrpc.Errmaker(mrpc.ERRRESPONSE,mrpc.ERRMESSAGE[mrpc.ERRRESPONSE])")
+			f.P("return nil,mrpc.ERR[mrpc.ERRRESPONSE]")
 			f.P("}")
 			f.P("return resp,nil")
 			f.P("}")
@@ -171,7 +171,7 @@ func dealServerStruct(f *protogen.GeneratedFile, file *protogen.File) {
 			} else {
 				output = fmt.Sprintf("%s.%s", outputpac, method.Output.GoIdent.GoName)
 			}
-			f.P(fmt.Sprintf("%s func(context.Context, *%s) (*%s,*mrpc.MsgErr)", method.GoName, input, output))
+			f.P(fmt.Sprintf("%s func(context.Context, *%s) (*%s,error)", method.GoName, input, output))
 		}
 		f.P("}")
 		f.P()
@@ -182,14 +182,14 @@ func dealServerHandlefunc(f *protogen.GeneratedFile, file *protogen.File) {
 		structname := fmt.Sprintf("Mrpc%sService", service.GoName)
 		for _, method := range service.Methods {
 			inputpac := method.Input.Desc.(protoreflect.Descriptor).ParentFile().Package()
-			f.P(fmt.Sprintf("func (s *%s)%s(ctx context.Context,in []byte)([]byte,*mrpc.MsgErr) {", structname, unexport(method.GoName)))
+			f.P(fmt.Sprintf("func (s *%s)%s(ctx context.Context,in []byte)([]byte,error) {", structname, unexport(method.GoName)))
 			if string(inputpac) == string(file.GoPackageName) {
 				f.P(fmt.Sprintf("req := &%s{}", method.Input.GoIdent.GoName))
 			} else {
 				f.P(fmt.Sprintf("req := &%s.%s{}", inputpac, method.Input.GoIdent.GoName))
 			}
 			f.P("if e:=proto.Unmarshal(in,req);e!=nil{")
-			f.P("return nil,mrpc.Errmaker(mrpc.ERRREQUEST,mrpc.ERRMESSAGE[mrpc.ERRREQUEST])")
+			f.P("return nil,mrpc.ERR[mrpc.ERRREQUEST]")
 			f.P("}")
 			f.P(fmt.Sprintf("resp,err:=s.%s(ctx,req)", method.GoName))
 			f.P("if err!=nil{")

@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"hash"
-	"unsafe"
+
+	"github.com/chenjie199234/Corelib/common"
 )
 
 type treeNode struct {
@@ -119,7 +120,7 @@ func Rebuild(hashs [][]byte) *MerkleTree {
 			right:   nil,
 		}
 		t.list.insert(newNode)
-		t.nodes[byte2str(hashs[0])] = newNode
+		t.nodes[common.Byte2str(hashs[0])] = newNode
 		t.root = newNode
 		return t
 	}
@@ -152,8 +153,8 @@ func Rebuild(hashs [][]byte) *MerkleTree {
 			t.encoder.Reset()
 			t.list.push(newLeft)
 			t.list.push(newRight)
-			t.nodes[byte2str(newLeft.hashStr)] = newLeft
-			t.nodes[byte2str(newRight.hashStr)] = newRight
+			t.nodes[common.Byte2str(newLeft.hashStr)] = newLeft
+			t.nodes[common.Byte2str(newRight.hashStr)] = newRight
 			temp[temppos] = newParent
 			i += 2
 			redundancy--
@@ -165,7 +166,7 @@ func Rebuild(hashs [][]byte) *MerkleTree {
 				right:   nil,
 			}
 			t.list.push(newNode)
-			t.nodes[byte2str(newNode.hashStr)] = newNode
+			t.nodes[common.Byte2str(newNode.hashStr)] = newNode
 			temp[temppos] = newNode
 			i++
 		}
@@ -194,14 +195,6 @@ func Rebuild(hashs [][]byte) *MerkleTree {
 	t.list.setcur(2 * (len(hashs) - (1 << (treeTall - 1))))
 	return t
 }
-func str2byte(data string) []byte {
-	temp := (*[2]uintptr)(unsafe.Pointer(&data))
-	result := [3]uintptr{temp[0], temp[1], temp[1]}
-	return *(*[]byte)(unsafe.Pointer(&result))
-}
-func byte2str(data []byte) string {
-	return *(*string)(unsafe.Pointer(&data))
-}
 func (t *MerkleTree) Push(newHash []byte) {
 	newNode := &treeNode{
 		hashStr: newHash,
@@ -209,7 +202,7 @@ func (t *MerkleTree) Push(newHash []byte) {
 		left:    nil,
 		right:   nil,
 	}
-	t.nodes[byte2str(newHash)] = newNode
+	t.nodes[common.Byte2str(newHash)] = newNode
 	if t.root == nil {
 		t.root = newNode
 		t.list.insert(newNode)
@@ -282,7 +275,7 @@ func VerifyRoute(root, origin []byte, route [][]byte) bool {
 	return bytes.Equal(root, origin)
 }
 func (t *MerkleTree) GetVerifyRoute(verifyHash []byte) [][]byte {
-	node, ok := t.nodes[byte2str(verifyHash)]
+	node, ok := t.nodes[common.Byte2str(verifyHash)]
 	if !ok {
 		return nil
 	}

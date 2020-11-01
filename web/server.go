@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/sys/trace"
 	"github.com/julienschmidt/httprouter"
@@ -127,13 +126,4 @@ func (this *Web) StartWebServer() {
 
 func (this *Web) Shudown() {
 	this.server.Shutdown(context.Background())
-}
-
-func Str2byte(data string) []byte {
-	temp := (*[2]uintptr)(unsafe.Pointer(&data))
-	result := [3]uintptr{temp[0], temp[1], temp[1]}
-	return *(*[]byte)(unsafe.Pointer(&result))
-}
-func Byte2str(data []byte) string {
-	return *(*string)(unsafe.Pointer(&data))
 }

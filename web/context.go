@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/chenjie199234/Corelib/common"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -124,5 +125,5 @@ func (this *Context) Write(code int, data []byte) error {
 }
 
 func (this *Context) WriteString(code int, data string) error {
-	return this.Write(code, Str2byte(data))
+	return this.Write(code, common.Str2byte(data))
 }

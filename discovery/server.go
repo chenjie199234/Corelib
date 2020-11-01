@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
+	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/hashtree"
 	"github.com/chenjie199234/Corelib/stream"
 )
@@ -98,7 +99,7 @@ func StartDiscoveryServer(cc *stream.TcpConfig, listenaddr string) error {
 
 func (s *discoveryserver) verifyfunc(ctx context.Context, clientuniquename string, peerVerifyData []byte) ([]byte, bool) {
 	//datas := bytes.Split(peerVerifyData, []byte{'|'})
-	datas := strings.Split(byte2str(peerVerifyData), "|")
+	datas := strings.Split(common.Byte2str(peerVerifyData), "|")
 	if len(datas) != 2 {
 		return nil, false
 	}
@@ -154,7 +155,7 @@ func (s *discoveryserver) userfunc(p *stream.Peer, clientuniquename string, data
 			reg.WebSockIp = ip
 		}
 		regmsg, _ = json.Marshal(reg)
-		leafindex := int(bkdrhash(clientuniquename, uint64(s.htree.GetLeavesNum())))
+		leafindex := int(common.BkdrhashString(clientuniquename, uint64(s.htree.GetLeavesNum())))
 		s.lker.Lock()
 		node, ok := s.allclients[clientuniquename]
 		if !ok {
@@ -169,7 +170,7 @@ func (s *discoveryserver) userfunc(p *stream.Peer, clientuniquename string, data
 		templeafdata, _ := s.htree.GetLeafValue(leafindex)
 		if templeafdata == nil {
 			leafdata := []*discoveryclientnode{node}
-			s.htree.SetSingleLeafHash(leafindex, str2byte(clientuniquename[:strings.Index(clientuniquename, ":")]+byte2str(regmsg)))
+			s.htree.SetSingleLeafHash(leafindex, common.Str2byte(clientuniquename[:strings.Index(clientuniquename, ":")]+common.Byte2str(regmsg)))
 			s.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
 		} else {
 			leafdata := *(*[]*discoveryclientnode)(templeafdata)
@@ -179,9 +180,9 @@ func (s *discoveryserver) userfunc(p *stream.Peer, clientuniquename string, data
 			})
 			all := make([]string, len(leafdata))
 			for i, client := range leafdata {
-				all[i] = client.clientuniquename[:strings.Index(client.clientuniquename, ":")] + byte2str(client.regdata)
+				all[i] = client.clientuniquename[:strings.Index(client.clientuniquename, ":")] + common.Byte2str(client.regdata)
 			}
-			s.htree.SetSingleLeafHash(leafindex, str2byte(strings.Join(all, "")))
+			s.htree.SetSingleLeafHash(leafindex, common.Str2byte(strings.Join(all, "")))
 			s.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
 		}
 		onlinemsg := makeOnlineMsg(clientuniquename, regmsg, s.htree.GetRootHash())
@@ -220,7 +221,7 @@ func (s *discoveryserver) userfunc(p *stream.Peer, clientuniquename string, data
 	}
 }
 func (s *discoveryserver) offlinefunc(p *stream.Peer, clientuniquename string, starttime uint64) {
-	leafindex := int(bkdrhash(clientuniquename, uint64(s.htree.GetLeavesNum())))
+	leafindex := int(common.BkdrhashString(clientuniquename, uint64(s.htree.GetLeavesNum())))
 	s.lker.Lock()
 	node, ok := s.allclients[clientuniquename]
 	if !ok {
@@ -250,9 +251,9 @@ func (s *discoveryserver) offlinefunc(p *stream.Peer, clientuniquename string, s
 	} else {
 		all := make([]string, len(leafdata))
 		for i, client := range leafdata {
-			all[i] = client.clientuniquename[:strings.Index(client.clientuniquename, ":")] + byte2str(client.regdata)
+			all[i] = client.clientuniquename[:strings.Index(client.clientuniquename, ":")] + common.Byte2str(client.regdata)
 		}
-		s.htree.SetSingleLeafHash(leafindex, str2byte(strings.Join(all, "")))
+		s.htree.SetSingleLeafHash(leafindex, common.Str2byte(strings.Join(all, "")))
 		s.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
 	}
 	//notice all other peer

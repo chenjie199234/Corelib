@@ -1,6 +1,8 @@
 package mrpc
 
-import "fmt"
+import (
+	"github.com/chenjie199234/Corelib/merror"
+)
 
 const (
 	ERRLARGE = iota + 1
@@ -14,24 +16,14 @@ const (
 	ERRPANIC
 )
 
-var ERRMESSAGE = map[uint64]string{
-	ERRLARGE:     "msg too large",
-	ERRNOAPI:     "api not implement",
-	ERRREQUEST:   "request data error",
-	ERRRESPONSE:  "response data error",
-	ERRCTXCANCEL: "context canceled",
-	ERRNOSERVER:  "no servers connected",
-	ERRCLOSING:   "connection is closing",
-	ERRCLOSED:    "connection is closed",
-	ERRPANIC:     "server panic",
-}
-
-func Errmaker(code uint64, msg string) *MsgErr {
-	return &MsgErr{
-		Code: code,
-		Msg:  msg,
-	}
-}
-func (this *MsgErr) Error() string {
-	return fmt.Sprintf(`{"code":%d,"msg":"%s"}`, this.Code, this.Msg)
+var ERR = map[uint64]*merror.MError{
+	ERRLARGE:     &merror.MError{Code: ERRLARGE, Msg: "msg too large"},
+	ERRNOAPI:     &merror.MError{Code: ERRNOAPI, Msg: "api not implement"},
+	ERRREQUEST:   &merror.MError{Code: ERRREQUEST, Msg: "request data error"},
+	ERRRESPONSE:  &merror.MError{Code: ERRRESPONSE, Msg: "response data error"},
+	ERRCTXCANCEL: &merror.MError{Code: ERRCTXCANCEL, Msg: "context canceled"},
+	ERRNOSERVER:  &merror.MError{Code: ERRNOSERVER, Msg: "no servers connected"},
+	ERRCLOSING:   &merror.MError{Code: ERRCLOSING, Msg: "connection is closing"},
+	ERRCLOSED:    &merror.MError{Code: ERRCLOSED, Msg: "connection is closed"},
+	ERRPANIC:     &merror.MError{Code: ERRPANIC, Msg: "server panic"},
 }

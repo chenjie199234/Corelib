@@ -22,7 +22,7 @@ type MrpcTestClient struct {
 	c *mrpc.MrpcClient
 }
 
-func (c *MrpcTestClient) Hello(ctx context.Context, req *HelloReq) (*HelloResp, *mrpc.MsgErr) {
+func (c *MrpcTestClient) Hello(ctx context.Context, req *HelloReq) (*HelloResp, error) {
 	reqd, _ := proto.Marshal(req)
 	respd, err := c.c.Call(ctx, "/Test/Hello", reqd)
 	if err != nil {
@@ -34,11 +34,11 @@ func (c *MrpcTestClient) Hello(ctx context.Context, req *HelloReq) (*HelloResp, 
 	resp := new(HelloResp)
 	if e := proto.Unmarshal(respd, resp); e != nil {
 		//this is impossible
-		return nil, mrpc.Errmaker(mrpc.ERRRESPONSE, mrpc.ERRMESSAGE[mrpc.ERRRESPONSE])
+		return nil, mrpc.ERR[mrpc.ERRRESPONSE]
 	}
 	return resp, nil
 }
-func (c *MrpcTestClient) Kiss(ctx context.Context, req *second.KissReq) (*second.KissResp, *mrpc.MsgErr) {
+func (c *MrpcTestClient) Kiss(ctx context.Context, req *second.KissReq) (*second.KissResp, error) {
 	reqd, _ := proto.Marshal(req)
 	respd, err := c.c.Call(ctx, "/Test/Kiss", reqd)
 	if err != nil {
@@ -50,11 +50,11 @@ func (c *MrpcTestClient) Kiss(ctx context.Context, req *second.KissReq) (*second
 	resp := new(second.KissResp)
 	if e := proto.Unmarshal(respd, resp); e != nil {
 		//this is impossible
-		return nil, mrpc.Errmaker(mrpc.ERRRESPONSE, mrpc.ERRMESSAGE[mrpc.ERRRESPONSE])
+		return nil, mrpc.ERR[mrpc.ERRRESPONSE]
 	}
 	return resp, nil
 }
-func (c *MrpcTestClient) Bye(ctx context.Context, req *second.ByeReq) (*second.ByeResp, *mrpc.MsgErr) {
+func (c *MrpcTestClient) Bye(ctx context.Context, req *second.ByeReq) (*second.ByeResp, error) {
 	reqd, _ := proto.Marshal(req)
 	respd, err := c.c.Call(ctx, "/Test/Bye", reqd)
 	if err != nil {
@@ -66,7 +66,7 @@ func (c *MrpcTestClient) Bye(ctx context.Context, req *second.ByeReq) (*second.B
 	resp := new(second.ByeResp)
 	if e := proto.Unmarshal(respd, resp); e != nil {
 		//this is impossible
-		return nil, mrpc.Errmaker(mrpc.ERRRESPONSE, mrpc.ERRMESSAGE[mrpc.ERRRESPONSE])
+		return nil, mrpc.ERR[mrpc.ERRRESPONSE]
 	}
 	return resp, nil
 }
@@ -76,15 +76,15 @@ func NewMrpcTestClient(c *mrpc.MrpcClient) *MrpcTestClient {
 
 type MrpcTestService struct {
 	Midware func() map[string][]mrpc.OutsideHandler
-	Hello   func(context.Context, *HelloReq) (*HelloResp, *mrpc.MsgErr)
-	Kiss    func(context.Context, *second.KissReq) (*second.KissResp, *mrpc.MsgErr)
-	Bye     func(context.Context, *second.ByeReq) (*second.ByeResp, *mrpc.MsgErr)
+	Hello   func(context.Context, *HelloReq) (*HelloResp, error)
+	Kiss    func(context.Context, *second.KissReq) (*second.KissResp, error)
+	Bye     func(context.Context, *second.ByeReq) (*second.ByeResp, error)
 }
 
-func (s *MrpcTestService) hello(ctx context.Context, in []byte) ([]byte, *mrpc.MsgErr) {
+func (s *MrpcTestService) hello(ctx context.Context, in []byte) ([]byte, error) {
 	req := &HelloReq{}
 	if e := proto.Unmarshal(in, req); e != nil {
-		return nil, mrpc.Errmaker(mrpc.ERRREQUEST, mrpc.ERRMESSAGE[mrpc.ERRREQUEST])
+		return nil, mrpc.ERR[mrpc.ERRREQUEST]
 	}
 	resp, err := s.Hello(ctx, req)
 	if err != nil {
@@ -96,10 +96,10 @@ func (s *MrpcTestService) hello(ctx context.Context, in []byte) ([]byte, *mrpc.M
 	}
 	return nil, nil
 }
-func (s *MrpcTestService) kiss(ctx context.Context, in []byte) ([]byte, *mrpc.MsgErr) {
+func (s *MrpcTestService) kiss(ctx context.Context, in []byte) ([]byte, error) {
 	req := &second.KissReq{}
 	if e := proto.Unmarshal(in, req); e != nil {
-		return nil, mrpc.Errmaker(mrpc.ERRREQUEST, mrpc.ERRMESSAGE[mrpc.ERRREQUEST])
+		return nil, mrpc.ERR[mrpc.ERRREQUEST]
 	}
 	resp, err := s.Kiss(ctx, req)
 	if err != nil {
@@ -111,10 +111,10 @@ func (s *MrpcTestService) kiss(ctx context.Context, in []byte) ([]byte, *mrpc.Ms
 	}
 	return nil, nil
 }
-func (s *MrpcTestService) bye(ctx context.Context, in []byte) ([]byte, *mrpc.MsgErr) {
+func (s *MrpcTestService) bye(ctx context.Context, in []byte) ([]byte, error) {
 	req := &second.ByeReq{}
 	if e := proto.Unmarshal(in, req); e != nil {
-		return nil, mrpc.Errmaker(mrpc.ERRREQUEST, mrpc.ERRMESSAGE[mrpc.ERRREQUEST])
+		return nil, mrpc.ERR[mrpc.ERRREQUEST]
 	}
 	resp, err := s.Bye(ctx, req)
 	if err != nil {

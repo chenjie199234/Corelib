@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/discovery"
+	"github.com/chenjie199234/Corelib/merror"
 	"github.com/chenjie199234/Corelib/rpc/mrpc"
 	"github.com/chenjie199234/Corelib/stream"
 )
@@ -59,8 +60,9 @@ func call() {
 			Addr: "computer",
 			Tel:  "123456789",
 		})
-		if e != nil {
-			panic(fmt.Sprintf("code:%d msg:%s", e.Code, e.Msg))
+		me := merror.ErrorToMError(e)
+		if me != nil {
+			panic(fmt.Sprintf("code:%d msg:%s", me.Code, me.Msg))
 		}
 		conder.L.Unlock()
 		ch <- struct{}{}

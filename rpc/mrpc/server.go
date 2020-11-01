@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/sys/cpu"
 	"github.com/chenjie199234/Corelib/sys/trace"
@@ -14,7 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type OutsideHandler func(ctx context.Context, req []byte) (resp []byte, e *MsgErr)
+type OutsideHandler func(ctx context.Context, req []byte) (resp []byte, e error)
 
 const defaulttimeout = 200
 
@@ -47,7 +48,7 @@ func (s *MrpcServer) StartMrpcServer(cc *stream.TcpConfig, listenaddr string) {
 func (s *MrpcServer) StopMrpcServer() {
 	d, _ := proto.Marshal(&Msg{
 		Callid: 0,
-		Error:  Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING]),
+		Error:  ERR[ERRCLOSING].Error(),
 	})
 	s.instance.SendMessageAll(d)
 	s.stopch = make(chan struct{})
@@ -63,7 +64,6 @@ func (s *MrpcServer) StopMrpcServer() {
 			}
 		}
 	}
-
 }
 func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func(*Msg) {
 	return func(msg *Msg) {
@@ -73,7 +73,7 @@ func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func
 				msg.Metadata = nil
 				msg.Cpu = cpu.GetUse()
 				msg.Body = nil
-				msg.Error = Errmaker(ERRPANIC, ERRMESSAGE[ERRPANIC])
+				msg.Error = ERR[ERRPANIC].Error()
 			}
 		}()
 		var ctx context.Context
@@ -97,14 +97,14 @@ func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func
 			ctx = trace.SetTrace(ctx, msg.Trace)
 		}
 		var resp []byte
-		var err *MsgErr
+		var err error
 		for _, handler := range handlers {
 			resp, err = handler(ctx, msg.Body)
 			if err != nil {
 				msg.Deadline = 0
 				msg.Body = nil
 				msg.Cpu = cpu.GetUse()
-				msg.Error = err
+				msg.Error = err.Error()
 				msg.Metadata = nil
 				return
 			}
@@ -112,7 +112,7 @@ func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func
 		msg.Deadline = 0
 		msg.Body = resp
 		msg.Cpu = cpu.GetUse()
-		msg.Error = nil
+		msg.Error = ""
 		msg.Metadata = nil
 	}
 }
@@ -120,7 +120,7 @@ func (s *MrpcServer) RegisterHandler(path string, timeout int, handlers ...Outsi
 	s.handler[path] = s.insidehandler(timeout, handlers...)
 }
 func (s *MrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
-	datas := strings.Split(byte2str(peerVerifyData), "|")
+	datas := strings.Split(common.Byte2str(peerVerifyData), "|")
 	if len(datas) != 2 {
 		return nil, false
 	}
@@ -145,7 +145,7 @@ func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte
 			msg.Metadata = nil
 			msg.Cpu = cpu.GetUse()
 			msg.Body = nil
-			msg.Error = Errmaker(ERRCLOSING, ERRMESSAGE[ERRCLOSING])
+			msg.Error = ERR[ERRCLOSING].Error()
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(d, starttime); e != nil {
 				fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)
@@ -158,7 +158,7 @@ func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte
 			msg.Metadata = nil
 			msg.Cpu = cpu.GetUse()
 			msg.Body = nil
-			msg.Error = Errmaker(ERRNOAPI, ERRMESSAGE[ERRNOAPI])
+			msg.Error = ERR[ERRNOAPI].Error()
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(d, starttime); e != nil {
 				fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)

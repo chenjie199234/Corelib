@@ -1,5 +1,7 @@
 package bitfilter
 
+import "github.com/chenjie199234/Corelib/common"
+
 //thread unsafe
 type BitFilter struct {
 	//length of data,each element of data has hash function nums byte
@@ -23,16 +25,22 @@ func New(lengths uint64) *BitFilter {
 }
 
 //rebuild this filter
-func Rebuild(length uint64, datas [][]byte, addednum uint64) *BitFilter {
-	if uint64(len(datas)) != length {
-		return nil
-	}
+func Rebuild(datas [][]byte, addednum uint64) *BitFilter {
 	return &BitFilter{
-		bytelen:  length,
-		bitlen:   length * 8,
+		bytelen:  uint64(len(datas)),
+		bitlen:   uint64(len(datas) * 8),
 		data:     datas,
 		addednum: addednum,
 	}
+}
+
+//clear this filter
+func (f *BitFilter) Clear() {
+	f.data = make([][]byte, f.bytelen)
+	for i := uint64(0); i < f.bytelen; i++ {
+		f.data[i] = make([]byte, 6)
+	}
+	f.addednum = 0
 }
 
 //check is in this filter
@@ -41,17 +49,17 @@ func (f *BitFilter) IsAdd(txhash []byte) bool {
 		bitnum := uint64(0)
 		switch i {
 		case 0:
-			bitnum = f.bkdrhash_byte(txhash)
+			bitnum = common.BkdrhashByte(txhash, f.bitlen)
 		case 1:
-			bitnum = f.djbhash_byte(txhash)
+			bitnum = common.DjbhashByte(txhash, f.bitlen)
 		case 2:
-			bitnum = f.fnvhash_byte(txhash)
+			bitnum = common.FnvhashByte(txhash, f.bitlen)
 		case 3:
-			bitnum = f.dekhash_byte(txhash)
+			bitnum = common.DekhashByte(txhash, f.bitlen)
 		case 4:
-			bitnum = f.rshash_byte(txhash)
+			bitnum = common.RshashByte(txhash, f.bitlen)
 		case 5:
-			bitnum = f.sdbmhash_byte(txhash)
+			bitnum = common.SdbmhashByte(txhash, f.bitlen)
 		}
 		index := bitnum / 8
 		offset := bitnum % 8
@@ -74,17 +82,17 @@ func (f *BitFilter) Add(txhashs [][]byte) map[uint64][]byte {
 			bitnum := uint64(0)
 			switch i {
 			case 0:
-				bitnum = f.bkdrhash_byte(txhash)
+				bitnum = common.BkdrhashByte(txhash, f.bitlen)
 			case 1:
-				bitnum = f.djbhash_byte(txhash)
+				bitnum = common.DjbhashByte(txhash, f.bitlen)
 			case 2:
-				bitnum = f.fnvhash_byte(txhash)
+				bitnum = common.FnvhashByte(txhash, f.bitlen)
 			case 3:
-				bitnum = f.dekhash_byte(txhash)
+				bitnum = common.DekhashByte(txhash, f.bitlen)
 			case 4:
-				bitnum = f.rshash_byte(txhash)
+				bitnum = common.RshashByte(txhash, f.bitlen)
 			case 5:
-				bitnum = f.sdbmhash_byte(txhash)
+				bitnum = common.SdbmhashByte(txhash, f.bitlen)
 			}
 			index := bitnum / 8
 			offset := bitnum % 8
@@ -94,12 +102,6 @@ func (f *BitFilter) Add(txhashs [][]byte) map[uint64][]byte {
 		f.addednum++
 	}
 	return temp
-}
-func (f *BitFilter) GetByIndex(index uint64) []byte {
-	if index >= f.bytelen {
-		return nil
-	}
-	return f.data[index]
 }
 
 //how many data in this filter
@@ -113,66 +115,15 @@ func (f *BitFilter) GetBitLength() uint64 {
 	return f.bitlen
 }
 
-//clear this filter
-func (f *BitFilter) Clear() {
-	f.data = make([][]byte, f.bytelen)
-	for i := uint64(0); i < f.bytelen; i++ {
-		f.data[i] = make([]byte, 6)
-	}
-	f.addednum = 0
-}
-
 //return
 //first:all data
 //second:added num
-func (f *BitFilter) Export() ([][]byte, uint64) {
+func (f *BitFilter) GetAllFilterData() ([][]byte, uint64) {
 	return f.data, f.addednum
 }
-
-//hash
-func (f *BitFilter) bkdrhash_byte(data []byte) uint64 {
-	seed := uint64(131)
-	hash := uint64(0)
-	for _, v := range data {
-		hash = hash*seed + uint64(v)
+func (f *BitFilter) GetFilterDataByIndex(index uint64) []byte {
+	if index >= f.bytelen {
+		return nil
 	}
-	return hash % f.bitlen
-}
-func (f *BitFilter) djbhash_byte(data []byte) uint64 {
-	hash := uint64(5381)
-	for _, v := range data {
-		hash = (hash << 5) + uint64(v)
-	}
-	return hash % f.bitlen
-}
-func (f *BitFilter) fnvhash_byte(data []byte) uint64 {
-	hash := uint64(2166136261)
-	for _, v := range data {
-		hash *= uint64(16777619)
-		hash ^= uint64(v)
-	}
-	return hash % f.bitlen
-}
-func (f *BitFilter) dekhash_byte(data []byte) uint64 {
-	hash := uint64(len(data))
-	for _, v := range data {
-		hash = ((hash << 5) ^ (hash >> 27)) ^ uint64(v)
-	}
-	return hash % f.bitlen
-}
-func (f *BitFilter) rshash_byte(data []byte) uint64 {
-	seed := uint64(63689)
-	hash := uint64(0)
-	for _, v := range data {
-		hash = hash*seed + uint64(v)
-		seed *= uint64(378551)
-	}
-	return hash % f.bitlen
-}
-func (f *BitFilter) sdbmhash_byte(data []byte) uint64 {
-	hash := uint64(0)
-	for _, v := range data {
-		hash = uint64(v) + (hash << 6) + (hash << 16) - hash
-	}
-	return hash % f.bitlen
+	return f.data[index]
 }

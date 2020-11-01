@@ -15,6 +15,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/hashtree"
 	"github.com/chenjie199234/Corelib/stream"
 )
@@ -538,7 +539,7 @@ func (c *discoveryclient) updateserver(cc *stream.TcpConfig, url string) {
 			server.status = 1
 			go func(saddr string, findex int) {
 				tempverifydata := hex.EncodeToString(c.verifydata) + "|" + saddr[:findex]
-				if r := c.instance.StartTcpClient(cc, saddr[findex+1:], str2byte(tempverifydata)); r == "" {
+				if r := c.instance.StartTcpClient(cc, saddr[findex+1:], common.Str2byte(tempverifydata)); r == "" {
 					c.lker.RLock()
 					server, ok := c.servers[saddr]
 					if !ok {
@@ -613,14 +614,14 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 			p.Close()
 			return
 		}
-		leafindex := int(bkdrhash(onlinepeer, uint64(server.htree.GetLeavesNum())))
+		leafindex := int(common.BkdrhashString(onlinepeer, uint64(server.htree.GetLeavesNum())))
 		templeafdata, _ := server.htree.GetLeafValue(leafindex)
 		if templeafdata == nil {
 			leafdata := make([]*discoveryclientnode, 0, 5)
 			temppeer := c.getnode(onlinepeer, regmsg)
 			leafdata = append(leafdata, temppeer)
 			server.allclients[onlinepeer] = temppeer
-			server.htree.SetSingleLeafHash(leafindex, str2byte(onlinepeer[:strings.Index(onlinepeer, ":")]+byte2str(regmsg)))
+			server.htree.SetSingleLeafHash(leafindex, common.Str2byte(onlinepeer[:strings.Index(onlinepeer, ":")]+common.Byte2str(regmsg)))
 			server.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
 		} else {
 			leafdata := *(*[]*discoveryclientnode)(templeafdata)
@@ -632,9 +633,9 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 			})
 			all := make([]string, len(leafdata))
 			for i, peer := range leafdata {
-				all[i] = peer.clientuniquename[:strings.Index(peer.clientuniquename, ":")] + byte2str(peer.regdata)
+				all[i] = peer.clientuniquename[:strings.Index(peer.clientuniquename, ":")] + common.Byte2str(peer.regdata)
 			}
-			server.htree.SetSingleLeafHash(leafindex, str2byte(strings.Join(all, "")))
+			server.htree.SetSingleLeafHash(leafindex, common.Str2byte(strings.Join(all, "")))
 			server.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
 		}
 		if !bytes.Equal(server.htree.GetRootHash(), newhash) {
@@ -664,7 +665,7 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 			return
 		}
 		delete(server.allclients, offlinepeer)
-		leafindex := int(bkdrhash(offlinepeer, uint64(server.htree.GetLeavesNum())))
+		leafindex := int(common.BkdrhashString(offlinepeer, uint64(server.htree.GetLeavesNum())))
 		templeafdata, _ := server.htree.GetLeafValue(leafindex)
 		leafdata := *(*[]*discoveryclientnode)(templeafdata)
 		var regmsg []byte
@@ -682,9 +683,9 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 		} else {
 			all := make([]string, len(leafdata))
 			for i, peer := range leafdata {
-				all[i] = peer.clientuniquename[:strings.Index(peer.clientuniquename, ":")] + byte2str(peer.regdata)
+				all[i] = peer.clientuniquename[:strings.Index(peer.clientuniquename, ":")] + common.Byte2str(peer.regdata)
 			}
-			server.htree.SetSingleLeafHash(leafindex, str2byte(strings.Join(all, "")))
+			server.htree.SetSingleLeafHash(leafindex, common.Str2byte(strings.Join(all, "")))
 			server.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
 		}
 		if !bytes.Equal(server.htree.GetRootHash(), newhash) {
@@ -715,7 +716,7 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 		for _, oldpeer := range server.allclients {
 			if newmsg, ok := all[oldpeer.clientuniquename]; !ok {
 				//delete
-				leafindex := int(bkdrhash(oldpeer.clientuniquename, uint64(server.htree.GetLeavesNum())))
+				leafindex := int(common.BkdrhashString(oldpeer.clientuniquename, uint64(server.htree.GetLeavesNum())))
 				if _, ok := deleted[leafindex]; !ok {
 					deleted[leafindex] = make(map[string][]byte, 5)
 				}
@@ -724,7 +725,7 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 				updateleavesvalue[leafindex] = nil
 			} else if !bytes.Equal(oldpeer.regdata, newmsg) {
 				//replace
-				leafindex := int(bkdrhash(oldpeer.clientuniquename, uint64(server.htree.GetLeavesNum())))
+				leafindex := int(common.BkdrhashString(oldpeer.clientuniquename, uint64(server.htree.GetLeavesNum())))
 				if _, ok := replace[leafindex]; !ok {
 					replace[leafindex] = make(map[string][]byte, 5)
 				}
@@ -736,7 +737,7 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 		for newpeer, newmsg := range all {
 			if oldpeer, ok := server.allclients[newpeer]; !ok {
 				//add
-				leafindex := int(bkdrhash(newpeer, uint64(server.htree.GetLeavesNum())))
+				leafindex := int(common.BkdrhashString(newpeer, uint64(server.htree.GetLeavesNum())))
 				if _, ok := added[leafindex]; !ok {
 					added[leafindex] = make(map[string][]byte, 5)
 				}
@@ -747,7 +748,7 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 				//this is impossible
 				fmt.Printf("[Discovery.client.userfunc.impossible]peer:%s regmsg conflict", oldpeer.clientuniquename)
 				//replace
-				leafindex := int(bkdrhash(newpeer, uint64(server.htree.GetLeavesNum())))
+				leafindex := int(common.BkdrhashString(newpeer, uint64(server.htree.GetLeavesNum())))
 				if _, ok := replace[leafindex]; !ok {
 					replace[leafindex] = make(map[string][]byte, 5)
 				}
@@ -841,9 +842,9 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 				})
 				all := make([]string, len(leafdata))
 				for i, peer := range leafdata {
-					all[i] = peer.clientuniquename[:strings.Index(peer.clientuniquename, ":")] + byte2str(peer.regdata)
+					all[i] = peer.clientuniquename[:strings.Index(peer.clientuniquename, ":")] + common.Byte2str(peer.regdata)
 				}
-				updateleaveshash[leafindex] = str2byte(strings.Join(all, ""))
+				updateleaveshash[leafindex] = common.Str2byte(strings.Join(all, ""))
 				updateleavesvalue[leafindex] = unsafe.Pointer(&leafdata)
 			}
 		}

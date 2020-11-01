@@ -8,10 +8,6 @@ message msg {
 	string trace=4;
 	double cpu=5;
 	bytes body=6;
-	err error=7;
+	string error=7;
 	map<string,string> metadata=8;
-	message err {
-		uint64 code=1;
-		string msg=2;
-	}
 }

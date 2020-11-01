@@ -11,6 +11,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/chenjie199234/Corelib/common"
 	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
 )
@@ -190,7 +191,7 @@ func (this *Instance) sworker(p *Peer) bool {
 		//set websocket pong handler
 		if p.protocoltype == WEBSOCKET {
 			(*websocket.Conn)(p.conn).SetPongHandler(func(data string) error {
-				return this.dealmsg(p, str2byte(data), true)
+				return this.dealmsg(p, common.Str2byte(data), true)
 			})
 		}
 		if this.conf.Onlinefunc != nil {
@@ -340,7 +341,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) string {
 		}
 		if p.protocoltype == WEBSOCKET {
 			(*websocket.Conn)(p.conn).SetPongHandler(func(data string) error {
-				return this.dealmsg(p, str2byte(data), true)
+				return this.dealmsg(p, common.Str2byte(data), true)
 			})
 		}
 		if this.conf.Onlinefunc != nil {

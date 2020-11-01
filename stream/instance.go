@@ -2,7 +2,6 @@ package stream
 
 import (
 	"context"
-	"crypto/md5"
 	"fmt"
 	"net"
 	"net/http"
@@ -12,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/buffer"
+	"github.com/chenjie199234/Corelib/common"
 )
 
 type Instance struct {
@@ -238,9 +238,5 @@ func (this *Instance) heart(node *peernode) {
 	}
 }
 func (this *Instance) getindex(peername string) uint {
-	result := uint(0)
-	for _, v := range md5.Sum(str2byte(peername)) {
-		result += uint(v)
-	}
-	return result % this.conf.GroupNum
+	return uint(common.BkdrhashString(peername, uint64(this.conf.GroupNum)))
 }

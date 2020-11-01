@@ -57,6 +57,7 @@ func dealImports(f *protogen.GeneratedFile, file *protogen.File) {
 
 	//third package
 	importsTHIRD := make(map[string]struct{})
+	importsTHIRD[strconv.Quote("github.com/chenjie199234/Corelib/common")] = struct{}{}
 	importsTHIRD[strconv.Quote("github.com/chenjie199234/Corelib/web")] = struct{}{}
 	importsTHIRD[strconv.Quote("google.golang.org/protobuf/proto")] = struct{}{}
 	//self package
@@ -147,7 +148,7 @@ func dealServerHandlefunc(f *protogen.GeneratedFile, file *protogen.File) {
 			f.P("return")
 			f.P("}")
 			f.P("}")
-			f.P("if e = json.Unmarshal(web.Str2byte(data), req); e != nil {")
+			f.P("if e = json.Unmarshal(common.Str2byte(data), req); e != nil {")
 			f.P("ctx.WriteString(http.StatusBadRequest, \"decode json request data error:\"+e.Error())")
 			f.P("return")
 			f.P("}")
@@ -159,7 +160,7 @@ func dealServerHandlefunc(f *protogen.GeneratedFile, file *protogen.File) {
 			f.P("return")
 			f.P("}")
 			f.P("}")
-			f.P("if e = proto.Unmarshal(web.Str2byte(data), req); e != nil {")
+			f.P("if e = proto.Unmarshal(common.Str2byte(data), req); e != nil {")
 			f.P("ctx.WriteString(http.StatusBadRequest, \"decode proto request data error:\"+e.Error())")
 			f.P("return")
 			f.P("}")

@@ -3,7 +3,8 @@ package stream
 import (
 	"encoding/binary"
 	"fmt"
-	"unsafe"
+
+	"github.com/chenjie199234/Corelib/common"
 )
 
 const (
@@ -57,7 +58,7 @@ func getVerifyMsg(data []byte) (string, []byte, uint64, error) {
 		return "", nil, 0, fmt.Errorf("empty message")
 	}
 
-	return byte2str(data[9 : 9+senderlen]), data[9+senderlen:], binary.BigEndian.Uint64(data[1:9]), nil
+	return common.Byte2str(data[9 : 9+senderlen]), data[9+senderlen:], binary.BigEndian.Uint64(data[1:9]), nil
 }
 
 //   each row is one byte
@@ -108,12 +109,4 @@ func addPrefix(data []byte) []byte {
 	prefix := make([]byte, 4)
 	binary.BigEndian.PutUint32(prefix, uint32(len(data)))
 	return append(prefix, data...)
-}
-func str2byte(data string) []byte {
-	temp := (*[2]uintptr)(unsafe.Pointer(&data))
-	result := [3]uintptr{temp[0], temp[1], temp[1]}
-	return *(*[]byte)(unsafe.Pointer(&result))
-}
-func byte2str(data []byte) string {
-	return *(*string)(unsafe.Pointer(&data))
 }

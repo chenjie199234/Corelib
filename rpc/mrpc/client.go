@@ -12,7 +12,9 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/discovery"
+	"github.com/chenjie199234/Corelib/merror"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/sys/trace"
 
@@ -254,7 +256,7 @@ func (c *MrpcClient) notice() {
 			for _, req := range server.reqs {
 				if req.callid != 0 {
 					req.resp = nil
-					req.err = Errmaker(ERRCLOSED, ERRMESSAGE[ERRCLOSED])
+					req.err = ERR[ERRCLOSED]
 					req.finish <- struct{}{}
 				}
 			}
@@ -313,7 +315,7 @@ func (c *MrpcClient) unregister(appuniquename string) {
 
 func (c *MrpcClient) start(addr string) {
 	tempverifydata := hex.EncodeToString(c.verifydata) + "|" + c.appname
-	if r := c.instance.StartTcpClient(c.cc, addr, str2byte(tempverifydata)); r == "" {
+	if r := c.instance.StartTcpClient(c.cc, addr, common.Str2byte(tempverifydata)); r == "" {
 		appuniquename := fmt.Sprintf("%s:%s", c.appname, addr)
 		c.lker.RLock()
 		var server *Serverapp
@@ -342,7 +344,7 @@ func (c *MrpcClient) start(addr string) {
 		for _, req := range server.reqs {
 			if req.callid != 0 {
 				req.resp = nil
-				req.err = Errmaker(ERRCLOSED, ERRMESSAGE[ERRCLOSED])
+				req.err = ERR[ERRCLOSED]
 				req.finish <- struct{}{}
 			}
 		}
@@ -419,7 +421,8 @@ func (c *MrpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte,
 		return
 	}
 	server.lker.Lock()
-	if msg.Error != nil && msg.Error.Code == ERRCLOSING {
+	e := merror.ErrorstrToMError(msg.Error)
+	if e != nil && e.Code == ERRCLOSING {
 		server.status = 4
 	}
 	req, ok := server.reqs[msg.Callid]
@@ -431,7 +434,7 @@ func (c *MrpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte,
 	if req.callid == msg.Callid {
 		server.Pickinfo.Netlag = time.Now().UnixNano() - req.starttime
 		req.resp = msg.Body
-		req.err = msg.Error
+		req.err = e
 		req.finish <- struct{}{}
 	}
 	server.lker.Unlock()
@@ -452,7 +455,7 @@ func (c *MrpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime
 	for _, req := range server.reqs {
 		if req.callid != 0 {
 			req.resp = nil
-			req.err = Errmaker(ERRCLOSED, ERRMESSAGE[ERRCLOSED])
+			req.err = ERR[ERRCLOSED]
 			req.finish <- struct{}{}
 		}
 	}
@@ -464,7 +467,7 @@ func (c *MrpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime
 	}
 }
 
-func (c *MrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, *MsgErr) {
+func (c *MrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, error) {
 	//make mrpc system message
 	msg := &Msg{
 		Callid: atomic.AddUint64(&c.callid, 1),
@@ -484,7 +487,7 @@ func (c *MrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 	msg.Metadata = GetAllMetadata(ctx)
 	d, _ := proto.Marshal(msg)
 	if len(d) >= 65535 {
-		return nil, Errmaker(ERRLARGE, ERRMESSAGE[ERRLARGE])
+		return nil, ERR[ERRLARGE]
 	}
 	var server *Serverapp
 	r := c.getreq(msg.Callid)
@@ -495,13 +498,13 @@ func (c *MrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 			if len(c.servers) == 0 {
 				c.lker.RUnlock()
 				c.putreq(r)
-				return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
+				return nil, ERR[ERRNOSERVER]
 			}
 			server = c.pick(c.servers)
 			if server == nil {
 				c.lker.RUnlock()
 				c.putreq(r)
-				return nil, Errmaker(ERRNOSERVER, ERRMESSAGE[ERRNOSERVER])
+				return nil, ERR[ERRNOSERVER]
 			}
 			server.lker.Lock()
 			c.lker.RUnlock()
@@ -547,7 +550,7 @@ func (c *MrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 			}
 			c.putreq(r)
 			server.lker.Unlock()
-			return nil, Errmaker(ERRCTXCANCEL, ERRMESSAGE[ERRCTXCANCEL])
+			return nil, ERR[ERRCTXCANCEL]
 		}
 	}
 }
@@ -556,7 +559,7 @@ type req struct {
 	callid    uint64
 	finish    chan struct{}
 	resp      []byte
-	err       *MsgErr
+	err       *merror.MError
 	starttime int64
 }
 

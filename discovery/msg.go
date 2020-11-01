@@ -3,7 +3,8 @@ package discovery
 import (
 	"bytes"
 	"fmt"
-	"unsafe"
+
+	"github.com/chenjie199234/Corelib/common"
 )
 
 const (
@@ -51,7 +52,7 @@ func getOnlineMsg(data []byte) (string, []byte, []byte, error) {
 	}
 	firstindex := bytes.Index(data, []byte{split})
 	secondindex := bytes.Index(data[firstindex+1:], []byte{split}) + firstindex + 1
-	return byte2str(data[1:firstindex]), data[firstindex+1 : secondindex], data[secondindex+1:], nil
+	return common.Byte2str(data[1:firstindex]), data[firstindex+1 : secondindex], data[secondindex+1:], nil
 }
 func makeOfflineMsg(peeruniquename string, hash []byte) []byte {
 	result := make([]byte, len(peeruniquename)+len(hash)+2)
@@ -69,7 +70,7 @@ func getOfflineMsg(data []byte) (string, []byte, error) {
 		return "", nil, fmt.Errorf("[Discovery.msg.GetOfflineMsg]error:format unknown")
 	}
 	index := bytes.Index(data, []byte{split})
-	return byte2str(data[1:index]), data[index+1:], nil
+	return common.Byte2str(data[1:index]), data[index+1:], nil
 }
 func makePullMsg() []byte {
 	return []byte{msgpull}
@@ -111,23 +112,7 @@ func getPushMsg(data []byte) (map[string][]byte, error) {
 	}
 	result := make(map[string][]byte, int(float64(len(datas))*1.3))
 	for i := 0; i < len(datas); i += 2 {
-		result[byte2str(datas[i])] = datas[i+1]
+		result[common.Byte2str(datas[i])] = datas[i+1]
 	}
 	return result, nil
-}
-func str2byte(data string) []byte {
-	temp := (*[2]uintptr)(unsafe.Pointer(&data))
-	result := [3]uintptr{temp[0], temp[1], temp[1]}
-	return *(*[]byte)(unsafe.Pointer(&result))
-}
-func byte2str(data []byte) string {
-	return *(*string)(unsafe.Pointer(&data))
-}
-func bkdrhash(peeruniquename string, total uint64) uint64 {
-	seed := uint64(131313)
-	hash := uint64(0)
-	for _, v := range peeruniquename {
-		hash = hash*seed + uint64(v)
-	}
-	return hash % total
 }

@@ -16,9 +16,9 @@ func Test_filter(t *testing.T) {
 	if !filter.IsAdd(data[1]) {
 		panic("data check error")
 	}
-	datas, addnum := filter.Export()
+	datas, addnum := filter.GetAllFilterData()
 	filter.Clear()
-	newfilter := Rebuild(filter.GetByteLength(), datas, addnum)
+	newfilter := Rebuild(datas, addnum)
 	if !newfilter.IsAdd(data[0]) {
 		panic("data check error")
 	}

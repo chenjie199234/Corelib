@@ -17,7 +17,7 @@ type MrpcTestClient struct {
 	c *mrpc.MrpcClient
 }
 
-func (c *MrpcTestClient) Hello(ctx context.Context, req *HelloReq) (*HelloResp, *mrpc.MsgErr) {
+func (c *MrpcTestClient) Hello(ctx context.Context, req *HelloReq) (*HelloResp, error) {
 	reqd, _ := proto.Marshal(req)
 	respd, err := c.c.Call(ctx, "/Test/Hello", reqd)
 	if err != nil {
@@ -29,7 +29,7 @@ func (c *MrpcTestClient) Hello(ctx context.Context, req *HelloReq) (*HelloResp, 
 	resp := new(HelloResp)
 	if e := proto.Unmarshal(respd, resp); e != nil {
 		//this is impossible
-		return nil, mrpc.Errmaker(mrpc.ERRRESPONSE, mrpc.ERRMESSAGE[mrpc.ERRRESPONSE])
+		return nil, mrpc.ERR[mrpc.ERRRESPONSE]
 	}
 	return resp, nil
 }
@@ -39,13 +39,13 @@ func NewMrpcTestClient(c *mrpc.MrpcClient) *MrpcTestClient {
 
 type MrpcTestService struct {
 	Midware func() map[string][]mrpc.OutsideHandler
-	Hello   func(context.Context, *HelloReq) (*HelloResp, *mrpc.MsgErr)
+	Hello   func(context.Context, *HelloReq) (*HelloResp, error)
 }
 
-func (s *MrpcTestService) hello(ctx context.Context, in []byte) ([]byte, *mrpc.MsgErr) {
+func (s *MrpcTestService) hello(ctx context.Context, in []byte) ([]byte, error) {
 	req := &HelloReq{}
 	if e := proto.Unmarshal(in, req); e != nil {
-		return nil, mrpc.Errmaker(mrpc.ERRREQUEST, mrpc.ERRMESSAGE[mrpc.ERRREQUEST])
+		return nil, mrpc.ERR[mrpc.ERRREQUEST]
 	}
 	resp, err := s.Hello(ctx, req)
 	if err != nil {
