@@ -45,11 +45,11 @@ func New(sid uint64) {
 			if now <= offset || templasttime > (1<<32-1) {
 				panic("[ID.init]server time wrong")
 			}
-			if templasttime < lasttime {
-				rollback++
-				fmt.Printf("[ID.init]server time rollback,old time:%d current time:%d rollback:%d\n", lasttime, templasttime, rollback&7)
-			}
 			if lasttime != templasttime {
+				if templasttime < lasttime {
+					rollback++
+					fmt.Printf("[ID.init]server time rollback,old time:%d current time:%d rollback:%d\n", lasttime, templasttime, rollback&7)
+				}
 				lasttime = templasttime
 				base = getlasttime() + getrollback() + getserverid()
 			}
