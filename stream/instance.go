@@ -53,6 +53,7 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			heartbeatbuffer: make(chan []byte, 3),
 			conn:            nil,
 			lastactive:      0,
+			idlestart:       0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
 			data:            nil,
@@ -82,6 +83,7 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			heartbeatbuffer: make(chan []byte, 3),
 			conn:            nil,
 			lastactive:      0,
+			idlestart:       0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
 			data:            nil,
@@ -111,6 +113,7 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			heartbeatbuffer: make(chan []byte, 3),
 			conn:            nil,
 			lastactive:      0,
+			idlestart:       0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
 			data:            nil,
@@ -211,12 +214,22 @@ func (this *Instance) heart(node *peernode) {
 				continue
 			}
 			templastactive := p.lastactive
+			tempidlestart := p.idlestart
 			if now >= templastactive && now-templastactive > this.conf.HeartbeatTimeout*1000*1000 {
 				//heartbeat timeout
-				fmt.Printf("[Stream.%s.heart] timeout %s:%s addr:%s\n",
+				fmt.Printf("[Stream.%s.heart] heart timeout %s:%s addr:%s\n",
 					p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 				p.closeconn()
-			} else if now >= templastactive && now-templastactive >= this.conf.HeartprobeInterval {
+				continue
+			}
+			if this.conf.IdleTimeout != 0 && now >= tempidlestart && now-tempidlestart > this.conf.IdleTimeout*1000*1000 {
+				//idle timeout
+				fmt.Printf("[Stream.%s.heart] idle timeout %s:%s addr:%s\n",
+					p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
+				p.closeconn()
+				continue
+			}
+			if now >= templastactive && now-templastactive >= this.conf.HeartprobeInterval {
 				var data []byte
 				switch p.protocoltype {
 				case TCP:

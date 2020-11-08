@@ -194,6 +194,8 @@ type InstanceConfig struct {
 	//heartbeat timeout
 	HeartbeatTimeout   uint64 `json:"heartbeat_timeout"`   //default 5000ms
 	HeartprobeInterval uint64 `json:"heartprobe_interval"` //default 1500ms
+	//idle timeout,0 means no idle timeout
+	IdleTimeout uint64 `json:"idle_timeout"`
 
 	//split connections into groups
 	//every group will have an independence RWMutex to control online and offline

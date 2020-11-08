@@ -78,9 +78,3 @@ func GetID() (uint64, error) {
 	}
 	return newid, nil
 }
-func GetIdTimestamp(id uint64) uint64 {
-	return id >> 32
-}
-func GetIdTimestampIndex(id uint64) uint64 {
-	return id & (1<<22 - 1)
-}

@@ -435,6 +435,7 @@ func (this *Instance) verifypeer(p *Peer) []byte {
 		return nil
 	}
 	p.lastactive = uint64(time.Now().UnixNano())
+	p.idlestart = p.lastactive
 	switch p.peertype {
 	case CLIENT:
 		p.clientname = sender
@@ -582,6 +583,7 @@ func (this *Instance) dealmsg(p *Peer, data []byte, frompong bool) error {
 		}
 		//update lastactive time
 		p.lastactive = uint64(time.Now().UnixNano())
+		p.idlestart = p.lastactive
 		this.conf.Userdatafunc(p, p.getpeeruniquename(), userdata, starttime)
 		return nil
 	default:
