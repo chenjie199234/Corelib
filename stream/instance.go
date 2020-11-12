@@ -53,7 +53,8 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			heartbeatbuffer: make(chan []byte, 3),
 			conn:            nil,
 			lastactive:      0,
-			idlestart:       0,
+			recvidlestart:   0,
+			sendidlestart:   0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
 			data:            nil,
@@ -83,7 +84,8 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			heartbeatbuffer: make(chan []byte, 3),
 			conn:            nil,
 			lastactive:      0,
-			idlestart:       0,
+			recvidlestart:   0,
+			sendidlestart:   0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
 			data:            nil,
@@ -113,7 +115,8 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 			heartbeatbuffer: make(chan []byte, 3),
 			conn:            nil,
 			lastactive:      0,
-			idlestart:       0,
+			recvidlestart:   0,
+			sendidlestart:   0,
 			Context:         tempctx,
 			CancelFunc:      tempcancel,
 			data:            nil,
@@ -214,7 +217,8 @@ func (this *Instance) heart(node *peernode) {
 				continue
 			}
 			templastactive := p.lastactive
-			tempidlestart := p.idlestart
+			temprecvidlestart := p.recvidlestart
+			tempsendidlestart := p.sendidlestart
 			if now >= templastactive && now-templastactive > this.conf.HeartbeatTimeout*1000*1000 {
 				//heartbeat timeout
 				fmt.Printf("[Stream.%s.heart] heart timeout %s:%s addr:%s\n",
@@ -222,29 +226,35 @@ func (this *Instance) heart(node *peernode) {
 				p.closeconn()
 				continue
 			}
-			if this.conf.IdleTimeout != 0 && now >= tempidlestart && now-tempidlestart > this.conf.IdleTimeout*1000*1000 {
-				//idle timeout
-				fmt.Printf("[Stream.%s.heart] idle timeout %s:%s addr:%s\n",
+			if now >= tempsendidlestart && now-tempsendidlestart > this.conf.SendIdleTimeout*1000*1000 {
+				//send idle timeout
+				fmt.Printf("[Stream.%s.heart] send idle timeout %s:%s addr:%s\n",
 					p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 				p.closeconn()
 				continue
 			}
-			if now >= templastactive && now-templastactive >= this.conf.HeartprobeInterval {
-				var data []byte
-				switch p.protocoltype {
-				case TCP:
-					fallthrough
-				case UNIXSOCKET:
-					data = makeHeartMsg(true)
-				case WEBSOCKET:
-					data = makeHeartMsg(false)
-				}
-				select {
-				case p.heartbeatbuffer <- data:
-				default:
-					fmt.Printf("[Stream.%s.heart] send heart msg to %s:%s addr:%s failed:heart buffer is full\n",
-						p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-				}
+			if this.conf.RecvIdleTimeout != 0 && now >= temprecvidlestart && now-temprecvidlestart > this.conf.RecvIdleTimeout*1000*1000 {
+				//recv idle timeout
+				fmt.Printf("[Stream.%s.heart] recv idle timeout %s:%s addr:%s\n",
+					p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
+				p.closeconn()
+				continue
+			}
+			//send heart beat data
+			var data []byte
+			switch p.protocoltype {
+			case TCP:
+				fallthrough
+			case UNIXSOCKET:
+				data = makeHeartMsg(true)
+			case WEBSOCKET:
+				data = makeHeartMsg(false)
+			}
+			select {
+			case p.heartbeatbuffer <- data:
+			default:
+				fmt.Printf("[Stream.%s.heart] send heart msg to %s:%s addr:%s failed:heart buffer is full\n",
+					p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 			}
 		}
 		node.RUnlock()

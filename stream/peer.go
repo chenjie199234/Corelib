@@ -50,7 +50,8 @@ type Peer struct {
 	heartbeatbuffer chan []byte
 	conn            unsafe.Pointer
 	lastactive      uint64 //unixnano timestamp
-	idlestart       uint64 //unixnano timestamp
+	recvidlestart   uint64 //unixnano timestamp
+	sendidlestart   uint64 //unixnano timestamp
 	context.Context
 	context.CancelFunc
 	data unsafe.Pointer //user data
@@ -79,7 +80,8 @@ func (p *Peer) reset() {
 		<-p.heartbeatbuffer
 	}
 	p.lastactive = 0
-	p.idlestart = 0
+	p.recvidlestart = 0
+	p.sendidlestart = 0
 	p.data = nil
 }
 func (p *Peer) getprotocolname() string {

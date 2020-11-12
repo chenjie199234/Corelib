@@ -194,8 +194,10 @@ type InstanceConfig struct {
 	//heartbeat timeout
 	HeartbeatTimeout   uint64 `json:"heartbeat_timeout"`   //default 5000ms
 	HeartprobeInterval uint64 `json:"heartprobe_interval"` //default 1500ms
-	//idle timeout,0 means no idle timeout
-	IdleTimeout uint64 `json:"idle_timeout"`
+	//0 means no idle timeout,only reveice heartbeat msg and no more userdata msg,every userdata msg will recycle the timeout
+	RecvIdleTimeout uint64 `json:"recv_idle_timeout"`
+	//is this is not 0,this must > HeartprobeInterval,this is useful for slow read attact
+	SendIdleTimeout uint64 `json:"send_idle_timeout"` //default 2*HeartprobeInterval
 
 	//split connections into groups
 	//every group will have an independence RWMutex to control online and offline
@@ -240,6 +242,9 @@ func checkInstanceConfig(c *InstanceConfig) error {
 	if c.HeartprobeInterval >= c.HeartbeatTimeout {
 		fmt.Println("[Stream.checkInstanceConfig]'heartbeat timeout' >= 'heartprobe interval','heartprobe interval' will be set to 'heartbeat timeout / 3'")
 		c.HeartprobeInterval = c.HeartbeatTimeout / 3
+	}
+	if c.SendIdleTimeout <= c.HeartprobeInterval {
+		c.SendIdleTimeout = c.HeartprobeInterval * 2
 	}
 	if c.GroupNum == 0 {
 		fmt.Println("[Stream.checkInstanceConfig]missing group num,default will be used:1 num")
