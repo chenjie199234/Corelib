@@ -23,7 +23,7 @@ func BkdrhashString(data string, total uint64) uint64 {
 func DjbhashString(data string, total uint64) uint64 {
 	hash := uint64(5381)
 	for _, v := range data {
-		hash = (hash << 5) + uint64(v)
+		hash = ((hash << 5) + hash) + uint64(v)
 	}
 	return hash % total
 }
@@ -69,7 +69,7 @@ func BkdrhashByte(data []byte, total uint64) uint64 {
 func DjbhashByte(data []byte, total uint64) uint64 {
 	hash := uint64(5381)
 	for _, v := range data {
-		hash = (hash << 5) + uint64(v)
+		hash = ((hash << 5) + hash) + uint64(v)
 	}
 	return hash % total
 }
