@@ -42,7 +42,6 @@ type MrpcClient struct {
 	lker       *sync.RWMutex
 	servers    []*Serverapp //all servers //key appuniquename
 	serverpool *sync.Pool
-	cc         *stream.TcpConfig
 	noticech   chan *discovery.NoticeMsg
 	offlinech  chan string
 
@@ -127,7 +126,7 @@ func (c *MrpcClient) putserver(s *Serverapp) {
 	c.serverpool.Put(s)
 }
 
-func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname string, vdata []byte, pick func([]*Serverapp) *Serverapp) *MrpcClient {
+func NewMrpcClient(c *stream.InstanceConfig, appname string, vdata []byte, pick func([]*Serverapp) *Serverapp) *MrpcClient {
 	//prevent duplicate create
 	lker.Lock()
 	if c, ok := clients[appname]; ok {
@@ -145,7 +144,6 @@ func NewMrpcClient(c *stream.InstanceConfig, cc *stream.TcpConfig, appname strin
 		servers:    make([]*Serverapp, 0, 10),
 		serverpool: &sync.Pool{},
 		offlinech:  make(chan string, 5),
-		cc:         cc,
 		callid:     0,
 		reqpool:    &sync.Pool{},
 		pick:       pick,
@@ -315,7 +313,7 @@ func (c *MrpcClient) unregister(appuniquename string) {
 
 func (c *MrpcClient) start(addr string) {
 	tempverifydata := hex.EncodeToString(c.verifydata) + "|" + c.appname
-	if r := c.instance.StartTcpClient(c.cc, addr, common.Str2byte(tempverifydata)); r == "" {
+	if r := c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata)); r == "" {
 		appuniquename := fmt.Sprintf("%s:%s", c.appname, addr)
 		c.lker.RLock()
 		var server *Serverapp

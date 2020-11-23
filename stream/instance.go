@@ -8,9 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
-	"github.com/chenjie199234/Corelib/buffer"
 	"github.com/chenjie199234/Corelib/common"
 )
 
@@ -22,107 +20,58 @@ type Instance struct {
 	unixlistener *net.UnixListener
 	webserver    *http.Server
 
-	peerPool          *sync.Pool
-	websocketPeerPool *sync.Pool
+	tcpPool  *sync.Pool
+	unixPool *sync.Pool
+	webPool  *sync.Pool
 }
 
-func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
+func (this *Instance) getPeer(t, writebuffernum int) *Peer {
+	tempctx, tempcancel := context.WithCancel(context.Background())
 	switch t {
 	case TCP:
-		tempctx, tempcancel := context.WithCancel(context.Background())
-		if p, ok := this.peerPool.Get().(*Peer); ok {
+		if p, ok := this.tcpPool.Get().(*Peer); ok {
 			p.reset()
 			p.status = 1
 			p.Context = tempctx
 			p.CancelFunc = tempcancel
 			return p
-		}
-		c := (*TcpConfig)(conf)
-		return &Peer{
-			parentnode:      nil,
-			clientname:      nil,
-			servername:      nil,
-			peertype:        0,
-			protocoltype:    0,
-			starttime:       0,
-			status:          1,
-			readbuffer:      buffer.NewBuf(c.AppMinReadBufferLen, c.AppMaxReadBufferLen),
-			tempbuffer:      make([]byte, c.AppMinReadBufferLen),
-			tempbuffernum:   0,
-			writerbuffer:    make(chan []byte, c.AppWriteBufferNum),
-			heartbeatbuffer: make(chan []byte, 3),
-			conn:            nil,
-			lastactive:      0,
-			recvidlestart:   0,
-			sendidlestart:   0,
-			Context:         tempctx,
-			CancelFunc:      tempcancel,
-			data:            nil,
 		}
 	case UNIXSOCKET:
-		tempctx, tempcancel := context.WithCancel(context.Background())
-		if p, ok := this.peerPool.Get().(*Peer); ok {
+		if p, ok := this.unixPool.Get().(*Peer); ok {
 			p.reset()
 			p.status = 1
 			p.Context = tempctx
 			p.CancelFunc = tempcancel
 			return p
-		}
-		c := (*UnixConfig)(conf)
-		return &Peer{
-			parentnode:      nil,
-			clientname:      nil,
-			servername:      nil,
-			peertype:        0,
-			protocoltype:    0,
-			starttime:       0,
-			status:          1,
-			readbuffer:      buffer.NewBuf(c.AppMinReadBufferLen, c.AppMaxReadBufferLen),
-			tempbuffer:      make([]byte, c.AppMinReadBufferLen),
-			tempbuffernum:   0,
-			writerbuffer:    make(chan []byte, c.AppWriteBufferNum),
-			heartbeatbuffer: make(chan []byte, 3),
-			conn:            nil,
-			lastactive:      0,
-			recvidlestart:   0,
-			sendidlestart:   0,
-			Context:         tempctx,
-			CancelFunc:      tempcancel,
-			data:            nil,
 		}
 	case WEBSOCKET:
-		tempctx, tempcancel := context.WithCancel(context.Background())
-		if p, ok := this.websocketPeerPool.Get().(*Peer); ok {
+		if p, ok := this.webPool.Get().(*Peer); ok {
 			p.reset()
 			p.status = 1
 			p.Context = tempctx
 			p.CancelFunc = tempcancel
 			return p
-		}
-		c := (*WebConfig)(conf)
-		return &Peer{
-			parentnode:      nil,
-			clientname:      nil,
-			servername:      nil,
-			peertype:        0,
-			protocoltype:    0,
-			starttime:       0,
-			status:          1,
-			readbuffer:      nil,
-			tempbuffer:      nil,
-			tempbuffernum:   0,
-			writerbuffer:    make(chan []byte, c.AppWriteBufferNum),
-			heartbeatbuffer: make(chan []byte, 3),
-			conn:            nil,
-			lastactive:      0,
-			recvidlestart:   0,
-			sendidlestart:   0,
-			Context:         tempctx,
-			CancelFunc:      tempcancel,
-			data:            nil,
 		}
 	default:
 		return nil
+	}
+	return &Peer{
+		parentnode:      nil,
+		clientname:      nil,
+		servername:      nil,
+		peertype:        0,
+		protocoltype:    0,
+		starttime:       0,
+		status:          1,
+		writerbuffer:    make(chan []byte, writebuffernum),
+		heartbeatbuffer: make(chan []byte, 3),
+		conn:            nil,
+		lastactive:      0,
+		recvidlestart:   0,
+		sendidlestart:   0,
+		Context:         tempctx,
+		CancelFunc:      tempcancel,
+		data:            nil,
 	}
 }
 func (this *Instance) putPeer(p *Peer) {
@@ -130,11 +79,11 @@ func (this *Instance) putPeer(p *Peer) {
 	p.reset()
 	switch tempprotocoltype {
 	case TCP:
-		fallthrough
+		this.tcpPool.Put(p)
 	case UNIXSOCKET:
-		this.peerPool.Put(p)
+		this.unixPool.Put(p)
 	case WEBSOCKET:
-		this.websocketPeerPool.Put(p)
+		this.webPool.Put(p)
 	}
 }
 func (this *Instance) addPeer(p *Peer) bool {
@@ -163,8 +112,9 @@ func NewInstance(c *InstanceConfig) *Instance {
 		peernodes: make([]*peernode, c.GroupNum),
 		stop:      0,
 
-		peerPool:          &sync.Pool{},
-		websocketPeerPool: &sync.Pool{},
+		tcpPool:  &sync.Pool{},
+		unixPool: &sync.Pool{},
+		webPool:  &sync.Pool{},
 	}
 	for i := range stream.peernodes {
 		stream.peernodes[i] = &peernode{

@@ -29,14 +29,7 @@ func Test_Tcpserver(t *testing.T) {
 		Userdatafunc:       tcpserverhandleuserdata,
 		Offlinefunc:        tcpserverhandleoffline,
 	})
-	go tcpserverinstance.StartTcpServer(&TcpConfig{
-		ConnectTimeout:       1000,
-		SocketReadBufferLen:  1024,
-		SocketWriteBufferLen: 1024,
-		AppMinReadBufferLen:  1024,
-		AppMaxReadBufferLen:  65535,
-		AppWriteBufferNum:    256,
-	}, "127.0.0.1:9234")
+	go tcpserverinstance.StartTcpServer("127.0.0.1:9234")
 	go func() {
 		for {
 			time.Sleep(time.Second)

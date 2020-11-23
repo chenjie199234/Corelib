@@ -42,8 +42,8 @@ func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *MrpcServer {
 	serverinstance.instance = stream.NewInstance(&dupc)
 	return serverinstance
 }
-func (s *MrpcServer) StartMrpcServer(cc *stream.TcpConfig, listenaddr string) {
-	s.instance.StartTcpServer(cc, listenaddr)
+func (s *MrpcServer) StartMrpcServer(listenaddr string) {
+	s.instance.StartTcpServer(listenaddr)
 }
 func (s *MrpcServer) StopMrpcServer() {
 	d, _ := proto.Marshal(&Msg{

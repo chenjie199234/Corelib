@@ -20,23 +20,22 @@ var clientinstanceconfig *stream.InstanceConfig = &stream.InstanceConfig{
 	HeartbeatTimeout:   3000,
 	HeartprobeInterval: 1000,
 	GroupNum:           1,
+	TcpC: &stream.TcpConfig{
+		ConnectTimeout:       1000,
+		SocketReadBufferLen:  1024,
+		SocketWriteBufferLen: 1024,
+		AppWriteBufferNum:    256,
+	},
 }
 
 var api *MrpcTestClient
 
 func Test_Client(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
-	tcpconfig := &stream.TcpConfig{
-		ConnectTimeout:       1000,
-		SocketReadBufferLen:  1024,
-		SocketWriteBufferLen: 1024,
-		AppMinReadBufferLen:  4096,
-		AppMaxReadBufferLen:  65535,
-		AppWriteBufferNum:    256,
-	}
+
 	verifydata := []byte("test")
-	discovery.NewDiscoveryClient(clientinstanceconfig, tcpconfig, verifydata, "http://127.0.0.1:8080/discoveryservers")
-	client := mrpc.NewMrpcClient(clientinstanceconfig, tcpconfig, "appserver", verifydata, nil)
+	discovery.NewDiscoveryClient(clientinstanceconfig, verifydata, "http://127.0.0.1:8080/discoveryservers")
+	client := mrpc.NewMrpcClient(clientinstanceconfig, "appserver", verifydata, nil)
 	api = NewMrpcTestClient(client)
 	time.Sleep(time.Second)
 	call()

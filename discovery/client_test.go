@@ -32,13 +32,12 @@ func Test_Client1(t *testing.T) {
 		HeartbeatTimeout:   5000,
 		HeartprobeInterval: 2000,
 		GroupNum:           1,
-	}, &stream.TcpConfig{
-		ConnectTimeout:       500,
-		SocketReadBufferLen:  1024,
-		SocketWriteBufferLen: 1024,
-		AppMinReadBufferLen:  1024,
-		AppMaxReadBufferLen:  65535,
-		AppWriteBufferNum:    256,
+		TcpC: &stream.TcpConfig{
+			ConnectTimeout:       500,
+			SocketReadBufferLen:  1024,
+			SocketWriteBufferLen: 1024,
+			AppWriteBufferNum:    256,
+		},
 	}, []byte{'t', 'e', 's', 't'}, "http://127.0.0.1:8080/discoveryservers")
 	time.Sleep(time.Second)
 	gexists, gch, _ := GrpcNotice("client")

@@ -1,13 +1,14 @@
 package stream
 
 import (
+	"bufio"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"sync"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/buffer"
 	"github.com/gorilla/websocket"
 )
 
@@ -28,7 +29,7 @@ var PEERTYPENAME = []string{CLIENT: "client", SERVER: "server"}
 
 var (
 	ERRCONNCLOSED = fmt.Errorf("connection is closed")
-	ERREMPTYMSG   = fmt.Errorf("send empty message")
+	ERRMSGLARGE   = fmt.Errorf("message too large")
 )
 
 type peernode struct {
@@ -43,9 +44,7 @@ type Peer struct {
 	protocoltype    int
 	starttime       uint64
 	status          uint32 //0--(closing),not 0--(connected)
-	readbuffer      *buffer.Buffer
-	tempbuffer      []byte
-	tempbuffernum   int
+	reader          *bufio.Reader
 	writerbuffer    chan []byte
 	heartbeatbuffer chan []byte
 	conn            unsafe.Pointer
@@ -69,10 +68,6 @@ func (p *Peer) reset() {
 	p.protocoltype = 0
 	p.starttime = 0
 	p.status = 0
-	if p.readbuffer != nil {
-		p.readbuffer.Reset()
-	}
-	p.tempbuffernum = 0
 	for len(p.writerbuffer) > 0 {
 		<-p.writerbuffer
 	}
@@ -162,13 +157,54 @@ func (p *Peer) setbuffer(readnum, writenum int) {
 	}
 }
 
+func (p *Peer) readMessage(max int) ([]byte, error) {
+	switch p.protocoltype {
+	case TCP:
+		fallthrough
+	case UNIXSOCKET:
+		temp := make([]byte, 4)
+		num := 0
+		for {
+			n, e := p.reader.Read(temp[num:])
+			if e != nil {
+				return nil, e
+			}
+			num += n
+			if num == 4 {
+				break
+			}
+		}
+		num = int(binary.BigEndian.Uint32(temp))
+		if num > max || num < 0 {
+			return nil, ERRMSGLARGE
+		} else if num == 0 {
+			return nil, nil
+		}
+		temp = make([]byte, num)
+		for {
+			n, e := p.reader.Read(temp[len(temp)-num:])
+			if e != nil {
+				return nil, e
+			}
+			num -= n
+			if num == 0 {
+				break
+			}
+		}
+		return temp, nil
+	case WEBSOCKET:
+		_, data, e := (*websocket.Conn)(p.conn).ReadMessage()
+		return data, e
+	}
+	return nil, nil
+}
 func (p *Peer) SendMessage(userdata []byte, starttime uint64) error {
 	if p.status == 0 || p.starttime != starttime {
 		//starttime for aba check
 		return ERRCONNCLOSED
 	}
 	if len(userdata) == 0 {
-		return ERREMPTYMSG
+		return nil
 	}
 	var data []byte
 	switch p.protocoltype {

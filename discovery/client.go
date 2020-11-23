@@ -79,7 +79,7 @@ var clientinstance *discoveryclient
 //this just start the client and sync the peers in the net
 //this will not register self into the net
 //please call the RegisterSelf() func to register self into the net
-func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []byte, url string) {
+func NewDiscoveryClient(c *stream.InstanceConfig, vdata []byte, url string) {
 	if clientinstance != nil {
 		return
 	}
@@ -111,7 +111,7 @@ func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []
 	clientinstance.c = &dupc
 	clientinstance.instance = stream.NewInstance(&dupc)
 
-	clientinstance.updateserver(cc, url)
+	clientinstance.updateserver(url)
 	tker := time.NewTicker(time.Second)
 	go func() {
 		for {
@@ -136,7 +136,7 @@ func NewDiscoveryClient(c *stream.InstanceConfig, cc *stream.TcpConfig, vdata []
 					return
 				case _, ok := <-tker.C:
 					if ok {
-						clientinstance.updateserver(cc, url)
+						clientinstance.updateserver(url)
 					}
 				}
 			}
@@ -463,7 +463,7 @@ func WebSocketNotice(peername string) (map[string]map[string][]byte, chan *Notic
 	return result, ch, nil
 }
 
-func (c *discoveryclient) updateserver(cc *stream.TcpConfig, url string) {
+func (c *discoveryclient) updateserver(url string) {
 	//get server addrs
 	resp, e := c.httpclient.Get(url)
 	if e != nil {
@@ -539,7 +539,7 @@ func (c *discoveryclient) updateserver(cc *stream.TcpConfig, url string) {
 			server.status = 1
 			go func(saddr string, findex int) {
 				tempverifydata := hex.EncodeToString(c.verifydata) + "|" + saddr[:findex]
-				if r := c.instance.StartTcpClient(cc, saddr[findex+1:], common.Str2byte(tempverifydata)); r == "" {
+				if r := c.instance.StartTcpClient(saddr[findex+1:], common.Str2byte(tempverifydata)); r == "" {
 					c.lker.RLock()
 					server, ok := c.servers[saddr]
 					if !ok {

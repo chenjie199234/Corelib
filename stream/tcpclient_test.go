@@ -28,14 +28,7 @@ func Test_Tcpclient(t *testing.T) {
 				Offlinefunc:        tcpclienthandleoffline,
 			})
 
-			tcpclientinstance.StartTcpClient(&TcpConfig{
-				ConnectTimeout:       1000,
-				SocketReadBufferLen:  1024,
-				SocketWriteBufferLen: 1024,
-				AppMinReadBufferLen:  1024,
-				AppMaxReadBufferLen:  65535,
-				AppWriteBufferNum:    256,
-			}, "127.0.0.1:9234", []byte{'t', 'e', 's', 't', 'c'})
+			tcpclientinstance.StartTcpClient("127.0.0.1:9234", []byte{'t', 'e', 's', 't', 'c'})
 			time.Sleep(time.Millisecond)
 		}
 	}()
@@ -57,7 +50,7 @@ func tcpclienthandleonline(p *Peer, peeruniquename string, starttime uint64) {
 		go func() {
 			for {
 				time.Sleep(time.Second)
-				p.SendMessage([]byte{'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd'}, starttime)
+				p.SendMessage(bytes.Repeat([]byte{'a'}, 1100), starttime)
 			}
 		}()
 	}

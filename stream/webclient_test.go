@@ -29,13 +29,7 @@ func Test_Webclient(t *testing.T) {
 				Userdatafunc:       webclienthandleuserdata,
 				Offlinefunc:        webclienthandleoffline,
 			})
-			webclientinstance.StartWebsocketClient(&WebConfig{
-				ConnectTimeout:       1000,
-				HttpMaxHeaderLen:     1024,
-				SocketReadBufferLen:  1024,
-				SocketWriteBufferLen: 1024,
-				AppWriteBufferNum:    256,
-			}, "ws://127.0.0.1:9235/test", []byte{'t', 'e', 's', 't', 'c'})
+			webclientinstance.StartWebsocketClient("ws://127.0.0.1:9235/test", []byte{'t', 'e', 's', 't', 'c'})
 			time.Sleep(time.Millisecond)
 		}
 	}()

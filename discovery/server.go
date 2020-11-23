@@ -86,14 +86,14 @@ func NewDiscoveryServer(c *stream.InstanceConfig, vdata []byte) {
 	serverinstance.c = &dupc
 	serverinstance.instance = stream.NewInstance(&dupc)
 }
-func StartDiscoveryServer(cc *stream.TcpConfig, listenaddr string) error {
+func StartDiscoveryServer(listenaddr string) error {
 	if serverinstance == nil {
 		return ERRSINIT
 	}
 	if old := atomic.SwapInt32(&serverinstance.status, 1); old == 1 {
 		return ERRSSTARTED
 	}
-	serverinstance.instance.StartTcpServer(cc, listenaddr)
+	serverinstance.instance.StartTcpServer(listenaddr)
 	return nil
 }
 

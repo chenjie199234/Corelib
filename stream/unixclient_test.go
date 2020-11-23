@@ -29,14 +29,7 @@ func Test_Unixclient(t *testing.T) {
 				Userdatafunc:       unixclienthandleuserdata,
 				Offlinefunc:        unixclienthandleoffline,
 			})
-			unixclientinstance.StartUnixsocketClient(&UnixConfig{
-				ConnectTimeout:       1000,
-				SocketReadBufferLen:  1024,
-				SocketWriteBufferLen: 1024,
-				AppMinReadBufferLen:  1024,
-				AppMaxReadBufferLen:  65535,
-				AppWriteBufferNum:    256,
-			}, "./test.socket", []byte{'t', 'e', 's', 't', 'c'})
+			unixclientinstance.StartUnixsocketClient("./test.socket", []byte{'t', 'e', 's', 't', 'c'})
 			time.Sleep(time.Millisecond)
 		}
 	}()

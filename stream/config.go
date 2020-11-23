@@ -29,58 +29,54 @@ type HandleUserdataFunc func(p *Peer, peeruniquename string, data []byte, startt
 type HandleOfflineFunc func(p *Peer, peeruniquename string, starttime uint64)
 
 type TcpConfig struct {
-	ConnectTimeout int `json:"connect_timeout"` //default 500ms,for client only
+	//for client only
+	ConnectTimeout int `json:"connect_timeout"` //default 500ms
 
-	SocketReadBufferLen  int `json:"socket_read_buffer_len"`  //default 1024 byte,max 65535 byte
-	SocketWriteBufferLen int `json:"socket_write_buffer_len"` //default 1024 byte,max 65535 byte
+	SocketReadBufferLen  int `json:"socket_read_buffer_len"`  //default 1024 byte,max 65536 byte
+	SocketWriteBufferLen int `json:"socket_write_buffer_len"` //default 1024 byte,max 65536 byte
 
-	//read buffer can auto grow and shirnk within min and max
-	AppMinReadBufferLen int `json:"app_min_read_buffer_len"`  //default 1024 byte,max 65535 byte
-	AppMaxReadBufferLen int `json:"app_max_write_buffer_len"` //default 65535 byte,max 65535 byte
+	MaxMessageLen int `json:"max_message_len"` //max 65536,default is max
+
 	//write buffer can store the messages in buffer and send async in another goruntine
 	AppWriteBufferNum int `json:"app_write_buffer_num"` //default 256 num(not the byte)
 }
 
+var defaultTcpConfig = &TcpConfig{
+	ConnectTimeout:       500,
+	SocketReadBufferLen:  1024,
+	SocketWriteBufferLen: 1024,
+	MaxMessageLen:        65536,
+	AppWriteBufferNum:    256,
+}
+
 func checkTcpConfig(c *TcpConfig) {
-	if c.ConnectTimeout == 0 {
+	if c.ConnectTimeout <= 0 {
 		fmt.Println("[Stream.checkTcpConfig]missing connect timeout,default will be used:500ms")
 		c.ConnectTimeout = 500
 	}
-	if c.SocketReadBufferLen == 0 {
+	if c.SocketReadBufferLen <= 0 {
 		fmt.Println("[Stream.checkTcpConfig]missing socket read buffer len,default will be used:1024 byte")
 		c.SocketReadBufferLen = 1024
 	}
-	if c.SocketReadBufferLen > 65535 {
-		fmt.Println("[Stream.checkTcpConfig]socket read buffer len is too large,default will be used:1024 byte")
-		c.SocketReadBufferLen = 1024
+	if c.SocketReadBufferLen > 65536 {
+		fmt.Println("[Stream.checkTcpConfig]socket read buffer len is too large,default will be used:65536 byte")
+		c.SocketReadBufferLen = 65536
 	}
-	if c.SocketWriteBufferLen == 0 {
+	if c.SocketWriteBufferLen <= 0 {
 		fmt.Println("[Stream.checkTcpConfig]missing socket write buffer len,default will be used:1024 byte")
 		c.SocketWriteBufferLen = 1024
 	}
-	if c.SocketWriteBufferLen > 65535 {
-		fmt.Println("[Stream.checkTcpConfig]socket write buffer len is too large,default will be used:1024 byte")
-		c.SocketReadBufferLen = 1024
+	if c.SocketWriteBufferLen > 65536 {
+		fmt.Println("[Stream.checkTcpConfig]socket write buffer len is too large,default will be used:65536 byte")
+		c.SocketReadBufferLen = 65536
 	}
-	if c.AppMinReadBufferLen == 0 {
-		fmt.Println("[Stream.checkTcpConfig]missing app min read buffer len,default will be used:1024 byte")
-		c.AppMinReadBufferLen = 1024
+	if c.MaxMessageLen <= 0 {
+		fmt.Println("[Stream.checkTcpConfig]missing max message length,default will be used:65536 byte")
+		c.MaxMessageLen = 65536
 	}
-	if c.AppMinReadBufferLen > 65535 {
-		fmt.Println("[Stream.checkTcpConfig]app min read buffer len is too large,default will be used:1024 byte")
-		c.AppMinReadBufferLen = 1024
-	}
-	if c.AppMaxReadBufferLen == 0 {
-		fmt.Println("[Stream.checkTcpConfig]missing app max read buffer len,default will be used:65535 byte")
-		c.AppMaxReadBufferLen = 65535
-	}
-	if c.AppMaxReadBufferLen > 65535 {
-		fmt.Println("[Stream.checkTcpConfig]app max read buffer len is too large,default will be used:65535 byte")
-		c.AppMaxReadBufferLen = 65535
-	}
-	if c.AppMinReadBufferLen > c.AppMaxReadBufferLen {
-		fmt.Println("[Stream.checkTcpConfig]app 'min read buffer len' > 'max read buffer len','max read buffer len' will be set to 'min read buffer len'")
-		c.AppMaxReadBufferLen = c.AppMinReadBufferLen
+	if c.MaxMessageLen > 65536 {
+		fmt.Println("[Stream.checkTcpConfig]max message length is too large,default will be used:65536 byte")
+		c.MaxMessageLen = 65536
 	}
 	if c.AppWriteBufferNum == 0 {
 		fmt.Println("[Stream.checkTcpConfig]missing app write buffer num,default will be used:256 num")
@@ -89,58 +85,54 @@ func checkTcpConfig(c *TcpConfig) {
 }
 
 type UnixConfig struct {
-	ConnectTimeout int `json:"connect_timeout"` //default 500ms,for client only
+	//for client only
+	ConnectTimeout int `json:"connect_timeout"` //default 500ms
 
 	SocketReadBufferLen  int `json:"socket_read_buffer_len"`  //default 1024 byte,max 65535 byte
 	SocketWriteBufferLen int `json:"socket_write_buffer_len"` //default 1024 byte,max 65535 byte
 
-	//read buffer can auto grow and shirnk within min and max
-	AppMinReadBufferLen int `json:"app_min_read_buffer_len"`  //default 1024 byte,max 65535 byte
-	AppMaxReadBufferLen int `json:"app_max_write_buffer_len"` //default 65535 byte,max 65535 byte
+	MaxMessageLen int `json:"max_message_len"` //max 65536,default is max
+
 	//write buffer can store the messages in buffer and send async in another goruntine
 	AppWriteBufferNum int `json:"app_write_buffer_num"` //default 256 num(not the byte)
 }
 
+var defaultUnixConfig = &UnixConfig{
+	ConnectTimeout:       500,
+	SocketReadBufferLen:  1024,
+	SocketWriteBufferLen: 1024,
+	MaxMessageLen:        65536,
+	AppWriteBufferNum:    256,
+}
+
 func checkUnixConfig(c *UnixConfig) {
-	if c.ConnectTimeout == 0 {
+	if c.ConnectTimeout <= 0 {
 		fmt.Println("[Stream.checkUnixConfig]missing connect timeout,default will be used:500ms")
 		c.ConnectTimeout = 500
 	}
-	if c.SocketReadBufferLen == 0 {
+	if c.SocketReadBufferLen <= 0 {
 		fmt.Println("[Stream.checkUnixConfig]missing socket read buffer len,default will be used:1024 byte")
 		c.SocketReadBufferLen = 1024
 	}
-	if c.SocketReadBufferLen > 65535 {
-		fmt.Println("[Stream.checkUnixConfig]socket read buffer len is too large,default will be used:1024 byte")
-		c.SocketReadBufferLen = 1024
+	if c.SocketReadBufferLen > 65536 {
+		fmt.Println("[Stream.checkUnixConfig]socket read buffer len is too large,default will be used:65536 byte")
+		c.SocketReadBufferLen = 65536
 	}
-	if c.SocketWriteBufferLen == 0 {
+	if c.SocketWriteBufferLen <= 0 {
 		fmt.Println("[Stream.checkUnixConfig]missing socket write buffer len,default will be used:1024 byte")
 		c.SocketWriteBufferLen = 1024
 	}
-	if c.SocketWriteBufferLen > 65535 {
-		fmt.Println("[Stream.checkUnixConfig]socket write buffer len is too large,default will be used:1024 byte")
-		c.SocketReadBufferLen = 1024
+	if c.SocketWriteBufferLen > 65536 {
+		fmt.Println("[Stream.checkUnixConfig]socket write buffer len is too large,default will be used:65536 byte")
+		c.SocketReadBufferLen = 65536
 	}
-	if c.AppMinReadBufferLen == 0 {
-		fmt.Println("[Stream.checkUnixConfig]missing app min read buffer len,default will be used:1024 byte")
-		c.AppMinReadBufferLen = 1024
+	if c.MaxMessageLen <= 0 {
+		fmt.Println("[Stream.checkUnixConfig]missing max message length,default will be used:65536 byte")
+		c.MaxMessageLen = 65536
 	}
-	if c.AppMinReadBufferLen > 65535 {
-		fmt.Println("[Stream.checkUnixConfig]app min read buffer len is too large,default will be used:1024 byte")
-		c.AppMinReadBufferLen = 1024
-	}
-	if c.AppMaxReadBufferLen == 0 {
-		fmt.Println("[Stream.checkUnixConfig]missing app max read buffer len,default will be used:65535 byte")
-		c.AppMaxReadBufferLen = 65535
-	}
-	if c.AppMaxReadBufferLen > 65535 {
-		fmt.Println("[Stream.checkUnixConfig]app max read buffer len is too large,default will be used:65535 byte")
-		c.AppMaxReadBufferLen = 65535
-	}
-	if c.AppMinReadBufferLen > c.AppMaxReadBufferLen {
-		fmt.Println("[Stream.checkUnixConfig]app 'min read buffer len' > 'max read buffer len','max read buffer len' will be set to 'min read buffer len'")
-		c.AppMaxReadBufferLen = c.AppMinReadBufferLen
+	if c.MaxMessageLen > 65536 {
+		fmt.Println("[Stream.checkUnixConfig]max message length is too large,default will be used:65536 byte")
+		c.MaxMessageLen = 65536
 	}
 	if c.AppWriteBufferNum == 0 {
 		fmt.Println("[Stream.checkUnixConfig]missing app write buffer num,default will be used:256 num")
@@ -151,15 +143,28 @@ func checkUnixConfig(c *UnixConfig) {
 type WebConfig struct {
 	//for client this is the time to build connection with server
 	//for server this is the time to upgrade connection to websocket
-	ConnectTimeout       int `json:"connect_timeout"`         //default 500ms
-	HttpMaxHeaderLen     int `json:"http_max_header_len"`     //default 1024 byte
+	ConnectTimeout int `json:"connect_timeout"` //default 500ms
+
 	SocketReadBufferLen  int `json:"socket_read_buffer_len"`  //default 1024 byte
 	SocketWriteBufferLen int `json:"socket_write_buffer_len"` //default 1024 byte
+
 	//write buffer can store the messages in buffer and send async in another goruntine
-	AppWriteBufferNum int    `json:"app_write_buffer_num"` //default 256 num(not the byte)
-	EnableCompress    bool   `json:"enable_compress"`      //default false
-	TlsCertFile       string `json:"tls_cert_file"`        //default don't use tls
-	TlsKeyFile        string `json:"tls_key_file"`         //default don't use tls
+	AppWriteBufferNum int `json:"app_write_buffer_num"` //default 256 num(not the byte)
+
+	HttpMaxHeaderLen int    `json:"http_max_header_len"` //default 1024 byte
+	EnableCompress   bool   `json:"enable_compress"`     //default false
+	TlsCertFile      string `json:"tls_cert_file"`       //default don't use tls
+	TlsKeyFile       string `json:"tls_key_file"`        //default don't use tls
+}
+
+var defaultWebConfig = &WebConfig{
+	ConnectTimeout:       500,
+	SocketReadBufferLen:  1024,
+	SocketWriteBufferLen: 1024,
+	AppWriteBufferNum:    256,
+
+	HttpMaxHeaderLen: 1024,
+	EnableCompress:   false,
 }
 
 func checkWebConfig(c *WebConfig) {
@@ -203,6 +208,10 @@ type InstanceConfig struct {
 	//every group will have an independence RWMutex to control online and offline
 	//every group will have an independence goruntine to check heart timeout nodes in this piece
 	GroupNum uint `json:"group_num"` //default 1 num
+
+	TcpC  *TcpConfig  `json:"tcp_config"`
+	UnixC *UnixConfig `json:"unix_config"`
+	WebC  *WebConfig  `json:"web_config"`
 
 	//before peer and peer confirm connection,they need to verify each other
 	//after tcp connected,this function will be called
@@ -260,5 +269,14 @@ func checkInstanceConfig(c *InstanceConfig) error {
 		return fmt.Errorf("[Stream.checkInstanceConfig]missing deal userdata function")
 	}
 	//online and offline func can be nill
+	if c.TcpC != nil {
+		checkTcpConfig(c.TcpC)
+	}
+	if c.UnixC != nil {
+		checkUnixConfig(c.UnixC)
+	}
+	if c.WebC != nil {
+		checkWebConfig(c.WebC)
+	}
 	return nil
 }

@@ -25,13 +25,12 @@ func Test_Discoveryserver(t *testing.T) {
 		HeartbeatTimeout:   5000,
 		HeartprobeInterval: 2000,
 		GroupNum:           1,
+		TcpC: &stream.TcpConfig{
+			ConnectTimeout:       500,
+			SocketReadBufferLen:  1024,
+			SocketWriteBufferLen: 1024,
+			AppWriteBufferNum:    256,
+		},
 	}, []byte{'t', 'e', 's', 't'})
-	discovery.StartDiscoveryServer(&stream.TcpConfig{
-		ConnectTimeout:       500,
-		SocketReadBufferLen:  1024,
-		SocketWriteBufferLen: 1024,
-		AppMinReadBufferLen:  1024,
-		AppMaxReadBufferLen:  65535,
-		AppWriteBufferNum:    256,
-	}, "127.0.0.1:9234")
+	discovery.StartDiscoveryServer("127.0.0.1:9234")
 }

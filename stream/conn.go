@@ -1,8 +1,8 @@
 package stream
 
 import (
+	"bufio"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"net"
 	"net/http"
@@ -16,11 +16,11 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-func (this *Instance) StartTcpServer(c *TcpConfig, listenaddr string) {
-	if c == nil {
-		c = &TcpConfig{}
+func (this *Instance) StartTcpServer(listenaddr string) {
+	if this.conf.TcpC == nil {
+		fmt.Printf("[Stream.TCP.StartTcpServer]missing tcp config,the default will be used:%+v\n", defaultTcpConfig)
+		this.conf.TcpC = defaultTcpConfig
 	}
-	checkTcpConfig(c)
 	var laddr *net.TCPAddr
 	var e error
 	var conn *net.TCPConn
@@ -31,7 +31,7 @@ func (this *Instance) StartTcpServer(c *TcpConfig, listenaddr string) {
 		panic("[Stream.TCP.StartTcpServer]listening self addr error:" + e.Error())
 	}
 	for {
-		p := this.getPeer(TCP, unsafe.Pointer(c))
+		p := this.getPeer(TCP, this.conf.TcpC.AppWriteBufferNum)
 		p.protocoltype = TCP
 		p.servername = &this.conf.SelfName
 		p.peertype = CLIENT
@@ -45,15 +45,20 @@ func (this *Instance) StartTcpServer(c *TcpConfig, listenaddr string) {
 			return
 		}
 		p.conn = unsafe.Pointer(conn)
-		p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-		go this.sworker(p)
+		p.setbuffer(this.conf.TcpC.SocketReadBufferLen, this.conf.TcpC.SocketWriteBufferLen)
+		if p.reader == nil {
+			p.reader = bufio.NewReaderSize(conn, this.conf.TcpC.SocketReadBufferLen)
+		} else {
+			p.reader.Reset(conn)
+		}
+		go this.sworker(p, this.conf.TcpC.MaxMessageLen)
 	}
 }
-func (this *Instance) StartUnixsocketServer(c *UnixConfig, listenaddr string) {
-	if c == nil {
-		c = &UnixConfig{}
+func (this *Instance) StartUnixsocketServer(listenaddr string) {
+	if this.conf.UnixC == nil {
+		fmt.Printf("[Stream.TCP.StartUnixsocketServer]missing unix config,the default will be used:%+v\n", defaultUnixConfig)
+		this.conf.UnixC = defaultUnixConfig
 	}
-	checkUnixConfig(c)
 	var laddr *net.UnixAddr
 	var e error
 	var conn *net.UnixConn
@@ -64,7 +69,7 @@ func (this *Instance) StartUnixsocketServer(c *UnixConfig, listenaddr string) {
 		panic("[Stream.UNIX.StartUnixsocketServer]listening self addr error:" + e.Error())
 	}
 	for {
-		p := this.getPeer(UNIXSOCKET, unsafe.Pointer(c))
+		p := this.getPeer(UNIXSOCKET, this.conf.UnixC.AppWriteBufferNum)
 		p.protocoltype = UNIXSOCKET
 		p.servername = &this.conf.SelfName
 		p.peertype = CLIENT
@@ -78,27 +83,34 @@ func (this *Instance) StartUnixsocketServer(c *UnixConfig, listenaddr string) {
 			return
 		}
 		p.conn = unsafe.Pointer(conn)
-		p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-		go this.sworker(p)
+		p.setbuffer(this.conf.UnixC.SocketReadBufferLen, this.conf.UnixC.SocketWriteBufferLen)
+		if p.reader == nil {
+			p.reader = bufio.NewReaderSize(conn, this.conf.UnixC.SocketReadBufferLen)
+		} else {
+			p.reader.Reset(conn)
+		}
+		go this.sworker(p, this.conf.UnixC.MaxMessageLen)
 	}
 }
 
-func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listenaddr string, checkorigin func(*http.Request) bool) {
-	if c == nil {
-		c = &WebConfig{}
+func (this *Instance) StartWebsocketServer(paths []string, listenaddr string, checkorigin func(*http.Request) bool) {
+	if this.conf.WebC == nil {
+		fmt.Printf("[Stream.WEB.StartWebsocketServer]missing web config,the default will be used:%+v\n", defaultWebConfig)
+		this.conf.WebC = defaultWebConfig
 	}
-	checkWebConfig(c)
 	upgrader := &websocket.Upgrader{
-		HandshakeTimeout:  time.Duration(c.ConnectTimeout) * time.Millisecond,
+		HandshakeTimeout:  time.Duration(this.conf.WebC.ConnectTimeout) * time.Millisecond,
 		WriteBufferPool:   &sync.Pool{},
 		CheckOrigin:       checkorigin,
-		EnableCompression: c.EnableCompress,
+		EnableCompression: this.conf.WebC.EnableCompress,
+		ReadBufferSize:    this.conf.WebC.SocketReadBufferLen,
+		WriteBufferSize:   this.conf.WebC.SocketWriteBufferLen,
 	}
 	this.webserver = &http.Server{
 		Addr:              listenaddr,
-		ReadHeaderTimeout: time.Duration(c.ConnectTimeout) * time.Millisecond,
-		ReadTimeout:       time.Duration(c.ConnectTimeout) * time.Millisecond,
-		MaxHeaderBytes:    c.HttpMaxHeaderLen,
+		ReadHeaderTimeout: time.Duration(this.conf.WebC.ConnectTimeout) * time.Millisecond,
+		ReadTimeout:       time.Duration(this.conf.WebC.ConnectTimeout) * time.Millisecond,
+		MaxHeaderBytes:    this.conf.WebC.HttpMaxHeaderLen,
 		Handler:           httprouter.New(),
 	}
 	connhandler := func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -111,19 +123,19 @@ func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listena
 			fmt.Printf("[Stream.WEB.StartWebsocketServer]upgrade error:%s\n", e)
 			return
 		}
-		p := this.getPeer(WEBSOCKET, unsafe.Pointer(c))
+		p := this.getPeer(WEBSOCKET, this.conf.WebC.AppWriteBufferNum)
 		p.protocoltype = WEBSOCKET
 		p.servername = &this.conf.SelfName
 		p.peertype = CLIENT
 		p.conn = unsafe.Pointer(conn)
-		p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-		go this.sworker(p)
+		p.setbuffer(this.conf.WebC.SocketReadBufferLen, this.conf.WebC.SocketWriteBufferLen)
+		go this.sworker(p, 0)
 	}
 	for _, path := range paths {
 		(this.webserver.Handler).(*httprouter.Router).GET(path, connhandler)
 	}
-	if c.TlsCertFile != "" && c.TlsKeyFile != "" {
-		if e := this.webserver.ListenAndServeTLS(c.TlsCertFile, c.TlsKeyFile); e != nil {
+	if this.conf.WebC.TlsCertFile != "" && this.conf.WebC.TlsKeyFile != "" {
+		if e := this.webserver.ListenAndServeTLS(this.conf.WebC.TlsCertFile, this.conf.WebC.TlsKeyFile); e != nil {
 			panic("[Stream.WEB.StartWebsocketServer]start wss server error:" + e.Error())
 		}
 	} else {
@@ -132,9 +144,9 @@ func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listena
 		}
 	}
 }
-func (this *Instance) sworker(p *Peer) bool {
+func (this *Instance) sworker(p *Peer, maxlen int) bool {
 	//read first verify message from client
-	verifydata := this.verifypeer(p)
+	verifydata := this.verifypeer(p, maxlen)
 	if p.clientname != nil {
 		//verify client success,send self's verify message to client
 		var verifymsg []byte
@@ -197,7 +209,7 @@ func (this *Instance) sworker(p *Peer) bool {
 		if this.conf.Onlinefunc != nil {
 			this.conf.Onlinefunc(p, p.getpeeruniquename(), p.starttime)
 		}
-		go this.read(p)
+		go this.read(p, maxlen)
 		go this.write(p)
 		return true
 	} else {
@@ -207,82 +219,94 @@ func (this *Instance) sworker(p *Peer) bool {
 	}
 }
 
-func (this *Instance) StartTcpClient(c *TcpConfig, serveraddr string, verifydata []byte) string {
+func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) string {
 	if atomic.LoadInt64(&this.stop) == 1 {
 		return ""
 	}
-	if c == nil {
-		c = &TcpConfig{}
+	if this.conf.TcpC == nil {
+		fmt.Printf("[Stream.TCP.StartTcpClient]missing tcp config,the default will be used:%+v\n", defaultTcpConfig)
+		this.conf.TcpC = defaultTcpConfig
 	}
-	checkTcpConfig(c)
-	conn, e := net.DialTimeout("tcp", serveraddr, time.Duration(c.ConnectTimeout)*time.Millisecond)
+	conn, e := net.DialTimeout("tcp", serveraddr, time.Duration(this.conf.TcpC.ConnectTimeout)*time.Millisecond)
 	if e != nil {
 		fmt.Printf("[Stream.TCP.StartTcpClient]tcp connect server addr:%s error:%s\n", serveraddr, e)
 		return ""
 	}
-	p := this.getPeer(TCP, unsafe.Pointer(c))
+	p := this.getPeer(TCP, this.conf.TcpC.AppWriteBufferNum)
 	p.protocoltype = TCP
 	p.clientname = &this.conf.SelfName
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn.(*net.TCPConn))
-	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-	return this.cworker(p, verifydata)
+	p.setbuffer(this.conf.TcpC.SocketReadBufferLen, this.conf.TcpC.SocketWriteBufferLen)
+	if p.reader == nil {
+		p.reader = bufio.NewReaderSize(conn, this.conf.TcpC.SocketReadBufferLen)
+	} else {
+		p.reader.Reset(conn)
+	}
+	return this.cworker(p, this.conf.TcpC.MaxMessageLen, verifydata)
 }
 
-func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string, verifydata []byte) string {
+func (this *Instance) StartUnixsocketClient(serveraddr string, verifydata []byte) string {
 	if atomic.LoadInt64(&this.stop) == 1 {
 		return ""
 	}
-	if c == nil {
-		c = &UnixConfig{}
+	if this.conf.UnixC == nil {
+		fmt.Printf("[Stream.UNIX.StartUnixsocketClient]missing unix config,the default will be used:%+v\n", defaultUnixConfig)
+		this.conf.UnixC = defaultUnixConfig
 	}
-	checkUnixConfig(c)
-	conn, e := net.DialTimeout("unix", serveraddr, time.Duration(c.ConnectTimeout)*time.Millisecond)
+	conn, e := net.DialTimeout("unix", serveraddr, time.Duration(this.conf.UnixC.ConnectTimeout)*time.Millisecond)
 	if e != nil {
 		fmt.Printf("[Stream.UNIX.StartUnixsocketClient]unix connect server addr:%s error:%s\n", serveraddr, e)
 		return ""
 	}
-	p := this.getPeer(UNIXSOCKET, unsafe.Pointer(c))
+	p := this.getPeer(UNIXSOCKET, this.conf.UnixC.AppWriteBufferNum)
 	p.protocoltype = UNIXSOCKET
 	p.clientname = &this.conf.SelfName
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn.(*net.UnixConn))
-	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-	return this.cworker(p, verifydata)
+	p.setbuffer(this.conf.UnixC.SocketReadBufferLen, this.conf.UnixC.SocketWriteBufferLen)
+	if p.reader == nil {
+		p.reader = bufio.NewReaderSize(conn, this.conf.UnixC.SocketReadBufferLen)
+	} else {
+		p.reader.Reset(conn)
+	}
+	return this.cworker(p, this.conf.UnixC.MaxMessageLen, verifydata)
 }
 
-func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string, verifydata []byte) string {
+func (this *Instance) StartWebsocketClient(serveraddr string, verifydata []byte) string {
 	if atomic.LoadInt64(&this.stop) == 1 {
 		return ""
 	}
-	if c == nil {
-		c = &WebConfig{}
+	if this.conf.WebC == nil {
+		fmt.Printf("[Stream.WEB.StartWebsocketClient]missing web config,the default will be used:%+v\n", defaultWebConfig)
+		this.conf.WebC = defaultWebConfig
 	}
-	checkWebConfig(c)
 	dialer := &websocket.Dialer{
 		NetDial: func(network, addr string) (net.Conn, error) {
-			return net.DialTimeout(network, addr, time.Duration(c.ConnectTimeout)*time.Millisecond)
+			return net.DialTimeout(network, addr, time.Duration(this.conf.WebC.ConnectTimeout)*time.Millisecond)
 		},
 		Proxy:             http.ProxyFromEnvironment,
-		HandshakeTimeout:  time.Duration(c.ConnectTimeout) * time.Millisecond,
+		HandshakeTimeout:  time.Duration(this.conf.WebC.ConnectTimeout) * time.Millisecond,
 		WriteBufferPool:   &sync.Pool{},
-		EnableCompression: c.EnableCompress,
+		EnableCompression: this.conf.WebC.EnableCompress,
+		ReadBufferSize:    this.conf.WebC.SocketReadBufferLen,
+		WriteBufferSize:   this.conf.WebC.SocketWriteBufferLen,
 	}
 	conn, _, e := dialer.Dial(serveraddr, nil)
 	if e != nil {
 		fmt.Printf("[Stream.WEB.StartWebsocketClient]websocket connect server addr:%s error:%s\n", serveraddr, e)
 		return ""
 	}
-	p := this.getPeer(WEBSOCKET, unsafe.Pointer(c))
+	p := this.getPeer(WEBSOCKET, this.conf.WebC.AppWriteBufferNum)
 	p.protocoltype = WEBSOCKET
 	p.clientname = &this.conf.SelfName
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn)
-	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
-	return this.cworker(p, verifydata)
+	p.setbuffer(this.conf.WebC.SocketReadBufferLen, this.conf.WebC.SocketWriteBufferLen)
+	return this.cworker(p, 0, verifydata)
 }
 
-func (this *Instance) cworker(p *Peer, verifydata []byte) string {
+func (this *Instance) cworker(p *Peer, maxlen int, verifydata []byte) string {
 	//send self's verify message to server
 	var verifymsg []byte
 	switch p.protocoltype {
@@ -322,7 +346,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) string {
 		}
 	}
 	//read first verify message from server
-	_ = this.verifypeer(p)
+	_ = this.verifypeer(p, maxlen)
 	if p.servername != nil {
 		//verify server success
 		if !this.addPeer(p) {
@@ -348,7 +372,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) string {
 			this.conf.Onlinefunc(p, p.getpeeruniquename(), p.starttime)
 		}
 		uniquename := p.getpeeruniquename()
-		go this.read(p)
+		go this.read(p, maxlen)
 		go this.write(p)
 		return uniquename
 	} else {
@@ -357,7 +381,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) string {
 		return ""
 	}
 }
-func (this *Instance) verifypeer(p *Peer) []byte {
+func (this *Instance) verifypeer(p *Peer, maxlen int) []byte {
 	switch p.protocoltype {
 	case TCP:
 		(*net.TCPConn)(p.conn).SetReadDeadline(time.Now().Add(time.Duration(this.conf.VerifyTimeout) * time.Millisecond))
@@ -368,48 +392,16 @@ func (this *Instance) verifypeer(p *Peer) []byte {
 	}
 	ctx, cancel := context.WithTimeout(p, time.Duration(this.conf.VerifyTimeout)*time.Millisecond)
 	defer cancel()
-	var e error
-	var data []byte
-	for {
-		switch p.protocoltype {
-		case TCP:
-			if p.readbuffer.Rest() > len(p.tempbuffer) {
-				p.tempbuffernum, e = (*net.TCPConn)(p.conn).Read(p.tempbuffer)
-			} else {
-				p.tempbuffernum, e = (*net.TCPConn)(p.conn).Read(p.tempbuffer[:p.readbuffer.Rest()])
-			}
-		case UNIXSOCKET:
-			if p.readbuffer.Rest() > len(p.tempbuffer) {
-				p.tempbuffernum, e = (*net.UnixConn)(p.conn).Read(p.tempbuffer)
-			} else {
-				p.tempbuffernum, e = (*net.UnixConn)(p.conn).Read(p.tempbuffer[:p.readbuffer.Rest()])
-			}
-		case WEBSOCKET:
-			_, data, e = (*websocket.Conn)(p.conn).ReadMessage()
-		}
-		if e != nil {
-			fmt.Printf("[Stream.%s.verifypeer]read first verify msg error:%s from %s addr:%s\n",
-				p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
-			return nil
-		}
-		if p.protocoltype != WEBSOCKET {
-			p.readbuffer.Put(p.tempbuffer[:p.tempbuffernum])
-			if p.readbuffer.Num() <= 4 {
-				continue
-			}
-			msglen := binary.BigEndian.Uint32(p.readbuffer.Peek(0, 4))
-			if p.readbuffer.Num() >= int(msglen+4) {
-				data = p.readbuffer.Get(int(msglen + 4))[4:]
-				break
-			}
-			if p.readbuffer.Rest() == 0 {
-				fmt.Printf("[Stream.%s.verifypeer]first verify msg too long from %s addr:%s\n",
-					p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
-				return nil
-			}
-		} else {
-			break
-		}
+	data, e := p.readMessage(maxlen)
+	if e != nil {
+		fmt.Printf("[Stream.%s.verifypeer]first verify msg read error:%s from %s addr:%s\n",
+			p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
+		return nil
+	}
+	if data == nil {
+		fmt.Printf("[Stream.%s.verifypeer]first verify msg empty from %s addr:%s\n",
+			p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
+		return nil
 	}
 	msgtype, e := getMsgType(data)
 	if e != nil {
@@ -455,7 +447,7 @@ func (this *Instance) verifypeer(p *Peer) []byte {
 	}
 	return response
 }
-func (this *Instance) read(p *Peer) {
+func (this *Instance) read(p *Peer, maxlen int) {
 	defer func() {
 		uniquename := p.getpeeruniquename()
 		//every connection will have two goruntine to work for it
@@ -486,72 +478,21 @@ func (this *Instance) read(p *Peer) {
 	case WEBSOCKET:
 		(*websocket.Conn)(p.conn).UnderlyingConn().SetDeadline(time.Time{})
 	}
-	var e error
-	data := []byte{}
 	for {
-		switch p.protocoltype {
-		case TCP:
-			if p.readbuffer.Rest() >= len(p.tempbuffer) {
-				p.tempbuffernum, e = (*net.TCPConn)(p.conn).Read(p.tempbuffer)
-			} else {
-				p.tempbuffernum, e = (*net.TCPConn)(p.conn).Read(p.tempbuffer[:p.readbuffer.Rest()])
-			}
-		case UNIXSOCKET:
-			if p.readbuffer.Rest() >= len(p.tempbuffer) {
-				p.tempbuffernum, e = (*net.UnixConn)(p.conn).Read(p.tempbuffer)
-			} else {
-				p.tempbuffernum, e = (*net.UnixConn)(p.conn).Read(p.tempbuffer[:p.readbuffer.Rest()])
-			}
-		case WEBSOCKET:
-			_, data, e = (*websocket.Conn)(p.conn).ReadMessage()
-		}
+		data, e := p.readMessage(maxlen)
 		if e != nil {
 			fmt.Printf("[Stream.%s.read]read msg error:%s from %s:%s addr:%s\n",
 				p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
 			return
 		}
-		if p.protocoltype != WEBSOCKET {
-			//tcp and unix socket
-			p.readbuffer.Put(p.tempbuffer[:p.tempbuffernum])
-			for {
-				if p.readbuffer.Num() <= 4 {
-					break
-				}
-				msglen := binary.BigEndian.Uint32(p.readbuffer.Peek(0, 4))
-				if msglen == 0 {
-					p.readbuffer.Get(4)
-					continue
-				}
-				if p.readbuffer.Num() < int(msglen+4) {
-					if p.readbuffer.Rest() == 0 {
-						fmt.Printf("[Stream.%s.read]msg too long from %s:%s addr:%s\n",
-							p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-						return
-					}
-					break
-				}
-				data = p.readbuffer.Get(int(msglen + 4))
-				if e := this.dealmsg(p, data, false); e != nil {
-					fmt.Println(e)
-					return
-				}
-			}
-		} else if len(data) != 0 {
-			if e := this.dealmsg(p, data, false); e != nil {
-				fmt.Println(e)
-				return
-			}
+		if e = this.dealmsg(p, data, false); e != nil {
+			fmt.Println(e)
+			return
 		}
 	}
 }
 func (this *Instance) dealmsg(p *Peer, data []byte, frompong bool) error {
-	var msgtype int
-	var e error
-	if p.protocoltype == TCP || p.protocoltype == UNIXSOCKET {
-		msgtype, e = getMsgType(data[4:])
-	} else {
-		msgtype, e = getMsgType(data)
-	}
+	msgtype, e := getMsgType(data)
 	if e != nil {
 		return fmt.Errorf("[Stream.%s,dealmsg]msg format error:%s from %s:%s addr:%s",
 			p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
@@ -567,13 +508,7 @@ func (this *Instance) dealmsg(p *Peer, data []byte, frompong bool) error {
 		p.lastactive = uint64(time.Now().UnixNano())
 		return nil
 	case USER:
-		var userdata []byte
-		var starttime uint64
-		if p.protocoltype == TCP || p.protocoltype == UNIXSOCKET {
-			userdata, starttime, e = getUserMsg(data[4:])
-		} else {
-			userdata, starttime, e = getUserMsg(data)
-		}
+		userdata, starttime, e := getUserMsg(data)
 		if e != nil {
 			return fmt.Errorf("[Stream.%s.dealmsg]msg format error:%s from %s:%s addr:%s",
 				p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())

@@ -18,29 +18,28 @@ var serverinstanceconfig *stream.InstanceConfig = &stream.InstanceConfig{
 	HeartbeatTimeout:   3000,
 	HeartprobeInterval: 1000,
 	GroupNum:           1,
-}
-
-func Test_Appserver1(t *testing.T) {
-	tcpconfig := &stream.TcpConfig{
+	TcpC: &stream.TcpConfig{
 		ConnectTimeout:       1000,
 		SocketReadBufferLen:  1024,
 		SocketWriteBufferLen: 1024,
-		AppMinReadBufferLen:  4096,
-		AppMaxReadBufferLen:  65535,
 		AppWriteBufferNum:    256,
-	}
+	},
+}
+
+func Test_Appserver1(t *testing.T) {
+
 	verifydata := []byte("test")
 	server := mrpc.NewMrpcServer(serverinstanceconfig, verifydata)
 	RegisterMrpcTestService(server, &MrpcTestService{
 		Midware: nil,
 		Hello:   Hello1,
 	})
-	discovery.NewDiscoveryClient(serverinstanceconfig, tcpconfig, verifydata, "http://127.0.0.1:8080/discoveryservers")
+	discovery.NewDiscoveryClient(serverinstanceconfig, verifydata, "http://127.0.0.1:8080/discoveryservers")
 	discovery.RegisterSelf(&discovery.RegMsg{
 		TcpIp:   "127.0.0.1",
 		TcpPort: 8888,
 	})
-	server.StartMrpcServer(tcpconfig, "127.0.0.1:8888")
+	server.StartMrpcServer("127.0.0.1:8888")
 }
 
 var count1 int32
@@ -52,26 +51,18 @@ func Hello1(ctx context.Context, req *HelloReq) (*HelloResp, error) {
 	return &HelloResp{Name: "server1", Sex: 1, Addr: "space", Tel: "123456789"}, nil
 }
 func Test_Appserver2(t *testing.T) {
-	tcpconfig := &stream.TcpConfig{
-		ConnectTimeout:       1000,
-		SocketReadBufferLen:  1024,
-		SocketWriteBufferLen: 1024,
-		AppMinReadBufferLen:  4096,
-		AppMaxReadBufferLen:  65535,
-		AppWriteBufferNum:    256,
-	}
 	verifydata := []byte("test")
 	server := mrpc.NewMrpcServer(serverinstanceconfig, verifydata)
 	RegisterMrpcTestService(server, &MrpcTestService{
 		Midware: nil,
 		Hello:   Hello2,
 	})
-	discovery.NewDiscoveryClient(serverinstanceconfig, tcpconfig, verifydata, "http://127.0.0.1:8080/discoveryservers")
+	discovery.NewDiscoveryClient(serverinstanceconfig, verifydata, "http://127.0.0.1:8080/discoveryservers")
 	discovery.RegisterSelf(&discovery.RegMsg{
 		TcpIp:   "127.0.0.1",
 		TcpPort: 8889,
 	})
-	server.StartMrpcServer(tcpconfig, "127.0.0.1:8889")
+	server.StartMrpcServer("127.0.0.1:8889")
 }
 
 var count2 int32
@@ -83,26 +74,18 @@ func Hello2(ctx context.Context, req *HelloReq) (*HelloResp, error) {
 	return &HelloResp{Name: "server2", Sex: 1, Addr: "space", Tel: "123456789"}, nil
 }
 func Test_Appserver3(t *testing.T) {
-	tcpconfig := &stream.TcpConfig{
-		ConnectTimeout:       1000,
-		SocketReadBufferLen:  1024,
-		SocketWriteBufferLen: 1024,
-		AppMinReadBufferLen:  4096,
-		AppMaxReadBufferLen:  65535,
-		AppWriteBufferNum:    256,
-	}
 	verifydata := []byte("test")
 	server := mrpc.NewMrpcServer(serverinstanceconfig, verifydata)
 	RegisterMrpcTestService(server, &MrpcTestService{
 		Midware: nil,
 		Hello:   Hello3,
 	})
-	discovery.NewDiscoveryClient(serverinstanceconfig, tcpconfig, verifydata, "http://127.0.0.1:8080/discoveryservers")
+	discovery.NewDiscoveryClient(serverinstanceconfig, verifydata, "http://127.0.0.1:8080/discoveryservers")
 	discovery.RegisterSelf(&discovery.RegMsg{
 		TcpIp:   "127.0.0.1",
 		TcpPort: 8890,
 	})
-	server.StartMrpcServer(tcpconfig, "127.0.0.1:8890")
+	server.StartMrpcServer("127.0.0.1:8890")
 }
 
 var count3 int32
@@ -114,26 +97,18 @@ func Hello3(ctx context.Context, req *HelloReq) (*HelloResp, error) {
 	return &HelloResp{Name: "server3", Sex: 1, Addr: "space", Tel: "123456789"}, nil
 }
 func Test_Appserver4(t *testing.T) {
-	tcpconfig := &stream.TcpConfig{
-		ConnectTimeout:       1000,
-		SocketReadBufferLen:  1024,
-		SocketWriteBufferLen: 1024,
-		AppMinReadBufferLen:  4096,
-		AppMaxReadBufferLen:  65535,
-		AppWriteBufferNum:    256,
-	}
 	verifydata := []byte("test")
 	server := mrpc.NewMrpcServer(serverinstanceconfig, verifydata)
 	RegisterMrpcTestService(server, &MrpcTestService{
 		Midware: nil,
 		Hello:   Hello4,
 	})
-	discovery.NewDiscoveryClient(serverinstanceconfig, tcpconfig, verifydata, "http://127.0.0.1:8080/discoveryservers")
+	discovery.NewDiscoveryClient(serverinstanceconfig, verifydata, "http://127.0.0.1:8080/discoveryservers")
 	discovery.RegisterSelf(&discovery.RegMsg{
 		TcpIp:   "127.0.0.1",
 		TcpPort: 8891,
 	})
-	server.StartMrpcServer(tcpconfig, "127.0.0.1:8891")
+	server.StartMrpcServer("127.0.0.1:8891")
 }
 
 var count4 int32

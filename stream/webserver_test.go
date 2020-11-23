@@ -31,13 +31,7 @@ func Test_Webserver(t *testing.T) {
 		Offlinefunc:        webserverhandleoffline,
 	})
 	os.Remove("./test.socket")
-	go webserverinstance.StartWebsocketServer(&WebConfig{
-		ConnectTimeout:       1000,
-		HttpMaxHeaderLen:     1024,
-		SocketReadBufferLen:  1024,
-		SocketWriteBufferLen: 1024,
-		AppWriteBufferNum:    256,
-	}, []string{"/test"}, "127.0.0.1:9235", func(*http.Request) bool { return true })
+	go webserverinstance.StartWebsocketServer([]string{"/test"}, "127.0.0.1:9235", func(*http.Request) bool { return true })
 	go func() {
 		for {
 			time.Sleep(time.Second)
