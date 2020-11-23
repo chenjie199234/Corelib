@@ -33,7 +33,7 @@ func (this *Instance) StartTcpServer(c *TcpConfig, listenaddr string) {
 	for {
 		p := this.getPeer(TCP, unsafe.Pointer(c))
 		p.protocoltype = TCP
-		p.servername = this.conf.SelfName
+		p.servername = &this.conf.SelfName
 		p.peertype = CLIENT
 		if conn, e = this.tcplistener.AcceptTCP(); e != nil {
 			fmt.Printf("[Stream.TCP.StartTcpServer]accept tcp connect error:%s\n", e)
@@ -66,7 +66,7 @@ func (this *Instance) StartUnixsocketServer(c *UnixConfig, listenaddr string) {
 	for {
 		p := this.getPeer(UNIXSOCKET, unsafe.Pointer(c))
 		p.protocoltype = UNIXSOCKET
-		p.servername = this.conf.SelfName
+		p.servername = &this.conf.SelfName
 		p.peertype = CLIENT
 		if conn, e = this.unixlistener.AcceptUnix(); e != nil {
 			fmt.Printf("[Stream.UNIX.StartUnixsocketServer]accept unix connect error:%s\n", e)
@@ -113,7 +113,7 @@ func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listena
 		}
 		p := this.getPeer(WEBSOCKET, unsafe.Pointer(c))
 		p.protocoltype = WEBSOCKET
-		p.servername = this.conf.SelfName
+		p.servername = &this.conf.SelfName
 		p.peertype = CLIENT
 		p.conn = unsafe.Pointer(conn)
 		p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
@@ -135,16 +135,16 @@ func (this *Instance) StartWebsocketServer(c *WebConfig, paths []string, listena
 func (this *Instance) sworker(p *Peer) bool {
 	//read first verify message from client
 	verifydata := this.verifypeer(p)
-	if p.clientname != "" {
+	if p.clientname != nil {
 		//verify client success,send self's verify message to client
 		var verifymsg []byte
 		switch p.protocoltype {
 		case TCP:
 			fallthrough
 		case UNIXSOCKET:
-			verifymsg = makeVerifyMsg(p.servername, verifydata, p.starttime, true)
+			verifymsg = makeVerifyMsg(*p.servername, verifydata, p.starttime, true)
 		case WEBSOCKET:
-			verifymsg = makeVerifyMsg(p.servername, verifydata, p.starttime, false)
+			verifymsg = makeVerifyMsg(*p.servername, verifydata, p.starttime, false)
 		}
 		send := 0
 		num := 0
@@ -176,7 +176,7 @@ func (this *Instance) sworker(p *Peer) bool {
 		}
 		if !this.addPeer(p) {
 			fmt.Printf("[Stream.%s.sworker]refuse reconnect from client:%s addr:%s\n",
-				p.getprotocolname(), p.clientname, p.getpeeraddr())
+				p.getprotocolname(), *p.clientname, p.getpeeraddr())
 			return false
 		}
 		if atomic.LoadInt64(&this.stop) == 1 {
@@ -222,7 +222,7 @@ func (this *Instance) StartTcpClient(c *TcpConfig, serveraddr string, verifydata
 	}
 	p := this.getPeer(TCP, unsafe.Pointer(c))
 	p.protocoltype = TCP
-	p.clientname = this.conf.SelfName
+	p.clientname = &this.conf.SelfName
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn.(*net.TCPConn))
 	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
@@ -244,7 +244,7 @@ func (this *Instance) StartUnixsocketClient(c *UnixConfig, serveraddr string, ve
 	}
 	p := this.getPeer(UNIXSOCKET, unsafe.Pointer(c))
 	p.protocoltype = UNIXSOCKET
-	p.clientname = this.conf.SelfName
+	p.clientname = &this.conf.SelfName
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn.(*net.UnixConn))
 	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
@@ -275,7 +275,7 @@ func (this *Instance) StartWebsocketClient(c *WebConfig, serveraddr string, veri
 	}
 	p := this.getPeer(WEBSOCKET, unsafe.Pointer(c))
 	p.protocoltype = WEBSOCKET
-	p.clientname = this.conf.SelfName
+	p.clientname = &this.conf.SelfName
 	p.peertype = SERVER
 	p.conn = unsafe.Pointer(conn)
 	p.setbuffer(c.SocketReadBufferLen, c.SocketWriteBufferLen)
@@ -289,9 +289,9 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) string {
 	case TCP:
 		fallthrough
 	case UNIXSOCKET:
-		verifymsg = makeVerifyMsg(p.clientname, verifydata, 0, true)
+		verifymsg = makeVerifyMsg(*p.clientname, verifydata, 0, true)
 	case WEBSOCKET:
-		verifymsg = makeVerifyMsg(p.clientname, verifydata, 0, false)
+		verifymsg = makeVerifyMsg(*p.clientname, verifydata, 0, false)
 	}
 	send := 0
 	num := 0
@@ -323,7 +323,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte) string {
 	}
 	//read first verify message from server
 	_ = this.verifypeer(p)
-	if p.servername != "" {
+	if p.servername != nil {
 		//verify server success
 		if !this.addPeer(p) {
 			fmt.Printf("[Stream.%s.cworker]refuse reconnect to server:%s addr:%s\n",
@@ -439,18 +439,18 @@ func (this *Instance) verifypeer(p *Peer) []byte {
 	p.sendidlestart = p.lastactive
 	switch p.peertype {
 	case CLIENT:
-		p.clientname = sender
+		p.clientname = &sender
 		p.starttime = p.lastactive
 	case SERVER:
-		p.servername = sender
+		p.servername = &sender
 		p.starttime = starttime
 	}
 	response, success := this.conf.Verifyfunc(ctx, p.getpeeruniquename(), peerverifydata)
 	if !success {
 		fmt.Printf("[Stream.%s.verifypeer]verify failed with data:%s from %s addr:%s\n",
 			p.getprotocolname(), peerverifydata, p.getpeertypename(), p.getpeeraddr())
-		p.clientname = ""
-		p.servername = ""
+		p.clientname = nil
+		p.servername = nil
 		return nil
 	}
 	return response

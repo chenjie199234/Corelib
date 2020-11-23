@@ -37,8 +37,8 @@ type peernode struct {
 }
 type Peer struct {
 	parentnode      *peernode
-	clientname      string
-	servername      string
+	clientname      *string
+	servername      *string
 	peertype        int
 	protocoltype    int
 	starttime       uint64
@@ -63,8 +63,8 @@ func (p *Peer) reset() {
 	}
 	p.closeconn()
 	p.parentnode = nil
-	p.clientname = ""
-	p.servername = ""
+	p.clientname = nil
+	p.servername = nil
 	p.peertype = 0
 	p.protocoltype = 0
 	p.starttime = 0
@@ -96,9 +96,9 @@ func (p *Peer) getpeeruniquename() string {
 func (p *Peer) getpeername() string {
 	switch p.peertype {
 	case CLIENT:
-		return p.clientname
+		return *p.clientname
 	case SERVER:
-		return p.servername
+		return *p.servername
 	}
 	return ""
 }
@@ -108,9 +108,9 @@ func (p *Peer) getselfuniquename() string {
 func (p *Peer) getselfname() string {
 	switch p.peertype {
 	case CLIENT:
-		return p.servername
+		return *p.servername
 	case SERVER:
-		return p.clientname
+		return *p.clientname
 	}
 	return ""
 }

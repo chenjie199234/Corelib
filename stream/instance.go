@@ -40,8 +40,8 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 		c := (*TcpConfig)(conf)
 		return &Peer{
 			parentnode:      nil,
-			clientname:      "",
-			servername:      "",
+			clientname:      nil,
+			servername:      nil,
 			peertype:        0,
 			protocoltype:    0,
 			starttime:       0,
@@ -71,8 +71,8 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 		c := (*UnixConfig)(conf)
 		return &Peer{
 			parentnode:      nil,
-			clientname:      "",
-			servername:      "",
+			clientname:      nil,
+			servername:      nil,
 			peertype:        0,
 			protocoltype:    0,
 			starttime:       0,
@@ -102,8 +102,8 @@ func (this *Instance) getPeer(t int, conf unsafe.Pointer) *Peer {
 		c := (*WebConfig)(conf)
 		return &Peer{
 			parentnode:      nil,
-			clientname:      "",
-			servername:      "",
+			clientname:      nil,
+			servername:      nil,
 			peertype:        0,
 			protocoltype:    0,
 			starttime:       0,
