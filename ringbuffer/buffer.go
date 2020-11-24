@@ -1,19 +1,21 @@
-//tcp buffer,has data race
-package buffer
+//has data race
+
+package ringbuffer
 
 import (
 	"errors"
 	"sync"
+	"unsafe"
 )
 
 var (
 	ERRFULL = errors.New("buffer is full,new msg will be dropped")
 )
 
-type Buffer struct {
+type RingBuffer struct {
 	head      int
 	tail      int
-	data      []byte
+	data      []unsafe.Pointer
 	maxlen    int
 	curlen    int
 	minbuflen int
@@ -31,10 +33,10 @@ func NewBufPool(minbuflen, maxbuflen int) *sync.Pool {
 	}
 	return &sync.Pool{
 		New: func() interface{} {
-			return &Buffer{
+			return &RingBuffer{
 				head:      0,
 				tail:      0,
-				data:      make([]byte, minbuflen),
+				data:      make([]unsafe.Pointer, minbuflen),
 				maxlen:    minbuflen,
 				curlen:    0,
 				minbuflen: minbuflen,
@@ -43,28 +45,28 @@ func NewBufPool(minbuflen, maxbuflen int) *sync.Pool {
 		},
 	}
 }
-func NewBuf(minbuflen, maxbuflen int) *Buffer {
+func NewBuf(minbuflen, maxbuflen int) *RingBuffer {
 	if minbuflen <= 0 {
 		minbuflen = 1024
 	}
 	if maxbuflen < minbuflen {
 		maxbuflen = minbuflen * 2
 	}
-	return &Buffer{
+	return &RingBuffer{
 		head:      0,
 		tail:      0,
-		data:      make([]byte, minbuflen),
+		data:      make([]unsafe.Pointer, minbuflen),
 		maxlen:    minbuflen,
 		curlen:    0,
 		minbuflen: minbuflen,
 		maxbuflen: maxbuflen,
 	}
 }
-func (b *Buffer) Get(num int) []byte {
+func (b *RingBuffer) Get(num int) []unsafe.Pointer {
 	if num > b.curlen || num <= 0 {
 		return nil
 	}
-	result := make([]byte, num)
+	result := make([]unsafe.Pointer, num)
 	for i := 0; i < num; i++ {
 		result[i] = b.data[b.head]
 		b.curlen--
@@ -75,11 +77,11 @@ func (b *Buffer) Get(num int) []byte {
 	}
 	return result
 }
-func (b *Buffer) Peek(offset, num int) []byte {
+func (b *RingBuffer) Peek(offset, num int) []unsafe.Pointer {
 	if num <= 0 || offset < 0 || offset+num > b.curlen {
 		return nil
 	}
-	result := make([]byte, num)
+	result := make([]unsafe.Pointer, num)
 	for i := 0; i < num; i++ {
 		if b.head+offset+i >= b.maxlen {
 			result[i] = b.data[b.head+offset+i-b.maxlen]
@@ -89,17 +91,17 @@ func (b *Buffer) Peek(offset, num int) []byte {
 	}
 	return result
 }
-func (b *Buffer) Put(data []byte) error {
+func (b *RingBuffer) Put(data []unsafe.Pointer) error {
 	if len(data) > b.Rest() {
 		return ERRFULL
 	}
 	//grow
 	for b.maxlen-b.curlen < len(data) {
-		var tempdata []byte
+		var tempdata []unsafe.Pointer
 		if b.maxlen*2 >= b.maxbuflen {
-			tempdata = make([]byte, b.maxbuflen)
+			tempdata = make([]unsafe.Pointer, b.maxbuflen)
 		} else {
-			tempdata = make([]byte, b.maxlen*2)
+			tempdata = make([]unsafe.Pointer, b.maxlen*2)
 		}
 		for i := 0; i < b.curlen; i++ {
 			if b.head+i >= b.maxlen {
@@ -130,11 +132,11 @@ func (b *Buffer) Put(data []byte) error {
 	}
 	if b.shirnkcount >= 50 && b.maxlen > b.minbuflen {
 		b.shirnkcount = 0
-		var tempdata []byte
+		var tempdata []unsafe.Pointer
 		if b.maxlen/2 <= b.minbuflen {
-			tempdata = make([]byte, b.minbuflen)
+			tempdata = make([]unsafe.Pointer, b.minbuflen)
 		} else {
-			tempdata = make([]byte, b.maxlen/2)
+			tempdata = make([]unsafe.Pointer, b.maxlen/2)
 		}
 		for i := 0; i < b.curlen; i++ {
 			if b.head+i >= b.maxlen {
@@ -150,19 +152,19 @@ func (b *Buffer) Put(data []byte) error {
 	}
 	return nil
 }
-func (b *Buffer) Num() int {
+func (b *RingBuffer) Num() int {
 	return b.curlen
 }
-func (b *Buffer) Rest() int {
+func (b *RingBuffer) Rest() int {
 	return b.maxbuflen - b.curlen
 }
 
 //this should be used before put back into the pool,after new buffer and after get from pool
-func (b *Buffer) Reset() {
+func (b *RingBuffer) Reset() {
 	b.head = 0
 	b.tail = 0
 	if b.maxlen >= b.minbuflen*4 {
-		b.data = make([]byte, b.minbuflen) //free old mem
+		b.data = make([]unsafe.Pointer, b.minbuflen) //free old mem
 	} else {
 		b.data = b.data[:b.minbuflen] //hold old mem as it's cap
 	}
