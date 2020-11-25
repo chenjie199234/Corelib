@@ -24,11 +24,12 @@ type RingBuffer struct {
 	shirnkcount int
 }
 
-func NewBufPool(minbuflen, maxbuflen int) *sync.Pool {
+// if maxbuflen is 0,means no limit
+func NewRingBufferPool(minbuflen, maxbuflen int) *sync.Pool {
 	if minbuflen <= 0 {
 		minbuflen = 1024
 	}
-	if maxbuflen <= minbuflen {
+	if maxbuflen != 0 && maxbuflen <= minbuflen {
 		maxbuflen = minbuflen * 2
 	}
 	return &sync.Pool{
@@ -45,11 +46,13 @@ func NewBufPool(minbuflen, maxbuflen int) *sync.Pool {
 		},
 	}
 }
-func NewBuf(minbuflen, maxbuflen int) *RingBuffer {
+
+// if maxbuflen is 0,means no limit
+func NewRingBuffer(minbuflen, maxbuflen int) *RingBuffer {
 	if minbuflen <= 0 {
 		minbuflen = 1024
 	}
-	if maxbuflen < minbuflen {
+	if maxbuflen < minbuflen && maxbuflen != 0 {
 		maxbuflen = minbuflen * 2
 	}
 	return &RingBuffer{
@@ -98,7 +101,7 @@ func (b *RingBuffer) Put(data []unsafe.Pointer) error {
 	//grow
 	for b.maxlen-b.curlen < len(data) {
 		var tempdata []unsafe.Pointer
-		if b.maxlen*2 >= b.maxbuflen {
+		if b.maxbuflen != 0 && b.maxlen*2 >= b.maxbuflen {
 			tempdata = make([]unsafe.Pointer, b.maxbuflen)
 		} else {
 			tempdata = make([]unsafe.Pointer, b.maxlen*2)
@@ -155,7 +158,12 @@ func (b *RingBuffer) Put(data []unsafe.Pointer) error {
 func (b *RingBuffer) Num() int {
 	return b.curlen
 }
+
+//return -1 means no limit
 func (b *RingBuffer) Rest() int {
+	if b.maxbuflen == 0 {
+		return -1
+	}
 	return b.maxbuflen - b.curlen
 }
 

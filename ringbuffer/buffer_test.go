@@ -6,7 +6,7 @@ import (
 )
 
 func Test_RingBuffer(t *testing.T) {
-	buf := NewBuf(10, 100)
+	buf := NewRingBuffer(10, 100)
 	a := "a"
 	b := "b"
 	buf.Put([]unsafe.Pointer{unsafe.Pointer(&a), unsafe.Pointer(&b)})
