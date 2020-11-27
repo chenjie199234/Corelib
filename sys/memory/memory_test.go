@@ -1,4 +1,4 @@
-package cpu
+package memory
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func Test_Cpu(t *testing.T) {
+func Test_Memory(t *testing.T) {
 	for {
 		time.Sleep(time.Second)
 		fmt.Printf("%+v\n", GetUse())
