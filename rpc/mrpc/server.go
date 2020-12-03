@@ -86,6 +86,16 @@ func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func
 		if msg.Deadline != 0 && dl.UnixNano() > msg.Deadline {
 			dl = time.Unix(0, msg.Deadline)
 		}
+		if dl.UnixNano() <= (time.Now().UnixNano() + int64(time.Millisecond)) {
+			msg.Path = ""
+			msg.Trace = ""
+			msg.Deadline = 0
+			msg.Body = nil
+			msg.Cpu = cpu.GetUse()
+			msg.Error = ERR[ERRCTXCANCEL].Error()
+			msg.Metadata = nil
+			return
+		}
 		ctx, f := context.WithDeadline(context.Background(), dl)
 		defer f()
 		if len(msg.Metadata) > 0 {
@@ -101,6 +111,8 @@ func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func
 		for _, handler := range handlers {
 			resp, err = handler(ctx, msg.Body)
 			if err != nil {
+				msg.Path = ""
+				msg.Trace = ""
 				msg.Deadline = 0
 				msg.Body = nil
 				msg.Cpu = cpu.GetUse()
@@ -109,6 +121,8 @@ func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func
 				return
 			}
 		}
+		msg.Path = ""
+		msg.Trace = ""
 		msg.Deadline = 0
 		msg.Body = resp
 		msg.Cpu = cpu.GetUse()
@@ -155,6 +169,8 @@ func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte
 		handler, ok := s.handler[msg.Path]
 		if !ok {
 			fmt.Printf("[Mrpc.server.userfunc]api:%s not implement\n", msg.Path)
+			msg.Path = ""
+			msg.Trace = ""
 			msg.Metadata = nil
 			msg.Cpu = cpu.GetUse()
 			msg.Body = nil
