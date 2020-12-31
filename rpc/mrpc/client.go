@@ -16,7 +16,7 @@ import (
 	"github.com/chenjie199234/Corelib/discovery"
 	"github.com/chenjie199234/Corelib/merror"
 	"github.com/chenjie199234/Corelib/stream"
-	"github.com/chenjie199234/Corelib/sys/trace"
+	//"github.com/chenjie199234/Corelib/sys/trace"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -126,7 +126,9 @@ func (c *MrpcClient) putserver(s *Serverapp) {
 	c.serverpool.Put(s)
 }
 
-func NewMrpcClient(c *stream.InstanceConfig, appname string, vdata []byte, pick func([]*Serverapp) *Serverapp) *MrpcClient {
+type PickHandler func([]*Serverapp) *Serverapp
+
+func NewMrpcClient(c *stream.InstanceConfig, appname string, vdata []byte, pick PickHandler) *MrpcClient {
 	//prevent duplicate create
 	lker.Lock()
 	if c, ok := clients[appname]; ok {
@@ -471,16 +473,15 @@ func (c *MrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 		Callid: atomic.AddUint64(&c.callid, 1),
 		Path:   path,
 	}
-	dl, ok := ctx.Deadline()
-	if ok {
+	if dl, ok := ctx.Deadline(); ok {
 		msg.Deadline = dl.UnixNano()
 	}
-	traceid := trace.GetTrace(ctx)
-	if traceid == "" {
-		traceid = trace.MakeTrace()
-	}
-	traceid = trace.AppendTrace(traceid, c.c.SelfName)
-	msg.Trace = traceid
+	//traceid := trace.GetTrace(ctx)
+	//if traceid == "" {
+	//        traceid = trace.MakeTrace()
+	//}
+	//traceid = trace.AppendTrace(traceid, c.c.SelfName)
+	//msg.Trace = traceid
 	msg.Body = in
 	msg.Metadata = GetAllMetadata(ctx)
 	d, _ := proto.Marshal(msg)
@@ -548,7 +549,14 @@ func (c *MrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 			}
 			c.putreq(r)
 			server.lker.Unlock()
-			return nil, ERR[ERRCTXCANCEL]
+			e := ctx.Err()
+			if e == context.Canceled {
+				return nil, ERR[ERRCTXCANCEL]
+			} else if e == context.DeadlineExceeded {
+				return nil, ERR[ERRCTXTIMEOUT]
+			} else {
+				return nil, ERR[ERRUNKNOWN]
+			}
 		}
 	}
 }

@@ -5,11 +5,13 @@ import (
 )
 
 const (
-	ERRLARGE = iota + 1
+	ERRUNKNOWN = iota + 1
+	ERRLARGE
 	ERRNOAPI
 	ERRREQUEST
 	ERRRESPONSE
 	ERRCTXCANCEL
+	ERRCTXTIMEOUT
 	ERRNOSERVER
 	ERRCLOSING
 	ERRCLOSED
@@ -17,13 +19,15 @@ const (
 )
 
 var ERR = map[uint64]*merror.MError{
-	ERRLARGE:     &merror.MError{Code: ERRLARGE, Msg: "msg too large"},
-	ERRNOAPI:     &merror.MError{Code: ERRNOAPI, Msg: "api not implement"},
-	ERRREQUEST:   &merror.MError{Code: ERRREQUEST, Msg: "request data error"},
-	ERRRESPONSE:  &merror.MError{Code: ERRRESPONSE, Msg: "response data error"},
-	ERRCTXCANCEL: &merror.MError{Code: ERRCTXCANCEL, Msg: "context canceled"},
-	ERRNOSERVER:  &merror.MError{Code: ERRNOSERVER, Msg: "no servers connected"},
-	ERRCLOSING:   &merror.MError{Code: ERRCLOSING, Msg: "connection is closing"},
-	ERRCLOSED:    &merror.MError{Code: ERRCLOSED, Msg: "connection is closed"},
-	ERRPANIC:     &merror.MError{Code: ERRPANIC, Msg: "server panic"},
+	ERRUNKNOWN:    &merror.MError{Code: ERRUNKNOWN, Msg: "mrpc:unknown error"},
+	ERRLARGE:      &merror.MError{Code: ERRLARGE, Msg: "mrpc:msg too large"},
+	ERRNOAPI:      &merror.MError{Code: ERRNOAPI, Msg: "mrpc:api not implement"},
+	ERRREQUEST:    &merror.MError{Code: ERRREQUEST, Msg: "mrpc:request data error"},
+	ERRRESPONSE:   &merror.MError{Code: ERRRESPONSE, Msg: "mrpc:response data error"},
+	ERRCTXCANCEL:  &merror.MError{Code: ERRCTXCANCEL, Msg: "mrpc:context canceled"},
+	ERRCTXTIMEOUT: &merror.MError{Code: ERRCTXTIMEOUT, Msg: "mrpc:context timeout"},
+	ERRNOSERVER:   &merror.MError{Code: ERRNOSERVER, Msg: "mrpc:no servers connected"},
+	ERRCLOSING:    &merror.MError{Code: ERRCLOSING, Msg: "mrpc:connection is closing"},
+	ERRCLOSED:     &merror.MError{Code: ERRCLOSED, Msg: "mrpc:connection is closed"},
+	ERRPANIC:      &merror.MError{Code: ERRPANIC, Msg: "mrpc:server panic"},
 }

@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
-	"github.com/chenjie199234/Corelib/sys/trace"
+	//"github.com/chenjie199234/Corelib/sys/trace"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -18,8 +19,6 @@ type Web struct {
 	router      *httprouter.Router
 	contextpool *sync.Pool
 }
-
-var defaulttimeout = 300
 
 func NewInstance(c *WebConfig) *Web {
 	checkconfig(c)
@@ -78,18 +77,49 @@ var emptydata = []byte{'{', '}'}
 func (this *Web) insideHandler(timeout int, handlers ...OutsideHandler) func(http.ResponseWriter, *http.Request, httprouter.Params) {
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		ctx := this.getContext(w, r, p)
-		//set dead line
+		now := time.Now()
 		var dl time.Time
-		if timeout > 0 {
-			dl = time.Now().Add(time.Duration(timeout) * time.Millisecond)
-		} else {
-			dl = time.Now().Add(time.Duration(defaulttimeout) * time.Millisecond)
+		var clientdeadline int64
+		if temp := ctx.GetHeader("Deadline"); temp != "" {
+			var e error
+			clientdeadline, e = strconv.ParseInt(temp, 10, 64)
+			if e != nil {
+				fmt.Printf("[Web.insideHandler]parse client deadline error:%s\n", e)
+				ctx.w.WriteHeader(http.StatusBadRequest)
+				ctx.w.Write(emptydata)
+			} else if clientdeadline != 0 {
+				if clientdeadline <= now.UnixNano()+int64(time.Millisecond) {
+					ctx.w.WriteHeader(http.StatusRequestTimeout)
+					ctx.w.Write(emptydata)
+					return
+				}
+			}
 		}
-		var f context.CancelFunc
-		ctx.Context, f = context.WithDeadline(ctx.Context, dl)
-		defer f()
+		var serverdeadline int64
+		if timeout > 0 && timeout < this.conf.WriteTimeout {
+			serverdeadline = now.UnixNano() + int64(timeout)*int64(time.Millisecond)
+		} else if this.conf.WriteTimeout > 0 {
+			serverdeadline = now.UnixNano() + int64(this.conf.WriteTimeout)*int64(time.Millisecond)
+		}
+		if clientdeadline != 0 && serverdeadline != 0 {
+			if clientdeadline < serverdeadline {
+				dl = time.Unix(0, clientdeadline)
+			} else {
+				dl = time.Unix(0, serverdeadline)
+			}
+		} else if clientdeadline != 0 {
+			dl = time.Unix(0, clientdeadline)
+		} else if serverdeadline != 0 {
+			dl = time.Unix(0, serverdeadline)
+		}
+
+		if !dl.IsZero() {
+			var f context.CancelFunc
+			ctx.Context, f = context.WithDeadline(ctx.Context, dl)
+			defer f()
+		}
 		//set traceid
-		ctx.Context = trace.SetTrace(ctx.Context, trace.MakeTrace())
+		//ctx.Context = trace.SetTrace(ctx.Context, trace.MakeTrace())
 		//deal logic
 		for _, handler := range handlers {
 			handler(ctx)

@@ -10,14 +10,12 @@ import (
 	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/sys/cpu"
-	"github.com/chenjie199234/Corelib/sys/trace"
+	//"github.com/chenjie199234/Corelib/sys/trace"
 
 	"google.golang.org/protobuf/proto"
 )
 
 type OutsideHandler func(ctx context.Context, req []byte) (resp []byte, e error)
-
-const defaulttimeout = 200
 
 type MrpcServer struct {
 	c          *stream.InstanceConfig
@@ -70,42 +68,50 @@ func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func
 		defer func() {
 			if e := recover(); e != nil {
 				fmt.Printf("[Mrpc.server.insidehandler]panic:%s\n", e)
-				msg.Metadata = nil
-				msg.Cpu = cpu.GetUse()
+				msg.Path = ""
+				msg.Trace = ""
+				msg.Deadline = 0
 				msg.Body = nil
+				msg.Cpu = cpu.GetUse()
 				msg.Error = ERR[ERRPANIC].Error()
+				msg.Metadata = nil
 			}
 		}()
-		var ctx context.Context
+		ctx := context.Background()
+		now := time.Now()
 		var dl time.Time
-		if timeout == 0 {
-			dl = time.Now().Add(defaulttimeout * time.Millisecond)
-		} else {
-			dl = time.Now().Add(time.Duration(timeout) * time.Millisecond)
-		}
-		if msg.Deadline != 0 && dl.UnixNano() > msg.Deadline {
+		if timeout != 0 {
+			if msg.Deadline == 0 || now.UnixNano()+int64(timeout) <= msg.Deadline {
+				dl = now.Add(time.Duration(timeout) * time.Millisecond)
+			} else {
+				dl = time.Unix(0, msg.Deadline)
+			}
+		} else if msg.Deadline != 0 {
 			dl = time.Unix(0, msg.Deadline)
 		}
-		if dl.UnixNano() <= (time.Now().UnixNano() + int64(time.Millisecond)) {
-			msg.Path = ""
-			msg.Trace = ""
-			msg.Deadline = 0
-			msg.Body = nil
-			msg.Cpu = cpu.GetUse()
-			msg.Error = ERR[ERRCTXCANCEL].Error()
-			msg.Metadata = nil
-			return
+		if !dl.IsZero() {
+			if dl.UnixNano() <= (now.UnixNano() + int64(time.Millisecond)) {
+				msg.Path = ""
+				msg.Trace = ""
+				msg.Deadline = 0
+				msg.Body = nil
+				msg.Cpu = cpu.GetUse()
+				msg.Error = ERR[ERRCTXTIMEOUT].Error()
+				msg.Metadata = nil
+				return
+			}
+			var f context.CancelFunc
+			ctx, f = context.WithDeadline(ctx, dl)
+			defer f()
 		}
-		ctx, f := context.WithDeadline(context.Background(), dl)
-		defer f()
 		if len(msg.Metadata) > 0 {
 			ctx = SetAllMetadata(ctx, msg.Metadata)
 		}
-		if msg.Trace == "" {
-			ctx = trace.SetTrace(ctx, trace.MakeTrace())
-		} else {
-			ctx = trace.SetTrace(ctx, msg.Trace)
-		}
+		//if msg.Trace == "" {
+		//        ctx = trace.SetTrace(ctx, trace.MakeTrace())
+		//} else {
+		//        ctx = trace.SetTrace(ctx, msg.Trace)
+		//}
 		var resp []byte
 		var err error
 		for _, handler := range handlers {

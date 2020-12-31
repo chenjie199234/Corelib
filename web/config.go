@@ -3,6 +3,7 @@ package web
 import "fmt"
 
 type WebConfig struct {
+	SelfName          string
 	Addr              string
 	ReadHeaderTimeout int //millisecond
 	ReadTimeout       int //millisecond

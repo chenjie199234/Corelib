@@ -6,16 +6,17 @@ import (
 	"time"
 )
 
-var offset uint64 = uint64(time.Date(2020, 5, 21, 13, 14, 0, 0, time.UTC).Unix())
+//2020-05-21 13:14:00
+const offset uint64 = 1590066840
 
 var lasttime uint64
 var serverid uint64
 var rollback uint64
 
 //64bit data
-//00000000000000000000000000000000         000                000000               0          0000000000000000000000
-//----32 bit timestamp(second)------3bit time rollback-----6bit serverid----1bit maxid lock-------22bit id----------
-//-----can support 136 years--------rollback 8 times/s---can support 60 servers----------can make 4,000,000+ ids in one second
+//00000000000000000000000000000000         000                000000                    00000000000000000000000
+//----32 bit timestamp(second)------3bit time rollback-----6bit serverid------------------------23bit id-------
+//-----can support 136 years--------rollback 8 times/s---can support 63 servers-----can make 8,000,000+ ids in one second
 var base uint64
 
 var inited int64
@@ -66,15 +67,42 @@ func getserverid() uint64 {
 	return serverid << 23
 }
 
+const mask uint64 = uint64(63) << 23
+
+func checkserverid(id uint64) bool {
+	if ((id & mask) >> 23) == serverid {
+		return true
+	}
+	return false
+}
+
 var ERRMAX = fmt.Errorf("[ID.GetID]Max id was used up in this second")
 
 func GetID() (uint64, error) {
-	if (base & (1 << 22)) > 0 {
+	if !checkserverid(base) {
 		return 0, ERRMAX
 	}
 	newid := atomic.AddUint64(&base, 1)
-	if (newid & (1 << 22)) > 0 {
+	if !checkserverid(newid) {
 		return 0, ERRMAX
 	}
 	return newid, nil
+}
+
+var ERRMAXONCE = fmt.Errorf("[ID.GetID]Too many ids required in once")
+
+func GetIDs(delta uint64) (start uint64, end uint64, e error) {
+	if delta > 5000 {
+		return 0, 0, ERRMAXONCE
+	}
+	if !checkserverid(base) {
+		return 0, 0, ERRMAX
+	}
+	newid := atomic.AddUint64(&base, delta)
+	if !checkserverid(newid) {
+		return 0, 0, ERRMAX
+	}
+	start = newid - delta
+	end = newid
+	return
 }

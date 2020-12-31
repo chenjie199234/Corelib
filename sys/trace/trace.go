@@ -1,21 +1,21 @@
 package trace
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"math/rand"
-	"strconv"
 	"time"
 )
 
-func MakeTrace() string {
-	now := time.Now().UnixNano()
-	encoder := md5.New()
-	encoder.Write(strconv.AppendInt([]byte{}, rand.Int63(), 10))
-	hash := hex.EncodeToString(encoder.Sum(nil))
-	return fmt.Sprintf("%d|%s", now, hash)
+var r *rand.Rand
+
+func init() {
+	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 }
-func AppendTrace(origintrace, appname string) string {
-	return fmt.Sprintf("%s|%s", origintrace, appname)
+
+func Trace(origin, appname string) string {
+	if origin == "" {
+		now := time.Now()
+		return fmt.Sprintf("%s.%d|%d|%s", now.Format("2006-01-02 15:04:05"), now.Nanosecond(), r.Int63(), appname)
+	}
+	return fmt.Sprintf("%s|%s", origin, appname)
 }
