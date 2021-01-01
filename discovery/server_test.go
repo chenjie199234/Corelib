@@ -1,7 +1,6 @@
 package discovery
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -26,7 +25,9 @@ func Test_Server1(t *testing.T) {
 		for {
 			<-tker.C
 			if serverinstance != nil {
-				fmt.Println(hex.EncodeToString(serverinstance.htree.GetRootHash()))
+				serverinstance.lker.RLock()
+				fmt.Println(serverinstance.allapps)
+				serverinstance.lker.RUnlock()
 			}
 		}
 	}()
@@ -60,7 +61,9 @@ func Test_Server2(t *testing.T) {
 		for {
 			<-tker.C
 			if serverinstance != nil {
-				fmt.Println(hex.EncodeToString(serverinstance.htree.GetRootHash()))
+				serverinstance.lker.RLock()
+				fmt.Println(serverinstance.allapps)
+				serverinstance.lker.RUnlock()
 			}
 		}
 	}()

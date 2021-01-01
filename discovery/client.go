@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,7 +16,6 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/common"
-	"github.com/chenjie199234/Corelib/hashtree"
 	"github.com/chenjie199234/Corelib/stream"
 )
 
@@ -57,7 +55,6 @@ type servernode struct {
 	lker      *sync.Mutex
 	peer      *stream.Peer
 	starttime uint64
-	htree     *hashtree.Hashtree
 	allapps   map[string]map[string]*appnode //first key:appname,second key:appuniquename=appname:ip:port
 	status    int                            //0-idle,1-start,2-verify,3-connected,4-preparing,5-registered
 }
@@ -204,59 +201,49 @@ func UnRegisterSelf() error {
 	return nil
 }
 func NoticeGrpcChange(appname string) (chan struct{}, error) {
-	if clientinstance == nil {
-		return nil, ERRCINIT
-	}
-	clientinstance.nlker.Lock()
-	notices, ok := clientinstance.grpcnotices[appname]
-	if !ok {
-		notices = make(map[chan struct{}]struct{}, 5)
-		clientinstance.grpcnotices[appname] = notices
-	}
-	ch := make(chan struct{}, 1)
-	notices[ch] = struct{}{}
-	clientinstance.nlker.Unlock()
-	return ch, nil
+	return noticechanges(appname, 1)
 }
 func NoticeHttpChange(appname string) (chan struct{}, error) {
-	if clientinstance == nil {
-		return nil, ERRCINIT
-	}
-	clientinstance.nlker.Lock()
-	notices, ok := clientinstance.httpnotices[appname]
-	if !ok {
-		notices = make(map[chan struct{}]struct{}, 5)
-		clientinstance.httpnotices[appname] = notices
-	}
-	ch := make(chan struct{}, 1)
-	notices[ch] = struct{}{}
-	clientinstance.nlker.Unlock()
-	return ch, nil
+	return noticechanges(appname, 2)
 }
-func NoticeTcpChange(appname string) (chan struct{}, error) {
-	if clientinstance == nil {
-		return nil, ERRCINIT
-	}
-	clientinstance.nlker.Lock()
-	notices, ok := clientinstance.tcpnotices[appname]
-	if !ok {
-		notices = make(map[chan struct{}]struct{}, 5)
-		clientinstance.tcpnotices[appname] = notices
-	}
-	ch := make(chan struct{}, 1)
-	notices[ch] = struct{}{}
-	clientinstance.nlker.Unlock()
-	return ch, nil
+func NoticeTcpChanges(appname string) (chan struct{}, error) {
+	return noticechanges(appname, 3)
 }
-func NoticeWebsocketChange(appname string) (chan struct{}, error) {
+func NoticeWebsocketChanges(appname string) (chan struct{}, error) {
+	return noticechanges(appname, 4)
+}
+func noticechanges(appname string, t int) (chan struct{}, error) {
 	if clientinstance == nil {
 		return nil, ERRCINIT
 	}
 	clientinstance.nlker.Lock()
-	notices, ok := clientinstance.webnotices[appname]
-	if !ok {
-		notices = make(map[chan struct{}]struct{}, 5)
-		clientinstance.webnotices[appname] = notices
+	var notices map[chan struct{}]struct{}
+	var ok bool
+	switch t {
+	case 1:
+		notices, ok = clientinstance.grpcnotices[appname]
+		if !ok {
+			notices = make(map[chan struct{}]struct{}, 5)
+			clientinstance.grpcnotices[appname] = notices
+		}
+	case 2:
+		notices, ok = clientinstance.httpnotices[appname]
+		if !ok {
+			notices = make(map[chan struct{}]struct{}, 5)
+			clientinstance.httpnotices[appname] = notices
+		}
+	case 3:
+		notices, ok = clientinstance.tcpnotices[appname]
+		if !ok {
+			notices = make(map[chan struct{}]struct{}, 5)
+			clientinstance.tcpnotices[appname] = notices
+		}
+	case 4:
+		notices, ok = clientinstance.webnotices[appname]
+		if !ok {
+			notices = make(map[chan struct{}]struct{}, 5)
+			clientinstance.webnotices[appname] = notices
+		}
 	}
 	ch := make(chan struct{}, 1)
 	notices[ch] = struct{}{}
@@ -324,10 +311,10 @@ func getinfos(appname string, t int) map[string]map[string][]byte {
 					if app.regmsg.WebSockPort == 0 {
 						continue
 					}
-					if len(app.regmsg.WebSockPath) != 0 && app.regmsg.WebSockPath[0] != '/' {
-						addr = fmt.Sprintf("%s:%d/%s", app.regmsg.WebSockIp, app.regmsg.WebSockPort, app.regmsg.WebSockPath)
+					if len(app.regmsg.WebSockUrl) != 0 && app.regmsg.WebSockUrl[0] != '/' {
+						addr = fmt.Sprintf("%s:%d/%s", app.regmsg.WebSockIp, app.regmsg.WebSockPort, app.regmsg.WebSockUrl)
 					} else {
-						addr = fmt.Sprintf("%s:%d%s", app.regmsg.WebSockIp, app.regmsg.WebSockPort, app.regmsg.WebSockPath)
+						addr = fmt.Sprintf("%s:%d%s", app.regmsg.WebSockIp, app.regmsg.WebSockPort, app.regmsg.WebSockUrl)
 					}
 				}
 
@@ -378,7 +365,7 @@ func (c *discoveryclient) updateserver(url string) {
 			}
 		} else if c.canreg && server.status == 4 {
 			server.status = 5
-			server.peer.SendMessage(makeOnlineMsg("", c.regmsg, nil), server.starttime)
+			server.peer.SendMessage(makeOnlineMsg("", c.regmsg), server.starttime)
 		}
 		server.lker.Unlock()
 	}
@@ -407,7 +394,6 @@ func (c *discoveryclient) updateserver(url string) {
 				lker:      &sync.Mutex{},
 				peer:      nil,
 				starttime: 0,
-				htree:     hashtree.New(10, 3),
 				allapps:   make(map[string]map[string]*appnode, 5),
 				status:    0,
 			}
@@ -492,7 +478,7 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 	defer server.lker.Unlock()
 	switch data[0] {
 	case msgonline:
-		onlineapp, regdata, newhash, e := getOnlineMsg(data)
+		onlineapp, regdata, e := getOnlineMsg(data)
 		if e != nil {
 			//this is impossible
 			fmt.Printf("[Discovery.client.userfunc.msgonline.impossible]online message:%s broken from discovery server:%s\n", data, serveruniquename)
@@ -512,40 +498,14 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 			server.allapps[appname] = make(map[string]*appnode, 5)
 		}
 		server.allapps[appname][onlineapp] = node
-		leafindex := int(common.BkdrhashString(onlineapp, uint64(server.htree.GetLeavesNum())))
-		templeafdata, _ := server.htree.GetLeafValue(leafindex)
-		if templeafdata == nil {
-			leafdata := make([]*appnode, 0, 5)
-			leafdata = append(leafdata, node)
-			server.htree.SetSingleLeafHash(leafindex, common.Str2byte(onlineapp[:strings.Index(onlineapp, ":")]+common.Byte2str(regdata)))
-			server.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
-		} else {
-			leafdata := *(*[]*appnode)(templeafdata)
-			leafdata = append(leafdata, node)
-			sort.Slice(leafdata, func(i, j int) bool {
-				return leafdata[i].appuniquename < leafdata[j].appuniquename
-			})
-			all := make([]string, len(leafdata))
-			for i, app := range leafdata {
-				all[i] = app.appuniquename[:strings.Index(app.appuniquename, ":")] + common.Byte2str(app.regdata)
-			}
-			server.htree.SetSingleLeafHash(leafindex, common.Str2byte(strings.Join(all, "")))
-			server.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
-		}
-		if !bytes.Equal(server.htree.GetRootHash(), newhash) {
-			//this is impossible
-			fmt.Printf("[Discovery.client.userfunc.msgonline.impossible]data from discovery server:%s conflict\n", serveruniquename)
-			p.SendMessage(makePullMsg(), server.starttime)
-		} else {
-			c.nlker.RLock()
-			c.notice(onlineapp)
-			c.nlker.RUnlock()
-			if onlineapp[:strings.Index(onlineapp, ":")] == c.c.SelfName && bytes.Equal(regdata, c.regmsg) {
-				fmt.Printf("[Discovery.client.userfunc.msgonline]self registered on discovery server:%s\n", serveruniquename)
-			}
+		c.nlker.RLock()
+		c.notice(onlineapp)
+		c.nlker.RUnlock()
+		if onlineapp[:strings.Index(onlineapp, ":")] == c.c.SelfName && bytes.Equal(regdata, c.regmsg) {
+			fmt.Printf("[Discovery.client.userfunc.msgonline]self registered on discovery server:%s\n", serveruniquename)
 		}
 	case msgoffline:
-		offlineapp, newhash, e := getOfflineMsg(data)
+		offlineapp, e := getOfflineMsg(data)
 		if e != nil {
 			//this is impossible
 			fmt.Printf("[Discovery.client.userfunc.msgoffline.impossible]offline message:%s broken from discovery server:%s\n", data, serveruniquename)
@@ -559,50 +519,21 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 			p.SendMessage(makePullMsg(), server.starttime)
 			return
 		}
-		if _, ok := server.allapps[appname][offlineapp]; !ok {
+		node, ok := server.allapps[appname][offlineapp]
+		if !ok {
 			//this is impossible
 			fmt.Printf("[Discovery.client.userfunc.msgoffline.impossible]offline app:%s missing\n", offlineapp)
 			p.SendMessage(makePullMsg(), server.starttime)
 			return
 		}
-		if _, ok := server.allapps[appname]; ok {
-			delete(server.allapps[appname], offlineapp)
-			if len(server.allapps[appname]) == 0 {
-				delete(server.allapps, appname)
-			}
-		}
-		leafindex := int(common.BkdrhashString(offlineapp, uint64(server.htree.GetLeavesNum())))
-		templeafdata, _ := server.htree.GetLeafValue(leafindex)
-		leafdata := *(*[]*appnode)(templeafdata)
-		var node *appnode
-		for i, app := range leafdata {
-			if app.appuniquename == offlineapp {
-				leafdata = append(leafdata[:i], leafdata[i+1:]...)
-				node = app
-				break
-			}
-		}
-		if len(leafdata) == 0 {
-			server.htree.SetSingleLeafHash(leafindex, nil)
-			server.htree.SetSingleLeafValue(leafindex, nil)
-		} else {
-			all := make([]string, len(leafdata))
-			for i, app := range leafdata {
-				all[i] = app.appuniquename[:strings.Index(app.appuniquename, ":")] + common.Byte2str(app.regdata)
-			}
-			server.htree.SetSingleLeafHash(leafindex, common.Str2byte(strings.Join(all, "")))
-			server.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
-		}
-		if !bytes.Equal(server.htree.GetRootHash(), newhash) {
-			//this is impossible
-			fmt.Printf("[Discovery.client.userfunc.msgoffline.impossible]data from discovery server:%s conflict\n", serveruniquename)
-			p.SendMessage(makePullMsg(), server.starttime)
-		} else {
-			c.nlker.RLock()
-			c.notice(offlineapp)
-			c.nlker.RUnlock()
-		}
+		delete(server.allapps[appname], offlineapp)
 		c.putnode(node)
+		if len(server.allapps[appname]) == 0 {
+			delete(server.allapps, appname)
+		}
+		c.nlker.RLock()
+		c.notice(offlineapp)
+		c.nlker.RUnlock()
 	case msgpush:
 		all, e := getPushMsg(data)
 		if e != nil {
@@ -614,184 +545,60 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 		if server.status == 3 {
 			server.status = 4
 		}
-		deleted := make(map[int]map[string][]byte, 5)
-		added := make(map[int]map[string][]byte, 5)
-		replace := make(map[int]map[string][]byte)
-		updateleaveshash := make(map[int][]byte, 5)
-		updateleavesvalue := make(map[int]unsafe.Pointer, 5)
-		for _, oldappgroup := range server.allapps {
+		notices := make(map[string]struct{})
+		for appname, oldappgroup := range server.allapps {
 			for _, oldapp := range oldappgroup {
 				if newmsg, ok := all[oldapp.appuniquename]; !ok {
 					//delete
-					leafindex := int(common.BkdrhashString(oldapp.appuniquename, uint64(server.htree.GetLeavesNum())))
-					if _, ok := deleted[leafindex]; !ok {
-						deleted[leafindex] = make(map[string][]byte, 5)
-					}
-					deleted[leafindex][oldapp.appuniquename] = oldapp.regdata
-					updateleaveshash[leafindex] = nil
-					updateleavesvalue[leafindex] = nil
+					delete(oldappgroup, oldapp.appuniquename)
+					notices[oldapp.appuniquename] = struct{}{}
 				} else if !bytes.Equal(oldapp.regdata, newmsg) {
+					//this is impossible
+					fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]app:%s regmsg changed from:%s to:%s\n", oldapp.appuniquename, oldapp.regdata, newmsg)
 					//replace
-					leafindex := int(common.BkdrhashString(oldapp.appuniquename, uint64(server.htree.GetLeavesNum())))
-					if _, ok := replace[leafindex]; !ok {
-						replace[leafindex] = make(map[string][]byte, 5)
+					regmsg := &RegMsg{}
+					if e = json.Unmarshal(newmsg, regmsg); e != nil || (regmsg.GrpcPort == 0 && regmsg.HttpPort == 0 && regmsg.TcpPort == 0 && regmsg.WebSockPort == 0) {
+						//thie is impossible
+						fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]app:%s regmsg:%s broken\n", oldapp.appuniquename, newmsg)
+						p.Close()
+						return
 					}
-					replace[leafindex][oldapp.appuniquename] = newmsg
-					updateleaveshash[leafindex] = nil
-					updateleavesvalue[leafindex] = nil
+					oldapp.regdata = newmsg
+					oldapp.regmsg = regmsg
+					notices[oldapp.appuniquename] = struct{}{}
 				}
+			}
+			if len(oldappgroup) == 0 {
+				delete(server.allapps, appname)
 			}
 		}
 		for newapp, newmsg := range all {
-			status := 0
+			regmsg := &RegMsg{}
+			if e = json.Unmarshal(newmsg, regmsg); e != nil || (regmsg.GrpcPort == 0 && regmsg.HttpPort == 0 && regmsg.TcpPort == 0 && regmsg.WebSockPort == 0) {
+				//thie is impossible
+				fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]app:%s regmsg:%s broken\n", newapp, newmsg)
+				p.Close()
+				return
+			}
 			appname := newapp[:strings.Index(newapp, ":")]
 			if _, ok := server.allapps[appname]; !ok {
 				//add
-				status = 1
+				server.allapps[appname] = make(map[string]*appnode, 5)
+				server.allapps[appname][newapp] = c.getnode(newapp, newmsg, regmsg)
+				notices[newapp] = struct{}{}
 			} else if oldapp, ok := server.allapps[appname][newapp]; !ok {
 				//add
-				status = 1
+				server.allapps[appname][newapp] = c.getnode(newapp, newmsg, regmsg)
+				notices[newapp] = struct{}{}
 			} else if !bytes.Equal(oldapp.regdata, newmsg) {
 				//this is impossible
-				fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]app:%s regmsg conflict", oldapp.appuniquename)
+				fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]app:%s regmsg changed from:%s to:%s\n", newapp, oldapp.regdata, newmsg)
 				//replace
-				status = 2
-			}
-			if status == 1 {
-				//add
-				leafindex := int(common.BkdrhashString(newapp, uint64(server.htree.GetLeavesNum())))
-				if _, ok := added[leafindex]; !ok {
-					added[leafindex] = make(map[string][]byte, 5)
-				}
-				added[leafindex][newapp] = newmsg
-				updateleaveshash[leafindex] = nil
-				updateleavesvalue[leafindex] = nil
-			} else {
-				//replace
-				leafindex := int(common.BkdrhashString(newapp, uint64(server.htree.GetLeavesNum())))
-				if _, ok := replace[leafindex]; !ok {
-					replace[leafindex] = make(map[string][]byte, 5)
-				}
-				replace[leafindex][newapp] = newmsg
-				updateleaveshash[leafindex] = nil
-				updateleavesvalue[leafindex] = nil
+				oldapp.regdata = newmsg
+				oldapp.regmsg = regmsg
+				notices[newapp] = struct{}{}
 			}
 		}
-		notices := make(map[string]struct{})
-		for leafindex := range updateleaveshash {
-			templeafdata, _ := server.htree.GetLeafValue(leafindex)
-			var leafdata []*appnode
-			if templeafdata == nil {
-				leafdata = make([]*appnode, 0, 5)
-			} else {
-				leafdata = *(*[]*appnode)(templeafdata)
-			}
-			//add
-			for newapp, newmsg := range added[leafindex] {
-				notices[newapp] = struct{}{}
-				regmsg := &RegMsg{}
-				if e = json.Unmarshal(newmsg, regmsg); e != nil || (regmsg.GrpcPort == 0 && regmsg.HttpPort == 0 && regmsg.TcpPort == 0 && regmsg.WebSockPort == 0) {
-					//thie is impossible
-					fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]app:%s register message:%s broken\n", newapp, newmsg)
-					p.Close()
-					return
-				}
-				appname := newapp[:strings.Index(newapp, ":")]
-				find := false
-				for _, oldapp := range leafdata {
-					if oldapp.appuniquename == newapp {
-						//this is impossible
-						find = true
-						oldapp.regdata = newmsg
-						oldapp.regmsg = regmsg
-						if _, ok := server.allapps[appname]; !ok {
-							server.allapps[appname] = make(map[string]*appnode, 5)
-						}
-						server.allapps[appname][newapp] = oldapp
-						break
-					}
-				}
-				if !find {
-					node := c.getnode(newapp, newmsg, regmsg)
-					leafdata = append(leafdata, node)
-					if _, ok := server.allapps[appname]; !ok {
-						server.allapps[appname] = make(map[string]*appnode, 5)
-					}
-					server.allapps[appname][newapp] = node
-				}
-			}
-			//replace
-			for newapp, newmsg := range replace[leafindex] {
-				notices[newapp] = struct{}{}
-				regmsg := &RegMsg{}
-				if e = json.Unmarshal(newmsg, regmsg); e != nil || (regmsg.GrpcPort == 0 && regmsg.HttpPort == 0 && regmsg.TcpPort == 0 && regmsg.WebSockPort == 0) {
-					//thie is impossible
-					fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]app:%s register message:%s broken\n", newapp, newmsg)
-					p.Close()
-					return
-				}
-				appname := newapp[:strings.Index(newapp, ":")]
-				find := false
-				for _, oldapp := range leafdata {
-					if oldapp.appuniquename == newapp {
-						find = true
-						oldapp.regdata = newmsg
-						oldapp.regmsg = regmsg
-						if _, ok := server.allapps[appname]; !ok {
-							server.allapps[appname] = make(map[string]*appnode, 5)
-						}
-						server.allapps[appname][newapp] = oldapp
-						break
-					}
-				}
-				if !find {
-					//this is impossible
-					oldnode := server.allapps[appname][newapp]
-					oldnode.regdata = newmsg
-					oldnode.regmsg = regmsg
-					leafdata = append(leafdata, oldnode)
-				}
-			}
-			//deleted
-			pos := len(leafdata) - 1
-			for oldapp := range deleted[leafindex] {
-				notices[oldapp] = struct{}{}
-				appname := oldapp[:strings.Index(oldapp, ":")]
-				if _, ok := server.allapps[appname]; ok {
-					delete(server.allapps[appname], oldapp)
-					if len(server.allapps[appname]) == 0 {
-						delete(server.allapps, appname)
-					}
-				}
-				for i, app := range leafdata {
-					if app.appuniquename == oldapp {
-						if i != pos {
-							leafdata[i], leafdata[pos] = leafdata[pos], leafdata[i]
-						}
-						c.putnode(app)
-						pos--
-						break
-					}
-				}
-			}
-			leafdata = leafdata[:pos+1]
-			if len(leafdata) == 0 {
-				updateleaveshash[leafindex] = nil
-				updateleavesvalue[leafindex] = nil
-			} else {
-				sort.Slice(leafdata, func(i, j int) bool {
-					return leafdata[i].appuniquename < leafdata[j].appuniquename
-				})
-				all := make([]string, len(leafdata))
-				for i, app := range leafdata {
-					all[i] = app.appuniquename[:strings.Index(app.appuniquename, ":")] + common.Byte2str(app.regdata)
-				}
-				updateleaveshash[leafindex] = common.Str2byte(strings.Join(all, ""))
-				updateleavesvalue[leafindex] = unsafe.Pointer(&leafdata)
-			}
-		}
-		server.htree.SetMultiLeavesHash(updateleaveshash)
-		server.htree.SetMultiLeavesValue(updateleavesvalue)
 		//notice
 		c.nlker.RLock()
 		for app := range notices {
@@ -812,16 +619,16 @@ func (c *discoveryclient) offlinefunc(p *stream.Peer, serveruniquename string, s
 	server.lker.Lock()
 	server.peer = nil
 	server.starttime = 0
-	server.htree.Reset()
+	tempallapps := server.allapps
+	server.allapps = make(map[string]map[string]*appnode, 0)
 	c.nlker.RLock()
-	for _, appgroup := range server.allapps {
+	for _, appgroup := range tempallapps {
 		for _, app := range appgroup {
 			c.notice(app.appuniquename)
 			c.putnode(app)
 		}
 	}
 	c.nlker.RUnlock()
-	server.allapps = make(map[string]map[string]*appnode, 0)
 	server.status = 0
 	server.lker.Unlock()
 }

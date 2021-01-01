@@ -24,48 +24,39 @@ type RegMsg struct {
 	TcpPort     int    `json:"tp,omitempty"`
 	WebSockIp   string `json:"wi,omitempty"`
 	WebSockPort int    `json:"wp,omitempty"`
-	WebSockPath string `json:"wpath,omitempty"`
+	WebSockUrl  string `json:"wu,omitempty"`
 	Addition    []byte `json:"a,omitempty"`
 }
 
-func makeOnlineMsg(peeruniquename string, data []byte, hash []byte) []byte {
-	result := make([]byte, len(peeruniquename)+len(data)+len(hash)+3)
+func makeOnlineMsg(peeruniquename string, data []byte) []byte {
+	result := make([]byte, len(peeruniquename)+len(data)+2)
 	result[0] = msgonline
 	copy(result[1:len(peeruniquename)+1], peeruniquename)
 	result[len(peeruniquename)+1] = split
 	copy(result[len(peeruniquename)+2:len(peeruniquename)+2+len(data)], data)
-	result[len(peeruniquename)+2+len(data)] = split
-	copy(result[len(peeruniquename)+len(data)+3:], hash)
 	return result
 }
-func getOnlineMsg(data []byte) (string, []byte, []byte, error) {
-	if len(data) <= 1 {
-		return "", nil, nil, nil
-	}
-	if bytes.Count(data, []byte{split}) < 2 {
-		return "", nil, nil, fmt.Errorf("[Discovery.msg.getOnlineMsg]error:format unknwon")
-	}
-	firstindex := bytes.Index(data, []byte{split})
-	secondindex := bytes.Index(data[firstindex+1:], []byte{split}) + firstindex + 1
-	return common.Byte2str(data[1:firstindex]), data[firstindex+1 : secondindex], data[secondindex+1:], nil
-}
-func makeOfflineMsg(peeruniquename string, hash []byte) []byte {
-	result := make([]byte, len(peeruniquename)+len(hash)+2)
-	result[0] = msgoffline
-	copy(result[1:len(peeruniquename)+1], peeruniquename)
-	result[1+len(peeruniquename)] = split
-	copy(result[len(peeruniquename)+2:], hash)
-	return result
-}
-func getOfflineMsg(data []byte) (string, []byte, error) {
+func getOnlineMsg(data []byte) (string, []byte, error) {
 	if len(data) <= 1 {
 		return "", nil, nil
 	}
-	if bytes.Count(data, []byte{split}) < 1 {
-		return "", nil, fmt.Errorf("[Discovery.msg.GetOfflineMsg]error:format unknown")
+	if bytes.Count(data, []byte{split}) != 1 {
+		return "", nil, fmt.Errorf("[Discovery.msg.getOnlineMsg]error:format unknwon")
 	}
-	index := bytes.Index(data, []byte{split})
-	return common.Byte2str(data[1:index]), data[index+1:], nil
+	firstindex := bytes.Index(data, []byte{split})
+	return common.Byte2str(data[1:firstindex]), data[firstindex+1:], nil
+}
+func makeOfflineMsg(peeruniquename string) []byte {
+	result := make([]byte, len(peeruniquename)+1)
+	result[0] = msgoffline
+	copy(result[1:len(peeruniquename)+1], peeruniquename)
+	return result
+}
+func getOfflineMsg(data []byte) (string, error) {
+	if len(data) <= 1 {
+		return "", nil
+	}
+	return common.Byte2str(data[1:]), nil
 }
 func makePullMsg() []byte {
 	return []byte{msgpull}

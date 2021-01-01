@@ -5,14 +5,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/common"
-	"github.com/chenjie199234/Corelib/hashtree"
 	"github.com/chenjie199234/Corelib/stream"
 )
 
@@ -25,7 +23,6 @@ var (
 type discoveryserver struct {
 	c           *stream.InstanceConfig
 	lker        *sync.RWMutex
-	htree       *hashtree.Hashtree
 	allapps     map[string]*appnode //key appuniquename
 	verifydata  []byte
 	appnodepool *sync.Pool
@@ -74,7 +71,6 @@ var serverinstance *discoveryserver
 func NewDiscoveryServer(c *stream.InstanceConfig, vdata []byte) {
 	temp := &discoveryserver{
 		lker:        &sync.RWMutex{},
-		htree:       hashtree.New(10, 3),
 		allapps:     make(map[string]*appnode),
 		verifydata:  vdata,
 		appnodepool: &sync.Pool{},
@@ -138,7 +134,7 @@ func (s *discoveryserver) userfunc(p *stream.Peer, appuniquename string, data []
 	}
 	switch data[0] {
 	case msgonline:
-		_, regmsg, _, e := getOnlineMsg(data)
+		_, regmsg, e := getOnlineMsg(data)
 		if e != nil {
 			//this is impossible
 			fmt.Printf("[Discovery.server.userfunc.impossible]online message:%s broken\n", data)
@@ -172,7 +168,6 @@ func (s *discoveryserver) userfunc(p *stream.Peer, appuniquename string, data []
 			reg.WebSockIp = ip
 		}
 		regmsg, _ = json.Marshal(reg)
-		leafindex := int(common.BkdrhashString(appuniquename, uint64(s.htree.GetLeavesNum())))
 		s.lker.Lock()
 		node, ok := s.allapps[appuniquename]
 		if !ok {
@@ -184,26 +179,7 @@ func (s *discoveryserver) userfunc(p *stream.Peer, appuniquename string, data []
 		}
 		node.regdata = regmsg
 		node.status = 3
-		templeafdata, _ := s.htree.GetLeafValue(leafindex)
-		if templeafdata == nil {
-			leafdata := make([]*appnode, 0, 5)
-			leafdata = append(leafdata, node)
-			s.htree.SetSingleLeafHash(leafindex, common.Str2byte(appuniquename[:strings.Index(appuniquename, ":")]+common.Byte2str(regmsg)))
-			s.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
-		} else {
-			leafdata := *(*[]*appnode)(templeafdata)
-			leafdata = append(leafdata, node)
-			sort.Slice(leafdata, func(i, j int) bool {
-				return leafdata[i].appuniquename < leafdata[j].appuniquename
-			})
-			all := make([]string, len(leafdata))
-			for i, app := range leafdata {
-				all[i] = app.appuniquename[:strings.Index(app.appuniquename, ":")] + common.Byte2str(app.regdata)
-			}
-			s.htree.SetSingleLeafHash(leafindex, common.Str2byte(strings.Join(all, "")))
-			s.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
-		}
-		onlinemsg := makeOnlineMsg(appuniquename, regmsg, s.htree.GetRootHash())
+		onlinemsg := makeOnlineMsg(appuniquename, regmsg)
 		//notice all other peers
 		for _, app := range s.allapps {
 			if app.status > 1 {
@@ -256,29 +232,9 @@ func (s *discoveryserver) offlinefunc(p *stream.Peer, appuniquename string, star
 		fmt.Printf("[Discovery.server.offlinefunc]app:%s offline\n", appuniquename)
 		return
 	}
-	leafindex := int(common.BkdrhashString(appuniquename, uint64(s.htree.GetLeavesNum())))
-	templeafdata, _ := s.htree.GetLeafValue(leafindex)
-	leafdata := *(*[]*appnode)(templeafdata)
-	for i, app := range leafdata {
-		if app.appuniquename == appuniquename {
-			leafdata = append(leafdata[:i], leafdata[i+1:]...)
-			break
-		}
-	}
-	if len(leafdata) == 0 {
-		s.htree.SetSingleLeafHash(leafindex, nil)
-		s.htree.SetSingleLeafValue(leafindex, nil)
-	} else {
-		all := make([]string, len(leafdata))
-		for i, app := range leafdata {
-			all[i] = app.appuniquename[:strings.Index(app.appuniquename, ":")] + common.Byte2str(app.regdata)
-		}
-		s.htree.SetSingleLeafHash(leafindex, common.Str2byte(strings.Join(all, "")))
-		s.htree.SetSingleLeafValue(leafindex, unsafe.Pointer(&leafdata))
-	}
 	s.putnode(node)
 	//notice all other peer
-	offlinemsg := makeOfflineMsg(appuniquename, s.htree.GetRootHash())
+	offlinemsg := makeOfflineMsg(appuniquename)
 	for _, app := range s.allapps {
 		if app.status > 1 {
 			app.peer.SendMessage(offlinemsg, app.starttime)
