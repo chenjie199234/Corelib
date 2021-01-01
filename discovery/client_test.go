@@ -9,7 +9,7 @@ import (
 	"github.com/chenjie199234/Corelib/stream"
 )
 
-func Test_Client1(t *testing.T) {
+func Test_Client(t *testing.T) {
 	go func() {
 		tker := time.NewTicker(time.Second)
 		for {
@@ -18,9 +18,13 @@ func Test_Client1(t *testing.T) {
 				clientinstance.lker.RLock()
 				if server, ok := clientinstance.servers["server1:127.0.0.1:9234"]; ok {
 					fmt.Println("server1:" + hex.EncodeToString(server.htree.GetRootHash()))
+				} else {
+					fmt.Println("server1: not online")
 				}
 				if server, ok := clientinstance.servers["server2:127.0.0.1:9235"]; ok {
 					fmt.Println("server2:" + hex.EncodeToString(server.htree.GetRootHash()))
+				} else {
+					fmt.Println("server2: not online")
 				}
 				clientinstance.lker.RUnlock()
 			}
@@ -40,48 +44,38 @@ func Test_Client1(t *testing.T) {
 		},
 	}, []byte{'t', 'e', 's', 't'}, "http://127.0.0.1:8080/discoveryservers")
 	time.Sleep(time.Second)
-	gexists, gch, _ := GrpcNotice("client")
-	fmt.Println(gexists)
-	hexists, hch, _ := HttpNotice("client")
-	fmt.Println(hexists)
-	texists, tch, _ := TcpNotice("client")
-	fmt.Println(texists)
-	wexists, wch, _ := WebSocketNotice("client")
-	fmt.Println(wexists)
+	gch, e := NoticeGrpcChange("client")
+	if e != nil {
+		panic("notice grpc change error:" + e.Error())
+	}
+	hch, e := NoticeHttpChange("client")
+	if e != nil {
+		panic("notice http change error:" + e.Error())
+	}
+	tch, e := NoticeTcpChange("client")
+	if e != nil {
+		panic("notice tcp change error:" + e.Error())
+	}
+	wch, e := NoticeWebsocketChange("client")
+	if e != nil {
+		panic("notice websocket change error:" + e.Error())
+	}
 	go func() {
 		for {
-			var noticemsg *NoticeMsg
 			select {
-			case noticemsg = <-gch:
-				if noticemsg.PeerAddr != "127.0.0.1:9000" && noticemsg.PeerAddr != "0.0.0.0:9000" {
-					panic("reg message broken")
-				}
-				if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
-					panic("reg message broken")
-				}
-			case noticemsg = <-hch:
-				if noticemsg.PeerAddr != "127.0.0.1:8000" && noticemsg.PeerAddr != "0.0.0.0:8000" {
-					panic("reg message broken")
-				}
-				if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
-					panic("reg message broken")
-				}
-			case noticemsg = <-tch:
-				if noticemsg.PeerAddr != "127.0.0.1:7000" && noticemsg.PeerAddr != "0.0.0.0:7000" {
-					panic("reg message broken")
-				}
-				if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
-					panic("reg message broken")
-				}
-			case noticemsg = <-wch:
-				if noticemsg.PeerAddr != "127.0.0.1:6000" && noticemsg.PeerAddr != "0.0.0.0:6000" {
-					panic("reg message broken")
-				}
-				if noticemsg.DiscoveryServer != "server1:127.0.0.1:9234" && noticemsg.DiscoveryServer != "server2:127.0.0.1:9235" {
-					panic("reg message broken")
-				}
+			case <-gch:
+				r := GetGrpcInfos("client")
+				fmt.Println(r)
+			case <-hch:
+				r := GetHttpInfos("client")
+				fmt.Println(r)
+			case <-tch:
+				r := GetTcpInfos("client")
+				fmt.Println(r)
+			case <-wch:
+				r := GetWebsocketInfos("client")
+				fmt.Println(r)
 			}
-			fmt.Printf("get notice msg:%+v\n", noticemsg)
 		}
 	}()
 	RegisterSelf(&RegMsg{
@@ -93,6 +87,7 @@ func Test_Client1(t *testing.T) {
 		TcpPort:     7000,
 		WebSockIp:   "",
 		WebSockPort: 6000,
+		WebSockPath: "/root",
 	})
 	select {}
 }

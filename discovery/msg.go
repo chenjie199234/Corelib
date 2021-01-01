@@ -24,13 +24,8 @@ type RegMsg struct {
 	TcpPort     int    `json:"tp,omitempty"`
 	WebSockIp   string `json:"wi,omitempty"`
 	WebSockPort int    `json:"wp,omitempty"`
+	WebSockPath string `json:"wpath,omitempty"`
 	Addition    []byte `json:"a,omitempty"`
-}
-type NoticeMsg struct {
-	PeerAddr        string `json:"p"` //peer's addr
-	Status          bool   `json:"s"` //true-online,false-offline
-	DiscoveryServer string `json:"d"` //happened on which discovery server
-	Addition        []byte `json:"a"`
 }
 
 func makeOnlineMsg(peeruniquename string, data []byte, hash []byte) []byte {
