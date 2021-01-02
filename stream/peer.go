@@ -28,8 +28,9 @@ const (
 var PEERTYPENAME = []string{CLIENT: "client", SERVER: "server"}
 
 var (
-	ERRCONNCLOSED = fmt.Errorf("connection is closed")
-	ERRMSGLARGE   = fmt.Errorf("message too large")
+	ERRCONNCLOSED  = fmt.Errorf("connection is closed")
+	ERRMSGLARGE    = fmt.Errorf("message too large")
+	ERRSENDBUFFULL = fmt.Errorf("send buffer full")
 )
 
 type peernode struct {
@@ -44,6 +45,7 @@ type Peer struct {
 	protocoltype    int
 	starttime       uint64
 	status          uint32 //0--(closing),not 0--(connected)
+	maxmsglen       int
 	reader          *bufio.Reader
 	writerbuffer    chan []byte
 	heartbeatbuffer chan []byte
@@ -206,6 +208,9 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 	if len(userdata) == 0 {
 		return nil
 	}
+	if len(userdata) > p.maxmsglen {
+		return ERRMSGLARGE
+	}
 	var data []byte
 	switch p.protocoltype {
 	case TCP:
@@ -224,6 +229,7 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 		select {
 		case p.writerbuffer <- data:
 		default:
+			return ERRSENDBUFFULL
 		}
 	}
 	return nil

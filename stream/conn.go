@@ -31,10 +31,7 @@ func (this *Instance) StartTcpServer(listenaddr string) {
 		panic("[Stream.TCP.StartTcpServer]listening self addr error:" + e.Error())
 	}
 	for {
-		p := this.getPeer(TCP, this.conf.TcpC.AppWriteBufferNum)
-		p.protocoltype = TCP
-		p.servername = &this.conf.SelfName
-		p.peertype = CLIENT
+		p := this.getPeer(TCP, CLIENT, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, &this.conf.SelfName)
 		if conn, e = this.tcplistener.AcceptTCP(); e != nil {
 			fmt.Printf("[Stream.TCP.StartTcpServer]accept tcp connect error:%s\n", e)
 			return
@@ -69,10 +66,7 @@ func (this *Instance) StartUnixsocketServer(listenaddr string) {
 		panic("[Stream.UNIX.StartUnixsocketServer]listening self addr error:" + e.Error())
 	}
 	for {
-		p := this.getPeer(UNIXSOCKET, this.conf.UnixC.AppWriteBufferNum)
-		p.protocoltype = UNIXSOCKET
-		p.servername = &this.conf.SelfName
-		p.peertype = CLIENT
+		p := this.getPeer(UNIXSOCKET, CLIENT, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, &this.conf.SelfName)
 		if conn, e = this.unixlistener.AcceptUnix(); e != nil {
 			fmt.Printf("[Stream.UNIX.StartUnixsocketServer]accept unix connect error:%s\n", e)
 			return
@@ -123,10 +117,7 @@ func (this *Instance) StartWebsocketServer(paths []string, listenaddr string, ch
 			fmt.Printf("[Stream.WEB.StartWebsocketServer]upgrade error:%s\n", e)
 			return
 		}
-		p := this.getPeer(WEBSOCKET, this.conf.WebC.AppWriteBufferNum)
-		p.protocoltype = WEBSOCKET
-		p.servername = &this.conf.SelfName
-		p.peertype = CLIENT
+		p := this.getPeer(WEBSOCKET, CLIENT, this.conf.WebC.AppWriteBufferNum, 0, &this.conf.SelfName)
 		p.conn = unsafe.Pointer(conn)
 		p.setbuffer(this.conf.WebC.SocketReadBufferLen, this.conf.WebC.SocketWriteBufferLen)
 		go this.sworker(p, 0)
@@ -232,10 +223,7 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) strin
 		fmt.Printf("[Stream.TCP.StartTcpClient]tcp connect server addr:%s error:%s\n", serveraddr, e)
 		return ""
 	}
-	p := this.getPeer(TCP, this.conf.TcpC.AppWriteBufferNum)
-	p.protocoltype = TCP
-	p.clientname = &this.conf.SelfName
-	p.peertype = SERVER
+	p := this.getPeer(TCP, SERVER, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, &this.conf.SelfName)
 	p.conn = unsafe.Pointer(conn.(*net.TCPConn))
 	p.setbuffer(this.conf.TcpC.SocketReadBufferLen, this.conf.TcpC.SocketWriteBufferLen)
 	if p.reader == nil {
@@ -259,10 +247,7 @@ func (this *Instance) StartUnixsocketClient(serveraddr string, verifydata []byte
 		fmt.Printf("[Stream.UNIX.StartUnixsocketClient]unix connect server addr:%s error:%s\n", serveraddr, e)
 		return ""
 	}
-	p := this.getPeer(UNIXSOCKET, this.conf.UnixC.AppWriteBufferNum)
-	p.protocoltype = UNIXSOCKET
-	p.clientname = &this.conf.SelfName
-	p.peertype = SERVER
+	p := this.getPeer(UNIXSOCKET, SERVER, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, &this.conf.SelfName)
 	p.conn = unsafe.Pointer(conn.(*net.UnixConn))
 	p.setbuffer(this.conf.UnixC.SocketReadBufferLen, this.conf.UnixC.SocketWriteBufferLen)
 	if p.reader == nil {
@@ -297,10 +282,7 @@ func (this *Instance) StartWebsocketClient(serveraddr string, verifydata []byte)
 		fmt.Printf("[Stream.WEB.StartWebsocketClient]websocket connect server addr:%s error:%s\n", serveraddr, e)
 		return ""
 	}
-	p := this.getPeer(WEBSOCKET, this.conf.WebC.AppWriteBufferNum)
-	p.protocoltype = WEBSOCKET
-	p.clientname = &this.conf.SelfName
-	p.peertype = SERVER
+	p := this.getPeer(WEBSOCKET, SERVER, this.conf.WebC.AppWriteBufferNum, 0, &this.conf.SelfName)
 	p.conn = unsafe.Pointer(conn)
 	p.setbuffer(this.conf.WebC.SocketReadBufferLen, this.conf.WebC.SocketWriteBufferLen)
 	return this.cworker(p, 0, verifydata)

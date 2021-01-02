@@ -417,13 +417,18 @@ func (c *MrpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime
 
 func (c *MrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, error) {
 	//make mrpc system message
+	dl, ok := ctx.Deadline()
+	if ok && dl.UnixNano() <= time.Now().UnixNano()+int64(time.Millisecond) {
+		return nil, ERR[ERRCTXTIMEOUT]
+	}
 	msg := &Msg{
 		Callid: atomic.AddUint64(&c.callid, 1),
 		Path:   path,
 	}
-	if dl, ok := ctx.Deadline(); ok {
+	if !dl.IsZero() {
 		msg.Deadline = dl.UnixNano()
 	}
+
 	//traceid := trace.GetTrace(ctx)
 	//if traceid == "" {
 	//        traceid = trace.MakeTrace()
@@ -433,7 +438,7 @@ func (c *MrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 	msg.Body = in
 	msg.Metadata = GetAllMetadata(ctx)
 	d, _ := proto.Marshal(msg)
-	if len(d) >= 65535 {
+	if len(d) > c.c.TcpC.MaxMessageLen {
 		return nil, ERR[ERRLARGE]
 	}
 	var server *Serverapp
@@ -455,12 +460,18 @@ func (c *MrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 			}
 			server.lker.Lock()
 			c.lker.RUnlock()
-			if server.status != 3 {
+			if !server.Pickable() {
 				server.lker.Unlock()
 				continue
 			}
 			server.reqs[msg.Callid] = r
+			if msg.Deadline != 0 && msg.Deadline <= time.Now().UnixNano()+int64(time.Millisecond) {
+				delete(server.reqs, msg.Callid)
+				server.lker.Unlock()
+				return nil, ERR[ERRCTXTIMEOUT]
+			}
 			if e := server.peer.SendMessage(d, server.starttime, true); e != nil {
+				//the error can only be connection closed
 				server.status = 4
 				delete(server.reqs, msg.Callid)
 				server.lker.Unlock()

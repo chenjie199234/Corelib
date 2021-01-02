@@ -25,42 +25,67 @@ type Instance struct {
 	webPool  *sync.Pool
 }
 
-func (this *Instance) getPeer(t, writebuffernum int) *Peer {
+func (this *Instance) getPeer(protot, peert, writebuffernum, maxmsglen int, selfname *string) *Peer {
 	tempctx, tempcancel := context.WithCancel(context.Background())
-	switch t {
+	switch protot {
 	case TCP:
 		if p, ok := this.tcpPool.Get().(*Peer); ok {
 			p.reset()
+			p.protocoltype = TCP
+			p.peertype = peert
 			p.status = 1
+			p.maxmsglen = maxmsglen
 			p.Context = tempctx
 			p.CancelFunc = tempcancel
+			if peert == CLIENT {
+				p.servername = selfname
+			} else {
+				p.clientname = selfname
+			}
 			return p
 		}
 	case UNIXSOCKET:
 		if p, ok := this.unixPool.Get().(*Peer); ok {
 			p.reset()
+			p.protocoltype = UNIXSOCKET
+			p.peertype = peert
 			p.status = 1
+			p.maxmsglen = maxmsglen
 			p.Context = tempctx
 			p.CancelFunc = tempcancel
+			if peert == CLIENT {
+				p.servername = selfname
+			} else {
+				p.clientname = selfname
+			}
 			return p
 		}
 	case WEBSOCKET:
 		if p, ok := this.webPool.Get().(*Peer); ok {
 			p.reset()
+			p.protocoltype = WEBSOCKET
+			p.peertype = peert
 			p.status = 1
+			p.maxmsglen = maxmsglen
 			p.Context = tempctx
 			p.CancelFunc = tempcancel
+			if peert == CLIENT {
+				p.servername = selfname
+			} else {
+				p.clientname = selfname
+			}
 			return p
 		}
 	}
-	return &Peer{
+	p := &Peer{
 		parentnode:      nil,
 		clientname:      nil,
 		servername:      nil,
-		peertype:        0,
-		protocoltype:    0,
+		peertype:        peert,
+		protocoltype:    protot,
 		starttime:       0,
 		status:          1,
+		maxmsglen:       maxmsglen,
 		writerbuffer:    make(chan []byte, writebuffernum),
 		heartbeatbuffer: make(chan []byte, 3),
 		conn:            nil,
@@ -71,6 +96,12 @@ func (this *Instance) getPeer(t, writebuffernum int) *Peer {
 		CancelFunc:      tempcancel,
 		data:            nil,
 	}
+	if peert == CLIENT {
+		p.servername = selfname
+	} else {
+		p.clientname = selfname
+	}
+	return p
 }
 func (this *Instance) putPeer(p *Peer) {
 	tempprotocoltype := p.protocoltype
