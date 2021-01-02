@@ -52,8 +52,6 @@ func (this *Instance) getPeer(t, writebuffernum int) *Peer {
 			p.CancelFunc = tempcancel
 			return p
 		}
-	default:
-		return nil
 	}
 	return &Peer{
 		parentnode:      nil,
@@ -146,11 +144,11 @@ func (this *Instance) Stop() {
 	}
 }
 
-func (this *Instance) SendMessageAll(data []byte) {
+func (this *Instance) SendMessageAll(data []byte, block bool) {
 	for _, node := range this.peernodes {
 		node.RWMutex.RLock()
 		for _, peer := range node.peers {
-			peer.SendMessage(data, peer.starttime)
+			peer.SendMessage(data, peer.starttime, block)
 		}
 		node.RWMutex.RUnlock()
 	}

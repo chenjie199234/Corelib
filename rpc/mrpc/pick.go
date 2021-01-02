@@ -3,12 +3,18 @@ package mrpc
 import (
 	"math"
 	"math/rand"
+	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 var r *rand.Rand
 
 func defaultPicker(servers []*Serverapp) *Serverapp {
+	if r == nil {
+		temp := rand.New(rand.NewSource(time.Now().UnixNano()))
+		atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&r)), nil, unsafe.Pointer(temp))
+	}
 	if len(servers) == 1 {
 		if servers[0].Pickable() {
 			return servers[0]

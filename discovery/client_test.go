@@ -43,11 +43,11 @@ func Test_Client1(t *testing.T) {
 		},
 	}, []byte{'t', 'e', 's', 't'}, "http://127.0.0.1:8080/discoveryservers")
 	time.Sleep(time.Second)
-	gch, e := NoticeGrpcChange("client")
+	gch, e := NoticeGrpcChanges("client")
 	if e != nil {
 		panic("notice grpc change error:" + e.Error())
 	}
-	hch, e := NoticeHttpChange("client")
+	hch, e := NoticeHttpChanges("client")
 	if e != nil {
 		panic("notice http change error:" + e.Error())
 	}
@@ -125,11 +125,11 @@ func Test_Client2(t *testing.T) {
 		},
 	}, []byte{'t', 'e', 's', 't'}, "http://127.0.0.1:8080/discoveryservers")
 	time.Sleep(time.Second)
-	gch, e := NoticeGrpcChange("client")
+	gch, e := NoticeGrpcChanges("client")
 	if e != nil {
 		panic("notice grpc change error:" + e.Error())
 	}
-	hch, e := NoticeHttpChange("client")
+	hch, e := NoticeHttpChanges("client")
 	if e != nil {
 		panic("notice http change error:" + e.Error())
 	}

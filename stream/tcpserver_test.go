@@ -50,7 +50,7 @@ func tcpserverhandleonline(p *Peer, peeruniquename string, starttime uint64) {
 }
 func tcpserverhandleuserdata(p *Peer, peeruniquename string, data []byte, starttime uint64) {
 	fmt.Printf("%s:%s\n", peeruniquename, data)
-	p.SendMessage(data, starttime)
+	p.SendMessage(data, starttime, true)
 }
 func tcpserverhandleoffline(p *Peer, peeruniquename string, starttime uint64) {
 	atomic.AddInt64(&tcpcount, -1)

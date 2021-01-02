@@ -2,7 +2,6 @@ package mrpc
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -48,7 +47,7 @@ func (s *MrpcServer) StopMrpcServer() {
 		Callid: 0,
 		Error:  ERR[ERRCLOSING].Error(),
 	})
-	s.instance.SendMessageAll(d)
+	s.instance.SendMessageAll(d, true)
 	s.stopch = make(chan struct{})
 	s.stoptimer = time.NewTimer(time.Second)
 	for {
@@ -140,11 +139,14 @@ func (s *MrpcServer) RegisterHandler(path string, timeout int, handlers ...Outsi
 	s.handler[path] = s.insidehandler(timeout, handlers...)
 }
 func (s *MrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
-	datas := strings.Split(common.Byte2str(peerVerifyData), "|")
-	if len(datas) != 2 {
+	temp := common.Byte2str(peerVerifyData)
+	index := strings.LastIndex(temp, "|")
+	if index == -1 {
 		return nil, false
 	}
-	if datas[1] != s.c.SelfName || hex.EncodeToString(s.verifydata) != datas[0] {
+	targetname := temp[index+1:]
+	vdata := temp[:index]
+	if targetname != s.c.SelfName || vdata != common.Byte2str(s.verifydata) {
 		return nil, false
 	}
 	return s.verifydata, true
@@ -167,7 +169,7 @@ func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte
 			msg.Body = nil
 			msg.Error = ERR[ERRCLOSING].Error()
 			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(d, starttime); e != nil {
+			if e := p.SendMessage(d, starttime, true); e != nil {
 				fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)
 			}
 			return
@@ -182,14 +184,14 @@ func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte
 			msg.Body = nil
 			msg.Error = ERR[ERRNOAPI].Error()
 			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(d, starttime); e != nil {
+			if e := p.SendMessage(d, starttime, true); e != nil {
 				fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)
 			}
 			return
 		}
 		handler(msg)
 		d, _ := proto.Marshal(msg)
-		if e := p.SendMessage(d, starttime); e != nil {
+		if e := p.SendMessage(d, starttime, true); e != nil {
 			fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)
 		}
 	}()

@@ -3,7 +3,6 @@ package discovery
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -200,17 +199,45 @@ func UnRegisterSelf() error {
 	}
 	return nil
 }
-func NoticeGrpcChange(appname string) (chan struct{}, error) {
+func NoticeGrpcChanges(appname string) (chan struct{}, error) {
 	return noticechanges(appname, 1)
 }
-func NoticeHttpChange(appname string) (chan struct{}, error) {
+func UnNoticeGrpcChanges(appname string, ch chan struct{}) {
+	clientinstance.nlker.Lock()
+	if _, ok := clientinstance.grpcnotices[appname]; ok {
+		delete(clientinstance.grpcnotices[appname], ch)
+	}
+	clientinstance.nlker.Unlock()
+}
+func NoticeHttpChanges(appname string) (chan struct{}, error) {
 	return noticechanges(appname, 2)
+}
+func UnNoticeHttpChanges(appname string, ch chan struct{}) {
+	clientinstance.nlker.Lock()
+	if _, ok := clientinstance.httpnotices[appname]; ok {
+		delete(clientinstance.httpnotices[appname], ch)
+	}
+	clientinstance.nlker.Unlock()
 }
 func NoticeTcpChanges(appname string) (chan struct{}, error) {
 	return noticechanges(appname, 3)
 }
+func UnNoticeTcpChanges(appname string, ch chan struct{}) {
+	clientinstance.nlker.Lock()
+	if _, ok := clientinstance.tcpnotices[appname]; ok {
+		delete(clientinstance.tcpnotices[appname], ch)
+	}
+	clientinstance.nlker.Unlock()
+}
 func NoticeWebsocketChanges(appname string) (chan struct{}, error) {
 	return noticechanges(appname, 4)
+}
+func UnNoticeWebsocketChanges(appname string, ch chan struct{}) {
+	clientinstance.nlker.Lock()
+	if _, ok := clientinstance.webnotices[appname]; ok {
+		delete(clientinstance.webnotices[appname], ch)
+	}
+	clientinstance.nlker.Unlock()
 }
 func noticechanges(appname string, t int) (chan struct{}, error) {
 	if clientinstance == nil {
@@ -246,6 +273,7 @@ func noticechanges(appname string, t int) (chan struct{}, error) {
 		}
 	}
 	ch := make(chan struct{}, 1)
+	ch <- struct{}{}
 	notices[ch] = struct{}{}
 	clientinstance.nlker.Unlock()
 	return ch, nil
@@ -363,9 +391,18 @@ func (c *discoveryclient) updateserver(url string) {
 			if server.peer != nil {
 				server.peer.Close()
 			}
+			//notice
+			c.nlker.Lock()
+			for _, appgroup := range server.allapps {
+				for _, app := range appgroup {
+					c.notice(app.appuniquename)
+					c.putnode(app)
+				}
+			}
+			c.nlker.Unlock()
 		} else if c.canreg && server.status == 4 {
 			server.status = 5
-			server.peer.SendMessage(makeOnlineMsg("", c.regmsg), server.starttime)
+			server.peer.SendMessage(makeOnlineMsg("", c.regmsg), server.starttime, true)
 		}
 		server.lker.Unlock()
 	}
@@ -403,7 +440,7 @@ func (c *discoveryclient) updateserver(url string) {
 		if server.status == 0 {
 			server.status = 1
 			go func(saddr string, findex int) {
-				tempverifydata := hex.EncodeToString(c.verifydata) + "|" + saddr[:findex]
+				tempverifydata := common.Byte2str(c.verifydata) + "|" + saddr[:findex]
 				if r := c.instance.StartTcpClient(saddr[findex+1:], common.Str2byte(tempverifydata)); r == "" {
 					c.lker.RLock()
 					server, ok := c.servers[saddr]
@@ -451,26 +488,27 @@ func (c *discoveryclient) onlinefunc(p *stream.Peer, serveruniquename string, st
 	c.lker.RLock()
 	server, ok := c.servers[serveruniquename]
 	if !ok {
+		p.Close()
 		//discovery server removed
 		c.lker.RUnlock()
 		return
 	}
 	server.lker.Lock()
 	c.lker.RUnlock()
-	if server.status == 2 {
-		server.status = 3
-		server.peer = p
-		server.starttime = starttime
-		p.SetData(unsafe.Pointer(server))
-		//after online the first message is pull all registered peers
-		p.SendMessage(makePullMsg(), starttime)
-		server.lker.Unlock()
-	} else {
-		server.lker.Unlock()
+	if server.peer != nil || server.starttime != 0 || server.status != 2 {
 		//this is impossible
-		fmt.Printf("[Discovery.client.onlinefunc.impossible]server:%s conflict\n", serveruniquename)
 		p.Close()
+		server.lker.Unlock()
+		fmt.Printf("[Discovery.client.onlinefunc.impossible]server:%s conflict\n", serveruniquename)
+		return
 	}
+	server.status = 3
+	server.peer = p
+	server.starttime = starttime
+	p.SetData(unsafe.Pointer(server))
+	//after online the first message is pull all registered peers
+	p.SendMessage(makePullMsg(), starttime, true)
+	server.lker.Unlock()
 }
 func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data []byte, starttime uint64) {
 	server := (*servernode)(p.GetData())
@@ -481,14 +519,14 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 		onlineapp, regdata, e := getOnlineMsg(data)
 		if e != nil {
 			//this is impossible
-			fmt.Printf("[Discovery.client.userfunc.msgonline.impossible]online message:%s broken from discovery server:%s\n", data, serveruniquename)
+			fmt.Printf("[Discovery.client.userfunc.msgonline.impossible]server:%s online message:%s broken\n", serveruniquename, data)
 			p.Close()
 			return
 		}
 		regmsg := &RegMsg{}
 		if e = json.Unmarshal(regdata, regmsg); e != nil || (regmsg.GrpcPort == 0 && regmsg.HttpPort == 0 && regmsg.TcpPort == 0 && regmsg.WebSockPort == 0) {
 			//this is impossible
-			fmt.Printf("[Discovery.client.userfunc.msgonline.impossible]online app:%s register message:%s broken\n", onlineapp, regdata)
+			fmt.Printf("[Discovery.client.userfunc.msgonline.impossible]server:%s online app:%s register message:%s broken\n", serveruniquename, onlineapp, regdata)
 			p.Close()
 			return
 		}
@@ -508,22 +546,22 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 		offlineapp, e := getOfflineMsg(data)
 		if e != nil {
 			//this is impossible
-			fmt.Printf("[Discovery.client.userfunc.msgoffline.impossible]offline message:%s broken from discovery server:%s\n", data, serveruniquename)
+			fmt.Printf("[Discovery.client.userfunc.msgoffline.impossible]server:%s offline message:%s broken\n", serveruniquename, data)
 			p.Close()
 			return
 		}
 		appname := offlineapp[:strings.Index(offlineapp, ":")]
 		if _, ok := server.allapps[appname]; !ok {
 			//this is impossible
-			fmt.Printf("[Discovery.client.userfunc.msgoffline.impossible]offline app:%s missing\n", offlineapp)
-			p.SendMessage(makePullMsg(), server.starttime)
+			fmt.Printf("[Discovery.client.userfunc.msgoffline.impossible]app:%s missing\n", offlineapp)
+			p.SendMessage(makePullMsg(), server.starttime, true)
 			return
 		}
 		node, ok := server.allapps[appname][offlineapp]
 		if !ok {
 			//this is impossible
-			fmt.Printf("[Discovery.client.userfunc.msgoffline.impossible]offline app:%s missing\n", offlineapp)
-			p.SendMessage(makePullMsg(), server.starttime)
+			fmt.Printf("[Discovery.client.userfunc.msgoffline.impossible]app:%s missing\n", offlineapp)
+			p.SendMessage(makePullMsg(), server.starttime, true)
 			return
 		}
 		delete(server.allapps[appname], offlineapp)
@@ -538,7 +576,7 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 		all, e := getPushMsg(data)
 		if e != nil {
 			//this is impossible
-			fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]push message:%d broken from discovery server:%s\n", data, serveruniquename)
+			fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]server:%s push message:%d broken\n", serveruniquename, data)
 			p.Close()
 			return
 		}
@@ -557,9 +595,11 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 					fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]app:%s regmsg changed from:%s to:%s\n", oldapp.appuniquename, oldapp.regdata, newmsg)
 					//replace
 					regmsg := &RegMsg{}
-					if e = json.Unmarshal(newmsg, regmsg); e != nil || (regmsg.GrpcPort == 0 && regmsg.HttpPort == 0 && regmsg.TcpPort == 0 && regmsg.WebSockPort == 0) {
-						//thie is impossible
-						fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]app:%s regmsg:%s broken\n", oldapp.appuniquename, newmsg)
+					e = json.Unmarshal(newmsg, regmsg)
+					if e != nil || (regmsg.GrpcPort == 0 && regmsg.HttpPort == 0 && regmsg.TcpPort == 0 && regmsg.WebSockPort == 0) {
+						//this is impossible
+						fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]server:%s app:%s regmsg:%s broken\n",
+							serveruniquename, oldapp.appuniquename, newmsg)
 						p.Close()
 						return
 					}
@@ -576,7 +616,7 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 			regmsg := &RegMsg{}
 			if e = json.Unmarshal(newmsg, regmsg); e != nil || (regmsg.GrpcPort == 0 && regmsg.HttpPort == 0 && regmsg.TcpPort == 0 && regmsg.WebSockPort == 0) {
 				//thie is impossible
-				fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]app:%s regmsg:%s broken\n", newapp, newmsg)
+				fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]server:%s app:%s regmsg:%s broken\n", serveruniquename, newapp, newmsg)
 				p.Close()
 				return
 			}
@@ -592,7 +632,8 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 				notices[newapp] = struct{}{}
 			} else if !bytes.Equal(oldapp.regdata, newmsg) {
 				//this is impossible
-				fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]app:%s regmsg changed from:%s to:%s\n", newapp, oldapp.regdata, newmsg)
+				fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]server:%s app:%s regmsg changed from:%s to:%s\n",
+					serveruniquename, newapp, oldapp.regdata, newmsg)
 				//replace
 				oldapp.regdata = newmsg
 				oldapp.regmsg = regmsg
@@ -614,21 +655,13 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 	}
 }
 func (c *discoveryclient) offlinefunc(p *stream.Peer, serveruniquename string, starttime uint64) {
+	//this is just disconnect to the discovery server
+	//keep the apps register info
 	fmt.Printf("[Discovery.client.offlinefunc]self unregistered on discovery server:%s\n", serveruniquename)
 	server := (*servernode)(p.GetData())
 	server.lker.Lock()
 	server.peer = nil
 	server.starttime = 0
-	tempallapps := server.allapps
-	server.allapps = make(map[string]map[string]*appnode, 0)
-	c.nlker.RLock()
-	for _, appgroup := range tempallapps {
-		for _, app := range appgroup {
-			c.notice(app.appuniquename)
-			c.putnode(app)
-		}
-	}
-	c.nlker.RUnlock()
 	server.status = 0
 	server.lker.Unlock()
 }

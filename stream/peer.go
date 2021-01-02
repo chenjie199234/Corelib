@@ -198,7 +198,7 @@ func (p *Peer) readMessage(max int) ([]byte, error) {
 	}
 	return nil, nil
 }
-func (p *Peer) SendMessage(userdata []byte, starttime uint64) error {
+func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error {
 	if p.status == 0 || p.starttime != starttime {
 		//starttime for aba check
 		return ERRCONNCLOSED
@@ -218,7 +218,14 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64) error {
 		return ERRCONNCLOSED
 	}
 	//here has a little data race,but never mind,peer will drop the race data
-	p.writerbuffer <- data
+	if block {
+		p.writerbuffer <- data
+	} else {
+		select {
+		case p.writerbuffer <- data:
+		default:
+		}
+	}
 	return nil
 }
 

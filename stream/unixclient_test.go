@@ -51,7 +51,7 @@ func unixclienthandleonline(p *Peer, peeruniquename string, starttime uint64) {
 		go func() {
 			for {
 				time.Sleep(time.Second)
-				p.SendMessage([]byte{'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd'}, starttime)
+				p.SendMessage([]byte{'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd'}, starttime, true)
 			}
 		}()
 	}

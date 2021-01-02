@@ -52,7 +52,7 @@ func unixserverhandleonline(p *Peer, peeruniquename string, starttime uint64) {
 }
 func unixserverhandleuserdata(ctx context.Context, p *Peer, peeruniquename string, data []byte, starttime uint64) {
 	fmt.Printf("%s:%s\n", peeruniquename, data)
-	p.SendMessage(data, starttime)
+	p.SendMessage(data, starttime, true)
 }
 func unixserverhandleoffline(p *Peer, peeruniquename string, starttime uint64) {
 	atomic.AddInt64(&unixcount, -1)
