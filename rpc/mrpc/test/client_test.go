@@ -35,11 +35,10 @@ func Test_Client(t *testing.T) {
 
 	verifydata := []byte("test")
 	discovery.NewDiscoveryClient(clientinstanceconfig, verifydata, "http://127.0.0.1:8080/discoveryservers")
-	client := mrpc.NewMrpcClient(clientinstanceconfig, "appserver", verifydata, nil)
+	client := mrpc.NewMrpcClient(clientinstanceconfig, "appserver", verifydata, nil, nil)
 	api = NewMrpcTestClient(client)
 	time.Sleep(time.Second)
 	call()
-	select {}
 }
 
 var count = 10000

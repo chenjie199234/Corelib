@@ -154,165 +154,142 @@ func NewMrpcClient(c *stream.InstanceConfig, appname string, vdata []byte, pick 
 //second key:discovery server
 //value:addition data
 func (c *MrpcClient) UpdateDiscovery(allapps map[string]map[string][]byte) {
-	//check addition change
-	//this is useless,because one app's node's addition data will not change when it is running
-	//for addr, discoveryservers := range allapps {
-	//        var temp []byte
-	//        for _, addition := range discoveryservers {
-	//                if temp == nil {
-	//                        temp = addition
-	//                } else if !bytes.Equal(temp, addition) {
-	//                        delete(allapps, addr)
-	//                        break
-	//                }
-	//        }
-	//}
-	//offline app or update app's discoveryservers
+	//offline app
 	c.lker.Lock()
 	defer c.lker.Unlock()
 	for _, server := range c.servers {
 		addr := server.appuniquename[strings.Index(server.appuniquename, ":")+1:]
 		if _, ok := allapps[addr]; !ok {
 			//this app unregistered
+			server.lker.Lock()
+			server.discoveryserver = nil
+			server.Pickinfo.DiscoveryServers = 0
+			server.Pickinfo.DiscoveryServerOfflineTime = time.Now().Unix()
+			server.lker.Unlock()
+		}
+	}
+	//online app or update app's discoveryservers
+	for addr, discoveryservers := range allapps {
+		var server *Serverapp
+		appuniquename := fmt.Sprintf("%s:%s", c.appname, addr)
+		for _, tempserver := range c.servers {
+			if tempserver.appuniquename == appuniquename {
+				server = tempserver
+				break
+			}
+		}
+		if server != nil {
+			//check disckvery servers
+			onlyunregister := false
+			server.lker.Lock()
+			//check unregister from discovery server
+			for discoveryserver := range server.discoveryserver {
+				if _, ok := discoveryservers[discoveryserver]; !ok {
+					delete(server.discoveryserver, discoveryserver)
+					onlyunregister = true
+				}
+			}
+			//check register on discovery server
+			for discoveryserver, addition := range discoveryservers {
+				if _, ok := server.discoveryserver[discoveryserver]; !ok {
+					if bytes.Equal(addition, server.Pickinfo.Addition) {
+						server.discoveryserver[discoveryserver] = struct{}{}
+						onlyunregister = false
+					} else {
+						fmt.Printf("[Mrpc.client.UpdateDiscovery.impossible]app:%s addition data conflict\n", appuniquename)
+					}
+				}
+			}
+			server.Pickinfo.DiscoveryServers = len(server.discoveryserver)
+			if onlyunregister {
+				server.Pickinfo.DiscoveryServerOfflineTime = time.Now().Unix()
+			}
+			server.lker.Unlock()
+		} else {
+			//online new
+			temp := make(map[string]struct{}, len(discoveryservers))
+			var tempaddition []byte
+			insert := true
+			for discoveryserver, addition := range discoveryservers {
+				temp[discoveryserver] = struct{}{}
+				if tempaddition == nil {
+					tempaddition = addition
+				} else if bytes.Equal(tempaddition, addition) {
+					fmt.Printf("[Mrpc.client.UpdateDiscovery.impossible]app:%s addition data conflict\n", appuniquename)
+					insert = false
+					break
+				}
+			}
+			if insert {
+				c.servers = append(c.servers, c.getserver(appuniquename, temp, tempaddition))
+				go c.start(addr)
+			}
 		}
 	}
 }
-func (c *MrpcClient) update(addr string, discoveryserver string, status bool, addition []byte) {
-	appuniquename := fmt.Sprintf("%s:%s", c.appname, addr)
+func (c *MrpcClient) start(addr string) {
+	tempverifydata := common.Byte2str(c.verifydata) + "|" + c.appname
+	if r := c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata)); r == "" {
+		appuniquename := fmt.Sprintf("%s:%s", c.appname, addr)
+		c.lker.RLock()
+		var server *Serverapp
+		for _, tempserver := range c.servers {
+			if tempserver.appuniquename == appuniquename {
+				server = tempserver
+				break
+			}
+		}
+		if server == nil {
+			//app removed
+			c.lker.RUnlock()
+			return
+		}
+		server.lker.Lock()
+		c.lker.RUnlock()
+		if len(server.discoveryserver) == 0 {
+			server.status = 0
+		} else {
+			server.status = 1
+			go c.start(addr)
+		}
+		//all req failed,here would't have data
+		if len(server.reqs) != 0 {
+			fmt.Printf("[Mrpc.client.start.impossible]unconnected app:%s has request\n", appuniquename)
+			for _, req := range server.reqs {
+				if req.callid != 0 {
+					req.resp = nil
+					req.err = ERR[ERRCLOSED]
+					req.finish <- struct{}{}
+				}
+			}
+			server.reqs = make(map[uint64]*req, 10)
+		}
+		server.lker.Unlock()
+		if server.status == 0 {
+			c.unregister(appuniquename)
+		}
+	}
 }
-
-//func (c *MrpcClient) first(data map[string]map[string][]byte) {
-//        for addr, discoveryservers := range data {
-//                appuniquename := fmt.Sprintf("%s:%s", c.appname, addr)
-//                tempdiscoveryservers := make(map[string]struct{}, len(discoveryservers))
-//                tempaddition := []byte{}
-//                for discoveryserver, addition := range discoveryservers {
-//                        if len(tempaddition) == 0 {
-//                                tempaddition = addition
-//                        } else if !bytes.Equal(tempaddition, addition) {
-//                                fmt.Printf("[Mrpc.client.first.impossible]peer:%s addition info conflict\n", appuniquename)
-//                                return
-//                        }
-//                        tempdiscoveryservers[discoveryserver] = struct{}{}
-//                        fmt.Printf("[Mrpc.client.first]app:%s registered on discovery server:%s\n", appuniquename, discoveryserver)
-//                }
-//                c.lker.Lock()
-//                c.servers = append(c.servers, c.getserver(appuniquename, tempdiscoveryservers, tempaddition))
-//                c.lker.Unlock()
-//                go c.start(addr)
-//        }
-//}
-//func (c *MrpcClient) notice() {
-//        for {
-//                data := <-c.noticech
-//                appuniquename := fmt.Sprintf("%s:%s", c.appname, data.PeerAddr)
-//                c.lker.Lock()
-//                var server *Serverapp
-//                var ok bool
-//                for _, v := range c.servers {
-//                        if v.appuniquename == appuniquename {
-//                                server = v
-//                                ok = true
-//                                break
-//                        }
-//                }
-//                if ok && data.Status {
-//                        //this peer exist,it register on another discovery server
-//                        server.lker.Lock()
-//                        c.lker.Unlock()
-//                        if _, ok := server.discoveryserver[data.DiscoveryServer]; ok {
-//                                //already registered on this discovery server
-//                                //this is impossible
-//                                fmt.Printf("[Mrpc.client.notice.impossible]app:%s duplicate register on discoveryserver:%s\n", appuniquename, data.DiscoveryServer)
-//                        } else if !bytes.Equal(server.Pickinfo.Addition, data.Addition) {
-//                                //register with different registerinfo
-//                                //this is impossible
-//                                server.discoveryserver[data.DiscoveryServer] = struct{}{}
-//                                server.Pickinfo.DiscoveryServers = len(server.discoveryserver)
-//                                fmt.Printf("[Mrpc.client.notice.impossible]app:%s addition info conflict\n", appuniquename)
-//                        } else {
-//                                server.discoveryserver[data.DiscoveryServer] = struct{}{}
-//                                server.Pickinfo.DiscoveryServers = len(server.discoveryserver)
-//                        }
-//                        fmt.Printf("[Mrpc.client.notice]app:%s registered on discovery server:%s\n", appuniquename, data.DiscoveryServer)
-//                        server.lker.Unlock()
-//                } else if ok {
-//                        //this peer exist,it unregister on a discovery server
-//                        server.lker.Lock()
-//                        c.lker.Unlock()
-//                        if _, ok := server.discoveryserver[data.DiscoveryServer]; !ok {
-//                                //didn't registered on this discovery server before
-//                                //this is impossible
-//                                fmt.Printf("[Mrpc.client.notice.impossible]app:%s duplicate unregister on discoveryserver:%s\n", appuniquename, data.DiscoveryServer)
-//                        } else if !bytes.Equal(server.Pickinfo.Addition, data.Addition) {
-//                                //this is impossible
-//                                delete(server.discoveryserver, data.DiscoveryServer)
-//                                server.Pickinfo.DiscoveryServers = len(server.discoveryserver)
-//                                server.Pickinfo.DiscoveryServerOfflineTime = time.Now().Unix()
-//                                fmt.Printf("[Mrpc.client.notice.impossible]app:%s addition info conflict\n", appuniquename)
-//                        } else {
-//                                delete(server.discoveryserver, data.DiscoveryServer)
-//                                server.Pickinfo.DiscoveryServers = len(server.discoveryserver)
-//                                server.Pickinfo.DiscoveryServerOfflineTime = time.Now().Unix()
-//                        }
-//                        fmt.Printf("[Mrpc.client.notice]app:%s unregistered on discovery server:%s\n", appuniquename, data.DiscoveryServer)
-//                        needoffline := false
-//                        if len(server.discoveryserver) == 0 && server.status == 0 {
-//                                needoffline = true
-//                        } else if len(server.discoveryserver) != 0 && server.status == 0 {
-//                                server.status = 1
-//                                go c.start(data.PeerAddr)
-//                        }
-//                        //all req failed
-//                        for _, req := range server.reqs {
-//                                if req.callid != 0 {
-//                                        req.resp = nil
-//                                        req.err = ERR[ERRCLOSED]
-//                                        req.finish <- struct{}{}
-//                                }
-//                        }
-//                        server.reqs = make(map[uint64]*req, 10)
-//                        server.lker.Unlock()
-//                        if needoffline {
-//                                c.unregister(appuniquename)
-//                        }
-//                } else if data.Status {
-//                        fmt.Printf("[Mrpc.client.notice]app:%s registered on discovery server:%s\n", appuniquename, data.DiscoveryServer)
-//                        //this peer not exist,it register on a discovery server
-//                        tempdiscoveryservers := make(map[string]struct{}, 2)
-//                        tempdiscoveryservers[data.DiscoveryServer] = struct{}{}
-//                        c.servers = append(c.servers, c.getserver(appuniquename, tempdiscoveryservers, data.Addition))
-//                        c.lker.Unlock()
-//                        go c.start(data.PeerAddr)
-//                } else {
-//                        c.lker.Unlock()
-//                        //this peer not exist,it unregister on a discovery server
-//                        //this is impossible
-//                        fmt.Printf("[Mprc.client.notice.impossible]app:%s duplicate unregister on discoveryserver:%s\n", appuniquename, data.DiscoveryServer)
-//                        return
-//                }
-//        }
-//}
 func (c *MrpcClient) unregister(appuniquename string) {
 	c.lker.Lock()
 	var server *Serverapp
-	var ok bool
 	var index int
-	for i, v := range c.servers {
-		if v.appuniquename == appuniquename {
-			server = v
-			ok = true
-			index = i
+	for tempindex, tempserver := range c.servers {
+		if tempserver.appuniquename == appuniquename {
+			server = tempserver
+			index = tempindex
 			break
 		}
 	}
-	if !ok {
+	if server == nil {
+		//already removed
 		c.lker.Unlock()
 		return
 	}
 	//check again
 	server.lker.Lock()
 	if len(server.discoveryserver) == 0 && server.status == 0 {
+		//remove app
 		c.servers[index], c.servers[len(c.servers)-1] = c.servers[len(c.servers)-1], c.servers[index]
 		c.servers = c.servers[:len(c.servers)-1]
 		c.putserver(server)
@@ -323,64 +300,19 @@ func (c *MrpcClient) unregister(appuniquename string) {
 	server.lker.Unlock()
 	c.lker.Unlock()
 }
-
-func (c *MrpcClient) start(addr string) {
-	tempverifydata := common.Byte2str(c.verifydata) + "|" + c.appname
-	if r := c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata)); r == "" {
-		appuniquename := fmt.Sprintf("%s:%s", c.appname, addr)
-		c.lker.RLock()
-		var server *Serverapp
-		var ok bool
-		for _, v := range c.servers {
-			if v.appuniquename == appuniquename {
-				server = v
-				ok = true
-				break
-			}
-		}
-		if !ok {
-			c.lker.RUnlock()
-			return
-		}
-		server.lker.Lock()
-		c.lker.RUnlock()
-		needoffline := len(server.discoveryserver) == 0
-		if needoffline {
-			server.status = 0
-		} else {
-			server.status = 1
-			go c.start(addr)
-		}
-		//all req failed
-		for _, req := range server.reqs {
-			if req.callid != 0 {
-				req.resp = nil
-				req.err = ERR[ERRCLOSED]
-				req.finish <- struct{}{}
-			}
-		}
-		server.reqs = make(map[uint64]*req, 10)
-		server.lker.Unlock()
-		if needoffline {
-			c.unregister(appuniquename)
-		}
-	}
-}
 func (c *MrpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal(peerVerifyData, c.verifydata) {
 		return nil, false
 	}
 	c.lker.RLock()
 	var server *Serverapp
-	var ok bool
-	for _, v := range c.servers {
-		if v.appuniquename == appuniquename {
-			server = v
-			ok = true
+	for _, tempserver := range c.servers {
+		if tempserver.appuniquename == appuniquename {
+			server = tempserver
 			break
 		}
 	}
-	if !ok {
+	if server == nil {
 		//server offline
 		c.lker.RUnlock()
 		return nil, false
@@ -400,15 +332,13 @@ func (c *MrpcClient) verifyfunc(ctx context.Context, appuniquename string, peerV
 func (c *MrpcClient) onlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
 	c.lker.RLock()
 	var server *Serverapp
-	var ok bool
-	for _, v := range c.servers {
-		if v.appuniquename == appuniquename {
-			server = v
-			ok = true
+	for _, tempserver := range c.servers {
+		if tempserver.appuniquename == appuniquename {
+			server = tempserver
 			break
 		}
 	}
-	if !ok {
+	if server == nil {
 		//server offline
 		p.Close()
 		c.lker.RUnlock()
@@ -463,8 +393,7 @@ func (c *MrpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime
 	server.lker.Lock()
 	server.peer = nil
 	server.starttime = 0
-	needoffline := len(server.discoveryserver) == 0
-	if needoffline {
+	if len(server.discoveryserver) == 0 {
 		server.status = 0
 	} else {
 		server.status = 1
@@ -481,7 +410,7 @@ func (c *MrpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime
 	server.reqs = make(map[uint64]*req, 10)
 	fmt.Printf("[Mrpc.client.onlinefunc]app:%s offline\n", appuniquename)
 	server.lker.Unlock()
-	if needoffline {
+	if server.status == 0 {
 		c.unregister(appuniquename)
 	}
 }
