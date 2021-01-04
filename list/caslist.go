@@ -1,0 +1,51 @@
+package list
+
+import (
+	"sync/atomic"
+	"unsafe"
+)
+
+//thread safe,without lock,but memory not friendly,gc will increase
+type CasList struct {
+	head *node
+	tail *node
+}
+type node struct {
+	value unsafe.Pointer
+	next  *node
+}
+
+func NewCasList() *CasList {
+	tempnode := &node{}
+	return &CasList{
+		head: tempnode,
+		tail: tempnode,
+	}
+}
+
+func (l *CasList) Push(data unsafe.Pointer) {
+	n := &node{
+		value: data,
+		next:  nil,
+	}
+	temptail := l.tail
+	oldtail := l.tail
+	for !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&temptail.next)), nil, unsafe.Pointer(n)) {
+		for temptail.next != nil {
+			temptail = temptail.next
+		}
+	}
+	atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&l.tail)), unsafe.Pointer(oldtail), unsafe.Pointer(n))
+}
+
+func (l *CasList) Pop() unsafe.Pointer {
+	for {
+		oldhead := l.head
+		if oldhead.next == nil {
+			return nil
+		}
+		if atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&l.head)), unsafe.Pointer(oldhead), unsafe.Pointer(oldhead.next)) {
+			return oldhead.next.value
+		}
+	}
+}

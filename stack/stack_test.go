@@ -1,4 +1,4 @@
-package ringbuffer
+package stack
 
 import (
 	"sync"
@@ -7,11 +7,9 @@ import (
 	"unsafe"
 )
 
-var d uint32
-
 func Benchmark_Cas(b *testing.B) {
 	b.StopTimer()
-	buf := NewCasRingBuffer(40960)
+	l := NewCasStack()
 	wg := &sync.WaitGroup{}
 	var count uint32
 	b.ResetTimer()
@@ -21,15 +19,13 @@ func Benchmark_Cas(b *testing.B) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 100000; j++ {
-				for buf.Push(unsafe.Pointer(&j)) != nil {
-				}
+				l.Push(unsafe.Pointer(&j))
 			}
 		}()
 		go func() {
 			defer wg.Done()
 			for {
-				r := buf.Pop()
-				if r != nil {
+				if l.Pop() != nil {
 					atomic.AddUint32(&count, 1)
 				}
 				if atomic.LoadUint32(&count) == 1000000 {
@@ -40,9 +36,10 @@ func Benchmark_Cas(b *testing.B) {
 	}
 	wg.Wait()
 }
+
 func Benchmark_Std(b *testing.B) {
 	b.StopTimer()
-	buf := NewStdRingBuffer(1024, 40960)
+	l := NewStdStack()
 	lker := &sync.Mutex{}
 	wg := &sync.WaitGroup{}
 	var count uint32
@@ -54,8 +51,7 @@ func Benchmark_Std(b *testing.B) {
 			defer wg.Done()
 			for j := 0; j < 100000; j++ {
 				lker.Lock()
-				for buf.Push([]unsafe.Pointer{unsafe.Pointer(&j)}) != nil {
-				}
+				l.Push(unsafe.Pointer(&j))
 				lker.Unlock()
 			}
 		}()
@@ -63,7 +59,7 @@ func Benchmark_Std(b *testing.B) {
 			defer wg.Done()
 			for {
 				lker.Lock()
-				r := buf.Pop(1)
+				r := l.Pop()
 				lker.Unlock()
 				if r != nil {
 					atomic.AddUint32(&count, 1)

@@ -1,18 +1,16 @@
-//has data race
-
 package ringbuffer
 
 import (
 	"errors"
-	"sync"
 	"unsafe"
 )
 
 var (
-	ERRFULL = errors.New("buffer is full,new msg will be dropped")
+	ERRFULL = errors.New("buffer is full")
 )
 
-type RingBuffer struct {
+//thread not safe,but can auto grow and shirnk within minlen and maxlen
+type StdRingBuffer struct {
 	head      int
 	tail      int
 	data      []unsafe.Pointer
@@ -25,37 +23,14 @@ type RingBuffer struct {
 }
 
 // if maxbuflen is 0,means no limit
-func NewRingBufferPool(minbuflen, maxbuflen int) *sync.Pool {
-	if minbuflen <= 0 {
-		minbuflen = 1024
-	}
-	if maxbuflen != 0 && maxbuflen <= minbuflen {
-		maxbuflen = minbuflen * 2
-	}
-	return &sync.Pool{
-		New: func() interface{} {
-			return &RingBuffer{
-				head:      0,
-				tail:      0,
-				data:      make([]unsafe.Pointer, minbuflen),
-				maxlen:    minbuflen,
-				curlen:    0,
-				minbuflen: minbuflen,
-				maxbuflen: maxbuflen,
-			}
-		},
-	}
-}
-
-// if maxbuflen is 0,means no limit
-func NewRingBuffer(minbuflen, maxbuflen int) *RingBuffer {
+func NewStdRingBuffer(minbuflen, maxbuflen int) *StdRingBuffer {
 	if minbuflen <= 0 {
 		minbuflen = 1024
 	}
 	if maxbuflen < minbuflen && maxbuflen != 0 {
 		maxbuflen = minbuflen * 2
 	}
-	return &RingBuffer{
+	return &StdRingBuffer{
 		head:      0,
 		tail:      0,
 		data:      make([]unsafe.Pointer, minbuflen),
@@ -65,7 +40,7 @@ func NewRingBuffer(minbuflen, maxbuflen int) *RingBuffer {
 		maxbuflen: maxbuflen,
 	}
 }
-func (b *RingBuffer) Get(num int) []unsafe.Pointer {
+func (b *StdRingBuffer) Pop(num int) []unsafe.Pointer {
 	if num > b.curlen || num <= 0 {
 		return nil
 	}
@@ -80,7 +55,7 @@ func (b *RingBuffer) Get(num int) []unsafe.Pointer {
 	}
 	return result
 }
-func (b *RingBuffer) Peek(offset, num int) []unsafe.Pointer {
+func (b *StdRingBuffer) Peek(offset, num int) []unsafe.Pointer {
 	if num <= 0 || offset < 0 || offset+num > b.curlen {
 		return nil
 	}
@@ -94,8 +69,8 @@ func (b *RingBuffer) Peek(offset, num int) []unsafe.Pointer {
 	}
 	return result
 }
-func (b *RingBuffer) Put(data []unsafe.Pointer) error {
-	if len(data) > b.Rest() {
+func (b *StdRingBuffer) Push(data []unsafe.Pointer) error {
+	if r := b.Rest(); r != -1 && len(data) > r {
 		return ERRFULL
 	}
 	//grow
@@ -155,20 +130,19 @@ func (b *RingBuffer) Put(data []unsafe.Pointer) error {
 	}
 	return nil
 }
-func (b *RingBuffer) Num() int {
+func (b *StdRingBuffer) Num() int {
 	return b.curlen
 }
 
 //return -1 means no limit
-func (b *RingBuffer) Rest() int {
+func (b *StdRingBuffer) Rest() int {
 	if b.maxbuflen == 0 {
 		return -1
 	}
 	return b.maxbuflen - b.curlen
 }
 
-//this should be used before put back into the pool,after new buffer and after get from pool
-func (b *RingBuffer) Reset() {
+func (b *StdRingBuffer) Reset() {
 	b.head = 0
 	b.tail = 0
 	if b.maxlen >= b.minbuflen*4 {
