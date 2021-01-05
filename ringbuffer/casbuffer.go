@@ -1,6 +1,7 @@
 package ringbuffer
 
 import (
+	"runtime"
 	"sync/atomic"
 	"unsafe"
 )
@@ -9,84 +10,132 @@ import (
 type CasRingBuffer struct {
 	head     uint32
 	tail     uint32
-	buf      []unsafe.Pointer
+	buf      []*node
 	capacity uint32
 }
 
+type node struct {
+	getpos uint32
+	putpos uint32
+	value  unsafe.Pointer
+}
+
 func NewCasRingBuffer(num uint32) *CasRingBuffer {
-	return &CasRingBuffer{
+	buf := &CasRingBuffer{
 		head:     0,
 		tail:     0,
-		buf:      make([]unsafe.Pointer, num),
+		buf:      make([]*node, num),
 		capacity: num,
 	}
+	for i := range buf.buf {
+		buf.buf[i] = &node{
+			getpos: uint32(i),
+			putpos: uint32(i),
+			value:  nil,
+		}
+	}
+	return buf
 }
 
 func (a *CasRingBuffer) Push(data unsafe.Pointer) error {
+	var putpos uint32
 	for {
-		oldtail := a.tail
-		if a.head+a.capacity-oldtail < 1 {
-			//full
+		putpos = a.tail
+		if a.head+a.capacity-putpos < 1 {
 			return ERRFULL
 		}
-		newtail := oldtail + 1
-		if atomic.CompareAndSwapUint32(&a.tail, oldtail, newtail) {
-			a.buf[oldtail%a.capacity] = data
+		if atomic.CompareAndSwapUint32(&a.tail, putpos, putpos+1) {
+			break
+		}
+	}
+	element := a.buf[putpos%a.capacity]
+	for {
+		if element.putpos == putpos && element.putpos == element.getpos {
+			element.value = data
+			atomic.AddUint32(&element.putpos, a.capacity)
 			return nil
+		} else {
+			runtime.Gosched()
 		}
 	}
 }
 
 func (a *CasRingBuffer) Pushs(datas []unsafe.Pointer) error {
-	if uint32(len(datas)) > a.capacity {
-		return ERRFULL
-	}
+	var putpos uint32
 	for {
-		oldtail := a.tail
-		if a.head+a.capacity-oldtail < uint32(len(datas)) {
+		putpos = a.tail
+		if int(a.head+a.capacity-putpos) < len(datas) {
 			return ERRFULL
 		}
-		newtail := oldtail + uint32(len(datas))
-		if atomic.CompareAndSwapUint32(&a.tail, oldtail, newtail) {
-			for i := uint32(0); i < uint32(len(datas)); i++ {
-				a.buf[(oldtail+i)%a.capacity] = datas[i]
-			}
-			return nil
+		if atomic.CompareAndSwapUint32(&a.tail, putpos, putpos+uint32(len(datas))) {
+			break
 		}
 	}
+	for i, data := range datas {
+		element := a.buf[(putpos+uint32(i))%a.capacity]
+		for {
+			if element.putpos == putpos && element.putpos == element.getpos {
+				element.value = data
+				atomic.AddUint32(&element.putpos, a.capacity)
+				break
+			} else {
+				runtime.Gosched()
+			}
+		}
+	}
+	return nil
 }
 
 //return nil means empty
 func (a *CasRingBuffer) Pop() unsafe.Pointer {
+	var getpos uint32
 	for {
-		oldhead := a.head
-		if oldhead+1 > a.tail {
+		getpos = a.head
+		if getpos+1 > a.tail {
 			return nil
 		}
-		newhead := oldhead + 1
-		if atomic.CompareAndSwapUint32(&a.head, oldhead, newhead) {
-			return a.buf[oldhead%a.capacity]
+		if atomic.CompareAndSwapUint32(&a.head, getpos, getpos+1) {
+			break
+		}
+	}
+	element := a.buf[getpos%a.capacity]
+	for {
+		if element.getpos == getpos && element.putpos-a.capacity == getpos {
+			val := element.value
+			element.value = nil
+			atomic.AddUint32(&element.getpos, a.capacity)
+			return val
+		} else {
+			runtime.Gosched()
 		}
 	}
 }
 
-//return nil means don't have enough elements
+//return nil means required too much
 func (a *CasRingBuffer) Pops(num uint32) []unsafe.Pointer {
-	if num > a.capacity {
-		return nil
-	}
+	var getpos uint32
 	for {
-		oldhead := a.head
-		if oldhead+num > a.tail {
+		getpos = a.head
+		if getpos+num > a.tail {
 			return nil
 		}
-		newhead := oldhead + num
-		if atomic.CompareAndSwapUint32(&a.head, oldhead, newhead) {
-			result := make([]unsafe.Pointer, num)
-			for i := uint32(0); i < num; i++ {
-				result[i] = a.buf[(oldhead+i)%a.capacity]
-			}
-			return result
+		if atomic.CompareAndSwapUint32(&a.head, getpos, getpos+num) {
+			break
 		}
 	}
+	result := make([]unsafe.Pointer, num)
+	for i := uint32(0); i < num; i++ {
+		element := a.buf[(getpos+uint32(i))%a.capacity]
+		for {
+			if element.getpos == getpos && element.putpos-a.capacity == getpos {
+				result[i] = element.value
+				element.value = nil
+				atomic.AddUint32(&element.getpos, a.capacity)
+				break
+			} else {
+				runtime.Gosched()
+			}
+		}
+	}
+	return result
 }

@@ -40,19 +40,35 @@ func NewStdRingBuffer(minbuflen, maxbuflen int) *StdRingBuffer {
 		maxbuflen: maxbuflen,
 	}
 }
-func (b *StdRingBuffer) Pop(num int) []unsafe.Pointer {
+
+//return nil means empty
+func (b *StdRingBuffer) Pop() unsafe.Pointer {
+	if b.curlen <= 0 {
+		return nil
+	}
+	result := b.data[b.head]
+	b.curlen--
+	b.head++
+	if b.head >= b.maxlen {
+		b.head = 0
+	}
+	return result
+}
+
+//return nil means required too much
+func (b *StdRingBuffer) Pops(num int) []unsafe.Pointer {
 	if num > b.curlen || num <= 0 {
 		return nil
 	}
 	result := make([]unsafe.Pointer, num)
 	for i := 0; i < num; i++ {
 		result[i] = b.data[b.head]
-		b.curlen--
 		b.head++
 		if b.head >= b.maxlen {
 			b.head = 0
 		}
 	}
+	b.curlen -= num
 	return result
 }
 func (b *StdRingBuffer) Peek(offset, num int) []unsafe.Pointer {
@@ -69,12 +85,12 @@ func (b *StdRingBuffer) Peek(offset, num int) []unsafe.Pointer {
 	}
 	return result
 }
-func (b *StdRingBuffer) Push(data []unsafe.Pointer) error {
-	if r := b.Rest(); r != -1 && len(data) > r {
+func (b *StdRingBuffer) Push(data unsafe.Pointer) error {
+	if b.Rest() == 0 {
 		return ERRFULL
 	}
 	//grow
-	for b.maxlen-b.curlen < len(data) {
+	if b.maxlen-b.curlen == 0 {
 		var tempdata []unsafe.Pointer
 		if b.maxbuflen != 0 && b.maxlen*2 >= b.maxbuflen {
 			tempdata = make([]unsafe.Pointer, b.maxbuflen)
@@ -82,10 +98,10 @@ func (b *StdRingBuffer) Push(data []unsafe.Pointer) error {
 			tempdata = make([]unsafe.Pointer, b.maxlen*2)
 		}
 		for i := 0; i < b.curlen; i++ {
-			if b.head+i >= b.maxlen {
-				tempdata[i] = b.data[b.head+i-b.maxlen]
-			} else {
-				tempdata[i] = b.data[b.head+i]
+			tempdata[i] = b.data[b.head]
+			b.head++
+			if b.head >= b.maxlen {
+				b.head = 0
 			}
 		}
 		b.data = tempdata
@@ -94,8 +110,70 @@ func (b *StdRingBuffer) Push(data []unsafe.Pointer) error {
 		b.maxlen = len(tempdata)
 	}
 	//input
-	for _, v := range data {
-		b.data[b.tail] = v
+	b.data[b.tail] = data
+	b.curlen++
+	b.tail++
+	if b.tail >= b.maxlen {
+		b.tail = 0
+	}
+	//shirnk
+	if float64(b.curlen) < float64(b.maxlen)/3.0 && b.maxlen > b.minbuflen {
+		b.shirnkcount++
+	} else {
+		b.shirnkcount = 0
+	}
+	if b.shirnkcount >= 50 {
+		b.shirnkcount = 0
+		var tempdata []unsafe.Pointer
+		if b.maxlen/2 <= b.minbuflen {
+			tempdata = make([]unsafe.Pointer, b.minbuflen)
+		} else {
+			tempdata = make([]unsafe.Pointer, b.maxlen/2)
+		}
+		for i := 0; i < b.curlen; i++ {
+			tempdata[i] = b.data[b.head]
+			b.head++
+			if b.head >= b.maxlen {
+				b.head = 0
+			}
+		}
+		b.data = tempdata
+		b.head = 0
+		b.tail = b.curlen
+		b.maxlen = len(tempdata)
+	}
+	return nil
+}
+func (b *StdRingBuffer) Pushs(datas []unsafe.Pointer) error {
+	if r := b.Rest(); r != -1 && len(datas) > r {
+		return ERRFULL
+	}
+	//grow
+	grow := b.maxlen
+	for grow-b.curlen < len(datas) {
+		if b.maxbuflen != 0 && grow*2 >= b.maxbuflen {
+			grow = b.maxbuflen
+		} else {
+			grow *= 2
+		}
+	}
+	if grow != b.maxlen {
+		tempdata := make([]unsafe.Pointer, grow)
+		for i := 0; i < b.curlen; i++ {
+			tempdata[i] = b.data[b.head]
+			b.head++
+			if b.head >= b.maxlen {
+				b.head = 0
+			}
+		}
+		b.data = tempdata
+		b.head = 0
+		b.tail = b.curlen
+		b.maxlen = grow
+	}
+	//input
+	for _, data := range datas {
+		b.data[b.tail] = data
 		b.curlen++
 		b.tail++
 		if b.tail >= b.maxlen {
@@ -117,10 +195,10 @@ func (b *StdRingBuffer) Push(data []unsafe.Pointer) error {
 			tempdata = make([]unsafe.Pointer, b.maxlen/2)
 		}
 		for i := 0; i < b.curlen; i++ {
-			if b.head+i >= b.maxlen {
-				tempdata[i] = b.data[b.head+i-b.maxlen]
-			} else {
-				tempdata[i] = b.data[b.head+i]
+			tempdata[i] = b.data[b.head]
+			b.head++
+			if b.head >= b.maxlen {
+				b.head = 0
 			}
 		}
 		b.data = tempdata

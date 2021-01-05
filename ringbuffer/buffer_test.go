@@ -32,7 +32,7 @@ func Benchmark_Cas(b *testing.B) {
 				if r != nil {
 					atomic.AddUint32(&count, 1)
 				}
-				if atomic.LoadUint32(&count) == 1000000 {
+				if d := atomic.LoadUint32(&count); d == 1000000 {
 					return
 				}
 			}
@@ -53,17 +53,21 @@ func Benchmark_Std(b *testing.B) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 100000; j++ {
-				lker.Lock()
-				for buf.Push([]unsafe.Pointer{unsafe.Pointer(&j)}) != nil {
+				for {
+					lker.Lock()
+					e := buf.Push(unsafe.Pointer(&j))
+					lker.Unlock()
+					if e == nil {
+						break
+					}
 				}
-				lker.Unlock()
 			}
 		}()
 		go func() {
 			defer wg.Done()
 			for {
 				lker.Lock()
-				r := buf.Pop(1)
+				r := buf.Pop()
 				lker.Unlock()
 				if r != nil {
 					atomic.AddUint32(&count, 1)
