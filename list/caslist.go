@@ -1,6 +1,7 @@
 package list
 
 import (
+	"runtime"
 	"sync/atomic"
 	"unsafe"
 )
@@ -30,10 +31,14 @@ func (l *CasList) Push(data unsafe.Pointer) {
 	}
 	temptail := l.tail
 	oldtail := l.tail
-	for !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&temptail.next)), nil, unsafe.Pointer(n)) {
+	for {
 		for temptail.next != nil {
 			temptail = temptail.next
 		}
+		if atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&temptail.next)), nil, unsafe.Pointer(n)) {
+			break
+		}
+		runtime.Gosched()
 	}
 	atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&l.tail)), unsafe.Pointer(oldtail), unsafe.Pointer(n))
 }
@@ -47,5 +52,6 @@ func (l *CasList) Pop() unsafe.Pointer {
 		if atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&l.head)), unsafe.Pointer(oldhead), unsafe.Pointer(oldhead.next)) {
 			return oldhead.next.value
 		}
+		runtime.Gosched()
 	}
 }

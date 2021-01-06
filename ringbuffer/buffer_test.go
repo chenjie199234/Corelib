@@ -80,3 +80,33 @@ func Benchmark_Std(b *testing.B) {
 	}
 	wg.Wait()
 }
+func Benchmark_Chan(b *testing.B) {
+	b.StopTimer()
+	ch := make(chan unsafe.Pointer, 40960)
+	wg := &sync.WaitGroup{}
+	var count uint32
+	b.ResetTimer()
+	b.StartTimer()
+	wg.Add(20)
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100000; j++ {
+				ch <- unsafe.Pointer(&j)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for {
+				<-ch
+				if atomic.AddUint32(&count, 1) == 1000000 {
+					close(ch)
+				}
+				if count >= 1000000 {
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}

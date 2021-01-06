@@ -47,6 +47,7 @@ func (a *CasRingBuffer) Push(data unsafe.Pointer) error {
 		if atomic.CompareAndSwapUint32(&a.tail, putpos, putpos+1) {
 			break
 		}
+		runtime.Gosched()
 	}
 	element := a.buf[putpos%a.capacity]
 	for {
@@ -54,9 +55,8 @@ func (a *CasRingBuffer) Push(data unsafe.Pointer) error {
 			element.value = data
 			atomic.AddUint32(&element.putpos, a.capacity)
 			return nil
-		} else {
-			runtime.Gosched()
 		}
+		runtime.Gosched()
 	}
 }
 
@@ -70,6 +70,7 @@ func (a *CasRingBuffer) Pushs(datas []unsafe.Pointer) error {
 		if atomic.CompareAndSwapUint32(&a.tail, putpos, putpos+uint32(len(datas))) {
 			break
 		}
+		runtime.Gosched()
 	}
 	for i, data := range datas {
 		element := a.buf[(putpos+uint32(i))%a.capacity]
@@ -78,9 +79,8 @@ func (a *CasRingBuffer) Pushs(datas []unsafe.Pointer) error {
 				element.value = data
 				atomic.AddUint32(&element.putpos, a.capacity)
 				break
-			} else {
-				runtime.Gosched()
 			}
+			runtime.Gosched()
 		}
 	}
 	return nil
@@ -97,6 +97,7 @@ func (a *CasRingBuffer) Pop() unsafe.Pointer {
 		if atomic.CompareAndSwapUint32(&a.head, getpos, getpos+1) {
 			break
 		}
+		runtime.Gosched()
 	}
 	element := a.buf[getpos%a.capacity]
 	for {
@@ -122,6 +123,7 @@ func (a *CasRingBuffer) Pops(num uint32) []unsafe.Pointer {
 		if atomic.CompareAndSwapUint32(&a.head, getpos, getpos+num) {
 			break
 		}
+		runtime.Gosched()
 	}
 	result := make([]unsafe.Pointer, num)
 	for i := uint32(0); i < num; i++ {

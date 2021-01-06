@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"runtime"
 	"sync/atomic"
 	"unsafe"
 )
@@ -38,5 +39,6 @@ func (s *CasStack) Pop() unsafe.Pointer {
 		if atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&s.top)), unsafe.Pointer(oldtop), unsafe.Pointer(oldtop.pre)) {
 			return oldtop.value
 		}
+		runtime.Gosched()
 	}
 }
