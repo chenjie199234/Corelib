@@ -6,6 +6,17 @@ import (
 	"unsafe"
 )
 
+//thread unsafe
+type LruCache struct {
+	sync.Mutex
+	maxcap int64
+	ttl    int64
+	curcap int64
+	buf    map[string]*node
+	head   *node
+	tail   *node
+	pool   *sync.Pool
+}
 type kv struct {
 	ttl   int64
 	key   string
@@ -16,17 +27,6 @@ type node struct {
 	data *kv
 	next *node
 	prev *node
-}
-
-type LruCache struct {
-	sync.Mutex
-	maxcap int64
-	ttl    int64
-	curcap int64
-	buf    map[string]*node
-	head   *node
-	tail   *node
-	pool   *sync.Pool
 }
 
 //ttl == 0 means not using expire time

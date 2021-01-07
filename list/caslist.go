@@ -24,6 +24,7 @@ func NewCasList() *CasList {
 	}
 }
 
+//push back
 func (l *CasList) Push(data unsafe.Pointer) {
 	n := &node{
 		value: data,
@@ -43,6 +44,7 @@ func (l *CasList) Push(data unsafe.Pointer) {
 	atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&l.tail)), unsafe.Pointer(oldtail), unsafe.Pointer(n))
 }
 
+//pop front
 func (l *CasList) Pop() unsafe.Pointer {
 	for {
 		oldhead := l.head

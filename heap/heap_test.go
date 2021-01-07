@@ -7,7 +7,7 @@ import (
 )
 
 func Test_Heap(t *testing.T) {
-	maxnum := NewHeapMaxNum(100)
+	maxnum := NewHeapMaxNum()
 	var data int = 11001
 	maxnum.Insert(1, unsafe.Pointer(&data))
 	maxnum.Insert(3, unsafe.Pointer(&data))
@@ -28,7 +28,7 @@ func Test_Heap(t *testing.T) {
 			panic("data error")
 		}
 	}
-	minnum := NewHeapMinNum(100)
+	minnum := NewHeapMinNum()
 	minnum.Insert(1, unsafe.Pointer(&data))
 	minnum.Insert(3, unsafe.Pointer(&data))
 	minnum.Insert(4, unsafe.Pointer(&data))
@@ -48,7 +48,7 @@ func Test_Heap(t *testing.T) {
 			panic("data error")
 		}
 	}
-	maxstr := NewHeapMaxStr(100)
+	maxstr := NewHeapMaxStr()
 	maxstr.Insert("b", unsafe.Pointer(&data))
 	maxstr.Insert("a", unsafe.Pointer(&data))
 	maxstr.Insert("c", unsafe.Pointer(&data))
@@ -68,7 +68,7 @@ func Test_Heap(t *testing.T) {
 			panic("data error")
 		}
 	}
-	minstr := NewHeapMinStr(100)
+	minstr := NewHeapMinStr()
 	minstr.Insert("b", unsafe.Pointer(&data))
 	minstr.Insert("a", unsafe.Pointer(&data))
 	minstr.Insert("c", unsafe.Pointer(&data))

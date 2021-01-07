@@ -21,6 +21,7 @@ var base uint64
 
 var inited int64
 
+//thread safe
 func New(sid uint64) {
 	if atomic.SwapInt64(&inited, 1) == 1 {
 		return

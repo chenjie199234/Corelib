@@ -11,10 +11,11 @@ import (
 	"unsafe"
 )
 
-func NewHeapMaxNum(minbufnum int64) *HeapNum {
+//thread unsafe
+func NewHeapMaxNum() *HeapNum {
 	return &HeapNum{
 		direction: 1,
-		data:      make([]*heapNodeNum, 0, minbufnum),
+		data:      make([]*heapNodeNum, 0),
 		pool: &sync.Pool{
 			New: func() interface{} {
 				return &heapNodeNum{}
@@ -22,10 +23,12 @@ func NewHeapMaxNum(minbufnum int64) *HeapNum {
 		},
 	}
 }
-func NewHeapMinNum(minbufnum int64) *HeapNum {
+
+//thread unsafe
+func NewHeapMinNum() *HeapNum {
 	return &HeapNum{
 		direction: 0,
-		data:      make([]*heapNodeNum, 0, minbufnum),
+		data:      make([]*heapNodeNum, 0),
 		pool: &sync.Pool{
 			New: func() interface{} {
 				return &heapNodeNum{}
@@ -33,10 +36,12 @@ func NewHeapMinNum(minbufnum int64) *HeapNum {
 		},
 	}
 }
-func NewHeapMaxStr(minbufnum int64) *HeapStr {
+
+//thread unsafe
+func NewHeapMaxStr() *HeapStr {
 	return &HeapStr{
 		direction: 1,
-		data:      make([]*heapNodeStr, 0, minbufnum),
+		data:      make([]*heapNodeStr, 0),
 		pool: &sync.Pool{
 			New: func() interface{} {
 				return &heapNodeStr{}
@@ -44,10 +49,12 @@ func NewHeapMaxStr(minbufnum int64) *HeapStr {
 		},
 	}
 }
-func NewHeapMinStr(minbufnum int64) *HeapStr {
+
+//thread unsafe
+func NewHeapMinStr() *HeapStr {
 	return &HeapStr{
 		direction: 0,
-		data:      make([]*heapNodeStr, 0, minbufnum),
+		data:      make([]*heapNodeStr, 0),
 		pool: &sync.Pool{
 			New: func() interface{} {
 				return &heapNodeStr{}
