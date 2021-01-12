@@ -4,6 +4,6 @@ import (
 	"testing"
 )
 
-func Test_PM(t *testing.T) {
-	t.Logf("%s\n", getInfo())
+func Test_Super(t *testing.T) {
+	NewSuper("super", 100)
 }
