@@ -29,13 +29,15 @@ type process struct {
 	stime    int64
 	status   int //0 closing,1 starting,2 working
 	version  string
+	restart  int
 }
 
 func (p *process) startProcess() {
+	p.restart = -1
 	first := true
 	for {
 		if !first {
-			time.Sleep(time.Millisecond * 50)
+			time.Sleep(time.Millisecond * 500)
 		}
 		first = false
 		p.g.lker.RLock()
@@ -55,6 +57,11 @@ func (p *process) startProcess() {
 			p.lker.Unlock()
 			p.g.lker.RUnlock()
 			break
+		}
+		if p.g.version != p.version {
+			p.restart = 0
+		} else {
+			p.restart++
 		}
 		p.version = p.g.version
 		p.stime = time.Now().UnixNano()
@@ -132,7 +139,14 @@ func (p *process) log() {
 	}()
 	wg.Wait()
 }
-
+func (p *process) restartProcess() {
+	p.lker.Lock()
+	defer p.lker.Unlock()
+	if p.status == p_WORKING && p.cmd != nil {
+		p.cmd.Process.Signal(syscall.SIGTERM)
+		p.restart = -1
+	}
+}
 func (p *process) stopProcess() {
 	p.lker.Lock()
 	defer p.lker.Unlock()

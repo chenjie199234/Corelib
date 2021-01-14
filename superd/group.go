@@ -457,15 +457,6 @@ func (g *group) build() error {
 	}
 	return nil
 }
-func (g *group) stopProcess(pid uint64) {
-	g.lker.Lock()
-	defer g.lker.Unlock()
-	p, ok := g.processes[pid]
-	if !ok {
-		return
-	}
-	p.stopProcess()
-}
 func (g *group) startProcess(pid uint64) bool {
 	g.lker.Lock()
 	defer g.lker.Unlock()
@@ -482,6 +473,27 @@ func (g *group) startProcess(pid uint64) bool {
 	g.processes[pid] = p
 	go p.startProcess()
 	return true
+}
+func (g *group) restartProcess(pid uint64) {
+	g.lker.Lock()
+	defer g.lker.Unlock()
+	if g.status != g_WORKING {
+		return
+	}
+	p, ok := g.processes[pid]
+	if !ok {
+		return
+	}
+	p.restartProcess()
+}
+func (g *group) stopProcess(pid uint64) {
+	g.lker.Lock()
+	defer g.lker.Unlock()
+	p, ok := g.processes[pid]
+	if !ok {
+		return
+	}
+	p.stopProcess()
 }
 func (g *group) logs(logdata string) {
 	g.s.log(g.name, 0, 0, "", logdata)

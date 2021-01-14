@@ -222,6 +222,15 @@ func (s *Super) StartProcess(groupname string) error {
 	}
 	return nil
 }
+func (s *Super) RestartProcess(groupname string, pid uint64) {
+	s.lker.RLock()
+	defer s.lker.RUnlock()
+	g, ok := s.groups[groupname]
+	if !ok {
+		return
+	}
+	g.restartProcess(pid)
+}
 func (s *Super) StopProcess(groupname string, pid uint64) {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
@@ -272,6 +281,7 @@ type ProcessInfo struct {
 	Stime   int64  `json:"start_time"`
 	Version string `json:"version"`
 	Status  int    `json:"status"`
+	Restart int    `json:"restart"`
 }
 
 func (s *Super) GetInfo() []byte {
@@ -305,6 +315,7 @@ func (s *Super) GetInfo() []byte {
 				Stime:   p.stime,
 				Version: p.version,
 				Status:  p.status,
+				Restart: p.restart,
 			}
 			if p.status == p_WORKING {
 				tempp.Ppid = uint64(p.cmd.Process.Pid)
