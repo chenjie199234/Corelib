@@ -7,8 +7,8 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
-	"time"
 
+	"github.com/chenjie199234/Corelib/mlog"
 	"github.com/chenjie199234/Corelib/rotatefile"
 )
 
@@ -19,55 +19,42 @@ const (
 
 //struct
 type Super struct {
-	name       string
-	processid  uint64
-	lker       *sync.RWMutex
-	groups     map[string]*group
-	loglker    *sync.Mutex
-	logfile    *rotatefile.RotateFile
-	maxlogsize uint64
-	pool       *sync.Pool
-	status     int
-	notice     chan string
-	closech    chan struct{}
+	processid uint64
+	name      string
+	lker      *sync.RWMutex
+	groups    map[string]*group
+	loglker   *sync.Mutex
+	logfile   *rotatefile.RotateFile
+	logsize   uint64
+	logcycle  uint64
+	status    int
+	notice    chan string
+	closech   chan struct{}
 }
 
 //maxlogsize unit M
-func NewSuper(supername string, maxlogsize uint64) (*Super, error) {
+func NewSuper(supername string, rotatelogcap rotatefile.RotateCap, rotatelogcycle rotatefile.RotateTime) (*Super, error) {
 	if supername == "" {
 		supername = "super"
 	}
-	if maxlogsize == 0 {
-		maxlogsize = 100
-	}
 	instance := &Super{
-		processid:  0,
-		name:       supername,
-		lker:       new(sync.RWMutex),
-		groups:     make(map[string]*group, 5),
-		loglker:    new(sync.Mutex),
-		maxlogsize: maxlogsize * 1024 * 1024,
-		pool:       &sync.Pool{},
-		status:     s_WORKING,
-		notice:     make(chan string, 100),
-		closech:    make(chan struct{}, 1),
+		name:     supername,
+		lker:     new(sync.RWMutex),
+		groups:   make(map[string]*group, 5),
+		loglker:  new(sync.Mutex),
+		logsize:  uint64(rotatelogcap),
+		logcycle: uint64(rotatelogcycle),
+		status:   s_WORKING,
+		notice:   make(chan string, 100),
+		closech:  make(chan struct{}, 1),
 	}
 	var e error
 	//app dir
 	if e = dirop("./app"); e != nil {
 		panic("[init]" + e.Error())
 	}
-	//self log dir
-	if e = dirop("./self_log"); e != nil {
-		panic("[init]" + e.Error())
-	}
 	//process log dir
 	if e = dirop("./process_log"); e != nil {
-		panic("[init]" + e.Error())
-	}
-	//self log file
-	instance.logfile, e = rotatefile.NewRotateFile("./self_log", "superd", instance.maxlogsize)
-	if e != nil {
 		panic("[init]" + e.Error())
 	}
 	go func() {
@@ -123,26 +110,6 @@ func dirop(path string) error {
 	}
 	return nil
 }
-func (s *Super) log(groupname string, lpid, ppid uint64, version, logdata string) {
-	lf, ok := s.pool.Get().(*logformat)
-	if !ok {
-		lf = &logformat{
-			Superd: s.name,
-		}
-	}
-	lf.Group = groupname
-	lf.Lpid = lpid
-	lf.Ppid = ppid
-	lf.Version = version
-	lf.Log = logdata
-	s.loglker.Lock()
-	now := time.Now()
-	lf.Time = fmt.Sprintf(now.Format("2006-01-02 15:04:05")+".%9d ", now.Nanosecond())
-	d, _ := json.Marshal(lf)
-	s.logfile.Write(append(d, '\n'))
-	s.loglker.Unlock()
-	s.pool.Put(lf)
-}
 func (s *Super) CreateGroup(groupname, url string, urltype int, buildcmd string, buildargs, buildenv []string, runcmd string, runargs, runenv []string) error {
 	//check group name
 	if len(groupname) == 0 || groupname[0] < 65 || (groupname[0] > 90 && groupname[0] < 97) || groupname[0] > 122 {
@@ -187,7 +154,7 @@ func (s *Super) CreateGroup(groupname, url string, urltype int, buildcmd string,
 			loglker:   new(sync.Mutex),
 			notice:    make(chan uint64, 100),
 		}
-		g.logfile, e = rotatefile.NewRotateFile("./process_log/"+groupname, groupname, s.maxlogsize)
+		g.logfile, e = rotatefile.NewRotateFile("./process_log/"+groupname, groupname, rotatefile.RotateCap(s.logsize), rotatefile.RotateTime(s.logcycle))
 		if e != nil {
 			return fmt.Errorf("[create group]" + e.Error())
 		}

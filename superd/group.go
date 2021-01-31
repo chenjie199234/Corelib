@@ -2,7 +2,6 @@ package superd
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,8 +9,8 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"time"
 
+	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/rotatefile"
 )
@@ -48,24 +47,21 @@ type group struct {
 }
 
 func (g *group) log(lpid, ppid uint64, version, logdata string) {
-	lf, ok := g.s.pool.Get().(*logformat)
-	if !ok {
-		lf = &logformat{
-			Superd: g.s.name,
-		}
-	}
-	lf.Group = g.name
-	lf.Lpid = lpid
-	lf.Ppid = ppid
-	lf.Version = version
-	lf.Log = logdata
-	g.loglker.Lock()
-	now := time.Now()
-	lf.Time = fmt.Sprintf(now.Format("2006-01-02 15:04:05")+".%9d ", now.Nanosecond())
-	d, _ := json.Marshal(lf)
-	g.logfile.Write(append(d, '\n'))
-	g.loglker.Unlock()
-	g.s.pool.Put(lf)
+	buf := bufpool.GetBuffer()
+	buf.Append("{")
+	buf.Append("\"lpid\":")
+	buf.Append(lpid)
+	buf.Append(",")
+	buf.Append("\"ppid\":")
+	buf.Append(ppid)
+	buf.Append(",")
+	buf.Append("\"ver\":")
+	buf.Append(version)
+	buf.Append(",")
+	buf.Append("\"log\":")
+	buf.Append(logdata)
+	buf.Append("}")
+	g.logfile.WriteBuf(buf)
 }
 func (g *group) startGroup() {
 	g.lker.Lock()
@@ -495,6 +491,7 @@ func (g *group) stopProcess(pid uint64) {
 	}
 	p.stopProcess()
 }
+
 func (g *group) logs(logdata string) {
 	g.s.log(g.name, 0, 0, "", logdata)
 }

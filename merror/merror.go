@@ -10,8 +10,8 @@ import (
 //if error was not in merror format,code will return -1,msg will use the origin error.Error()
 
 type MError struct {
-	Code int64
-	Msg  string
+	Code int64  `json:"code"`
+	Msg  string `json:"msg"`
 }
 
 func MakeError(code int64, msg string) *MError {

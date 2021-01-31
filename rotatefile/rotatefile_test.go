@@ -1,25 +1,46 @@
 package rotatefile
 
 import (
-	"bytes"
+	"strings"
+	"sync"
 	"testing"
+
+	"github.com/chenjie199234/Corelib/bufpool"
 )
 
 func Test_RotateFile(t *testing.T) {
-	f, e := NewRotateFile("./", "abc", 1024)
+	f, e := NewRotateFile("./", "abc", 1, 0)
 	if e != nil {
 		panic(e)
 	}
-	for i := 0; i < 641; i++ {
-		if e := f.Write(bytes.Repeat([]byte{'a'}, 15)); e != nil {
-			panic(e)
-		}
-		if e := f.Write([]byte{'\n'}); e != nil {
-			panic(e)
-		}
+	wg := &sync.WaitGroup{}
+	wg.Add(500)
+	cond := sync.NewCond(&sync.Mutex{})
+	for c := 0; c < 500; c++ {
+		go func() {
+			defer wg.Done()
+			cond.L.Lock()
+			wg.Done()
+			cond.Wait()
+			for i := 0; i < 1000; i++ {
+				buf := bufpool.GetBuffer()
+				buf.Append(strings.Repeat("a", 15) + "\n")
+				if _, e := f.WriteBuf(buf); e != nil {
+					panic(e)
+				}
+			}
+			cond.L.Unlock()
+		}()
 	}
+	wg.Wait()
+	t.Log("prepared")
+	wg.Add(500)
+	cond.Broadcast()
+	wg.Wait()
 	f.Close(true)
-	if e := f.Write([]byte{'\n'}); e == nil {
+	buf := bufpool.GetBuffer()
+	buf.Append("1")
+	if _, e := f.WriteBuf(buf); e == nil {
 		panic("file already closed,write should return error,but no error return")
 	}
 }
