@@ -16,16 +16,12 @@ const (
 )
 
 type RegMsg struct {
-	GrpcIp      string `json:"gi,omitempty"`
-	GrpcPort    int    `json:"gp,omitempty"`
-	HttpIp      string `json:"hi,omitempty"`
-	HttpPort    int    `json:"hp,omitempty"`
-	TcpIp       string `json:"ti,omitempty"`
-	TcpPort     int    `json:"tp,omitempty"`
-	WebSockIp   string `json:"wi,omitempty"`
-	WebSockPort int    `json:"wp,omitempty"`
-	WebSockUrl  string `json:"wu,omitempty"`
-	Addition    []byte `json:"a,omitempty"`
+	WebScheme string `json:"hs,omitempty"`
+	WebIp     string `json:"hi,omitempty"`
+	WebPort   int    `json:"hp,omitempty"`
+	RpcIp     string `json:"ri,omitempty"`
+	RpcPort   int    `json:"rp,omitempty"`
+	Addition  []byte `json:"a,omitempty"`
 }
 
 func makeOnlineMsg(peeruniquename string, data []byte) []byte {

@@ -5,5 +5,5 @@ import (
 )
 
 func Test_Super(t *testing.T) {
-	NewSuper("super", 100)
+	NewSuper("super", 100, 0)
 }

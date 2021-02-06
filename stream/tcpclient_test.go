@@ -7,6 +7,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,17 +18,16 @@ func Test_Tcpclient(t *testing.T) {
 	go func() {
 		for count := 0; count < 10000; count++ {
 			tcpclientinstance := NewInstance(&InstanceConfig{
-				SelfName:           fmt.Sprintf("tcpclient%d", count),
-				VerifyTimeout:      500,
-				HeartbeatTimeout:   1500,
-				HeartprobeInterval: 500,
+				SelfName:           "tcpclient",
+				VerifyTimeout:      500 * time.Millisecond,
+				HeartbeatTimeout:   1500 * time.Millisecond,
+				HeartprobeInterval: 500 * time.Millisecond,
 				GroupNum:           10,
 				Verifyfunc:         tcpclienthandleVerify,
 				Onlinefunc:         tcpclienthandleonline,
 				Userdatafunc:       tcpclienthandleuserdata,
 				Offlinefunc:        tcpclienthandleoffline,
 			})
-
 			tcpclientinstance.StartTcpClient("127.0.0.1:9234", []byte{'t', 'e', 's', 't', 'c'})
 			time.Sleep(time.Millisecond)
 		}
@@ -35,6 +35,10 @@ func Test_Tcpclient(t *testing.T) {
 	http.ListenAndServe(":8081", nil)
 }
 func tcpclienthandleVerify(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
+	index := strings.Index(peeruniquename, ":")
+	if peeruniquename[:index] != "server" {
+		panic("name error")
+	}
 	if !bytes.Equal([]byte{'t', 'e', 's', 't'}, peerVerifyData) {
 		fmt.Println("verify error")
 		return nil, false
@@ -42,11 +46,10 @@ func tcpclienthandleVerify(ctx context.Context, peeruniquename string, peerVerif
 	return nil, true
 }
 
-var tcp int64
+var firsttcpclient int64
 
 func tcpclienthandleonline(p *Peer, peeruniquename string, starttime uint64) {
-	old := atomic.SwapInt64(&tcp, 1)
-	if old == 0 {
+	if atomic.SwapInt64(&firsttcpclient, 1) == 0 {
 		go func() {
 			for {
 				time.Sleep(time.Second)

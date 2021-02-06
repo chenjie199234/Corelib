@@ -1,4 +1,4 @@
-package mrpc
+package rpc
 
 import (
 	"github.com/chenjie199234/Corelib/merror"

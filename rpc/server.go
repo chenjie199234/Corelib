@@ -1,15 +1,16 @@
-package mrpc
+package rpc
 
 import (
 	"context"
-	"fmt"
+	"math"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/common"
+	"github.com/chenjie199234/Corelib/mlog"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/sys/cpu"
-	//"github.com/chenjie199234/Corelib/sys/trace"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -18,21 +19,25 @@ type OutsideHandler func(ctx context.Context, req []byte) (resp []byte, e error)
 
 type MrpcServer struct {
 	c          *stream.InstanceConfig
+	timeout    time.Duration
 	handler    map[string]func(*Msg)
 	instance   *stream.Instance
 	verifydata []byte
-	stoptimer  *time.Timer //if this is not nil,means this server is closing
+	status     int32 //0 stop,1 starting
+	count      int32
 	stopch     chan struct{}
 }
 
-func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *MrpcServer {
+func NewMrpcServer(c *stream.InstanceConfig, globaltimeout time.Duration, vdata []byte) *MrpcServer {
 	serverinstance := &MrpcServer{
+		timeout:    globaltimeout,
 		handler:    make(map[string]func(*Msg), 10),
 		verifydata: vdata,
+		stopch:     make(chan struct{}, 1),
 	}
 	dupc := *c //duplicate to remote the callback func race
 	dupc.Verifyfunc = serverinstance.verifyfunc
-	dupc.Onlinefunc = nil
+	dupc.Onlinefunc = serverinstance.onlinefunc
 	dupc.Userdatafunc = serverinstance.userfunc
 	dupc.Offlinefunc = nil
 	serverinstance.c = &dupc
@@ -40,35 +45,45 @@ func NewMrpcServer(c *stream.InstanceConfig, vdata []byte) *MrpcServer {
 	return serverinstance
 }
 func (s *MrpcServer) StartMrpcServer(listenaddr string) {
+	if atomic.SwapInt32(&s.status, 1) == 1 {
+		return
+	}
 	s.instance.StartTcpServer(listenaddr)
 }
 func (s *MrpcServer) StopMrpcServer() {
+	if atomic.SwapInt32(&s.status, 0) == 0 {
+		return
+	}
 	d, _ := proto.Marshal(&Msg{
 		Callid: 0,
 		Error:  ERR[ERRCLOSING].Error(),
 	})
 	s.instance.SendMessageAll(d, true)
-	s.stopch = make(chan struct{})
-	s.stoptimer = time.NewTimer(time.Second)
+	timer := time.NewTimer(time.Second)
 	for {
 		select {
-		case <-s.stoptimer.C:
-			return
+		case <-timer.C:
+			if atomic.LoadInt32(&s.count) == 0 {
+				s.instance.Stop()
+				return
+			}
+			timer.Reset(time.Second)
+			for len(timer.C) > 0 {
+				<-timer.C
+			}
 		case <-s.stopch:
-			s.stoptimer.Reset(time.Second)
-			for len(s.stoptimer.C) > 0 {
-				<-s.stoptimer.C
+			timer.Reset(time.Second)
+			for len(timer.C) > 0 {
+				<-timer.C
 			}
 		}
 	}
 }
-func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func(*Msg) {
+func (s *MrpcServer) insidehandler(functimeout time.Duration, handlers ...OutsideHandler) func(*Msg) {
 	return func(msg *Msg) {
 		defer func() {
 			if e := recover(); e != nil {
-				fmt.Printf("[Mrpc.server.insidehandler]panic:%s\n", e)
 				msg.Path = ""
-				msg.Trace = ""
 				msg.Deadline = 0
 				msg.Body = nil
 				msg.Cpu = cpu.GetUse()
@@ -76,22 +91,29 @@ func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func
 				msg.Metadata = nil
 			}
 		}()
-		ctx := context.Background()
+		var globaldl int64
+		var funcdl int64
 		now := time.Now()
-		var dl time.Time
-		if timeout != 0 {
-			if msg.Deadline == 0 || now.UnixNano()+int64(timeout) <= msg.Deadline {
-				dl = now.Add(time.Duration(timeout) * time.Millisecond)
-			} else {
-				dl = time.Unix(0, msg.Deadline)
-			}
-		} else if msg.Deadline != 0 {
-			dl = time.Unix(0, msg.Deadline)
+		if s.timeout != 0 {
+			globaldl = now.UnixNano() + int64(s.timeout)
 		}
-		if !dl.IsZero() {
-			if dl.UnixNano() <= (now.UnixNano() + int64(time.Millisecond)) {
+		if functimeout != 0 {
+			funcdl = now.UnixNano() + int64(functimeout)
+		}
+		min := int64(math.MaxInt64)
+		if msg.Deadline != 0 && msg.Deadline < min {
+			min = msg.Deadline
+		}
+		if funcdl != 0 && funcdl < min {
+			min = funcdl
+		}
+		if globaldl != 0 && globaldl < min {
+			min = globaldl
+		}
+		ctx := context.Background()
+		if min != math.MaxInt64 {
+			if min < now.UnixNano()+int64(time.Millisecond) {
 				msg.Path = ""
-				msg.Trace = ""
 				msg.Deadline = 0
 				msg.Body = nil
 				msg.Cpu = cpu.GetUse()
@@ -99,25 +121,19 @@ func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func
 				msg.Metadata = nil
 				return
 			}
-			var f context.CancelFunc
-			ctx, f = context.WithDeadline(ctx, dl)
-			defer f()
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, min))
+			defer cancel()
 		}
 		if len(msg.Metadata) > 0 {
 			ctx = SetAllMetadata(ctx, msg.Metadata)
 		}
-		//if msg.Trace == "" {
-		//        ctx = trace.SetTrace(ctx, trace.MakeTrace())
-		//} else {
-		//        ctx = trace.SetTrace(ctx, msg.Trace)
-		//}
 		var resp []byte
 		var err error
 		for _, handler := range handlers {
 			resp, err = handler(ctx, msg.Body)
 			if err != nil {
 				msg.Path = ""
-				msg.Trace = ""
 				msg.Deadline = 0
 				msg.Body = nil
 				msg.Cpu = cpu.GetUse()
@@ -127,7 +143,6 @@ func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func
 			}
 		}
 		msg.Path = ""
-		msg.Trace = ""
 		msg.Deadline = 0
 		msg.Body = resp
 		msg.Cpu = cpu.GetUse()
@@ -135,10 +150,15 @@ func (s *MrpcServer) insidehandler(timeout int, handlers ...OutsideHandler) func
 		msg.Metadata = nil
 	}
 }
-func (s *MrpcServer) RegisterHandler(path string, timeout int, handlers ...OutsideHandler) {
-	s.handler[path] = s.insidehandler(timeout, handlers...)
+
+//thread unsafe
+func (s *MrpcServer) RegisterHandler(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+	s.handler[path] = s.insidehandler(functimeout, handlers...)
 }
 func (s *MrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
+	if atomic.LoadInt32(&s.status) == 0 {
+		return nil, false
+	}
 	temp := common.Byte2str(peerVerifyData)
 	index := strings.LastIndex(temp, "|")
 	if index == -1 {
@@ -151,48 +171,64 @@ func (s *MrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peer
 	}
 	return s.verifydata, true
 }
-func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, starttime uint64) {
-	go func() {
-		msg := &Msg{}
-		if e := proto.Unmarshal(data, msg); e != nil {
-			//this is impossible
-			fmt.Printf("[Mrpc.server.userfunc.impossible]unmarshal data error:%s\n", e)
-			return
+func (s *MrpcServer) onlinefunc(p *stream.Peer, peeruniquename string, starttime uint64) {
+	if atomic.LoadInt32(&s.status) == 0 {
+		d, _ := proto.Marshal(&Msg{
+			Callid: 0,
+			Error:  ERR[ERRCLOSING].Error(),
+		})
+		select {
+		case s.stopch <- struct{}{}:
+		default:
 		}
-		if s.stoptimer != nil {
+		p.SendMessage(d, starttime, true)
+	}
+}
+func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, starttime uint64) {
+	msg := &Msg{}
+	if e := proto.Unmarshal(data, msg); e != nil {
+		mlog.Error("[rpc.server.userfunc] data format error:", e)
+		p.Close()
+		return
+	}
+	go func() {
+		atomic.AddInt32(&s.count, 1)
+		defer atomic.AddInt32(&s.count, -1)
+		if atomic.LoadInt32(&s.status) == 0 {
 			select {
 			case s.stopch <- struct{}{}:
 			default:
 			}
-			msg.Metadata = nil
-			msg.Cpu = cpu.GetUse()
+			msg.Path = ""
+			msg.Deadline = 0
+			msg.Cpu = 0
 			msg.Body = nil
 			msg.Error = ERR[ERRCLOSING].Error()
+			msg.Metadata = nil
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(d, starttime, true); e != nil {
-				fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)
+				mlog.Error("[rpc.server.userfunc] send message error:", e)
 			}
 			return
 		}
 		handler, ok := s.handler[msg.Path]
 		if !ok {
-			fmt.Printf("[Mrpc.server.userfunc]api:%s not implement\n", msg.Path)
 			msg.Path = ""
-			msg.Trace = ""
-			msg.Metadata = nil
+			msg.Deadline = 0
 			msg.Cpu = cpu.GetUse()
 			msg.Body = nil
 			msg.Error = ERR[ERRNOAPI].Error()
+			msg.Metadata = nil
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(d, starttime, true); e != nil {
-				fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)
+				mlog.Error("[rpc.server.userfunc] send message error:", e)
 			}
 			return
 		}
 		handler(msg)
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(d, starttime, true); e != nil {
-			fmt.Printf("[Mrpc.server.userfunc]error:%s\n", e)
+			mlog.Error("[rpc.server.userfunc] send message error:", e)
 		}
 	}()
 }

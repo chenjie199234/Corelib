@@ -1,7 +1,6 @@
-package mrpc
+package rpc
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/chenjie199234/Corelib/discovery"
@@ -12,15 +11,14 @@ func defaultdiscovery(appname string, client *MrpcClient) {
 		var notice chan struct{}
 		var e error
 		for {
-			notice, e = discovery.NoticeTcpChanges(appname)
+			notice, e = discovery.NoticeRpcChanges(appname)
 			if e == nil {
 				break
 			}
-			fmt.Printf("[Mrpc.client.defaultdiscovery]Notice discovery changes error:%s\n", e)
 			time.Sleep(time.Millisecond * 100)
 		}
 		<-notice
-		infos := discovery.GetTcpInfos(appname)
-		client.UpdateDiscovery(infos)
+		infos, addition := discovery.GetRpcInfos(appname)
+		client.UpdateDiscovery(infos, addition)
 	}
 }

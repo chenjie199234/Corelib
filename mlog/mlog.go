@@ -2,9 +2,10 @@ package mlog
 
 import (
 	"flag"
+	"fmt"
 	"os"
+	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/chenjie199234/Corelib/bufpool"
@@ -16,7 +17,6 @@ const (
 	infoLevel
 	warningLevel
 	errorLevel
-	panicLevel
 )
 const (
 	targetStd = iota + 1
@@ -28,11 +28,6 @@ type log struct {
 	target int
 	level  int
 	rf     *rotatefile.RotateFile
-	kvpool *sync.Pool
-}
-type kv struct {
-	key   string
-	value interface{}
 }
 
 var instance *log
@@ -42,13 +37,12 @@ var logdir = flag.String("logdir", "./", "log file's dir")
 var logcap = flag.Uint64("logcap", 0, "max size of each log file\npass will rotate\nunit M")
 var logcycle = flag.String("logcycle", "off", "rotate log file every\noff,hour,day,month")
 var logtarget = flag.String("logtarget", "std", "where to output log\nstd,file,both")
-var loglevel = flag.String("loglevel", "Info", "min level can be logged\nDebug,Info,Warning,Error,Panic")
+var loglevel = flag.String("loglevel", "Info", "min level can be logged\nDebug,Info,Warning,Error")
+var logkeep = flag.Uint64("logkeepday", 0, "log file will keep how many days")
+var logfileline = flag.Bool("logfileline", false, "add log caller's file and line number")
 
 func init() {
-	flag.Parse()
-	instance = &log{
-		kvpool: &sync.Pool{},
-	}
+	instance = &log{}
 	switch strings.ToLower(*logtarget) {
 	case "":
 		fallthrough
@@ -72,22 +66,20 @@ func init() {
 		instance.level = warningLevel
 	case "error":
 		instance.level = errorLevel
-	case "panic":
-		instance.level = panicLevel
 	default:
-		panic("[mlog]log level unknown,supported:debug,info,warning,error,panic.default is debug")
+		panic("[mlog]log level unknown,supported:debug,info,warning,error.default is info")
 	}
 	if instance.target&targetFile > 0 {
 		var e error
 		switch strings.ToLower(*logcycle) {
 		case "off":
-			instance.rf, e = rotatefile.NewRotateFile(*logdir+"/", *logname, rotatefile.RotateCap(*logcap), rotatefile.RotateOff)
+			instance.rf, e = rotatefile.NewRotateFile(*logdir, *logname, "log", rotatefile.RotateCap(*logcap), rotatefile.RotateOff, rotatefile.KeepDays(*logkeep))
 		case "hour":
-			instance.rf, e = rotatefile.NewRotateFile(*logdir+"/", *logname, rotatefile.RotateCap(*logcap), rotatefile.RotateHour)
+			instance.rf, e = rotatefile.NewRotateFile(*logdir, *logname, "log", rotatefile.RotateCap(*logcap), rotatefile.RotateHour, rotatefile.KeepDays(*logkeep))
 		case "day":
-			instance.rf, e = rotatefile.NewRotateFile(*logdir+"/", *logname, rotatefile.RotateCap(*logcap), rotatefile.RotateDay)
+			instance.rf, e = rotatefile.NewRotateFile(*logdir, *logname, "log", rotatefile.RotateCap(*logcap), rotatefile.RotateDay, rotatefile.KeepDays(*logkeep))
 		case "month":
-			instance.rf, e = rotatefile.NewRotateFile(*logdir+"/", *logname, rotatefile.RotateCap(*logcap), rotatefile.RotateMonth)
+			instance.rf, e = rotatefile.NewRotateFile(*logdir, *logname, "log", rotatefile.RotateCap(*logcap), rotatefile.RotateMonth, rotatefile.KeepDays(*logkeep))
 		default:
 			panic("[mlog]log cycle unknown,supported:hour,day,month.default is no cycle")
 		}
@@ -96,78 +88,71 @@ func init() {
 		}
 	}
 }
-func KV(key string, value interface{}) *kv {
-	temp, ok := instance.kvpool.Get().(*kv)
-	if !ok {
-		return &kv{key: key, value: value}
-	}
-	temp.key = key
-	temp.value = value
-	return temp
-}
-func Debug(msg string, datas ...kv) {
+func Debug(datas ...interface{}) {
 	if instance.level > debugLevel {
 		return
 	}
 	buf := bufpool.GetBuffer()
 	buf.Append("[DBG] ")
-	buf.Append(time.Now())
-	buf.Append(" msg:")
-	buf.Append(msg)
 	write(buf, datas...)
 }
-func Info(msg string, datas ...kv) {
+func Info(datas ...interface{}) {
 	if instance.level > infoLevel {
 		return
 	}
 	buf := bufpool.GetBuffer()
 	buf.Append("[INF] ")
-	buf.Append(time.Now())
-	buf.Append(" msg:")
-	buf.Append(msg)
 	write(buf, datas...)
 }
-func Warning(msg string, datas ...kv) {
+func Warning(datas ...interface{}) {
 	if instance.level > warningLevel {
 		return
 	}
 	buf := bufpool.GetBuffer()
 	buf.Append("[WRN] ")
-	buf.Append(time.Now())
-	buf.Append(" msg:")
-	buf.Append(msg)
 	write(buf, datas...)
 }
-func Error(msg string, datas ...kv) {
+func Error(datas ...interface{}) {
 	if instance.level > errorLevel {
 		return
 	}
 	buf := bufpool.GetBuffer()
 	buf.Append("[ERR] ")
-	buf.Append(time.Now())
-	buf.Append(" msg:")
-	buf.Append(msg)
 	write(buf, datas...)
 }
-func write(buf *bufpool.Buffer, kvs ...kv) {
-	for _, temp := range kvs {
+func Must(datas ...interface{}) {
+	buf := bufpool.GetBuffer()
+	buf.Append("[MST] ")
+	write(buf, datas...)
+}
+func write(buf *bufpool.Buffer, datas ...interface{}) {
+	buf.Append(time.Now())
+	if *logfileline {
+		_, file, line, _ := runtime.Caller(2)
 		buf.Append(" ")
-		buf.Append(temp.key)
+		buf.Append(file)
 		buf.Append(":")
-		buf.Append(temp.value)
-		instance.kvpool.Put(temp)
+		buf.Append(line)
+	}
+	for _, data := range datas {
+		buf.Append(" ")
+		buf.Append(data)
 	}
 	buf.Append("\n")
 	if instance.target&targetStd > 0 {
 		os.Stderr.Write(buf.Bytes())
 	}
 	if instance.target&targetFile > 0 {
-		instance.rf.WriteBuf(buf)
+		if _, e := instance.rf.WriteBuf(buf); e != nil {
+			fmt.Println("[mlog] write rotate file error: " + e.Error())
+			bufpool.PutBuffer(buf)
+		}
+	} else {
+		bufpool.PutBuffer(buf)
 	}
-	bufpool.PutBuffer(buf)
 }
-func Close(wait bool) {
+func Close() {
 	if instance.target&targetFile > 0 && instance.rf != nil {
-		instance.rf.Close(wait)
+		instance.rf.Close()
 	}
 }

@@ -1,9 +1,33 @@
 package common
 
 import (
+	"fmt"
 	"unsafe"
 )
 
+func NameCheck(name string, haspoint bool) error {
+	if name == "" {
+		return fmt.Errorf("name is empty")
+	}
+	if len(name) > 32 {
+		return fmt.Errorf("name is too long")
+	}
+	for _, v := range name {
+		if haspoint {
+			if name[0] < 97 || name[0] > 122 {
+				return fmt.Errorf("name's first character must in [a-z]")
+			}
+			if (v < 48 || (v > 57 && v < 97) || v > 122) && v != 46 {
+				return fmt.Errorf("name has illegal character,must in [a-z][0-9][.]")
+			}
+		} else {
+			if v < 48 || (v > 57 && v < 97) || v > 122 {
+				return fmt.Errorf("name has illegal character,must in [a-z][0-9]")
+			}
+		}
+	}
+	return nil
+}
 func Str2byte(data string) []byte {
 	temp := (*[2]uintptr)(unsafe.Pointer(&data))
 	result := [3]uintptr{temp[0], temp[1], temp[1]}

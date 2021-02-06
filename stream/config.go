@@ -3,6 +3,9 @@ package stream
 import (
 	"context"
 	"fmt"
+	"time"
+
+	"github.com/chenjie199234/Corelib/common"
 )
 
 //Warning!!Don't write block logic in these callback,live for{}
@@ -30,188 +33,126 @@ type HandleOfflineFunc func(p *Peer, peeruniquename string, starttime uint64)
 
 type TcpConfig struct {
 	//for client only
-	ConnectTimeout int `json:"connect_timeout"` //default 500ms
+	ConnectTimeout time.Duration //default 500ms
 
-	SocketReadBufferLen  int `json:"socket_read_buffer_len"`  //default 1024 byte,max 65536 byte
-	SocketWriteBufferLen int `json:"socket_write_buffer_len"` //default 1024 byte,max 65536 byte
+	SocketReadBufferLen  int //default 1024 byte,max 65536 byte
+	SocketWriteBufferLen int //default 1024 byte,max 65536 byte
 
-	MaxMessageLen int `json:"max_message_len"` //max 65536,default is max
+	MaxMessageLen int //max 65536,default is max
 
 	//write buffer can store the messages in buffer and send async in another goruntine
-	AppWriteBufferNum int `json:"app_write_buffer_num"` //default 256 num(not the byte)
+	AppWriteBufferNum int //default 256 num(not the byte)
 }
 
 var defaultTcpConfig = &TcpConfig{
-	ConnectTimeout:       500,
+	ConnectTimeout:       500 * time.Millisecond,
 	SocketReadBufferLen:  1024,
 	SocketWriteBufferLen: 1024,
 	MaxMessageLen:        65536,
 	AppWriteBufferNum:    256,
 }
 
-func checkTcpConfig(c *TcpConfig) {
+func (c *TcpConfig) checkTcpConfig() {
 	if c.ConnectTimeout <= 0 {
-		fmt.Println("[Stream.checkTcpConfig]missing connect timeout,default will be used:500ms")
-		c.ConnectTimeout = 500
+		c.ConnectTimeout = 500 * time.Millisecond
 	}
 	if c.SocketReadBufferLen <= 0 {
-		fmt.Println("[Stream.checkTcpConfig]missing socket read buffer len,default will be used:1024 byte")
 		c.SocketReadBufferLen = 1024
 	}
 	if c.SocketReadBufferLen > 65536 {
-		fmt.Println("[Stream.checkTcpConfig]socket read buffer len is too large,default will be used:65536 byte")
 		c.SocketReadBufferLen = 65536
 	}
 	if c.SocketWriteBufferLen <= 0 {
-		fmt.Println("[Stream.checkTcpConfig]missing socket write buffer len,default will be used:1024 byte")
 		c.SocketWriteBufferLen = 1024
 	}
 	if c.SocketWriteBufferLen > 65536 {
-		fmt.Println("[Stream.checkTcpConfig]socket write buffer len is too large,default will be used:65536 byte")
 		c.SocketReadBufferLen = 65536
 	}
 	if c.MaxMessageLen <= 0 {
-		fmt.Println("[Stream.checkTcpConfig]missing max message length,default will be used:65536 byte")
 		c.MaxMessageLen = 65536
 	}
 	if c.MaxMessageLen > 65536 {
-		fmt.Println("[Stream.checkTcpConfig]max message length is too large,default will be used:65536 byte")
 		c.MaxMessageLen = 65536
 	}
 	if c.AppWriteBufferNum == 0 {
-		fmt.Println("[Stream.checkTcpConfig]missing app write buffer num,default will be used:256 num")
 		c.AppWriteBufferNum = 256
 	}
 }
 
 type UnixConfig struct {
 	//for client only
-	ConnectTimeout int `json:"connect_timeout"` //default 500ms
+	ConnectTimeout time.Duration //default 500ms
 
-	SocketReadBufferLen  int `json:"socket_read_buffer_len"`  //default 1024 byte,max 65535 byte
-	SocketWriteBufferLen int `json:"socket_write_buffer_len"` //default 1024 byte,max 65535 byte
+	SocketReadBufferLen  int //default 1024 byte,max 65535 byte
+	SocketWriteBufferLen int //default 1024 byte,max 65535 byte
 
-	MaxMessageLen int `json:"max_message_len"` //max 65536,default is max
+	MaxMessageLen int //max 65536,default is max
 
 	//write buffer can store the messages in buffer and send async in another goruntine
-	AppWriteBufferNum int `json:"app_write_buffer_num"` //default 256 num(not the byte)
+	AppWriteBufferNum int //default 256 num(not the byte)
 }
 
 var defaultUnixConfig = &UnixConfig{
-	ConnectTimeout:       500,
+	ConnectTimeout:       500 * time.Millisecond,
 	SocketReadBufferLen:  1024,
 	SocketWriteBufferLen: 1024,
 	MaxMessageLen:        65536,
 	AppWriteBufferNum:    256,
 }
 
-func checkUnixConfig(c *UnixConfig) {
+func (c *UnixConfig) checkUnixConfig() {
 	if c.ConnectTimeout <= 0 {
-		fmt.Println("[Stream.checkUnixConfig]missing connect timeout,default will be used:500ms")
-		c.ConnectTimeout = 500
+		c.ConnectTimeout = 500 * time.Millisecond
 	}
 	if c.SocketReadBufferLen <= 0 {
-		fmt.Println("[Stream.checkUnixConfig]missing socket read buffer len,default will be used:1024 byte")
 		c.SocketReadBufferLen = 1024
 	}
 	if c.SocketReadBufferLen > 65536 {
-		fmt.Println("[Stream.checkUnixConfig]socket read buffer len is too large,default will be used:65536 byte")
 		c.SocketReadBufferLen = 65536
 	}
 	if c.SocketWriteBufferLen <= 0 {
-		fmt.Println("[Stream.checkUnixConfig]missing socket write buffer len,default will be used:1024 byte")
 		c.SocketWriteBufferLen = 1024
 	}
 	if c.SocketWriteBufferLen > 65536 {
-		fmt.Println("[Stream.checkUnixConfig]socket write buffer len is too large,default will be used:65536 byte")
 		c.SocketReadBufferLen = 65536
 	}
 	if c.MaxMessageLen <= 0 {
-		fmt.Println("[Stream.checkUnixConfig]missing max message length,default will be used:65536 byte")
 		c.MaxMessageLen = 65536
 	}
 	if c.MaxMessageLen > 65536 {
-		fmt.Println("[Stream.checkUnixConfig]max message length is too large,default will be used:65536 byte")
 		c.MaxMessageLen = 65536
 	}
 	if c.AppWriteBufferNum == 0 {
-		fmt.Println("[Stream.checkUnixConfig]missing app write buffer num,default will be used:256 num")
 		c.AppWriteBufferNum = 256
-	}
-}
-
-type WebConfig struct {
-	//for client this is the time to build connection with server
-	//for server this is the time to upgrade connection to websocket
-	ConnectTimeout int `json:"connect_timeout"` //default 500ms
-
-	SocketReadBufferLen  int `json:"socket_read_buffer_len"`  //default 1024 byte
-	SocketWriteBufferLen int `json:"socket_write_buffer_len"` //default 1024 byte
-
-	//write buffer can store the messages in buffer and send async in another goruntine
-	AppWriteBufferNum int `json:"app_write_buffer_num"` //default 256 num(not the byte)
-
-	HttpMaxHeaderLen int    `json:"http_max_header_len"` //default 1024 byte
-	EnableCompress   bool   `json:"enable_compress"`     //default false
-	TlsCertFile      string `json:"tls_cert_file"`       //default don't use tls
-	TlsKeyFile       string `json:"tls_key_file"`        //default don't use tls
-}
-
-var defaultWebConfig = &WebConfig{
-	ConnectTimeout:       500,
-	SocketReadBufferLen:  1024,
-	SocketWriteBufferLen: 1024,
-	AppWriteBufferNum:    256,
-
-	HttpMaxHeaderLen: 1024,
-	EnableCompress:   false,
-}
-
-func checkWebConfig(c *WebConfig) {
-	if c.ConnectTimeout == 0 {
-		fmt.Println("[Stream.checkWebConfig]missing connect timeout,default will be used:500ms")
-		c.ConnectTimeout = 500
-	}
-	if c.HttpMaxHeaderLen == 0 {
-		fmt.Println("[Stream.checkWebConfig]missing http max header len,default will be used:1024 byte")
-		c.HttpMaxHeaderLen = 1024
-	}
-	if c.SocketReadBufferLen == 0 {
-		fmt.Println("[Stream.checkWebConfig]missing socket read buffer len,default will be used:1024 byte")
-		c.SocketReadBufferLen = 1024
-	}
-	if c.SocketWriteBufferLen == 0 {
-		fmt.Println("[Stream.checkWebConfig]missing socket write buffer len,default will be used:1024 byte")
-		c.SocketWriteBufferLen = 1024
-	}
-	if c.AppWriteBufferNum == 0 {
-		fmt.Println("[Stream.checkWebConfig]missing app write buffer num,default will be used:256 num")
-		c.SocketWriteBufferLen = 256
 	}
 }
 
 type InstanceConfig struct {
 	//the name of this instance
-	SelfName string `json:"self_name"`
+	SelfName string
 	//two peers need to verify each other,before they can communicate
-	VerifyTimeout uint64 `json:"verify_timeout"` //default 1000ms
+	VerifyTimeout time.Duration //default 1s
 
 	//heartbeat timeout
-	HeartbeatTimeout   uint64 `json:"heartbeat_timeout"`   //default 5000ms
-	HeartprobeInterval uint64 `json:"heartprobe_interval"` //default 1500ms
-	//0 means no idle timeout,only reveice heartbeat msg and no more userdata msg,every userdata msg will recycle the timeout
-	RecvIdleTimeout uint64 `json:"recv_idle_timeout"`
-	//is this is not 0,this must > HeartprobeInterval,this is useful for slow read attact
-	SendIdleTimeout uint64 `json:"send_idle_timeout"` //default HeartprobeInterval + (1 second)
+	HeartbeatTimeout time.Duration //default 5s
+	//must < HeartbeatTimeout
+	HeartprobeInterval time.Duration //default 1.5s
+	//only reveice heartbeat msg and no more userdata msg is idle
+	//0 means no idle timeout
+	//every userdata msg will recycle the timeout
+	RecvIdleTimeout time.Duration
+	//if this is not 0,this must > HeartprobeInterval,this is useful for slow read attact
+	SendIdleTimeout time.Duration //default HeartprobeInterval + (1 second)
 
 	//split connections into groups
 	//every group will have an independence RWMutex to control online and offline
-	//every group will have an independence goruntine to check heart timeout nodes in this piece
-	GroupNum uint `json:"group_num"` //default 1 num
+	//every group will have an independence goruntine to check nodes' heart timeout in this group
+	GroupNum uint //default 1 num
 
-	TcpC  *TcpConfig  `json:"tcp_config"`
-	UnixC *UnixConfig `json:"unix_config"`
-	WebC  *WebConfig  `json:"web_config"`
+	//specify the tcp socket connection's config
+	TcpC *TcpConfig
+	//specify the unix socket connection's config
+	UnixC *UnixConfig
 
 	//before peer and peer confirm connection,they need to verify each other
 	//after tcp connected,this function will be called
@@ -225,58 +166,45 @@ type InstanceConfig struct {
 }
 
 func checkInstanceConfig(c *InstanceConfig) error {
-	if c.SelfName == "" {
-		return fmt.Errorf("[Stream.checkInstanceConfig]missing instance name")
-	}
-	if len(c.SelfName) > 64 {
-		return fmt.Errorf("[Stream.checkInstanceConfig]instance name too long")
-	}
-	for _, v := range c.SelfName {
-		if (int(v) < 48 && int(v) != 46) || (int(v) > 57 && int(v) < 65) || (int(v) > 90 && int(v) < 97) || int(v) > 122 {
-			return fmt.Errorf("[Stream.checkInstanceConfig]instance name contains illegal character which is not in [0-9],[a-z],[A-Z],[.]")
-		}
+	if e := common.NameCheck(c.SelfName, true); e != nil {
+		return fmt.Errorf("[Stream.checkInstanceConfig] " + e.Error())
 	}
 	if c.VerifyTimeout == 0 {
-		fmt.Println("[Stream.checkInstanceConfig]missing verify timeout,default will be used:1000ms")
-		c.VerifyTimeout = 1000
+		c.VerifyTimeout = time.Second
 	}
 	if c.HeartbeatTimeout == 0 {
-		fmt.Println("[Stream.checkInstanceConfig]missing heartbeat timeout,default will be used:5000ms")
-		c.HeartbeatTimeout = 5000
+		c.HeartbeatTimeout = 5 * time.Second
 	}
 	if c.HeartprobeInterval == 0 {
-		fmt.Println("[Stream.checkInstanceConfig]missing heartprobe interval,default will be used:1500ms")
-		c.HeartprobeInterval = 1500
+		c.HeartprobeInterval = 1500 * time.Millisecond
 	}
 	if c.HeartprobeInterval >= c.HeartbeatTimeout {
-		fmt.Println("[Stream.checkInstanceConfig]'heartbeat timeout' >= 'heartprobe interval','heartprobe interval' will be set to 'heartbeat timeout / 3'")
 		c.HeartprobeInterval = c.HeartbeatTimeout / 3
 	}
 	if c.SendIdleTimeout <= c.HeartprobeInterval {
-		fmt.Println("[Stream.checkInstanceConfig]'sendidle timeout' <= 'heartbeat interval','sendidle timeout' will be set to 'heartbeat timeout' + '1s'")
-		c.SendIdleTimeout = c.HeartprobeInterval + 1000
+		c.SendIdleTimeout = c.HeartprobeInterval + time.Second
 	}
 	if c.GroupNum == 0 {
-		fmt.Println("[Stream.checkInstanceConfig]missing group num,default will be used:1 num")
 		c.GroupNum = 1
 	}
 	//verify func can't be nill
-	if c.Verifyfunc == nil {
-		return fmt.Errorf("[Stream.checkInstanceConfig]missing deal verify function")
-	}
 	//user data deal func can't be nill
-	if c.Userdatafunc == nil {
-		return fmt.Errorf("[Stream.checkInstanceConfig]missing deal userdata function")
-	}
 	//online and offline func can be nill
-	if c.TcpC != nil {
-		checkTcpConfig(c.TcpC)
+	if c.Verifyfunc == nil {
+		return fmt.Errorf("[Stream.checkInstanceConfig]missing verify function")
 	}
-	if c.UnixC != nil {
-		checkUnixConfig(c.UnixC)
+	if c.Userdatafunc == nil {
+		return fmt.Errorf("[Stream.checkInstanceConfig]missing userdata function")
 	}
-	if c.WebC != nil {
-		checkWebConfig(c.WebC)
+	if c.TcpC == nil {
+		c.TcpC = defaultTcpConfig
+	} else {
+		c.TcpC.checkTcpConfig()
+	}
+	if c.UnixC == nil {
+		c.UnixC = defaultUnixConfig
+	} else {
+		c.UnixC.checkUnixConfig()
 	}
 	return nil
 }

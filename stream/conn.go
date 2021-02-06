@@ -3,41 +3,37 @@ package stream
 import (
 	"bufio"
 	"context"
-	"fmt"
+	"errors"
 	"net"
-	"net/http"
-	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 	"unsafe"
 
+	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/common"
-	"github.com/gorilla/websocket"
-	"github.com/julienschmidt/httprouter"
+	"github.com/chenjie199234/Corelib/mlog"
 )
 
 func (this *Instance) StartTcpServer(listenaddr string) {
-	if this.conf.TcpC == nil {
-		fmt.Printf("[Stream.TCP.StartTcpServer]missing tcp config,the default will be used:%+v\n", defaultTcpConfig)
-		this.conf.TcpC = defaultTcpConfig
+	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
+	if e != nil {
+		panic("[Stream.TCP.StartTcpServer] resolve addr:" + listenaddr + " error:" + e.Error())
 	}
-	var laddr *net.TCPAddr
-	var e error
-	var conn *net.TCPConn
-	if laddr, e = net.ResolveTCPAddr("tcp", listenaddr); e != nil {
-		panic("[Stream.TCP.StartTcpServer]resolve self addr error:" + e.Error())
-	}
-	if this.tcplistener, e = net.ListenTCP(laddr.Network(), laddr); e != nil {
-		panic("[Stream.TCP.StartTcpServer]listening self addr error:" + e.Error())
+	this.tcplistener, e = net.ListenTCP(laddr.Network(), laddr)
+	if e != nil {
+		panic("[Stream.TCP.StartTcpServer] listen addr:" + listenaddr + " error:" + e.Error())
 	}
 	for {
-		p := this.getPeer(TCP, CLIENT, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, &this.conf.SelfName)
-		if conn, e = this.tcplistener.AcceptTCP(); e != nil {
-			fmt.Printf("[Stream.TCP.StartTcpServer]accept tcp connect error:%s\n", e)
+		p := this.getPeer(TCP, CLIENT, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, this.conf.SelfName)
+		conn, e := this.tcplistener.AcceptTCP()
+		if e != nil {
+			mlog.Error("[Stream.TCP.StartTcpServer] accept connect error:", e)
 			return
 		}
-		if atomic.LoadInt64(&this.stop) == 1 {
+		if atomic.LoadInt32(&this.stop) == 1 {
 			conn.Close()
+			this.putPeer(p)
 			this.tcplistener.Close()
 			return
 		}
@@ -51,28 +47,25 @@ func (this *Instance) StartTcpServer(listenaddr string) {
 		go this.sworker(p, this.conf.TcpC.MaxMessageLen)
 	}
 }
-func (this *Instance) StartUnixsocketServer(listenaddr string) {
-	if this.conf.UnixC == nil {
-		fmt.Printf("[Stream.TCP.StartUnixsocketServer]missing unix config,the default will be used:%+v\n", defaultUnixConfig)
-		this.conf.UnixC = defaultUnixConfig
+func (this *Instance) StartUnixServer(listenaddr string) {
+	laddr, e := net.ResolveUnixAddr("unix", listenaddr)
+	if e != nil {
+		panic("[Stream.UNIX.StartUnixServer] resolve addr:" + listenaddr + " error:" + e.Error())
 	}
-	var laddr *net.UnixAddr
-	var e error
-	var conn *net.UnixConn
-	if laddr, e = net.ResolveUnixAddr("unix", listenaddr); e != nil {
-		panic("[Stream.UNIX.StartUnixsocketServer]resolve self addr error:" + e.Error())
-	}
-	if this.unixlistener, e = net.ListenUnix("unix", laddr); e != nil {
-		panic("[Stream.UNIX.StartUnixsocketServer]listening self addr error:" + e.Error())
+	this.unixlistener, e = net.ListenUnix("unix", laddr)
+	if e != nil {
+		panic("[Stream.UNIX.StartUnixServer] listening addr:" + listenaddr + " error:" + e.Error())
 	}
 	for {
-		p := this.getPeer(UNIXSOCKET, CLIENT, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, &this.conf.SelfName)
-		if conn, e = this.unixlistener.AcceptUnix(); e != nil {
-			fmt.Printf("[Stream.UNIX.StartUnixsocketServer]accept unix connect error:%s\n", e)
+		p := this.getPeer(UNIX, CLIENT, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, this.conf.SelfName)
+		conn, e := this.unixlistener.AcceptUnix()
+		if e != nil {
+			mlog.Error("[Stream.UNIX.StartUnixServer] accept connect error:", e)
 			return
 		}
-		if atomic.LoadInt64(&this.stop) == 1 {
+		if atomic.LoadInt32(&this.stop) == 1 {
 			conn.Close()
+			this.putPeer(p)
 			this.unixlistener.Close()
 			return
 		}
@@ -87,143 +80,87 @@ func (this *Instance) StartUnixsocketServer(listenaddr string) {
 	}
 }
 
-func (this *Instance) StartWebsocketServer(paths []string, listenaddr string, checkorigin func(*http.Request) bool) {
-	if this.conf.WebC == nil {
-		fmt.Printf("[Stream.WEB.StartWebsocketServer]missing web config,the default will be used:%+v\n", defaultWebConfig)
-		this.conf.WebC = defaultWebConfig
-	}
-	upgrader := &websocket.Upgrader{
-		HandshakeTimeout:  time.Duration(this.conf.WebC.ConnectTimeout) * time.Millisecond,
-		WriteBufferPool:   &sync.Pool{},
-		CheckOrigin:       checkorigin,
-		EnableCompression: this.conf.WebC.EnableCompress,
-		ReadBufferSize:    this.conf.WebC.SocketReadBufferLen,
-		WriteBufferSize:   this.conf.WebC.SocketWriteBufferLen,
-	}
-	this.webserver = &http.Server{
-		Addr:              listenaddr,
-		ReadHeaderTimeout: time.Duration(this.conf.WebC.ConnectTimeout) * time.Millisecond,
-		ReadTimeout:       time.Duration(this.conf.WebC.ConnectTimeout) * time.Millisecond,
-		MaxHeaderBytes:    this.conf.WebC.HttpMaxHeaderLen,
-		Handler:           httprouter.New(),
-	}
-	connhandler := func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		if atomic.LoadInt64(&this.stop) == 1 {
-			this.webserver.Shutdown(context.Background())
-			return
-		}
-		conn, e := upgrader.Upgrade(w, r, nil)
-		if e != nil {
-			fmt.Printf("[Stream.WEB.StartWebsocketServer]upgrade error:%s\n", e)
-			return
-		}
-		p := this.getPeer(WEBSOCKET, CLIENT, this.conf.WebC.AppWriteBufferNum, 0, &this.conf.SelfName)
-		p.conn = unsafe.Pointer(conn)
-		p.setbuffer(this.conf.WebC.SocketReadBufferLen, this.conf.WebC.SocketWriteBufferLen)
-		go this.sworker(p, 0)
-	}
-	for _, path := range paths {
-		(this.webserver.Handler).(*httprouter.Router).GET(path, connhandler)
-	}
-	if this.conf.WebC.TlsCertFile != "" && this.conf.WebC.TlsKeyFile != "" {
-		if e := this.webserver.ListenAndServeTLS(this.conf.WebC.TlsCertFile, this.conf.WebC.TlsKeyFile); e != nil {
-			panic("[Stream.WEB.StartWebsocketServer]start wss server error:" + e.Error())
-		}
-	} else {
-		if e := this.webserver.ListenAndServe(); e != nil {
-			panic("[Stream.WEB.StartWebsocketServer]start ws server error:" + e.Error())
-		}
-	}
-}
-func (this *Instance) sworker(p *Peer, maxlen int) bool {
+func (this *Instance) sworker(p *Peer, maxlen int) {
 	//read first verify message from client
 	verifydata := this.verifypeer(p, maxlen)
-	if p.clientname != nil {
-		//verify client success,send self's verify message to client
-		var verifymsg []byte
-		switch p.protocoltype {
-		case TCP:
-			fallthrough
-		case UNIXSOCKET:
-			verifymsg = makeVerifyMsg(*p.servername, verifydata, p.starttime, true)
-		case WEBSOCKET:
-			verifymsg = makeVerifyMsg(*p.servername, verifydata, p.starttime, false)
+	if p.clientname != "" {
+		if !this.addPeer(p) {
+			switch p.protocoltype {
+			case TCP:
+				mlog.Error("[Stream.TCP.sworker] duplicate connect from client:", p.getpeername(), "addr:", p.getpeeraddr())
+			case UNIX:
+				mlog.Error("[Stream.UNIX.sworker] duplicate connect from client:", p.getpeername(), "addr:", p.getpeeraddr())
+			}
+			p.closeconn()
+			this.putPeer(p)
+			return
 		}
+		if atomic.LoadInt32(&this.stop) == 1 {
+			p.closeconn()
+			//after addpeer should use this way to delete this peer
+			this.noticech <- p
+			return
+		}
+		//verify client success,send self's verify message to client
+		verifymsg := makeVerifyMsg(p.servername, verifydata, p.starttime, true)
 		send := 0
 		num := 0
 		var e error
-		for send < len(verifymsg) {
+		for send < verifymsg.Len() {
 			switch p.protocoltype {
 			case TCP:
-				num, e = (*net.TCPConn)(p.conn).Write(verifymsg[send:])
-			case UNIXSOCKET:
-				num, e = (*net.UnixConn)(p.conn).Write(verifymsg[send:])
-			case WEBSOCKET:
-				e = (*websocket.Conn)(p.conn).WriteMessage(websocket.BinaryMessage, verifymsg)
+				if num, e = (*net.TCPConn)(p.conn).Write(verifymsg.Bytes()[send:]); e != nil {
+					mlog.Error("[Stream.TCP.sworker] write first verify msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+				}
+			case UNIX:
+				if num, e = (*net.UnixConn)(p.conn).Write(verifymsg.Bytes()[send:]); e != nil {
+					mlog.Error("[Stream.UNIX.sworker] write first verify msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+				}
 			}
 			if e != nil {
-				fmt.Printf("[Stream.%s.sworker]write first verify msg error:%s to client addr:%s\n",
-					p.getprotocolname(), e, p.getpeeraddr())
+				bufpool.PutBuffer(verifymsg)
 				p.closeconn()
 				this.putPeer(p)
-				return false
+				return
 			}
-			switch p.protocoltype {
-			case TCP:
-				fallthrough
-			case UNIXSOCKET:
-				send += num
-			case WEBSOCKET:
-				send = len(verifymsg)
-			}
+			send += num
 		}
-		if !this.addPeer(p) {
-			fmt.Printf("[Stream.%s.sworker]refuse reconnect from client:%s addr:%s\n",
-				p.getprotocolname(), *p.clientname, p.getpeeraddr())
-			return false
-		}
-		if atomic.LoadInt64(&this.stop) == 1 {
-			p.CancelFunc()
-			p.closeconn()
-			p.parentnode.Lock()
-			delete(p.parentnode.peers, p.getpeeruniquename())
-			p.parentnode.Unlock()
-			this.putPeer(p)
-			return false
-		}
-		//set websocket pong handler
-		if p.protocoltype == WEBSOCKET {
-			(*websocket.Conn)(p.conn).SetPongHandler(func(data string) error {
-				return this.dealmsg(p, common.Str2byte(data), true)
-			})
-		}
+		bufpool.PutBuffer(verifymsg)
 		if this.conf.Onlinefunc != nil {
 			this.conf.Onlinefunc(p, p.getpeeruniquename(), p.starttime)
 		}
 		go this.read(p, maxlen)
 		go this.write(p)
-		return true
+		return
 	} else {
 		p.closeconn()
 		this.putPeer(p)
-		return false
+		return
 	}
 }
 
+// success return peeruniquename
+// fail return empty
 func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) string {
-	if atomic.LoadInt64(&this.stop) == 1 {
+	if atomic.LoadInt32(&this.stop) == 1 {
 		return ""
 	}
-	if this.conf.TcpC == nil {
-		fmt.Printf("[Stream.TCP.StartTcpClient]missing tcp config,the default will be used:%+v\n", defaultTcpConfig)
-		this.conf.TcpC = defaultTcpConfig
+	dialer := net.Dialer{
+		Timeout: this.conf.TcpC.ConnectTimeout,
+		Control: func(network, address string, c syscall.RawConn) error {
+			c.Control(func(fd uintptr) {
+				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, this.conf.TcpC.SocketReadBufferLen)
+				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, this.conf.TcpC.SocketWriteBufferLen)
+			})
+			return nil
+		},
 	}
-	conn, e := net.DialTimeout("tcp", serveraddr, time.Duration(this.conf.TcpC.ConnectTimeout)*time.Millisecond)
+	conn, e := dialer.Dial("tcp", serveraddr)
 	if e != nil {
-		fmt.Printf("[Stream.TCP.StartTcpClient]tcp connect server addr:%s error:%s\n", serveraddr, e)
+		mlog.Error("[Stream.TCP.StartTcpClient] error:", e)
 		return ""
 	}
-	p := this.getPeer(TCP, SERVER, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, &this.conf.SelfName)
+	p := this.getPeer(TCP, SERVER, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, this.conf.SelfName)
 	p.conn = unsafe.Pointer(conn.(*net.TCPConn))
 	p.setbuffer(this.conf.TcpC.SocketReadBufferLen, this.conf.TcpC.SocketWriteBufferLen)
 	if p.reader == nil {
@@ -234,20 +171,28 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) strin
 	return this.cworker(p, this.conf.TcpC.MaxMessageLen, verifydata)
 }
 
-func (this *Instance) StartUnixsocketClient(serveraddr string, verifydata []byte) string {
-	if atomic.LoadInt64(&this.stop) == 1 {
+// success return peeruniquename
+// fail return empty
+func (this *Instance) StartUnixClient(serveraddr string, verifydata []byte) string {
+	if atomic.LoadInt32(&this.stop) == 1 {
 		return ""
 	}
-	if this.conf.UnixC == nil {
-		fmt.Printf("[Stream.UNIX.StartUnixsocketClient]missing unix config,the default will be used:%+v\n", defaultUnixConfig)
-		this.conf.UnixC = defaultUnixConfig
+	dialer := net.Dialer{
+		Timeout: this.conf.UnixC.ConnectTimeout,
+		Control: func(network, address string, c syscall.RawConn) error {
+			c.Control(func(fd uintptr) {
+				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, this.conf.UnixC.SocketReadBufferLen)
+				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, this.conf.UnixC.SocketWriteBufferLen)
+			})
+			return nil
+		},
 	}
-	conn, e := net.DialTimeout("unix", serveraddr, time.Duration(this.conf.UnixC.ConnectTimeout)*time.Millisecond)
+	conn, e := dialer.Dial("unix", serveraddr)
 	if e != nil {
-		fmt.Printf("[Stream.UNIX.StartUnixsocketClient]unix connect server addr:%s error:%s\n", serveraddr, e)
+		mlog.Error("[Stream.UNIX.StartUnixClient] error:", e)
 		return ""
 	}
-	p := this.getPeer(UNIXSOCKET, SERVER, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, &this.conf.SelfName)
+	p := this.getPeer(UNIX, SERVER, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, this.conf.SelfName)
 	p.conn = unsafe.Pointer(conn.(*net.UnixConn))
 	p.setbuffer(this.conf.UnixC.SocketReadBufferLen, this.conf.UnixC.SocketWriteBufferLen)
 	if p.reader == nil {
@@ -258,97 +203,52 @@ func (this *Instance) StartUnixsocketClient(serveraddr string, verifydata []byte
 	return this.cworker(p, this.conf.UnixC.MaxMessageLen, verifydata)
 }
 
-func (this *Instance) StartWebsocketClient(serveraddr string, verifydata []byte) string {
-	if atomic.LoadInt64(&this.stop) == 1 {
-		return ""
-	}
-	if this.conf.WebC == nil {
-		fmt.Printf("[Stream.WEB.StartWebsocketClient]missing web config,the default will be used:%+v\n", defaultWebConfig)
-		this.conf.WebC = defaultWebConfig
-	}
-	dialer := &websocket.Dialer{
-		NetDial: func(network, addr string) (net.Conn, error) {
-			return net.DialTimeout(network, addr, time.Duration(this.conf.WebC.ConnectTimeout)*time.Millisecond)
-		},
-		Proxy:             http.ProxyFromEnvironment,
-		HandshakeTimeout:  time.Duration(this.conf.WebC.ConnectTimeout) * time.Millisecond,
-		WriteBufferPool:   &sync.Pool{},
-		EnableCompression: this.conf.WebC.EnableCompress,
-		ReadBufferSize:    this.conf.WebC.SocketReadBufferLen,
-		WriteBufferSize:   this.conf.WebC.SocketWriteBufferLen,
-	}
-	conn, _, e := dialer.Dial(serveraddr, nil)
-	if e != nil {
-		fmt.Printf("[Stream.WEB.StartWebsocketClient]websocket connect server addr:%s error:%s\n", serveraddr, e)
-		return ""
-	}
-	p := this.getPeer(WEBSOCKET, SERVER, this.conf.WebC.AppWriteBufferNum, 0, &this.conf.SelfName)
-	p.conn = unsafe.Pointer(conn)
-	p.setbuffer(this.conf.WebC.SocketReadBufferLen, this.conf.WebC.SocketWriteBufferLen)
-	return this.cworker(p, 0, verifydata)
-}
-
 func (this *Instance) cworker(p *Peer, maxlen int, verifydata []byte) string {
 	//send self's verify message to server
-	var verifymsg []byte
-	switch p.protocoltype {
-	case TCP:
-		fallthrough
-	case UNIXSOCKET:
-		verifymsg = makeVerifyMsg(*p.clientname, verifydata, 0, true)
-	case WEBSOCKET:
-		verifymsg = makeVerifyMsg(*p.clientname, verifydata, 0, false)
-	}
+	verifymsg := makeVerifyMsg(p.clientname, verifydata, 0, true)
 	send := 0
 	num := 0
 	var e error
-	for send < len(verifymsg) {
+	for send < verifymsg.Len() {
 		switch p.protocoltype {
 		case TCP:
-			num, e = (*net.TCPConn)(p.conn).Write(verifymsg[send:])
-		case UNIXSOCKET:
-			num, e = (*net.UnixConn)(p.conn).Write(verifymsg[send:])
-		case WEBSOCKET:
-			e = (*websocket.Conn)(p.conn).WriteMessage(websocket.BinaryMessage, verifymsg)
+			if num, e = (*net.TCPConn)(p.conn).Write(verifymsg.Bytes()[send:]); e != nil {
+				mlog.Error("[Stream.TCP.cworker] write first verify msg to server addr:", p.getpeeraddr(), "error:", e)
+			}
+		case UNIX:
+			if num, e = (*net.UnixConn)(p.conn).Write(verifymsg.Bytes()[send:]); e != nil {
+				mlog.Error("[Stream.UNIX.cworker] write first verify msg to server addr:", p.getpeeraddr(), "error:", e)
+			}
 		}
 		if e != nil {
-			fmt.Printf("[Stream.%s.cworker]write first verify msg error:%s to server addr:%s\n",
-				p.getprotocolname(), e, p.getpeeraddr())
+			bufpool.PutBuffer(verifymsg)
 			p.closeconn()
 			this.putPeer(p)
 			return ""
 		}
-		switch p.protocoltype {
-		case TCP:
-			fallthrough
-		case UNIXSOCKET:
-			send += num
-		case WEBSOCKET:
-			send = len(verifymsg)
-		}
+		send += num
 	}
+	bufpool.PutBuffer(verifymsg)
 	//read first verify message from server
 	_ = this.verifypeer(p, maxlen)
-	if p.servername != nil {
+	if p.servername != "" {
 		//verify server success
 		if !this.addPeer(p) {
-			fmt.Printf("[Stream.%s.cworker]refuse reconnect to server:%s addr:%s\n",
-				p.getprotocolname(), p.getpeername(), p.getpeeraddr())
-			return ""
-		}
-		if atomic.LoadInt64(&this.stop) == 1 {
-			p.CancelFunc()
+			switch p.protocoltype {
+			case TCP:
+				mlog.Error("[Stream.TCP.cworker] duplicate connect to server:", p.getpeername(), "addr:", p.getpeeraddr())
+			case UNIX:
+				mlog.Error("[Stream.UNIX.cworker] duplicate connect to server:", p.getpeername(), "addr:", p.getpeeraddr())
+			}
 			p.closeconn()
-			p.parentnode.Lock()
-			delete(p.parentnode.peers, p.getpeeruniquename())
-			p.parentnode.Unlock()
 			this.putPeer(p)
 			return ""
 		}
-		if p.protocoltype == WEBSOCKET {
-			(*websocket.Conn)(p.conn).SetPongHandler(func(data string) error {
-				return this.dealmsg(p, common.Str2byte(data), true)
-			})
+		if atomic.LoadInt32(&this.stop) == 1 {
+			p.closeconn()
+			//after addpeer should use this way to delete this peer
+			this.noticech <- p
+			return ""
 		}
 		if this.conf.Onlinefunc != nil {
 			this.conf.Onlinefunc(p, p.getpeeruniquename(), p.starttime)
@@ -366,46 +266,51 @@ func (this *Instance) cworker(p *Peer, maxlen int, verifydata []byte) string {
 func (this *Instance) verifypeer(p *Peer, maxlen int) []byte {
 	switch p.protocoltype {
 	case TCP:
-		(*net.TCPConn)(p.conn).SetReadDeadline(time.Now().Add(time.Duration(this.conf.VerifyTimeout) * time.Millisecond))
-	case UNIXSOCKET:
-		(*net.UnixConn)(p.conn).SetReadDeadline(time.Now().Add(time.Duration(this.conf.VerifyTimeout) * time.Millisecond))
-	case WEBSOCKET:
-		(*websocket.Conn)(p.conn).SetReadDeadline(time.Now().Add(time.Duration(this.conf.VerifyTimeout) * time.Millisecond))
+		(*net.TCPConn)(p.conn).SetReadDeadline(time.Now().Add(this.conf.VerifyTimeout))
+	case UNIX:
+		(*net.UnixConn)(p.conn).SetReadDeadline(time.Now().Add(this.conf.VerifyTimeout))
 	}
-	ctx, cancel := context.WithTimeout(p, time.Duration(this.conf.VerifyTimeout)*time.Millisecond)
+	ctx, cancel := context.WithTimeout(p, this.conf.VerifyTimeout)
 	defer cancel()
 	data, e := p.readMessage(maxlen)
+	if data != nil {
+		defer bufpool.PutBuffer(data)
+	}
+	var sender string
+	var peerverifydata []byte
+	var starttime uint64
+	if e == nil {
+		if data == nil {
+			e = errors.New("empty message")
+		} else {
+			var msgtype int
+			if msgtype, e = getMsgType(data.Bytes()); e == nil && msgtype != VERIFY {
+				e = errors.New("first msg is not verify msg")
+			}
+			if e == nil {
+				if sender, peerverifydata, starttime, e = getVerifyMsg(data.Bytes()); e == nil && (sender == "" || sender == p.getselfname()) {
+					e = errors.New("sender name illegal")
+				}
+			}
+		}
+	}
 	if e != nil {
-		fmt.Printf("[Stream.%s.verifypeer]first verify msg read error:%s from %s addr:%s\n",
-			p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
-		return nil
-	}
-	if data == nil {
-		fmt.Printf("[Stream.%s.verifypeer]first verify msg empty from %s addr:%s\n",
-			p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
-		return nil
-	}
-	msgtype, e := getMsgType(data)
-	if e != nil {
-		fmt.Printf("[Stream.%s.verifypeer]first verify msg format error:%s from %s addr:%s\n",
-			p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
-		return nil
-	}
-	//first message must be verify message
-	if msgtype != VERIFY {
-		fmt.Printf("[Stream.%s.verifypeer]first msg isn't verify msg from %s addr:%s\n",
-			p.getprotocolname(), p.getpeertypename(), p.getpeeraddr())
-		return nil
-	}
-	sender, peerverifydata, starttime, e := getVerifyMsg(data)
-	if e != nil {
-		fmt.Printf("[Stream.%s.verifypeer]first verify msg format error:%s from %s addr:%s\n",
-			p.getprotocolname(), e, p.getpeertypename(), p.getpeeraddr())
-		return nil
-	}
-	if sender == "" || sender == p.getselfname() {
-		fmt.Printf("[Stream.%s.verifypeer]sender name:%s check failed from %s addr:%s\n",
-			p.getprotocolname(), sender, p.getpeertypename(), p.getpeeraddr())
+		switch p.protocoltype {
+		case TCP:
+			switch p.peertype {
+			case CLIENT:
+				mlog.Error("[Stream.TCP.verifypeer] read first verify msg from client addr:", p.getpeeraddr(), "error:", e)
+			case SERVER:
+				mlog.Error("[Stream.TCP.verifypeer] read first verify msg from server addr:", p.getpeeraddr(), "error:", e)
+			}
+		case UNIX:
+			switch p.peertype {
+			case CLIENT:
+				mlog.Error("[Stream.UNIX.verifypeer] read first verify msg from client addr:", p.getpeeraddr(), "error:", e)
+			case SERVER:
+				mlog.Error("[Stream.UNIX.verifypeer] read first verify msg from server addr:", p.getpeeraddr(), "error:", e)
+			}
+		}
 		return nil
 	}
 	p.lastactive = uint64(time.Now().UnixNano())
@@ -413,176 +318,224 @@ func (this *Instance) verifypeer(p *Peer, maxlen int) []byte {
 	p.sendidlestart = p.lastactive
 	switch p.peertype {
 	case CLIENT:
-		p.clientname = &sender
+		dup := make([]byte, 0, len(sender))
+		dup = append(dup, sender...)
+		p.clientname = common.Byte2str(dup)
 		p.starttime = p.lastactive
 	case SERVER:
-		p.servername = &sender
+		dup := make([]byte, 0, len(sender))
+		dup = append(dup, sender...)
+		p.servername = common.Byte2str(dup)
 		p.starttime = starttime
 	}
 	response, success := this.conf.Verifyfunc(ctx, p.getpeeruniquename(), peerverifydata)
 	if !success {
-		fmt.Printf("[Stream.%s.verifypeer]verify failed with data:%s from %s addr:%s\n",
-			p.getprotocolname(), peerverifydata, p.getpeertypename(), p.getpeeraddr())
-		p.clientname = nil
-		p.servername = nil
+		switch p.protocoltype {
+		case TCP:
+			switch p.peertype {
+			case CLIENT:
+				mlog.Error("[Stream.TCP.verifypeer] client:", p.getpeername(), "addr:", p.getpeeraddr(), "verify failed with data:", common.Byte2str(peerverifydata))
+			case SERVER:
+				mlog.Error("[Stream.TCP.verifypeer] server:", p.getpeername(), "addr:", p.getpeeraddr(), "verify failed with data:", common.Byte2str(peerverifydata))
+			}
+		case UNIX:
+			switch p.peertype {
+			case CLIENT:
+				mlog.Error("[Stream.UNIX.verifypeer] client:", p.getpeername(), "addr:", p.getpeeraddr(), "verify failed with data:", common.Byte2str(peerverifydata))
+			case SERVER:
+				mlog.Error("[Stream.UNIX.verifypeer] server:", p.getpeername(), "addr:", p.getpeeraddr(), "verify failed with data:", common.Byte2str(peerverifydata))
+			}
+		}
+		p.clientname = ""
+		p.servername = ""
 		return nil
 	}
 	return response
 }
 func (this *Instance) read(p *Peer, maxlen int) {
 	defer func() {
-		uniquename := p.getpeeruniquename()
 		//every connection will have two goruntine to work for it
 		if old := atomic.SwapUint32(&p.status, 0); old > 0 {
 			//cause write goruntine return,this will be useful when there is nothing in writebuffer
 			p.closeconn()
 			//prevent write goruntine block on read channel
-			p.writerbuffer <- []byte{}
-			p.heartbeatbuffer <- []byte{}
+			p.writerbuffer <- (*bufpool.Buffer)(nil)
+			p.heartbeatbuffer <- (*bufpool.Buffer)(nil)
 		} else {
-			p.CancelFunc()
 			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, uniquename, p.starttime)
+				this.conf.Offlinefunc(p, p.getpeeruniquename(), p.starttime)
 			}
-			p.parentnode.Lock()
-			delete(p.parentnode.peers, uniquename)
 			//when second goruntine return,put connection back to the pool
-			p.parentnode.Unlock()
-			this.putPeer(p)
+			this.noticech <- p
 		}
 	}()
 	//after verify,the read timeout is useless,heartbeat will work for this
 	switch p.protocoltype {
 	case TCP:
 		(*net.TCPConn)(p.conn).SetReadDeadline(time.Time{})
-	case UNIXSOCKET:
+	case UNIX:
 		(*net.UnixConn)(p.conn).SetReadDeadline(time.Time{})
-	case WEBSOCKET:
-		(*websocket.Conn)(p.conn).UnderlyingConn().SetDeadline(time.Time{})
 	}
 	for {
+		var msgtype int
 		data, e := p.readMessage(maxlen)
+		if e == nil {
+			if data == nil {
+				e = errors.New("empty message")
+			} else {
+				msgtype, e = getMsgType(data.Bytes())
+				if e == nil && msgtype != HEART && msgtype != USER && msgtype != CLOSEREAD && msgtype != CLOSEWRITE {
+					e = errors.New("unknown msg type")
+				}
+			}
+		}
 		if e != nil {
-			fmt.Printf("[Stream.%s.read]read msg error:%s from %s:%s addr:%s\n",
-				p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
+			switch p.protocoltype {
+			case TCP:
+				switch p.peertype {
+				case CLIENT:
+					mlog.Error("[Stream.TCP.read] read msg from client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+				case SERVER:
+					mlog.Error("[Stream.TCP.read] read msg from server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+				}
+			case UNIX:
+				switch p.peertype {
+				case CLIENT:
+					mlog.Error("[Stream.UNIX.read] read msg from client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+				case SERVER:
+					mlog.Error("[Stream.UNIX.read] read msg from server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+				}
+			}
+			if data != nil {
+				bufpool.PutBuffer(data)
+			}
 			return
 		}
-		if e = this.dealmsg(p, data, false); e != nil {
-			fmt.Println(e)
-			return
-		}
-	}
-}
-func (this *Instance) dealmsg(p *Peer, data []byte, frompong bool) error {
-	msgtype, e := getMsgType(data)
-	if e != nil {
-		return fmt.Errorf("[Stream.%s,dealmsg]msg format error:%s from %s:%s addr:%s",
-			p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-	}
-	//deal message
-	switch msgtype {
-	case HEART:
-		if p.protocoltype == WEBSOCKET && !frompong {
-			return fmt.Errorf("[Stream.WEB.dealmsg]msg type error from %s:%s addr:%s",
-				p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-		}
-		//update lastactive time
-		p.lastactive = uint64(time.Now().UnixNano())
-		return nil
-	case USER:
-		userdata, starttime, e := getUserMsg(data)
-		if e != nil {
-			return fmt.Errorf("[Stream.%s.dealmsg]msg format error:%s from %s:%s addr:%s",
-				p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-		}
-		if starttime != p.starttime {
+		//deal message
+		switch msgtype {
+		case HEART:
+			//update lastactive time
+			p.lastactive = uint64(time.Now().UnixNano())
+		case USER:
+			if !p.closewrite {
+				userdata, starttime, _ := getUserMsg(data.Bytes())
+				if starttime == p.starttime {
+					//update lastactive time
+					p.lastactive = uint64(time.Now().UnixNano())
+					p.recvidlestart = p.lastactive
+					this.conf.Userdatafunc(p, p.getpeeruniquename(), userdata, starttime)
+				}
+				//drop race data
+			}
+		case CLOSEREAD:
+			starttime, _ := getCloseReadMsg(data.Bytes())
+			if starttime == p.starttime {
+				p.closeread = true
+				if p.closewrite {
+					return
+				}
+				p.writerbuffer <- makeCloseWriteMsg(p.starttime, true)
+			}
 			//drop race data
-			return nil
+		case CLOSEWRITE:
+			starttime, _ := getCloseWriteMsg(data.Bytes())
+			if starttime == p.starttime {
+				p.closewrite = true
+				if p.closeread {
+					return
+				}
+				p.writerbuffer <- makeCloseReadMsg(p.starttime, true)
+			}
+			//drop race data
 		}
-		//update lastactive time
-		p.lastactive = uint64(time.Now().UnixNano())
-		p.recvidlestart = p.lastactive
-		this.conf.Userdatafunc(p, p.getpeeruniquename(), userdata, starttime)
-		return nil
-	default:
-		return fmt.Errorf("[Stream.%s.dealmsg]get unknown type msg type:%d from %s:%s addr:%s",
-			p.getprotocolname(), msgtype, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
+		bufpool.PutBuffer(data)
 	}
 }
+
 func (this *Instance) write(p *Peer) {
 	defer func() {
 		//drop all data,prevent close read goruntine block on send empty data to these channel
 		for len(p.writerbuffer) > 0 {
-			<-p.writerbuffer
+			if v := <-p.writerbuffer; v != nil {
+				bufpool.PutBuffer(v)
+			}
 		}
 		for len(p.heartbeatbuffer) > 0 {
-			<-p.heartbeatbuffer
+			if v := <-p.heartbeatbuffer; v != nil {
+				bufpool.PutBuffer(v)
+			}
 		}
 		//every connection will have two goruntine to work for it
 		if old := atomic.SwapUint32(&p.status, 0); old > 0 {
 			//when first goruntine return,close the connection,cause read goruntine return
 			p.closeconn()
 		} else {
-			p.CancelFunc()
-			uniquename := p.getpeeruniquename()
 			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, uniquename, p.starttime)
+				this.conf.Offlinefunc(p, p.getpeeruniquename(), p.starttime)
 			}
-			p.parentnode.Lock()
-			delete(p.parentnode.peers, uniquename)
 			//when second goruntine return,put connection back to the pool
-			p.parentnode.Unlock()
-			this.putPeer(p)
+			this.noticech <- p
 		}
 	}()
-	var data []byte
+	var data *bufpool.Buffer
 	var ok bool
 	var send int
 	var num int
 	var e error
-	var isheart bool
 	for {
-		isheart = false
+		status := atomic.LoadUint32(&p.status)
+		if (status == 0 || status == 2) && len(p.writerbuffer) == 0 {
+			return
+		}
 		if len(p.heartbeatbuffer) > 0 {
 			data, ok = <-p.heartbeatbuffer
-			isheart = true
 		} else {
 			select {
 			case data, ok = <-p.writerbuffer:
 			case data, ok = <-p.heartbeatbuffer:
-				isheart = true
 			}
 		}
-		if !ok || len(data) == 0 {
+		if p.closeread && p.closewrite {
+			if data != nil {
+				bufpool.PutBuffer(data)
+			}
 			return
 		}
-		p.sendidlestart = uint64(time.Now().UnixNano())
-		send = 0
-		for send < len(data) {
-			switch p.protocoltype {
-			case TCP:
-				num, e = (*net.TCPConn)(p.conn).Write(data[send:])
-			case UNIXSOCKET:
-				num, e = (*net.UnixConn)(p.conn).Write(data[send:])
-			case WEBSOCKET:
-				if isheart {
-					e = (*websocket.Conn)(p.conn).WriteMessage(websocket.PingMessage, data)
-				} else {
-					e = (*websocket.Conn)(p.conn).WriteMessage(websocket.BinaryMessage, data)
+		if !ok || data == nil {
+			continue
+		}
+		if !p.closeread {
+			p.sendidlestart = uint64(time.Now().UnixNano())
+			send = 0
+			for send < data.Len() {
+				switch p.protocoltype {
+				case TCP:
+					num, e = (*net.TCPConn)(p.conn).Write(data.Bytes()[send:])
+				case UNIX:
+					num, e = (*net.UnixConn)(p.conn).Write(data.Bytes()[send:])
 				}
-			}
-			if e != nil {
-				fmt.Printf("[Stream.%s.write]write msg error:%s to %s:%s addr:%s\n",
-					p.getprotocolname(), e, p.getpeertypename(), p.getpeername(), p.getpeeraddr())
-				return
-			}
-			if p.protocoltype == TCP || p.protocoltype == UNIXSOCKET {
-				//tcp and unixsocket
+				if e != nil {
+					switch p.protocoltype {
+					case TCP:
+						switch p.peertype {
+						case CLIENT:
+							mlog.Error("[Stream.TCP.write] write msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+						case SERVER:
+							mlog.Error("[Stream.TCP.write] write msg to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+						}
+					case SERVER:
+						switch p.peertype {
+						case CLIENT:
+							mlog.Error("[Stream.UNIX.write] write msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+						case SERVER:
+							mlog.Error("[Stream.UNIX.write] write msg to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+						}
+					}
+					return
+				}
 				send += num
-			} else {
-				//websocket
-				send = len(data)
 			}
 		}
+		bufpool.PutBuffer(data)
 	}
 }

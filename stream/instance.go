@@ -2,99 +2,56 @@ package stream
 
 import (
 	"context"
-	"fmt"
 	"net"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/common"
+	"github.com/chenjie199234/Corelib/mlog"
 )
 
 type Instance struct {
 	conf         *InstanceConfig
 	peernodes    []*peernode
-	stop         int64
+	stop         int32
 	tcplistener  *net.TCPListener
 	unixlistener *net.UnixListener
-	webserver    *http.Server
+	totalpeernum int64
 
-	tcpPool  *sync.Pool
-	unixPool *sync.Pool
-	webPool  *sync.Pool
+	noticech chan *Peer
+	closech  chan struct{}
+
+	pool *sync.Pool
 }
 
-func (this *Instance) getPeer(protot, peert, writebuffernum, maxmsglen int, selfname *string) *Peer {
+func (this *Instance) getPeer(protot, peert, writebuffernum, maxmsglen int, selfname string) *Peer {
 	tempctx, tempcancel := context.WithCancel(context.Background())
-	switch protot {
-	case TCP:
-		if p, ok := this.tcpPool.Get().(*Peer); ok {
-			p.reset()
-			p.protocoltype = TCP
-			p.peertype = peert
-			p.status = 1
-			p.maxmsglen = maxmsglen
-			p.Context = tempctx
-			p.CancelFunc = tempcancel
-			if peert == CLIENT {
-				p.servername = selfname
-			} else {
-				p.clientname = selfname
-			}
-			return p
+	if p, ok := this.pool.Get().(*Peer); ok {
+		p.reset()
+		p.protocoltype = protot
+		p.peertype = peert
+		p.status = 1
+		p.maxmsglen = maxmsglen
+		p.Context = tempctx
+		p.CancelFunc = tempcancel
+		if peert == CLIENT {
+			p.servername = selfname
+		} else {
+			p.clientname = selfname
 		}
-	case UNIXSOCKET:
-		if p, ok := this.unixPool.Get().(*Peer); ok {
-			p.reset()
-			p.protocoltype = UNIXSOCKET
-			p.peertype = peert
-			p.status = 1
-			p.maxmsglen = maxmsglen
-			p.Context = tempctx
-			p.CancelFunc = tempcancel
-			if peert == CLIENT {
-				p.servername = selfname
-			} else {
-				p.clientname = selfname
-			}
-			return p
-		}
-	case WEBSOCKET:
-		if p, ok := this.webPool.Get().(*Peer); ok {
-			p.reset()
-			p.protocoltype = WEBSOCKET
-			p.peertype = peert
-			p.status = 1
-			p.maxmsglen = maxmsglen
-			p.Context = tempctx
-			p.CancelFunc = tempcancel
-			if peert == CLIENT {
-				p.servername = selfname
-			} else {
-				p.clientname = selfname
-			}
-			return p
-		}
+		return p
 	}
 	p := &Peer{
-		parentnode:      nil,
-		clientname:      nil,
-		servername:      nil,
 		peertype:        peert,
 		protocoltype:    protot,
-		starttime:       0,
 		status:          1,
 		maxmsglen:       maxmsglen,
-		writerbuffer:    make(chan []byte, writebuffernum),
-		heartbeatbuffer: make(chan []byte, 3),
-		conn:            nil,
-		lastactive:      0,
-		recvidlestart:   0,
-		sendidlestart:   0,
+		writerbuffer:    make(chan *bufpool.Buffer, writebuffernum),
+		heartbeatbuffer: make(chan *bufpool.Buffer, 1),
 		Context:         tempctx,
 		CancelFunc:      tempcancel,
-		data:            nil,
 	}
 	if peert == CLIENT {
 		p.servername = selfname
@@ -104,29 +61,20 @@ func (this *Instance) getPeer(protot, peert, writebuffernum, maxmsglen int, self
 	return p
 }
 func (this *Instance) putPeer(p *Peer) {
-	tempprotocoltype := p.protocoltype
-	p.reset()
-	switch tempprotocoltype {
-	case TCP:
-		this.tcpPool.Put(p)
-	case UNIXSOCKET:
-		this.unixPool.Put(p)
-	case WEBSOCKET:
-		this.webPool.Put(p)
-	}
+	p.CancelFunc()
+	this.pool.Put(p)
 }
 func (this *Instance) addPeer(p *Peer) bool {
 	uniquename := p.getpeeruniquename()
 	node := this.peernodes[this.getindex(uniquename)]
 	node.Lock()
 	if _, ok := node.peers[uniquename]; ok {
-		p.closeconn()
-		this.putPeer(p)
 		node.Unlock()
 		return false
 	}
 	p.parentnode = node
 	node.peers[uniquename] = p
+	atomic.AddInt64(&this.totalpeernum, 1)
 	node.Unlock()
 	return true
 }
@@ -140,10 +88,9 @@ func NewInstance(c *InstanceConfig) *Instance {
 		conf:      c,
 		peernodes: make([]*peernode, c.GroupNum),
 		stop:      0,
-
-		tcpPool:  &sync.Pool{},
-		unixPool: &sync.Pool{},
-		webPool:  &sync.Pool{},
+		noticech:  make(chan *Peer, 1024),
+		closech:   make(chan struct{}, 1),
+		pool:      &sync.Pool{},
 	}
 	for i := range stream.peernodes {
 		stream.peernodes[i] = &peernode{
@@ -151,10 +98,38 @@ func NewInstance(c *InstanceConfig) *Instance {
 		}
 		go stream.heart(stream.peernodes[i])
 	}
+	go func() {
+		for {
+			p := <-stream.noticech
+			if p != nil {
+				if p.parentnode != nil {
+					p.parentnode.Lock()
+					atomic.AddInt64(&stream.totalpeernum, -1)
+					delete(p.parentnode.peers, p.getpeeruniquename())
+					p.parentnode.Unlock()
+				}
+				stream.putPeer(p)
+			}
+			if atomic.LoadInt32(&stream.stop) == 1 {
+				count := 0
+				for _, node := range stream.peernodes {
+					node.RLock()
+					count += len(node.peers)
+					node.RUnlock()
+				}
+				if count == 0 {
+					select {
+					case stream.closech <- struct{}{}:
+					default:
+					}
+				}
+			}
+		}
+	}()
 	return stream
 }
 func (this *Instance) Stop() {
-	if atomic.SwapInt64(&this.stop, 1) == 1 {
+	if atomic.SwapInt32(&this.stop, 1) == 1 {
 		return
 	}
 	if this.tcplistener != nil {
@@ -163,26 +138,32 @@ func (this *Instance) Stop() {
 	if this.unixlistener != nil {
 		this.unixlistener.Close()
 	}
-	if this.webserver != nil {
-		this.webserver.Shutdown(context.Background())
-	}
 	for _, node := range this.peernodes {
 		node.RLock()
 		for _, peer := range node.peers {
-			peer.closeconn()
+			peer.Close()
 		}
 		node.RUnlock()
 	}
+	//prevent notice block on empty chan
+	this.noticech <- (*Peer)(nil)
+	<-this.closech
 }
 
 func (this *Instance) SendMessageAll(data []byte, block bool) {
+	wg := &sync.WaitGroup{}
 	for _, node := range this.peernodes {
 		node.RWMutex.RLock()
 		for _, peer := range node.peers {
-			peer.SendMessage(data, peer.starttime, block)
+			wg.Add(1)
+			go func(p *Peer) {
+				p.SendMessage(data, p.starttime, block)
+				wg.Done()
+			}(peer)
 		}
 		node.RWMutex.RUnlock()
 	}
+	wg.Wait()
 }
 
 func (this *Instance) heart(node *peernode) {
@@ -195,45 +176,94 @@ func (this *Instance) heart(node *peernode) {
 			if p.status == 0 {
 				continue
 			}
-			templastactive := p.lastactive
-			temprecvidlestart := p.recvidlestart
-			tempsendidlestart := p.sendidlestart
-			if now >= templastactive && now-templastactive > this.conf.HeartbeatTimeout*1000*1000 {
+			templastactive := atomic.LoadUint64(&p.lastactive)
+			temprecvidlestart := atomic.LoadUint64(&p.recvidlestart)
+			tempsendidlestart := atomic.LoadUint64(&p.sendidlestart)
+			if now >= templastactive && now-templastactive > uint64(this.conf.HeartbeatTimeout) {
 				//heartbeat timeout
-				fmt.Printf("[Stream.%s.heart] heart timeout %s:%s addr:%s\n",
-					p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
+				switch p.protocoltype {
+				case TCP:
+					switch p.peertype {
+					case CLIENT:
+						mlog.Error("[Stream.TCP.heart] heart timeout client:", p.getpeername(), "addr:", p.getpeeraddr())
+					case SERVER:
+						mlog.Error("[Stream.TCP.heart] heart timeout server:", p.getpeername(), "addr:", p.getpeeraddr())
+					}
+				case UNIX:
+					switch p.peertype {
+					case CLIENT:
+						mlog.Error("[Stream.UNIX.heart] heart timeout client:", p.getpeername(), "addr:", p.getpeeraddr())
+					case SERVER:
+						mlog.Error("[Stream.UNIX.heart] heart timeout server:", p.getpeername(), "addr:", p.getpeeraddr())
+					}
+				}
 				p.closeconn()
 				continue
 			}
-			if now >= tempsendidlestart && now-tempsendidlestart > this.conf.SendIdleTimeout*1000*1000 {
+			if now >= tempsendidlestart && now-tempsendidlestart > uint64(this.conf.SendIdleTimeout) {
 				//send idle timeout
-				fmt.Printf("[Stream.%s.heart] send idle timeout %s:%s addr:%s\n",
-					p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
+				switch p.protocoltype {
+				case TCP:
+					switch p.peertype {
+					case CLIENT:
+						mlog.Error("[Stream.TCP.heart] send idle timeout client:", p.getpeername(), "addr:", p.getpeeraddr())
+					case SERVER:
+						mlog.Error("[Stream.TCP.heart] send idle timeout server:", p.getpeername(), "addr:", p.getpeeraddr())
+					}
+				case SERVER:
+					switch p.peertype {
+					case CLIENT:
+						mlog.Error("[Stream.UNIX.heart] send idle timeout client:", p.getpeername(), "addr:", p.getpeeraddr())
+					case SERVER:
+						mlog.Error("[Stream.UNIX.heart] send idle timeout server:", p.getpeername(), "addr:", p.getpeeraddr())
+					}
+				}
 				p.closeconn()
 				continue
 			}
-			if this.conf.RecvIdleTimeout != 0 && now >= temprecvidlestart && now-temprecvidlestart > this.conf.RecvIdleTimeout*1000*1000 {
+			if this.conf.RecvIdleTimeout != 0 && now >= temprecvidlestart && now-temprecvidlestart > uint64(this.conf.RecvIdleTimeout) {
 				//recv idle timeout
-				fmt.Printf("[Stream.%s.heart] recv idle timeout %s:%s addr:%s\n",
-					p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
+				switch p.protocoltype {
+				case TCP:
+					switch p.peertype {
+					case CLIENT:
+						mlog.Error("[Stream.TCP.heart] recv idle timeout client:", p.getpeername(), "addr:", p.getpeeraddr())
+					case SERVER:
+						mlog.Error("[Stream.TCP.heart] recv idle timeout server:", p.getpeername(), "addr:", p.getpeeraddr())
+					}
+				case UNIX:
+					switch p.peertype {
+					case CLIENT:
+						mlog.Error("[Stream.UNIX.heart] recv idle timeout client:", p.getpeername(), "addr:", p.getpeeraddr())
+					case SERVER:
+						mlog.Error("[Stream.UNIX.heart] recv idle timeout server:", p.getpeername(), "addr:", p.getpeeraddr())
+					}
+				}
 				p.closeconn()
 				continue
 			}
 			//send heart beat data
-			var data []byte
-			switch p.protocoltype {
-			case TCP:
-				fallthrough
-			case UNIXSOCKET:
-				data = makeHeartMsg(true)
-			case WEBSOCKET:
-				data = makeHeartMsg(false)
-			}
+			data := makeHeartMsg(true)
 			select {
 			case p.heartbeatbuffer <- data:
 			default:
-				fmt.Printf("[Stream.%s.heart] send heart msg to %s:%s addr:%s failed:heart buffer is full\n",
-					p.getprotocolname(), p.getpeertypename(), p.getpeername(), p.getpeeraddr())
+				switch p.protocoltype {
+				case TCP:
+					switch p.peertype {
+					case CLIENT:
+						mlog.Error("[Stream.TCP.heart] send heart msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error: heart buffer is full")
+					case SERVER:
+						mlog.Error("[Stream.TCP.heart] send heart msg to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error: heart buffer is full")
+					}
+				case UNIX:
+					switch p.peertype {
+					case CLIENT:
+						mlog.Error("[Stream.UNIX.heart] send heart msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error: heart buffer is full")
+					case SERVER:
+						mlog.Error("[Stream.UNIX.heart] send heart msg to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error: heart buffer is full")
+					}
+				}
+				bufpool.PutBuffer(data)
 			}
 		}
 		node.RUnlock()

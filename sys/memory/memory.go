@@ -10,6 +10,12 @@ import (
 var usepercent float64
 
 func init() {
+	meminfo, e := mem.VirtualMemory()
+	if e != nil {
+		fmt.Printf("[Sys.Memory]Get memory use percent error:%s\n", e)
+	} else {
+		usepercent = meminfo.UsedPercent
+	}
 	tker := time.NewTicker(time.Millisecond * 200)
 	go func() {
 		for {

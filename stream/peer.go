@@ -6,30 +6,28 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
-	"github.com/gorilla/websocket"
+	"github.com/chenjie199234/Corelib/bufpool"
+	"github.com/chenjie199234/Corelib/mlog"
 )
 
 const (
 	TCP = iota + 1
-	WEBSOCKET
-	UNIXSOCKET
+	UNIX
 )
-
-var PROTOCOLNAME = []string{TCP: "TCP", WEBSOCKET: "WEB", UNIXSOCKET: "UNIX"}
 
 const (
 	CLIENT = iota + 1
 	SERVER
 )
 
-var PEERTYPENAME = []string{CLIENT: "client", SERVER: "server"}
-
 var (
 	ERRCONNCLOSED  = fmt.Errorf("connection is closed")
-	ERRMSGLARGE    = fmt.Errorf("message too large")
+	ERRMSGLENGTH   = fmt.Errorf("message length error")
 	ERRSENDBUFFULL = fmt.Errorf("send buffer full")
 )
 
@@ -37,18 +35,21 @@ type peernode struct {
 	sync.RWMutex
 	peers map[string]*Peer
 }
+
 type Peer struct {
 	parentnode      *peernode
-	clientname      *string
-	servername      *string
+	clientname      string
+	servername      string
 	peertype        int
 	protocoltype    int
 	starttime       uint64
-	status          uint32 //0--(closing),not 0--(connected)
+	closeread       bool
+	closewrite      bool
+	status          uint32 //0--(closed),1--(connected),2--(closing)
 	maxmsglen       int
 	reader          *bufio.Reader
-	writerbuffer    chan []byte
-	heartbeatbuffer chan []byte
+	writerbuffer    chan *bufpool.Buffer
+	heartbeatbuffer chan *bufpool.Buffer
 	conn            unsafe.Pointer
 	lastactive      uint64 //unixnano timestamp
 	recvidlestart   uint64 //unixnano timestamp
@@ -59,33 +60,30 @@ type Peer struct {
 }
 
 func (p *Peer) reset() {
-	if p.CancelFunc != nil {
-		p.CancelFunc()
-	}
-	p.closeconn()
 	p.parentnode = nil
-	p.clientname = nil
-	p.servername = nil
-	p.peertype = 0
-	p.protocoltype = 0
+	p.clientname = ""
+	p.servername = ""
+	//p.peertype = 0
+	//p.protocoltype = 0
 	p.starttime = 0
-	p.status = 0
+	p.closeread = false
+	p.closewrite = false
+	//p.status = 0
 	for len(p.writerbuffer) > 0 {
-		<-p.writerbuffer
+		if v := <-p.writerbuffer; v != nil {
+			bufpool.PutBuffer(v)
+		}
 	}
 	for len(p.heartbeatbuffer) > 0 {
-		<-p.heartbeatbuffer
+		if v := <-p.heartbeatbuffer; v != nil {
+			bufpool.PutBuffer(v)
+		}
 	}
+	p.conn = nil
 	p.lastactive = 0
 	p.recvidlestart = 0
 	p.sendidlestart = 0
 	p.data = nil
-}
-func (p *Peer) getprotocolname() string {
-	return PROTOCOLNAME[p.protocoltype]
-}
-func (p *Peer) getpeertypename() string {
-	return PEERTYPENAME[p.peertype]
 }
 func (p *Peer) getpeeruniquename() string {
 	return p.getpeername() + ":" + p.getpeeraddr()
@@ -93,9 +91,9 @@ func (p *Peer) getpeeruniquename() string {
 func (p *Peer) getpeername() string {
 	switch p.peertype {
 	case CLIENT:
-		return *p.clientname
+		return p.clientname
 	case SERVER:
-		return *p.servername
+		return p.servername
 	}
 	return ""
 }
@@ -105,9 +103,9 @@ func (p *Peer) getselfuniquename() string {
 func (p *Peer) getselfname() string {
 	switch p.peertype {
 	case CLIENT:
-		return *p.servername
+		return p.servername
 	case SERVER:
-		return *p.clientname
+		return p.clientname
 	}
 	return ""
 }
@@ -115,10 +113,16 @@ func (p *Peer) getpeeraddr() string {
 	switch p.protocoltype {
 	case TCP:
 		return (*net.TCPConn)(p.conn).RemoteAddr().String()
-	case UNIXSOCKET:
-		return (*net.UnixConn)(p.conn).RemoteAddr().String()
-	case WEBSOCKET:
-		return (*websocket.Conn)(p.conn).RemoteAddr().String()
+	case UNIX:
+		c, e := (*net.UnixConn)(p.conn).SyscallConn()
+		if e != nil {
+			return ""
+		}
+		var fd uintptr
+		c.Control(func(tempfd uintptr) {
+			fd = tempfd
+		})
+		return (*net.UnixConn)(p.conn).RemoteAddr().String() + ":" + strconv.FormatUint(uint64(fd), 10)
 	}
 	return ""
 }
@@ -126,102 +130,120 @@ func (p *Peer) getselfaddr() string {
 	switch p.protocoltype {
 	case TCP:
 		return (*net.TCPConn)(p.conn).LocalAddr().String()
-	case UNIXSOCKET:
-		return (*net.UnixConn)(p.conn).LocalAddr().String()
-	case WEBSOCKET:
-		return (*websocket.Conn)(p.conn).LocalAddr().String()
+	case UNIX:
+		c, e := (*net.UnixConn)(p.conn).SyscallConn()
+		if e != nil {
+			return ""
+		}
+		var fd uintptr
+		c.Control(func(tempfd uintptr) {
+			fd = tempfd
+		})
+		return (*net.UnixConn)(p.conn).RemoteAddr().String() + ":" + strconv.FormatUint(uint64(fd), 10)
 	}
 	return ""
 }
+
+//closeconn close the under layer socket
 func (p *Peer) closeconn() {
 	if p.conn != nil {
 		switch p.protocoltype {
 		case TCP:
 			(*net.TCPConn)(p.conn).Close()
-		case UNIXSOCKET:
+		case UNIX:
 			(*net.UnixConn)(p.conn).Close()
-		case WEBSOCKET:
-			(*websocket.Conn)(p.conn).Close()
 		}
 	}
 }
+
+//closeRead just stop read
+//write goruntine can still write data
+func (p *Peer) closeRead() {
+	p.writerbuffer <- makeCloseReadMsg(p.starttime, true)
+}
+
+//closeWrite just stop write
+//read goruntine can still read data
+func (p *Peer) closeWrite() {
+	p.writerbuffer <- makeCloseWriteMsg(p.starttime, true)
+}
+
 func (p *Peer) setbuffer(readnum, writenum int) {
 	switch p.protocoltype {
 	case TCP:
 		(*net.TCPConn)(p.conn).SetReadBuffer(readnum)
 		(*net.TCPConn)(p.conn).SetWriteBuffer(writenum)
-	case UNIXSOCKET:
+	case UNIX:
 		(*net.UnixConn)(p.conn).SetReadBuffer(readnum)
 		(*net.UnixConn)(p.conn).SetWriteBuffer(writenum)
-	case WEBSOCKET:
-		(*websocket.Conn)(p.conn).UnderlyingConn().(*net.TCPConn).SetReadBuffer(readnum)
-		(*websocket.Conn)(p.conn).UnderlyingConn().(*net.TCPConn).SetWriteBuffer(writenum)
 	}
 }
 
-func (p *Peer) readMessage(max int) ([]byte, error) {
-	switch p.protocoltype {
-	case TCP:
-		fallthrough
-	case UNIXSOCKET:
-		temp := make([]byte, 4)
-		num := 0
-		for {
-			n, e := p.reader.Read(temp[num:])
-			if e != nil {
-				return nil, e
-			}
-			num += n
-			if num == 4 {
-				break
-			}
+func (p *Peer) readMessage(max int) (*bufpool.Buffer, error) {
+	buf := bufpool.GetBuffer()
+	buf.Grow(4)
+	num := 0
+	for {
+		n, e := p.reader.Read(buf.Bytes()[num:])
+		if e != nil {
+			bufpool.PutBuffer(buf)
+			return nil, e
 		}
-		num = int(binary.BigEndian.Uint32(temp))
-		if num > max || num < 0 {
-			return nil, ERRMSGLARGE
-		} else if num == 0 {
-			return nil, nil
+		num += n
+		if num == 4 {
+			break
 		}
-		temp = make([]byte, num)
-		for {
-			n, e := p.reader.Read(temp[len(temp)-num:])
-			if e != nil {
-				return nil, e
-			}
-			num -= n
-			if num == 0 {
-				break
-			}
-		}
-		return temp, nil
-	case WEBSOCKET:
-		_, data, e := (*websocket.Conn)(p.conn).ReadMessage()
-		return data, e
 	}
-	return nil, nil
+	num = int(binary.BigEndian.Uint32(buf.Bytes()))
+	if num > max || num < 0 {
+		bufpool.PutBuffer(buf)
+		return nil, ERRMSGLENGTH
+	} else if num == 0 {
+		bufpool.PutBuffer(buf)
+		return nil, nil
+	}
+	buf.Grow(num)
+	for {
+		n, e := p.reader.Read(buf.Bytes()[buf.Len()-num:])
+		if e != nil {
+			bufpool.PutBuffer(buf)
+			return nil, e
+		}
+		num -= n
+		if num == 0 {
+			break
+		}
+	}
+	return buf, nil
 }
 func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error {
-	if p.status == 0 || p.starttime != starttime {
-		//starttime for aba check
-		return ERRCONNCLOSED
-	}
 	if len(userdata) == 0 {
 		return nil
 	}
 	if len(userdata) > p.maxmsglen {
-		return ERRMSGLARGE
+		switch p.protocoltype {
+		case TCP:
+			switch p.peertype {
+			case CLIENT:
+				mlog.Error("[Stream.TCP.SendMessage] send message to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRMSGLENGTH)
+			case SERVER:
+				mlog.Error("[Stream.TCP.SendMessage] send message to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRMSGLENGTH)
+			}
+		case UNIX:
+			switch p.peertype {
+			case CLIENT:
+				mlog.Error("[Stream.UNIX.SendMessage] send message to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRMSGLENGTH)
+			case SERVER:
+				mlog.Error("[Stream.UNIX.SendMessage] send message to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRMSGLENGTH)
+			}
+		}
+		return ERRMSGLENGTH
 	}
-	var data []byte
-	switch p.protocoltype {
-	case TCP:
-		fallthrough
-	case UNIXSOCKET:
-		data = makeUserMsg(userdata, starttime, true)
-	case WEBSOCKET:
-		data = makeUserMsg(userdata, starttime, false)
-	default:
+	if p.status == 0 || p.status == 2 || p.starttime != starttime {
+		//starttime for aba check
 		return ERRCONNCLOSED
 	}
+	data := makeUserMsg(userdata, starttime, true)
 	//here has a little data race,but never mind,peer will drop the race data
 	if block {
 		p.writerbuffer <- data
@@ -229,26 +251,57 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 		select {
 		case p.writerbuffer <- data:
 		default:
+			switch p.protocoltype {
+			case TCP:
+				switch p.peertype {
+				case CLIENT:
+					mlog.Error("[Stream.TCP.SendMessage] send message to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRSENDBUFFULL)
+				case SERVER:
+					mlog.Error("[Stream.TCP.SendMessage] send message to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRSENDBUFFULL)
+				}
+			case UNIX:
+				switch p.peertype {
+				case CLIENT:
+					mlog.Error("[Stream.UNIX.SendMessage] send message to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRSENDBUFFULL)
+				case SERVER:
+					mlog.Error("[Stream.UNIX.SendMessage] send message to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRSENDBUFFULL)
+				}
+			}
 			return ERRSENDBUFFULL
 		}
 	}
 	return nil
 }
 
-//warning!has data race with HandleOfflineFunc
-//this function can only be called before this peer's HandleOfflineFunc
+//warning!has data race
+//this is only safe to use in callback func in sync mode
 func (p *Peer) Close() {
-	p.closeconn()
+	old := p.status
+	if atomic.CompareAndSwapUint32(&p.status, old, 2) {
+		p.closeRead()
+	}
 }
 
-//warning!has data race with HandleOfflineFunc
-//this function can only be called before and in this peer's HandleOfflineFunc
+//warning!has data race
+//this is only safe to use in callback func in sync mode
+func (p *Peer) CloseRead() {
+	p.closeRead()
+}
+
+//warning!has data race
+//this is only safe to use in callback func in sync mode
+func (p *Peer) CloseWrite() {
+	p.closeWrite()
+}
+
+//warning!has data race
+//this is only safe to use in callback func in sync mode
 func (p *Peer) GetData() unsafe.Pointer {
 	return p.data
 }
 
-//warning!has data race with HandleOfflineFunc
-//this function can only be called before this peer's HandleOfflineFunc
+//warning!has data race
+//this is only safe to use in callback func in sync mode
 func (p *Peer) SetData(data unsafe.Pointer) {
 	p.data = data
 }

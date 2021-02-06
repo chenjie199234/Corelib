@@ -1,12 +1,14 @@
 package bufpool
 
 import (
+	"io"
 	"reflect"
 	"strconv"
 	"sync"
 	"time"
 	"unsafe"
 
+	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/mtime"
 )
 
@@ -17,7 +19,8 @@ func init() {
 }
 
 type Buffer struct {
-	buf []byte
+	buf    []byte
+	offset int
 }
 
 func GetBuffer() *Buffer {
@@ -28,15 +31,25 @@ func GetBuffer() *Buffer {
 		}
 	}
 	buf.buf = buf.buf[:0]
+	buf.offset = 0
 	return buf
 }
 func PutBuffer(buf *Buffer) {
 	pool.Put(buf)
 }
+
+//byte will type assert to uint8,so it will be treated as number
+//rune will type assert to int32,so it will be treated as number
 func (b *Buffer) Append(data interface{}) {
-	b.appendany(data)
+	switch d := data.(type) {
+	case reflect.Value:
+		b.appendreflect(d)
+	default:
+		b.appendbasic(data)
+	}
 }
-func (b *Buffer) appendany(data interface{}) {
+
+func (b *Buffer) appendbasic(data interface{}) {
 	switch d := data.(type) {
 	case bool:
 		b.buf = strconv.AppendBool(b.buf, d)
@@ -950,8 +963,6 @@ func (b *Buffer) appendany(data interface{}) {
 		} else {
 			b.buf = append(b.buf, "[]"...)
 		}
-	case reflect.Value:
-		b.appendreflect(d)
 	default:
 		b.appendreflect(reflect.ValueOf(d))
 	}
@@ -961,7 +972,11 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 	case reflect.Bool:
 		b.buf = strconv.AppendBool(b.buf, d.Bool())
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		b.buf = strconv.AppendInt(b.buf, d.Int(), 10)
+		if d.Type().Name() == "Duration" {
+			b.buf = b.appendDuration(*(*time.Duration)(unsafe.Pointer(d.Addr().Pointer())))
+		} else {
+			b.buf = strconv.AppendInt(b.buf, d.Int(), 10)
+		}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		b.buf = strconv.AppendUint(b.buf, d.Uint(), 10)
 	case reflect.Float32:
@@ -1007,7 +1022,6 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 		if d.IsNil() {
 			b.buf = append(b.buf, "nil"...)
 		} else if d.Len() > 0 {
-			println("slice")
 			b.buf = append(b.buf, '[')
 			for i := 0; i < d.Len(); i++ {
 				b.appendreflect(d.Index(i))
@@ -1034,7 +1048,10 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 			b.buf = append(b.buf, "{}"...)
 		}
 	case reflect.Struct:
-		if d.NumField() > 0 {
+		if d.Type().Name() == "Time" || d.Type().Name() == "MTime" {
+			t := (*time.Time)(unsafe.Pointer(d.Addr().Pointer()))
+			b.appendbasic(t)
+		} else if d.NumField() > 0 {
 			b.buf = append(b.buf, '{')
 			t := d.Type()
 			for i := 0; i < d.NumField(); i++ {
@@ -1056,11 +1073,23 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 	case reflect.Uintptr:
 		b.buf = b.appendPointer(d.Uint())
 	case reflect.UnsafePointer:
-		b.buf = b.appendPointer(uint64(d.Pointer()))
+		if d.IsNil() {
+			b.buf = append(b.buf, "nil"...)
+		} else {
+			b.buf = b.appendPointer(uint64(d.Pointer()))
+		}
 	case reflect.Func:
-		b.buf = b.appendPointer(uint64(d.Pointer()))
+		if d.IsNil() {
+			b.buf = append(b.buf, "nil"...)
+		} else {
+			b.buf = b.appendPointer(uint64(d.Pointer()))
+		}
 	case reflect.Chan:
-		b.buf = b.appendPointer(uint64(d.Pointer()))
+		if d.IsNil() {
+			b.buf = append(b.buf, "nil"...)
+		} else {
+			b.buf = b.appendPointer(uint64(d.Pointer()))
+		}
 	default:
 		b.buf = append(b.buf, "unsupported type"...)
 	}
@@ -1166,9 +1195,31 @@ func (b *Buffer) Len() int {
 func (b *Buffer) Cap() int {
 	return cap(b.buf)
 }
+func (b *Buffer) Grow(n int) {
+	if cap(b.buf) >= n {
+		(*[3]uintptr)(unsafe.Pointer(&(b.buf)))[1] = uintptr(n)
+	} else {
+		b.buf = make([]byte, n)
+	}
+}
+func (b *Buffer) Reset() {
+	b.buf = b.buf[:0]
+	b.offset = 0
+}
 func (b *Buffer) Bytes() []byte {
 	return b.buf
 }
 func (b *Buffer) String() string {
-	return string(b.buf)
+	return common.Byte2str(b.buf)
+}
+func (b *Buffer) Read(p []byte) (n int, err error) {
+	if b.Len() == 0 {
+		if len(p) == 0 {
+			return 0, nil
+		}
+		return 0, io.EOF
+	}
+	n = copy(p, b.buf[b.offset:])
+	b.offset += n
+	return n, nil
 }

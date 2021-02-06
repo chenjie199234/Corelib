@@ -2,14 +2,15 @@ package superd
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/chenjie199234/Corelib/common"
+	"github.com/chenjie199234/Corelib/mlog"
 )
 
 const (
@@ -19,17 +20,19 @@ const (
 )
 
 type process struct {
-	s        *Super
-	g        *group
-	logicpid uint64
-	cmd      *exec.Cmd
-	out      *bufio.Reader
-	err      *bufio.Reader
-	lker     *sync.RWMutex
-	stime    int64
-	status   int //0 closing,1 starting,2 working
-	version  string
-	restart  int
+	s            *Super
+	g            *group
+	logicpid     uint64
+	cmd          *exec.Cmd
+	out          *bufio.Reader
+	err          *bufio.Reader
+	lker         *sync.RWMutex
+	stime        int64
+	status       int //0 closing,1 starting,2 working
+	version      string
+	versionshort string
+	restart      int
+	autorestart  bool
 }
 
 func (p *process) startProcess() {
@@ -42,18 +45,15 @@ func (p *process) startProcess() {
 		first = false
 		p.g.lker.RLock()
 		if p.g.status == g_CLOSING {
-			//group is closing
 			p.g.lker.RUnlock()
 			break
 		}
 		if p.g.status != g_WORKING {
-			//this is impossible,group status must be working
 			p.g.lker.RUnlock()
 			continue
 		}
 		p.lker.Lock()
 		if p.status == p_CLOSING {
-			//process status must be starting
 			p.lker.Unlock()
 			p.g.lker.RUnlock()
 			break
@@ -64,23 +64,29 @@ func (p *process) startProcess() {
 			p.restart++
 		}
 		p.version = p.g.version
+		if p.g.urlType == UrlGit {
+			findex := strings.Index(p.version, "|")
+			p.versionshort = p.version[:findex+8]
+		} else {
+			p.versionshort = p.version
+		}
 		p.stime = time.Now().UnixNano()
 		p.cmd = exec.Command(p.g.runCmd, p.g.runArgs...)
 		p.cmd.Env = p.g.runEnv
 		p.cmd.Dir = "./app/" + p.g.name
-		p.logs("begin start")
+		mlog.Info("[process.start] start in group:", p.g.name, "on version:", p.version, "logicpid:", p.logicpid)
 		out, e := p.cmd.StdoutPipe()
 		if e != nil {
 			p.lker.Unlock()
 			p.g.lker.RUnlock()
-			p.logs(fmt.Sprintf("pipe stdout error:%s", e))
+			mlog.Error("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "pipe stdout error:", e)
 			continue
 		}
 		err, e := p.cmd.StderrPipe()
 		if e != nil {
 			p.lker.Unlock()
 			p.g.lker.RUnlock()
-			p.logs(fmt.Sprintf("pipe stderr error:%s", e))
+			mlog.Error("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "pipe stderr error:", e)
 			continue
 		}
 		p.out = bufio.NewReaderSize(out, 4096)
@@ -88,7 +94,7 @@ func (p *process) startProcess() {
 		if e = p.cmd.Start(); e != nil {
 			p.lker.Unlock()
 			p.g.lker.RUnlock()
-			p.logs(fmt.Sprintf("start new process error:%s", e))
+			mlog.Error("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "start new process error:", e)
 			continue
 		}
 		p.status = p_WORKING
@@ -96,13 +102,15 @@ func (p *process) startProcess() {
 		p.g.lker.RUnlock()
 		p.log()
 		if e = p.cmd.Wait(); e != nil {
-			p.logs(fmt.Sprintf("exit error:%s", e))
+			mlog.Error("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "exit process error:", e)
 		} else {
-			p.logs("exit success")
+			mlog.Info("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "exit process success")
 		}
 		p.lker.Lock()
-		if p.status == p_WORKING {
+		if p.autorestart && p.status == p_WORKING {
 			p.status = p_STARTING
+		} else {
+			p.status = p_CLOSING
 		}
 		p.lker.Unlock()
 	}
@@ -115,12 +123,12 @@ func (p *process) log() {
 		for {
 			line, _, e := p.out.ReadLine()
 			if e != nil && e != io.EOF {
-				p.logs(fmt.Sprintf("read stdout error:%s", e))
+				mlog.Error("[process.log] in group:", p.g.name, "logicpid:", p.logicpid, "physicpid:", p.cmd.Process.Pid, "version:", p.version, "read stdout error:", e)
 				break
 			} else if e != nil {
 				break
 			}
-			p.logg(common.Byte2str(line))
+			p.g.log(p.logicpid, uint64(p.cmd.Process.Pid), p.versionshort, common.Byte2str(line))
 		}
 		wg.Done()
 	}()
@@ -128,12 +136,12 @@ func (p *process) log() {
 		for {
 			line, _, e := p.err.ReadLine()
 			if e != nil && e != io.EOF {
-				p.logs(fmt.Sprintf("read stderr error:%s", e))
+				mlog.Error("[process.log] in group:", p.g.name, "logicpid:", p.logicpid, "physicpid:", p.cmd.Process.Pid, "version:", p.version, "read stderr error:", e)
 				break
 			} else if e != nil {
 				break
 			}
-			p.logg(common.Byte2str(line))
+			p.g.log(p.logicpid, uint64(p.cmd.Process.Pid), p.versionshort, common.Byte2str(line))
 		}
 		wg.Done()
 	}()
@@ -143,8 +151,8 @@ func (p *process) restartProcess() {
 	p.lker.Lock()
 	defer p.lker.Unlock()
 	if p.status == p_WORKING && p.cmd != nil {
-		p.cmd.Process.Signal(syscall.SIGTERM)
 		p.restart = -1
+		p.cmd.Process.Signal(syscall.SIGTERM)
 	}
 }
 func (p *process) stopProcess() {
@@ -156,19 +164,5 @@ func (p *process) stopProcess() {
 	p.status = p_CLOSING
 	if p.cmd != nil {
 		p.cmd.Process.Signal(syscall.SIGTERM)
-	}
-}
-func (p *process) logs(data string) {
-	if p.cmd == nil || p.cmd.Process == nil {
-		p.s.log(p.g.name, p.logicpid, 0, p.version, data)
-	} else {
-		p.s.log(p.g.name, p.logicpid, uint64(p.cmd.Process.Pid), p.version, data)
-	}
-}
-func (p *process) logg(data string) {
-	if p.cmd == nil || p.cmd.Process == nil {
-		p.g.log(p.logicpid, 0, p.version, data)
-	} else {
-		p.g.log(p.logicpid, uint64(p.cmd.Process.Pid), p.version, data)
 	}
 }

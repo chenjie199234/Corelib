@@ -1,7 +1,6 @@
 package superd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -16,6 +15,10 @@ const (
 	s_CLOSING = iota
 	s_WORKING
 )
+const (
+	UrlGit = iota
+	UrlBin
+)
 
 //struct
 type Super struct {
@@ -23,8 +26,6 @@ type Super struct {
 	name      string
 	lker      *sync.RWMutex
 	groups    map[string]*group
-	loglker   *sync.Mutex
-	logfile   *rotatefile.RotateFile
 	logsize   uint64
 	logcycle  uint64
 	status    int
@@ -41,7 +42,6 @@ func NewSuper(supername string, rotatelogcap rotatefile.RotateCap, rotatelogcycl
 		name:     supername,
 		lker:     new(sync.RWMutex),
 		groups:   make(map[string]*group, 5),
-		loglker:  new(sync.Mutex),
 		logsize:  uint64(rotatelogcap),
 		logcycle: uint64(rotatelogcycle),
 		status:   s_WORKING,
@@ -53,13 +53,12 @@ func NewSuper(supername string, rotatelogcap rotatefile.RotateCap, rotatelogcycl
 	if e = dirop("./app"); e != nil {
 		panic("[init]" + e.Error())
 	}
-	//process log dir
-	if e = dirop("./process_log"); e != nil {
+	//app stdout and stderr log dir
+	if e = dirop("./app_log"); e != nil {
 		panic("[init]" + e.Error())
 	}
 	go func() {
 		defer func() {
-			instance.logfile.Close(true)
 			instance.closech <- struct{}{}
 		}()
 		for {
@@ -68,6 +67,7 @@ func NewSuper(supername string, rotatelogcap rotatefile.RotateCap, rotatelogcycl
 				if !ok {
 					return
 				}
+				mlog.Info("[super.group] stop group name:", groupname)
 				instance.lker.Lock()
 				delete(instance.groups, groupname)
 				if instance.status == s_CLOSING && len(instance.groups) == 0 {
@@ -82,8 +82,8 @@ func NewSuper(supername string, rotatelogcap rotatefile.RotateCap, rotatelogcycl
 }
 func (s *Super) CloseSuper() {
 	s.lker.Lock()
-	defer s.lker.Unlock()
 	if s.status == s_CLOSING {
+		s.lker.Unlock()
 		return
 	}
 	s.status = s_CLOSING
@@ -91,9 +91,10 @@ func (s *Super) CloseSuper() {
 		close(s.notice)
 	} else {
 		for _, g := range s.groups {
-			g.stopGroup()
+			go g.stopGroup()
 		}
 	}
+	s.lker.Unlock()
 	<-s.closech
 	return
 }
@@ -110,7 +111,7 @@ func dirop(path string) error {
 	}
 	return nil
 }
-func (s *Super) CreateGroup(groupname, url string, urltype int, buildcmd string, buildargs, buildenv []string, runcmd string, runargs, runenv []string) error {
+func (s *Super) CreateGroup(groupname, url string, urltype int, buildcmd string, buildargs, buildenv []string, runcmd string, runargs, runenv []string, logkeepdays uint64) error {
 	//check group name
 	if len(groupname) == 0 || groupname[0] < 65 || (groupname[0] > 90 && groupname[0] < 97) || groupname[0] > 122 {
 		return fmt.Errorf("[create group]group name illegal,must start with [a-z][A-Z]")
@@ -120,18 +121,24 @@ func (s *Super) CreateGroup(groupname, url string, urltype int, buildcmd string,
 			return fmt.Errorf("[create group]group name has illegal character,only support[a-z][A-Z][.]")
 		}
 	}
+	if urltype != UrlBin && urltype != UrlGit {
+		return fmt.Errorf("[create group]unsupported url type")
+	}
 	s.lker.Lock()
 	defer s.lker.Unlock()
+	if s.status == s_CLOSING {
+		return fmt.Errorf("[create group]superd is closing")
+	}
 	g, ok := s.groups[groupname]
 	if !ok {
 		var e error
-		if e = os.RemoveAll("./process_log"); e != nil {
+		if e = os.RemoveAll("./app_log"); e != nil {
 			return fmt.Errorf("[create group] remove old dir error:%s", e)
 		}
 		if e = os.RemoveAll("./app/" + groupname); e != nil {
 			return fmt.Errorf("[create group]remote old dir error:%s", e)
 		}
-		if e = dirop("./process_log/" + groupname); e != nil {
+		if e = dirop("./app_log/" + groupname); e != nil {
 			return fmt.Errorf("[create group]%s", e)
 		}
 		if e = dirop("./app/" + groupname); e != nil {
@@ -154,12 +161,12 @@ func (s *Super) CreateGroup(groupname, url string, urltype int, buildcmd string,
 			loglker:   new(sync.Mutex),
 			notice:    make(chan uint64, 100),
 		}
-		g.logfile, e = rotatefile.NewRotateFile("./process_log/"+groupname, groupname, rotatefile.RotateCap(s.logsize), rotatefile.RotateTime(s.logcycle))
+		g.logfile, e = rotatefile.NewRotateFile("./app_log/"+groupname, groupname, "log", rotatefile.RotateCap(s.logsize), rotatefile.RotateTime(s.logcycle), rotatefile.KeepDays(logkeepdays))
 		if e != nil {
 			return fmt.Errorf("[create group]" + e.Error())
 		}
-		go g.startGroup()
 		s.groups[groupname] = g
+		go g.startGroup()
 		return nil
 	} else {
 		return fmt.Errorf("[create group]group already exist")
@@ -177,16 +184,14 @@ func (s *Super) DeleteGroup(groupname string) error {
 	}
 	return nil
 }
-func (s *Super) StartProcess(groupname string) error {
+func (s *Super) StartProcess(groupname string, autorestart bool) error {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
 	g, ok := s.groups[groupname]
 	if !ok {
 		return fmt.Errorf("[start process]Group doesn't exist,please create the group before start process.")
 	}
-	if !g.startProcess(atomic.AddUint64(&s.processid, 1)) {
-		return fmt.Errorf("[start process]Group is preparing,please wait for a second.")
-	}
+	go g.startProcess(atomic.AddUint64(&s.processid, 1), autorestart)
 	return nil
 }
 func (s *Super) RestartProcess(groupname string, pid uint64) {
@@ -196,7 +201,7 @@ func (s *Super) RestartProcess(groupname string, pid uint64) {
 	if !ok {
 		return
 	}
-	g.restartProcess(pid)
+	go g.restartProcess(pid)
 }
 func (s *Super) StopProcess(groupname string, pid uint64) {
 	s.lker.RLock()
@@ -205,7 +210,7 @@ func (s *Super) StopProcess(groupname string, pid uint64) {
 	if !ok {
 		return
 	}
-	g.stopProcess(pid)
+	go g.stopProcess(pid)
 }
 func (s *Super) UpdateGroupSrc(groupname string) error {
 	s.lker.RLock()
@@ -243,19 +248,20 @@ type GroupInfo struct {
 	Pinfo     []*ProcessInfo `json:"process_info"`
 }
 type ProcessInfo struct {
-	Lpid    uint64 `json:"logic_pid"`
-	Ppid    uint64 `json:"physic_pid"`
-	Stime   int64  `json:"start_time"`
-	Version string `json:"version"`
-	Status  int    `json:"status"`
-	Restart int    `json:"restart"`
+	Lpid        uint64 `json:"logic_pid"`
+	Ppid        uint64 `json:"physic_pid"`
+	Stime       int64  `json:"start_time"`
+	Version     string `json:"version"`
+	Status      int    `json:"status"` //0 closing,1 starting,2 working
+	Restart     int    `json:"restart"`
+	AutoRestart bool   `json:"auto_restart"`
 }
 
-func (s *Super) GetInfo() []byte {
+func (s *Super) GetInfo() []*GroupInfo {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
 	if s.status == s_CLOSING {
-		return []byte("[]")
+		return nil
 	}
 	result := make([]*GroupInfo, len(s.groups))
 	gindex := 0
@@ -279,10 +285,12 @@ func (s *Super) GetInfo() []byte {
 		for _, p := range g.processes {
 			p.lker.RLock()
 			tempp := &ProcessInfo{
-				Stime:   p.stime,
-				Version: p.version,
-				Status:  p.status,
-				Restart: p.restart,
+				Lpid:        p.logicpid,
+				Stime:       p.stime,
+				Version:     p.version,
+				Status:      p.status,
+				Restart:     p.restart,
+				AutoRestart: p.autorestart,
 			}
 			if p.status == p_WORKING {
 				tempp.Ppid = uint64(p.cmd.Process.Pid)
@@ -300,6 +308,6 @@ func (s *Super) GetInfo() []byte {
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Name < result[j].Name
 	})
-	d, _ := json.Marshal(result)
-	return d
+	//d, _ := json.Marshal(result)
+	return result
 }

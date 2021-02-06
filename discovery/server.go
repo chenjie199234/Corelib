@@ -148,24 +148,18 @@ func (s *discoveryserver) userfunc(p *stream.Peer, appuniquename string, data []
 			p.Close()
 			return
 		}
-		if reg.GrpcPort == 0 && reg.HttpPort == 0 && reg.TcpPort == 0 && reg.WebSockPort == 0 {
+		if (reg.WebPort == 0 || reg.WebScheme == "") && reg.RpcPort == 0 {
 			//register with empty data
 			fmt.Printf("[Discovery.server.userfunc.impossible]app:%s register with empty message:%s\n", appuniquename, regmsg)
 			p.Close()
 			return
 		}
 		ip := appuniquename[strings.Index(appuniquename, ":")+1 : strings.LastIndex(appuniquename, ":")]
-		if reg.GrpcPort != 0 && reg.GrpcIp == "" {
-			reg.GrpcIp = ip
+		if reg.WebPort != 0 && reg.WebScheme != "" && reg.WebIp == "" {
+			reg.WebIp = ip
 		}
-		if reg.HttpPort != 0 && reg.HttpIp == "" {
-			reg.HttpIp = ip
-		}
-		if reg.TcpPort != 0 && reg.TcpIp == "" {
-			reg.TcpIp = ip
-		}
-		if reg.WebSockPort != 0 && reg.WebSockIp == "" {
-			reg.WebSockIp = ip
+		if reg.RpcPort != 0 && reg.RpcIp == "" {
+			reg.RpcIp = ip
 		}
 		regmsg, _ = json.Marshal(reg)
 		s.lker.Lock()

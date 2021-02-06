@@ -1,0 +1,12 @@
+syntax="proto3";
+package rpc;
+option go_package=".;rpc";
+message msg {
+	uint64 callid=1;
+	string path=2;
+	int64 deadline=3;
+	double cpu=4;
+	bytes body=5;
+	string error=6;
+	map<string,string> metadata=7;
+}

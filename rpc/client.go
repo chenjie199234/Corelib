@@ -1,4 +1,4 @@
-package mrpc
+package rpc
 
 import (
 	"bytes"
@@ -13,7 +13,6 @@ import (
 	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/merror"
 	"github.com/chenjie199234/Corelib/stream"
-	//"github.com/chenjie199234/Corelib/sys/trace"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -153,7 +152,7 @@ func NewMrpcClient(c *stream.InstanceConfig, appname string, vdata []byte, pick 
 //first key:addr
 //second key:discovery server
 //value:addition data
-func (c *MrpcClient) UpdateDiscovery(allapps map[string]map[string][]byte) {
+func (c *MrpcClient) UpdateDiscovery(allapps map[string]map[string]struct{}, addition []byte) {
 	//offline app
 	c.lker.Lock()
 	defer c.lker.Unlock()

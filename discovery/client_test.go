@@ -43,50 +43,34 @@ func Test_Client1(t *testing.T) {
 		},
 	}, []byte{'t', 'e', 's', 't'}, "http://127.0.0.1:8080/discoveryservers")
 	time.Sleep(time.Second)
-	gch, e := NoticeGrpcChanges("client")
+	rch, e := NoticeRpcChanges("client")
 	if e != nil {
 		panic("notice grpc change error:" + e.Error())
 	}
-	hch, e := NoticeHttpChanges("client")
+	wch, e := NoticeWebChanges("client")
 	if e != nil {
 		panic("notice http change error:" + e.Error())
-	}
-	tch, e := NoticeTcpChanges("client")
-	if e != nil {
-		panic("notice tcp change error:" + e.Error())
-	}
-	wch, e := NoticeWebsocketChanges("client")
-	if e != nil {
-		panic("notice websocket change error:" + e.Error())
 	}
 	go func() {
 		for {
 			select {
-			case <-gch:
-				r := GetGrpcInfos("client")
+			case <-rch:
+				r, addition := GetRpcInfos("client")
 				fmt.Println(r)
-			case <-hch:
-				r := GetHttpInfos("client")
-				fmt.Println(r)
-			case <-tch:
-				r := GetTcpInfos("client")
-				fmt.Println(r)
+				fmt.Printf("%s\n", addition)
 			case <-wch:
-				r := GetWebsocketInfos("client")
+				r, addition := GetWebInfos("client")
 				fmt.Println(r)
+				fmt.Printf("%s\n", addition)
 			}
 		}
 	}()
 	RegisterSelf(&RegMsg{
-		GrpcIp:      "",
-		GrpcPort:    9000,
-		HttpIp:      "",
-		HttpPort:    8000,
-		TcpIp:       "",
-		TcpPort:     7000,
-		WebSockIp:   "",
-		WebSockPort: 6000,
-		WebSockUrl:  "/root",
+		RpcIp:     "",
+		RpcPort:   9000,
+		WebIp:     "",
+		WebPort:   8000,
+		WebScheme: "https",
 	})
 	select {}
 }
@@ -125,50 +109,34 @@ func Test_Client2(t *testing.T) {
 		},
 	}, []byte{'t', 'e', 's', 't'}, "http://127.0.0.1:8080/discoveryservers")
 	time.Sleep(time.Second)
-	gch, e := NoticeGrpcChanges("client")
+	rch, e := NoticeRpcChanges("client")
 	if e != nil {
 		panic("notice grpc change error:" + e.Error())
 	}
-	hch, e := NoticeHttpChanges("client")
+	wch, e := NoticeWebChanges("client")
 	if e != nil {
 		panic("notice http change error:" + e.Error())
-	}
-	tch, e := NoticeTcpChanges("client")
-	if e != nil {
-		panic("notice tcp change error:" + e.Error())
-	}
-	wch, e := NoticeWebsocketChanges("client")
-	if e != nil {
-		panic("notice websocket change error:" + e.Error())
 	}
 	go func() {
 		for {
 			select {
-			case <-gch:
-				r := GetGrpcInfos("client")
+			case <-rch:
+				r, addition := GetRpcInfos("client")
 				fmt.Println(r)
-			case <-hch:
-				r := GetHttpInfos("client")
-				fmt.Println(r)
-			case <-tch:
-				r := GetTcpInfos("client")
-				fmt.Println(r)
+				fmt.Printf("%s\n", addition)
 			case <-wch:
-				r := GetWebsocketInfos("client")
+				r, addition := GetWebInfos("client")
 				fmt.Println(r)
+				fmt.Printf("%s\n", addition)
 			}
 		}
 	}()
 	RegisterSelf(&RegMsg{
-		GrpcIp:      "",
-		GrpcPort:    9001,
-		HttpIp:      "",
-		HttpPort:    8001,
-		TcpIp:       "",
-		TcpPort:     7001,
-		WebSockIp:   "",
-		WebSockPort: 6001,
-		WebSockUrl:  "/root",
+		RpcIp:     "",
+		RpcPort:   9001,
+		WebIp:     "",
+		WebPort:   8001,
+		WebScheme: "https",
 	})
 	select {}
 }

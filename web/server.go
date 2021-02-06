@@ -2,158 +2,367 @@ package web
 
 import (
 	"context"
-	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
-	//"github.com/chenjie199234/Corelib/sys/trace"
+	"github.com/chenjie199234/Corelib/common"
+	"github.com/chenjie199234/Corelib/mlog"
 	"github.com/julienschmidt/httprouter"
 )
 
-type Web struct {
-	conf        *WebConfig
-	server      *http.Server
-	router      *httprouter.Router
-	contextpool *sync.Pool
+type WebServer struct {
+	s       *http.Server
+	c       *Config
+	global  []OutsideHandler
+	router  *httprouter.Router
+	ctxpool *sync.Pool
 }
 
-func NewInstance(c *WebConfig) *Web {
-	checkconfig(c)
-	instance := &Web{
-		conf: c,
-		server: &http.Server{
-			Addr:              c.Addr,
-			ReadTimeout:       time.Duration(c.ReadTimeout) * time.Millisecond,
-			ReadHeaderTimeout: time.Duration(c.ReadHeaderTimeout) * time.Millisecond,
-			WriteTimeout:      time.Duration(c.WriteTimeout) * time.Millisecond,
-			IdleTimeout:       time.Duration(c.IdleTimeout) * time.Millisecond,
-			MaxHeaderBytes:    c.MaxHeaderBytes,
-		},
-		router: httprouter.New(),
-		contextpool: &sync.Pool{
-			New: func() interface{} {
-				return &Context{}
-			},
-		},
+type Config struct {
+	Timeout            time.Duration
+	StaticFileRootPath string
+	MaxHeader          int
+	ReadBuffer         int //socket buffer
+	WriteBuffer        int //socker buffer
+	Cors               *CorsConfig
+}
+
+type CorsConfig struct {
+	AllowedOrigin    []string
+	AllowedHeader    []string
+	ExposeHeader     []string
+	AllowCredentials bool
+	MaxAge           time.Duration
+	allorigin        bool
+	allheader        bool
+	headerstr        string
+	exposestr        string
+}
+
+func (c *Config) validate() {
+	if c == nil {
+		c = &Config{}
 	}
-	instance.server.ConnState = func(conn net.Conn, s http.ConnState) {
-		if s == http.StateNew {
-			conn.(*net.TCPConn).SetReadBuffer(c.SocketReadBufferLen)
-			conn.(*net.TCPConn).SetWriteBuffer(c.SocketWriteBufferLen)
+	if c.Cors == nil {
+		c.Cors = &CorsConfig{
+			AllowedOrigin:    []string{"*"},
+			AllowedHeader:    []string{"*"},
+			ExposeHeader:     nil,
+			AllowCredentials: false,
+			MaxAge:           time.Hour * 24,
 		}
 	}
-	instance.router.PanicHandler = func(w http.ResponseWriter, r *http.Request, i interface{}) {
-		fmt.Printf("[Web.PanicHandler]panic:\n,%s\n", i)
-		http.Error(w, "500 server error:panic", http.StatusInternalServerError)
+	if c.MaxHeader == 0 {
+		c.MaxHeader = 1024
 	}
-	return instance
+	if c.ReadBuffer == 0 {
+		c.ReadBuffer = 1024
+	}
+	if c.WriteBuffer == 0 {
+		c.WriteBuffer = 1024
+	}
+	for _, v := range c.Cors.AllowedOrigin {
+		if v == "*" {
+			c.Cors.allorigin = true
+			break
+		}
+	}
+	hasorigin := false
+	for _, v := range c.Cors.AllowedHeader {
+		if v == "*" {
+			c.Cors.allheader = true
+			break
+		} else if v == "Origin" {
+			hasorigin = true
+		}
+	}
+	if !c.Cors.allheader && !hasorigin {
+		c.Cors.AllowedHeader = append(c.Cors.AllowedHeader, "Origin")
+	}
+	c.Cors.headerstr = c.getHeaders()
+	c.Cors.exposestr = c.getExpose()
 }
-func (this *Web) getContext(w http.ResponseWriter, r *http.Request, p httprouter.Params) *Context {
-	ctx := this.contextpool.Get().(*Context)
-	ctx.w = w
-	ctx.r = r
-	ctx.p = p
-	ctx.s = true
-	ctx.Context = r.Context()
-	return ctx
+func (c *Config) getHeaders() string {
+	if c.Cors.allheader || len(c.Cors.AllowedHeader) == 0 {
+		return ""
+	}
+	removedup := make(map[string]struct{}, len(c.Cors.AllowedHeader))
+	for _, v := range c.Cors.AllowedHeader {
+		if v != "*" {
+			removedup[http.CanonicalHeaderKey(v)] = struct{}{}
+		}
+	}
+	unique := make([]string, len(removedup))
+	index := 0
+	for v := range removedup {
+		unique[index] = v
+		index++
+	}
+	return strings.Join(unique, ", ")
 }
-func (this *Web) putContext(ctx *Context) {
-	ctx.w = nil
-	ctx.r = nil
-	ctx.p = nil
-	ctx.s = false
-	ctx.Context = nil
-	this.contextpool.Put(ctx)
+func (c *Config) getExpose() string {
+	if len(c.Cors.ExposeHeader) > 0 {
+		removedup := make(map[string]struct{}, len(c.Cors.ExposeHeader))
+		for _, v := range c.Cors.ExposeHeader {
+			removedup[http.CanonicalHeaderKey(v)] = struct{}{}
+		}
+		unique := make([]string, len(removedup))
+		index := 0
+		for v := range removedup {
+			unique[index] = v
+			index++
+		}
+		return strings.Join(unique, ", ")
+	} else {
+		return ""
+	}
 }
 
-//return code message data
-type OutsideHandler func(*Context)
-
-var emptydata = []byte{'{', '}'}
-
-func (this *Web) insideHandler(timeout int, handlers ...OutsideHandler) func(http.ResponseWriter, *http.Request, httprouter.Params) {
-	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		ctx := this.getContext(w, r, p)
-		now := time.Now()
-		var dl time.Time
-		var clientdeadline int64
-		if temp := ctx.GetHeader("Deadline"); temp != "" {
-			var e error
-			clientdeadline, e = strconv.ParseInt(temp, 10, 64)
-			if e != nil {
-				fmt.Printf("[Web.insideHandler]parse client deadline error:%s\n", e)
-				ctx.w.WriteHeader(http.StatusBadRequest)
-				ctx.w.Write(emptydata)
-			} else if clientdeadline != 0 {
-				if clientdeadline <= now.UnixNano()+int64(time.Millisecond) {
-					ctx.w.WriteHeader(http.StatusRequestTimeout)
-					ctx.w.Write(emptydata)
-					return
+func NewWebServer(c *Config) *WebServer {
+	c.validate()
+	instance := &WebServer{
+		c:       c,
+		global:  make([]OutsideHandler, 0, 10),
+		router:  httprouter.New(),
+		ctxpool: &sync.Pool{},
+	}
+	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mlog.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
+		http.Error(w,
+			http.StatusText(http.StatusNotFound),
+			http.StatusNotFound,
+		)
+	})
+	instance.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mlog.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown method")
+		http.Error(w,
+			http.StatusText(http.StatusMethodNotAllowed),
+			http.StatusMethodNotAllowed,
+		)
+	})
+	instance.router.PanicHandler = func(w http.ResponseWriter, r *http.Request, msg interface{}) {
+		mlog.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "panic:", msg)
+		http.Error(w,
+			http.StatusText(http.StatusInternalServerError),
+			http.StatusInternalServerError,
+		)
+	}
+	instance.router.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		//for OPTIONS preflight
+		defer w.WriteHeader(http.StatusNoContent)
+		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		if origin == "" {
+			return
+		}
+		if r.Header.Get("Access-Control-Request-Method") == "" {
+			return
+		}
+		headers := w.Header()
+		headers.Add("Vary", "Origin")
+		headers.Add("Vary", "Access-Control-Request-Method")
+		headers.Add("Vary", "Access-Control-Request-Headers")
+		headers.Set("Access-Control-Allow-Methods", headers.Get("Allow"))
+		headers.Del("Allow")
+		if c.Cors.allorigin {
+			headers.Set("Access-Control-Allow-Origin", "*")
+		} else {
+			for _, v := range c.Cors.AllowedOrigin {
+				if origin == v {
+					headers.Set("Access-Control-Allow-Origin", origin)
+					break
 				}
 			}
 		}
-		var serverdeadline int64
-		if timeout > 0 && timeout < this.conf.WriteTimeout {
-			serverdeadline = now.UnixNano() + int64(timeout)*int64(time.Millisecond)
-		} else if this.conf.WriteTimeout > 0 {
-			serverdeadline = now.UnixNano() + int64(this.conf.WriteTimeout)*int64(time.Millisecond)
+		if c.Cors.allheader {
+			headers.Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
+		} else if len(c.Cors.headerstr) > 0 {
+			headers.Set("Access-Control-Allow-Headers", c.Cors.headerstr)
 		}
-		if clientdeadline != 0 && serverdeadline != 0 {
-			if clientdeadline < serverdeadline {
-				dl = time.Unix(0, clientdeadline)
-			} else {
-				dl = time.Unix(0, serverdeadline)
-			}
-		} else if clientdeadline != 0 {
-			dl = time.Unix(0, clientdeadline)
-		} else if serverdeadline != 0 {
-			dl = time.Unix(0, serverdeadline)
+		if c.Cors.AllowCredentials {
+			headers.Set("Access-Control-Allow-Credentials", "true")
 		}
+		if c.Cors.MaxAge != 0 {
+			headers.Set("Access-Control-Max-Age", strconv.FormatInt(int64(c.Cors.MaxAge)/int64(time.Second), 10))
+		}
+	})
+	if c.StaticFileRootPath != "" {
+		instance.router.ServeFiles("/src/*filepath", http.Dir(c.StaticFileRootPath))
+	}
+	return instance
+}
+func (this *WebServer) StartWebServer(listenaddr string, cert, key string) {
+	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
+	if e != nil {
+		panic("[web.server] resolve addr:" + listenaddr + " error:" + e.Error())
+	}
+	l, e := net.ListenTCP("tcp", laddr)
+	if e != nil {
+		panic("[web.server] listen addr:" + listenaddr + " error:" + e.Error())
+	}
+	this.s = &http.Server{
+		Handler:        this,
+		ReadTimeout:    this.c.Timeout,
+		MaxHeaderBytes: this.c.MaxHeader,
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			(c.(*net.TCPConn)).SetReadBuffer(this.c.ReadBuffer)
+			(c.(*net.TCPConn)).SetWriteBuffer(this.c.WriteBuffer)
+			return ctx
+		},
+	}
+	if cert != "" && key != "" {
+		this.s.ServeTLS(l, cert, key)
+	} else {
+		this.s.Serve(l)
+	}
+}
+func (this *WebServer) StopWebServer() {
+	mlog.Close()
+	this.s.Shutdown(context.Background())
+}
+func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, handlers []OutsideHandler) *Context {
+	ctx, ok := this.ctxpool.Get().(*Context)
+	if !ok {
+		return &Context{Context: r.Context(), w: w, r: r, handlers: handlers}
+	}
+	ctx.w = w
+	ctx.r = r
+	ctx.handlers = handlers
+	ctx.Context = r.Context()
+	return ctx
+}
 
-		if !dl.IsZero() {
-			var f context.CancelFunc
-			ctx.Context, f = context.WithDeadline(ctx.Context, dl)
-			defer f()
-		}
-		//set traceid
-		//ctx.Context = trace.SetTrace(ctx.Context, trace.MakeTrace())
-		//deal logic
-		for _, handler := range handlers {
-			handler(ctx)
-			if !ctx.s {
-				break
+func (this *WebServer) putContext(ctx *Context) {
+	ctx.w = nil
+	ctx.r = nil
+	ctx.handlers = nil
+	ctx.Context = nil
+	ctx.next = 0
+	this.ctxpool.Put(ctx)
+}
+
+type OutsideHandler func(*Context)
+
+//thread unsafe
+func (this *WebServer) Use(globalMids ...OutsideHandler) {
+	this.global = append(this.global, globalMids...)
+}
+
+//thread unsafe
+func (this *WebServer) Get(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+	this.router.Handler(http.MethodGet, path, this.insideHandler(functimeout, handlers))
+}
+
+//thread unsafe
+func (this *WebServer) Delete(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+	this.router.Handler(http.MethodDelete, path, this.insideHandler(functimeout, handlers))
+}
+
+//thread unsafe
+func (this *WebServer) Post(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+	this.router.Handler(http.MethodPost, path, this.insideHandler(functimeout, handlers))
+}
+
+//thread unsafe
+func (this *WebServer) Put(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+	this.router.Handler(http.MethodPut, path, this.insideHandler(functimeout, handlers))
+}
+
+//thread unsafe
+func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+	this.router.Handler(http.MethodPatch, path, this.insideHandler(functimeout, handlers))
+}
+
+func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	this.router.ServeHTTP(w, r)
+}
+
+func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHandler) http.HandlerFunc {
+	totalhandlers := make([]OutsideHandler, 1)
+	totalhandlers = append(totalhandlers, this.global...)
+	totalhandlers = append(totalhandlers, handlers...)
+	if len(totalhandlers) > math.MaxInt8 {
+		panic("[web.server] too many handlers for one single path")
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		//set cors
+		if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
+			headers := w.Header()
+			headers.Add("Vary", "Origin")
+			if this.c.Cors.allorigin {
+				headers.Set("Access-Control-Allow-Origin", "*")
+			} else {
+				find := false
+				for _, v := range this.c.Cors.AllowedOrigin {
+					if origin == v {
+						headers.Set("Access-Control-Allow-Origin", origin)
+						find = true
+						break
+					}
+				}
+				if !find {
+					mlog.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "origin:", origin, "error: cors")
+					w.WriteHeader(http.StatusForbidden)
+					w.Write(common.Str2byte(http.StatusText(http.StatusForbidden)))
+					return
+				}
+			}
+			if this.c.Cors.AllowCredentials {
+				headers.Set("Access-Control-Allow-Credentials", "true")
+			}
+			if len(this.c.Cors.exposestr) > 0 {
+				headers.Set("Access-Control-Expose-Headers", this.c.Cors.exposestr)
 			}
 		}
-		if ctx.s {
-			ctx.w.WriteHeader(http.StatusOK)
-			ctx.w.Write(emptydata)
+		//set timeout
+		now := time.Now()
+		var globaldl int64
+		var funcdl int64
+		var clientdl int64
+		if this.c.Timeout != 0 {
+			globaldl = now.UnixNano() + int64(this.c.Timeout)
 		}
+		if timeout != 0 {
+			funcdl = now.UnixNano() + int64(timeout)
+		}
+		if temp := r.Header.Get("Deadline"); temp != "" {
+			var e error
+			clientdl, e = strconv.ParseInt(temp, 10, 64)
+			if e != nil {
+				mlog.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Deadline", temp, "format error")
+				w.WriteHeader(http.StatusBadGateway)
+				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
+				return
+			}
+		}
+		min := int64(math.MaxInt64)
+		if clientdl < min && clientdl != 0 {
+			min = clientdl
+		}
+		if funcdl < min && funcdl != 0 {
+			min = funcdl
+		}
+		if globaldl < min && globaldl != 0 {
+			min = globaldl
+		}
+		if min != math.MaxInt64 {
+			if min < now.UnixNano()+int64(time.Millisecond) {
+				//min logic time,1ms
+				w.WriteHeader(http.StatusGatewayTimeout)
+				w.Write(common.Str2byte(http.StatusText(http.StatusGatewayTimeout)))
+				return
+			}
+			ctx, cancel := context.WithDeadline(r.Context(), time.Unix(0, min))
+			defer cancel()
+			r = r.WithContext(ctx)
+		}
+		//logic
+		ctx := this.getContext(w, r, totalhandlers)
+		ctx.Next()
 		this.putContext(ctx)
 	}
-}
-
-func (this *Web) GET(path string, timeout int, handlers ...OutsideHandler) {
-	this.router.GET(path, this.insideHandler(timeout, handlers...))
-}
-func (this *Web) POST(path string, timeout int, handlers ...OutsideHandler) {
-	this.router.POST(path, this.insideHandler(timeout, handlers...))
-}
-func (this *Web) ServeFiles(path string, root http.FileSystem) {
-	this.router.ServeFiles(path, root)
-}
-
-func (this *Web) StartWebServer() {
-	this.server.Handler = this.router
-	if this.conf.TlsCertFile != "" && this.conf.TlsKeyFile != "" {
-		this.server.ListenAndServeTLS(this.conf.TlsCertFile, this.conf.TlsKeyFile)
-	} else {
-		this.server.ListenAndServe()
-	}
-}
-
-func (this *Web) Shudown() {
-	this.server.Shutdown(context.Background())
 }

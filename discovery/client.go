@@ -40,11 +40,9 @@ type discoveryclient struct {
 	canreg     bool
 	stopch     chan struct{}
 	//key appname
-	grpcnotices map[string]map[chan struct{}]struct{}
-	httpnotices map[string]map[chan struct{}]struct{}
-	tcpnotices  map[string]map[chan struct{}]struct{}
-	webnotices  map[string]map[chan struct{}]struct{}
-	nlker       *sync.RWMutex
+	rpcnotices map[string]map[chan struct{}]struct{}
+	webnotices map[string]map[chan struct{}]struct{}
+	nlker      *sync.RWMutex
 
 	appnodepool *sync.Pool
 }
@@ -93,10 +91,8 @@ func NewDiscoveryClient(c *stream.InstanceConfig, vdata []byte, url string) {
 		verifydata:  vdata,
 		servers:     make(map[string]*servernode, 5),
 		stopch:      make(chan struct{}),
-		grpcnotices: make(map[string]map[chan struct{}]struct{}, 5),
-		httpnotices: make(map[string]map[chan struct{}]struct{}, 5),
-		tcpnotices:  make(map[string]map[chan struct{}]struct{}, 5),
 		webnotices:  make(map[string]map[chan struct{}]struct{}, 5),
+		rpcnotices:  make(map[string]map[chan struct{}]struct{}, 5),
 		nlker:       &sync.RWMutex{},
 		appnodepool: &sync.Pool{},
 	}
@@ -153,20 +149,12 @@ func RegisterSelf(regmsg *RegMsg) error {
 	}
 	temp := make(map[int]struct{})
 	count := 0
-	if regmsg.GrpcPort != 0 {
-		temp[regmsg.GrpcPort] = struct{}{}
+	if regmsg.WebPort != 0 && regmsg.WebScheme != "" {
+		temp[regmsg.WebPort] = struct{}{}
 		count++
 	}
-	if regmsg.HttpPort != 0 {
-		temp[regmsg.HttpPort] = struct{}{}
-		count++
-	}
-	if regmsg.TcpPort != 0 {
-		temp[regmsg.TcpPort] = struct{}{}
-		count++
-	}
-	if regmsg.WebSockPort != 0 {
-		temp[regmsg.WebSockPort] = struct{}{}
+	if regmsg.RpcPort != 0 {
+		temp[regmsg.RpcPort] = struct{}{}
 		count++
 	}
 	if count == 0 {
@@ -199,119 +187,57 @@ func UnRegisterSelf() error {
 	}
 	return nil
 }
-func NoticeGrpcChanges(appname string) (chan struct{}, error) {
-	return noticechanges(appname, 1)
-}
-func UnNoticeGrpcChanges(appname string, ch chan struct{}) {
-	clientinstance.nlker.Lock()
-	if _, ok := clientinstance.grpcnotices[appname]; ok {
-		delete(clientinstance.grpcnotices[appname], ch)
-	}
-	clientinstance.nlker.Unlock()
-}
-func NoticeHttpChanges(appname string) (chan struct{}, error) {
-	return noticechanges(appname, 2)
-}
-func UnNoticeHttpChanges(appname string, ch chan struct{}) {
-	clientinstance.nlker.Lock()
-	if _, ok := clientinstance.httpnotices[appname]; ok {
-		delete(clientinstance.httpnotices[appname], ch)
-	}
-	clientinstance.nlker.Unlock()
-}
-func NoticeTcpChanges(appname string) (chan struct{}, error) {
-	return noticechanges(appname, 3)
-}
-func UnNoticeTcpChanges(appname string, ch chan struct{}) {
-	clientinstance.nlker.Lock()
-	if _, ok := clientinstance.tcpnotices[appname]; ok {
-		delete(clientinstance.tcpnotices[appname], ch)
-	}
-	clientinstance.nlker.Unlock()
-}
-func NoticeWebsocketChanges(appname string) (chan struct{}, error) {
-	return noticechanges(appname, 4)
-}
-func UnNoticeWebsocketChanges(appname string, ch chan struct{}) {
-	clientinstance.nlker.Lock()
-	if _, ok := clientinstance.webnotices[appname]; ok {
-		delete(clientinstance.webnotices[appname], ch)
-	}
-	clientinstance.nlker.Unlock()
-}
-func noticechanges(appname string, t int) (chan struct{}, error) {
+
+func NoticeWebChanges(appname string) (chan struct{}, error) {
 	if clientinstance == nil {
 		return nil, ERRCINIT
 	}
 	clientinstance.nlker.Lock()
-	var notices map[chan struct{}]struct{}
-	var ok bool
-	switch t {
-	case 1:
-		notices, ok = clientinstance.grpcnotices[appname]
-		if !ok {
-			notices = make(map[chan struct{}]struct{}, 5)
-			clientinstance.grpcnotices[appname] = notices
-		}
-	case 2:
-		notices, ok = clientinstance.httpnotices[appname]
-		if !ok {
-			notices = make(map[chan struct{}]struct{}, 5)
-			clientinstance.httpnotices[appname] = notices
-		}
-	case 3:
-		notices, ok = clientinstance.tcpnotices[appname]
-		if !ok {
-			notices = make(map[chan struct{}]struct{}, 5)
-			clientinstance.tcpnotices[appname] = notices
-		}
-	case 4:
-		notices, ok = clientinstance.webnotices[appname]
-		if !ok {
-			notices = make(map[chan struct{}]struct{}, 5)
-			clientinstance.webnotices[appname] = notices
-		}
+	defer clientinstance.nlker.Unlock()
+	if _, ok := clientinstance.webnotices[appname]; !ok {
+		clientinstance.webnotices[appname] = make(map[chan struct{}]struct{}, 10)
 	}
 	ch := make(chan struct{}, 1)
 	ch <- struct{}{}
-	notices[ch] = struct{}{}
-	clientinstance.nlker.Unlock()
+	clientinstance.webnotices[appname][ch] = struct{}{}
+	return ch, nil
+}
+
+func NoticeRpcChanges(appname string) (chan struct{}, error) {
+	if clientinstance == nil {
+		return nil, ERRCINIT
+	}
+	clientinstance.nlker.Lock()
+	defer clientinstance.nlker.Unlock()
+	if _, ok := clientinstance.rpcnotices[appname]; !ok {
+		clientinstance.rpcnotices[appname] = make(map[chan struct{}]struct{}, 10)
+	}
+	ch := make(chan struct{}, 1)
+	ch <- struct{}{}
+	clientinstance.rpcnotices[appname][ch] = struct{}{}
 	return ch, nil
 }
 
 //first key:app addr
 //second key:discovery addr
 //value:addition data
-func GetGrpcInfos(appname string) map[string]map[string][]byte {
+func GetRpcInfos(appname string) (map[string]map[string]struct{}, []byte) {
 	return getinfos(appname, 1)
 }
 
 //first key:app addr
 //second key:discovery addr
 //value:addition data
-func GetHttpInfos(appname string) map[string]map[string][]byte {
+func GetWebInfos(appname string) (map[string]map[string]struct{}, []byte) {
 	return getinfos(appname, 2)
 }
 
 //first key:app addr
 //second key:discovery addr
 //value:addition data
-func GetTcpInfos(appname string) map[string]map[string][]byte {
-	return getinfos(appname, 3)
-}
-
-//first key:app addr
-//second key:discovery addr
-//value:addition data
-func GetWebsocketInfos(appname string) map[string]map[string][]byte {
-	return getinfos(appname, 4)
-}
-
-//first key:app addr
-//second key:discovery addr
-//value:addition data
-func getinfos(appname string, t int) map[string]map[string][]byte {
-	result := make(map[string]map[string][]byte, 5)
+func getinfos(appname string, t int) (map[string]map[string]struct{}, []byte) {
+	result := make(map[string]map[string]struct{}, 5)
+	var resultaddition []byte
 	clientinstance.lker.RLock()
 	defer clientinstance.lker.RUnlock()
 	for serveruniquename, server := range clientinstance.servers {
@@ -321,40 +247,27 @@ func getinfos(appname string, t int) map[string]map[string][]byte {
 				var addr string
 				switch t {
 				case 1:
-					if app.regmsg.GrpcPort == 0 {
+					if app.regmsg.RpcPort == 0 {
 						continue
 					}
-					addr = fmt.Sprintf("%s:%d", app.regmsg.GrpcIp, app.regmsg.GrpcPort)
+					addr = fmt.Sprintf("%s:%d", app.regmsg.RpcIp, app.regmsg.RpcPort)
 				case 2:
-					if app.regmsg.HttpPort == 0 {
+					if app.regmsg.WebPort == 0 || app.regmsg.WebScheme == "" {
 						continue
 					}
-					addr = fmt.Sprintf("%s:%d", app.regmsg.HttpIp, app.regmsg.HttpPort)
-				case 3:
-					if app.regmsg.TcpPort == 0 {
-						continue
-					}
-					addr = fmt.Sprintf("%s:%d", app.regmsg.TcpIp, app.regmsg.TcpPort)
-				case 4:
-					if app.regmsg.WebSockPort == 0 {
-						continue
-					}
-					if len(app.regmsg.WebSockUrl) != 0 && app.regmsg.WebSockUrl[0] != '/' {
-						addr = fmt.Sprintf("%s:%d/%s", app.regmsg.WebSockIp, app.regmsg.WebSockPort, app.regmsg.WebSockUrl)
-					} else {
-						addr = fmt.Sprintf("%s:%d%s", app.regmsg.WebSockIp, app.regmsg.WebSockPort, app.regmsg.WebSockUrl)
-					}
+					addr = fmt.Sprintf("%s://%s:%d", app.regmsg.WebScheme, app.regmsg.WebIp, app.regmsg.WebPort)
 				}
 
 				if _, ok := result[addr]; !ok {
-					result[addr] = make(map[string][]byte, 5)
+					result[addr] = make(map[string]struct{}, 5)
 				}
-				result[addr][serveruniquename] = app.regmsg.Addition
+				result[addr][serveruniquename] = struct{}{}
+				resultaddition = app.regmsg.Addition
 			}
 		}
 		server.lker.Unlock()
 	}
-	return result
+	return result, resultaddition
 }
 
 func (c *discoveryclient) updateserver(url string) {
@@ -524,7 +437,7 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 			return
 		}
 		regmsg := &RegMsg{}
-		if e = json.Unmarshal(regdata, regmsg); e != nil || (regmsg.GrpcPort == 0 && regmsg.HttpPort == 0 && regmsg.TcpPort == 0 && regmsg.WebSockPort == 0) {
+		if e = json.Unmarshal(regdata, regmsg); e != nil || (regmsg.RpcPort == 0 && (regmsg.WebPort == 0 || regmsg.WebScheme == "")) {
 			//this is impossible
 			fmt.Printf("[Discovery.client.userfunc.msgonline.impossible]server:%s online app:%s register message:%s broken\n", serveruniquename, onlineapp, regdata)
 			p.Close()
@@ -596,7 +509,7 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 					//replace
 					regmsg := &RegMsg{}
 					e = json.Unmarshal(newmsg, regmsg)
-					if e != nil || (regmsg.GrpcPort == 0 && regmsg.HttpPort == 0 && regmsg.TcpPort == 0 && regmsg.WebSockPort == 0) {
+					if e != nil || (regmsg.RpcPort == 0 && (regmsg.WebPort == 0 || regmsg.WebScheme == "")) {
 						//this is impossible
 						fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]server:%s app:%s regmsg:%s broken\n",
 							serveruniquename, oldapp.appuniquename, newmsg)
@@ -614,7 +527,7 @@ func (c *discoveryclient) userfunc(p *stream.Peer, serveruniquename string, data
 		}
 		for newapp, newmsg := range all {
 			regmsg := &RegMsg{}
-			if e = json.Unmarshal(newmsg, regmsg); e != nil || (regmsg.GrpcPort == 0 && regmsg.HttpPort == 0 && regmsg.TcpPort == 0 && regmsg.WebSockPort == 0) {
+			if e = json.Unmarshal(newmsg, regmsg); e != nil || (regmsg.RpcPort == 0 && (regmsg.WebPort == 0 || regmsg.WebScheme == "")) {
 				//thie is impossible
 				fmt.Printf("[Discovery.client.userfunc.msgpush.impossible]server:%s app:%s regmsg:%s broken\n", serveruniquename, newapp, newmsg)
 				p.Close()
@@ -667,23 +580,7 @@ func (c *discoveryclient) offlinefunc(p *stream.Peer, serveruniquename string, s
 }
 func (c *discoveryclient) notice(appuniquename string) {
 	appname := appuniquename[:strings.Index(appuniquename, ":")]
-	if notices, ok := c.grpcnotices[appname]; ok {
-		for n := range notices {
-			select {
-			case n <- struct{}{}:
-			default:
-			}
-		}
-	}
-	if notices, ok := c.httpnotices[appname]; ok {
-		for n := range notices {
-			select {
-			case n <- struct{}{}:
-			default:
-			}
-		}
-	}
-	if notices, ok := c.tcpnotices[appname]; ok {
+	if notices, ok := c.rpcnotices[appname]; ok {
 		for n := range notices {
 			select {
 			case n <- struct{}{}:

@@ -7,14 +7,14 @@ import (
 	"context"
 
 	//third
-	"github.com/chenjie199234/Corelib/rpc/mrpc"
+	"github.com/chenjie199234/Corelib/rpc"
 	"google.golang.org/protobuf/proto"
 )
 
 var PathMrpcTestHello = "/Test/Hello"
 
 type MrpcTestClient struct {
-	c *mrpc.MrpcClient
+	c *rpc.MrpcClient
 }
 
 func (c *MrpcTestClient) Hello(ctx context.Context, req *HelloReq) (*HelloResp, error) {

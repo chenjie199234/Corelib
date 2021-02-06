@@ -1,4 +1,4 @@
-package mrpc
+package rpc
 
 import (
 	"context"

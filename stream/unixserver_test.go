@@ -8,22 +8,20 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"runtime"
-	"sync/atomic"
 	"testing"
 	"time"
 )
 
 var unixserverinstance *Instance
-var unixcount int64
 
 func Test_Unixserver(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	unixserverinstance = NewInstance(&InstanceConfig{
 		SelfName:           "server",
-		VerifyTimeout:      500,
-		HeartbeatTimeout:   1500,
-		HeartprobeInterval: 500,
-		RecvIdleTimeout:    30000, //30s
+		VerifyTimeout:      500 * time.Millisecond,
+		HeartbeatTimeout:   1500 * time.Millisecond,
+		HeartprobeInterval: 500 * time.Millisecond,
+		RecvIdleTimeout:    30 * time.Second, //30s
 		GroupNum:           10,
 		Verifyfunc:         unixserverhandleVerify,
 		Onlinefunc:         unixserverhandleonline,
@@ -31,11 +29,11 @@ func Test_Unixserver(t *testing.T) {
 		Offlinefunc:        unixclienthandleoffline,
 	})
 	os.Remove("./test.socket")
-	go unixserverinstance.StartUnixsocketServer("./test.socket")
+	go unixserverinstance.StartUnixServer("./test.socket")
 	go func() {
 		for {
 			time.Sleep(time.Second)
-			fmt.Println("client num:", unixcount)
+			fmt.Println("client num:", unixserverinstance.totalpeernum)
 		}
 	}()
 	http.ListenAndServe(":8082", nil)
@@ -48,12 +46,10 @@ func unixserverhandleVerify(ctx context.Context, peeruniquename string, peerVeri
 	return []byte{'t', 'e', 's', 't'}, true
 }
 func unixserverhandleonline(p *Peer, peeruniquename string, starttime uint64) {
-	atomic.AddInt64(&unixcount, 1)
 }
 func unixserverhandleuserdata(ctx context.Context, p *Peer, peeruniquename string, data []byte, starttime uint64) {
 	fmt.Printf("%s:%s\n", peeruniquename, data)
 	p.SendMessage(data, starttime, true)
 }
 func unixserverhandleoffline(p *Peer, peeruniquename string, starttime uint64) {
-	atomic.AddInt64(&unixcount, -1)
 }
