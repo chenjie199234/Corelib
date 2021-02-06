@@ -7,7 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/chenjie199234/Corelib/mlog"
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/rotatefile"
 )
 
@@ -67,7 +67,7 @@ func NewSuper(supername string, rotatelogcap rotatefile.RotateCap, rotatelogcycl
 				if !ok {
 					return
 				}
-				mlog.Info("[super.group] stop group name:", groupname)
+				log.Info("[super.group] stop group name:", groupname)
 				instance.lker.Lock()
 				delete(instance.groups, groupname)
 				if instance.status == s_CLOSING && len(instance.groups) == 0 {

@@ -12,7 +12,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/common"
-	"github.com/chenjie199234/Corelib/mlog"
+	"github.com/chenjie199234/Corelib/log"
 )
 
 func (this *Instance) StartTcpServer(listenaddr string) {
@@ -28,7 +28,7 @@ func (this *Instance) StartTcpServer(listenaddr string) {
 		p := this.getPeer(TCP, CLIENT, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, this.conf.SelfName)
 		conn, e := this.tcplistener.AcceptTCP()
 		if e != nil {
-			mlog.Error("[Stream.TCP.StartTcpServer] accept connect error:", e)
+			log.Error("[Stream.TCP.StartTcpServer] accept connect error:", e)
 			return
 		}
 		if atomic.LoadInt32(&this.stop) == 1 {
@@ -60,7 +60,7 @@ func (this *Instance) StartUnixServer(listenaddr string) {
 		p := this.getPeer(UNIX, CLIENT, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, this.conf.SelfName)
 		conn, e := this.unixlistener.AcceptUnix()
 		if e != nil {
-			mlog.Error("[Stream.UNIX.StartUnixServer] accept connect error:", e)
+			log.Error("[Stream.UNIX.StartUnixServer] accept connect error:", e)
 			return
 		}
 		if atomic.LoadInt32(&this.stop) == 1 {
@@ -87,9 +87,9 @@ func (this *Instance) sworker(p *Peer, maxlen int) {
 		if !this.addPeer(p) {
 			switch p.protocoltype {
 			case TCP:
-				mlog.Error("[Stream.TCP.sworker] duplicate connect from client:", p.getpeername(), "addr:", p.getpeeraddr())
+				log.Error("[Stream.TCP.sworker] duplicate connect from client:", p.getpeername(), "addr:", p.getpeeraddr())
 			case UNIX:
-				mlog.Error("[Stream.UNIX.sworker] duplicate connect from client:", p.getpeername(), "addr:", p.getpeeraddr())
+				log.Error("[Stream.UNIX.sworker] duplicate connect from client:", p.getpeername(), "addr:", p.getpeeraddr())
 			}
 			p.closeconn()
 			this.putPeer(p)
@@ -110,11 +110,11 @@ func (this *Instance) sworker(p *Peer, maxlen int) {
 			switch p.protocoltype {
 			case TCP:
 				if num, e = (*net.TCPConn)(p.conn).Write(verifymsg.Bytes()[send:]); e != nil {
-					mlog.Error("[Stream.TCP.sworker] write first verify msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+					log.Error("[Stream.TCP.sworker] write first verify msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
 				}
 			case UNIX:
 				if num, e = (*net.UnixConn)(p.conn).Write(verifymsg.Bytes()[send:]); e != nil {
-					mlog.Error("[Stream.UNIX.sworker] write first verify msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+					log.Error("[Stream.UNIX.sworker] write first verify msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
 				}
 			}
 			if e != nil {
@@ -157,7 +157,7 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) strin
 	}
 	conn, e := dialer.Dial("tcp", serveraddr)
 	if e != nil {
-		mlog.Error("[Stream.TCP.StartTcpClient] error:", e)
+		log.Error("[Stream.TCP.StartTcpClient] error:", e)
 		return ""
 	}
 	p := this.getPeer(TCP, SERVER, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, this.conf.SelfName)
@@ -189,7 +189,7 @@ func (this *Instance) StartUnixClient(serveraddr string, verifydata []byte) stri
 	}
 	conn, e := dialer.Dial("unix", serveraddr)
 	if e != nil {
-		mlog.Error("[Stream.UNIX.StartUnixClient] error:", e)
+		log.Error("[Stream.UNIX.StartUnixClient] error:", e)
 		return ""
 	}
 	p := this.getPeer(UNIX, SERVER, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, this.conf.SelfName)
@@ -213,11 +213,11 @@ func (this *Instance) cworker(p *Peer, maxlen int, verifydata []byte) string {
 		switch p.protocoltype {
 		case TCP:
 			if num, e = (*net.TCPConn)(p.conn).Write(verifymsg.Bytes()[send:]); e != nil {
-				mlog.Error("[Stream.TCP.cworker] write first verify msg to server addr:", p.getpeeraddr(), "error:", e)
+				log.Error("[Stream.TCP.cworker] write first verify msg to server addr:", p.getpeeraddr(), "error:", e)
 			}
 		case UNIX:
 			if num, e = (*net.UnixConn)(p.conn).Write(verifymsg.Bytes()[send:]); e != nil {
-				mlog.Error("[Stream.UNIX.cworker] write first verify msg to server addr:", p.getpeeraddr(), "error:", e)
+				log.Error("[Stream.UNIX.cworker] write first verify msg to server addr:", p.getpeeraddr(), "error:", e)
 			}
 		}
 		if e != nil {
@@ -236,9 +236,9 @@ func (this *Instance) cworker(p *Peer, maxlen int, verifydata []byte) string {
 		if !this.addPeer(p) {
 			switch p.protocoltype {
 			case TCP:
-				mlog.Error("[Stream.TCP.cworker] duplicate connect to server:", p.getpeername(), "addr:", p.getpeeraddr())
+				log.Error("[Stream.TCP.cworker] duplicate connect to server:", p.getpeername(), "addr:", p.getpeeraddr())
 			case UNIX:
-				mlog.Error("[Stream.UNIX.cworker] duplicate connect to server:", p.getpeername(), "addr:", p.getpeeraddr())
+				log.Error("[Stream.UNIX.cworker] duplicate connect to server:", p.getpeername(), "addr:", p.getpeeraddr())
 			}
 			p.closeconn()
 			this.putPeer(p)
@@ -299,16 +299,16 @@ func (this *Instance) verifypeer(p *Peer, maxlen int) []byte {
 		case TCP:
 			switch p.peertype {
 			case CLIENT:
-				mlog.Error("[Stream.TCP.verifypeer] read first verify msg from client addr:", p.getpeeraddr(), "error:", e)
+				log.Error("[Stream.TCP.verifypeer] read first verify msg from client addr:", p.getpeeraddr(), "error:", e)
 			case SERVER:
-				mlog.Error("[Stream.TCP.verifypeer] read first verify msg from server addr:", p.getpeeraddr(), "error:", e)
+				log.Error("[Stream.TCP.verifypeer] read first verify msg from server addr:", p.getpeeraddr(), "error:", e)
 			}
 		case UNIX:
 			switch p.peertype {
 			case CLIENT:
-				mlog.Error("[Stream.UNIX.verifypeer] read first verify msg from client addr:", p.getpeeraddr(), "error:", e)
+				log.Error("[Stream.UNIX.verifypeer] read first verify msg from client addr:", p.getpeeraddr(), "error:", e)
 			case SERVER:
-				mlog.Error("[Stream.UNIX.verifypeer] read first verify msg from server addr:", p.getpeeraddr(), "error:", e)
+				log.Error("[Stream.UNIX.verifypeer] read first verify msg from server addr:", p.getpeeraddr(), "error:", e)
 			}
 		}
 		return nil
@@ -334,16 +334,16 @@ func (this *Instance) verifypeer(p *Peer, maxlen int) []byte {
 		case TCP:
 			switch p.peertype {
 			case CLIENT:
-				mlog.Error("[Stream.TCP.verifypeer] client:", p.getpeername(), "addr:", p.getpeeraddr(), "verify failed with data:", common.Byte2str(peerverifydata))
+				log.Error("[Stream.TCP.verifypeer] client:", p.getpeername(), "addr:", p.getpeeraddr(), "verify failed with data:", common.Byte2str(peerverifydata))
 			case SERVER:
-				mlog.Error("[Stream.TCP.verifypeer] server:", p.getpeername(), "addr:", p.getpeeraddr(), "verify failed with data:", common.Byte2str(peerverifydata))
+				log.Error("[Stream.TCP.verifypeer] server:", p.getpeername(), "addr:", p.getpeeraddr(), "verify failed with data:", common.Byte2str(peerverifydata))
 			}
 		case UNIX:
 			switch p.peertype {
 			case CLIENT:
-				mlog.Error("[Stream.UNIX.verifypeer] client:", p.getpeername(), "addr:", p.getpeeraddr(), "verify failed with data:", common.Byte2str(peerverifydata))
+				log.Error("[Stream.UNIX.verifypeer] client:", p.getpeername(), "addr:", p.getpeeraddr(), "verify failed with data:", common.Byte2str(peerverifydata))
 			case SERVER:
-				mlog.Error("[Stream.UNIX.verifypeer] server:", p.getpeername(), "addr:", p.getpeeraddr(), "verify failed with data:", common.Byte2str(peerverifydata))
+				log.Error("[Stream.UNIX.verifypeer] server:", p.getpeername(), "addr:", p.getpeeraddr(), "verify failed with data:", common.Byte2str(peerverifydata))
 			}
 		}
 		p.clientname = ""
@@ -394,16 +394,16 @@ func (this *Instance) read(p *Peer, maxlen int) {
 			case TCP:
 				switch p.peertype {
 				case CLIENT:
-					mlog.Error("[Stream.TCP.read] read msg from client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+					log.Error("[Stream.TCP.read] read msg from client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
 				case SERVER:
-					mlog.Error("[Stream.TCP.read] read msg from server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+					log.Error("[Stream.TCP.read] read msg from server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
 				}
 			case UNIX:
 				switch p.peertype {
 				case CLIENT:
-					mlog.Error("[Stream.UNIX.read] read msg from client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+					log.Error("[Stream.UNIX.read] read msg from client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
 				case SERVER:
-					mlog.Error("[Stream.UNIX.read] read msg from server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+					log.Error("[Stream.UNIX.read] read msg from server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
 				}
 			}
 			if data != nil {
@@ -519,16 +519,16 @@ func (this *Instance) write(p *Peer) {
 					case TCP:
 						switch p.peertype {
 						case CLIENT:
-							mlog.Error("[Stream.TCP.write] write msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+							log.Error("[Stream.TCP.write] write msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
 						case SERVER:
-							mlog.Error("[Stream.TCP.write] write msg to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+							log.Error("[Stream.TCP.write] write msg to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
 						}
 					case SERVER:
 						switch p.peertype {
 						case CLIENT:
-							mlog.Error("[Stream.UNIX.write] write msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+							log.Error("[Stream.UNIX.write] write msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
 						case SERVER:
-							mlog.Error("[Stream.UNIX.write] write msg to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+							log.Error("[Stream.UNIX.write] write msg to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
 						}
 					}
 					return

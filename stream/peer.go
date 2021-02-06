@@ -12,7 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/bufpool"
-	"github.com/chenjie199234/Corelib/mlog"
+	"github.com/chenjie199234/Corelib/log"
 )
 
 const (
@@ -225,16 +225,16 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 		case TCP:
 			switch p.peertype {
 			case CLIENT:
-				mlog.Error("[Stream.TCP.SendMessage] send message to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRMSGLENGTH)
+				log.Error("[Stream.TCP.SendMessage] send message to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRMSGLENGTH)
 			case SERVER:
-				mlog.Error("[Stream.TCP.SendMessage] send message to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRMSGLENGTH)
+				log.Error("[Stream.TCP.SendMessage] send message to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRMSGLENGTH)
 			}
 		case UNIX:
 			switch p.peertype {
 			case CLIENT:
-				mlog.Error("[Stream.UNIX.SendMessage] send message to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRMSGLENGTH)
+				log.Error("[Stream.UNIX.SendMessage] send message to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRMSGLENGTH)
 			case SERVER:
-				mlog.Error("[Stream.UNIX.SendMessage] send message to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRMSGLENGTH)
+				log.Error("[Stream.UNIX.SendMessage] send message to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRMSGLENGTH)
 			}
 		}
 		return ERRMSGLENGTH
@@ -255,16 +255,16 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 			case TCP:
 				switch p.peertype {
 				case CLIENT:
-					mlog.Error("[Stream.TCP.SendMessage] send message to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRSENDBUFFULL)
+					log.Error("[Stream.TCP.SendMessage] send message to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRSENDBUFFULL)
 				case SERVER:
-					mlog.Error("[Stream.TCP.SendMessage] send message to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRSENDBUFFULL)
+					log.Error("[Stream.TCP.SendMessage] send message to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRSENDBUFFULL)
 				}
 			case UNIX:
 				switch p.peertype {
 				case CLIENT:
-					mlog.Error("[Stream.UNIX.SendMessage] send message to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRSENDBUFFULL)
+					log.Error("[Stream.UNIX.SendMessage] send message to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRSENDBUFFULL)
 				case SERVER:
-					mlog.Error("[Stream.UNIX.SendMessage] send message to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRSENDBUFFULL)
+					log.Error("[Stream.UNIX.SendMessage] send message to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", ERRSENDBUFFULL)
 				}
 			}
 			return ERRSENDBUFFULL

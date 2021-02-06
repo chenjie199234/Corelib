@@ -1,4 +1,4 @@
-package mtime
+package time
 
 import (
 	"encoding/json"
@@ -7,8 +7,8 @@ import (
 )
 
 type TData struct {
-	TT MTime     `json:"tt"`
-	DD MDuration `json:"dd"`
+	TT Time     `json:"tt"`
+	DD Duration `json:"dd"`
 }
 
 func Test_Mtime(t *testing.T) {

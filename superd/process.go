@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/common"
-	"github.com/chenjie199234/Corelib/mlog"
+	"github.com/chenjie199234/Corelib/log"
 )
 
 const (
@@ -74,19 +74,19 @@ func (p *process) startProcess() {
 		p.cmd = exec.Command(p.g.runCmd, p.g.runArgs...)
 		p.cmd.Env = p.g.runEnv
 		p.cmd.Dir = "./app/" + p.g.name
-		mlog.Info("[process.start] start in group:", p.g.name, "on version:", p.version, "logicpid:", p.logicpid)
+		log.Info("[process.start] start in group:", p.g.name, "on version:", p.version, "logicpid:", p.logicpid)
 		out, e := p.cmd.StdoutPipe()
 		if e != nil {
 			p.lker.Unlock()
 			p.g.lker.RUnlock()
-			mlog.Error("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "pipe stdout error:", e)
+			log.Error("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "pipe stdout error:", e)
 			continue
 		}
 		err, e := p.cmd.StderrPipe()
 		if e != nil {
 			p.lker.Unlock()
 			p.g.lker.RUnlock()
-			mlog.Error("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "pipe stderr error:", e)
+			log.Error("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "pipe stderr error:", e)
 			continue
 		}
 		p.out = bufio.NewReaderSize(out, 4096)
@@ -94,7 +94,7 @@ func (p *process) startProcess() {
 		if e = p.cmd.Start(); e != nil {
 			p.lker.Unlock()
 			p.g.lker.RUnlock()
-			mlog.Error("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "start new process error:", e)
+			log.Error("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "start new process error:", e)
 			continue
 		}
 		p.status = p_WORKING
@@ -102,9 +102,9 @@ func (p *process) startProcess() {
 		p.g.lker.RUnlock()
 		p.log()
 		if e = p.cmd.Wait(); e != nil {
-			mlog.Error("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "exit process error:", e)
+			log.Error("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "exit process error:", e)
 		} else {
-			mlog.Info("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "exit process success")
+			log.Info("[process.start] in group:", p.g.name, "logicpid:", p.logicpid, "version:", p.version, "exit process success")
 		}
 		p.lker.Lock()
 		if p.autorestart && p.status == p_WORKING {
@@ -123,7 +123,7 @@ func (p *process) log() {
 		for {
 			line, _, e := p.out.ReadLine()
 			if e != nil && e != io.EOF {
-				mlog.Error("[process.log] in group:", p.g.name, "logicpid:", p.logicpid, "physicpid:", p.cmd.Process.Pid, "version:", p.version, "read stdout error:", e)
+				log.Error("[process.log] in group:", p.g.name, "logicpid:", p.logicpid, "physicpid:", p.cmd.Process.Pid, "version:", p.version, "read stdout error:", e)
 				break
 			} else if e != nil {
 				break
@@ -136,7 +136,7 @@ func (p *process) log() {
 		for {
 			line, _, e := p.err.ReadLine()
 			if e != nil && e != io.EOF {
-				mlog.Error("[process.log] in group:", p.g.name, "logicpid:", p.logicpid, "physicpid:", p.cmd.Process.Pid, "version:", p.version, "read stderr error:", e)
+				log.Error("[process.log] in group:", p.g.name, "logicpid:", p.logicpid, "physicpid:", p.cmd.Process.Pid, "version:", p.version, "read stderr error:", e)
 				break
 			} else if e != nil {
 				break

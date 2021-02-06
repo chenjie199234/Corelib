@@ -12,7 +12,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/common"
-	"github.com/chenjie199234/Corelib/mlog"
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/rotatefile"
 )
 
@@ -58,7 +58,7 @@ func (g *group) log(lpid, ppid uint64, version, logdata string) {
 	g.logfile.WriteBuf(buf)
 }
 func (g *group) startGroup() {
-	mlog.Info("[group.start]", g.name, "init")
+	log.Info("[group.start]", g.name, "init")
 	g.lker.Lock()
 	switch g.urlType {
 	case UrlBin:
@@ -90,7 +90,7 @@ func (g *group) startGroup() {
 	}
 	g.status = g_WORKING
 	g.lker.Unlock()
-	mlog.Info("[group.start]", g.name, "init success")
+	log.Info("[group.start]", g.name, "init success")
 	go func() {
 		defer func() {
 			g.logfile.Close()
@@ -102,7 +102,7 @@ func (g *group) startGroup() {
 				if !ok {
 					return
 				}
-				mlog.Info("[group.process]", g.name, "stop process logicpid:", lpid)
+				log.Info("[group.process]", g.name, "stop process logicpid:", lpid)
 				g.lker.Lock()
 				delete(g.processes, lpid)
 				if g.status == g_CLOSING && len(g.processes) == 0 {
@@ -133,10 +133,10 @@ func (g *group) updateGroupSrc() {
 	g.lker.Lock()
 	defer g.lker.Unlock()
 	if g.status != g_WORKING {
-		mlog.Error("[group.update]", g.name, "status:", g.status, "can't update bin/src")
+		log.Error("[group.update]", g.name, "status:", g.status, "can't update bin/src")
 		return
 	}
-	mlog.Info("[group.update]", g.name, "start")
+	log.Info("[group.update]", g.name, "start")
 	g.status = g_UPDATING
 	defer func() {
 		g.status = g_WORKING
@@ -157,25 +157,25 @@ func (g *group) updateGroupSrc() {
 			return
 		}
 	}
-	mlog.Info("[group.update]", g.name, "exit success")
+	log.Info("[group.update]", g.name, "exit success")
 	return
 }
 func (g *group) switchGroupBranch(branch string) {
 	g.lker.Lock()
 	defer g.lker.Unlock()
 	if g.urlType != UrlGit {
-		mlog.Error("[group.switch]", g.name, "isn't a git based group")
+		log.Error("[group.switch]", g.name, "isn't a git based group")
 		return
 	}
 	if g.status != g_WORKING {
-		mlog.Error("[group.switch]", g.name, "status:", g.status, "can't switch branch")
+		log.Error("[group.switch]", g.name, "status:", g.status, "can't switch branch")
 		return
 	}
 	vers := strings.Split(g.version, "|")
 	if len(vers) > 0 && vers[0] == branch {
 		return
 	}
-	mlog.Info("[group.switch]", g.name, "start")
+	log.Info("[group.switch]", g.name, "start")
 	g.status = g_UPDATING
 	defer func() {
 		g.status = g_WORKING
@@ -192,7 +192,7 @@ func (g *group) switchGroupBranch(branch string) {
 	if !g.gitinfo() {
 		return
 	}
-	mlog.Info("[group.switch]", g.name, "exit success")
+	log.Info("[group.switch]", g.name, "exit success")
 	return
 }
 func (g *group) deleteGroup() bool {
@@ -206,74 +206,74 @@ func (g *group) deleteGroup() bool {
 	return true
 }
 func (g *group) bin() bool {
-	mlog.Info("[group.bin]", g.name, "start")
+	log.Info("[group.bin]", g.name, "start")
 	f, e := os.OpenFile("./app/"+g.name+"/"+g.name+"_temp", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0744)
 	if e != nil {
-		mlog.Error("[group.bin]", g.name, "exit error: create temp file error:", e)
+		log.Error("[group.bin]", g.name, "exit error: create temp file error:", e)
 		return false
 	}
 	resp, e := http.Get(g.url)
 	if e != nil {
-		mlog.Error("[group.bin]", g.name, "exit error: http request error:", e)
+		log.Error("[group.bin]", g.name, "exit error: http request error:", e)
 		return false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		if data, e := ioutil.ReadAll(resp.Body); e != nil {
-			mlog.Error("[group.bin]", g.name, "exit error: http response error: code:", resp.StatusCode, "msg:read msg error:", e)
+			log.Error("[group.bin]", g.name, "exit error: http response error: code:", resp.StatusCode, "msg:read msg error:", e)
 		} else {
-			mlog.Error("[group.bin]", g.name, "exit error: http response error: code:", resp.StatusCode, "msg:", common.Byte2str(data))
+			log.Error("[group.bin]", g.name, "exit error: http response error: code:", resp.StatusCode, "msg:", common.Byte2str(data))
 		}
 		return false
 	}
 	if _, e = io.Copy(f, resp.Body); e != nil {
-		mlog.Error("[group.bin]", g.name, "exit error: copy data into bin file error:", e)
+		log.Error("[group.bin]", g.name, "exit error: copy data into bin file error:", e)
 		return false
 	}
 	if e = os.Rename("./app/"+g.name+"/"+g.name+"_temp", "./app/"+g.name+"/"+g.name); e != nil {
-		mlog.Error("[group.bin]", g.name, "exit error: cover old bin file with new bin file error:", e)
+		log.Error("[group.bin]", g.name, "exit error: cover old bin file with new bin file error:", e)
 		return false
 	}
 	g.version = resp.Header.Get("Version")
-	mlog.Info("[group.bin]", g.name, "exit success")
+	log.Info("[group.bin]", g.name, "exit success")
 	return true
 }
 func (g *group) gitclone() bool {
 	cmd := exec.Command("git", "clone", "-q", g.url, "./")
-	mlog.Info("[group.clone]", g.name, "start")
+	log.Info("[group.clone]", g.name, "start")
 	return g.git(cmd, "clone")
 }
 func (g *group) gitpull() bool {
 	cmd := exec.Command("git", "pull", "-q")
-	mlog.Info("[group.pull]", g.name, "start")
+	log.Info("[group.pull]", g.name, "start")
 	return g.git(cmd, "pull")
 }
 func (g *group) checkout(branch string) bool {
 	cmd := exec.Command("git", "checkout", "-q", branch)
-	mlog.Info("[group.checkout]", g.name, "start")
+	log.Info("[group.checkout]", g.name, "start")
 	return g.git(cmd, "checkout")
 }
 func (g *group) gitinfo() bool {
 	cmd := exec.Command("git", "log", "-1", "--pretty=format:\"%D|%h|%cn(%ce)|%cI\"")
-	mlog.Info("[group.info]", g.name, "start")
+	log.Info("[group.info]", g.name, "start")
 	return g.git(cmd, "info")
 }
 func (g *group) git(cmd *exec.Cmd, operation string) bool {
 	cmd.Dir = "./app/" + g.name
 	tempout, e := cmd.StdoutPipe()
 	if e != nil {
-		mlog.Error("[group."+operation+"]", g.name, "exit error: pipe stdout error:", e)
+		log.Error("[group."+operation+"]", g.name, "exit error: pipe stdout error:", e)
 		return false
 	}
 	temperr, e := cmd.StderrPipe()
 	if e != nil {
-		mlog.Error("[group."+operation+"]", g.name, "exit error: pipe stderr error:", e)
+		log.Error("[group."+operation+"]", g.name, "exit error: pipe stderr error:", e)
 		return false
 	}
 	outreader := bufio.NewReaderSize(tempout, 4096)
 	errreader := bufio.NewReaderSize(temperr, 4096)
 	if e = cmd.Start(); e != nil {
-		mlog.Error("[group."+operation+"]", g.name, "exit error: start process error:", e)
+		log.Error("[group."+operation+"]", g.name, "exit error: start process error:", e)
 		return false
 	}
 	wg := &sync.WaitGroup{}
@@ -282,7 +282,7 @@ func (g *group) git(cmd *exec.Cmd, operation string) bool {
 		for {
 			line, _, e := outreader.ReadLine()
 			if e != nil && e != io.EOF {
-				mlog.Error("[group."+operation+"]", g.name, "read stdout error:", e)
+				log.Error("[group."+operation+"]", g.name, "read stdout error:", e)
 				break
 			} else if e != nil {
 				break
@@ -298,7 +298,7 @@ func (g *group) git(cmd *exec.Cmd, operation string) bool {
 				branch = strings.TrimSpace(tempstrs[1])
 				g.version = branch + rest
 			}
-			mlog.Info("[group."+operation+"]", g.name, common.Byte2str(line))
+			log.Info("[group."+operation+"]", g.name, common.Byte2str(line))
 		}
 		wg.Done()
 	}()
@@ -306,21 +306,21 @@ func (g *group) git(cmd *exec.Cmd, operation string) bool {
 		for {
 			line, _, e := errreader.ReadLine()
 			if e != nil && e != io.EOF {
-				mlog.Error("[group."+operation+"]", g.name, "read stderr error:", e)
+				log.Error("[group."+operation+"]", g.name, "read stderr error:", e)
 				break
 			} else if e != nil {
 				break
 			}
-			mlog.Info("[group."+operation+"]", g.name, common.Byte2str(line))
+			log.Info("[group."+operation+"]", g.name, common.Byte2str(line))
 		}
 		wg.Done()
 	}()
 	wg.Wait()
 	if e = cmd.Wait(); e != nil {
-		mlog.Error("[group."+operation+"]", g.name, "exit error:", e)
+		log.Error("[group."+operation+"]", g.name, "exit error:", e)
 		return false
 	}
-	mlog.Info("[group."+operation+"]", g.name, "exit success")
+	log.Info("[group."+operation+"]", g.name, "exit success")
 	return true
 }
 
@@ -329,21 +329,21 @@ func (g *group) build() bool {
 	cmd := exec.Command(g.buildCmd, g.buildArgs...)
 	cmd.Env = g.buildEnv
 	cmd.Dir = "./app/" + g.name
-	mlog.Info("[group.build]", g.name, "start")
+	log.Info("[group.build]", g.name, "start")
 	tempout, e := cmd.StdoutPipe()
 	if e != nil {
-		mlog.Error("[group.build]", g.name, "exit error: pipe stdout error:", e)
+		log.Error("[group.build]", g.name, "exit error: pipe stdout error:", e)
 		return false
 	}
 	temperr, e := cmd.StderrPipe()
 	if e != nil {
-		mlog.Error("[group.build]", g.name, "exit error: pipe stderr error:", e)
+		log.Error("[group.build]", g.name, "exit error: pipe stderr error:", e)
 		return false
 	}
 	outreader := bufio.NewReaderSize(tempout, 4096)
 	errreader := bufio.NewReaderSize(temperr, 4096)
 	if e = cmd.Start(); e != nil {
-		mlog.Error("[group.build]", g.name, "exit error: start process error:", e)
+		log.Error("[group.build]", g.name, "exit error: start process error:", e)
 		return false
 	}
 	wg := &sync.WaitGroup{}
@@ -352,12 +352,12 @@ func (g *group) build() bool {
 		for {
 			line, _, e := outreader.ReadLine()
 			if e != nil && e != io.EOF {
-				mlog.Error("[group.build]", g.name, "read stdout error:", e)
+				log.Error("[group.build]", g.name, "read stdout error:", e)
 				break
 			} else if e != nil {
 				break
 			}
-			mlog.Info("[group.build]", g.name, common.Byte2str(line))
+			log.Info("[group.build]", g.name, common.Byte2str(line))
 		}
 		wg.Done()
 	}()
@@ -365,21 +365,21 @@ func (g *group) build() bool {
 		for {
 			line, _, e := errreader.ReadLine()
 			if e != nil && e != io.EOF {
-				mlog.Error("[group.build]", g.name, "read stderr error:", e)
+				log.Error("[group.build]", g.name, "read stderr error:", e)
 				break
 			} else if e != nil {
 				break
 			}
-			mlog.Info("[group.build]", g.name, common.Byte2str(line))
+			log.Info("[group.build]", g.name, common.Byte2str(line))
 		}
 		wg.Done()
 	}()
 	wg.Wait()
 	if e = cmd.Wait(); e != nil {
-		mlog.Error("[group.build]", g.name, "exit error:", e)
+		log.Error("[group.build]", g.name, "exit error:", e)
 		return false
 	}
-	mlog.Info("[group.build]", g.name, "exit success")
+	log.Info("[group.build]", g.name, "exit success")
 	return true
 }
 func (g *group) startProcess(pid uint64, autorestart bool) bool {

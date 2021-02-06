@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/common"
-	"github.com/chenjie199234/Corelib/mlog"
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/sys/cpu"
 
@@ -187,7 +187,7 @@ func (s *MrpcServer) onlinefunc(p *stream.Peer, peeruniquename string, starttime
 func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, starttime uint64) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
-		mlog.Error("[rpc.server.userfunc] data format error:", e)
+		log.Error("[rpc.server.userfunc] data format error:", e)
 		p.Close()
 		return
 	}
@@ -207,7 +207,7 @@ func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte
 			msg.Metadata = nil
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(d, starttime, true); e != nil {
-				mlog.Error("[rpc.server.userfunc] send message error:", e)
+				log.Error("[rpc.server.userfunc] send message error:", e)
 			}
 			return
 		}
@@ -221,14 +221,14 @@ func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte
 			msg.Metadata = nil
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(d, starttime, true); e != nil {
-				mlog.Error("[rpc.server.userfunc] send message error:", e)
+				log.Error("[rpc.server.userfunc] send message error:", e)
 			}
 			return
 		}
 		handler(msg)
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(d, starttime, true); e != nil {
-			mlog.Error("[rpc.server.userfunc] send message error:", e)
+			log.Error("[rpc.server.userfunc] send message error:", e)
 		}
 	}()
 }

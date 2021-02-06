@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/common"
-	"github.com/chenjie199234/Corelib/mlog"
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -132,21 +132,21 @@ func NewWebServer(c *Config) *WebServer {
 		ctxpool: &sync.Pool{},
 	}
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mlog.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
+		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
 		http.Error(w,
 			http.StatusText(http.StatusNotFound),
 			http.StatusNotFound,
 		)
 	})
 	instance.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mlog.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown method")
+		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown method")
 		http.Error(w,
 			http.StatusText(http.StatusMethodNotAllowed),
 			http.StatusMethodNotAllowed,
 		)
 	})
 	instance.router.PanicHandler = func(w http.ResponseWriter, r *http.Request, msg interface{}) {
-		mlog.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "panic:", msg)
+		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "panic:", msg)
 		http.Error(w,
 			http.StatusText(http.StatusInternalServerError),
 			http.StatusInternalServerError,
@@ -221,7 +221,7 @@ func (this *WebServer) StartWebServer(listenaddr string, cert, key string) {
 	}
 }
 func (this *WebServer) StopWebServer() {
-	mlog.Close()
+	log.Close()
 	this.s.Shutdown(context.Background())
 }
 func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, handlers []OutsideHandler) *Context {
@@ -305,7 +305,7 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 					}
 				}
 				if !find {
-					mlog.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "origin:", origin, "error: cors")
+					log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "origin:", origin, "error: cors")
 					w.WriteHeader(http.StatusForbidden)
 					w.Write(common.Str2byte(http.StatusText(http.StatusForbidden)))
 					return
@@ -333,7 +333,7 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 			var e error
 			clientdl, e = strconv.ParseInt(temp, 10, 64)
 			if e != nil {
-				mlog.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Deadline", temp, "format error")
+				log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Deadline", temp, "format error")
 				w.WriteHeader(http.StatusBadGateway)
 				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
 				return
