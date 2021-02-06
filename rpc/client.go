@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -11,25 +12,24 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/common"
-	"github.com/chenjie199234/Corelib/merror"
+	"github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/stream"
 
 	"google.golang.org/protobuf/proto"
 )
 
-type PickHandler func(servers []*Serverapp) *Serverapp
-type DiscoveryHandler func(appname string, client *MrpcClient)
+type PickHandler func(servers []*ServerForPick) *ServerForPick
+type DiscoveryHandler func(appname string, client *RpcClient)
 
 //appuniquename = appname:addr
-type MrpcClient struct {
+type RpcClient struct {
 	c          *stream.InstanceConfig
 	appname    string
 	verifydata []byte
 	instance   *stream.Instance
 
-	lker       *sync.RWMutex
-	servers    []*Serverapp
-	serverpool *sync.Pool
+	lker    *sync.RWMutex
+	servers []*ServerForPick
 
 	callid  uint64
 	reqpool *sync.Pool
@@ -38,87 +38,46 @@ type MrpcClient struct {
 	discovery DiscoveryHandler
 }
 
-type Serverapp struct {
-	lker          *sync.Mutex
-	appuniquename string
-	//key discoveryserver uniquename
-	discoveryserver map[string]struct{} //this app registered on which discovery server
-	peer            *stream.Peer
-	starttime       uint64
-	status          int //0-idle,1-start,2-verify,3-connected,4-closing
+type ServerForPick struct {
+	lker             *sync.Mutex
+	addr             string
+	discoveryservers map[string]struct{} //this app registered on which discovery server
+	peer             *stream.Peer
+	starttime        uint64
+	status           int //0-idle,1-start,2-verify,3-connected,4-closing
 
 	//active calls
 	reqs map[uint64]*req //all reqs to this server
 
-	Pickinfo *PickInfo
+	Pickinfo *pickinfo
 }
-type PickInfo struct {
+type pickinfo struct {
+	Lastcall                   int64   //last call timestamp nanosecond
 	Cpu                        float64 //cpuinfo
-	Netlag                     int64   //netlaginfo
 	Activecalls                int     //current active calls
 	DiscoveryServers           int     //this server registered on how many discoveryservers
 	DiscoveryServerOfflineTime int64   //
 	Addition                   []byte  //addition info register on register center
 }
 
-func (s *Serverapp) Pickable() bool {
+func (s *ServerForPick) Pickable() bool {
 	return s.status == 3
 }
-func (c *MrpcClient) getserver(appuniquename string, discoveryservers map[string]struct{}, addition []byte) *Serverapp {
-	s, ok := c.serverpool.Get().(*Serverapp)
-	if !ok {
-		return &Serverapp{
-			lker:            &sync.Mutex{},
-			appuniquename:   appuniquename,
-			discoveryserver: discoveryservers,
-			peer:            nil,
-			starttime:       0,
-			status:          1,
 
-			reqs: make(map[uint64]*req, 10),
+var lker *sync.Mutex
+var all map[string]*RpcClient
 
-			Pickinfo: &PickInfo{
-				Cpu:              0,
-				Netlag:           0,
-				Activecalls:      0,
-				DiscoveryServers: len(discoveryservers),
-				Addition:         addition,
-			},
-		}
+func init() {
+	rand.Seed(time.Now().UnixNano())
+	lker = &sync.Mutex{}
+	all = make(map[string]*RpcClient)
+}
+
+func NewRpcClient(c *stream.InstanceConfig, appname string, vdata []byte, pick PickHandler, discovery DiscoveryHandler) *RpcClient {
+	if e := common.NameCheck(appname, true); e != nil {
+		panic("[rpc.client]" + e.Error())
 	}
-	s.appuniquename = appuniquename
-	s.discoveryserver = discoveryservers
-	s.peer = nil
-	s.starttime = 0
-	s.status = 1
 
-	s.reqs = make(map[uint64]*req, 10)
-
-	s.Pickinfo.Cpu = 0
-	s.Pickinfo.Netlag = 0
-	s.Pickinfo.Activecalls = 0
-	s.Pickinfo.DiscoveryServers = len(discoveryservers)
-	s.Pickinfo.Addition = addition
-	return s
-}
-func (c *MrpcClient) putserver(s *Serverapp) {
-	s.appuniquename = ""
-	s.discoveryserver = nil
-	s.peer = nil
-	s.starttime = 0
-	s.status = 0
-
-	s.reqs = make(map[uint64]*req, 10)
-
-	s.Pickinfo.Cpu = 0
-	s.Pickinfo.Netlag = 0
-	s.Pickinfo.Activecalls = 0
-	s.Pickinfo.DiscoveryServers = 0
-	s.Pickinfo.Addition = nil
-	c.serverpool.Put(s)
-}
-
-func NewMrpcClient(c *stream.InstanceConfig, appname string, vdata []byte, pick PickHandler, discovery DiscoveryHandler) *MrpcClient {
 	//use default pick
 	if pick == nil {
 		pick = defaultPicker
@@ -126,12 +85,16 @@ func NewMrpcClient(c *stream.InstanceConfig, appname string, vdata []byte, pick 
 	if discovery == nil {
 		discovery = defaultdiscovery
 	}
-	client := &MrpcClient{
+	lker.Lock()
+	defer lker.Unlock()
+	if client, ok := all[appname]; ok {
+		return client
+	}
+	client := &RpcClient{
 		appname:    appname,
 		verifydata: vdata,
 		lker:       &sync.RWMutex{},
-		servers:    make([]*Serverapp, 0, 10),
-		serverpool: &sync.Pool{},
+		servers:    make([]*ServerForPick, 0, 10),
 		callid:     0,
 		reqpool:    &sync.Pool{},
 		pick:       pick,
@@ -152,7 +115,7 @@ func NewMrpcClient(c *stream.InstanceConfig, appname string, vdata []byte, pick 
 //first key:addr
 //second key:discovery server
 //value:addition data
-func (c *MrpcClient) UpdateDiscovery(allapps map[string]map[string]struct{}, addition []byte) {
+func (c *RpcClient) UpdateDiscovery(allapps map[string]map[string]struct{}, addition []byte) {
 	//offline app
 	c.lker.Lock()
 	defer c.lker.Unlock()
@@ -226,7 +189,7 @@ func (c *MrpcClient) UpdateDiscovery(allapps map[string]map[string]struct{}, add
 		}
 	}
 }
-func (c *MrpcClient) start(addr string) {
+func (c *RpcClient) start(addr string) {
 	tempverifydata := common.Byte2str(c.verifydata) + "|" + c.appname
 	if r := c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata)); r == "" {
 		appuniquename := fmt.Sprintf("%s:%s", c.appname, addr)
@@ -269,7 +232,7 @@ func (c *MrpcClient) start(addr string) {
 		}
 	}
 }
-func (c *MrpcClient) unregister(appuniquename string) {
+func (c *RpcClient) unregister(appuniquename string) {
 	c.lker.Lock()
 	var server *Serverapp
 	var index int
@@ -299,7 +262,7 @@ func (c *MrpcClient) unregister(appuniquename string) {
 	server.lker.Unlock()
 	c.lker.Unlock()
 }
-func (c *MrpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
+func (c *RpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal(peerVerifyData, c.verifydata) {
 		return nil, false
 	}
@@ -328,7 +291,7 @@ func (c *MrpcClient) verifyfunc(ctx context.Context, appuniquename string, peerV
 	server.lker.Unlock()
 	return nil, true
 }
-func (c *MrpcClient) onlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
+func (c *RpcClient) onlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
 	c.lker.RLock()
 	var server *Serverapp
 	for _, tempserver := range c.servers {
@@ -360,7 +323,7 @@ func (c *MrpcClient) onlinefunc(p *stream.Peer, appuniquename string, starttime 
 	server.lker.Unlock()
 }
 
-func (c *MrpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, starttime uint64) {
+func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, starttime uint64) {
 	server := (*Serverapp)(p.GetData())
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
@@ -387,7 +350,7 @@ func (c *MrpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte,
 	}
 	server.lker.Unlock()
 }
-func (c *MrpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
+func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
 	server := (*Serverapp)(p.GetData())
 	server.lker.Lock()
 	server.peer = nil
@@ -414,7 +377,7 @@ func (c *MrpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime
 	}
 }
 
-func (c *MrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, error) {
+func (c *RpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, error) {
 	//make mrpc system message
 	dl, ok := ctx.Deadline()
 	if ok && dl.UnixNano() <= time.Now().UnixNano()+int64(time.Millisecond) {
@@ -536,7 +499,7 @@ func (r *req) reset() {
 	r.err = nil
 	r.starttime = 0
 }
-func (c *MrpcClient) getreq(callid uint64) *req {
+func (c *RpcClient) getreq(callid uint64) *req {
 	r, ok := c.reqpool.Get().(*req)
 	if ok {
 		r.reset()
@@ -552,7 +515,7 @@ func (c *MrpcClient) getreq(callid uint64) *req {
 		starttime: time.Now().UnixNano(),
 	}
 }
-func (c *MrpcClient) putreq(r *req) {
+func (c *RpcClient) putreq(r *req) {
 	r.reset()
 	c.reqpool.Put(r)
 }

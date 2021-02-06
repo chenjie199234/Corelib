@@ -183,63 +183,57 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		ctx, cancel = context.WithTimeout(ctx, min)
 		defer cancel()
 	}
-	for {
-		dl, ok := ctx.Deadline()
-		if ok && dl.UnixNano() < time.Now().UnixNano()+int64(5*time.Millisecond) {
-			//ttl + server logic time
-			return nil, context.DeadlineExceeded
-		}
-		var server *ServerForPick
-		this.lker.RLock()
-		server = this.picker(this.hosts)
-		this.lker.RUnlock()
-		if server == nil {
-			return nil, ERRNOSERVER
-		}
-		add := false
-		del := false
-		if server.host[len(server.host)-1] == '/' && pathwithquery[0] == '/' {
-			del = true
-		} else if server.host[len(server.host)-1] != '/' && pathwithquery[0] != '/' {
-			add = true
-		}
-		url := ""
-		if add {
-			url = server.host + "/" + pathwithquery
-		} else if del {
-			url = server.host + pathwithquery[1:]
-		} else {
-			url = server.host + pathwithquery
-		}
-		req, e := http.NewRequestWithContext(ctx, method, url, nil)
-		if e != nil {
-			return nil, e
-		}
-		req.Header = header
-		if ok {
-			req.Header.Set("Deadline", strconv.FormatInt(dl.UnixNano(), 10))
-		}
-		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
-		atomic.StoreInt64(&server.Pickinfo.Lastcall, time.Now().UnixNano())
-		resp, e := server.client.Do(req)
-		if e != nil {
-			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
-			atomic.StoreUint64((*uint64)(unsafe.Pointer(&server.Pickinfo.Cpu)), 100)
-			if e != context.Canceled && e != context.DeadlineExceeded {
-				continue
-			}
-			return nil, e
-		}
-		atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
-		if temp := resp.Header.Get("Cpu"); temp != "" {
-			if servercpu, e := strconv.ParseFloat(temp, 64); e == nil {
-				if servercpu < 1 {
-					atomic.StoreUint64((*uint64)(unsafe.Pointer(&server.Pickinfo.Cpu)), 1)
-				} else {
-					atomic.StoreUint64((*uint64)(unsafe.Pointer(&server.Pickinfo.Cpu)), math.Float64bits(servercpu))
-				}
-			}
-		}
-		return resp, nil
+	dl, ok := ctx.Deadline()
+	if ok && dl.UnixNano() < time.Now().UnixNano()+int64(5*time.Millisecond) {
+		//ttl + server logic time
+		return nil, context.DeadlineExceeded
 	}
+	var server *ServerForPick
+	this.lker.RLock()
+	server = this.picker(this.hosts)
+	this.lker.RUnlock()
+	if server == nil {
+		return nil, ERRNOSERVER
+	}
+	add := false
+	del := false
+	if server.host[len(server.host)-1] == '/' && pathwithquery[0] == '/' {
+		del = true
+	} else if server.host[len(server.host)-1] != '/' && pathwithquery[0] != '/' {
+		add = true
+	}
+	url := ""
+	if add {
+		url = server.host + "/" + pathwithquery
+	} else if del {
+		url = server.host + pathwithquery[1:]
+	} else {
+		url = server.host + pathwithquery
+	}
+	req, e := http.NewRequestWithContext(ctx, method, url, nil)
+	if e != nil {
+		return nil, e
+	}
+	req.Header = header
+	if ok {
+		req.Header.Set("Deadline", strconv.FormatInt(dl.UnixNano(), 10))
+	}
+	atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
+	defer atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
+	atomic.StoreInt64(&server.Pickinfo.Lastcall, time.Now().UnixNano())
+	resp, e := server.client.Do(req)
+	if e != nil {
+		atomic.StoreUint64((*uint64)(unsafe.Pointer(&server.Pickinfo.Cpu)), 100)
+		return nil, e
+	}
+	if temp := resp.Header.Get("Cpu"); temp != "" {
+		if servercpu, e := strconv.ParseFloat(temp, 64); e == nil {
+			if servercpu < 1 {
+				atomic.StoreUint64((*uint64)(unsafe.Pointer(&server.Pickinfo.Cpu)), 1)
+			} else {
+				atomic.StoreUint64((*uint64)(unsafe.Pointer(&server.Pickinfo.Cpu)), math.Float64bits(servercpu))
+			}
+		}
+	}
+	return resp, nil
 }

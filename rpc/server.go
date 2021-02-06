@@ -17,7 +17,7 @@ import (
 
 type OutsideHandler func(ctx context.Context, req []byte) (resp []byte, e error)
 
-type MrpcServer struct {
+type RpcServer struct {
 	c          *stream.InstanceConfig
 	timeout    time.Duration
 	handler    map[string]func(*Msg)
@@ -28,8 +28,8 @@ type MrpcServer struct {
 	stopch     chan struct{}
 }
 
-func NewMrpcServer(c *stream.InstanceConfig, globaltimeout time.Duration, vdata []byte) *MrpcServer {
-	serverinstance := &MrpcServer{
+func NewRpcServer(c *stream.InstanceConfig, globaltimeout time.Duration, vdata []byte) *RpcServer {
+	serverinstance := &RpcServer{
 		timeout:    globaltimeout,
 		handler:    make(map[string]func(*Msg), 10),
 		verifydata: vdata,
@@ -44,13 +44,13 @@ func NewMrpcServer(c *stream.InstanceConfig, globaltimeout time.Duration, vdata 
 	serverinstance.instance = stream.NewInstance(&dupc)
 	return serverinstance
 }
-func (s *MrpcServer) StartMrpcServer(listenaddr string) {
+func (s *RpcServer) StartRpcServer(listenaddr string) {
 	if atomic.SwapInt32(&s.status, 1) == 1 {
 		return
 	}
 	s.instance.StartTcpServer(listenaddr)
 }
-func (s *MrpcServer) StopMrpcServer() {
+func (s *RpcServer) StopMrpcServer() {
 	if atomic.SwapInt32(&s.status, 0) == 0 {
 		return
 	}
@@ -79,7 +79,7 @@ func (s *MrpcServer) StopMrpcServer() {
 		}
 	}
 }
-func (s *MrpcServer) insidehandler(functimeout time.Duration, handlers ...OutsideHandler) func(*Msg) {
+func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...OutsideHandler) func(*Msg) {
 	return func(msg *Msg) {
 		defer func() {
 			if e := recover(); e != nil {
@@ -152,10 +152,10 @@ func (s *MrpcServer) insidehandler(functimeout time.Duration, handlers ...Outsid
 }
 
 //thread unsafe
-func (s *MrpcServer) RegisterHandler(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+func (s *RpcServer) RegisterHandler(path string, functimeout time.Duration, handlers ...OutsideHandler) {
 	s.handler[path] = s.insidehandler(functimeout, handlers...)
 }
-func (s *MrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
+func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if atomic.LoadInt32(&s.status) == 0 {
 		return nil, false
 	}
@@ -171,7 +171,7 @@ func (s *MrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peer
 	}
 	return s.verifydata, true
 }
-func (s *MrpcServer) onlinefunc(p *stream.Peer, peeruniquename string, starttime uint64) {
+func (s *RpcServer) onlinefunc(p *stream.Peer, peeruniquename string, starttime uint64) {
 	if atomic.LoadInt32(&s.status) == 0 {
 		d, _ := proto.Marshal(&Msg{
 			Callid: 0,
@@ -184,7 +184,7 @@ func (s *MrpcServer) onlinefunc(p *stream.Peer, peeruniquename string, starttime
 		p.SendMessage(d, starttime, true)
 	}
 }
-func (s *MrpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, starttime uint64) {
+func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, starttime uint64) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		log.Error("[rpc.server.userfunc] data format error:", e)
