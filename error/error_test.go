@@ -1,4 +1,4 @@
-package cerror
+package error
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 )
 
 func Test_MError(t *testing.T) {
-	me := &CError{
+	me := &Error{
 		Code: 100,
 		Msg:  "test",
 	}
@@ -49,6 +49,6 @@ func Test_MError(t *testing.T) {
 		panic("translate error")
 	}
 }
-func toerror(e *CError) error {
+func toerror(e *Error) error {
 	return e
 }

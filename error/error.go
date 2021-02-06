@@ -1,4 +1,4 @@
-package cerror
+package error
 
 import (
 	"encoding/json"
@@ -9,19 +9,19 @@ import (
 
 //if error was not in merror format,code will return -1,msg will use the origin error.Error()
 
-type CError struct {
+type Error struct {
 	Code int64  `json:"code"`
 	Msg  string `json:"msg"`
 }
 
-func MakeError(code int64, msg string) *CError {
-	return &CError{Code: code, Msg: msg}
+func MakeError(code int64, msg string) *Error {
+	return &Error{Code: code, Msg: msg}
 }
 func GetCodeFromErrorstr(e string) int64 {
 	if e == "" {
 		return 0
 	}
-	tempe := &CError{}
+	tempe := &Error{}
 	if ee := json.Unmarshal(common.Str2byte(e), tempe); ee != nil {
 		return -1
 	}
@@ -31,11 +31,11 @@ func GetCodeFromError(e error) int64 {
 	if e == nil {
 		return 0
 	}
-	tempe, ok := e.(*CError)
+	tempe, ok := e.(*Error)
 	if ok {
 		return tempe.Code
 	}
-	tempe = &CError{}
+	tempe = &Error{}
 	if ee := json.Unmarshal(common.Str2byte(e.Error()), tempe); ee != nil {
 		return -1
 	}
@@ -45,7 +45,7 @@ func GetMsgFromErrorstr(e string) string {
 	if e == "" {
 		return ""
 	}
-	tempe := &CError{}
+	tempe := &Error{}
 	if ee := json.Unmarshal(common.Str2byte(e), tempe); ee != nil {
 		return e
 	}
@@ -55,40 +55,40 @@ func GetMsgFromError(e error) string {
 	if e == nil {
 		return ""
 	}
-	tempe, ok := e.(*CError)
+	tempe, ok := e.(*Error)
 	if ok {
 		return tempe.Msg
 	}
-	tempe = &CError{}
+	tempe = &Error{}
 	if ee := json.Unmarshal(common.Str2byte(e.Error()), tempe); ee != nil {
 		return e.Error()
 	}
 	return tempe.Msg
 }
-func ErrorstrToMError(e string) *CError {
+func ErrorstrToMError(e string) *Error {
 	if e == "" {
 		return nil
 	}
-	result := &CError{}
+	result := &Error{}
 	if ee := json.Unmarshal(common.Str2byte(e), result); ee != nil {
-		return &CError{Code: -1, Msg: e}
+		return &Error{Code: -1, Msg: e}
 	}
 	return result
 }
-func ErrorToMError(e error) *CError {
+func ErrorToMError(e error) *Error {
 	if e == nil {
 		return nil
 	}
-	result, ok := e.(*CError)
+	result, ok := e.(*Error)
 	if ok {
 		return result
 	}
-	result = &CError{}
+	result = &Error{}
 	if ee := json.Unmarshal(common.Str2byte(e.Error()), result); ee != nil {
-		return &CError{Code: -1, Msg: e.Error()}
+		return &Error{Code: -1, Msg: e.Error()}
 	}
 	return result
 }
-func (this *CError) Error() string {
+func (this *Error) Error() string {
 	return fmt.Sprintf(`{"code":%d,"msg":"%s"}`, this.Code, this.Msg)
 }

@@ -1,7 +1,7 @@
 package rpc
 
 import (
-	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/error"
 )
 
 const (
@@ -18,16 +18,16 @@ const (
 	ERRPANIC
 )
 
-var ERR = map[uint64]*cerror.CError{
-	ERRUNKNOWN:    &cerror.CError{Code: ERRUNKNOWN, Msg: "rpc:unknown error"},
-	ERRLARGE:      &cerror.CError{Code: ERRLARGE, Msg: "rpc:msg too large"},
-	ERRNOAPI:      &cerror.CError{Code: ERRNOAPI, Msg: "rpc:api not implement"},
-	ERRREQUEST:    &cerror.CError{Code: ERRREQUEST, Msg: "rpc:request data error"},
-	ERRRESPONSE:   &cerror.CError{Code: ERRRESPONSE, Msg: "rpc:response data error"},
-	ERRCTXCANCEL:  &cerror.CError{Code: ERRCTXCANCEL, Msg: "rpc:context canceled"},
-	ERRCTXTIMEOUT: &cerror.CError{Code: ERRCTXTIMEOUT, Msg: "rpc:context timeout"},
-	ERRNOSERVER:   &cerror.CError{Code: ERRNOSERVER, Msg: "rpc:no servers connected"},
-	ERRCLOSING:    &cerror.CError{Code: ERRCLOSING, Msg: "rpc:connection is closing"},
-	ERRCLOSED:     &cerror.CError{Code: ERRCLOSED, Msg: "rpc:connection is closed"},
-	ERRPANIC:      &cerror.CError{Code: ERRPANIC, Msg: "rpc:server panic"},
+var ERR = map[uint64]*error.Error{
+	ERRUNKNOWN:    &error.Error{Code: ERRUNKNOWN, Msg: "rpc:unknown error"},
+	ERRLARGE:      &error.Error{Code: ERRLARGE, Msg: "rpc:msg too large"},
+	ERRNOAPI:      &error.Error{Code: ERRNOAPI, Msg: "rpc:api not implement"},
+	ERRREQUEST:    &error.Error{Code: ERRREQUEST, Msg: "rpc:request data error"},
+	ERRRESPONSE:   &error.Error{Code: ERRRESPONSE, Msg: "rpc:response data error"},
+	ERRCTXCANCEL:  &error.Error{Code: ERRCTXCANCEL, Msg: "rpc:context canceled"},
+	ERRCTXTIMEOUT: &error.Error{Code: ERRCTXTIMEOUT, Msg: "rpc:context timeout"},
+	ERRNOSERVER:   &error.Error{Code: ERRNOSERVER, Msg: "rpc:no servers connected"},
+	ERRCLOSING:    &error.Error{Code: ERRCLOSING, Msg: "rpc:connection is closing"},
+	ERRCLOSED:     &error.Error{Code: ERRCLOSED, Msg: "rpc:connection is closed"},
+	ERRPANIC:      &error.Error{Code: ERRPANIC, Msg: "rpc:server panic"},
 }
