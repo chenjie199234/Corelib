@@ -9,7 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/common"
-	mtime "github.com/chenjie199234/Corelib/time"
+	ctime "github.com/chenjie199234/Corelib/time"
 )
 
 var pool *sync.Pool
@@ -775,7 +775,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 		}
 	case time.Duration:
 		b.buf = b.appendDuration(d)
-	case mtime.Duration:
+	case ctime.Duration:
 		b.buf = b.appendDuration(time.Duration(d))
 	case *time.Duration:
 		if d == nil {
@@ -783,7 +783,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 		} else {
 			b.buf = b.appendDuration(*d)
 		}
-	case *mtime.Duration:
+	case *ctime.Duration:
 		if d == nil {
 			b.buf = append(b.buf, "nil"...)
 		} else {
@@ -802,7 +802,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 		} else {
 			b.buf = append(b.buf, "[]"...)
 		}
-	case []mtime.Duration:
+	case []ctime.Duration:
 		if d == nil {
 			b.buf = append(b.buf, "nil"...)
 		} else if len(d) > 0 {
@@ -832,7 +832,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 		} else {
 			b.buf = append(b.buf, "[]"...)
 		}
-	case []*mtime.Duration:
+	case []*ctime.Duration:
 		if d == nil {
 			b.buf = append(b.buf, "nil"...)
 		} else if len(d) > 0 {
@@ -851,7 +851,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 		}
 	case time.Time:
 		b.buf = d.AppendFormat(b.buf, "2006-01-02 15:04:05.000000000 -07")
-	case mtime.Time:
+	case ctime.Time:
 		b.buf = time.Time(d).AppendFormat(b.buf, "2006-01-02 15:04:05.000000000 -07")
 	case *time.Time:
 		if d == nil {
@@ -859,7 +859,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 		} else {
 			b.buf = (*d).AppendFormat(b.buf, "2006-01-02 15:04:05.000000000 -07")
 		}
-	case *mtime.Time:
+	case *ctime.Time:
 		if d == nil {
 			b.buf = append(b.buf, "nil"...)
 		} else {
@@ -878,7 +878,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 		} else {
 			b.buf = append(b.buf, "[]"...)
 		}
-	case []mtime.Time:
+	case []ctime.Time:
 		if d == nil {
 			b.buf = append(b.buf, "nil"...)
 		} else if len(d) > 0 {
@@ -908,7 +908,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 		} else {
 			b.buf = append(b.buf, "[]"...)
 		}
-	case []*mtime.Time:
+	case []*ctime.Time:
 		if d == nil {
 			b.buf = append(b.buf, "nil"...)
 		} else if len(d) > 0 {
