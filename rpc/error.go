@@ -6,7 +6,7 @@ import (
 
 const (
 	ERRUNKNOWN = iota + 1
-	ERRLARGE
+	ERRMSGLARGE
 	ERRNOAPI
 	ERRREQUEST
 	ERRRESPONSE
@@ -20,7 +20,7 @@ const (
 
 var ERR = map[uint64]*error.Error{
 	ERRUNKNOWN:    &error.Error{Code: ERRUNKNOWN, Msg: "rpc:unknown error"},
-	ERRLARGE:      &error.Error{Code: ERRLARGE, Msg: "rpc:msg too large"},
+	ERRMSGLARGE:   &error.Error{Code: ERRMSGLARGE, Msg: "rpc:msg too large"},
 	ERRNOAPI:      &error.Error{Code: ERRNOAPI, Msg: "rpc:api not implement"},
 	ERRREQUEST:    &error.Error{Code: ERRREQUEST, Msg: "rpc:request data error"},
 	ERRRESPONSE:   &error.Error{Code: ERRRESPONSE, Msg: "rpc:response data error"},

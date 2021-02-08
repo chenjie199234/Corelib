@@ -58,16 +58,16 @@ func NewWebClient(appname string, globaltimeout time.Duration, picker PickHandle
 	if e := common.NameCheck(appname, true); e != nil {
 		panic("[web.client] " + e.Error())
 	}
+	lker.Lock()
+	defer lker.Unlock()
+	if c, ok := all[appname]; ok {
+		return c
+	}
 	if picker == nil {
 		picker = defaultPicker
 	}
 	if discover == nil {
 		discover = defaultDiscover
-	}
-	lker.Lock()
-	defer lker.Unlock()
-	if c, ok := all[appname]; ok {
-		return c
 	}
 	instance := &WebClient{
 		timeout: globaltimeout,
@@ -123,7 +123,7 @@ func (this *WebClient) UpdateDiscovery(all map[string]map[string]struct{}, addit
 				client:           &http.Client{},
 				discoveryservers: discoverservers,
 				Pickinfo: &pickinfo{
-					Lastcall:                   time.Now().UnixNano(),
+					Lastcall:                   0,
 					Cpu:                        1,
 					Activecalls:                0,
 					DiscoveryServers:           int32(len(discoverservers)),

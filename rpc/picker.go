@@ -3,17 +3,12 @@ package rpc
 import (
 	"math"
 	"math/rand"
-	"sync/atomic"
 	"time"
-	"unsafe"
 )
 
-var r *rand.Rand
-
-func defaultPicker(servers []*Serverapp) *Serverapp {
-	if r == nil {
-		temp := rand.New(rand.NewSource(time.Now().UnixNano()))
-		atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&r)), nil, unsafe.Pointer(temp))
+func defaultPicker(servers []*ServerForPick) *ServerForPick {
+	if len(servers) == 0 {
+		return nil
 	}
 	if len(servers) == 1 {
 		if servers[0].Pickable() {
@@ -22,77 +17,83 @@ func defaultPicker(servers []*Serverapp) *Serverapp {
 			return nil
 		}
 	}
-	now := time.Now().Unix()
-	var normala, normalb, dangera, dangerb, nightmarea, nightmareb *Serverapp
-	start := r.Intn(len(servers))
-	index := start
+	start := rand.Intn(len(servers))
+	i := start
+	first := true
+	var normal1, normal2, danger1, danger2, nightmare1, nightmare2 *ServerForPick
+	onesbefore := time.Now().Add(-time.Second)
 	for {
-		if servers[index].Pickable() {
-			switch {
-			case servers[index].Pickinfo.DiscoveryServers == 0:
-				//nigntmare
-				if nightmarea == nil {
-					nightmarea = servers[index]
-				} else if nightmareb == nil {
-					nightmareb = servers[index]
-				}
-			case now-servers[index].Pickinfo.DiscoveryServerOfflineTime <= 2:
-				//danger
-				if dangera == nil {
-					dangera = servers[index]
-				} else if dangerb == nil {
-					dangerb = servers[index]
-				}
-			default:
-				//normal
-				if normala == nil {
-					normala = servers[index]
-				} else if normalb == nil {
-					normalb = servers[index]
+		if !first && i == start {
+			break
+		}
+		first = false
+		if servers[i].Pickable() {
+			if servers[i].Pickinfo.DiscoveryServers != 0 &&
+				servers[i].Pickinfo.DiscoveryServerOfflineTime < onesbefore.UnixNano() &&
+				(servers[i].Pickinfo.Lastcall < onesbefore.UnixNano() || servers[i].Pickinfo.Cpu != 100) {
+				if normal1 == nil {
+					normal1 = servers[i]
+				} else {
+					normal2 = servers[i]
 					break
+				}
+			} else if servers[i].Pickinfo.DiscoveryServers == 0 {
+				if nightmare1 == nil {
+					nightmare1 = servers[i]
+				} else if nightmare2 == nil {
+					nightmare2 = servers[i]
+				}
+			} else {
+				if danger1 == nil {
+					danger1 = servers[i]
+				} else if danger2 == nil {
+					danger2 = servers[i]
 				}
 			}
 		}
-		index++
-		if index == len(servers) {
-			index = 0
-		}
-		if index == start {
-			break
+		i++
+		if i >= len(servers) {
+			i = 0
 		}
 	}
-	if normala != nil && normalb != nil {
-
-	} else if normala != nil {
-		return normala
-	} else if dangera != nil && dangerb != nil {
-		normala = dangera
-		normalb = dangerb
-	} else if dangera != nil {
-		return dangera
-	} else if nightmarea != nil && nightmareb != nil {
-		normala = nightmarea
-		normalb = nightmareb
-	} else if nightmarea != nil {
-		return nightmarea
+	//check normal
+	if normal1 != nil && normal2 != nil {
+	} else if normal1 != nil {
+		return normal1
+	} else if normal2 != nil {
+		return normal2
+	}
+	//check danger
+	if danger1 != nil && danger1 != nil {
+		normal1 = danger1
+		normal2 = danger2
+	} else if danger1 != nil {
+		return danger1
+	} else if danger2 != nil {
+		return danger2
+	}
+	//check nightmare
+	if nightmare1 != nil && nightmare2 != nil {
+		normal1 = nightmare1
+		normal2 = nightmare2
+	} else if nightmare1 != nil {
+		return nightmare1
+	} else if nightmare2 != nil {
+		return nightmare2
 	} else {
 		return nil
 	}
-	loada := math.Sqrt(float64(normala.Pickinfo.Netlag)) *
-		normala.Pickinfo.Cpu *
-		float64(normala.Pickinfo.Activecalls) *
-		math.Log1p(float64(normalb.Pickinfo.DiscoveryServers)) //more discoveryservers more safety,so a * b's discoveryserver num
-	loadb := math.Sqrt(float64(normalb.Pickinfo.Netlag)) *
-		normalb.Pickinfo.Cpu *
-		float64(normalb.Pickinfo.Activecalls) *
-		math.Log1p(float64(normala.Pickinfo.DiscoveryServers)) //more discoveryservers more safety,so b * a's discoveryserver num
-	if loada < loadb {
-		return normala
-	} else if loada > loadb {
-		return normalb
+	//more discoveryservers more safety,so 1 * 2's discoveryserver num
+	load1 := normal1.Pickinfo.Cpu * float64(normal1.Pickinfo.Activecalls) * math.Log1p(float64(normal2.Pickinfo.DiscoveryServers))
+	//more discoveryservers more safety,so 2 * 1's discoveryserver num
+	load2 := normal2.Pickinfo.Cpu * float64(normal2.Pickinfo.Activecalls) * math.Log1p(float64(normal2.Pickinfo.DiscoveryServers))
+	if load1 > load2 {
+		return normal2
+	} else if load1 < load2 {
+		return normal1
 	} else if rand.Intn(2) == 0 {
-		return normala
+		return normal1
 	} else {
-		return normalb
+		return normal2
 	}
 }

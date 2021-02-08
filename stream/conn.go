@@ -83,60 +83,59 @@ func (this *Instance) StartUnixServer(listenaddr string) {
 func (this *Instance) sworker(p *Peer, maxlen int) {
 	//read first verify message from client
 	verifydata := this.verifypeer(p, maxlen)
-	if p.clientname != "" {
-		if !this.addPeer(p) {
-			switch p.protocoltype {
-			case TCP:
-				log.Error("[Stream.TCP.sworker] duplicate connect from client:", p.getpeername(), "addr:", p.getpeeraddr())
-			case UNIX:
-				log.Error("[Stream.UNIX.sworker] duplicate connect from client:", p.getpeername(), "addr:", p.getpeeraddr())
-			}
-			p.closeconn()
-			this.putPeer(p)
-			return
-		}
-		if atomic.LoadInt32(&this.stop) == 1 {
-			p.closeconn()
-			//after addpeer should use this way to delete this peer
-			this.noticech <- p
-			return
-		}
-		//verify client success,send self's verify message to client
-		verifymsg := makeVerifyMsg(p.servername, verifydata, p.starttime, true)
-		send := 0
-		num := 0
-		var e error
-		for send < verifymsg.Len() {
-			switch p.protocoltype {
-			case TCP:
-				if num, e = (*net.TCPConn)(p.conn).Write(verifymsg.Bytes()[send:]); e != nil {
-					log.Error("[Stream.TCP.sworker] write first verify msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
-				}
-			case UNIX:
-				if num, e = (*net.UnixConn)(p.conn).Write(verifymsg.Bytes()[send:]); e != nil {
-					log.Error("[Stream.UNIX.sworker] write first verify msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
-				}
-			}
-			if e != nil {
-				bufpool.PutBuffer(verifymsg)
-				p.closeconn()
-				this.putPeer(p)
-				return
-			}
-			send += num
-		}
-		bufpool.PutBuffer(verifymsg)
-		if this.conf.Onlinefunc != nil {
-			this.conf.Onlinefunc(p, p.getpeeruniquename(), p.starttime)
-		}
-		go this.read(p, maxlen)
-		go this.write(p)
-		return
-	} else {
+	if p.clientname == "" {
 		p.closeconn()
 		this.putPeer(p)
 		return
 	}
+	if !this.addPeer(p) {
+		switch p.protocoltype {
+		case TCP:
+			log.Error("[Stream.TCP.sworker] duplicate connect from client:", p.getpeername(), "addr:", p.getpeeraddr())
+		case UNIX:
+			log.Error("[Stream.UNIX.sworker] duplicate connect from client:", p.getpeername(), "addr:", p.getpeeraddr())
+		}
+		p.closeconn()
+		this.putPeer(p)
+		return
+	}
+	if atomic.LoadInt32(&this.stop) == 1 {
+		p.closeconn()
+		//after addpeer should use this way to delete this peer
+		this.noticech <- p
+		return
+	}
+	//verify client success,send self's verify message to client
+	verifymsg := makeVerifyMsg(p.servername, verifydata, p.starttime, true)
+	send := 0
+	num := 0
+	var e error
+	for send < verifymsg.Len() {
+		switch p.protocoltype {
+		case TCP:
+			if num, e = (*net.TCPConn)(p.conn).Write(verifymsg.Bytes()[send:]); e != nil {
+				log.Error("[Stream.TCP.sworker] write first verify msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+			}
+		case UNIX:
+			if num, e = (*net.UnixConn)(p.conn).Write(verifymsg.Bytes()[send:]); e != nil {
+				log.Error("[Stream.UNIX.sworker] write first verify msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+			}
+		}
+		if e != nil {
+			bufpool.PutBuffer(verifymsg)
+			p.closeconn()
+			this.putPeer(p)
+			return
+		}
+		send += num
+	}
+	bufpool.PutBuffer(verifymsg)
+	if this.conf.Onlinefunc != nil {
+		this.conf.Onlinefunc(p, p.getpeeruniquename(), p.starttime)
+	}
+	go this.read(p, maxlen)
+	go this.write(p)
+	return
 }
 
 // success return peeruniquename
@@ -231,37 +230,36 @@ func (this *Instance) cworker(p *Peer, maxlen int, verifydata []byte) string {
 	bufpool.PutBuffer(verifymsg)
 	//read first verify message from server
 	_ = this.verifypeer(p, maxlen)
-	if p.servername != "" {
-		//verify server success
-		if !this.addPeer(p) {
-			switch p.protocoltype {
-			case TCP:
-				log.Error("[Stream.TCP.cworker] duplicate connect to server:", p.getpeername(), "addr:", p.getpeeraddr())
-			case UNIX:
-				log.Error("[Stream.UNIX.cworker] duplicate connect to server:", p.getpeername(), "addr:", p.getpeeraddr())
-			}
-			p.closeconn()
-			this.putPeer(p)
-			return ""
-		}
-		if atomic.LoadInt32(&this.stop) == 1 {
-			p.closeconn()
-			//after addpeer should use this way to delete this peer
-			this.noticech <- p
-			return ""
-		}
-		if this.conf.Onlinefunc != nil {
-			this.conf.Onlinefunc(p, p.getpeeruniquename(), p.starttime)
-		}
-		uniquename := p.getpeeruniquename()
-		go this.read(p, maxlen)
-		go this.write(p)
-		return uniquename
-	} else {
+	if p.servername == "" {
 		p.closeconn()
 		this.putPeer(p)
 		return ""
 	}
+	//verify server success
+	if !this.addPeer(p) {
+		switch p.protocoltype {
+		case TCP:
+			log.Error("[Stream.TCP.cworker] duplicate connect to server:", p.getpeername(), "addr:", p.getpeeraddr())
+		case UNIX:
+			log.Error("[Stream.UNIX.cworker] duplicate connect to server:", p.getpeername(), "addr:", p.getpeeraddr())
+		}
+		p.closeconn()
+		this.putPeer(p)
+		return ""
+	}
+	if atomic.LoadInt32(&this.stop) == 1 {
+		p.closeconn()
+		//after addpeer should use this way to delete this peer
+		this.noticech <- p
+		return ""
+	}
+	if this.conf.Onlinefunc != nil {
+		this.conf.Onlinefunc(p, p.getpeeruniquename(), p.starttime)
+	}
+	uniquename := p.getpeeruniquename()
+	go this.read(p, maxlen)
+	go this.write(p)
+	return uniquename
 }
 func (this *Instance) verifypeer(p *Peer, maxlen int) []byte {
 	switch p.protocoltype {

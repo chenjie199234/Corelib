@@ -11,41 +11,41 @@ func Test_MError(t *testing.T) {
 		Msg:  "test",
 	}
 	ee := toerror(me)
-	if code := GetCodeFromError(ee); code != 100 {
+	if code := GetCodeFromStdError(ee); code != 100 {
 		panic("code error")
 	}
 	if code := GetCodeFromErrorstr(ee.Error()); code != 100 {
 		panic("code error")
 	}
-	if msg := GetMsgFromError(ee); msg != "test" {
+	if msg := GetMsgFromStdError(ee); msg != "test" {
 		panic("msg error")
 	}
 	if msg := GetMsgFromErrorstr(ee.Error()); msg != "test" {
 		panic("msg error")
 	}
-	if temp := ErrorToMError(ee); temp.Code != me.Code || temp.Msg != me.Msg {
+	if temp := StdErrorToError(ee); temp.Code != me.Code || temp.Msg != me.Msg {
 		panic("translate error")
 	}
-	if temp := ErrorstrToMError(ee.Error()); temp.Code != me.Code || temp.Msg != me.Msg {
+	if temp := ErrorstrToError(ee.Error()); temp.Code != me.Code || temp.Msg != me.Msg {
 		panic("translate error")
 	}
 	eee := fmt.Errorf("test")
-	if code := GetCodeFromError(eee); code != -1 {
+	if code := GetCodeFromStdError(eee); code != -1 {
 		panic("code error")
 	}
 	if code := GetCodeFromErrorstr(eee.Error()); code != -1 {
 		panic("code error")
 	}
-	if msg := GetMsgFromError(eee); msg != "test" {
+	if msg := GetMsgFromStdError(eee); msg != "test" {
 		panic("msg error")
 	}
 	if msg := GetMsgFromErrorstr(eee.Error()); msg != "test" {
 		panic("msg error")
 	}
-	if temp := ErrorToMError(eee); temp.Code != -1 || temp.Msg != "test" {
+	if temp := StdErrorToError(eee); temp.Code != -1 || temp.Msg != "test" {
 		panic("translate error")
 	}
-	if temp := ErrorstrToMError(eee.Error()); temp.Code != -1 || temp.Msg != "test" {
+	if temp := ErrorstrToError(eee.Error()); temp.Code != -1 || temp.Msg != "test" {
 		panic("translate error")
 	}
 }

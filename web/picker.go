@@ -16,19 +16,13 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 	start := rand.Intn(len(servers))
 	i := start
 	first := true
-	var normal1 *ServerForPick
-	var normal2 *ServerForPick
-	var danger1 *ServerForPick
-	var danger2 *ServerForPick
-	var nightmare1 *ServerForPick
-	var nightmare2 *ServerForPick
-	now := time.Now()
+	var normal1, normal2, danger1, danger2, nightmare1, nightmare2 *ServerForPick
+	onesbefore := time.Now().Add(-time.Second)
 	for {
 		if !first && i == start {
 			break
 		}
 		first = false
-		onesbefore := now.Add(-time.Second)
 		if servers[i].Pickinfo.DiscoveryServers != 0 &&
 			servers[i].Pickinfo.DiscoveryServerOfflineTime < onesbefore.UnixNano() &&
 			(servers[i].Pickinfo.Lastcall < onesbefore.UnixNano() || servers[i].Pickinfo.Cpu != 100) {

@@ -2,7 +2,6 @@ package error
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/chenjie199234/Corelib/common"
 )
@@ -27,7 +26,7 @@ func GetCodeFromErrorstr(e string) int64 {
 	}
 	return tempe.Code
 }
-func GetCodeFromError(e error) int64 {
+func GetCodeFromStdError(e error) int64 {
 	if e == nil {
 		return 0
 	}
@@ -51,7 +50,7 @@ func GetMsgFromErrorstr(e string) string {
 	}
 	return tempe.Msg
 }
-func GetMsgFromError(e error) string {
+func GetMsgFromStdError(e error) string {
 	if e == nil {
 		return ""
 	}
@@ -65,7 +64,7 @@ func GetMsgFromError(e error) string {
 	}
 	return tempe.Msg
 }
-func ErrorstrToMError(e string) *Error {
+func ErrorstrToError(e string) *Error {
 	if e == "" {
 		return nil
 	}
@@ -75,7 +74,7 @@ func ErrorstrToMError(e string) *Error {
 	}
 	return result
 }
-func ErrorToMError(e error) *Error {
+func StdErrorToError(e error) *Error {
 	if e == nil {
 		return nil
 	}
@@ -90,5 +89,6 @@ func ErrorToMError(e error) *Error {
 	return result
 }
 func (this *Error) Error() string {
-	return fmt.Sprintf(`{"code":%d,"msg":"%s"}`, this.Code, this.Msg)
+	d, _ := json.Marshal(this)
+	return common.Byte2str(d)
 }

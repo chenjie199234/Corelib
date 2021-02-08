@@ -6,7 +6,7 @@ import (
 	"github.com/chenjie199234/Corelib/discovery"
 )
 
-func defaultdiscovery(appname string, client *MrpcClient) {
+func defaultdiscovery(appname string, client *RpcClient) {
 	for {
 		var notice chan struct{}
 		var e error

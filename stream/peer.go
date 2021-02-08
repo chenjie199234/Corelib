@@ -239,7 +239,7 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 		}
 		return ERRMSGLENGTH
 	}
-	if p.status == 0 || p.status == 2 || p.starttime != starttime {
+	if p.closeread || p.status == 0 || p.status == 2 || p.starttime != starttime {
 		//starttime for aba check
 		return ERRCONNCLOSED
 	}
