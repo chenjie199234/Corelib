@@ -29,7 +29,7 @@ var serverinstanceconfig *stream.InstanceConfig = &stream.InstanceConfig{
 func Test_Appserver1(t *testing.T) {
 
 	verifydata := []byte("test")
-	server := rpc.NewMrpcServer(serverinstanceconfig, verifydata)
+	server := rpc.NewRpcServer(serverinstanceconfig, 0, verifydata)
 	RegisterMrpcTestService(server, &MrpcTestService{
 		Midware: nil,
 		Hello:   Hello1,
@@ -39,7 +39,7 @@ func Test_Appserver1(t *testing.T) {
 		RpcIp:   "127.0.0.1",
 		RpcPort: 8888,
 	})
-	server.StartMrpcServer("127.0.0.1:8888")
+	server.StartRpcServer("127.0.0.1:8888")
 }
 
 var count1 int32
@@ -52,7 +52,7 @@ func Hello1(ctx context.Context, req *HelloReq) (*HelloResp, error) {
 }
 func Test_Appserver2(t *testing.T) {
 	verifydata := []byte("test")
-	server := rpc.NewMrpcServer(serverinstanceconfig, verifydata)
+	server := rpc.NewRpcServer(serverinstanceconfig, 0, verifydata)
 	RegisterMrpcTestService(server, &MrpcTestService{
 		Midware: nil,
 		Hello:   Hello2,
@@ -62,7 +62,7 @@ func Test_Appserver2(t *testing.T) {
 		RpcIp:   "127.0.0.1",
 		RpcPort: 8889,
 	})
-	server.StartMrpcServer("127.0.0.1:8889")
+	server.StartRpcServer("127.0.0.1:8889")
 }
 
 var count2 int32
@@ -75,7 +75,7 @@ func Hello2(ctx context.Context, req *HelloReq) (*HelloResp, error) {
 }
 func Test_Appserver3(t *testing.T) {
 	verifydata := []byte("test")
-	server := rpc.NewMrpcServer(serverinstanceconfig, verifydata)
+	server := rpc.NewRpcServer(serverinstanceconfig, 0, verifydata)
 	RegisterMrpcTestService(server, &MrpcTestService{
 		Midware: nil,
 		Hello:   Hello3,
@@ -85,7 +85,7 @@ func Test_Appserver3(t *testing.T) {
 		RpcIp:   "127.0.0.1",
 		RpcPort: 8890,
 	})
-	server.StartMrpcServer("127.0.0.1:8890")
+	server.StartRpcServer("127.0.0.1:8890")
 }
 
 var count3 int32
@@ -98,7 +98,7 @@ func Hello3(ctx context.Context, req *HelloReq) (*HelloResp, error) {
 }
 func Test_Appserver4(t *testing.T) {
 	verifydata := []byte("test")
-	server := rpc.NewMrpcServer(serverinstanceconfig, verifydata)
+	server := rpc.NewRpcServer(serverinstanceconfig, 0, verifydata)
 	RegisterMrpcTestService(server, &MrpcTestService{
 		Midware: nil,
 		Hello:   Hello4,
@@ -108,7 +108,7 @@ func Test_Appserver4(t *testing.T) {
 		RpcIp:   "127.0.0.1",
 		RpcPort: 8891,
 	})
-	server.StartMrpcServer("127.0.0.1:8891")
+	server.StartRpcServer("127.0.0.1:8891")
 }
 
 var count4 int32

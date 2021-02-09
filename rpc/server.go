@@ -20,7 +20,7 @@ type OutsideHandler func(ctx context.Context, req []byte) (resp []byte, e error)
 type RpcServer struct {
 	c          *stream.InstanceConfig
 	timeout    time.Duration
-	handler    map[string]func(*Msg)
+	handler    map[string]func(string, *Msg)
 	instance   *stream.Instance
 	verifydata []byte
 	status     int32 //0 stop,1 starting
@@ -31,7 +31,7 @@ type RpcServer struct {
 func NewRpcServer(c *stream.InstanceConfig, globaltimeout time.Duration, vdata []byte) *RpcServer {
 	serverinstance := &RpcServer{
 		timeout:    globaltimeout,
-		handler:    make(map[string]func(*Msg), 10),
+		handler:    make(map[string]func(string, *Msg), 10),
 		verifydata: vdata,
 		stopch:     make(chan struct{}, 1),
 	}
@@ -56,7 +56,7 @@ func (s *RpcServer) StopMrpcServer() {
 	}
 	d, _ := proto.Marshal(&Msg{
 		Callid: 0,
-		Error:  ERR[ERRCLOSING].Error(),
+		Error:  ERRCLOSING.Error(),
 	})
 	s.instance.SendMessageAll(d, true)
 	timer := time.NewTimer(time.Second)
@@ -79,15 +79,15 @@ func (s *RpcServer) StopMrpcServer() {
 		}
 	}
 }
-func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...OutsideHandler) func(*Msg) {
-	return func(msg *Msg) {
+func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...OutsideHandler) func(string, *Msg) {
+	return func(peeruniquename string, msg *Msg) {
 		defer func() {
 			if e := recover(); e != nil {
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
 				msg.Cpu = cpu.GetUse()
-				msg.Error = ERR[ERRPANIC].Error()
+				msg.Error = ERRPANIC.Error()
 				msg.Metadata = nil
 			}
 		}()
@@ -117,14 +117,17 @@ func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...Outside
 				msg.Deadline = 0
 				msg.Body = nil
 				msg.Cpu = cpu.GetUse()
-				msg.Error = ERR[ERRCTXTIMEOUT].Error()
+				msg.Error = ERRCTXTIMEOUT.Error()
 				msg.Metadata = nil
 				return
 			}
+			ctx = SetDeadline(ctx, min)
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, min))
 			defer cancel()
 		}
+		ctx = SetPath(ctx, msg.Path)
+		ctx = SetPeerName(ctx, peeruniquename)
 		if len(msg.Metadata) > 0 {
 			ctx = SetAllMetadata(ctx, msg.Metadata)
 		}
@@ -175,7 +178,7 @@ func (s *RpcServer) onlinefunc(p *stream.Peer, peeruniquename string, starttime 
 	if atomic.LoadInt32(&s.status) == 0 {
 		d, _ := proto.Marshal(&Msg{
 			Callid: 0,
-			Error:  ERR[ERRCLOSING].Error(),
+			Error:  ERRCLOSING.Error(),
 		})
 		select {
 		case s.stopch <- struct{}{}:
@@ -203,7 +206,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			msg.Deadline = 0
 			msg.Cpu = 0
 			msg.Body = nil
-			msg.Error = ERR[ERRCLOSING].Error()
+			msg.Error = ERRCLOSING.Error()
 			msg.Metadata = nil
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(d, starttime, true); e != nil {
@@ -217,7 +220,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			msg.Deadline = 0
 			msg.Cpu = cpu.GetUse()
 			msg.Body = nil
-			msg.Error = ERR[ERRNOAPI].Error()
+			msg.Error = ERRNOAPI.Error()
 			msg.Metadata = nil
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(d, starttime, true); e != nil {
@@ -225,7 +228,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			}
 			return
 		}
-		handler(msg)
+		handler(peeruniquename, msg)
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(d, starttime, true); e != nil {
 			log.Error("[rpc.server.userfunc] send message error:", e)

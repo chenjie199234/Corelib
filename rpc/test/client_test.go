@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/discovery"
-	"github.com/chenjie199234/Corelib/merror"
-	"github.com/chenjie199234/Corelib/rpc/mrpc"
+	"github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/rpc"
 	"github.com/chenjie199234/Corelib/stream"
 )
 
@@ -35,7 +35,7 @@ func Test_Client(t *testing.T) {
 
 	verifydata := []byte("test")
 	discovery.NewDiscoveryClient(clientinstanceconfig, verifydata, "http://127.0.0.1:8080/discoveryservers")
-	client := mrpc.NewMrpcClient(clientinstanceconfig, "appserver", verifydata, nil, nil)
+	client := rpc.NewRpcClient(clientinstanceconfig, 0, "appserver", verifydata, nil, nil)
 	api = NewMrpcTestClient(client)
 	time.Sleep(time.Second)
 	call()
@@ -51,14 +51,14 @@ func call() {
 		ch <- struct{}{}
 		conder.Wait()
 		ctx := context.Background()
-		ctx = mrpc.SetAllMetadata(ctx, map[string]string{"req": "req"})
+		ctx = rpc.SetAllMetadata(ctx, map[string]string{"req": "req"})
 		_, e := api.Hello(ctx, &HelloReq{
 			Name: "client",
 			Sex:  0,
 			Addr: "computer",
 			Tel:  "123456789",
 		})
-		me := merror.ErrorToMError(e)
+		me := error.StdErrorToError(e)
 		if me != nil {
 			panic(fmt.Sprintf("code:%d msg:%s", me.Code, me.Msg))
 		}

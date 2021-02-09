@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math"
@@ -12,7 +13,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/common"
 )
 
@@ -160,24 +160,27 @@ func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, pathw
 func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header) (*http.Response, error) {
 	return this.call(http.MethodDelete, ctx, functimeout, pathwithquery, header, nil)
 }
-func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body *bufpool.Buffer) (*http.Response, error) {
+func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body []byte) (*http.Response, error) {
 	return this.call(http.MethodPost, ctx, functimeout, pathwithquery, header, body)
 }
-func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body *bufpool.Buffer) (*http.Response, error) {
+func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body []byte) (*http.Response, error) {
 	return this.call(http.MethodPut, ctx, functimeout, pathwithquery, header, body)
 }
-func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body *bufpool.Buffer) (*http.Response, error) {
+func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body []byte) (*http.Response, error) {
 	return this.call(http.MethodPatch, ctx, functimeout, pathwithquery, header, body)
 }
-func (this *WebClient) call(method string, ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body *bufpool.Buffer) (*http.Response, error) {
+func (this *WebClient) call(method string, ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body []byte) (*http.Response, error) {
 	var min time.Duration
-	if this.timeout < functimeout {
+	if this.timeout != 0 {
 		min = this.timeout
-	} else {
-		min = functimeout
 	}
-	//var realctx context.Context
-	//var cancel context.CancelFunc
+	if functimeout != 0 {
+		if min == 0 {
+			min = functimeout
+		} else if functimeout < min {
+			min = functimeout
+		}
+	}
 	if min != 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, min)
@@ -210,7 +213,13 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	} else {
 		url = server.host + pathwithquery
 	}
-	req, e := http.NewRequestWithContext(ctx, method, url, nil)
+	var req *http.Request
+	var e error
+	if body != nil {
+		req, e = http.NewRequestWithContext(ctx, method, url, bytes.NewBuffer(body))
+	} else {
+		req, e = http.NewRequestWithContext(ctx, method, url, nil)
+	}
 	if e != nil {
 		return nil, e
 	}

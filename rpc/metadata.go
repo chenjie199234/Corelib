@@ -5,6 +5,9 @@ import (
 )
 
 type metadatakey struct{}
+type peernamekey struct{}
+type pathkey struct{}
+type deadlinekey struct{}
 
 func GetAllMetadata(ctx context.Context) map[string]string {
 	value := ctx.Value(metadatakey{})
@@ -47,4 +50,46 @@ func SetAllMetadata(ctx context.Context, data map[string]string) context.Context
 		result[k] = v
 	}
 	return ctx
+}
+func GetPath(ctx context.Context) string {
+	value := ctx.Value(pathkey{})
+	if value == nil {
+		return ""
+	}
+	result, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return result
+}
+func SetPath(ctx context.Context, path string) context.Context {
+	return context.WithValue(ctx, pathkey{}, path)
+}
+func GetPeerName(ctx context.Context) string {
+	value := ctx.Value(peernamekey{})
+	if value == nil {
+		return ""
+	}
+	result, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return result
+}
+func SetPeerName(ctx context.Context, peername string) context.Context {
+	return context.WithValue(ctx, peernamekey{}, peername)
+}
+func GetDeadline(ctx context.Context) int64 {
+	value := ctx.Value(deadlinekey{})
+	if value == nil {
+		return 0
+	}
+	result, ok := value.(int64)
+	if !ok {
+		return 0
+	}
+	return result
+}
+func SetDeadline(ctx context.Context, dl int64) context.Context {
+	return context.WithValue(ctx, deadlinekey{}, dl)
 }

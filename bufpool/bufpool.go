@@ -55,13 +55,13 @@ func (b *Buffer) appendbasic(data interface{}) {
 		b.buf = strconv.AppendBool(b.buf, d)
 	case *bool:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendBool(b.buf, *d)
 		}
 	case []bool:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -70,16 +70,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*bool:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendBool(b.buf, *dd)
 				}
@@ -87,7 +87,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case int:
 		b.buf = strconv.AppendInt(b.buf, int64(d), 10)
@@ -101,37 +101,37 @@ func (b *Buffer) appendbasic(data interface{}) {
 		b.buf = strconv.AppendInt(b.buf, d, 10)
 	case *int:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendInt(b.buf, int64(*d), 10)
 		}
 	case *int8:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendInt(b.buf, int64(*d), 10)
 		}
 	case *int16:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendInt(b.buf, int64(*d), 10)
 		}
 	case *int32:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendInt(b.buf, int64(*d), 10)
 		}
 	case *int64:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendInt(b.buf, *d, 10)
 		}
 	case []int:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -140,11 +140,11 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []int8:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -153,11 +153,11 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []int16:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -166,11 +166,11 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []int32:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -179,11 +179,11 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []int64:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -192,16 +192,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*int:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendInt(b.buf, int64(*dd), 10)
 				}
@@ -209,16 +209,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*int8:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendInt(b.buf, int64(*dd), 10)
 				}
@@ -226,16 +226,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*int16:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendInt(b.buf, int64(*dd), 10)
 				}
@@ -243,16 +243,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*int32:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendInt(b.buf, int64(*dd), 10)
 				}
@@ -260,16 +260,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*int64:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendInt(b.buf, *dd, 10)
 				}
@@ -277,7 +277,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case uint:
 		b.buf = strconv.AppendUint(b.buf, uint64(d), 10)
@@ -291,37 +291,37 @@ func (b *Buffer) appendbasic(data interface{}) {
 		b.buf = strconv.AppendUint(b.buf, d, 10)
 	case *uint:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendUint(b.buf, uint64(*d), 10)
 		}
 	case *uint8:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendUint(b.buf, uint64(*d), 10)
 		}
 	case *uint16:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendUint(b.buf, uint64(*d), 10)
 		}
 	case *uint32:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendUint(b.buf, uint64(*d), 10)
 		}
 	case *uint64:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendUint(b.buf, *d, 10)
 		}
 	case []uint:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -330,11 +330,11 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []uint8:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -343,11 +343,11 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []uint16:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -356,11 +356,11 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []uint32:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -369,11 +369,11 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []uint64:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -382,16 +382,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*uint:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendUint(b.buf, uint64(*dd), 10)
 				}
@@ -399,16 +399,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*uint8:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendUint(b.buf, uint64(*dd), 10)
 				}
@@ -416,16 +416,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*uint16:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendUint(b.buf, uint64(*dd), 10)
 				}
@@ -433,16 +433,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*uint32:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendUint(b.buf, uint64(*dd), 10)
 				}
@@ -450,16 +450,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*uint64:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendUint(b.buf, *dd, 10)
 				}
@@ -467,7 +467,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case float32:
 		b.buf = strconv.AppendFloat(b.buf, float64(d), 'f', -1, 32)
@@ -475,19 +475,19 @@ func (b *Buffer) appendbasic(data interface{}) {
 		b.buf = strconv.AppendFloat(b.buf, d, 'f', -1, 64)
 	case *float32:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendFloat(b.buf, float64(*d), 'f', -1, 32)
 		}
 	case *float64:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendFloat(b.buf, *d, 'f', -1, 64)
 		}
 	case []float32:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -496,11 +496,11 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []float64:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -509,16 +509,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*float32:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendFloat(b.buf, float64(*dd), 'f', -1, 32)
 				}
@@ -526,16 +526,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*float64:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendFloat(b.buf, float64(*dd), 'f', -1, 64)
 				}
@@ -543,7 +543,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case complex64:
 		b.buf = strconv.AppendFloat(b.buf, float64(real(d)), 'f', -1, 32)
@@ -561,7 +561,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 		b.buf = append(b.buf, 'i')
 	case *complex64:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendFloat(b.buf, float64(real(*d)), 'f', -1, 32)
 			if imag(*d) >= 0 {
@@ -572,7 +572,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 		}
 	case *complex128:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = strconv.AppendFloat(b.buf, real(*d), 'f', -1, 32)
 			if imag(*d) >= 0 {
@@ -583,7 +583,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 		}
 	case []complex64:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -596,11 +596,11 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []complex128:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -613,11 +613,11 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*complex64:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -635,16 +635,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*complex128:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendFloat(b.buf, real(*dd), 'f', -1, 32)
 					if imag(*dd) >= 0 {
@@ -657,19 +657,19 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case string:
 		b.buf = append(b.buf, d...)
 	case *string:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = append(b.buf, *d...)
 		}
 	case []string:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -678,16 +678,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*string:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = append(b.buf, *dd...)
 				}
@@ -695,7 +695,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case uintptr:
 		b.buf = b.appendPointer(uint64(d))
@@ -703,19 +703,19 @@ func (b *Buffer) appendbasic(data interface{}) {
 		b.buf = b.appendPointer(uint64(uintptr(d)))
 	case *uintptr:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = b.appendPointer(uint64(*d))
 		}
 	case *unsafe.Pointer:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = b.appendPointer(uint64(uintptr(*d)))
 		}
 	case []uintptr:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -724,11 +724,11 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []unsafe.Pointer:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -737,16 +737,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*uintptr:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = b.appendPointer(uint64(*dd))
 				}
@@ -754,16 +754,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*unsafe.Pointer:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = b.appendPointer(uint64(uintptr(*dd)))
 				}
@@ -771,7 +771,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case time.Duration:
 		b.buf = b.appendDuration(d)
@@ -779,19 +779,19 @@ func (b *Buffer) appendbasic(data interface{}) {
 		b.buf = b.appendDuration(time.Duration(d))
 	case *time.Duration:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = b.appendDuration(*d)
 		}
 	case *ctime.Duration:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = b.appendDuration(time.Duration(*d))
 		}
 	case []time.Duration:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -800,11 +800,11 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []ctime.Duration:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -813,16 +813,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*time.Duration:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = b.appendDuration(*dd)
 				}
@@ -830,16 +830,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*ctime.Duration:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = b.appendDuration(time.Duration(*dd))
 				}
@@ -847,7 +847,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case time.Time:
 		b.buf = d.AppendFormat(b.buf, "2006-01-02 15:04:05.000000000 -07")
@@ -855,19 +855,19 @@ func (b *Buffer) appendbasic(data interface{}) {
 		b.buf = time.Time(d).AppendFormat(b.buf, "2006-01-02 15:04:05.000000000 -07")
 	case *time.Time:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = (*d).AppendFormat(b.buf, "2006-01-02 15:04:05.000000000 -07")
 		}
 	case *ctime.Time:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = time.Time(*d).AppendFormat(b.buf, "2006-01-02 15:04:05.000000000 -07")
 		}
 	case []time.Time:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -876,11 +876,11 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []ctime.Time:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -889,16 +889,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*time.Time:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = (*dd).AppendFormat(b.buf, "2006-01-02 15:04:05.000000000 -07")
 				}
@@ -906,16 +906,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*ctime.Time:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = time.Time(*dd).AppendFormat(b.buf, "2006-01-02 15:04:05.000000000 -07")
 				}
@@ -923,19 +923,19 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case error:
 		b.buf = append(b.buf, d.Error()...)
 	case *error:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = append(b.buf, (*d).Error()...)
 		}
 	case []error:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
@@ -944,16 +944,16 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case []*error:
 		if d == nil {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if len(d) > 0 {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = append(b.buf, (*dd).Error()...)
 				}
@@ -961,7 +961,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	default:
 		b.appendreflect(reflect.ValueOf(d))
@@ -1003,7 +1003,7 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 		b.buf = append(b.buf, d.String()...)
 	case reflect.Interface:
 		if d.IsNil() {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.appendreflect(d.Elem())
 		}
@@ -1016,11 +1016,11 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case reflect.Slice:
 		if d.IsNil() {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if d.Len() > 0 {
 			b.buf = append(b.buf, '[')
 			for i := 0; i < d.Len(); i++ {
@@ -1029,11 +1029,11 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 			}
 			b.buf[len(b.buf)-1] = ']'
 		} else {
-			b.buf = append(b.buf, "[]"...)
+			b.appendemptyslice()
 		}
 	case reflect.Map:
 		if d.IsNil() {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else if d.Len() > 0 {
 			b.buf = append(b.buf, '{')
 			iter := d.MapRange()
@@ -1045,7 +1045,7 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 			}
 			b.buf[len(b.buf)-1] = '}'
 		} else {
-			b.buf = append(b.buf, "{}"...)
+			b.appendemptyobj()
 		}
 	case reflect.Struct:
 		if d.Type().Name() == "Time" || d.Type().Name() == "MTime" {
@@ -1062,11 +1062,11 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 			}
 			b.buf[len(b.buf)-1] = '}'
 		} else {
-			b.buf = append(b.buf, "{}"...)
+			b.appendemptyobj()
 		}
 	case reflect.Ptr:
 		if d.IsNil() {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.appendreflect(d.Elem())
 		}
@@ -1074,19 +1074,19 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 		b.buf = b.appendPointer(d.Uint())
 	case reflect.UnsafePointer:
 		if d.IsNil() {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = b.appendPointer(uint64(d.Pointer()))
 		}
 	case reflect.Func:
 		if d.IsNil() {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = b.appendPointer(uint64(d.Pointer()))
 		}
 	case reflect.Chan:
 		if d.IsNil() {
-			b.buf = append(b.buf, "nil"...)
+			b.appendnil()
 		} else {
 			b.buf = b.appendPointer(uint64(d.Pointer()))
 		}
@@ -1140,7 +1140,7 @@ func (b *Buffer) appendDuration(d time.Duration) []byte {
 }
 func (b *Buffer) appendPointer(p uint64) []byte {
 	if p == 0 {
-		b.buf = append(b.buf, "nil"...)
+		b.appendnil()
 	} else {
 		first := false
 		b.buf = append(b.buf, "0x"...)
@@ -1188,6 +1188,15 @@ func (b *Buffer) appendPointer(p uint64) []byte {
 		}
 	}
 	return b.buf
+}
+func (b *Buffer) appendnil() {
+	b.buf = append(b.buf, "nil"...)
+}
+func (b *Buffer) appendemptyslice() {
+	b.buf = append(b.buf, "[]"...)
+}
+func (b *Buffer) appendemptyobj() {
+	b.buf = append(b.buf, "{}"...)
 }
 func (b *Buffer) Len() int {
 	return len(b.buf)

@@ -75,7 +75,7 @@ func init() {
 	all = make(map[string]*RpcClient)
 }
 
-func NewRpcClient(c *stream.InstanceConfig, globaltimeout time.Duration, appname string, vdata []byte, pick PickHandler, discovery DiscoveryHandler) *RpcClient {
+func NewRpcClient(c *stream.InstanceConfig, vdata []byte, appname string, globaltimeout time.Duration, pick PickHandler, discovery DiscoveryHandler) *RpcClient {
 	if e := common.NameCheck(appname, true); e != nil {
 		panic("[rpc.client]" + e.Error())
 	}
@@ -302,7 +302,7 @@ func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, 
 	}
 	server.lker.Lock()
 	e := cerror.ErrorstrToError(msg.Error)
-	if e != nil && e.Code == ERRCLOSING {
+	if e != nil && e.Code == ERRCLOSING.Code {
 		server.status = 4
 	}
 	req, ok := server.reqs[msg.Callid]
@@ -332,7 +332,7 @@ func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime 
 	for _, req := range server.reqs {
 		if req.callid != 0 {
 			req.resp = nil
-			req.err = ERR[ERRCLOSED]
+			req.err = ERRCLOSED
 			req.finish <- struct{}{}
 		}
 	}
@@ -352,10 +352,15 @@ func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime 
 
 func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path string, in []byte) ([]byte, error) {
 	var min time.Duration
-	if c.timeout < functimeout {
+	if c.timeout != 0 {
 		min = c.timeout
-	} else {
-		min = functimeout
+	}
+	if functimeout != 0 {
+		if min == 0 {
+			min = functimeout
+		} else if functimeout < min {
+			min = functimeout
+		}
 	}
 	if min != 0 {
 		var cancel context.CancelFunc
@@ -365,7 +370,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 	dl, ok := ctx.Deadline()
 	if ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 		//ttl + server logic time
-		return nil, ERR[ERRCTXTIMEOUT]
+		return nil, ERRCTXTIMEOUT
 	}
 	msg := &Msg{
 		Callid:   atomic.AddUint64(&c.callid, 1),
@@ -376,7 +381,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 	}
 	d, _ := proto.Marshal(msg)
 	if len(d) > c.c.TcpC.MaxMessageLen {
-		return nil, ERR[ERRMSGLARGE]
+		return nil, ERRMSGLARGE
 	}
 	var server *ServerForPick
 	r := c.getreq(msg.Callid)
@@ -388,7 +393,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 			if server == nil {
 				c.lker.RUnlock()
 				c.putreq(r)
-				return nil, ERR[ERRNOSERVER]
+				return nil, ERRNOSERVER
 			}
 			server.lker.Lock()
 			c.lker.RUnlock()
@@ -398,12 +403,12 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 			}
 			if msg.Deadline != 0 && msg.Deadline <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				server.lker.Unlock()
-				return nil, ERR[ERRCTXTIMEOUT]
+				return nil, ERRCTXTIMEOUT
 			}
 			if e := server.peer.SendMessage(d, server.starttime, false); e != nil {
 				if e == stream.ERRMSGLENGTH {
 					server.lker.Unlock()
-					return nil, ERR[ERRMSGLARGE]
+					return nil, ERRMSGLARGE
 				}
 				if e == stream.ERRCONNCLOSED {
 					server.status = 4
@@ -419,7 +424,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 		}
 		select {
 		case <-r.finish:
-			if r.err != nil && r.err.Code == ERRCLOSING {
+			if r.err != nil && r.err.Code == ERRCLOSING.Code {
 				r.resp = nil
 				r.err = nil
 				continue
@@ -439,11 +444,11 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 			c.putreq(r)
 			e := ctx.Err()
 			if e == context.Canceled {
-				return nil, ERR[ERRCTXCANCEL]
+				return nil, ERRCTXCANCEL
 			} else if e == context.DeadlineExceeded {
-				return nil, ERR[ERRCTXTIMEOUT]
+				return nil, ERRCTXTIMEOUT
 			} else {
-				return nil, ERR[ERRUNKNOWN]
+				return nil, ERRUNKNOWN
 			}
 		}
 	}

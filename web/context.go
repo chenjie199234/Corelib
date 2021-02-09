@@ -140,9 +140,21 @@ func (this *Context) GetCookie(key string) *http.Cookie {
 	}
 	return result
 }
+
+func (this *Context) ParseForm() error {
+	if e := this.r.ParseForm(); e != nil {
+		return e
+	}
+	if e := this.r.ParseMultipartForm(32 << 20); e != nil && e != http.ErrNotMultipart {
+		return e
+	}
+	return nil
+}
+
+//must call ParseForm before this
 func (this *Context) GetForm(key string) string {
 	if len(this.r.Form) == 0 {
-		this.r.ParseForm()
+		return ""
 	}
 	//return "" means not exists
 	return this.r.Form.Get(key)
