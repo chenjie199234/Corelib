@@ -8,6 +8,9 @@ import (
 	"github.com/chenjie199234/Corelib/stream"
 )
 
+func finder() {
+	UpdateDiscoveryServers([]string{"server1:127.0.0.1:9234", "server2:127.0.0.1:9235"})
+}
 func Test_Client1(t *testing.T) {
 	//go func() {
 	//        tker := time.NewTicker(time.Second)
@@ -31,18 +34,16 @@ func Test_Client1(t *testing.T) {
 	//}()
 	NewDiscoveryClient(&stream.InstanceConfig{
 		SelfName:           "client",
-		VerifyTimeout:      500,
-		HeartbeatTimeout:   5000,
-		HeartprobeInterval: 2000,
+		HeartbeatTimeout:   5 * time.Second,
+		HeartprobeInterval: 2 * time.Second,
 		GroupNum:           1,
 		TcpC: &stream.TcpConfig{
-			ConnectTimeout:       500,
+			ConnectTimeout:       500 * time.Millisecond,
 			SocketReadBufferLen:  1024,
 			SocketWriteBufferLen: 1024,
 			AppWriteBufferNum:    256,
 		},
-	}, []byte{'t', 'e', 's', 't'}, "http://127.0.0.1:8080/discoveryservers")
-	time.Sleep(time.Second)
+	}, []byte{'t', 'e', 's', 't'}, finder)
 	rch, e := NoticeRpcChanges("client")
 	if e != nil {
 		panic("notice grpc change error:" + e.Error())
@@ -65,6 +66,7 @@ func Test_Client1(t *testing.T) {
 			}
 		}
 	}()
+	time.Sleep(time.Second)
 	RegisterSelf(&RegMsg{
 		RpcIp:     "",
 		RpcPort:   9000,
@@ -72,6 +74,13 @@ func Test_Client1(t *testing.T) {
 		WebPort:   8000,
 		WebScheme: "https",
 	})
+	time.Sleep(time.Second * 10)
+	for i := 0; i < 10; i++ {
+		fmt.Println()
+	}
+	fmt.Println("unregister start")
+	UnRegisterSelf()
+	fmt.Println("unregister end")
 	select {}
 }
 func Test_Client2(t *testing.T) {
@@ -97,18 +106,16 @@ func Test_Client2(t *testing.T) {
 	//}()
 	NewDiscoveryClient(&stream.InstanceConfig{
 		SelfName:           "client",
-		VerifyTimeout:      500,
-		HeartbeatTimeout:   5000,
-		HeartprobeInterval: 2000,
+		HeartbeatTimeout:   5 * time.Second,
+		HeartprobeInterval: 2 * time.Second,
 		GroupNum:           1,
 		TcpC: &stream.TcpConfig{
-			ConnectTimeout:       500,
+			ConnectTimeout:       500 * time.Millisecond,
 			SocketReadBufferLen:  1024,
 			SocketWriteBufferLen: 1024,
 			AppWriteBufferNum:    256,
 		},
-	}, []byte{'t', 'e', 's', 't'}, "http://127.0.0.1:8080/discoveryservers")
-	time.Sleep(time.Second)
+	}, []byte{'t', 'e', 's', 't'}, finder)
 	rch, e := NoticeRpcChanges("client")
 	if e != nil {
 		panic("notice grpc change error:" + e.Error())
@@ -131,6 +138,7 @@ func Test_Client2(t *testing.T) {
 			}
 		}
 	}()
+	time.Sleep(time.Second)
 	RegisterSelf(&RegMsg{
 		RpcIp:     "",
 		RpcPort:   9001,
@@ -138,5 +146,12 @@ func Test_Client2(t *testing.T) {
 		WebPort:   8001,
 		WebScheme: "https",
 	})
+	time.Sleep(time.Second * 10)
+	for i := 0; i < 10; i++ {
+		fmt.Println()
+	}
+	fmt.Println("unregister start")
+	UnRegisterSelf()
+	fmt.Println("unregister end")
 	select {}
 }

@@ -16,6 +16,7 @@ import (
 //Before two peers can communicate with each other,they need to verify the identity first
 //server's response will write back to the client for client to verify the server
 //client's response is useless and it will be dropped,you can just return nil
+//Don't reuse peerVerifyData in this function,the under layer data in 'peerVerifyData' will change when this function return
 type HandleVerifyFunc func(ctx context.Context, peeruniquename string, peerVerifyData []byte) (response []byte, success bool)
 
 //This is a notice after two peers verify each other success
@@ -24,6 +25,7 @@ type HandleOnlineFunc func(p *Peer, peeruniquename string, starttime uint64)
 
 //This is a func to deal the user message
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
+//Don't reuse 'data' in this function,the under layer data in 'data' will change when this function return
 type HandleUserdataFunc func(p *Peer, peeruniquename string, data []byte, starttime uint64)
 
 //This is a notice before two peers disconnect with each other

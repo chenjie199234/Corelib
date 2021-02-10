@@ -400,16 +400,16 @@ func (this *Instance) read(p *Peer, maxlen int) {
 			case TCP:
 				switch p.peertype {
 				case CLIENT:
-					log.Error("[Stream.TCP.read] read msg from client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+					log.Error("[Stream.TCP.read] read msg from client:", p.getpeername(), "error:", e)
 				case SERVER:
-					log.Error("[Stream.TCP.read] read msg from server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+					log.Error("[Stream.TCP.read] read msg from server:", p.getpeername(), "error:", e)
 				}
 			case UNIX:
 				switch p.peertype {
 				case CLIENT:
-					log.Error("[Stream.UNIX.read] read msg from client:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+					log.Error("[Stream.UNIX.read] read msg from client:", p.getpeername(), "error:", e)
 				case SERVER:
-					log.Error("[Stream.UNIX.read] read msg from server:", p.getpeername(), "addr:", p.getpeeraddr(), "error:", e)
+					log.Error("[Stream.UNIX.read] read msg from server:", p.getpeername(), "error:", e)
 				}
 			}
 			if data != nil {

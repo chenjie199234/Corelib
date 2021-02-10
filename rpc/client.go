@@ -266,6 +266,10 @@ func (c *RpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVe
 	}
 	exist.lker.Lock()
 	c.lker.RUnlock()
+	if exist.peer != nil || exist.starttime != 0 || exist.status != 1 {
+		exist.lker.Unlock()
+		return nil, false
+	}
 	exist.status = 2
 	exist.lker.Unlock()
 	return nil, true
@@ -287,6 +291,11 @@ func (c *RpcClient) onlinefunc(p *stream.Peer, appuniquename string, starttime u
 	}
 	exist.lker.Lock()
 	c.lker.RUnlock()
+	if exist.peer != nil || exist.starttime != 0 || exist.status != 2 {
+		p.Close()
+		exist.lker.Unlock()
+		return
+	}
 	exist.peer = p
 	exist.starttime = starttime
 	exist.status = 3
@@ -328,6 +337,10 @@ func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, 
 }
 func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
 	server := (*ServerForPick)(p.GetData())
+	if server == nil {
+		return
+	}
+	log.Info("[rpc.client.offlinefunc] server:", appuniquename, "offline")
 	server.lker.Lock()
 	server.peer = nil
 	server.starttime = 0
@@ -350,7 +363,6 @@ func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime 
 		time.Sleep(100 * time.Millisecond)
 		go c.start(appuniquename[strings.Index(appuniquename, ":")+1:])
 	}
-	log.Info("[rpc.client.offlinefunc] server:", appuniquename, "offline")
 }
 
 func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path string, in []byte) ([]byte, error) {

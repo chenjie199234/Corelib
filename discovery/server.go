@@ -3,30 +3,22 @@ package discovery
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/common"
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/stream"
-)
-
-var (
-	ERRSINIT    = fmt.Errorf("[Discovery.server]not init,call NewDiscoveryServer first")
-	ERRSSTARTED = fmt.Errorf("[Discovery.server]already started")
 )
 
 //appuniquename = appname:ip:port
 type discoveryserver struct {
-	c           *stream.InstanceConfig
+	selfname    string
 	lker        *sync.RWMutex
 	allapps     map[string]*appnode //key appuniquename
 	verifydata  []byte
 	appnodepool *sync.Pool
 	instance    *stream.Instance
-	status      int32
 }
 
 //appuniquename = appname:ip:port
@@ -65,36 +57,27 @@ func (s *discoveryserver) putnode(n *appnode) {
 	s.appnodepool.Put(n)
 }
 
-var serverinstance *discoveryserver
+//var serverinstance
 
-func NewDiscoveryServer(c *stream.InstanceConfig, vdata []byte) {
-	temp := &discoveryserver{
+func NewDiscoveryServer(c *stream.InstanceConfig, vdata []byte) *discoveryserver {
+	instance := &discoveryserver{
+		selfname:    c.SelfName,
 		lker:        &sync.RWMutex{},
 		allapps:     make(map[string]*appnode),
 		verifydata:  vdata,
 		appnodepool: &sync.Pool{},
 	}
-	if !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&serverinstance)), nil, unsafe.Pointer(temp)) {
-		return
-	}
 	//tcp instance
 	dupc := *c //duplicate to remote the callback func race
-	dupc.Verifyfunc = serverinstance.verifyfunc
-	dupc.Onlinefunc = serverinstance.onlinefunc
-	dupc.Userdatafunc = serverinstance.userfunc
-	dupc.Offlinefunc = serverinstance.offlinefunc
-	serverinstance.c = &dupc
-	serverinstance.instance = stream.NewInstance(&dupc)
+	dupc.Verifyfunc = instance.verifyfunc
+	dupc.Onlinefunc = instance.onlinefunc
+	dupc.Userdatafunc = instance.userfunc
+	dupc.Offlinefunc = instance.offlinefunc
+	instance.instance = stream.NewInstance(&dupc)
+	return instance
 }
-func StartDiscoveryServer(listenaddr string) error {
-	if serverinstance == nil {
-		return ERRSINIT
-	}
-	if old := atomic.SwapInt32(&serverinstance.status, 1); old == 1 {
-		return ERRSSTARTED
-	}
-	serverinstance.instance.StartTcpServer(listenaddr)
-	return nil
+func (s *discoveryserver) StartDiscoveryServer(listenaddr string) {
+	s.instance.StartTcpServer(listenaddr)
 }
 
 //appuniquename = appname:ip:port
@@ -106,7 +89,7 @@ func (s *discoveryserver) verifyfunc(ctx context.Context, appuniquename string, 
 	}
 	targetname := temp[index+1:]
 	vdata := temp[:index]
-	if targetname != s.c.SelfName || vdata != common.Byte2str(s.verifydata) {
+	if targetname != s.selfname || vdata != common.Byte2str(s.verifydata) {
 		return nil, false
 	}
 	return s.verifydata, true
@@ -118,13 +101,12 @@ func (s *discoveryserver) onlinefunc(p *stream.Peer, appuniquename string, start
 	if _, ok := s.allapps[appuniquename]; ok {
 		p.Close()
 		s.lker.Unlock()
-		//this is impossible
-		fmt.Printf("[Discovery.server.onlinefunc.impossible]app:%s conflict\n", appuniquename)
 		return
 	}
 	s.allapps[appuniquename] = s.getnode(p, appuniquename, starttime)
 	s.lker.Unlock()
-	fmt.Printf("[Discovery.server.onlinefunc]app:%s online\n", appuniquename)
+	log.Info("[Discovery.server.onlinefunc]app:", appuniquename, "online")
+	return
 }
 
 //appuniquename = appname:ip:port
@@ -137,20 +119,20 @@ func (s *discoveryserver) userfunc(p *stream.Peer, appuniquename string, data []
 		_, regmsg, e := getOnlineMsg(data)
 		if e != nil {
 			//this is impossible
-			fmt.Printf("[Discovery.server.userfunc.impossible]app:%s online message:%s broken\n", appuniquename, data)
+			log.Error("[Discovery.server.userfunc]app:", appuniquename, "online message:", common.Byte2str(data), "format unknown")
 			p.Close()
 			return
 		}
 		reg := &RegMsg{}
 		if e := json.Unmarshal(regmsg, reg); e != nil {
 			//this is impossible
-			fmt.Printf("[Discovery.server.userfunc.impossible]app:%s register message:%s broken\n", appuniquename, regmsg)
+			log.Error("[Discovery.server.userfunc]app:", appuniquename, "register message:", common.Byte2str(regmsg), "format error:", e)
 			p.Close()
 			return
 		}
 		if (reg.WebPort == 0 || reg.WebScheme == "") && reg.RpcPort == 0 {
 			//register with empty data
-			fmt.Printf("[Discovery.server.userfunc.impossible]app:%s register with empty message:%s\n", appuniquename, regmsg)
+			log.Error("[Discovery.server.userfunc]app:", appuniquename, "register with empty message:", common.Byte2str(regmsg))
 			p.Close()
 			return
 		}
@@ -167,7 +149,7 @@ func (s *discoveryserver) userfunc(p *stream.Peer, appuniquename string, data []
 		if !ok {
 			//this is impossible
 			s.lker.Unlock()
-			fmt.Printf("[Discovery.server.userfunc.impossible]app:%s missing\n", appuniquename)
+			log.Error("[Discovery.server.userfunc]app:", appuniquename, "missing")
 			p.Close()
 			return
 		}
@@ -181,19 +163,19 @@ func (s *discoveryserver) userfunc(p *stream.Peer, appuniquename string, data []
 			}
 		}
 		s.lker.Unlock()
-		fmt.Printf("[Discovery.server.userfunc]app:%s registered with data:%s\n", appuniquename, regmsg)
+		log.Info("[Discovery.server.userfunc]app:", appuniquename, "registered with data:", common.Byte2str(regmsg))
 	case msgpull:
 		s.lker.RLock()
 		node, ok := s.allapps[appuniquename]
 		if !ok {
 			//this is impossible
 			s.lker.RUnlock()
-			fmt.Printf("[Discovery.server.userfunc.impossible]app:%s missing\n", appuniquename)
+			log.Error("[Discovery.server.userfunc]app:", appuniquename, "missing")
 			p.Close()
 			return
 		}
 		if node.status < 2 {
-			fmt.Printf("[Discovery.server.userfunc]app:%s preparing\n", appuniquename)
+			log.Info("[Discovery.server.userfunc]app:", appuniquename, "preparing")
 			node.status = 2
 		}
 		all := make(map[string][]byte, int(float64(len(s.allapps))*1.3))
@@ -205,7 +187,7 @@ func (s *discoveryserver) userfunc(p *stream.Peer, appuniquename string, data []
 		p.SendMessage(makePushMsg(all), starttime, true)
 		s.lker.RUnlock()
 	default:
-		fmt.Printf("[Discovery.server.userfunc.impossible]unknown message type from app:%s\n", appuniquename)
+		log.Error("[Discovery.server.userfunc]unknown message type from app:", appuniquename)
 		p.Close()
 	}
 }
@@ -216,14 +198,14 @@ func (s *discoveryserver) offlinefunc(p *stream.Peer, appuniquename string, star
 	node, ok := s.allapps[appuniquename]
 	if !ok {
 		s.lker.Unlock()
-		fmt.Printf("[Discovery.server.offlinefunc.impossible]app:%s missing\n", appuniquename)
+		log.Error("[Discovery.server.offlinefunc]app:", appuniquename, "missing")
 		return
 	}
 	delete(s.allapps, appuniquename)
 	if node.status != 3 {
 		s.putnode(node)
 		s.lker.Unlock()
-		fmt.Printf("[Discovery.server.offlinefunc]app:%s offline\n", appuniquename)
+		log.Info("[Discovery.server.offlinefunc]app:", appuniquename, "offline")
 		return
 	}
 	s.putnode(node)
@@ -235,5 +217,5 @@ func (s *discoveryserver) offlinefunc(p *stream.Peer, appuniquename string, star
 		}
 	}
 	s.lker.Unlock()
-	fmt.Printf("[Discovery.server.offlinefunc]app:%s offline\n", appuniquename)
+	log.Info("[Discovery.server.offlinefunc]app:", appuniquename, "offline")
 }
