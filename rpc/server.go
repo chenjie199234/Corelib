@@ -3,23 +3,28 @@ package rpc
 import (
 	"context"
 	"math"
+	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/sys/cpu"
 
 	"google.golang.org/protobuf/proto"
 )
 
-type OutsideHandler func(ctx context.Context, req []byte) (resp []byte, e error)
+type OutsideHandler func(ctx *Context)
 
 type RpcServer struct {
-	c          *stream.InstanceConfig
+	selfname   string
 	timeout    time.Duration
+	global     []OutsideHandler
+	ctxpool    *sync.Pool
 	handler    map[string]func(string, *Msg)
 	instance   *stream.Instance
 	verifydata []byte
@@ -31,6 +36,8 @@ type RpcServer struct {
 func NewRpcServer(c *stream.InstanceConfig, globaltimeout time.Duration, vdata []byte) *RpcServer {
 	serverinstance := &RpcServer{
 		timeout:    globaltimeout,
+		global:     make([]OutsideHandler, 0, 10),
+		ctxpool:    &sync.Pool{},
 		handler:    make(map[string]func(string, *Msg), 10),
 		verifydata: vdata,
 		stopch:     make(chan struct{}, 1),
@@ -40,7 +47,6 @@ func NewRpcServer(c *stream.InstanceConfig, globaltimeout time.Duration, vdata [
 	dupc.Onlinefunc = serverinstance.onlinefunc
 	dupc.Userdatafunc = serverinstance.userfunc
 	dupc.Offlinefunc = nil
-	serverinstance.c = &dupc
 	serverinstance.instance = stream.NewInstance(&dupc)
 	return serverinstance
 }
@@ -50,7 +56,7 @@ func (s *RpcServer) StartRpcServer(listenaddr string) {
 	}
 	s.instance.StartTcpServer(listenaddr)
 }
-func (s *RpcServer) StopMrpcServer() {
+func (s *RpcServer) StopRpcServer() {
 	if atomic.SwapInt32(&s.status, 0) == 0 {
 		return
 	}
@@ -79,7 +85,48 @@ func (s *RpcServer) StopMrpcServer() {
 		}
 	}
 }
+func (s *RpcServer) getContext(ctx context.Context, peeruniquename string, msg *Msg, handlers []OutsideHandler) *Context {
+	result, ok := s.ctxpool.Get().(*Context)
+	if !ok {
+		return &Context{
+			Context:        ctx,
+			peeruniquename: peeruniquename,
+			msg:            msg,
+			handlers:       handlers,
+		}
+	}
+	result.Context = ctx
+	result.peeruniquename = peeruniquename
+	result.msg = msg
+	result.handlers = handlers
+	return result
+}
+
+func (s *RpcServer) putContext(ctx *Context) {
+	ctx.Context = nil
+	ctx.peeruniquename = ""
+	ctx.msg = nil
+	ctx.handlers = nil
+	ctx.next = 0
+}
+
+//thread unsafe
+func (s *RpcServer) Use(globalMids ...OutsideHandler) {
+	s.global = append(s.global, globalMids...)
+}
+
+//thread unsafe
+func (s *RpcServer) RegisterHandler(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+	s.handler[path] = s.insidehandler(functimeout, handlers...)
+}
 func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...OutsideHandler) func(string, *Msg) {
+	totalhandlers := make([]OutsideHandler, 1)
+	totalhandlers = append(totalhandlers, s.global...)
+	totalhandlers = append(totalhandlers, handlers...)
+	if len(totalhandlers) > math.MaxInt8 {
+		log.Error("[rpc.server] too many handlers for one single path")
+		os.Exit(1)
+	}
 	return func(peeruniquename string, msg *Msg) {
 		defer func() {
 			if e := recover(); e != nil {
@@ -121,42 +168,17 @@ func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...Outside
 				msg.Metadata = nil
 				return
 			}
-			ctx = SetDeadline(ctx, min)
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, min))
 			defer cancel()
 		}
-		ctx = SetPath(ctx, msg.Path)
-		ctx = SetPeerName(ctx, peeruniquename)
 		if len(msg.Metadata) > 0 {
-			ctx = SetAllMetadata(ctx, msg.Metadata)
+			ctx = metadata.SetAllMetadata(ctx, msg.Metadata)
 		}
-		var resp []byte
-		var err error
-		for _, handler := range handlers {
-			resp, err = handler(ctx, msg.Body)
-			if err != nil {
-				msg.Path = ""
-				msg.Deadline = 0
-				msg.Body = nil
-				msg.Cpu = cpu.GetUse()
-				msg.Error = err.Error()
-				msg.Metadata = nil
-				return
-			}
-		}
-		msg.Path = ""
-		msg.Deadline = 0
-		msg.Body = resp
-		msg.Cpu = cpu.GetUse()
-		msg.Error = ""
-		msg.Metadata = nil
+		workctx := s.getContext(ctx, peeruniquename, msg, totalhandlers)
+		workctx.Next()
+		s.putContext(workctx)
 	}
-}
-
-//thread unsafe
-func (s *RpcServer) RegisterHandler(path string, functimeout time.Duration, handlers ...OutsideHandler) {
-	s.handler[path] = s.insidehandler(functimeout, handlers...)
 }
 func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if atomic.LoadInt32(&s.status) == 0 {
@@ -169,7 +191,7 @@ func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerV
 	}
 	targetname := temp[index+1:]
 	vdata := temp[:index]
-	if targetname != s.c.SelfName || vdata != common.Byte2str(s.verifydata) {
+	if targetname != s.selfname || vdata != common.Byte2str(s.verifydata) {
 		return nil, false
 	}
 	return s.verifydata, true

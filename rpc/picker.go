@@ -64,7 +64,7 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 		return normal2
 	}
 	//check danger
-	if danger1 != nil && danger1 != nil {
+	if danger1 != nil && danger2 != nil {
 		normal1 = danger1
 		normal2 = danger2
 	} else if danger1 != nil {

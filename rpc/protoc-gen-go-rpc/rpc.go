@@ -126,7 +126,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 			panic(e)
 		}
 		if len(method.Input.Fields) > 0 && haschecker(method.Input) {
-			checker("req.", method.Input, g)
+			checker("req.", method.Input, g, false)
 		}
 		g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
 		g.P("callback,e:=c.cc.Call(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, ",reqd)")
@@ -167,23 +167,25 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 		p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
 		freturn := g.QualifiedGoIdent(rpcPackage.Ident("OutsideHandler"))
 		g.P(fname, "(", p1, ")", freturn, "{")
-		g.P("return func(ctx "+g.QualifiedGoIdent(contextPackage.Ident("Context")), ",in []byte)([]byte,error){")
+		g.P("return func(ctx *"+g.QualifiedGoIdent(rpcPackage.Ident("Context")), "){")
 		g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
-		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(in,req);e!=nil{")
-		g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(ctx.GetBody(),req);e!=nil{")
+		g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+		g.P("return")
 		g.P("}")
 		if haschecker(method.Input) {
-			checker("req.", method.Input, g)
+			checker("req.", method.Input, g, true)
 		}
 		g.P("resp,e:=handler(ctx,req)")
 		g.P("if e!=nil{")
-		g.P("return nil,e")
+		g.P("ctx.Abort(e)")
+		g.P("return")
 		g.P("}")
 		g.P("if resp == nil{")
 		g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 		g.P("}")
 		g.P("respd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
-		g.P("return respd,nil")
+		g.P("ctx.Write(respd)")
 		g.P("}")
 		g.P("}")
 	}
@@ -227,7 +229,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	g.P("}")
 }
 
-func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile) {
+func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile, server bool) {
 	for _, field := range message.Fields {
 		if field.Oneof != nil {
 			panic("don't use oneof in proto,protoc plugin can't support!")
@@ -243,7 +245,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if len(", prefix, field.GoName, ") == 0{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 			}
@@ -257,14 +264,24 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if len(", prefix, field.GoName, ") == 0 {")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.gt != nil {
 					g.P("//gt check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)<=", *r.gt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -272,7 +289,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//gte check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)<", *r.gte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -280,7 +302,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//lt check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)>=", *r.lt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -288,7 +315,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//lte check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)>", *r.lte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -303,7 +335,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -318,7 +355,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -326,25 +368,45 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.gt != nil {
 					g.P("//gt check")
 					g.P("if float64(", prefix, field.GoName, ")<=", *r.gt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.gte != nil {
 					g.P("//gte check")
 					g.P("if float64(", prefix, field.GoName, ")<", *r.gte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.lt != nil {
 					g.P("//lt check")
 					g.P("if float64(", prefix, field.GoName, ")>=", *r.lt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.lte != nil {
 					g.P("//lte check")
 					g.P("if float64(", prefix, field.GoName, ")>", *r.lte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.in != nil {
@@ -357,7 +419,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.notin != nil {
@@ -370,7 +437,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 			}
@@ -382,14 +454,24 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if len(", prefix, field.GoName, ") == 0 {")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.gt != nil {
 					g.P("//gt check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)<=", *r.gt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -397,7 +479,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//gte check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)<", *r.gte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -405,7 +492,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//lt check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)>=", *r.lt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -413,7 +505,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//lte check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)>", *r.lte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -428,7 +525,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -443,7 +545,11 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -451,25 +557,45 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.gt != nil {
 					g.P("//gt check")
 					g.P("if float64(", prefix, field.GoName, ")<=", *r.gt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.gte != nil {
 					g.P("//gte check")
 					g.P("if float64(", prefix, field.GoName, ")<", *r.gte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.lt != nil {
 					g.P("//lt check")
 					g.P("if float64(", prefix, field.GoName, ")>=", *r.lt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.lte != nil {
 					g.P("//lte check")
 					g.P("if float64(", prefix, field.GoName, ")>", *r.lte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.in != nil {
@@ -482,7 +608,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.notin != nil {
@@ -495,7 +626,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 			}
@@ -509,14 +645,24 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if len(", prefix, field.GoName, ") == 0 {")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.gt != nil {
 					g.P("//gt check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)<=", *r.gt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -524,7 +670,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//gte check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)<", *r.gte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -532,7 +683,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//lt check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)>=", *r.lt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -540,7 +696,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//lte check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)>", *r.lte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -555,7 +716,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -570,7 +736,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -578,25 +749,45 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.gt != nil {
 					g.P("//gt check")
 					g.P("if float64(", prefix, field.GoName, ")<=", *r.gt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.gte != nil {
 					g.P("//gte check")
 					g.P("if float64(", prefix, field.GoName, ")<", *r.gte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.lt != nil {
 					g.P("//lt check")
 					g.P("if float64(", prefix, field.GoName, ")>=", *r.lt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.lte != nil {
 					g.P("//lte check")
 					g.P("if float64(", prefix, field.GoName, ")>", *r.lte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.in != nil {
@@ -609,7 +800,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.notin != nil {
@@ -622,7 +818,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 			}
@@ -634,14 +835,24 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if len(", prefix, field.GoName, ") == 0 {")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.gt != nil {
 					g.P("//gt check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)<=", *r.gt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -649,7 +860,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//gte check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)<", *r.gte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -657,7 +873,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//lt check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)>=", *r.lt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -665,7 +886,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//lte check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)>", *r.lte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -680,7 +906,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -695,7 +926,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -703,25 +939,45 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.gt != nil {
 					g.P("//gt check")
 					g.P("if float64(", prefix, field.GoName, ")<=", *r.gt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.gte != nil {
 					g.P("//gte check")
 					g.P("if float64(", prefix, field.GoName, ")<", *r.gte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.lt != nil {
 					g.P("//lt check")
 					g.P("if float64(", prefix, field.GoName, ")>=", *r.lt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.lte != nil {
 					g.P("//lte check")
 					g.P("if float64(", prefix, field.GoName, ")>", *r.lte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.in != nil {
@@ -734,7 +990,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.notin != nil {
@@ -747,7 +1008,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 			}
@@ -757,14 +1023,24 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if len(", prefix, field.GoName, ") == 0 {")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.gt != nil {
 					g.P("//gt check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)<=", *r.gt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -772,7 +1048,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//gte check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)<", *r.gte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -780,7 +1061,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//lt check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)>=", *r.lt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -788,7 +1074,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//lte check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)>", *r.lte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -803,7 +1094,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -818,7 +1114,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -826,25 +1127,45 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.gt != nil {
 					g.P("//gt check")
 					g.P("if float64(", prefix, field.GoName, ")<=", *r.gt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.gte != nil {
 					g.P("//gte check")
 					g.P("if float64(", prefix, field.GoName, ")<", *r.gte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.lt != nil {
 					g.P("//lt check")
 					g.P("if float64(", prefix, field.GoName, ")>=", *r.lt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.lte != nil {
 					g.P("//lte check")
 					g.P("if float64(", prefix, field.GoName, ")>", *r.lte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.in != nil {
@@ -857,7 +1178,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.notin != nil {
@@ -870,7 +1196,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 			}
@@ -880,14 +1211,24 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if len(", prefix, field.GoName, ") == 0 {")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.gt != nil {
 					g.P("//gt check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if v<=", *r.gt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -895,7 +1236,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//gte check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if v<", *r.gte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -903,7 +1249,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//lt check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if v>=", *r.lt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -911,7 +1262,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//lte check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if v>", *r.lte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -926,7 +1282,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -941,7 +1302,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -949,25 +1315,45 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.gt != nil {
 					g.P("//gt check")
 					g.P("if ", prefix, field.GoName, "<=", *r.gt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.gte != nil {
 					g.P("//gte check")
 					g.P("if ", prefix, field.GoName, "<", *r.gte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.lt != nil {
 					g.P("//lt check")
 					g.P("if ", prefix, field.GoName, ">=", *r.lt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.lte != nil {
 					g.P("//lte check")
 					g.P("if ", prefix, field.GoName, ">", *r.lte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.in != nil {
@@ -980,7 +1366,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.notin != nil {
@@ -993,7 +1384,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 			}
@@ -1003,7 +1399,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if len(", prefix, field.GoName, ") == 0 {")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.in != nil {
@@ -1017,7 +1418,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("v!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -1032,7 +1438,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("v==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -1040,7 +1451,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if len(", prefix, field.GoName, ") == 0 {")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.in != nil {
@@ -1053,7 +1469,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P(prefix, field.GoName, "!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.notin != nil {
@@ -1066,7 +1487,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P(prefix, field.GoName, "==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 			}
@@ -1076,7 +1502,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if len(", prefix, field.GoName, ") == 0 {")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.in != nil {
@@ -1090,7 +1521,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("string(v)!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -1105,7 +1541,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("string(v)==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -1113,7 +1554,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if len(", prefix, field.GoName, ") == 0 {")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.in != nil {
@@ -1126,7 +1572,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("string(", prefix, field.GoName, ")!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.notin != nil {
@@ -1139,7 +1590,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("string(", prefix, field.GoName, ")==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 			}
@@ -1149,20 +1605,35 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				g.P("//enum check")
 				g.P("for _, v := range ", prefix, field.GoName, "{")
 				g.P("if _, ok := ", g.QualifiedGoIdent(field.Enum.GoIdent), "_name[int32(v)]; !ok {")
-				g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+					g.P("return")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+				}
 				g.P("}")
 				g.P("}")
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if len(", prefix, field.GoName, ") == 0 {")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.gt != nil {
 					g.P("//gt check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)<=", *r.gt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -1170,7 +1641,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//gte check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)<", *r.gte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -1178,7 +1654,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//lt check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)>=", *r.lt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -1186,7 +1667,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//lte check")
 					g.P("for _,v:=range ", prefix, field.GoName, "{")
 					g.P("if float64(v)>", *r.lte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -1201,7 +1687,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
@@ -1216,37 +1707,67 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
 			} else {
 				g.P("//enum check")
 				g.P("if _,ok:=", g.QualifiedGoIdent(field.Enum.GoIdent), "_name[int32(", prefix, field.GoName, ")];!ok{")
-				g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+					g.P("return")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+				}
 				g.P("}")
 				if r.gt != nil {
 					g.P("//gt check")
 					g.P("if float64(", prefix, field.GoName, ")<=", *r.gt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.gte != nil {
 					g.P("//gte check")
 					g.P("if float64(", prefix, field.GoName, ")<", *r.gte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.lt != nil {
 					g.P("//lt check")
 					g.P("if float64(", prefix, field.GoName, ")>=", *r.lt, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.lte != nil {
 					g.P("//lte check")
 					g.P("if float64(", prefix, field.GoName, ")>", *r.lte, "{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.in != nil {
@@ -1259,7 +1780,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if r.notin != nil {
@@ -1272,7 +1798,12 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 							g.P("vv==", strconv.Quote(v), "{")
 						}
 					}
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 			}
@@ -1284,21 +1815,31 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("//enum check")
 					g.P("for _, v := range ", prefix, field.GoName, "{")
 					g.P("if _, ok := ", g.QualifiedGoIdent(field.Message.Fields[1].Enum.GoIdent), "_name[int32(v)]; !ok {")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 					g.P("}")
 				}
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if len(", prefix, field.GoName, ") == 0 {")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if field.Desc.MapValue().Kind() == protoreflect.MessageKind {
 					if haschecker(field.Message.Fields[1].Message) {
 						g.P("for k:=range ", prefix, field.GoName, "{")
 						g.P("if ", prefix, field.GoName, "[k]!=nil{")
-						checker(prefix+field.GoName+"[k].", field.Message.Fields[1].Message, g)
+						checker(prefix+field.GoName+"[k].", field.Message.Fields[1].Message, g, server)
 						g.P("}")
 						g.P("}")
 					}
@@ -1308,13 +1849,18 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if len(", prefix, field.GoName, ") == 0 {")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if haschecker(field.Message) {
 					g.P("for i:=range ", prefix, field.GoName, "{")
 					g.P("if ", prefix, field.GoName, "[i]!=nil{")
-					checker(prefix+field.GoName+"[i].", field.Message, g)
+					checker(prefix+field.GoName+"[i].", field.Message, g, server)
 					g.P("}")
 					g.P("}")
 				}
@@ -1323,12 +1869,17 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 				if r.notempty {
 					g.P("//empty check")
 					g.P("if ", prefix, field.GoName, "==nil{")
-					g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+						g.P("return")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+					}
 					g.P("}")
 				}
 				if haschecker(field.Message) {
 					g.P("if ", prefix, field.GoName, "!=nil{")
-					checker(prefix+field.GoName+".", field.Message, g)
+					checker(prefix+field.GoName+".", field.Message, g, server)
 					g.P("}")
 				}
 			}

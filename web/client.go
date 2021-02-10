@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -14,6 +15,7 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/common"
+	"github.com/chenjie199234/Corelib/metadata"
 )
 
 var ERRNOSERVER = fmt.Errorf("[web.client] no server")
@@ -226,6 +228,10 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	req.Header = header
 	if ok {
 		req.Header.Set("Deadline", strconv.FormatInt(dl.UnixNano(), 10))
+	}
+	if md := metadata.GetAllMetadata(ctx); len(md) > 0 {
+		d, _ := json.Marshal(md)
+		req.Header.Set("Metadata", common.Byte2str(d))
 	}
 	atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 	defer atomic.AddInt32(&server.Pickinfo.Activecalls, -1)

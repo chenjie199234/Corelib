@@ -5,6 +5,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,8 +17,8 @@ import (
 )
 
 type WebServer struct {
-	s       *http.Server
 	c       *Config
+	s       *http.Server
 	global  []OutsideHandler
 	router  *httprouter.Router
 	ctxpool *sync.Pool
@@ -198,11 +199,13 @@ func NewWebServer(c *Config) *WebServer {
 func (this *WebServer) StartWebServer(listenaddr string, cert, key string) {
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
-		panic("[web.server] resolve addr:" + listenaddr + " error:" + e.Error())
+		log.Error("[web.server] resolve addr:", listenaddr, " error:", e)
+		os.Exit(1)
 	}
 	l, e := net.ListenTCP("tcp", laddr)
 	if e != nil {
-		panic("[web.server] listen addr:" + listenaddr + " error:" + e.Error())
+		log.Error("[web.server] listen addr:", listenaddr, " error:", e)
+		os.Exit(1)
 	}
 	this.s = &http.Server{
 		Handler:        this,
@@ -221,7 +224,6 @@ func (this *WebServer) StartWebServer(listenaddr string, cert, key string) {
 	}
 }
 func (this *WebServer) StopWebServer() {
-	log.Close()
 	this.s.Shutdown(context.Background())
 }
 func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, handlers []OutsideHandler) *Context {
@@ -286,7 +288,8 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 	totalhandlers = append(totalhandlers, this.global...)
 	totalhandlers = append(totalhandlers, handlers...)
 	if len(totalhandlers) > math.MaxInt8 {
-		panic("[web.server] too many handlers for one single path")
+		log.Error("[web.server] too many handlers for one single path")
+		os.Exit(1)
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		//set cors

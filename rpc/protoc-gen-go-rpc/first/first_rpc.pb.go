@@ -164,133 +164,156 @@ type FirstRpcServer interface {
 }
 
 func _First_Hello_RpcHandler(handler func(context.Context, *Helloreq) (*Helloresp, error)) rpc.OutsideHandler {
-	return func(ctx context.Context, in []byte) ([]byte, error) {
+	return func(ctx *rpc.Context) {
 		req := new(Helloreq)
-		if e := proto.Unmarshal(in, req); e != nil {
-			return nil, rpc.ERRREQUEST
+		if e := proto.Unmarshal(ctx.GetBody(), req); e != nil {
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		//gt check
 		if float64(req.I32) <= 6 {
-			return nil, rpc.ERRREQUEST
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		//not in check
 		if vv := strconv.FormatInt(int64(req.I32), 10); vv == "8" ||
 			vv == "9" {
-			return nil, rpc.ERRREQUEST
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		//empty check
 		if len(req.Ri32) == 0 {
-			return nil, rpc.ERRREQUEST
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		//in check
 		for _, v := range req.Ri32 {
 			if vv := strconv.FormatInt(int64(v), 10); vv != "1" ||
 				vv != "2" ||
 				vv != "3" {
-				return nil, rpc.ERRREQUEST
+				ctx.Abort(rpc.ERRREQUEST)
+				return
 			}
 		}
 		//gt check
 		if float64(req.Ui32) <= 6 {
-			return nil, rpc.ERRREQUEST
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		//not in check
 		if vv := strconv.FormatUint(uint64(req.Ui32), 10); vv == "8" ||
 			vv == "9" {
-			return nil, rpc.ERRREQUEST
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		//empty check
 		if len(req.Rui32) == 0 {
-			return nil, rpc.ERRREQUEST
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		//in check
 		for _, v := range req.Rui32 {
 			if vv := strconv.FormatUint(uint64(v), 10); vv != "1" ||
 				vv != "2" ||
 				vv != "3" {
-				return nil, rpc.ERRREQUEST
+				ctx.Abort(rpc.ERRREQUEST)
+				return
 			}
 		}
 		//empty check
 		if len(req.Bs) == 0 {
-			return nil, rpc.ERRREQUEST
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		//empty check
 		if len(req.Rbs) == 0 {
-			return nil, rpc.ERRREQUEST
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		//empty check
 		if len(req.Ss) == 0 {
-			return nil, rpc.ERRREQUEST
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		//empty check
 		if len(req.Rss) == 0 {
-			return nil, rpc.ERRREQUEST
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		//enum check
 		if _, ok := second.ABC_name[int32(req.E)]; !ok {
-			return nil, rpc.ERRREQUEST
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		//enum check
 		for _, v := range req.Re {
 			if _, ok := second.ABC_name[int32(v)]; !ok {
-				return nil, rpc.ERRREQUEST
+				ctx.Abort(rpc.ERRREQUEST)
+				return
 			}
 		}
 		if req.A != nil {
 			//gt check
 			if float64(req.A.Uid) <= 0 {
-				return nil, rpc.ERRREQUEST
+				ctx.Abort(rpc.ERRREQUEST)
+				return
 			}
 		}
 		for i := range req.Ra {
 			if req.Ra[i] != nil {
 				//gt check
 				if float64(req.Ra[i].Uid) <= 0 {
-					return nil, rpc.ERRREQUEST
+					ctx.Abort(rpc.ERRREQUEST)
+					return
 				}
 			}
 		}
 		//enum check
 		for _, v := range req.Me {
 			if _, ok := second.ABC_name[int32(v)]; !ok {
-				return nil, rpc.ERRREQUEST
+				ctx.Abort(rpc.ERRREQUEST)
+				return
 			}
 		}
 		//empty check
 		if len(req.Me) == 0 {
-			return nil, rpc.ERRREQUEST
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		//empty check
 		if len(req.Mb) == 0 {
-			return nil, rpc.ERRREQUEST
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		resp, e := handler(ctx, req)
 		if e != nil {
-			return nil, e
+			ctx.Abort(e)
+			return
 		}
 		if resp == nil {
 			resp = new(Helloresp)
 		}
 		respd, _ := proto.Marshal(resp)
-		return respd, nil
+		ctx.Write(respd)
 	}
 }
 func _First_World_RpcHandler(handler func(context.Context, *Worldreq) (*Worldresp, error)) rpc.OutsideHandler {
-	return func(ctx context.Context, in []byte) ([]byte, error) {
+	return func(ctx *rpc.Context) {
 		req := new(Worldreq)
-		if e := proto.Unmarshal(in, req); e != nil {
-			return nil, rpc.ERRREQUEST
+		if e := proto.Unmarshal(ctx.GetBody(), req); e != nil {
+			ctx.Abort(rpc.ERRREQUEST)
+			return
 		}
 		resp, e := handler(ctx, req)
 		if e != nil {
-			return nil, e
+			ctx.Abort(e)
+			return
 		}
 		if resp == nil {
 			resp = new(Worldresp)
 		}
 		respd, _ := proto.Marshal(resp)
-		return respd, nil
+		ctx.Write(respd)
 	}
 }
 func RegisterFirstRpcServer(engine *rpc.RpcServer, svc FirstRpcServer, allmids map[string]rpc.OutsideHandler) {

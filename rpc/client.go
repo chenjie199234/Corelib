@@ -14,6 +14,7 @@ import (
 	"github.com/chenjie199234/Corelib/common"
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/stream"
 
 	"google.golang.org/protobuf/proto"
@@ -347,7 +348,7 @@ func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime 
 		time.Sleep(100 * time.Millisecond)
 		go c.start(appuniquename[strings.Index(appuniquename, ":")+1:])
 	}
-	log.Info("[Mrpc.client.offlinefunc] server:", appuniquename, "offline")
+	log.Info("[rpc.client.offlinefunc] server:", appuniquename, "offline")
 }
 
 func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path string, in []byte) ([]byte, error) {
@@ -377,7 +378,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 		Path:     path,
 		Deadline: dl.UnixNano(),
 		Body:     in,
-		Metadata: GetAllMetadata(ctx),
+		Metadata: metadata.GetAllMetadata(ctx),
 	}
 	d, _ := proto.Marshal(msg)
 	if len(d) > c.c.TcpC.MaxMessageLen {

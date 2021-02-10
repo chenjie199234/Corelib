@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -77,10 +78,24 @@ func (this *Context) GetResponse() http.ResponseWriter {
 	return this.w
 }
 func (this *Context) GetHost() string {
-	return this.r.Host
+	return this.r.URL.Host
+}
+func (this *Context) GetPath() string {
+	return this.r.URL.Path
 }
 func (this *Context) GetMethod() string {
 	return this.r.Method
+}
+func (this *Context) GetMetadata() map[string]string {
+	str := this.r.Header.Get("Metadata")
+	if str == "" {
+		return nil
+	}
+	md := make(map[string]string)
+	if e := json.Unmarshal(common.Str2byte(str), &md); e != nil {
+		return nil
+	}
+	return md
 }
 func (this *Context) GetHeader(key string) string {
 	//return "" means not exists
