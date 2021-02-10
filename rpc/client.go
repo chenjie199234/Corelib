@@ -5,6 +5,7 @@ import (
 	"context"
 	"math"
 	"math/rand"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -78,7 +79,8 @@ func init() {
 
 func NewRpcClient(c *stream.InstanceConfig, vdata []byte, appname string, globaltimeout time.Duration, pick PickHandler, discovery DiscoveryHandler) *RpcClient {
 	if e := common.NameCheck(appname, true); e != nil {
-		panic("[rpc.client]" + e.Error())
+		log.Error("[rpc.client]", e)
+		os.Exit(1)
 	}
 	lker.Lock()
 	defer lker.Unlock()

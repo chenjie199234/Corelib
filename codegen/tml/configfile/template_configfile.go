@@ -9,16 +9,21 @@ import (
 const textsource = `{
 	"rpc":{
 		"rpc_port":9000,
-		"rpc_timeout":"200ms"
+		"rpc_verifydata":"test",
+		"rpc_timeout":"200ms",
+		"rpc_timeout":"500ms",
+		"rpc_conn_timeout":"1s",
+		"rpc_heart_timeout":"5s",
+		"rpc_heart_probe":"1.5s"
 	},
 	"http":{
 		"http_port":8000,
 		"http_timeout":"200ms",
+		"http_staticfile":"./src",
 		"http_certfile":"",
 		"http_keyfile":"",
 		"http_cors":{
 			"cors_origin":["*"],
-			"cors_method":["GET","POST","OPTIONS"],
 			"cors_header":["*"],
 			"cors_expose":[]
 		}
@@ -62,34 +67,23 @@ const textsource = `{
 			"password":"example",
 			"group_name":"example_group",
 			"start_offset":-1,
-			"commit_interval":0
+			"commit_interval":"0s"
 		}
 	}
 }`
 const textapp = `{
 
 }`
-const textdiscovery = `{
-	"http":{
-		"example_service":[]
-	},
-	"grpc":{
-		"example_service":[]
-	}
-}`
 
 const path = "./"
 const sourcename = "SourceConfig.json"
 const appname = "AppConfig.json"
-const discoveryname = "DiscoveryConfig.json"
 
 var tmlsource *template.Template
 var tmlapp *template.Template
-var tmldiscovery *template.Template
 
 var filesource *os.File
 var fileapp *os.File
-var filediscovery *os.File
 
 func init() {
 	var e error
@@ -100,10 +94,6 @@ func init() {
 	tmlapp, e = template.New("app").Parse(textapp)
 	if e != nil {
 		panic(fmt.Sprintf("create template for %s error:%s", path+appname, e))
-	}
-	tmldiscovery, e = template.New("discovery").Parse(textdiscovery)
-	if e != nil {
-		panic(fmt.Sprintf("create template for %s error:%s", path+discoveryname, e))
 	}
 }
 func CreatePathAndFile() {
@@ -119,10 +109,6 @@ func CreatePathAndFile() {
 	if e != nil {
 		panic(fmt.Sprintf("make file:%s error:%s", path+appname, e))
 	}
-	filediscovery, e = os.OpenFile(path+discoveryname, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+discoveryname, e))
-	}
 }
 func Execute(projectname string) {
 	if e := tmlsource.Execute(filesource, projectname); e != nil {
@@ -130,8 +116,5 @@ func Execute(projectname string) {
 	}
 	if e := tmlapp.Execute(fileapp, projectname); e != nil {
 		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+appname, e))
-	}
-	if e := tmldiscovery.Execute(filediscovery, projectname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+discoveryname, e))
 	}
 }

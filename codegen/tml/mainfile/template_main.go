@@ -9,21 +9,24 @@ import (
 const text = `package main
 
 import (
+	"flag"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 
 	"{{.}}/config"
-	"{{.}}/discovery"
-	"{{.}}/server/xgrpc"
-	"{{.}}/server/xhttp"
+	"{{.}}/server/xrpc"
+	"{{.}}/server/xweb"
 	"{{.}}/service"
+
+	"github.com/chenjie199234/Corelib/log"
 )
 
 func main() {
+	flag.Parse()
+	defer log.Close()
 	//start the whole business service
-	//discovery register will in here
 	service.StartService()
 	//start low level net service
 	ch := make(chan os.Signal, 1)
@@ -31,7 +34,7 @@ func main() {
 	//grpc server,if don't need,please comment this
 	wg.Add(1)
 	go func() {
-		xgrpc.StartGrpcServer()
+		xrpc.StartRpcServer()
 		select {
 		case ch <- syscall.SIGTERM:
 		default:
@@ -41,7 +44,7 @@ func main() {
 	//http server,if don't need,please comment this
 	wg.Add(1)
 	go func() {
-		xhttp.StartHttpServer()
+		xweb.StartWebServer()
 		select {
 		case ch <- syscall.SIGTERM:
 		default:
@@ -53,21 +56,18 @@ func main() {
 	//stop watching config hot update
 	config.Close()
 	//stop the whole business service
-	//discovery unregister will in here
 	service.StopService()
-	//stop discover cluster info
-	discovery.Close()
 	//stop low level net service
 	//grpc server,if don't need,please comment this
 	wg.Add(1)
 	go func() {
-		xgrpc.StopGrpcServer()
+		xrpc.StopRpcServer()
 		wg.Done()
 	}()
 	//http server,if don't need,please comment this
 	wg.Add(1)
 	go func() {
-		xhttp.StopHttpServer()
+		xweb.StopWebServer()
 		wg.Done()
 	}()
 	wg.Wait()

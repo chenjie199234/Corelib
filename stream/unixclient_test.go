@@ -21,7 +21,6 @@ func Test_Unixclient(t *testing.T) {
 			unixclientinstance := NewInstance(&InstanceConfig{
 				//SelfName: fmt.Sprintf("unixclient%d", count),
 				SelfName:           "unixclientd",
-				VerifyTimeout:      500 * time.Millisecond,
 				HeartbeatTimeout:   1500 * time.Millisecond,
 				HeartprobeInterval: 500 * time.Millisecond,
 				GroupNum:           10,

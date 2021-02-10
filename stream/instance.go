@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"net"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -82,7 +83,8 @@ func (this *Instance) addPeer(p *Peer) bool {
 //be careful about the callback func race
 func NewInstance(c *InstanceConfig) *Instance {
 	if e := checkInstanceConfig(c); e != nil {
-		panic(e)
+		log.Error(e)
+		os.Exit(1)
 	}
 	stream := &Instance{
 		conf:      c,

@@ -7,21 +7,20 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/chenjie199234/Corelib/codegen/tml/api"
+	statusapi "github.com/chenjie199234/Corelib/codegen/tml/api/status"
 	subapi "github.com/chenjie199234/Corelib/codegen/tml/api/sub"
 	"github.com/chenjie199234/Corelib/codegen/tml/cmd"
 	"github.com/chenjie199234/Corelib/codegen/tml/config"
 	"github.com/chenjie199234/Corelib/codegen/tml/configfile"
 	"github.com/chenjie199234/Corelib/codegen/tml/dao"
 	subdao "github.com/chenjie199234/Corelib/codegen/tml/dao/sub"
-	"github.com/chenjie199234/Corelib/codegen/tml/discovery"
 	"github.com/chenjie199234/Corelib/codegen/tml/git"
 	"github.com/chenjie199234/Corelib/codegen/tml/gomod"
 	"github.com/chenjie199234/Corelib/codegen/tml/mainfile"
 	"github.com/chenjie199234/Corelib/codegen/tml/model"
 	"github.com/chenjie199234/Corelib/codegen/tml/readme"
-	"github.com/chenjie199234/Corelib/codegen/tml/server/xgrpc"
-	"github.com/chenjie199234/Corelib/codegen/tml/server/xhttp"
+	"github.com/chenjie199234/Corelib/codegen/tml/server/xrpc"
+	"github.com/chenjie199234/Corelib/codegen/tml/server/xweb"
 	"github.com/chenjie199234/Corelib/codegen/tml/service"
 	servicestatus "github.com/chenjie199234/Corelib/codegen/tml/service/status"
 	subservice "github.com/chenjie199234/Corelib/codegen/tml/service/sub"
@@ -88,8 +87,8 @@ func main() {
 		fmt.Println("start")
 		fmt.Printf("project's dir is:%s in project's create dir:%s\n", "./"+*name, *dir)
 
-		api.CreatePathAndFile()
-		api.Execute(*name)
+		statusapi.CreatePathAndFile()
+		statusapi.Execute(*name)
 
 		config.CreatePathAndFile()
 		config.Execute(*name)
@@ -115,11 +114,11 @@ func main() {
 		model.CreatePathAndFile()
 		model.Execute(*name)
 
-		xgrpc.CreatePathAndFile()
-		xgrpc.Execute(*name)
+		xrpc.CreatePathAndFile()
+		xrpc.Execute(*name)
 
-		xhttp.CreatePathAndFile()
-		xhttp.Execute(*name)
+		xweb.CreatePathAndFile()
+		xweb.Execute(*name)
 
 		service.CreatePathAndFile()
 		service.Execute(*name)
@@ -132,9 +131,6 @@ func main() {
 
 		readme.CreatePathAndFile()
 		readme.Execute(*name)
-
-		discovery.CreatePathAndFile()
-		discovery.Execute(*name)
 
 		git.CreatePathAndFile()
 		git.Execute(*name)

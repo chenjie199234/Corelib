@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"math"
 	"math/rand"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -15,10 +16,11 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/common"
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/metadata"
 )
 
-var ERRNOSERVER = fmt.Errorf("[web.client] no server")
+var ERRNOSERVER = errors.New("[web] no servers")
 
 type PickHandler func(servers []*ServerForPick) *ServerForPick
 type DiscoveryHandler func(appname string, client *WebClient)
@@ -58,7 +60,8 @@ func init() {
 
 func NewWebClient(appname string, globaltimeout time.Duration, picker PickHandler, discover DiscoveryHandler) *WebClient {
 	if e := common.NameCheck(appname, true); e != nil {
-		panic("[web.client] " + e.Error())
+		log.Error("[web.client]", e)
+		os.Exit(1)
 	}
 	lker.Lock()
 	defer lker.Unlock()

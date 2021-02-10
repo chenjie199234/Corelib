@@ -12,12 +12,10 @@ const text = `package config
 import (
 	"encoding/json"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sync/atomic"
 	"unsafe"
-
-	//make sure source package is the first init
-	_ "{{.}}/source"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/chenjie199234/Corelib/log"
@@ -38,18 +36,22 @@ var closech chan struct{}
 func init() {
 	data, e := ioutil.ReadFile("AppConfig.json")
 	if e != nil {
-		log.Fatalf("[AppConfig]read config file error:%s", e)
+		log.Error("[AppConfig]read config file error", e)
+		os.Exit(1)
 	}
 	AC = &AppConfig{}
 	if e = json.Unmarshal(data, AC); e != nil {
-		log.Fatalf("[AppConfig]config data format error:%s", e)
+		log.Error("[AppConfig]config data format error:", e)
+		os.Exit(1)
 	}
 	watcher, e = fsnotify.NewWatcher()
 	if e != nil {
-		log.Fatalf("[AppConfig]create watcher for hot update error:%s", e)
+		log.Error("[AppConfig]create watcher for hot update error:", e)
+		os.Exit(1)
 	}
 	if e = watcher.Add("./"); e != nil {
-		log.Fatalf("[AppConfig]create watcher for hot update error:%s", e)
+		log.Error("[AppConfig]create watcher for hot update error:", e)
+		os.Exit(1)
 	}
 	closech = make(chan struct{})
 	go watch()
@@ -67,12 +69,12 @@ func watch() {
 			}
 			data, e := ioutil.ReadFile("AppConfig.json")
 			if e != nil {
-				log.Errorf("[AppConfig]hot update read config file error:%s", e)
+				log.Error("[AppConfig]hot update read config file error:", e)
 				continue
 			}
 			c := &AppConfig{}
 			if e = json.Unmarshal(data, c); e != nil {
-				log.Errorf("[AppConfig]hot update config data format error:%s", e)
+				log.Error("[AppConfig]hot update config data format error:", e)
 				continue
 			}
 			atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&AC)), unsafe.Pointer(c))
@@ -80,7 +82,7 @@ func watch() {
 			if !ok {
 				return
 			}
-			log.Errorf("[AppConfig]watcher error,%s", err)
+			log.Error("[AppConfig]watcher error:", err)
 		}
 	}
 }

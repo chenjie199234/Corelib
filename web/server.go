@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -322,6 +324,7 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 			}
 		}
 		//set timeout
+		basectx := r.Context()
 		now := time.Now()
 		var globaldl int64
 		var funcdl int64
@@ -337,7 +340,7 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 			clientdl, e = strconv.ParseInt(temp, 10, 64)
 			if e != nil {
 				log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Deadline", temp, "format error")
-				w.WriteHeader(http.StatusBadGateway)
+				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
 				return
 			}
@@ -359,10 +362,21 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 				w.Write(common.Str2byte(http.StatusText(http.StatusGatewayTimeout)))
 				return
 			}
-			ctx, cancel := context.WithDeadline(r.Context(), time.Unix(0, min))
+			var cancel context.CancelFunc
+			basectx, cancel = context.WithDeadline(basectx, time.Unix(0, min))
 			defer cancel()
-			r = r.WithContext(ctx)
 		}
+		if mdstr := r.Header.Get("Metadata"); mdstr != "" {
+			md := make(map[string]string)
+			if e := json.Unmarshal(common.Str2byte(mdstr), &md); e != nil {
+				log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Metadata", mdstr, "format error")
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
+				return
+			}
+			basectx = metadata.SetAllMetadata(basectx, md)
+		}
+		r = r.WithContext(basectx)
 		//logic
 		ctx := this.getContext(w, r, totalhandlers)
 		ctx.Next()

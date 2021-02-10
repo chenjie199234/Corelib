@@ -19,4 +19,13 @@ func Test_Mtime(t *testing.T) {
 		t.Fatal(e)
 	}
 	t.Log(time.Time(d.TT).Nanosecond())
+	t.Log(int64(d.DD))
+	data = `{"tt":0,"dd":10}`
+	d = &TData{}
+	e = json.Unmarshal([]byte(data), d)
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Log(time.Time(d.TT).Nanosecond())
+	t.Log(int64(d.DD))
 }

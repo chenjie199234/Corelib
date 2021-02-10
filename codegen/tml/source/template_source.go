@@ -14,42 +14,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"time"
 
+	"github.com/chenjie199234/Corelib/log"
+	ctime "github.com/chenjie199234/Corelib/time"
 	"github.com/go-redis/redis/v8"
 	"github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/scram"
-	"github.com/chenjie199234/Corelib/log"
 )
-
-//XDuration transfer to time.Duration by time.Duration(XDuration)
-type XDuration time.Duration
-
-//UnmarshalText -
-func (d *XDuration) UnmarshalJSON(data []byte) error {
-	if data[0] == '"' && data[len(data)-1] == '"' {
-		if len(data) == 2 {
-			*d = XDuration(0)
-			return nil
-		}
-		data = data[1 : len(data)-1]
-	}
-	if data[0] != '"' && data[len(data)-1] != '"' {
-		temp, e := time.ParseDuration(string(data))
-		if e != nil {
-			return fmt.Errorf("format wrong for XDuration")
-		}
-		*d = XDuration(temp)
-	} else {
-		return fmt.Errorf("format wrong for XDuration")
-	}
-	return nil
-}
 
 //SourceConfig can't hot update
 type sourceConfig struct {
-	Log      *LogConfig                 $json:"log"$
 	Rpc      *RpcConfig                 $json:"rpc"$
 	Http     *HttpConfig                $json:"http"$
 	DB       map[string]*DBConfig       $json:"db"$        //key xx_db
@@ -58,26 +35,24 @@ type sourceConfig struct {
 	KafkaSub map[string]*KafkaSubConfig $json:"kafka_sub"$ //key topic name
 }
 
-//LogConfig -
-type LogConfig struct {
-	LogPath   string $json:"log_path"$
-	Debug     bool   $json:"debug"$
-	MultiFile bool   $json:"multi_file"$
-}
-
 //RpcConfig -
 type RpcConfig struct {
-	RpcPort    uint      $json:"rpc_port"$
-	RpcTimeout XDuration $json:"rpc_timeout"$ //default 500ms
+	RpcPort         uint           $json:"rpc_port"$
+	RpcVerifydata   string         $json:"rpc_verifydata"$
+	RpcTimeout      ctime.Duration $json:"rpc_timeout"$       //default 500ms
+	RpcConnTimeout  ctime.Duration $json:"rpc_conn_timeout"$  //default 1s
+	RpcHeartTimeout ctime.Duration $json:"rpc_heart_timeout"$ //default 5s
+	RpcHeartProbe   ctime.Duration $json:"rpc_heart_probe"$   //default 1.5s
 }
 
 //HttpConfig -
 type HttpConfig struct {
 	//server
-	HttpPort     uint      $json:"http_port"$
-	HttpTimeout  XDuration $json:"http_timeout"$ //default 500ms
-	HttpCertFile string    $json:"http_certfile"$
-	HttpKeyFile  string    $json:"http_keyfile"$
+	HttpPort       uint           $json:"http_port"$
+	HttpTimeout    ctime.Duration $json:"http_timeout"$ //default 500ms
+	HttpStaticFile string         $json:"http_staticfile"$
+	HttpCertFile   string         $json:"http_certfile"$
+	HttpKeyFile    string         $json:"http_keyfile"$
 	//cors
 	HttpCors *HttpCorsConfig $json:"http_cors"$
 }
@@ -85,34 +60,33 @@ type HttpConfig struct {
 //HttpCorsConfig -
 type HttpCorsConfig struct {
 	CorsOrigin []string $json:"cors_origin"$
-	CorsMethod []string $json:"cors_method"$
 	CorsHeader []string $json:"cors_header"$
 	CorsExpose []string $json:"cors_expose"$
 }
 
 //RedisConfig -
 type RedisConfig struct {
-	Username    string    $json:"username"$
-	Passwd      string    $json:"passwd"$
-	Net         string    $json:"net"$
-	Addr        string    $json:"addr"$
-	Maxopen     int       $json:"max_open"$     //default 256 //max num of connections can be opened
-	MaxIdletime XDuration $json:"max_idletime"$ //default 1min //max time a connection can be idle,more then this time,connection will be closed
-	IoTimeout   XDuration $json:"io_timeout"$   //default 500ms
-	ConnTimeout XDuration $json:"conn_timeout"$ //default 250ms
+	Username    string         $json:"username"$
+	Passwd      string         $json:"passwd"$
+	Net         string         $json:"net"$
+	Addr        string         $json:"addr"$
+	Maxopen     int            $json:"max_open"$     //default 256 //max num of connections can be opened
+	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 1min //max time a connection can be idle,more then this time,connection will be closed
+	IoTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms
+	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms
 }
 
 //DBConfig -
 type DBConfig struct {
-	Username    string    $json:"username"$
-	Passwd      string    $json:"passwd"$
-	Net         string    $json:"net"$
-	Addr        string    $json:"addr"$
-	Collation   string    $json:"collation"$
-	Maxopen     int       $json:"max_open"$     //default 256 //max num of connections can be opened
-	MaxIdletime XDuration $json:"max_idletime"$ //default 1min //max time a connection can be idle,more then this time,connection will be closed
-	IoTimeout   XDuration $json:"io_timeout"$   //default 500ms
-	ConnTimeout XDuration $json:"conn_timeout"$ //default 250ms
+	Username    string         $json:"username"$
+	Passwd      string         $json:"passwd"$
+	Net         string         $json:"net"$
+	Addr        string         $json:"addr"$
+	Collation   string         $json:"collation"$
+	Maxopen     int            $json:"max_open"$     //default 256 //max num of connections can be opened
+	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 1min //max time a connection can be idle,more then this time,connection will be closed
+	IoTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms
+	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms
 }
 
 //KafkaPubConfig -
@@ -134,7 +108,7 @@ type KafkaSubConfig struct {
 	StartOffset int64 $json:"start_offset"$
 	//if this is 0,commit is synced,and effective is slow.
 	//if this is not 0,commit is asynced,effective is high,but will cause duplicate sub when the program crash
-	CommitInterval XDuration $json:"commit_interval"$
+	CommitInterval ctime.Duration $json:"commit_interval"$
 }
 
 //SC total source config instance
@@ -158,26 +132,26 @@ func init() {
 		panic(fmt.Sprintf("[SourceConfig]format error:%s", e))
 	}
 	sc.validate()
-	log.Init(&log.Config{
-		LogPath:   sc.Log.LogPath,
-		Debug:     sc.Log.Debug,
-		MultiFile: sc.Log.MultiFile,
-		AppName:   "{{.}}",
-	})
 	sc.newsource()
 }
 
 func (c *sourceConfig) validate() {
-	if c.Log.LogPath == "" {
-		panic("[SourceConfig]log path is empty")
-	}
 	if c.Rpc.RpcPort == 0 {
 		//use default
 		c.Rpc.RpcPort = 9000
 	}
 	if c.Rpc.RpcTimeout == 0 {
 		//use default
-		c.Rpc.RpcTimeout = XDuration(time.Millisecond * 500)
+		c.Rpc.RpcTimeout = ctime.Duration(time.Millisecond * 500)
+	}
+	if c.Rpc.RpcConnTimeout == 0 {
+		c.Rpc.RpcConnTimeout = ctime.Duration(time.Second)
+	}
+	if c.Rpc.RpcHeartTimeout == 0 {
+		c.Rpc.RpcHeartTimeout = ctime.Duration(5 * time.Second)
+	}
+	if c.Rpc.RpcHeartProbe == 0 {
+		c.Rpc.RpcHeartProbe = ctime.Duration(1500 * time.Millisecond)
 	}
 	if c.Http.HttpPort == 0 {
 		//use default
@@ -185,7 +159,7 @@ func (c *sourceConfig) validate() {
 	}
 	if c.Http.HttpTimeout == 0 {
 		//use default
-		c.Http.HttpTimeout = XDuration(time.Millisecond * 500)
+		c.Http.HttpTimeout = ctime.Duration(time.Millisecond * 500)
 	}
 	for _, dbc := range c.DB {
 		//mysql can don't use passwd but must use username
@@ -203,15 +177,15 @@ func (c *sourceConfig) validate() {
 		}
 		if dbc.MaxIdletime == 0 {
 			//use default
-			dbc.MaxIdletime = XDuration(time.Minute * 10)
+			dbc.MaxIdletime = ctime.Duration(time.Minute * 10)
 		}
 		if dbc.IoTimeout == 0 {
 			//use default
-			dbc.IoTimeout = XDuration(time.Millisecond * 500)
+			dbc.IoTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if dbc.ConnTimeout == 0 {
 			//use default
-			dbc.ConnTimeout = XDuration(time.Millisecond * 250)
+			dbc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
 		}
 	}
 	for _, redisc := range c.Redis {
@@ -226,15 +200,15 @@ func (c *sourceConfig) validate() {
 		}
 		if redisc.MaxIdletime == 0 {
 			//use default
-			redisc.MaxIdletime = XDuration(time.Minute * 10)
+			redisc.MaxIdletime = ctime.Duration(time.Minute * 10)
 		}
 		if redisc.IoTimeout == 0 {
 			//use default
-			redisc.IoTimeout = XDuration(time.Millisecond * 500)
+			redisc.IoTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if redisc.ConnTimeout == 0 {
 			//use default
-			redisc.ConnTimeout = XDuration(time.Millisecond * 250)
+			redisc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
 		}
 	}
 	for _, pubc := range c.KafkaPub {
@@ -314,7 +288,8 @@ func (c *sourceConfig) newsource() {
 			var e error
 			dialer.SASLMechanism, e = scram.Mechanism(scram.SHA512, subc.Username, subc.Passwd)
 			if e != nil {
-				log.Fatalf("[source]kafka topic:%s sub group:%s username and password parse error:%s", topic, subc.GroupName, e)
+				log.Error("[source] kafka topic:", topic, "sub group:", subc.GroupName, "username and password parse error:", e)
+				os.Exit(1)
 			}
 		}
 		reader := kafka.NewReader(kafka.ReaderConfig{
@@ -346,7 +321,8 @@ func (c *sourceConfig) newsource() {
 			var e error
 			dialer.SASLMechanism, e = scram.Mechanism(scram.SHA512, pubc.Username, pubc.Passwd)
 			if e != nil {
-				log.Fatalf("[source]kafka topic:%s pub username and password parse error:%s", topic, e)
+				log.Error("[source] kafka topic:", topic, "pub username and password parse error:", e)
+				os.Exit(1)
 			}
 		}
 		writer := kafka.NewWriter(kafka.WriterConfig{

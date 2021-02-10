@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"encoding/json"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/chenjie199234/Corelib/common"
+	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/sys/cpu"
 	"github.com/julienschmidt/httprouter"
 )
@@ -87,15 +87,7 @@ func (this *Context) GetMethod() string {
 	return this.r.Method
 }
 func (this *Context) GetMetadata() map[string]string {
-	str := this.r.Header.Get("Metadata")
-	if str == "" {
-		return nil
-	}
-	md := make(map[string]string)
-	if e := json.Unmarshal(common.Str2byte(str), &md); e != nil {
-		return nil
-	}
-	return md
+	return metadata.GetAllMetadata(this.r.Context())
 }
 func (this *Context) GetHeader(key string) string {
 	//return "" means not exists

@@ -32,7 +32,7 @@ type HandleUserdataFunc func(p *Peer, peeruniquename string, data []byte, startt
 type HandleOfflineFunc func(p *Peer, peeruniquename string, starttime uint64)
 
 type TcpConfig struct {
-	//for client only
+	//include connect time and verify time
 	ConnectTimeout time.Duration //default 500ms
 
 	SocketReadBufferLen  int //default 1024 byte,max 65536 byte
@@ -80,7 +80,7 @@ func (c *TcpConfig) checkTcpConfig() {
 }
 
 type UnixConfig struct {
-	//for client only
+	//include connect time and verify time
 	ConnectTimeout time.Duration //default 500ms
 
 	SocketReadBufferLen  int //default 1024 byte,max 65535 byte
@@ -130,8 +130,6 @@ func (c *UnixConfig) checkUnixConfig() {
 type InstanceConfig struct {
 	//the name of this instance
 	SelfName string
-	//two peers need to verify each other,before they can communicate
-	VerifyTimeout time.Duration //default 1s
 
 	//heartbeat timeout
 	HeartbeatTimeout time.Duration //default 5s
@@ -168,9 +166,6 @@ type InstanceConfig struct {
 func checkInstanceConfig(c *InstanceConfig) error {
 	if e := common.NameCheck(c.SelfName, true); e != nil {
 		return fmt.Errorf("[Stream.checkInstanceConfig] " + e.Error())
-	}
-	if c.VerifyTimeout == 0 {
-		c.VerifyTimeout = time.Second
 	}
 	if c.HeartbeatTimeout == 0 {
 		c.HeartbeatTimeout = 5 * time.Second

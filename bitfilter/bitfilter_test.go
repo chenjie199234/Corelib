@@ -1,11 +1,10 @@
 package bitfilter
 
 import (
-	"context"
+	//"context"
 	"testing"
-	"time"
-
-	"github.com/gomodule/redigo/redis"
+	//"time"
+	//"github.com/gomodule/redigo/redis"
 )
 
 func Test_MemoryBitFilter(t *testing.T) {
@@ -31,42 +30,43 @@ func Test_MemoryBitFilter(t *testing.T) {
 		panic("data check error")
 	}
 }
-func Test_RedisBitFilter(t *testing.T) {
-	pool := &redis.Pool{}
-	pool.Dial = func() (redis.Conn, error) {
-		return redis.Dial("tcp", "127.0.0.1:6379")
-	}
-	pool.MaxIdle = 10
-	pool.MaxActive = 10
-	pool.MaxConnLifetime = time.Hour
 
-	filter, e := NewRedisBitFilter(context.Background(), pool, "testbloom", &Option{})
-	if e != nil {
-		t.Fatal(e)
-	}
-	r, e := filter.Set(context.Background(), "test")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if !r {
-		t.Fatal("add failed")
-	}
-	r, e = filter.Set(context.Background(), "test")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if r {
-		t.Fatal("dup add failed")
-	}
-	rr, e := filter.Check(context.Background(), "test")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if rr {
-		t.Fatal("check failed")
-	}
-	e = filter.clean()
-	if e != nil {
-		t.Fatal("clean error:" + e.Error())
-	}
-}
+//func Test_RedisBitFilter(t *testing.T) {
+//        pool := &redis.Pool{}
+//        pool.Dial = func() (redis.Conn, error) {
+//                return redis.Dial("tcp", "127.0.0.1:6379")
+//        }
+//        pool.MaxIdle = 10
+//        pool.MaxActive = 10
+//        pool.MaxConnLifetime = time.Hour
+
+//        filter, e := NewRedisBitFilter(context.Background(), pool, "testbloom", &Option{})
+//        if e != nil {
+//                t.Fatal(e)
+//        }
+//        r, e := filter.Set(context.Background(), "test")
+//        if e != nil {
+//                t.Fatal(e)
+//        }
+//        if !r {
+//                t.Fatal("add failed")
+//        }
+//        r, e = filter.Set(context.Background(), "test")
+//        if e != nil {
+//                t.Fatal(e)
+//        }
+//        if r {
+//                t.Fatal("dup add failed")
+//        }
+//        rr, e := filter.Check(context.Background(), "test")
+//        if e != nil {
+//                t.Fatal(e)
+//        }
+//        if rr {
+//                t.Fatal("check failed")
+//        }
+//        e = filter.clean()
+//        if e != nil {
+//                t.Fatal("clean error:" + e.Error())
+//        }
+//}

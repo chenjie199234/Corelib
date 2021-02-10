@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -18,11 +19,13 @@ import (
 func (this *Instance) StartTcpServer(listenaddr string) {
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
-		panic("[Stream.TCP.StartTcpServer] resolve addr:" + listenaddr + " error:" + e.Error())
+		log.Error("[Stream.TCP.StartTcpServer] resolve addr:", listenaddr, "error:", e)
+		os.Exit(1)
 	}
 	this.tcplistener, e = net.ListenTCP(laddr.Network(), laddr)
 	if e != nil {
-		panic("[Stream.TCP.StartTcpServer] listen addr:" + listenaddr + " error:" + e.Error())
+		log.Error("[Stream.TCP.StartTcpServer] listen addr:", listenaddr, "error:", e)
+		os.Exit(1)
 	}
 	for {
 		p := this.getPeer(TCP, CLIENT, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, this.conf.SelfName)
@@ -50,11 +53,13 @@ func (this *Instance) StartTcpServer(listenaddr string) {
 func (this *Instance) StartUnixServer(listenaddr string) {
 	laddr, e := net.ResolveUnixAddr("unix", listenaddr)
 	if e != nil {
-		panic("[Stream.UNIX.StartUnixServer] resolve addr:" + listenaddr + " error:" + e.Error())
+		log.Error("[Stream.UNIX.StartUnixServer] resolve addr:", listenaddr, "error:", e)
+		os.Exit(1)
 	}
 	this.unixlistener, e = net.ListenUnix("unix", laddr)
 	if e != nil {
-		panic("[Stream.UNIX.StartUnixServer] listening addr:" + listenaddr + " error:" + e.Error())
+		log.Error("[Stream.UNIX.StartUnixServer] listening addr:", listenaddr, "error:", e)
+		os.Exit(1)
 	}
 	for {
 		p := this.getPeer(UNIX, CLIENT, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, this.conf.SelfName)
@@ -262,13 +267,16 @@ func (this *Instance) cworker(p *Peer, maxlen int, verifydata []byte) string {
 	return uniquename
 }
 func (this *Instance) verifypeer(p *Peer, maxlen int) []byte {
+	var ctx context.Context
+	var cancel context.CancelFunc
 	switch p.protocoltype {
 	case TCP:
-		(*net.TCPConn)(p.conn).SetReadDeadline(time.Now().Add(this.conf.VerifyTimeout))
+		(*net.TCPConn)(p.conn).SetReadDeadline(time.Now().Add(this.conf.TcpC.ConnectTimeout))
+		ctx, cancel = context.WithTimeout(p, this.conf.TcpC.ConnectTimeout)
 	case UNIX:
-		(*net.UnixConn)(p.conn).SetReadDeadline(time.Now().Add(this.conf.VerifyTimeout))
+		(*net.UnixConn)(p.conn).SetReadDeadline(time.Now().Add(this.conf.UnixC.ConnectTimeout))
+		ctx, cancel = context.WithTimeout(p, this.conf.UnixC.ConnectTimeout)
 	}
-	ctx, cancel := context.WithTimeout(p, this.conf.VerifyTimeout)
 	defer cancel()
 	data, e := p.readMessage(maxlen)
 	if data != nil {

@@ -19,7 +19,6 @@ func Test_Tcpclient(t *testing.T) {
 		for count := 0; count < 10000; count++ {
 			tcpclientinstance := NewInstance(&InstanceConfig{
 				SelfName:           "tcpclient",
-				VerifyTimeout:      500 * time.Millisecond,
 				HeartbeatTimeout:   1500 * time.Millisecond,
 				HeartprobeInterval: 500 * time.Millisecond,
 				GroupNum:           10,
