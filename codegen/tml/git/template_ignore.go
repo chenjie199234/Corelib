@@ -20,10 +20,6 @@ const text = `*
 !/dao/*
 !/dao/**/
 !/dao/**/*
-!/discovery/
-!/discovery/*
-!/discovery/**/
-!/discovery/**/*
 !/model/
 !/model/*
 !/model/**/
@@ -43,7 +39,6 @@ const text = `*
 !AppConfig.json
 !cmd.sh
 !cmd.bat
-!DiscoveryConfig.json
 !go.mod
 !main.go
 !README.md
