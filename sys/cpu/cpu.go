@@ -1,12 +1,12 @@
 package cpu
 
 import (
-	"fmt"
 	"math"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/shirou/gopsutil/cpu"
 )
 
@@ -15,20 +15,20 @@ var usepercent float64
 func init() {
 	info, e := cpu.Percent(0, false)
 	if e != nil {
-		fmt.Printf("[Sys.cpu]Get cpu use percent error:%s\n", e)
+		log.Error("[Sys.cpu]Get cpu use percent error:", e)
 	} else if len(info) > 0 {
 		atomic.StoreUint64((*uint64)(unsafe.Pointer(&usepercent)), math.Float64bits(info[0]))
 	} else {
-		fmt.Printf("[Sys.cpu]Get cpu use percent return empty\n")
+		log.Error("[Sys.cpu]Get cpu use percent return empty")
 	}
 	time.Sleep(100 * time.Millisecond)
 	info, e = cpu.Percent(0, false)
 	if e != nil {
-		fmt.Printf("[Sys.cpu]Get cpu use percent error:%s\n", e)
+		log.Error("[Sys.cpu]Get cpu use percent error:", e)
 	} else if len(info) > 0 {
 		atomic.StoreUint64((*uint64)(unsafe.Pointer(&usepercent)), math.Float64bits(info[0]))
 	} else {
-		fmt.Printf("[Sys.cpu]Get cpu use percent return empty\n")
+		log.Error("[Sys.cpu]Get cpu use percent return empty")
 	}
 	tker := time.NewTicker(500 * time.Millisecond)
 	go func() {
@@ -36,11 +36,11 @@ func init() {
 			<-tker.C
 			info, e := cpu.Percent(0, false)
 			if e != nil {
-				fmt.Printf("[Sys.cpu]Get cpu use percent error:%s\n", e)
+				log.Error("[Sys.cpu]Get cpu use percent error:", e)
 			} else if len(info) > 0 {
 				atomic.StoreUint64((*uint64)(unsafe.Pointer(&usepercent)), math.Float64bits(info[0]))
 			} else {
-				fmt.Printf("[Sys.cpu]Get cpu use percent return empty\n")
+				log.Error("[Sys.cpu]Get cpu use percent return empty")
 			}
 		}
 	}()

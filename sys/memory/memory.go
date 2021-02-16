@@ -1,9 +1,9 @@
 package memory
 
 import (
-	"fmt"
 	"time"
 
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/shirou/gopsutil/mem"
 )
 
@@ -12,7 +12,7 @@ var usepercent float64
 func init() {
 	meminfo, e := mem.VirtualMemory()
 	if e != nil {
-		fmt.Printf("[Sys.Memory]Get memory use percent error:%s\n", e)
+		log.Error("[Sys.Memory]Get memory use percent error:", e)
 	} else {
 		usepercent = meminfo.UsedPercent
 	}
@@ -22,7 +22,7 @@ func init() {
 			<-tker.C
 			meminfo, e := mem.VirtualMemory()
 			if e != nil {
-				fmt.Printf("[Sys.Memory]Get memory use percent error:%s\n", e)
+				log.Error("[Sys.Memory]Get memory use percent error:", e)
 			} else {
 				usepercent = meminfo.UsedPercent
 			}

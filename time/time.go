@@ -2,7 +2,7 @@ package time
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"strconv"
 	"time"
 
@@ -27,11 +27,11 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 		}
 		temp, e := time.ParseDuration(common.Byte2str(data))
 		if e != nil {
-			return fmt.Errorf("format wrong for MDuration,supported:\"1h2m3s4ms5us6ns\"")
+			return errors.New("format wrong for MDuration,supported:\"1h2m3s4ms5us6ns\"")
 		}
 		*d = Duration(temp)
 	} else {
-		return fmt.Errorf("format wrong for MDuration,supported: \"1h2m3s4ms5us6ns\"")
+		return errors.New("format wrong for MDuration,supported: \"1h2m3s4ms5us6ns\"")
 	}
 	return nil
 }
@@ -50,11 +50,11 @@ func (d *Duration) UnmarshalText(data []byte) error {
 		}
 		temp, e := time.ParseDuration(common.Byte2str(data))
 		if e != nil {
-			return fmt.Errorf("format wrong for MDuration,supported:\"1h2m3s4ms5us6ns\"")
+			return errors.New("format wrong for MDuration,supported:\"1h2m3s4ms5us6ns\"")
 		}
 		*d = Duration(temp)
 	} else {
-		return fmt.Errorf("format wrong for MDuration,supported: \"1h2m3s4ms5us6ns\"")
+		return errors.New("format wrong for MDuration,supported: \"1h2m3s4ms5us6ns\"")
 	}
 	return nil
 }
@@ -75,11 +75,11 @@ func (t *Time) UnmarshalJSON(data []byte) error {
 			temp, e = time.Parse("2006-01-02 15:04:05 -07", common.Byte2str(data))
 		}
 		if e != nil {
-			return fmt.Errorf("format wrong for MTime,supported:\"2006-01-02 15:04:05\"(time zone is utc)/\"2006-01-02 15:04:05 +08(time zone is +08)\"")
+			return errors.New("format wrong for MTime,supported:\"2006-01-02 15:04:05\"(time zone is utc)/\"2006-01-02 15:04:05 +08(time zone is +08)\"")
 		}
 		*t = Time(temp)
 	} else {
-		return fmt.Errorf("format wrong for MTime,supported: \"2006-01-02 15:04:05\"(time zone is utc)/\"2006-01-02 15:04:05 +01(time zone is +01)\"")
+		return errors.New("format wrong for MTime,supported: \"2006-01-02 15:04:05\"(time zone is utc)/\"2006-01-02 15:04:05 +01(time zone is +01)\"")
 	}
 	return nil
 }
@@ -100,11 +100,11 @@ func (t *Time) UnmarshalText(data []byte) error {
 			temp, e = time.Parse("2006-01-02 15:04:05 -07", common.Byte2str(data))
 		}
 		if e != nil {
-			return fmt.Errorf("format wrong for MTime,supported:\"2006-01-02 15:04:05\"(time zone is utc)/\"2006-01-02 15:04:05 +08(time zone is +08)\"")
+			return errors.New("format wrong for MTime,supported:\"2006-01-02 15:04:05\"(time zone is utc)/\"2006-01-02 15:04:05 +08(time zone is +08)\"")
 		}
 		*t = Time(temp)
 	} else {
-		return fmt.Errorf("format wrong for MTime,supported: \"2006-01-02 15:04:05\"(time zone is utc)/\"2006-01-02 15:04:05 +01(time zone is +01)\"")
+		return errors.New("format wrong for MTime,supported: \"2006-01-02 15:04:05\"(time zone is utc)/\"2006-01-02 15:04:05 +01(time zone is +01)\"")
 	}
 	return nil
 }

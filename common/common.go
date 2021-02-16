@@ -1,28 +1,28 @@
 package common
 
 import (
-	"fmt"
+	"errors"
 	"unsafe"
 )
 
 func NameCheck(name string, haspoint bool) error {
-	if name == "" {
-		return fmt.Errorf("name is empty")
+	if len(name) == 0 {
+		return errors.New("name is empty")
 	}
 	if len(name) > 32 {
-		return fmt.Errorf("name is too long")
+		return errors.New("name is too long")
+	}
+	if name[0] < 65 || (name[0] > 90 && name[0] < 97) || name[0] > 122 {
+		return errors.New("name's first character must in [a-z][A-Z]")
 	}
 	for _, v := range name {
 		if haspoint {
-			if name[0] < 97 || name[0] > 122 {
-				return fmt.Errorf("name's first character must in [a-z]")
-			}
-			if (v < 48 || (v > 57 && v < 97) || v > 122) && v != 46 {
-				return fmt.Errorf("name has illegal character,must in [a-z][0-9][.]")
+			if (v != 46 && v < 48) || (v > 57 && v < 65) || (v > 90 && v < 97) || v > 122 {
+				return errors.New("name has illegal character,must in [a-z][A-Z][0-9][.]")
 			}
 		} else {
-			if v < 48 || (v > 57 && v < 97) || v > 122 {
-				return fmt.Errorf("name has illegal character,must in [a-z][0-9]")
+			if v < 48 || (v > 57 && v < 65) || (v > 90 && v < 97) || v > 122 {
+				return errors.New("name has illegal character,must in [a-z][A-Z][0-9]")
 			}
 		}
 	}

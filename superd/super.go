@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/rotatefile"
 )
@@ -51,11 +52,11 @@ func NewSuper(supername string, rotatelogcap rotatefile.RotateCap, rotatelogcycl
 	var e error
 	//app dir
 	if e = dirop("./app"); e != nil {
-		panic("[init]" + e.Error())
+		return nil, e
 	}
 	//app stdout and stderr log dir
 	if e = dirop("./app_log"); e != nil {
-		panic("[init]" + e.Error())
+		return nil, e
 	}
 	go func() {
 		defer func() {
@@ -113,8 +114,8 @@ func dirop(path string) error {
 }
 func (s *Super) CreateGroup(groupname, url string, urltype int, buildcmd string, buildargs, buildenv []string, runcmd string, runargs, runenv []string, logkeepdays uint64) error {
 	//check group name
-	if len(groupname) == 0 || groupname[0] < 65 || (groupname[0] > 90 && groupname[0] < 97) || groupname[0] > 122 {
-		return fmt.Errorf("[create group]group name illegal,must start with [a-z][A-Z]")
+	if e := common.NameCheck(groupname, true); e != nil {
+		return fmt.Errorf("[create group]" + e.Error())
 	}
 	for _, v := range groupname {
 		if (v < 65 && v != 46) || (v > 90 && v < 97) || v > 122 {
