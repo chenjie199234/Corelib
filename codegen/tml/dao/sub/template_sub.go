@@ -11,19 +11,19 @@ const text = `package {{.}}
 import (
 	"database/sql"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/chenjie199234/Corelib/redis"
 )
 
 //Dao this is a data operation layer to operate {{.}} service's data
 type Dao struct {
 	db    *sql.DB
-	cache *redis.Client
+	cache *redis.Pool
 }
 
 //NewDao Dao is only a data operation layer
 //don't write business logic in this package
 //business logic should be written in service package
-func NewDao(db *sql.DB, cache *redis.Client) *Dao {
+func NewDao(db *sql.DB, cache *redis.Pool) *Dao {
 	return &Dao{
 		db:    db,
 		cache: cache,

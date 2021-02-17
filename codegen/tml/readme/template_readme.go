@@ -17,7 +17,6 @@ const text = `# {{.}}
 
 ## 配置文件
 AppConfig.json该文件配置了该服务需要使用的业务配置,可热更新<br/>
-DiscoveryConfig.json该文件配置了该服务的服务发现信息,可热更新<br/>
 SourceConfig.json该文件配置了该服务需要使用的资源配置,不热更新<br/>
 
 ## 初始化git

@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/redis"
 	ctime "github.com/chenjie199234/Corelib/time"
-	"github.com/go-redis/redis/v8"
 	"github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/scram"
@@ -68,7 +68,6 @@ type HttpCorsConfig struct {
 type RedisConfig struct {
 	Username    string         $json:"username"$
 	Passwd      string         $json:"passwd"$
-	Net         string         $json:"net"$
 	Addr        string         $json:"addr"$
 	Maxopen     int            $json:"max_open"$     //default 256 //max num of connections can be opened
 	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 1min //max time a connection can be idle,more then this time,connection will be closed
@@ -116,7 +115,7 @@ var sc *sourceConfig
 
 var dbs map[string]*sql.DB
 
-var caches map[string]*redis.Client
+var caches map[string]*redis.Pool
 
 var kafkaSubers map[string]*kafka.Reader
 
@@ -137,11 +136,9 @@ func init() {
 
 func (c *sourceConfig) validate() {
 	if c.Rpc.RpcPort == 0 {
-		//use default
 		c.Rpc.RpcPort = 9000
 	}
 	if c.Rpc.RpcTimeout == 0 {
-		//use default
 		c.Rpc.RpcTimeout = ctime.Duration(time.Millisecond * 500)
 	}
 	if c.Rpc.RpcConnTimeout == 0 {
@@ -154,11 +151,9 @@ func (c *sourceConfig) validate() {
 		c.Rpc.RpcHeartProbe = ctime.Duration(1500 * time.Millisecond)
 	}
 	if c.Http.HttpPort == 0 {
-		//use default
 		c.Http.HttpPort = 8000
 	}
 	if c.Http.HttpTimeout == 0 {
-		//use default
 		c.Http.HttpTimeout = ctime.Duration(time.Millisecond * 500)
 	}
 	for _, dbc := range c.DB {
@@ -172,42 +167,33 @@ func (c *sourceConfig) validate() {
 			dbc.Net = "tcp"
 		}
 		if dbc.Maxopen == 0 {
-			//use default
 			dbc.Maxopen = 100
 		}
 		if dbc.MaxIdletime == 0 {
-			//use default
 			dbc.MaxIdletime = ctime.Duration(time.Minute * 10)
 		}
 		if dbc.IoTimeout == 0 {
-			//use default
 			dbc.IoTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if dbc.ConnTimeout == 0 {
-			//use default
 			dbc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
 		}
 	}
 	for _, redisc := range c.Redis {
 		//redis can don't use username and passwd
-		if redisc.Addr == "" || redisc.Net == "" {
+		if redisc.Addr == ""  {
 			redisc.Addr = "127.0.0.1:6379"
-			redisc.Net = "tcp"
 		}
 		if redisc.Maxopen == 0 {
-			//use default
 			redisc.Maxopen = 100
 		}
 		if redisc.MaxIdletime == 0 {
-			//use default
 			redisc.MaxIdletime = ctime.Duration(time.Minute * 10)
 		}
 		if redisc.IoTimeout == 0 {
-			//use default
 			redisc.IoTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if redisc.ConnTimeout == 0 {
-			//use default
 			redisc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
 		}
 	}
@@ -262,18 +248,15 @@ func (c *sourceConfig) newsource() {
 		if k == "example_redis" {
 			continue
 		}
-		op := &redis.Options{}
-		op.Username = redisc.Username
-		op.Password = redisc.Passwd
-		op.Network = redisc.Net
-		op.Addr = redisc.Addr
-		op.PoolSize = redisc.Maxopen
-		op.IdleTimeout = time.Duration(redisc.MaxIdletime)
-		op.DialTimeout = time.Duration(redisc.ConnTimeout)
-		op.ReadTimeout = time.Duration(redisc.IoTimeout)
-		op.WriteTimeout = time.Duration(redisc.IoTimeout)
-		tempredis := redis.NewClient(op)
-		caches[k] = tempredis
+		caches[k] = redis.NewRedis(&redis.Config{
+			Username:    redisc.Username,
+			Password:    redisc.Passwd,
+			Addr:        redisc.Addr,
+			MaxOpen:     redisc.Maxopen,
+			MaxIdletime: time.Duration(redisc.MaxIdletime),
+			IOTimeout:   time.Duration(redisc.IoTimeout),
+			ConnTimeout: time.Duration(redisc.ConnTimeout),
+		})
 	}
 	kafkaSubers = make(map[string]*kafka.Reader, len(c.KafkaSub))
 	for topic, subc := range c.KafkaSub {
@@ -359,7 +342,7 @@ func GetDB(dbname string) *sql.DB {
 
 //GetRedis get a redis client by redis's logic name
 //return nil means not exist
-func GetRedis(redisname string) *redis.Client {
+func GetRedis(redisname string) *redis.Pool {
 	return caches[redisname]
 }
 
