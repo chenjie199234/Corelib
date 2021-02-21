@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/chenjie199234/Corelib/common"
+	"github.com/chenjie199234/Corelib/util/common"
 )
 
 //Warning!!Don't write block logic in these callback,live for{}

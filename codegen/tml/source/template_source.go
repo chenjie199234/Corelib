@@ -19,7 +19,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
-	ctime "github.com/chenjie199234/Corelib/time"
+	ctime "github.com/chenjie199234/Corelib/util/time"
 	"github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/scram"

@@ -15,9 +15,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/metadata"
+	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/metadata"
 )
 
 var ERRNOSERVER = errors.New("[web] no servers")

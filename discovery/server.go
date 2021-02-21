@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/stream"
+	"github.com/chenjie199234/Corelib/util/common"
 )
 
 //appuniquename = appname:ip:port

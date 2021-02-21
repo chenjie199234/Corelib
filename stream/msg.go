@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/chenjie199234/Corelib/bufpool"
-	"github.com/chenjie199234/Corelib/common"
+	"github.com/chenjie199234/Corelib/util/common"
 )
 
 const (

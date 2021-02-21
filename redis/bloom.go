@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/chenjie199234/Corelib/common"
+	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/gomodule/redigo/redis"
 )
 

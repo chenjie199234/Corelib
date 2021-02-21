@@ -11,9 +11,9 @@ import (
 	"sync"
 
 	"github.com/chenjie199234/Corelib/bufpool"
-	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/rotatefile"
+	"github.com/chenjie199234/Corelib/util/common"
 )
 
 const (

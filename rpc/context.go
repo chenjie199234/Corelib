@@ -3,7 +3,7 @@ package rpc
 import (
 	"context"
 
-	"github.com/chenjie199234/Corelib/sys/cpu"
+	"github.com/chenjie199234/Corelib/util/cpu"
 )
 
 type Context struct {

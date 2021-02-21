@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/chenjie199234/Corelib/common"
+	"github.com/chenjie199234/Corelib/util/common"
 )
 
 const (

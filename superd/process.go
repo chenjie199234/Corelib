@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/util/common"
 )
 
 const (

@@ -24,7 +24,7 @@ const (
 	jsonPackage    = protogen.GoImportPath("encoding/json")
 	contextPackage = protogen.GoImportPath("context")
 	webPackage     = protogen.GoImportPath("github.com/chenjie199234/Corelib/web")
-	commonPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/common")
+	commonPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
 	bufpoolPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/bufpool")
 )
 

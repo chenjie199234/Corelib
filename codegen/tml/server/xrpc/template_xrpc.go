@@ -16,7 +16,6 @@ import (
 	"{{.}}/service"
 	"{{.}}/source"
 
-	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/rpc"
 	"github.com/chenjie199234/Corelib/rpc/mids"
 	"github.com/chenjie199234/Corelib/stream"
@@ -36,7 +35,7 @@ func StartRpcServer() {
 			AppWriteBufferNum: 65535,
 		},
 	}
-	s = rpc.NewRpcServer(rpcc, time.Duration(c.RpcTimeout), common.Str2byte(c.RpcVerifydata))
+	s = rpc.NewRpcServer(rpcc, time.Duration(c.RpcTimeout), []byte(c.RpcVerifydata))
 
 	//this place can register global midwares
 	//s.Use(globalmidwares)

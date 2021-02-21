@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/metadata"
+	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/metadata"
 	"github.com/julienschmidt/httprouter"
 )
 

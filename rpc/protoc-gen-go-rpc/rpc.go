@@ -26,7 +26,7 @@ const (
 	contextPackage = protogen.GoImportPath("context")
 	rpcPackage     = protogen.GoImportPath("github.com/chenjie199234/Corelib/rpc")
 	streamPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/stream")
-	commonPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/common")
+	commonPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
 	bufpoolPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/bufpool")
 )
 

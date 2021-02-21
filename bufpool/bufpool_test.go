@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	ctime "github.com/chenjie199234/Corelib/time"
+	ctime "github.com/chenjie199234/Corelib/util/time"
 )
 
 type A struct {

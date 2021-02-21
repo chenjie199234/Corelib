@@ -8,8 +8,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/common"
-	ctime "github.com/chenjie199234/Corelib/time"
+	"github.com/chenjie199234/Corelib/util/common"
+	ctime "github.com/chenjie199234/Corelib/util/time"
 )
 
 var pool *sync.Pool

@@ -7,22 +7,22 @@ import (
 
 func NameCheck(name string, haspoint bool) error {
 	if len(name) == 0 {
-		return errors.New("name is empty")
+		return errors.New("empty")
 	}
 	if len(name) > 32 {
-		return errors.New("name is too long")
+		return errors.New("too long")
 	}
 	if name[0] < 65 || (name[0] > 90 && name[0] < 97) || name[0] > 122 {
-		return errors.New("name's first character must in [a-z][A-Z]")
+		return errors.New("first character must in [a-z][A-Z]")
 	}
 	for _, v := range name {
 		if haspoint {
 			if (v != 46 && v < 48) || (v > 57 && v < 65) || (v > 90 && v < 97) || v > 122 {
-				return errors.New("name has illegal character,must in [a-z][A-Z][0-9][.]")
+				return errors.New("illegal character,must in [a-z][A-Z][0-9][.]")
 			}
 		} else {
 			if v < 48 || (v > 57 && v < 65) || (v > 90 && v < 97) || v > 122 {
-				return errors.New("name has illegal character,must in [a-z][A-Z][0-9]")
+				return errors.New("illegal character,must in [a-z][A-Z][0-9]")
 			}
 		}
 	}

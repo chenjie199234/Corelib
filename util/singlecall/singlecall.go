@@ -6,7 +6,7 @@ import (
 	"unsafe"
 )
 
-type Once struct {
+type SingleCall struct {
 	sync.Mutex
 	pool  *sync.Pool
 	calls map[string]*call
@@ -15,17 +15,17 @@ type call struct {
 	err   error
 	resp  unsafe.Pointer
 	wg    *sync.WaitGroup
-	once  *Once
+	once  *SingleCall
 	count int32
 }
 
-func NewOnce() *Once {
-	return &Once{
+func NewSingleCall() *SingleCall {
+	return &SingleCall{
 		pool:  &sync.Pool{},
 		calls: make(map[string]*call),
 	}
 }
-func (this *Once) getcall() *call {
+func (this *SingleCall) getcall() *call {
 	c, ok := this.pool.Get().(*call)
 	if !ok {
 		c = &call{
@@ -37,7 +37,7 @@ func (this *Once) getcall() *call {
 	}
 	return c
 }
-func (this *Once) putcall(c *call) {
+func (this *SingleCall) putcall(c *call) {
 	c.err = nil
 	c.resp = nil
 	c.wg = nil
@@ -45,7 +45,7 @@ func (this *Once) putcall(c *call) {
 	c.count = 0
 	this.pool.Put(c)
 }
-func (this *Once) Do(key string, f func() (unsafe.Pointer, error)) (resp unsafe.Pointer, e error) {
+func (this *SingleCall) Do(key string, f func() (unsafe.Pointer, error)) (resp unsafe.Pointer, e error) {
 	this.Lock()
 	c, ok := this.calls[key]
 	if !ok {

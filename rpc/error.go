@@ -1,7 +1,7 @@
 package rpc
 
 import (
-	"github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/util/error"
 )
 
 var (

@@ -12,8 +12,8 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/bufpool"
-	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/util/common"
 )
 
 func (this *Instance) StartTcpServer(listenaddr string) {

@@ -9,11 +9,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/chenjie199234/Corelib/common"
 	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/stream"
-	"github.com/chenjie199234/Corelib/sys/cpu"
+	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/cpu"
+	"github.com/chenjie199234/Corelib/util/metadata"
 
 	"google.golang.org/protobuf/proto"
 )

@@ -3,7 +3,7 @@ package error
 import (
 	"encoding/json"
 
-	"github.com/chenjie199234/Corelib/common"
+	"github.com/chenjie199234/Corelib/util/common"
 )
 
 //if error was not in merror format,code will return -1,msg will use the origin error.Error()

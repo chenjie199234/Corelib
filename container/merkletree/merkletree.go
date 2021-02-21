@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"hash"
 
-	"github.com/chenjie199234/Corelib/common"
+	"github.com/chenjie199234/Corelib/util/common"
 )
 
 type treeNode struct {
