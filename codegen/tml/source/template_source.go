@@ -243,7 +243,7 @@ func (c *sourceConfig) newsource() {
 		tempdb.SetConnMaxIdleTime(time.Duration(dbc.MaxIdletime))
 		dbs[k] = tempdb
 	}
-	caches = make(map[string]*redis.Client, len(c.Redis))
+	caches = make(map[string]*redis.Pool, len(c.Redis))
 	for k, redisc := range c.Redis {
 		if k == "example_redis" {
 			continue
