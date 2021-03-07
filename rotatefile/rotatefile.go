@@ -16,28 +16,13 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-type RotateCap uint //unit M
-type RotateTime uint
-type KeepDays uint //unit Day
-
-const (
-	RotateOff RotateTime = iota + 1
-	RotateHour
-	RotateDay
-	RotateMonth
-)
-
 //thread unsafe
 type RotateFile struct {
-	path      string
-	name      string
-	ext       string
+	c         *Config
 	file      *os.File
 	buffile   *bufio.Writer
 	maxcap    uint64
 	curcap    uint64
-	cycle     RotateTime
-	keep      uint64
 	lastcycle *time.Time
 
 	sync.Mutex
@@ -47,6 +32,14 @@ type RotateFile struct {
 
 	status int32 //0 closed,1 working
 	waitch chan struct{}
+}
+type Config struct {
+	Path        string
+	Name        string
+	Ext         string
+	RotateCap   uint //unit M
+	RotateCycle uint //0-off,1-hour,2-day,3-week,4-month
+	KeepDays    uint //unit day
 }
 
 type node struct {
@@ -68,26 +61,26 @@ func (f *RotateFile) putnode(n *node) {
 	}
 	f.pool.Put(n)
 }
-func NewRotateFile(path, name, ext string, maxcap RotateCap, cycle RotateTime, maxdays KeepDays) (*RotateFile, error) {
+
+//rotatecap unit M
+//rotatecycle 0-off,1-hour,2-day,3-week,4-month
+//keeydays unit day
+func NewRotateFile(c *Config) (*RotateFile, error) {
 	//create the first file
-	if path == "" {
+	if c.Path == "" {
 		//default current dir
-		path = "./"
+		c.Path = "./"
 	}
-	tempfile, now, e := createfile(path, name, ext)
+	tempfile, now, e := createfile(c.Path, c.Name, c.Ext)
 	if e != nil {
 		return nil, e
 	}
 	rf := &RotateFile{
-		path:      path,
-		name:      name,
-		ext:       ext,
+		c:         c,
 		file:      tempfile,
 		buffile:   bufio.NewWriterSize(tempfile, 4096),
-		maxcap:    uint64(maxcap) * 1024 * 1024,
+		maxcap:    uint64(c.RotateCap) * 1024 * 1024,
 		curcap:    0,
-		cycle:     cycle,
-		keep:      uint64(maxdays),
 		lastcycle: now,
 
 		pool: &sync.Pool{},
@@ -137,7 +130,7 @@ func createfile(path string, name string, ext string) (*os.File, *time.Time, err
 func (f *RotateFile) run() {
 	f.runcleaner()
 	tker := time.NewTicker(time.Second)
-	cleantker := time.NewTicker(24 * time.Hour)
+	cleantker := time.NewTicker(time.Hour)
 	for {
 		select {
 		case <-tker.C:
@@ -174,12 +167,12 @@ func (f *RotateFile) run() {
 	}
 }
 func (f *RotateFile) runcleaner() {
-	if f.keep == 0 {
+	if f.c.KeepDays == 0 {
 		return
 	}
 	now := time.Now()
 	now = now.UTC()
-	finfos, e := ioutil.ReadDir(f.path)
+	finfos, e := ioutil.ReadDir(f.c.Path)
 	if e != nil {
 		fmt.Printf("[rotate file] read file dir error:%s\n", e)
 		return
@@ -194,7 +187,7 @@ func (f *RotateFile) runcleaner() {
 		}
 		filename := filepath.Base(finfo.Name())
 		var timestr string
-		if f.name != "" {
+		if f.c.Name != "" {
 			index1 := strings.Index(filename, "_")
 			if index1 == -1 {
 				continue
@@ -205,11 +198,11 @@ func (f *RotateFile) runcleaner() {
 			}
 			timestr = filename[:index1+index2+1]
 			reststr := filename[index1+index2+2:]
-			if !strings.HasPrefix(reststr, f.name) {
+			if !strings.HasPrefix(reststr, f.c.Name) {
 				continue
 			}
-			extstr := reststr[len(f.name):]
-			if f.ext == "" {
+			extstr := reststr[len(f.c.Name):]
+			if f.c.Ext == "" {
 				if extstr != "" {
 					continue
 				}
@@ -220,7 +213,7 @@ func (f *RotateFile) runcleaner() {
 				if extstr[0] != '.' {
 					continue
 				}
-				if extstr != f.ext && extstr[1:] != f.ext {
+				if extstr != f.c.Ext && extstr[1:] != f.c.Ext {
 					continue
 				}
 			}
@@ -231,7 +224,7 @@ func (f *RotateFile) runcleaner() {
 			}
 			timestr = filename[:index]
 			extstr := filename[index:]
-			if f.ext == "" {
+			if f.c.Ext == "" {
 				if extstr != "" {
 					continue
 				}
@@ -239,7 +232,7 @@ func (f *RotateFile) runcleaner() {
 				if extstr == "" {
 					continue
 				}
-				if extstr != f.ext && extstr[1:] != f.ext {
+				if extstr != f.c.Ext && extstr[1:] != f.c.Ext {
 					continue
 				}
 			}
@@ -248,8 +241,8 @@ func (f *RotateFile) runcleaner() {
 		if e != nil {
 			continue
 		}
-		if now.Sub(t) >= time.Duration(f.keep)*24*time.Hour {
-			if e = os.Remove(f.path + "/" + filename); e != nil {
+		if now.Sub(t) >= time.Duration(f.c.KeepDays)*24*time.Hour {
+			if e = os.Remove(f.c.Path + "/" + filename); e != nil {
 				fmt.Printf("[rotate file] clean old file error:%s\n", e)
 			}
 		}
@@ -263,23 +256,27 @@ func (f *RotateFile) runticker() {
 	now := time.Now()
 	now = now.UTC()
 	need := false
-	switch f.cycle {
-	case RotateHour:
+	switch f.c.RotateCycle {
+	case 1:
 		if f.lastcycle.Hour() != now.Hour() {
 			need = true
 		}
-	case RotateDay:
+	case 2:
 		if f.lastcycle.Day() != now.Day() {
 			need = true
 		}
-	case RotateMonth:
+	case 3:
+		if f.lastcycle.Weekday() == now.Weekday() && f.lastcycle.Day() != now.Day() {
+			need = true
+		}
+	case 4:
 		if f.lastcycle.Month() != now.Month() {
 			need = true
 		}
 	}
 	need = true
 	if need {
-		tempfile, now, e := createfile(f.path, f.name, f.ext)
+		tempfile, now, e := createfile(f.c.Path, f.c.Name, f.c.Ext)
 		if e != nil {
 			fmt.Println(e)
 			return
@@ -298,7 +295,7 @@ func (f *RotateFile) runwriter(data *bufpool.Buffer) {
 				bufpool.PutBuffer(data)
 				return
 			}
-			tempfile, now, e := createfile(f.path, f.name, f.ext)
+			tempfile, now, e := createfile(f.c.Path, f.c.Name, f.c.Ext)
 			if e != nil {
 				fmt.Println(e)
 				bufpool.PutBuffer(data)
@@ -308,16 +305,20 @@ func (f *RotateFile) runwriter(data *bufpool.Buffer) {
 			f.file = tempfile
 			f.buffile.Reset(f.file)
 			f.curcap = 0
-			switch f.cycle {
-			case RotateHour:
+			switch f.c.RotateCycle {
+			case 1:
 				if f.lastcycle.Hour() != now.Hour() {
 					f.lastcycle = now
 				}
-			case RotateDay:
+			case 2:
 				if f.lastcycle.Day() != now.Day() {
 					f.lastcycle = now
 				}
-			case RotateMonth:
+			case 3:
+				if f.lastcycle.Weekday() == now.Weekday() && f.lastcycle.Day() != now.Day() {
+					f.lastcycle = now
+				}
+			case 4:
 				if f.lastcycle.Month() != now.Month() {
 					f.lastcycle = now
 				}

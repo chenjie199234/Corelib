@@ -26,6 +26,9 @@ type Config struct {
 	ConnTimeout time.Duration
 }
 
+var ErrNil = redis.ErrNil
+var ErrPoolExhausted = redis.ErrPoolExhausted
+
 var p *sync.Pool
 
 func init() {

@@ -9,8 +9,8 @@ import (
 )
 
 func Test_Server1(t *testing.T) {
-	instance := NewDiscoveryServer(&stream.InstanceConfig{
-		SelfName:           "server1",
+	instance, e := NewDiscoveryServer(&stream.InstanceConfig{
+		SelfName:           "server",
 		HeartbeatTimeout:   5 * time.Second,
 		HeartprobeInterval: 2 * time.Second,
 		GroupNum:           1,
@@ -21,22 +21,30 @@ func Test_Server1(t *testing.T) {
 			AppWriteBufferNum:    256,
 		},
 	}, []byte{'t', 'e', 's', 't'})
+	if e != nil {
+		panic(e)
+	}
 	go func() {
 		tker := time.NewTicker(time.Second)
 		for {
 			<-tker.C
-			if instance != nil {
-				instance.lker.RLock()
-				fmt.Println(instance.allapps)
-				instance.lker.RUnlock()
+			if instance.groups["client1"] != nil {
+				fmt.Println("client1:", " apps:", instance.groups["client1"].apps, " bewatched:", instance.groups["client1"].bewatched)
+			} else {
+				fmt.Println("client1: nil")
+			}
+			if instance.groups["client2"] != nil {
+				fmt.Println("client2:", " apps:", instance.groups["client2"].apps, " bewatched:", instance.groups["client2"].bewatched)
+			} else {
+				fmt.Println("client2: nil")
 			}
 		}
 	}()
 	instance.StartDiscoveryServer("127.0.0.1:9234")
 }
 func Test_Server2(t *testing.T) {
-	instance := NewDiscoveryServer(&stream.InstanceConfig{
-		SelfName:           "server2",
+	instance, _ := NewDiscoveryServer(&stream.InstanceConfig{
+		SelfName:           "server",
 		HeartbeatTimeout:   5 * time.Second,
 		HeartprobeInterval: 2 * time.Second,
 		GroupNum:           1,
@@ -52,9 +60,16 @@ func Test_Server2(t *testing.T) {
 		for {
 			<-tker.C
 			if instance != nil {
-				instance.lker.RLock()
-				fmt.Println(instance.allapps)
-				instance.lker.RUnlock()
+				if instance.groups["client1"] != nil {
+					fmt.Println("client1:", " apps:", instance.groups["client1"].apps, " bewatched:", instance.groups["client1"].bewatched)
+				} else {
+					fmt.Println("client1: nil")
+				}
+				if instance.groups["client2"] != nil {
+					fmt.Println("client2:", " apps:", instance.groups["client2"].apps, " bewatched:", instance.groups["client2"].bewatched)
+				} else {
+					fmt.Println("client2: nil")
+				}
 			}
 		}
 	}()

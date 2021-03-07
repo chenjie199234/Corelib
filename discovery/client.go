@@ -28,16 +28,19 @@ var (
 )
 
 //in this function,call UpdateDiscoveryServers() to update the discovery servers
-type DiscoveryServerFinder func()
+type DiscoveryServerFinder func(manually chan struct{})
 
 //serveruniquename = servername:ip:port
 type DiscoveryClient struct {
 	selfname   string
 	verifydata []byte
 	instance   *stream.Instance
-	regmsg     []byte
-	finder     DiscoveryServerFinder
+	regdata    []byte
 	status     int //0-closing,1-working
+
+	//finder
+	finder   DiscoveryServerFinder
+	manually chan struct{}
 	//other
 	lker    *sync.RWMutex
 	servers map[string]*servernode //key serveruniquename
@@ -45,8 +48,6 @@ type DiscoveryClient struct {
 	rpcnotices map[string]map[chan struct{}]struct{}
 	webnotices map[string]map[chan struct{}]struct{}
 	nlker      *sync.RWMutex
-
-	appnodepool *sync.Pool
 }
 
 //appuniquename = appname:ip:port
@@ -54,30 +55,9 @@ type servernode struct {
 	lker      *sync.Mutex
 	peer      *stream.Peer
 	starttime uint64
-	allapps   map[string]map[string]*appnode //first key:appname,second key:appuniquename=appname:ip:port
-	status    int                            //0-closing,1-start,2-verify,3-connected,4-preparing,5-registered
-	regmsg    []byte
-}
-
-func (c *DiscoveryClient) getnode(appuniquename string, regdata []byte, regmsg *RegMsg) *appnode {
-	node, ok := c.appnodepool.Get().(*appnode)
-	if !ok {
-		return &appnode{
-			appuniquename: appuniquename,
-			regdata:       regdata,
-			regmsg:        regmsg,
-		}
-	}
-	node.appuniquename = appuniquename
-	node.regdata = regdata
-	node.regmsg = regmsg
-	return node
-}
-
-func (c *DiscoveryClient) putnode(n *appnode) {
-	n.appuniquename = ""
-	n.regdata = nil
-	c.appnodepool.Put(n)
+	allapps   map[string]map[string]*appnode //first key:appname,second key:appuniquename
+	status    int                            //0-closing,1-start,2-verified,3-connected,4-registered
+	regdata   []byte
 }
 
 var clientinstance *DiscoveryClient
@@ -85,25 +65,24 @@ var clientinstance *DiscoveryClient
 //this just start the client and sync the peers in the net
 //this will not register self into the net
 //please call the RegisterSelf() func to register self into the net
-func NewDiscoveryClient(c *stream.InstanceConfig, vdata []byte, finder DiscoveryServerFinder) {
+func NewDiscoveryClient(c *stream.InstanceConfig, vdata []byte, finder DiscoveryServerFinder) error {
 	if finder == nil {
-		log.Error("[Discovery.client] finder nil")
-		return
+		return errors.New("[Discovery.client] finder nil")
 	}
 	temp := &DiscoveryClient{
-		selfname:    c.SelfName,
-		verifydata:  vdata,
-		finder:      finder,
-		status:      1,
-		lker:        &sync.RWMutex{},
-		servers:     make(map[string]*servernode, 5),
-		webnotices:  make(map[string]map[chan struct{}]struct{}, 5),
-		rpcnotices:  make(map[string]map[chan struct{}]struct{}, 5),
-		nlker:       &sync.RWMutex{},
-		appnodepool: &sync.Pool{},
+		selfname:   c.SelfName,
+		verifydata: vdata,
+		status:     1,
+		finder:     finder,
+		manually:   make(chan struct{}, 1),
+		lker:       &sync.RWMutex{},
+		servers:    make(map[string]*servernode, 5),
+		webnotices: make(map[string]map[chan struct{}]struct{}, 5),
+		rpcnotices: make(map[string]map[chan struct{}]struct{}, 5),
+		nlker:      &sync.RWMutex{},
 	}
 	if !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&clientinstance)), nil, unsafe.Pointer(temp)) {
-		return
+		return nil
 	}
 	//tcp instance
 	dupc := *c //duplicate to remote the callback func race
@@ -111,9 +90,16 @@ func NewDiscoveryClient(c *stream.InstanceConfig, vdata []byte, finder Discovery
 	dupc.Onlinefunc = clientinstance.onlinefunc
 	dupc.Userdatafunc = clientinstance.userfunc
 	dupc.Offlinefunc = clientinstance.offlinefunc
-	clientinstance.instance = stream.NewInstance(&dupc)
-	go finder()
+	var e error
+	clientinstance.instance, e = stream.NewInstance(&dupc)
+	if e != nil {
+		return errors.New("[discovery.client.NewDiscoveryClient]new tcp instance error:" + e.Error())
+	}
+	go finder(clientinstance.manually)
+	return nil
 }
+
+//server addr format: servername:ip:port
 func UpdateDiscoveryServers(serveraddrs []string) {
 	clientinstance.lker.Lock()
 	if clientinstance.status == 0 {
@@ -143,7 +129,7 @@ func UpdateDiscoveryServers(serveraddrs []string) {
 	for _, saddr := range serveraddrs {
 		//check saddr
 		findex := strings.Index(saddr, ":")
-		if findex == -1 || len(saddr) == findex+1 {
+		if findex == -1 || findex == 0 || findex == len(saddr)-1 {
 			log.Error("[Discovery.client.UpdateDiscoveryServers] server addr:", saddr, "format error")
 			continue
 		}
@@ -166,7 +152,7 @@ func UpdateDiscoveryServers(serveraddrs []string) {
 				starttime: 0,
 				allapps:   make(map[string]map[string]*appnode, 5),
 				status:    1,
-				regmsg:    clientinstance.regmsg,
+				regdata:   clientinstance.regdata,
 			}
 			clientinstance.servers[saddr] = server
 			go clientinstance.start(saddr[findex+1:], saddr[:findex])
@@ -189,6 +175,10 @@ func (c *DiscoveryClient) start(addr, servername string) {
 		if server.status == 0 {
 			server.lker.Unlock()
 		} else {
+			select {
+			case c.manually <- struct{}{}:
+			default:
+			}
 			server.status = 1
 			server.lker.Unlock()
 			time.Sleep(100 * time.Millisecond)
@@ -224,16 +214,18 @@ func RegisterSelf(regmsg *RegMsg) error {
 		return ERRREGMSG_CHAR
 	}
 	clientinstance.lker.Lock()
-	if clientinstance.regmsg != nil {
+	if clientinstance.regdata != nil {
 		clientinstance.lker.Unlock()
 		return ERRREG
 	}
-	clientinstance.regmsg = d
-	for _, server := range clientinstance.servers {
+	clientinstance.regdata = d
+	for serveruniquename, server := range clientinstance.servers {
 		server.lker.Lock()
-		server.regmsg = d
-		if server.status == 4 {
-			server.peer.SendMessage(makeOnlineMsg("", clientinstance.regmsg), server.starttime, true)
+		server.regdata = d
+		if server.status == 3 {
+			server.status = 4
+			log.Info("[Discovery.client.RegisterSelf] register to server:", serveruniquename, "with data:", common.Byte2str(clientinstance.regdata))
+			server.peer.SendMessage(makeOnlineMsg("useless", clientinstance.regdata), server.starttime, true)
 		}
 		server.lker.Unlock()
 	}
@@ -245,11 +237,15 @@ func UnRegisterSelf() error {
 		return ERRINIT
 	}
 	clientinstance.lker.Lock()
+	if clientinstance.status == 0 {
+		clientinstance.lker.Unlock()
+		return nil
+	}
 	clientinstance.status = 0
 	for k, server := range clientinstance.servers {
 		server.lker.Lock()
 		server.status = 0
-		server.regmsg = nil
+		server.regdata = nil
 		delete(clientinstance.servers, k)
 		server.lker.Unlock()
 	}
@@ -262,14 +258,24 @@ func NoticeWebChanges(appname string) (chan struct{}, error) {
 	if clientinstance == nil {
 		return nil, ERRINIT
 	}
+	pullmsg := makePullMsg(appname)
+	clientinstance.lker.RLock()
+	for _, server := range clientinstance.servers {
+		server.lker.Lock()
+		if server.status >= 3 {
+			server.peer.SendMessage(pullmsg, server.starttime, true)
+		}
+		server.lker.Unlock()
+	}
+	clientinstance.lker.RUnlock()
 	clientinstance.nlker.Lock()
-	defer clientinstance.nlker.Unlock()
 	if _, ok := clientinstance.webnotices[appname]; !ok {
 		clientinstance.webnotices[appname] = make(map[chan struct{}]struct{}, 10)
 	}
 	ch := make(chan struct{}, 1)
 	ch <- struct{}{}
 	clientinstance.webnotices[appname][ch] = struct{}{}
+	clientinstance.nlker.Unlock()
 	return ch, nil
 }
 
@@ -277,6 +283,16 @@ func NoticeRpcChanges(appname string) (chan struct{}, error) {
 	if clientinstance == nil {
 		return nil, ERRINIT
 	}
+	pullmsg := makePullMsg(appname)
+	clientinstance.lker.RLock()
+	for _, server := range clientinstance.servers {
+		server.lker.Lock()
+		if server.status >= 3 {
+			server.peer.SendMessage(pullmsg, server.starttime, true)
+		}
+		server.lker.Unlock()
+	}
+	clientinstance.lker.RUnlock()
 	clientinstance.nlker.Lock()
 	defer clientinstance.nlker.Unlock()
 	if _, ok := clientinstance.rpcnotices[appname]; !ok {
@@ -376,17 +392,35 @@ func (c *DiscoveryClient) onlinefunc(p *stream.Peer, serveruniquename string, st
 		server.lker.Unlock()
 		return
 	}
+	log.Info("[Discovery.client.onlinefunc] server:", serveruniquename, "online")
 	server.peer = p
 	server.starttime = starttime
 	server.status = 3
 	p.SetData(unsafe.Pointer(server))
-	//after online the first message is pull all registered peers
-	p.SendMessage(makePullMsg(), starttime, true)
+	if server.regdata != nil {
+		server.status = 4
+		log.Info("[Discovery.client.onlinefunc] register to server:", serveruniquename, "with data:", common.Byte2str(server.regdata))
+		server.peer.SendMessage(makeOnlineMsg("useless", server.regdata), server.starttime, true)
+	}
+	clientinstance.nlker.RLock()
+	result := make(map[string]struct{}, 5)
+	for k := range clientinstance.rpcnotices {
+		result[k] = struct{}{}
+	}
+	for k := range clientinstance.webnotices {
+		result[k] = struct{}{}
+	}
+	clientinstance.nlker.RUnlock()
+	for k := range result {
+		server.peer.SendMessage(makePullMsg(k), server.starttime, true)
+	}
 	server.lker.Unlock()
-	log.Info("[Discovery.client.onlinefunc] server:", serveruniquename, "online")
 	return
 }
 func (c *DiscoveryClient) userfunc(p *stream.Peer, serveruniquename string, origindata []byte, starttime uint64) {
+	if len(origindata) == 0 {
+		return
+	}
 	data := make([]byte, len(origindata))
 	copy(data, origindata)
 	server := (*servernode)(p.GetData())
@@ -397,143 +431,58 @@ func (c *DiscoveryClient) userfunc(p *stream.Peer, serveruniquename string, orig
 	defer server.lker.Unlock()
 	switch data[0] {
 	case msgonline:
-		onlineapp, regdata, e := getOnlineMsg(data)
-		if e != nil {
-			log.Error("[Discovery.client.userfunc] server:", serveruniquename, "online message:", common.Byte2str(data), "broken")
+		appuniquename, regdata := getOnlineMsg(data)
+		if appuniquename == "" || regdata == nil {
+			log.Error("[Discovery.client.userfunc] server:", serveruniquename, "online app with online message:", common.Byte2str(data), "format error")
 			p.Close()
 			return
 		}
-		regmsg := &RegMsg{}
-		if e = json.Unmarshal(regdata, regmsg); e != nil || (regmsg.RpcPort == 0 && (regmsg.WebPort == 0 || regmsg.WebScheme == "")) {
-			log.Error("[Discovery.client.userfunc] server:", serveruniquename, "online app:", onlineapp, "register message:", common.Byte2str(regdata), "broken")
+		reg := &RegMsg{}
+		if e := json.Unmarshal(regdata, reg); e != nil {
+			log.Error("[Discovery.client.userfunc] server:", serveruniquename, "online app:", appuniquename, "with register message:", common.Byte2str(regdata), "format error:", e)
 			p.Close()
 			return
 		}
-		appname := onlineapp[:strings.Index(onlineapp, ":")]
-		node := c.getnode(onlineapp, regdata, regmsg)
+		if reg.RpcPort == 0 && (reg.WebPort == 0 || reg.WebScheme == "") {
+			log.Error("[Discovery.server.userfunc] server:", serveruniquename, "online app:", appuniquename, "with empty register message:", common.Byte2str(regdata))
+			p.Close()
+			return
+		}
+		appname := appuniquename[:strings.Index(appuniquename, ":")]
+		if group, ok := server.allapps[appname]; ok {
+			if _, ok := group[appuniquename]; ok {
+				return
+			}
+		}
+		node := &appnode{
+			appuniquename: appuniquename,
+			regdata:       regdata,
+			regmsg:        reg,
+		}
 		if _, ok := server.allapps[appname]; !ok {
 			server.allapps[appname] = make(map[string]*appnode, 5)
 		}
-		server.allapps[appname][onlineapp] = node
+		server.allapps[appname][appuniquename] = node
 		c.nlker.RLock()
-		c.notice(onlineapp)
+		c.notice(appname)
 		c.nlker.RUnlock()
-		if appname == c.selfname {
-			log.Info("[Discovery.client.userfunc] registered on server:", serveruniquename)
-		}
 	case msgoffline:
-		offlineapp, e := getOfflineMsg(data)
-		if e != nil {
+		fmt.Println("offline")
+		appuniquename := getOfflineMsg(data)
+		if appuniquename == "" {
 			//this is impossible
-			log.Error("[Discovery.client.userfunc] server:", serveruniquename, "offline message:", common.Byte2str(data), "broken")
+			log.Error("[Discovery.client.userfunc] server:", serveruniquename, "offline app with offline message:", common.Byte2str(data), "format error")
 			p.Close()
 			return
 		}
-		appname := offlineapp[:strings.Index(offlineapp, ":")]
-		if _, ok := server.allapps[appname]; !ok {
-			//this is impossible
-			log.Error("[Discovery.client.userfunc] app:", offlineapp, "missing")
-			p.SendMessage(makePullMsg(), server.starttime, true)
-			return
-		}
-		node, ok := server.allapps[appname][offlineapp]
-		if !ok {
-			//this is impossible
-			log.Error("[Discovery.client.userfunc] app:", offlineapp, "missing")
-			p.SendMessage(makePullMsg(), server.starttime, true)
-			return
-		}
-		delete(server.allapps[appname], offlineapp)
-		c.putnode(node)
+		appname := appuniquename[:strings.Index(appuniquename, ":")]
+		delete(server.allapps[appname], appuniquename)
 		if len(server.allapps[appname]) == 0 {
 			delete(server.allapps, appname)
 		}
 		c.nlker.RLock()
-		c.notice(offlineapp)
+		c.notice(appname)
 		c.nlker.RUnlock()
-	case msgpush:
-		all, e := getPushMsg(data)
-		if e != nil {
-			//this is impossible
-			log.Error("[Discovery.client.userfunc] server:", serveruniquename, "push message:", common.Byte2str(data), "broken")
-			p.Close()
-			return
-		}
-		notices := make(map[string]struct{})
-		for appname, oldappgroup := range server.allapps {
-			for _, oldapp := range oldappgroup {
-				if newmsg, ok := all[oldapp.appuniquename]; !ok {
-					//delete
-					delete(oldappgroup, oldapp.appuniquename)
-					notices[oldapp.appuniquename] = struct{}{}
-				} else if !bytes.Equal(oldapp.regdata, newmsg) {
-					//this is impossible
-					log.Error("[Discovery.client.userfunc] app:", oldapp.appuniquename,
-						"regmsg changed from:", common.Byte2str(oldapp.regdata), "to:", common.Byte2str(newmsg))
-					//replace
-					regmsg := &RegMsg{}
-					e = json.Unmarshal(newmsg, regmsg)
-					if e != nil || (regmsg.RpcPort == 0 && (regmsg.WebPort == 0 || regmsg.WebScheme == "")) {
-						//this is impossible
-						log.Error("[Discovery.client.userfunc] server:", serveruniquename,
-							"app:", oldapp.appuniquename, "regmsg:", common.Byte2str(newmsg), "broken")
-						p.Close()
-						return
-					}
-					oldapp.regdata = newmsg
-					oldapp.regmsg = regmsg
-					notices[oldapp.appuniquename] = struct{}{}
-				}
-			}
-			if len(oldappgroup) == 0 {
-				delete(server.allapps, appname)
-			}
-		}
-		for newapp, newmsg := range all {
-			regmsg := &RegMsg{}
-			if e = json.Unmarshal(newmsg, regmsg); e != nil || (regmsg.RpcPort == 0 && (regmsg.WebPort == 0 || regmsg.WebScheme == "")) {
-				//thie is impossible
-				log.Error("[Discovery.client.userfunc] server:", serveruniquename, "app:", newapp, "regmsg:", common.Byte2str(newmsg), "broken")
-				p.Close()
-				return
-			}
-			appname := newapp[:strings.Index(newapp, ":")]
-			if _, ok := server.allapps[appname]; !ok {
-				//add
-				server.allapps[appname] = make(map[string]*appnode, 5)
-				server.allapps[appname][newapp] = c.getnode(newapp, newmsg, regmsg)
-				notices[newapp] = struct{}{}
-			} else if oldapp, ok := server.allapps[appname][newapp]; !ok {
-				//add
-				server.allapps[appname][newapp] = c.getnode(newapp, newmsg, regmsg)
-				notices[newapp] = struct{}{}
-			} else if !bytes.Equal(oldapp.regdata, newmsg) {
-				//this is impossible
-				log.Error("[Discovery.client.userfunc] server:", serveruniquename,
-					"app:", newapp, "regmsg changed from:", common.Byte2str(oldapp.regdata), "to:", common.Byte2str(newmsg))
-				//replace
-				oldapp.regdata = newmsg
-				oldapp.regmsg = regmsg
-				notices[newapp] = struct{}{}
-			}
-		}
-		//notice
-		c.nlker.RLock()
-		for app := range notices {
-			c.notice(app)
-		}
-		c.nlker.RUnlock()
-		if server.status == 3 {
-			log.Info("[Discovery.client.userfunc] prepared on server:", serveruniquename)
-			if len(server.regmsg) != 0 {
-				fmt.Printf("regmsg:%s\n", server.regmsg)
-				server.status = 5
-				server.peer.SendMessage(makeOnlineMsg("", server.regmsg), server.starttime, true)
-			} else {
-				fmt.Println("regmsg:nil")
-				server.status = 4
-			}
-		}
 	default:
 		log.Error("[Discovery.client.userfunc] unknown message type")
 		p.Close()
@@ -550,16 +499,18 @@ func (c *DiscoveryClient) offlinefunc(p *stream.Peer, serveruniquename string, s
 	server.starttime = 0
 	//notice
 	c.nlker.Lock()
-	for _, appgroup := range server.allapps {
-		for _, app := range appgroup {
-			clientinstance.notice(app.appuniquename)
-		}
+	for appname := range server.allapps {
+		c.notice(appname)
 	}
 	c.nlker.Unlock()
 	server.allapps = make(map[string]map[string]*appnode, 5)
 	if server.status == 0 {
 		server.lker.Unlock()
 	} else {
+		select {
+		case c.manually <- struct{}{}:
+		default:
+		}
 		server.status = 1
 		server.lker.Unlock()
 		time.Sleep(100 * time.Millisecond)
@@ -567,8 +518,7 @@ func (c *DiscoveryClient) offlinefunc(p *stream.Peer, serveruniquename string, s
 		go c.start(serveruniquename[index+1:], serveruniquename[:index])
 	}
 }
-func (c *DiscoveryClient) notice(appuniquename string) {
-	appname := appuniquename[:strings.Index(appuniquename, ":")]
+func (c *DiscoveryClient) notice(appname string) {
 	if notices, ok := c.rpcnotices[appname]; ok {
 		for n := range notices {
 			select {

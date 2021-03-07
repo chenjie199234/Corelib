@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"net"
-	"os"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -16,29 +15,26 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-func (this *Instance) StartTcpServer(listenaddr string) {
+func (this *Instance) StartTcpServer(listenaddr string) error {
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
-		log.Error("[Stream.TCP.StartTcpServer] resolve addr:", listenaddr, "error:", e)
-		os.Exit(1)
+		return errors.New("[Stream.TCP.StartTcpServer] resolve addr:" + listenaddr + " error:" + e.Error())
 	}
 	this.tcplistener, e = net.ListenTCP(laddr.Network(), laddr)
 	if e != nil {
-		log.Error("[Stream.TCP.StartTcpServer] listen addr:", listenaddr, "error:", e)
-		os.Exit(1)
+		return errors.New("[Stream.TCP.StartTcpServer] listen addr:" + listenaddr + " error:" + e.Error())
 	}
 	for {
 		p := this.getPeer(TCP, CLIENT, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, this.conf.SelfName)
 		conn, e := this.tcplistener.AcceptTCP()
 		if e != nil {
-			log.Error("[Stream.TCP.StartTcpServer] accept connect error:", e)
-			return
+			return errors.New("[Stream.TCP.Accept] accept connect error:" + e.Error())
 		}
 		if atomic.LoadInt32(&this.stop) == 1 {
 			conn.Close()
 			this.putPeer(p)
 			this.tcplistener.Close()
-			return
+			return errors.New("[Stream.TCP.Accept] server closed")
 		}
 		p.conn = unsafe.Pointer(conn)
 		p.setbuffer(this.conf.TcpC.SocketReadBufferLen, this.conf.TcpC.SocketWriteBufferLen)
@@ -50,29 +46,26 @@ func (this *Instance) StartTcpServer(listenaddr string) {
 		go this.sworker(p, this.conf.TcpC.MaxMessageLen)
 	}
 }
-func (this *Instance) StartUnixServer(listenaddr string) {
+func (this *Instance) StartUnixServer(listenaddr string) error {
 	laddr, e := net.ResolveUnixAddr("unix", listenaddr)
 	if e != nil {
-		log.Error("[Stream.UNIX.StartUnixServer] resolve addr:", listenaddr, "error:", e)
-		os.Exit(1)
+		return errors.New("[Stream.UNIX.StartUnixServer] resolve addr:" + listenaddr + " error:" + e.Error())
 	}
 	this.unixlistener, e = net.ListenUnix("unix", laddr)
 	if e != nil {
-		log.Error("[Stream.UNIX.StartUnixServer] listening addr:", listenaddr, "error:", e)
-		os.Exit(1)
+		return errors.New("[Stream.UNIX.StartUnixServer] listening addr:" + listenaddr + " error:" + e.Error())
 	}
 	for {
 		p := this.getPeer(UNIX, CLIENT, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, this.conf.SelfName)
 		conn, e := this.unixlistener.AcceptUnix()
 		if e != nil {
-			log.Error("[Stream.UNIX.StartUnixServer] accept connect error:", e)
-			return
+			return errors.New("[Stream.UNIX.Accept] accept connect error:" + e.Error())
 		}
 		if atomic.LoadInt32(&this.stop) == 1 {
 			conn.Close()
 			this.putPeer(p)
 			this.unixlistener.Close()
-			return
+			return errors.New("[Stream.UNIX.Accept] server closed")
 		}
 		p.conn = unsafe.Pointer(conn)
 		p.setbuffer(this.conf.UnixC.SocketReadBufferLen, this.conf.UnixC.SocketWriteBufferLen)

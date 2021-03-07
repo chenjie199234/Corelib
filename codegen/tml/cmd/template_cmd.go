@@ -27,6 +27,7 @@ help() {
 	echo "   build                     Complie this program to binary"
 	echo "   pb                        Generate the proto in this program"
 	echo "   new <sub service name>    Create a new sub service"
+	echo "   kubernetes                Update or add kubernetes config"
 	echo "   h/-h/help/-help/--help    Show this message."
 }
 
@@ -44,11 +45,15 @@ run() {
 
 build() {
 	go mod tidy
-	go build
+	go build -o main
 }
 
 new() {
 	codegen -n {{.}} -s $1
+}
+
+kubernetes() {
+	codegen -n {{.}} -k
 }
 
 if !(type git >/dev/null 2>&1);then
@@ -103,6 +108,11 @@ fi
 
 if [[ "$1" == "pb" ]];then
 	pb
+	exit 0
+fi
+
+if [[ "$1" == "kubernetes" ]];then
+	kubernetes
 	exit 0
 fi
 
@@ -206,6 +216,12 @@ if %1 == "pb" (
 if "%1" == "pb" (
 	goto :pb
 )
+if %1 == "kubernetes" (
+	goto :kubernetes
+)
+if "%1" ==  "kubernetes" (
+	goto :kubernetes
+)
 if %1 == "new" (
 	if "%2" == "" (
 		goto :help
@@ -239,7 +255,11 @@ goto :end
 
 :build
 	go mod tidy
-	go build
+	go build -o main.exe
+goto :end
+
+:kubernetes
+	codegen -n {{.}} -k
 goto :end
 
 :new

@@ -16,6 +16,7 @@ import (
 	"{{.}}/service"
 	"{{.}}/source"
 
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/web"
 	"github.com/chenjie199234/Corelib/web/mids"
 )
@@ -47,11 +48,20 @@ func StartWebServer() {
 	//s.Use(globalmidwares)
 
 	//you just need to register your service here
-	api.RegisterStatusWebServer(s, service.SvcStatus, mids.AllMids())
+	if e := api.RegisterStatusWebServer(s, service.SvcStatus, mids.AllMids()); e != nil {
+		log.Error("[xweb] register handlers error:", e)
+		return
+	}
 	//example
-	//api.RegisterExampleWebServer(s, service.SvcExample, mids.AllMids())
+	//if e := api.RegisterExampleWebServer(s, service.SvcExample, mids.AllMids()); e != nil {
+	//log.Error("[xweb] register handlers error:", e)
+	//return
+	//}
 
-	s.StartWebServer(fmt.Sprintf(":%d", c.HttpPort), c.HttpCertFile, c.HttpKeyFile)
+	if e := s.StartWebServer(fmt.Sprintf(":%d", c.HttpPort), c.HttpCertFile, c.HttpKeyFile); e != nil {
+		log.Error("[xweb] start web server error:", e)
+		return
+	}
 }
 
 //StopWebServer -

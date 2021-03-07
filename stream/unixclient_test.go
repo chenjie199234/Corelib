@@ -18,7 +18,7 @@ func Test_Unixclient(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	go func() {
 		for count := 0; count < 1; count++ {
-			unixclientinstance := NewInstance(&InstanceConfig{
+			unixclientinstance, _ := NewInstance(&InstanceConfig{
 				//SelfName: fmt.Sprintf("unixclient%d", count),
 				SelfName:           "unixclientd",
 				HeartbeatTimeout:   1500 * time.Millisecond,

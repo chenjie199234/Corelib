@@ -100,8 +100,12 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	p2 := "picker " + g.QualifiedGoIdent(webPackage.Ident("PickHandler"))
 	p3 := "discover " + g.QualifiedGoIdent(webPackage.Ident("DiscoveryHandler"))
 	g.P("//has race,will only return the first's call's client,the config will use the first call's config")
-	g.P("func New", clientName, "(", p1, ",", p2, ",", p3, ")", clientName, "{")
-	g.P("return &", lowclientName, "{cc:", g.QualifiedGoIdent(webPackage.Ident("NewWebClient")), "(\"", *file.Proto.Package, "\",globaltimeout,picker,discover)}")
+	g.P("func New", clientName, "(", p1, ",", p2, ",", p3, ")(", clientName, ",error){")
+	g.P("cc,e:=", g.QualifiedGoIdent(webPackage.Ident("NewWebClient")), "(\"", *file.Proto.Package, "\",globaltimeout,picker,discover)")
+	g.P("if e != nil{")
+	g.P("return nil,e")
+	g.P("}")
+	g.P("return &", lowclientName, "{cc:cc},nil")
 	g.P("}")
 	g.P()
 	// Client handler
@@ -377,7 +381,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	}
 
 	//Server Register
-	g.P("func Register", serverName, "(engine *", g.QualifiedGoIdent(webPackage.Ident("WebServer")), ",svc ", serverName, ",allmids map[string]", g.QualifiedGoIdent(webPackage.Ident("OutsideHandler")), "){")
+	g.P("func Register", serverName, "(engine *", g.QualifiedGoIdent(webPackage.Ident("WebServer")), ",svc ", serverName, ",allmids map[string]", g.QualifiedGoIdent(webPackage.Ident("OutsideHandler")), ")error{")
 	g.P("//avoid lint")
 	g.P("_=allmids")
 	for _, method := range service.Methods {
@@ -408,32 +412,53 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 			g.P("mids = append(mids,", fname, ")")
 			switch r.method {
 			case http.MethodGet:
-				g.P("engine.Get(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...)")
+				g.P("if e:=engine.Get(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...);e!=nil{")
+				g.P("return e")
+				g.P("}")
 			case http.MethodPost:
-				g.P("engine.Post(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...)")
+				g.P("if e:=engine.Post(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...);e!=nil{")
+				g.P("return e")
+				g.P("}")
 			case http.MethodPut:
-				g.P("engine.Put(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...)")
+				g.P("if e:=engine.Put(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...);e!=nil{")
+				g.P("return e")
+				g.P("}")
 			case http.MethodPatch:
-				g.P("engine.Patch(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...)")
+				g.P("if e:=engine.Patch(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...);e!=nil{")
+				g.P("return e")
+				g.P("}")
 			case http.MethodDelete:
-				g.P("engine.Delete(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...)")
+				g.P("if e:=engine.Delete(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...);e!=nil{")
+				g.P("return e")
+				g.P("}")
 			}
 			g.P("}")
 		} else {
 			switch r.method {
 			case http.MethodGet:
-				g.P("engine.Get(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ")")
+				g.P("if e:=engine.Get(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ");e!=nil{")
+				g.P("return e")
+				g.P("}")
 			case http.MethodPost:
-				g.P("engine.Post(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ")")
+				g.P("if e:=engine.Post(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ");e!=nil{")
+				g.P("return e")
+				g.P("}")
 			case http.MethodPut:
-				g.P("engine.Put(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ")")
+				g.P("if e:=engine.Put(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ");e!=nil{")
+				g.P("return e")
+				g.P("}")
 			case http.MethodPatch:
-				g.P("engine.Patch(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ")")
+				g.P("if e:=engine.Patch(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ");e!=nil{")
+				g.P("return e")
+				g.P("}")
 			case http.MethodDelete:
-				g.P("engine.Delete(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ")")
+				g.P("if e:=engine.Delete(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ");e!=nil{")
+				g.P("return e")
+				g.P("}")
 			}
 		}
 	}
+	g.P("return nil")
 	g.P("}")
 }
 

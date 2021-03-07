@@ -16,6 +16,7 @@ import (
 	"{{.}}/service"
 	"{{.}}/source"
 
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/rpc"
 	"github.com/chenjie199234/Corelib/rpc/mids"
 	"github.com/chenjie199234/Corelib/stream"
@@ -27,7 +28,7 @@ var s *rpc.RpcServer
 func StartRpcServer() {
 	c := source.GetRpcConfig()
 	rpcc := &stream.InstanceConfig{
-		SelfName:"{{.}}",
+		SelfName:           "{{.}}",
 		HeartbeatTimeout:   time.Duration(c.RpcHeartTimeout),
 		HeartprobeInterval: time.Duration(c.RpcHeartProbe),
 		TcpC: &stream.TcpConfig{
@@ -35,17 +36,30 @@ func StartRpcServer() {
 			AppWriteBufferNum: 65535,
 		},
 	}
-	s = rpc.NewRpcServer(rpcc, time.Duration(c.RpcTimeout), []byte(c.RpcVerifydata))
+	var e error
+	if s, e = rpc.NewRpcServer(rpcc, time.Duration(c.RpcTimeout), []byte(c.RpcVerifydata)); e != nil {
+		log.Error("[xrpc] new rpc server error:", e)
+		return
+	}
 
 	//this place can register global midwares
 	//s.Use(globalmidwares)
 
 	//you just need to register your service here
-	api.RegisterStatusRpcServer(s, service.SvcStatus,mids.AllMids())
+	if e := api.RegisterStatusRpcServer(s, service.SvcStatus, mids.AllMids()); e != nil {
+		log.Error("[xrpc] register handlers error:", e)
+		return
+	}
 	//example
-	//api.RegisterExampleRpcServer(s, service.SvcExample,mids.AllMids())
+	//if e := api.RegisterExampleRpcServer(s, service.SvcExample,mids.AllMids()); e != nil {
+	//log.Error("[xrpc] register handlers error:", e)
+	//return
+	//}
 
-	s.StartRpcServer(fmt.Sprintf(":%d", c.RpcPort))
+	if e := s.StartRpcServer(fmt.Sprintf(":%d", c.RpcPort)); e != nil {
+		log.Error("[xrpc] start rpc server error:", e)
+		return
+	}
 }
 
 //StopRpcServer -

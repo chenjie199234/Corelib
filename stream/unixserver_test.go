@@ -16,7 +16,7 @@ var unixserverinstance *Instance
 
 func Test_Unixserver(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	unixserverinstance = NewInstance(&InstanceConfig{
+	unixserverinstance, _ = NewInstance(&InstanceConfig{
 		SelfName:           "server",
 		HeartbeatTimeout:   1500 * time.Millisecond,
 		HeartprobeInterval: 500 * time.Millisecond,

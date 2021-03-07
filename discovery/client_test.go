@@ -8,8 +8,9 @@ import (
 	"github.com/chenjie199234/Corelib/stream"
 )
 
-func finder() {
-	UpdateDiscoveryServers([]string{"server1:127.0.0.1:9234", "server2:127.0.0.1:9235"})
+func finder(manually chan struct{}) {
+	UpdateDiscoveryServers([]string{"server:127.0.0.1:9234", "server:127.0.0.1:9235"})
+	//UpdateDiscoveryServers([]string{"server:127.0.0.1:9234"})
 }
 func Test_Client1(t *testing.T) {
 	//go func() {
@@ -33,7 +34,7 @@ func Test_Client1(t *testing.T) {
 	//        }
 	//}()
 	NewDiscoveryClient(&stream.InstanceConfig{
-		SelfName:           "client",
+		SelfName:           "client1",
 		HeartbeatTimeout:   5 * time.Second,
 		HeartprobeInterval: 2 * time.Second,
 		GroupNum:           1,
@@ -44,11 +45,11 @@ func Test_Client1(t *testing.T) {
 			AppWriteBufferNum:    256,
 		},
 	}, []byte{'t', 'e', 's', 't'}, finder)
-	rch, e := NoticeRpcChanges("client")
+	rch, e := NoticeRpcChanges("client2")
 	if e != nil {
 		panic("notice grpc change error:" + e.Error())
 	}
-	wch, e := NoticeWebChanges("client")
+	wch, e := NoticeWebChanges("client2")
 	if e != nil {
 		panic("notice http change error:" + e.Error())
 	}
@@ -56,17 +57,18 @@ func Test_Client1(t *testing.T) {
 		for {
 			select {
 			case <-rch:
-				r, addition := GetRpcInfos("client")
+				r, addition := GetRpcInfos("client2")
 				fmt.Println(r)
 				fmt.Printf("%s\n", addition)
 			case <-wch:
-				r, addition := GetWebInfos("client")
+				r, addition := GetWebInfos("client2")
 				fmt.Println(r)
 				fmt.Printf("%s\n", addition)
 			}
 		}
 	}()
-	time.Sleep(time.Second)
+	time.Sleep(3 * time.Second)
+	fmt.Println("register start")
 	RegisterSelf(&RegMsg{
 		RpcIp:     "",
 		RpcPort:   9000,
@@ -74,13 +76,14 @@ func Test_Client1(t *testing.T) {
 		WebPort:   8000,
 		WebScheme: "https",
 	})
-	time.Sleep(time.Second * 10)
-	for i := 0; i < 10; i++ {
-		fmt.Println()
-	}
-	fmt.Println("unregister start")
-	UnRegisterSelf()
-	fmt.Println("unregister end")
+	fmt.Println("register end")
+	//time.Sleep(time.Second * 10)
+	//for i := 0; i < 10; i++ {
+	//        fmt.Println()
+	//}
+	//fmt.Println("unregister start")
+	//UnRegisterSelf()
+	//fmt.Println("unregister end")
 	select {}
 }
 func Test_Client2(t *testing.T) {
@@ -105,7 +108,7 @@ func Test_Client2(t *testing.T) {
 	//        }
 	//}()
 	NewDiscoveryClient(&stream.InstanceConfig{
-		SelfName:           "client",
+		SelfName:           "client2",
 		HeartbeatTimeout:   5 * time.Second,
 		HeartprobeInterval: 2 * time.Second,
 		GroupNum:           1,
@@ -116,11 +119,11 @@ func Test_Client2(t *testing.T) {
 			AppWriteBufferNum:    256,
 		},
 	}, []byte{'t', 'e', 's', 't'}, finder)
-	rch, e := NoticeRpcChanges("client")
+	rch, e := NoticeRpcChanges("client1")
 	if e != nil {
 		panic("notice grpc change error:" + e.Error())
 	}
-	wch, e := NoticeWebChanges("client")
+	wch, e := NoticeWebChanges("client1")
 	if e != nil {
 		panic("notice http change error:" + e.Error())
 	}
@@ -128,17 +131,18 @@ func Test_Client2(t *testing.T) {
 		for {
 			select {
 			case <-rch:
-				r, addition := GetRpcInfos("client")
+				r, addition := GetRpcInfos("client1")
 				fmt.Println(r)
 				fmt.Printf("%s\n", addition)
 			case <-wch:
-				r, addition := GetWebInfos("client")
+				r, addition := GetWebInfos("client1")
 				fmt.Println(r)
 				fmt.Printf("%s\n", addition)
 			}
 		}
 	}()
-	time.Sleep(time.Second)
+	time.Sleep(3 * time.Second)
+	fmt.Println("register start")
 	RegisterSelf(&RegMsg{
 		RpcIp:     "",
 		RpcPort:   9001,
@@ -146,12 +150,13 @@ func Test_Client2(t *testing.T) {
 		WebPort:   8001,
 		WebScheme: "https",
 	})
-	time.Sleep(time.Second * 10)
-	for i := 0; i < 10; i++ {
-		fmt.Println()
-	}
-	fmt.Println("unregister start")
-	UnRegisterSelf()
-	fmt.Println("unregister end")
+	fmt.Println("register end")
+	//time.Sleep(time.Second * 10)
+	//for i := 0; i < 10; i++ {
+	//        fmt.Println()
+	//}
+	//fmt.Println("unregister start")
+	//UnRegisterSelf()
+	//fmt.Println("unregister end")
 	select {}
 }

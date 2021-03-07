@@ -26,8 +26,12 @@ type firstRpcClient struct {
 }
 
 //has race,will only return the first's call's client,the config will use the first call's config
-func NewFirstRpcClient(c *stream.InstanceConfig, verifydata []byte, globaltimeout time.Duration, picker rpc.PickHandler, discover rpc.DiscoveryHandler) FirstRpcClient {
-	return &firstRpcClient{cc: rpc.NewRpcClient(c, verifydata, "first", globaltimeout, picker, discover)}
+func NewFirstRpcClient(c *stream.InstanceConfig, verifydata []byte, globaltimeout time.Duration, picker rpc.PickHandler, discover rpc.DiscoveryHandler) (FirstRpcClient, error) {
+	cc, e := rpc.NewRpcClient(c, verifydata, "first", globaltimeout, picker, discover)
+	if e != nil {
+		return nil, e
+	}
+	return &firstRpcClient{cc: cc}, nil
 }
 
 func (c *firstRpcClient) Hello(ctx context.Context, req *Helloreq) (*Helloresp, error) {
@@ -316,7 +320,7 @@ func _First_World_RpcHandler(handler func(context.Context, *Worldreq) (*Worldres
 		ctx.Write(respd)
 	}
 }
-func RegisterFirstRpcServer(engine *rpc.RpcServer, svc FirstRpcServer, allmids map[string]rpc.OutsideHandler) {
+func RegisterFirstRpcServer(engine *rpc.RpcServer, svc FirstRpcServer, allmids map[string]rpc.OutsideHandler) error {
 	//avoid lint
 	_ = allmids
 	{
@@ -328,7 +332,12 @@ func RegisterFirstRpcServer(engine *rpc.RpcServer, svc FirstRpcServer, allmids m
 			}
 		}
 		mids = append(mids, _First_Hello_RpcHandler(svc.Hello))
-		engine.RegisterHandler(RpcPathFirstHello, 200000000, mids...)
+		if e := engine.RegisterHandler(RpcPathFirstHello, 200000000, mids...); e != nil {
+			return e
+		}
 	}
-	engine.RegisterHandler(RpcPathFirstWorld, 0, _First_World_RpcHandler(svc.World))
+	if e := engine.RegisterHandler(RpcPathFirstWorld, 0, _First_World_RpcHandler(svc.World)); e != nil {
+		return e
+	}
+	return nil
 }

@@ -5,17 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"math"
 	"math/rand"
 	"net/http"
-	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/metadata"
 )
@@ -41,12 +37,12 @@ type ServerForPick struct {
 	Pickinfo         *pickinfo
 }
 type pickinfo struct {
-	Lastcall                   int64   //last call timestamp nano second
-	Cpu                        float64 //cpu use percent [0-100] if call error this will be set to 100 as a punish
-	Activecalls                int32   //current active calls
-	DiscoveryServers           int32   //this server registered on how many discoveryservers
-	DiscoveryServerOfflineTime int64   //
-	Addition                   []byte  //addition info register on register center
+	Lastfail       int64   //last fail timestamp nano second
+	Cpu            float64 //cpu use percent [0-100] if call error this will be set to 100 as a punish
+	Activecalls    int32   //current active calls
+	DServers       int32   //this server registered on how many discoveryservers
+	DServerOffline int64   //
+	Addition       []byte  //addition info register on register center
 }
 
 var lker *sync.Mutex
@@ -58,15 +54,14 @@ func init() {
 	all = make(map[string]*WebClient)
 }
 
-func NewWebClient(appname string, globaltimeout time.Duration, picker PickHandler, discover DiscoveryHandler) *WebClient {
+func NewWebClient(appname string, globaltimeout time.Duration, picker PickHandler, discover DiscoveryHandler) (*WebClient, error) {
 	if e := common.NameCheck(appname, true); e != nil {
-		log.Error("[web.client]", e)
-		os.Exit(1)
+		return nil, errors.New("[web.client]" + e.Error())
 	}
 	lker.Lock()
 	defer lker.Unlock()
 	if c, ok := all[appname]; ok {
-		return c
+		return c, nil
 	}
 	if picker == nil {
 		picker = defaultPicker
@@ -85,7 +80,7 @@ func NewWebClient(appname string, globaltimeout time.Duration, picker PickHandle
 	}
 	all[appname] = instance
 	go instance.discover(appname, instance)
-	return instance
+	return instance, nil
 }
 
 //firstkey:host
@@ -98,7 +93,7 @@ func (this *WebClient) UpdateDiscovery(all map[string]map[string]struct{}, addit
 	pos := 0
 	endpos := len(this.hosts) - 1
 	for {
-		if _, ok := all[this.hosts[pos].host]; !ok {
+		if discoveryservers, ok := all[this.hosts[pos].host]; !ok || len(discoveryservers) == 0 {
 			this.hosts[pos], this.hosts[endpos] = this.hosts[endpos], this.hosts[pos]
 			endpos--
 			if endpos < pos {
@@ -114,6 +109,9 @@ func (this *WebClient) UpdateDiscovery(all map[string]map[string]struct{}, addit
 	this.hosts = this.hosts[:endpos+1]
 	//check register
 	for host, discoverservers := range all {
+		if len(discoverservers) == 0 {
+			continue
+		}
 		var exist *ServerForPick
 		for _, existhost := range this.hosts {
 			if existhost.host == host {
@@ -128,12 +126,12 @@ func (this *WebClient) UpdateDiscovery(all map[string]map[string]struct{}, addit
 				client:           &http.Client{},
 				discoveryservers: discoverservers,
 				Pickinfo: &pickinfo{
-					Lastcall:                   0,
-					Cpu:                        1,
-					Activecalls:                0,
-					DiscoveryServers:           int32(len(discoverservers)),
-					DiscoveryServerOfflineTime: 0,
-					Addition:                   addition,
+					Lastfail:       0,
+					Cpu:            1,
+					Activecalls:    0,
+					DServers:       int32(len(discoverservers)),
+					DServerOffline: 0,
+					Addition:       addition,
 				},
 			})
 			continue
@@ -143,19 +141,19 @@ func (this *WebClient) UpdateDiscovery(all map[string]map[string]struct{}, addit
 		for dserver := range exist.discoveryservers {
 			if _, ok := discoverservers[dserver]; !ok {
 				delete(exist.discoveryservers, dserver)
-				exist.Pickinfo.DiscoveryServerOfflineTime = time.Now().UnixNano()
+				exist.Pickinfo.DServerOffline = time.Now().UnixNano()
 			}
 		}
 		//register on which new discovery server
 		for dserver := range discoverservers {
 			if _, ok := exist.discoveryservers[dserver]; !ok {
 				exist.discoveryservers[dserver] = struct{}{}
-				exist.Pickinfo.DiscoveryServerOfflineTime = 0
+				exist.Pickinfo.DServerOffline = 0
 			}
 		}
 		//
 		exist.Pickinfo.Addition = addition
-		exist.Pickinfo.DiscoveryServers = int32(len(exist.discoveryservers))
+		exist.Pickinfo.DServers = int32(len(exist.discoveryservers))
 	}
 }
 
@@ -238,19 +236,14 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	}
 	atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 	defer atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
-	atomic.StoreInt64(&server.Pickinfo.Lastcall, time.Now().UnixNano())
 	resp, e := server.client.Do(req)
 	if e != nil {
-		atomic.StoreUint64((*uint64)(unsafe.Pointer(&server.Pickinfo.Cpu)), 100)
+		atomic.StoreInt64(&server.Pickinfo.Lastfail, time.Now().UnixNano())
 		return nil, e
 	}
 	if temp := resp.Header.Get("Cpu"); temp != "" {
 		if servercpu, e := strconv.ParseFloat(temp, 64); e == nil {
-			if servercpu < 1 {
-				atomic.StoreUint64((*uint64)(unsafe.Pointer(&server.Pickinfo.Cpu)), 1)
-			} else {
-				atomic.StoreUint64((*uint64)(unsafe.Pointer(&server.Pickinfo.Cpu)), math.Float64bits(servercpu))
-			}
+			server.Pickinfo.Cpu = servercpu
 		}
 	}
 	return resp, nil

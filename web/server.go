@@ -3,10 +3,10 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -198,16 +198,14 @@ func NewWebServer(c *Config) *WebServer {
 	}
 	return instance
 }
-func (this *WebServer) StartWebServer(listenaddr string, cert, key string) {
+func (this *WebServer) StartWebServer(listenaddr string, cert, key string) error {
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
-		log.Error("[web.server] resolve addr:", listenaddr, " error:", e)
-		os.Exit(1)
+		return errors.New("[web.server] resolve addr:" + listenaddr + " error:" + e.Error())
 	}
 	l, e := net.ListenTCP("tcp", laddr)
 	if e != nil {
-		log.Error("[web.server] listen addr:", listenaddr, " error:", e)
-		os.Exit(1)
+		return errors.New("[web.server] listen addr:" + listenaddr + " error:" + e.Error())
 	}
 	this.s = &http.Server{
 		Handler:        this,
@@ -220,10 +218,15 @@ func (this *WebServer) StartWebServer(listenaddr string, cert, key string) {
 		},
 	}
 	if cert != "" && key != "" {
-		this.s.ServeTLS(l, cert, key)
+		e = this.s.ServeTLS(l, cert, key)
+
 	} else {
 		this.s.Serve(l)
 	}
+	if e != nil {
+		return errors.New("[web.server] serve error:" + e.Error())
+	}
+	return nil
 }
 func (this *WebServer) StopWebServer() {
 	this.s.Shutdown(context.Background())
@@ -257,41 +260,65 @@ func (this *WebServer) Use(globalMids ...OutsideHandler) {
 }
 
 //thread unsafe
-func (this *WebServer) Get(path string, functimeout time.Duration, handlers ...OutsideHandler) {
-	this.router.Handler(http.MethodGet, path, this.insideHandler(functimeout, handlers))
+func (this *WebServer) Get(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
+	h, e := this.insideHandler(functimeout, handlers)
+	if e != nil {
+		return e
+	}
+	this.router.Handler(http.MethodGet, path, h)
+	return nil
 }
 
 //thread unsafe
-func (this *WebServer) Delete(path string, functimeout time.Duration, handlers ...OutsideHandler) {
-	this.router.Handler(http.MethodDelete, path, this.insideHandler(functimeout, handlers))
+func (this *WebServer) Delete(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
+	h, e := this.insideHandler(functimeout, handlers)
+	if e != nil {
+		return e
+	}
+	this.router.Handler(http.MethodDelete, path, h)
+	return nil
 }
 
 //thread unsafe
-func (this *WebServer) Post(path string, functimeout time.Duration, handlers ...OutsideHandler) {
-	this.router.Handler(http.MethodPost, path, this.insideHandler(functimeout, handlers))
+func (this *WebServer) Post(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
+	h, e := this.insideHandler(functimeout, handlers)
+	if e != nil {
+		return e
+	}
+	this.router.Handler(http.MethodPost, path, h)
+	return nil
 }
 
 //thread unsafe
-func (this *WebServer) Put(path string, functimeout time.Duration, handlers ...OutsideHandler) {
-	this.router.Handler(http.MethodPut, path, this.insideHandler(functimeout, handlers))
+func (this *WebServer) Put(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
+	h, e := this.insideHandler(functimeout, handlers)
+	if e != nil {
+		return e
+	}
+	this.router.Handler(http.MethodPut, path, h)
+	return nil
 }
 
 //thread unsafe
-func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ...OutsideHandler) {
-	this.router.Handler(http.MethodPatch, path, this.insideHandler(functimeout, handlers))
+func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
+	h, e := this.insideHandler(functimeout, handlers)
+	if e != nil {
+		return e
+	}
+	this.router.Handler(http.MethodPatch, path, h)
+	return nil
 }
 
 func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	this.router.ServeHTTP(w, r)
 }
 
-func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHandler) http.HandlerFunc {
+func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHandler) (http.HandlerFunc, error) {
 	totalhandlers := make([]OutsideHandler, 1)
 	totalhandlers = append(totalhandlers, this.global...)
 	totalhandlers = append(totalhandlers, handlers...)
 	if len(totalhandlers) > math.MaxInt8 {
-		log.Error("[web.server] too many handlers for one single path")
-		os.Exit(1)
+		return nil, errors.New("[web.server] too many handlers for one single path")
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		//set cors
@@ -381,5 +408,5 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 		ctx := this.getContext(w, r, totalhandlers)
 		ctx.Next()
 		this.putContext(ctx)
-	}
+	}, nil
 }

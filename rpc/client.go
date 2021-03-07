@@ -3,9 +3,8 @@ package rpc
 import (
 	"bytes"
 	"context"
-	"math"
+	"errors"
 	"math/rand"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -56,12 +55,12 @@ type ServerForPick struct {
 	Pickinfo *pickinfo
 }
 type pickinfo struct {
-	Lastcall                   int64   //last call timestamp nanosecond
-	Cpu                        float64 //cpuinfo
-	Activecalls                int32   //current active calls
-	DiscoveryServers           int32   //this server registered on how many discoveryservers
-	DiscoveryServerOfflineTime int64   //
-	Addition                   []byte  //addition info register on register center
+	Lastfail       int64   //last fail timestamp nanosecond
+	Cpu            float64 //cpuinfo
+	Activecalls    int32   //current active calls
+	DServers       int32   //this app registered on how many discoveryservers
+	DServerOffline int64   //
+	Addition       []byte  //addition info register on register center
 }
 
 func (s *ServerForPick) Pickable() bool {
@@ -77,15 +76,15 @@ func init() {
 	all = make(map[string]*RpcClient)
 }
 
-func NewRpcClient(c *stream.InstanceConfig, vdata []byte, appname string, globaltimeout time.Duration, pick PickHandler, discovery DiscoveryHandler) *RpcClient {
-	if e := common.NameCheck(appname, true); e != nil {
-		log.Error("[rpc.client]", e)
-		os.Exit(1)
+func NewRpcClient(c *stream.InstanceConfig, vdata []byte, appname string, globaltimeout time.Duration, pick PickHandler, discovery DiscoveryHandler) (*RpcClient, error) {
+	e := common.NameCheck(appname, true)
+	if e != nil {
+		return nil, errors.New("[rpc.client]" + e.Error())
 	}
 	lker.Lock()
 	defer lker.Unlock()
 	if client, ok := all[appname]; ok {
-		return client
+		return client, nil
 	}
 	if pick == nil {
 		pick = defaultPicker
@@ -111,10 +110,13 @@ func NewRpcClient(c *stream.InstanceConfig, vdata []byte, appname string, global
 	dupc.Userdatafunc = client.userfunc
 	dupc.Offlinefunc = client.offlinefunc
 	client.c = &dupc
-	client.instance = stream.NewInstance(&dupc)
+	client.instance, e = stream.NewInstance(&dupc)
+	if e != nil {
+		return nil, errors.New("[rpc.client.NewRpcClient]new tcp instance error:" + e.Error())
+	}
 	go discovery(appname, client)
 	all[appname] = client
-	return client
+	return client, nil
 }
 
 //first key:addr
@@ -128,8 +130,8 @@ func (c *RpcClient) UpdateDiscovery(allapps map[string]map[string]struct{}, addi
 		if _, ok := allapps[server.addr]; !ok {
 			//this app unregistered
 			server.discoveryservers = nil
-			server.Pickinfo.DiscoveryServers = 0
-			server.Pickinfo.DiscoveryServerOfflineTime = time.Now().Unix()
+			server.Pickinfo.DServers = 0
+			server.Pickinfo.DServerOffline = time.Now().Unix()
 		}
 	}
 	//online app or update app's discoveryservers
@@ -153,12 +155,12 @@ func (c *RpcClient) UpdateDiscovery(allapps map[string]map[string]struct{}, addi
 				reqs:             make(map[uint64]*req, 10),
 				lker:             &sync.Mutex{},
 				Pickinfo: &pickinfo{
-					Lastcall:                   0,
-					Cpu:                        1,
-					Activecalls:                0,
-					DiscoveryServers:           int32(len(discoveryservers)),
-					DiscoveryServerOfflineTime: 0,
-					Addition:                   addition,
+					Lastfail:       0,
+					Cpu:            1,
+					Activecalls:    0,
+					DServers:       int32(len(discoveryservers)),
+					DServerOffline: 0,
+					Addition:       addition,
 				},
 			})
 			go c.start(addr)
@@ -169,18 +171,18 @@ func (c *RpcClient) UpdateDiscovery(allapps map[string]map[string]struct{}, addi
 		for dserver := range exist.discoveryservers {
 			if _, ok := discoveryservers[dserver]; !ok {
 				delete(exist.discoveryservers, dserver)
-				exist.Pickinfo.DiscoveryServerOfflineTime = time.Now().UnixNano()
+				exist.Pickinfo.DServerOffline = time.Now().UnixNano()
 			}
 		}
 		//register on which new discovery server
 		for dserver := range discoveryservers {
 			if _, ok := exist.discoveryservers[dserver]; !ok {
 				exist.discoveryservers[dserver] = struct{}{}
-				exist.Pickinfo.DiscoveryServerOfflineTime = 0
+				exist.Pickinfo.DServerOffline = 0
 			}
 		}
 		exist.Pickinfo.Addition = addition
-		exist.Pickinfo.DiscoveryServers = int32(len(exist.discoveryservers))
+		exist.Pickinfo.DServers = int32(len(exist.discoveryservers))
 	}
 }
 func (c *RpcClient) start(addr string) {
@@ -317,21 +319,16 @@ func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, 
 	if e != nil && e.Code == ERRCLOSING.Code {
 		server.status = 4
 	}
+	server.Pickinfo.Cpu = msg.Cpu
 	req, ok := server.reqs[msg.Callid]
 	if !ok {
 		server.lker.Unlock()
 		return
 	}
-	if msg.Cpu < 1 {
-		atomic.StoreUint64((*uint64)(unsafe.Pointer(&server.Pickinfo.Cpu)), 1)
-	} else {
-		atomic.StoreUint64((*uint64)(unsafe.Pointer(&server.Pickinfo.Cpu)), math.Float64bits(msg.Cpu))
-	}
 	if req.callid == msg.Callid {
 		req.resp = msg.Body
 		req.err = e
 		req.finish <- struct{}{}
-		atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 	}
 	server.lker.Unlock()
 }
@@ -401,8 +398,8 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 	var server *ServerForPick
 	r := c.getreq(msg.Callid)
 	for {
-		//pick server
 		for {
+			//pick server
 			c.lker.RLock()
 			server = c.pick(c.servers)
 			if server == nil {
@@ -416,10 +413,12 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 				server.lker.Unlock()
 				continue
 			}
+			//check timeout
 			if msg.Deadline != 0 && msg.Deadline <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				server.lker.Unlock()
 				return nil, ERRCTXTIMEOUT
 			}
+			//send message
 			if e := server.peer.SendMessage(d, server.starttime, false); e != nil {
 				if e == stream.ERRMSGLENGTH {
 					server.lker.Unlock()
@@ -431,7 +430,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 				server.lker.Unlock()
 				continue
 			}
-			atomic.StoreInt64(&server.Pickinfo.Lastcall, time.Now().UnixNano())
+			//send message success,store req,add req num
 			server.reqs[msg.Callid] = r
 			atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 			server.lker.Unlock()
@@ -439,28 +438,38 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 		}
 		select {
 		case <-r.finish:
-			if r.err != nil && r.err.Code == ERRCLOSING.Code {
-				r.resp = nil
-				r.err = nil
-				continue
-			}
-			resp := r.resp
-			err := r.err
+			//req finished,delete req,reduce req num
+			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 			server.lker.Lock()
 			delete(server.reqs, msg.Callid)
 			server.lker.Unlock()
+			if r.err != nil {
+				//req error,update last fail time
+				atomic.StoreInt64(&server.Pickinfo.Lastfail, time.Now().UnixNano())
+				if r.err.Code == ERRCLOSING.Code {
+					//server is closing,this req can be retry
+					r.resp = nil
+					r.err = nil
+					continue
+				}
+			}
+			resp := r.resp
+			err := r.err
 			c.putreq(r)
 			//resp and err maybe both nil
 			return resp, err
 		case <-ctx.Done():
+			//req canceled or timeout,delete req,reduce req num
+			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 			server.lker.Lock()
 			delete(server.reqs, msg.Callid)
 			server.lker.Unlock()
+			//update last fail time
+			atomic.StoreInt64(&server.Pickinfo.Lastfail, time.Now().UnixNano())
 			c.putreq(r)
-			e := ctx.Err()
-			if e == context.Canceled {
+			if ctx.Err() == context.Canceled {
 				return nil, ERRCTXCANCEL
-			} else if e == context.DeadlineExceeded {
+			} else if ctx.Err() == context.DeadlineExceeded {
 				return nil, ERRCTXTIMEOUT
 			} else {
 				return nil, ERRUNKNOWN

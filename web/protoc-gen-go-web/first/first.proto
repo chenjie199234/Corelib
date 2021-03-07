@@ -3,7 +3,7 @@ package first;
 option go_package="./first;first";
 import "second/second.proto";
 service first {
-	rpc hello(helloreq)returns(helloresp);//method:get|timeout:200ms
+	rpc hello(helloreq)returns(helloresp);//method:get|timeout:200ms|mids:["auth"]
 	rpc world(worldreq)returns(worldresp);
 }
 message helloreq{

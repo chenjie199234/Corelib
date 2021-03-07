@@ -2,8 +2,8 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"math"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -33,7 +33,7 @@ type RpcServer struct {
 	stopch     chan struct{}
 }
 
-func NewRpcServer(c *stream.InstanceConfig, globaltimeout time.Duration, vdata []byte) *RpcServer {
+func NewRpcServer(c *stream.InstanceConfig, globaltimeout time.Duration, vdata []byte) (*RpcServer, error) {
 	serverinstance := &RpcServer{
 		timeout:    globaltimeout,
 		global:     make([]OutsideHandler, 0, 10),
@@ -47,14 +47,18 @@ func NewRpcServer(c *stream.InstanceConfig, globaltimeout time.Duration, vdata [
 	dupc.Onlinefunc = serverinstance.onlinefunc
 	dupc.Userdatafunc = serverinstance.userfunc
 	dupc.Offlinefunc = nil
-	serverinstance.instance = stream.NewInstance(&dupc)
-	return serverinstance
-}
-func (s *RpcServer) StartRpcServer(listenaddr string) {
-	if atomic.SwapInt32(&s.status, 1) == 1 {
-		return
+	var e error
+	serverinstance.instance, e = stream.NewInstance(&dupc)
+	if e != nil {
+		return nil, errors.New("[rpc.server.NewRpcServer]new tcp instance error:" + e.Error())
 	}
-	s.instance.StartTcpServer(listenaddr)
+	return serverinstance, nil
+}
+func (s *RpcServer) StartRpcServer(listenaddr string) error {
+	if atomic.SwapInt32(&s.status, 1) == 1 {
+		return nil
+	}
+	return s.instance.StartTcpServer(listenaddr)
 }
 func (s *RpcServer) StopRpcServer() {
 	if atomic.SwapInt32(&s.status, 0) == 0 {
@@ -116,16 +120,20 @@ func (s *RpcServer) Use(globalMids ...OutsideHandler) {
 }
 
 //thread unsafe
-func (s *RpcServer) RegisterHandler(path string, functimeout time.Duration, handlers ...OutsideHandler) {
-	s.handler[path] = s.insidehandler(functimeout, handlers...)
+func (s *RpcServer) RegisterHandler(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
+	h, e := s.insidehandler(functimeout, handlers...)
+	if e != nil {
+		return e
+	}
+	s.handler[path] = h
+	return nil
 }
-func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...OutsideHandler) func(string, *Msg) {
+func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...OutsideHandler) (func(string, *Msg), error) {
 	totalhandlers := make([]OutsideHandler, 1)
 	totalhandlers = append(totalhandlers, s.global...)
 	totalhandlers = append(totalhandlers, handlers...)
 	if len(totalhandlers) > math.MaxInt8 {
-		log.Error("[rpc.server] too many handlers for one single path")
-		os.Exit(1)
+		return nil, errors.New("[rpc.server] too many handlers for one single path")
 	}
 	return func(peeruniquename string, msg *Msg) {
 		defer func() {
@@ -178,7 +186,7 @@ func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...Outside
 		workctx := s.getContext(ctx, peeruniquename, msg, totalhandlers)
 		workctx.Next()
 		s.putContext(workctx)
-	}
+	}, nil
 }
 func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if atomic.LoadInt32(&s.status) == 0 {

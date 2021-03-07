@@ -8,7 +8,7 @@ import (
 	json "encoding/json"
 	fmt "fmt"
 	bufpool "github.com/chenjie199234/Corelib/bufpool"
-	common "github.com/chenjie199234/Corelib/common"
+	common "github.com/chenjie199234/Corelib/util/common"
 	web "github.com/chenjie199234/Corelib/web"
 	ioutil "io/ioutil"
 	http "net/http"
@@ -30,8 +30,12 @@ type firstWebClient struct {
 }
 
 //has race,will only return the first's call's client,the config will use the first call's config
-func NewFirstWebClient(globaltimeout time.Duration, picker web.PickHandler, discover web.DiscoveryHandler) FirstWebClient {
-	return &firstWebClient{cc: web.NewWebClient("first", globaltimeout, picker, discover)}
+func NewFirstWebClient(globaltimeout time.Duration, picker web.PickHandler, discover web.DiscoveryHandler) (FirstWebClient, error) {
+	cc, e := web.NewWebClient("first", globaltimeout, picker, discover)
+	if e != nil {
+		return nil, e
+	}
+	return &firstWebClient{cc: cc}, nil
 }
 
 func (c *firstWebClient) Hello(ctx context.Context, req *Helloreq) (*Helloresp, error) {
@@ -712,9 +716,24 @@ func _First_World_WebHandler(handler func(context.Context, *Worldreq) (*Worldres
 		}
 	}
 }
-func RegisterFirstWebServer(engine *web.WebServer, svc FirstWebServer, allmids map[string]web.OutsideHandler) {
+func RegisterFirstWebServer(engine *web.WebServer, svc FirstWebServer, allmids map[string]web.OutsideHandler) error {
 	//avoid lint
 	_ = allmids
-	engine.Get(WebPathFirstHello, 200000000, _First_Hello_WebHandler(svc.Hello))
-	engine.Get(WebPathFirstWorld, 0, _First_World_WebHandler(svc.World))
+	{
+		requiredMids := []string{"auth"}
+		mids := make([]web.OutsideHandler, 0)
+		for _, v := range requiredMids {
+			if mid, ok := allmids[v]; ok {
+				mids = append(mids, mid)
+			}
+		}
+		mids = append(mids, _First_Hello_WebHandler(svc.Hello))
+		if e := engine.Get(WebPathFirstHello, 200000000, mids...); e != nil {
+			return e
+		}
+	}
+	if e := engine.Get(WebPathFirstWorld, 0, _First_World_WebHandler(svc.World)); e != nil {
+		return e
+	}
+	return nil
 }

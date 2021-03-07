@@ -2,7 +2,6 @@ package discovery
 
 import (
 	"bytes"
-	"fmt"
 
 	"github.com/chenjie199234/Corelib/util/common"
 )
@@ -11,7 +10,6 @@ const (
 	msgonline  = 'a'
 	msgoffline = 'b'
 	msgpull    = 'c'
-	msgpush    = 'd'
 	split      = '|'
 )
 
@@ -24,23 +22,23 @@ type RegMsg struct {
 	Addition  []byte `json:"a,omitempty"`
 }
 
-func makeOnlineMsg(peeruniquename string, data []byte) []byte {
-	result := make([]byte, len(peeruniquename)+len(data)+2)
+func makeOnlineMsg(appuniquename string, data []byte) []byte {
+	result := make([]byte, len(appuniquename)+len(data)+2)
 	result[0] = msgonline
-	copy(result[1:len(peeruniquename)+1], peeruniquename)
-	result[len(peeruniquename)+1] = split
-	copy(result[len(peeruniquename)+2:len(peeruniquename)+2+len(data)], data)
+	copy(result[1:len(appuniquename)+1], appuniquename)
+	result[len(appuniquename)+1] = split
+	copy(result[len(appuniquename)+2:len(appuniquename)+2+len(data)], data)
 	return result
 }
-func getOnlineMsg(data []byte) (string, []byte, error) {
+func getOnlineMsg(data []byte) (string, []byte) {
 	if len(data) <= 1 {
-		return "", nil, nil
-	}
-	if bytes.Count(data, []byte{split}) != 1 {
-		return "", nil, fmt.Errorf("[Discovery.msg.getOnlineMsg]error:format unknwon")
+		return "", nil
 	}
 	firstindex := bytes.Index(data, []byte{split})
-	return common.Byte2str(data[1:firstindex]), data[firstindex+1:], nil
+	if firstindex == -1 || firstindex == 0 || firstindex == 1 || firstindex == (len(data)-1) {
+		return "", nil
+	}
+	return common.Byte2str(data[1:firstindex]), data[firstindex+1:]
 }
 func makeOfflineMsg(peeruniquename string) []byte {
 	result := make([]byte, len(peeruniquename)+1)
@@ -48,53 +46,21 @@ func makeOfflineMsg(peeruniquename string) []byte {
 	copy(result[1:len(peeruniquename)+1], peeruniquename)
 	return result
 }
-func getOfflineMsg(data []byte) (string, error) {
+func getOfflineMsg(data []byte) string {
 	if len(data) <= 1 {
-		return "", nil
+		return ""
 	}
-	return common.Byte2str(data[1:]), nil
+	return common.Byte2str(data[1:])
 }
-func makePullMsg() []byte {
-	return []byte{msgpull}
-}
-func makePushMsg(data map[string][]byte) []byte {
-	count := 0
-	for k, v := range data {
-		count += len(k) + 1
-		count += len(v) + 1
-	}
-	if count == 0 {
-		return []byte{msgpush}
-	}
-	result := make([]byte, count)
-	index := 0
-	for k, v := range data {
-		if index == 0 {
-			result[index] = msgpush
-		} else {
-			result[index] = split
-		}
-		index++
-		copy(result[index:len(k)+index], k)
-		index += len(k)
-		result[index] = split
-		index++
-		copy(result[index:len(v)+index], v)
-		index += len(v)
-	}
+func makePullMsg(appname string) []byte {
+	result := make([]byte, 1+len(appname))
+	result[0] = msgpull
+	copy(result[1:], appname)
 	return result
 }
-func getPushMsg(data []byte) (map[string][]byte, error) {
+func getPullMsg(data []byte) string {
 	if len(data) <= 1 {
-		return nil, nil
+		return ""
 	}
-	datas := bytes.Split(data[1:], []byte{split})
-	if len(datas)%2 != 0 {
-		return nil, fmt.Errorf("[Discovery.msg.GetPushMsg]error:format unknown")
-	}
-	result := make(map[string][]byte, int(float64(len(datas))*1.3))
-	for i := 0; i < len(datas); i += 2 {
-		result[common.Byte2str(datas[i])] = datas[i+1]
-	}
-	return result, nil
+	return common.Byte2str(data[1:])
 }

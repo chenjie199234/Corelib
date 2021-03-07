@@ -10,7 +10,6 @@ import (
 const text = `package source
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -19,8 +18,8 @@ import (
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
+	"github.com/chenjie199234/Corelib/sql"
 	ctime "github.com/chenjie199234/Corelib/util/time"
-	"github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/scram"
 )
@@ -113,7 +112,7 @@ type KafkaSubConfig struct {
 //SC total source config instance
 var sc *sourceConfig
 
-var dbs map[string]*sql.DB
+var dbs map[string]*sql.Pool
 
 var caches map[string]*redis.Pool
 
@@ -157,7 +156,6 @@ func (c *sourceConfig) validate() {
 		c.Http.HttpTimeout = ctime.Duration(time.Millisecond * 500)
 	}
 	for _, dbc := range c.DB {
-		//mysql can don't use passwd but must use username
 		if dbc.Username == "" {
 			dbc.Username = "root"
 			dbc.Passwd = "root"
@@ -180,7 +178,6 @@ func (c *sourceConfig) validate() {
 		}
 	}
 	for _, redisc := range c.Redis {
-		//redis can don't use username and passwd
 		if redisc.Addr == ""  {
 			redisc.Addr = "127.0.0.1:6379"
 		}
@@ -222,26 +219,21 @@ func (c *sourceConfig) validate() {
 
 //don't change this function only if you known what you are changing
 func (c *sourceConfig) newsource() {
-	dbs = make(map[string]*sql.DB, len(c.DB))
+	dbs = make(map[string]*sql.Pool, len(c.DB))
 	for k, dbc := range c.DB {
 		if k == "example_db" {
 			continue
 		}
-		op := &mysql.Config{}
-		op.User = dbc.Username
-		op.Passwd = dbc.Passwd
-		op.Net = dbc.Net
-		op.Addr = dbc.Addr
-		op.Timeout = time.Duration(dbc.ConnTimeout)
-		op.WriteTimeout = time.Duration(dbc.IoTimeout)
-		op.ReadTimeout = time.Duration(dbc.IoTimeout)
-		op.AllowNativePasswords = true
-		op.Collation = dbc.Collation
-		op.ParseTime = true
-		tempdb, _ := sql.Open("mysql", op.FormatDSN())
-		tempdb.SetMaxOpenConns(dbc.Maxopen)
-		tempdb.SetConnMaxIdleTime(time.Duration(dbc.MaxIdletime))
-		dbs[k] = tempdb
+		dbs[k] = sql.NewMysql(&sql.Config{
+			Username    :dbc.Username,
+			Password    :dbc.Passwd,
+			Addr        :dbc.Addr,
+			Collation   :dbc.Collation,
+			MaxOpen     :dbc.MaxOpen,
+			MaxIdletime time.Duration(dbc.MaxIdletime),
+			IOTimeout   time.Duration(dbc.IOTimeout),
+			ConnTimeout time.Duration(dbc.ConnTimeout)
+		})
 	}
 	caches = make(map[string]*redis.Pool, len(c.Redis))
 	for k, redisc := range c.Redis {
@@ -336,7 +328,7 @@ func GetHttpConfig() *HttpConfig {
 
 //GetDB get a db client by db's logic name
 //return nil means not exist
-func GetDB(dbname string) *sql.DB {
+func GetDB(dbname string) *sql.Pool{
 	return dbs[dbname]
 }
 

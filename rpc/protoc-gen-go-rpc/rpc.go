@@ -104,8 +104,12 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	p4 := "picker " + g.QualifiedGoIdent(rpcPackage.Ident("PickHandler"))
 	p5 := "discover " + g.QualifiedGoIdent(rpcPackage.Ident("DiscoveryHandler"))
 	g.P("//has race,will only return the first's call's client,the config will use the first call's config")
-	g.P("func New", clientName, "(", p1, ",", p2, ",", p3, ",", p4, ",", p5, ")", clientName, "{")
-	g.P("return &", lowclientName, "{cc:", g.QualifiedGoIdent(rpcPackage.Ident("NewRpcClient")), "(c,verifydata,\"", *file.Proto.Package, "\",globaltimeout,picker,discover)}")
+	g.P("func New", clientName, "(", p1, ",", p2, ",", p3, ",", p4, ",", p5, ")(", clientName, ",error){")
+	g.P("cc,e:=", g.QualifiedGoIdent(rpcPackage.Ident("NewRpcClient")), "(c,verifydata,\"", *file.Proto.Package, "\",globaltimeout,picker,discover)")
+	g.P("if e != nil {")
+	g.P("return nil,e")
+	g.P("}")
+	g.P("return &", lowclientName, "{cc:cc},nil")
 	g.P("}")
 	g.P()
 	// Client handler
@@ -191,7 +195,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	}
 
 	//Server Register
-	g.P("func Register", serverName, "(engine *", g.QualifiedGoIdent(rpcPackage.Ident("RpcServer")), ",svc ", serverName, ",allmids map[string]", g.QualifiedGoIdent(rpcPackage.Ident("OutsideHandler")), "){")
+	g.P("func Register", serverName, "(engine *", g.QualifiedGoIdent(rpcPackage.Ident("RpcServer")), ",svc ", serverName, ",allmids map[string]", g.QualifiedGoIdent(rpcPackage.Ident("OutsideHandler")), ")error{")
 	g.P("//avoid lint")
 	g.P("_=allmids")
 	for _, method := range service.Methods {
@@ -220,12 +224,17 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 			g.P("}")
 			g.P("}")
 			g.P("mids = append(mids,", fname, ")")
-			g.P("engine.RegisterHandler(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...)")
+			g.P("if e := engine.RegisterHandler(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...);e!=nil{")
+			g.P("return e")
+			g.P("}")
 			g.P("}")
 		} else {
-			g.P("engine.RegisterHandler(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ")")
+			g.P("if e := engine.RegisterHandler(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ");e!=nil{")
+			g.P("return e")
+			g.P("}")
 		}
 	}
+	g.P("return nil")
 	g.P("}")
 }
 

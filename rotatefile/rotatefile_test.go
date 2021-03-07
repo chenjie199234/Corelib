@@ -6,7 +6,15 @@ import (
 )
 
 func Test_RotateFile(t *testing.T) {
-	_, e := NewRotateFile("./log", "", ".log", 1, 0, 1)
+	c := &Config{
+		Path:        "./log",
+		Name:        "",
+		Ext:         ".log",
+		RotateCap:   1,
+		RotateCycle: 1,
+		KeepDays:    1,
+	}
+	_, e := NewRotateFile(c)
 	if e != nil {
 		panic(e)
 	}

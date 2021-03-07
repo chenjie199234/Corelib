@@ -24,7 +24,6 @@ import (
 )
 
 func main() {
-	flag.Parse()
 	defer log.Close()
 	//start the whole business service
 	service.StartService()
