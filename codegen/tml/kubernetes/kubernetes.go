@@ -106,7 +106,7 @@ spec:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 80
+        averageUtilization: 80{{ if .NeedService }}
 ---
 apiVersion: v1
 kind: Service
