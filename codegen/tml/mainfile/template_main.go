@@ -9,7 +9,6 @@ import (
 const text = `package main
 
 import (
-	"flag"
 	"os"
 	"os/signal"
 	"sync"

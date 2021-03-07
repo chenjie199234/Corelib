@@ -68,7 +68,7 @@ type RedisConfig struct {
 	Username    string         $json:"username"$
 	Passwd      string         $json:"passwd"$
 	Addr        string         $json:"addr"$
-	Maxopen     int            $json:"max_open"$     //default 256 //max num of connections can be opened
+	MaxOpen     int            $json:"max_open"$     //default 256 //max num of connections can be opened
 	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 1min //max time a connection can be idle,more then this time,connection will be closed
 	IoTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms
 	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms
@@ -81,7 +81,7 @@ type DBConfig struct {
 	Net         string         $json:"net"$
 	Addr        string         $json:"addr"$
 	Collation   string         $json:"collation"$
-	Maxopen     int            $json:"max_open"$     //default 256 //max num of connections can be opened
+	MaxOpen     int            $json:"max_open"$     //default 256 //max num of connections can be opened
 	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 1min //max time a connection can be idle,more then this time,connection will be closed
 	IoTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms
 	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms
@@ -164,8 +164,8 @@ func (c *sourceConfig) validate() {
 			dbc.Addr = "127.0.0.1:3306"
 			dbc.Net = "tcp"
 		}
-		if dbc.Maxopen == 0 {
-			dbc.Maxopen = 100
+		if dbc.MaxOpen == 0 {
+			dbc.MaxOpen = 100
 		}
 		if dbc.MaxIdletime == 0 {
 			dbc.MaxIdletime = ctime.Duration(time.Minute * 10)
@@ -181,8 +181,8 @@ func (c *sourceConfig) validate() {
 		if redisc.Addr == ""  {
 			redisc.Addr = "127.0.0.1:6379"
 		}
-		if redisc.Maxopen == 0 {
-			redisc.Maxopen = 100
+		if redisc.MaxOpen == 0 {
+			redisc.MaxOpen = 100
 		}
 		if redisc.MaxIdletime == 0 {
 			redisc.MaxIdletime = ctime.Duration(time.Minute * 10)
@@ -230,9 +230,9 @@ func (c *sourceConfig) newsource() {
 			Addr        :dbc.Addr,
 			Collation   :dbc.Collation,
 			MaxOpen     :dbc.MaxOpen,
-			MaxIdletime time.Duration(dbc.MaxIdletime),
-			IOTimeout   time.Duration(dbc.IOTimeout),
-			ConnTimeout time.Duration(dbc.ConnTimeout)
+			MaxIdletime :time.Duration(dbc.MaxIdletime),
+			IOTimeout   :time.Duration(dbc.IoTimeout),
+			ConnTimeout :time.Duration(dbc.ConnTimeout),
 		})
 	}
 	caches = make(map[string]*redis.Pool, len(c.Redis))
@@ -244,7 +244,7 @@ func (c *sourceConfig) newsource() {
 			Username:    redisc.Username,
 			Password:    redisc.Passwd,
 			Addr:        redisc.Addr,
-			MaxOpen:     redisc.Maxopen,
+			MaxOpen:     redisc.MaxOpen,
 			MaxIdletime: time.Duration(redisc.MaxIdletime),
 			IOTimeout:   time.Duration(redisc.IoTimeout),
 			ConnTimeout: time.Duration(redisc.ConnTimeout),
