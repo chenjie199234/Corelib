@@ -102,8 +102,9 @@ func NewDiscoveryClient(c *stream.InstanceConfig, vdata []byte, finder Discovery
 //server addr format: servername:ip:port
 func UpdateDiscoveryServers(serveraddrs []string) {
 	clientinstance.lker.Lock()
+	defer clientinstance.lker.Unlock()
 	if clientinstance.status == 0 {
-		clientinstance.lker.Unlock()
+		//clientinstance.lker.Unlock()
 		return
 	}
 	//delete offline server
@@ -158,7 +159,6 @@ func UpdateDiscoveryServers(serveraddrs []string) {
 			go clientinstance.start(saddr[findex+1:], saddr[:findex])
 		}
 	}
-	clientinstance.lker.Unlock()
 }
 func (c *DiscoveryClient) start(addr, servername string) {
 	tempverifydata := common.Byte2str(clientinstance.verifydata) + "|" + servername
@@ -167,7 +167,7 @@ func (c *DiscoveryClient) start(addr, servername string) {
 		server, ok := c.servers[servername+":"+addr]
 		if !ok {
 			//server removed
-			c.lker.Unlock()
+			c.lker.RUnlock()
 			return
 		}
 		server.lker.Lock()
@@ -214,8 +214,8 @@ func RegisterSelf(regmsg *RegMsg) error {
 		return ERRREGMSG_CHAR
 	}
 	clientinstance.lker.Lock()
+	defer clientinstance.lker.Unlock()
 	if clientinstance.regdata != nil {
-		clientinstance.lker.Unlock()
 		return ERRREG
 	}
 	clientinstance.regdata = d
@@ -229,7 +229,6 @@ func RegisterSelf(regmsg *RegMsg) error {
 		}
 		server.lker.Unlock()
 	}
-	clientinstance.lker.Unlock()
 	return nil
 }
 func UnRegisterSelf() error {
@@ -269,13 +268,13 @@ func NoticeWebChanges(appname string) (chan struct{}, error) {
 	}
 	clientinstance.lker.RUnlock()
 	clientinstance.nlker.Lock()
+	defer clientinstance.nlker.Unlock()
 	if _, ok := clientinstance.webnotices[appname]; !ok {
 		clientinstance.webnotices[appname] = make(map[chan struct{}]struct{}, 10)
 	}
 	ch := make(chan struct{}, 1)
 	ch <- struct{}{}
 	clientinstance.webnotices[appname][ch] = struct{}{}
-	clientinstance.nlker.Unlock()
 	return ch, nil
 }
 
@@ -367,13 +366,12 @@ func (c *DiscoveryClient) verifyfunc(ctx context.Context, serveruniquename strin
 		return nil, false
 	}
 	server.lker.Lock()
+	defer server.lker.Unlock()
 	c.lker.RUnlock()
 	if server.peer != nil || server.status != 1 || server.starttime != 0 {
-		server.lker.Unlock()
 		return nil, false
 	}
 	server.status = 2
-	server.lker.Unlock()
 	return nil, true
 }
 func (c *DiscoveryClient) onlinefunc(p *stream.Peer, serveruniquename string, starttime uint64) {
@@ -386,10 +384,10 @@ func (c *DiscoveryClient) onlinefunc(p *stream.Peer, serveruniquename string, st
 		return
 	}
 	server.lker.Lock()
+	defer server.lker.Unlock()
 	c.lker.RUnlock()
 	if server.peer != nil || server.status != 2 || server.starttime != 0 {
 		p.Close()
-		server.lker.Unlock()
 		return
 	}
 	log.Info("[Discovery.client.onlinefunc] server:", serveruniquename, "online")
@@ -414,7 +412,6 @@ func (c *DiscoveryClient) onlinefunc(p *stream.Peer, serveruniquename string, st
 	for k := range result {
 		server.peer.SendMessage(makePullMsg(k), server.starttime, true)
 	}
-	server.lker.Unlock()
 	return
 }
 func (c *DiscoveryClient) userfunc(p *stream.Peer, serveruniquename string, origindata []byte, starttime uint64) {

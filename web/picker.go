@@ -17,15 +17,15 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 	i := start
 	first := true
 	var normal1, normal2, danger1, danger2 *ServerForPick
-	onesbefore := time.Now().Add(-time.Second)
+	before := time.Now().Add(-time.Millisecond * 100)
 	for {
 		if !first && i == start {
 			break
 		}
 		first = false
 		if servers[i].Pickinfo.DServers != 0 &&
-			servers[i].Pickinfo.DServerOffline < onesbefore.UnixNano() &&
-			servers[i].Pickinfo.Lastfail < onesbefore.UnixNano() {
+			servers[i].Pickinfo.DServerOffline < before.UnixNano() &&
+			servers[i].Pickinfo.Lastfail < before.UnixNano() {
 			if normal1 == nil {
 				normal1 = servers[i]
 			} else {
@@ -59,9 +59,9 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 		}
 	}
 	//more discoveryservers more safety,so 1 * 2's discoveryserver num
-	load1 := normal1.Pickinfo.Cpu * float64(normal1.Pickinfo.Activecalls) * math.Log(float64(normal2.Pickinfo.DServers+1))
+	load1 := float64(normal1.Pickinfo.Activecalls) * math.Log(float64(normal2.Pickinfo.DServers+2))
 	//more discoveryservers more safety,so 2 * 1's discoveryserver num
-	load2 := normal2.Pickinfo.Cpu * float64(normal2.Pickinfo.Activecalls) * math.Log(float64(normal1.Pickinfo.DServers+1))
+	load2 := float64(normal2.Pickinfo.Activecalls) * math.Log(float64(normal1.Pickinfo.DServers+2))
 	if load1 > load2 {
 		return normal2
 	} else if load1 < load2 {

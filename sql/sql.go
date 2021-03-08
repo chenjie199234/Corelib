@@ -49,3 +49,6 @@ func (p *Pool) Conn(ctx context.Context) (*sql.Conn, error) {
 func (p *Pool) BeginTx(ctx context.Context) (*sql.Tx, error) {
 	return p.p.BeginTx(ctx, nil)
 }
+func (p *Pool) GetDB() *sql.DB {
+	return p.p
+}

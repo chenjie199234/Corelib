@@ -5,11 +5,9 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/chenjie199234/Corelib/util/common"
-	"github.com/chenjie199234/Corelib/util/cpu"
 	"github.com/chenjie199234/Corelib/util/metadata"
 	"github.com/julienschmidt/httprouter"
 )
@@ -37,7 +35,6 @@ func (this *Context) Next() {
 }
 
 func (this *Context) Abort(code int, msg []byte) error {
-	this.w.Header().Set("Cpu", strconv.FormatFloat(cpu.GetUse(), 'f', -1, 64))
 	this.w.WriteHeader(code)
 	if len(msg) > 0 {
 		this.w.Write(msg)
@@ -51,7 +48,6 @@ func (this *Context) AbortString(code int, msg string) error {
 }
 
 func (this *Context) Write(code int, msg []byte) error {
-	this.w.Header().Set("Cpu", strconv.FormatFloat(cpu.GetUse(), 'f', -1, 64))
 	this.w.WriteHeader(code)
 	if len(msg) > 0 {
 		this.w.Write(msg)

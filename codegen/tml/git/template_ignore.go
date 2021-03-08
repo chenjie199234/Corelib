@@ -39,6 +39,8 @@ const text = `*
 !AppConfig.json
 !cmd.sh
 !cmd.bat
+!deployment.yaml
+!Dockerfile
 !go.mod
 !main.go
 !README.md

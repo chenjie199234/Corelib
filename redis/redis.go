@@ -72,6 +72,9 @@ func putconn(c *Conn) {
 	c.c.Close()
 	p.Put(c)
 }
+func (p *Pool) GetRedis() *redis.Pool {
+	return p.p
+}
 func (p *Pool) GetContext(ctx context.Context) (*Conn, error) {
 	c, e := p.p.GetContext(ctx)
 	if e != nil {

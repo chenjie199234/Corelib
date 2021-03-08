@@ -71,6 +71,9 @@ func NewDiscoveryServer(c *stream.InstanceConfig, vdata []byte) (*discoveryserve
 func (s *discoveryserver) StartDiscoveryServer(listenaddr string) error {
 	return s.instance.StartTcpServer(listenaddr)
 }
+func (s *discoveryserver) StopDiscoveryServer() {
+	s.instance.Stop()
+}
 
 //appuniquename = appname:ip:port
 func (s *discoveryserver) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {

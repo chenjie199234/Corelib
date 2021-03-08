@@ -2,8 +2,6 @@ package rpc
 
 import (
 	"context"
-
-	"github.com/chenjie199234/Corelib/util/cpu"
 )
 
 type Context struct {
@@ -32,7 +30,6 @@ func (c *Context) Abort(e error) {
 	c.msg.Path = ""
 	c.msg.Deadline = 0
 	c.msg.Body = nil
-	c.msg.Cpu = cpu.GetUse()
 	c.msg.Error = e.Error()
 	c.msg.Metadata = nil
 	c.next = -1
@@ -42,7 +39,6 @@ func (c *Context) Write(resp []byte) {
 	c.msg.Path = ""
 	c.msg.Deadline = 0
 	c.msg.Body = resp
-	c.msg.Cpu = cpu.GetUse()
 	c.msg.Error = ""
 	c.msg.Metadata = nil
 	c.next = -1

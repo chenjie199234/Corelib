@@ -79,10 +79,10 @@ spec:
             successThreshold: 1
             failureThreshold: 5
           ports:
-            - name: http
+            - name: web
               containerPort: 8000
               protocol: TCP
-            - name: grpc
+            - name: rpc
               containerPort: 9000
               protocol: TCP
       imagePullSecrets:
@@ -118,11 +118,11 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - name: http
+  - name: web
     protocol: TCP
     port: 80
     targetPort: 8000
-  - name: grpc
+  - name: rpc
     protocol: TCP
     port: 90
     targetPort: 9000

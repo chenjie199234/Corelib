@@ -37,12 +37,11 @@ type ServerForPick struct {
 	Pickinfo         *pickinfo
 }
 type pickinfo struct {
-	Lastfail       int64   //last fail timestamp nano second
-	Cpu            float64 //cpu use percent [0-100] if call error this will be set to 100 as a punish
-	Activecalls    int32   //current active calls
-	DServers       int32   //this server registered on how many discoveryservers
-	DServerOffline int64   //
-	Addition       []byte  //addition info register on register center
+	Lastfail       int64  //last fail timestamp nano second
+	Activecalls    int32  //current active calls
+	DServers       int32  //this server registered on how many discoveryservers
+	DServerOffline int64  //
+	Addition       []byte //addition info register on register center
 }
 
 var lker *sync.Mutex
@@ -127,7 +126,6 @@ func (this *WebClient) UpdateDiscovery(all map[string]map[string]struct{}, addit
 				discoveryservers: discoverservers,
 				Pickinfo: &pickinfo{
 					Lastfail:       0,
-					Cpu:            1,
 					Activecalls:    0,
 					DServers:       int32(len(discoverservers)),
 					DServerOffline: 0,
@@ -240,11 +238,6 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	if e != nil {
 		atomic.StoreInt64(&server.Pickinfo.Lastfail, time.Now().UnixNano())
 		return nil, e
-	}
-	if temp := resp.Header.Get("Cpu"); temp != "" {
-		if servercpu, e := strconv.ParseFloat(temp, 64); e == nil {
-			server.Pickinfo.Cpu = servercpu
-		}
 	}
 	return resp, nil
 }

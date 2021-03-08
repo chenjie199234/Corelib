@@ -12,7 +12,6 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
-	"github.com/chenjie199234/Corelib/util/cpu"
 	"github.com/chenjie199234/Corelib/util/metadata"
 
 	"google.golang.org/protobuf/proto"
@@ -141,7 +140,6 @@ func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...Outside
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
-				msg.Cpu = cpu.GetUse()
 				msg.Error = ERRPANIC.Error()
 				msg.Metadata = nil
 			}
@@ -171,7 +169,6 @@ func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...Outside
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
-				msg.Cpu = cpu.GetUse()
 				msg.Error = ERRCTXTIMEOUT.Error()
 				msg.Metadata = nil
 				return
@@ -234,7 +231,6 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			}
 			msg.Path = ""
 			msg.Deadline = 0
-			msg.Cpu = 0
 			msg.Body = nil
 			msg.Error = ERRCLOSING.Error()
 			msg.Metadata = nil
@@ -248,7 +244,6 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		if !ok {
 			msg.Path = ""
 			msg.Deadline = 0
-			msg.Cpu = cpu.GetUse()
 			msg.Body = nil
 			msg.Error = ERRNOAPI.Error()
 			msg.Metadata = nil

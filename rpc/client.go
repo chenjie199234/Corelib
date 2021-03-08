@@ -55,12 +55,11 @@ type ServerForPick struct {
 	Pickinfo *pickinfo
 }
 type pickinfo struct {
-	Lastfail       int64   //last fail timestamp nanosecond
-	Cpu            float64 //cpuinfo
-	Activecalls    int32   //current active calls
-	DServers       int32   //this app registered on how many discoveryservers
-	DServerOffline int64   //
-	Addition       []byte  //addition info register on register center
+	Lastfail       int64  //last fail timestamp nanosecond
+	Activecalls    int32  //current active calls
+	DServers       int32  //this app registered on how many discoveryservers
+	DServerOffline int64  //
+	Addition       []byte //addition info register on register center
 }
 
 func (s *ServerForPick) Pickable() bool {
@@ -156,7 +155,6 @@ func (c *RpcClient) UpdateDiscovery(allapps map[string]map[string]struct{}, addi
 				lker:             &sync.Mutex{},
 				Pickinfo: &pickinfo{
 					Lastfail:       0,
-					Cpu:            1,
 					Activecalls:    0,
 					DServers:       int32(len(discoveryservers)),
 					DServerOffline: 0,
@@ -319,7 +317,6 @@ func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, 
 	if e != nil && e.Code == ERRCLOSING.Code {
 		server.status = 4
 	}
-	server.Pickinfo.Cpu = msg.Cpu
 	req, ok := server.reqs[msg.Callid]
 	if !ok {
 		server.lker.Unlock()

@@ -1,7 +1,6 @@
 package rpc
 
 import (
-	"math"
 	"math/rand"
 	"time"
 )
@@ -83,9 +82,9 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 		}
 	}
 	//more discoveryservers more safety,so 1 * 2's discoveryserver num
-	load1 := normal1.Pickinfo.Cpu * float64(normal1.Pickinfo.Activecalls) * math.Log(float64(normal2.Pickinfo.DServers+2))
+	load1 := normal1.Pickinfo.Activecalls
 	//more discoveryservers more safety,so 2 * 1's discoveryserver num
-	load2 := normal2.Pickinfo.Cpu * float64(normal2.Pickinfo.Activecalls) * math.Log(float64(normal1.Pickinfo.DServers+2))
+	load2 := normal2.Pickinfo.Activecalls
 	if load1 > load2 {
 		return normal2
 	} else if load1 < load2 {
