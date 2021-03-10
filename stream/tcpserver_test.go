@@ -17,7 +17,6 @@ var tcpserverinstance *Instance
 func Test_Tcpserver(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	tcpserverinstance, _ = NewInstance(&InstanceConfig{
-		SelfName:           "server",
 		HeartbeatTimeout:   1500 * time.Millisecond,
 		HeartprobeInterval: 500 * time.Millisecond,
 		RecvIdleTimeout:    30 * time.Second, //30s
@@ -26,7 +25,7 @@ func Test_Tcpserver(t *testing.T) {
 		Onlinefunc:         tcpserverhandleonline,
 		Userdatafunc:       tcpserverhandleuserdata,
 		Offlinefunc:        tcpserverhandleoffline,
-	})
+	}, "testgroup", "tcpserver")
 	go tcpserverinstance.StartTcpServer("127.0.0.1:9234")
 	go func() {
 		for {
@@ -43,7 +42,7 @@ func Test_Tcpserver(t *testing.T) {
 }
 func tcpserverhandleVerify(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	index := strings.Index(peeruniquename, ":")
-	if peeruniquename[:index] != "tcpclient" {
+	if peeruniquename[:index] != "testgroup.tcpclient" {
 		panic("name error")
 	}
 	if !bytes.Equal([]byte{'t', 'e', 's', 't', 'c'}, peerVerifyData) {

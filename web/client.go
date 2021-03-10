@@ -19,7 +19,7 @@ import (
 var ERRNOSERVER = errors.New("[web] no servers")
 
 type PickHandler func(servers []*ServerForPick) *ServerForPick
-type DiscoveryHandler func(appname string, client *WebClient)
+type DiscoveryHandler func(group, name string, client *WebClient)
 
 type WebClient struct {
 	timeout time.Duration
@@ -53,9 +53,16 @@ func init() {
 	all = make(map[string]*WebClient)
 }
 
-func NewWebClient(appname string, globaltimeout time.Duration, picker PickHandler, discover DiscoveryHandler) (*WebClient, error) {
-	if e := common.NameCheck(appname, true); e != nil {
-		return nil, errors.New("[web.client]" + e.Error())
+func NewWebClient(group, name string, globaltimeout time.Duration, picker PickHandler, discover DiscoveryHandler) (*WebClient, error) {
+	if e := common.NameCheck(name, false, true, false, true); e != nil {
+		return nil, e
+	}
+	if e := common.NameCheck(group, false, true, false, true); e != nil {
+		return nil, e
+	}
+	appname := group + "." + name
+	if e := common.NameCheck(appname, true, true, false, true); e != nil {
+		return nil, e
 	}
 	lker.Lock()
 	defer lker.Unlock()
@@ -78,7 +85,7 @@ func NewWebClient(appname string, globaltimeout time.Duration, picker PickHandle
 		discover: discover,
 	}
 	all[appname] = instance
-	go instance.discover(appname, instance)
+	go instance.discover(group, name, instance)
 	return instance, nil
 }
 

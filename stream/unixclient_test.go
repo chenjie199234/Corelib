@@ -19,8 +19,6 @@ func Test_Unixclient(t *testing.T) {
 	go func() {
 		for count := 0; count < 1; count++ {
 			unixclientinstance, _ := NewInstance(&InstanceConfig{
-				//SelfName: fmt.Sprintf("unixclient%d", count),
-				SelfName:           "unixclientd",
 				HeartbeatTimeout:   1500 * time.Millisecond,
 				HeartprobeInterval: 500 * time.Millisecond,
 				GroupNum:           10,
@@ -28,7 +26,7 @@ func Test_Unixclient(t *testing.T) {
 				Onlinefunc:         unixclienthandleonline,
 				Userdatafunc:       unixclienthandleuserdata,
 				Offlinefunc:        unixclienthandleoffline,
-			})
+			}, "testgroup", "unixclient")
 			unixclientinstance.StartUnixClient("./test.socket", []byte{'t', 'e', 's', 't', 'c'})
 			time.Sleep(time.Millisecond)
 		}

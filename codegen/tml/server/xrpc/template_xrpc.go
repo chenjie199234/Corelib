@@ -46,17 +46,17 @@ func StartRpcServer() {
 	//s.Use(globalmidwares)
 
 	//you just need to register your service here
-	if e := api.RegisterStatusRpcServer(s, service.SvcStatus, mids.AllMids()); e != nil {
+	if e = api.RegisterStatusRpcServer(s, service.SvcStatus, mids.AllMids()); e != nil {
 		log.Error("[xrpc] register handlers error:", e)
 		return
 	}
 	//example
-	//if e := api.RegisterExampleRpcServer(s, service.SvcExample,mids.AllMids()); e != nil {
+	//if e = api.RegisterExampleRpcServer(s, service.SvcExample,mids.AllMids()); e != nil {
 	//log.Error("[xrpc] register handlers error:", e)
 	//return
 	//}
 
-	if e := s.StartRpcServer(fmt.Sprintf(":%d", c.RpcPort)); e != nil {
+	if e = s.StartRpcServer(fmt.Sprintf(":%d", c.RpcPort)); e != nil {
 		log.Error("[xrpc] start rpc server error:", e)
 		return
 	}

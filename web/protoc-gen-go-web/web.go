@@ -101,7 +101,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	p3 := "discover " + g.QualifiedGoIdent(webPackage.Ident("DiscoveryHandler"))
 	g.P("//has race,will only return the first's call's client,the config will use the first call's config")
 	g.P("func New", clientName, "(", p1, ",", p2, ",", p3, ")(", clientName, ",error){")
-	g.P("cc,e:=", g.QualifiedGoIdent(webPackage.Ident("NewWebClient")), "(\"", *file.Proto.Package, "\",globaltimeout,picker,discover)")
+	g.P("cc,e:=", g.QualifiedGoIdent(webPackage.Ident("NewWebClient")), "(Group,Name,globaltimeout,picker,discover)")
 	g.P("if e != nil{")
 	g.P("return nil,e")
 	g.P("}")

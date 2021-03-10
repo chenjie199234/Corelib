@@ -117,34 +117,41 @@ type Cmd struct {
 	Env  []string `json:"env"`
 }
 
-func (s *Super) CreateGroup(groupname, url string, buildcmds []*Cmd, runcmd *Cmd, logkeepdays uint64) error {
+func (s *Super) CreateGroup(groupname, appname, url string, buildcmds []*Cmd, runcmd *Cmd, logkeepdays uint64) error {
 	//check group name
-	if e := common.NameCheck(groupname, true); e != nil {
-		return errors.New("[create group]" + e.Error())
+	if e := common.NameCheck(appname, false, true, false, true); e != nil {
+		return e
+	}
+	if e := common.NameCheck(groupname, false, true, false, true); e != nil {
+		return e
+	}
+	fullappname := groupname + "." + appname
+	if e := common.NameCheck(fullappname, true, true, false, true); e != nil {
+		return e
 	}
 	s.lker.Lock()
 	defer s.lker.Unlock()
 	if s.status == s_CLOSING {
-		return errors.New("[create group]Superd is closing")
+		return errors.New("[create group] Superd is closing")
 	}
-	g, ok := s.groups[groupname]
+	g, ok := s.groups[fullappname]
 	if !ok {
 		var e error
 		if e = os.RemoveAll("./app_log"); e != nil {
 			return errors.New("[create group] remove old dir error:" + e.Error())
 		}
-		if e = os.RemoveAll("./app/" + groupname); e != nil {
-			return errors.New("[create group]remote old dir error:" + e.Error())
+		if e = os.RemoveAll("./app/" + fullappname); e != nil {
+			return errors.New("[create group] remote old dir error:" + e.Error())
 		}
-		if e = dirop("./app_log/" + groupname); e != nil {
-			return errors.New("[create group]" + e.Error())
+		if e = dirop("./app_log/" + fullappname); e != nil {
+			return errors.New("[create group] " + e.Error())
 		}
-		if e = dirop("./app/" + groupname); e != nil {
-			return errors.New("[create group]" + e.Error())
+		if e = dirop("./app/" + fullappname); e != nil {
+			return errors.New("[create group] " + e.Error())
 		}
 		g = &group{
 			s:         s,
-			name:      groupname,
+			name:      fullappname,
 			url:       url,
 			buildcmds: buildcmds,
 			runcmd:    runcmd,
@@ -155,32 +162,32 @@ func (s *Super) CreateGroup(groupname, url string, buildcmds []*Cmd, runcmd *Cmd
 			notice:    make(chan uint64, 100),
 		}
 		g.logfile, e = rotatefile.NewRotateFile(&rotatefile.Config{
-			Path:        "./app_log/" + groupname,
-			Name:        groupname,
+			Path:        "./app_log/" + fullappname,
+			Name:        fullappname,
 			Ext:         "log",
 			RotateCap:   s.c.LogRotateCap,
 			RotateCycle: s.c.LogRotateCycle,
 			KeepDays:    s.c.LogKeepDays,
 		})
 		if e != nil {
-			return errors.New("[create group]" + e.Error())
+			return errors.New("[create group] " + e.Error())
 		}
-		s.groups[groupname] = g
+		s.groups[fullappname] = g
 		go g.startGroup()
 		return nil
 	} else {
-		return errors.New("[create group]Group already exist")
+		return errors.New("[create group] Group already exist")
 	}
 }
 func (s *Super) BuildGroup(groupname, branchname, tagname string) error {
 	if branchname == "" && tagname == "" {
-		return errors.New("[build group]Missing branch or tag.")
+		return errors.New("[build group] Missing branch or tag.")
 	}
 	s.lker.RLock()
 	defer s.lker.RUnlock()
 	g, ok := s.groups[groupname]
 	if !ok {
-		return errors.New("[build group]Group doesn't exist.")
+		return errors.New("[build group] Group doesn't exist.")
 	}
 	go g.build(branchname, tagname)
 	return nil
@@ -261,7 +268,7 @@ func (s *Super) GetGroupInfo(groupname string) (*GroupInfo, error) {
 	defer s.lker.RUnlock()
 	g, ok := s.groups[groupname]
 	if !ok {
-		return nil, errors.New("[group info]Group doesn't exist.")
+		return nil, errors.New("[group info] Group doesn't exist.")
 	}
 	result := new(GroupInfo)
 	result.Name = g.name

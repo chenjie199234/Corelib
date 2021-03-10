@@ -16,7 +16,7 @@ func Test_Super(t *testing.T) {
 		Cmd:  "./main",
 		Args: nil,
 	}
-	if e := s.CreateGroup("test", "xxx", buildcmds, runcmd, 1); e != nil {
+	if e := s.CreateGroup("testgroup", "testname", "xxx", buildcmds, runcmd, 1); e != nil {
 		panic(e)
 	}
 	for {

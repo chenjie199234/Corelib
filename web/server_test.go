@@ -8,7 +8,7 @@ import (
 )
 
 func Test_Server(t *testing.T) {
-	engine := NewWebServer(&Config{})
+	engine, _ := NewWebServer(&Config{}, "testgroup", "testname")
 	engine.Post("/ping", 100*time.Millisecond, handleroot)
 	engine.StartWebServer("127.0.0.1:8080", "", "")
 }

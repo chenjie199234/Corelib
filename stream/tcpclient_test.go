@@ -18,7 +18,6 @@ func Test_Tcpclient(t *testing.T) {
 	go func() {
 		for count := 0; count < 10000; count++ {
 			tcpclientinstance, _ := NewInstance(&InstanceConfig{
-				SelfName:           "tcpclient",
 				HeartbeatTimeout:   1500 * time.Millisecond,
 				HeartprobeInterval: 500 * time.Millisecond,
 				GroupNum:           10,
@@ -26,7 +25,7 @@ func Test_Tcpclient(t *testing.T) {
 				Onlinefunc:         tcpclienthandleonline,
 				Userdatafunc:       tcpclienthandleuserdata,
 				Offlinefunc:        tcpclienthandleoffline,
-			})
+			}, "testgroup", "tcpclient")
 			tcpclientinstance.StartTcpClient("127.0.0.1:9234", []byte{'t', 'e', 's', 't', 'c'})
 			time.Sleep(time.Millisecond)
 		}
@@ -35,7 +34,7 @@ func Test_Tcpclient(t *testing.T) {
 }
 func tcpclienthandleVerify(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	index := strings.Index(peeruniquename, ":")
-	if peeruniquename[:index] != "server" {
+	if peeruniquename[:index] != "testgroup.tcpserver" {
 		panic("name error")
 	}
 	if !bytes.Equal([]byte{'t', 'e', 's', 't'}, peerVerifyData) {

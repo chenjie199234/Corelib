@@ -13,6 +13,7 @@ import (
 )
 
 type Instance struct {
+	selfname     string
 	conf         *InstanceConfig
 	peernodes    []*peernode
 	stop         int32
@@ -80,11 +81,21 @@ func (this *Instance) addPeer(p *Peer) bool {
 }
 
 //be careful about the callback func race
-func NewInstance(c *InstanceConfig) (*Instance, error) {
+func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
+	if e := common.NameCheck(name, false, true, false, true); e != nil {
+		return nil, e
+	}
+	if e := common.NameCheck(group, false, true, false, true); e != nil {
+		return nil, e
+	}
+	if e := common.NameCheck(group+"."+name, true, true, false, true); e != nil {
+		return nil, e
+	}
 	if e := checkInstanceConfig(c); e != nil {
 		return nil, e
 	}
 	stream := &Instance{
+		selfname:  group + "." + name,
 		conf:      c,
 		peernodes: make([]*peernode, c.GroupNum),
 		stop:      0,
@@ -149,7 +160,9 @@ func (this *Instance) Stop() {
 	this.noticech <- (*Peer)(nil)
 	<-this.closech
 }
-
+func (this *Instance) GetSelfName() string {
+	return this.selfname
+}
 func (this *Instance) SendMessageAll(data []byte, block bool) {
 	wg := &sync.WaitGroup{}
 	for _, node := range this.peernodes {

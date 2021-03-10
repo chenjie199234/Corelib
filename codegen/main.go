@@ -1,15 +1,18 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"strings"
 
 	statusapi "github.com/chenjie199234/Corelib/codegen/tml/api/status"
 	subapi "github.com/chenjie199234/Corelib/codegen/tml/api/sub"
+	"github.com/chenjie199234/Corelib/codegen/tml/client"
 	"github.com/chenjie199234/Corelib/codegen/tml/cmd"
 	"github.com/chenjie199234/Corelib/codegen/tml/config"
 	"github.com/chenjie199234/Corelib/codegen/tml/configfile"
@@ -30,20 +33,26 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-var name = flag.String("n", "", "project's name\ncharacter:[a-z][A-Z][0-9][.]\nfirst character can't be[.]")
+var name = flag.String("n", "", "project's name\ncharacter:[a-z][0-9]\nfirst character must in [a-z]")
+var group = flag.String("g", "", "project's group\ncharacter:[a-z][0-9]\nfirst character must in [a-z]")
 var dir = flag.String("d", "", "project's create dir")
 var sub = flag.String("s", "", "create subservice's name in project\ncharacter:[a-z][A-Z][0-9]")
 var kub = flag.Bool("k", false, "update exist project's kubernetes config file")
 var needkubernetes bool
 var needkubernetesservice bool
 var needkubernetesingress bool
-var kubernetesnamespace string
 var kubernetesingresshost string
 
 func main() {
 	flag.Parse()
 	//pre check
-	if e := common.NameCheck(*name, true); e != nil {
+	if e := common.NameCheck(*name, false, true, false, true); e != nil {
+		panic(e)
+	}
+	if e := common.NameCheck(*group, false, true, false, true); e != nil {
+		panic(e)
+	}
+	if e := common.NameCheck(*group+"."+*name, true, true, false, true); e != nil {
 		panic(e)
 	}
 	if len(*sub) == 0 {
@@ -53,7 +62,7 @@ func main() {
 		} else {
 			createBaseProject()
 		}
-	} else if e := common.NameCheck(*sub, false); e != nil {
+	} else if e := common.NameCheck(*sub, false, true, false, true); e != nil {
 		panic(e)
 	} else {
 		checkBaseProjectName()
@@ -61,27 +70,40 @@ func main() {
 	}
 }
 func checkBaseProjectName() {
-	data, e := ioutil.ReadFile("./cmd.sh")
+	data, e := ioutil.ReadFile("./api/client.go")
 	if e != nil {
 		panic("please change dir to project's root dir,then run this manually or run the cmd script")
 	}
-	index := bytes.Index(data, []byte("CurrentProject:"))
-	if index == -1 {
-		panic("please change dir to project's root dir,then run this manually or run the cmd script")
-	}
-	pname := make([]byte, 0)
-	index += 15
+	bio := bufio.NewReader(bytes.NewBuffer(data))
+	var tempname, tempgroup string
 	for {
-		if data[index] != '\r' && data[index] != '\n' {
-			pname = append(pname, data[index])
-		} else {
+		line, _, e := bio.ReadLine()
+		if e != nil {
+			if e != io.EOF {
+				panic("read api/client.go error:" + e.Error())
+			}
 			break
 		}
-		index++
+		str := strings.TrimSpace(string(line))
+		if strings.HasPrefix(str, "const Name = ") {
+			tempname = str[13:]
+			if len(tempname) <= 2 || tempname[0] != '"' || tempname[len(tempname)-1] != '"' {
+				panic("api/client.go broken!")
+			}
+			tempname = tempname[1 : len(tempname)-1]
+		}
+		if strings.HasPrefix(str, "const Group = ") {
+			tempgroup = str[14:]
+			if len(tempgroup) <= 2 || tempgroup[0] != '"' || tempgroup[len(tempgroup)-1] != '"' {
+				panic("api/client.go broken!")
+			}
+			tempgroup = tempgroup[1 : len(tempgroup)-1]
+		}
+		if tempname != "" && tempgroup != "" {
+			break
+		}
 	}
-	pname = bytes.TrimSpace(pname)
-	pname = bytes.TrimSuffix(pname, []byte{'"'})
-	if string(pname) != *name {
+	if tempname != *name && tempgroup != *group {
 		panic("please change dir to project's root dir,then run this manually or run the cmd script")
 	}
 }
@@ -202,13 +224,16 @@ func createBaseProject() {
 	servicestatus.Execute(*name)
 
 	cmd.CreatePathAndFile()
-	cmd.Execute(*name)
+	cmd.Execute(*name, *group)
 
 	readme.CreatePathAndFile()
 	readme.Execute(*name)
 
 	git.CreatePathAndFile()
 	git.Execute(*name)
+
+	client.CreatePathAndFile()
+	client.Execute(*name, *group)
 
 	fmt.Println("base project create success!")
 	createkubernetes()
@@ -229,18 +254,6 @@ func createkubernetes() {
 		if input[0] == 'y' {
 			needkubernetes = true
 		}
-	}
-	if needkubernetes {
-		input = ""
-		for len(input) == 0 {
-			fmt.Printf("kubernetes namespace: ")
-			_, e := fmt.Scanln(&input)
-			if e != nil {
-				panic(e)
-			}
-			input = strings.TrimSpace(input)
-		}
-		kubernetesnamespace = input
 	}
 	if needkubernetes {
 		input = ""
@@ -303,7 +316,7 @@ func createkubernetes() {
 	if needkubernetes {
 		fmt.Println("start create kubernetes config.")
 		kubernetes.CreatePathAndFile()
-		kubernetes.Execute(*name, kubernetesnamespace, needkubernetesservice, needkubernetesingress, kubernetesingresshost)
+		kubernetes.Execute(*name, *group, needkubernetesservice, needkubernetesingress, kubernetesingresshost)
 		fmt.Println("create kubernetes config success!")
 	}
 }

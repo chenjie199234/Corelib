@@ -9,7 +9,7 @@ import (
 )
 
 func finder(manually chan struct{}) {
-	UpdateDiscoveryServers([]string{"server:127.0.0.1:9234", "server:127.0.0.1:9235"})
+	UpdateDiscoveryServers([]string{"default.discoverycenter1:127.0.0.1:9234", "default.discoverycenter2:127.0.0.1:9235"})
 	//UpdateDiscoveryServers([]string{"server:127.0.0.1:9234"})
 }
 func Test_Client1(t *testing.T) {
@@ -34,7 +34,6 @@ func Test_Client1(t *testing.T) {
 	//        }
 	//}()
 	NewDiscoveryClient(&stream.InstanceConfig{
-		SelfName:           "client1",
 		HeartbeatTimeout:   5 * time.Second,
 		HeartprobeInterval: 2 * time.Second,
 		GroupNum:           1,
@@ -44,12 +43,12 @@ func Test_Client1(t *testing.T) {
 			SocketWriteBufferLen: 1024,
 			AppWriteBufferNum:    256,
 		},
-	}, []byte{'t', 'e', 's', 't'}, finder)
-	rch, e := NoticeRpcChanges("client2")
+	}, "testgroup", "testclient1", []byte{'t', 'e', 's', 't'}, finder)
+	rch, e := NoticeRpcChanges("testgroup.testclient2")
 	if e != nil {
 		panic("notice grpc change error:" + e.Error())
 	}
-	wch, e := NoticeWebChanges("client2")
+	wch, e := NoticeWebChanges("testgroup.testclient2")
 	if e != nil {
 		panic("notice http change error:" + e.Error())
 	}
@@ -57,11 +56,11 @@ func Test_Client1(t *testing.T) {
 		for {
 			select {
 			case <-rch:
-				r, addition := GetRpcInfos("client2")
+				r, addition := GetRpcInfos("testgroup.testclient2")
 				fmt.Println(r)
 				fmt.Printf("%s\n", addition)
 			case <-wch:
-				r, addition := GetWebInfos("client2")
+				r, addition := GetWebInfos("testgroup.testclient2")
 				fmt.Println(r)
 				fmt.Printf("%s\n", addition)
 			}
@@ -108,7 +107,6 @@ func Test_Client2(t *testing.T) {
 	//        }
 	//}()
 	NewDiscoveryClient(&stream.InstanceConfig{
-		SelfName:           "client2",
 		HeartbeatTimeout:   5 * time.Second,
 		HeartprobeInterval: 2 * time.Second,
 		GroupNum:           1,
@@ -118,12 +116,12 @@ func Test_Client2(t *testing.T) {
 			SocketWriteBufferLen: 1024,
 			AppWriteBufferNum:    256,
 		},
-	}, []byte{'t', 'e', 's', 't'}, finder)
-	rch, e := NoticeRpcChanges("client1")
+	}, "testgroup", "testclient2", []byte{'t', 'e', 's', 't'}, finder)
+	rch, e := NoticeRpcChanges("testgroup.testclient1")
 	if e != nil {
 		panic("notice grpc change error:" + e.Error())
 	}
-	wch, e := NoticeWebChanges("client1")
+	wch, e := NoticeWebChanges("testgroup.testclient1")
 	if e != nil {
 		panic("notice http change error:" + e.Error())
 	}
@@ -131,11 +129,11 @@ func Test_Client2(t *testing.T) {
 		for {
 			select {
 			case <-rch:
-				r, addition := GetRpcInfos("client1")
+				r, addition := GetRpcInfos("testgroup.testclient1")
 				fmt.Println(r)
 				fmt.Printf("%s\n", addition)
 			case <-wch:
-				r, addition := GetWebInfos("client1")
+				r, addition := GetWebInfos("testgroup.testclient1")
 				fmt.Println(r)
 				fmt.Printf("%s\n", addition)
 			}

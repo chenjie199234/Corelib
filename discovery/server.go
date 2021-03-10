@@ -3,8 +3,6 @@ package discovery
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"strings"
 	"sync"
 	"unsafe"
@@ -21,7 +19,6 @@ const (
 )
 
 type discoveryserver struct {
-	selfname   string
 	lker       *sync.Mutex
 	groups     map[string]*appgroup //key appname
 	verifydata []byte
@@ -47,9 +44,17 @@ type appnode struct {
 	bewatched     map[string]*appnode //key appuniquename
 }
 
-func NewDiscoveryServer(c *stream.InstanceConfig, vdata []byte) (*discoveryserver, error) {
+func NewDiscoveryServer(c *stream.InstanceConfig, group, name string, vdata []byte) (*discoveryserver, error) {
+	if e := common.NameCheck(name, false, true, false, true); e != nil {
+		return nil, e
+	}
+	if e := common.NameCheck(group, false, true, false, true); e != nil {
+		return nil, e
+	}
+	if e := common.NameCheck(group+"."+name, true, true, false, true); e != nil {
+		return nil, e
+	}
 	instance := &discoveryserver{
-		selfname:   c.SelfName,
 		lker:       &sync.Mutex{},
 		groups:     make(map[string]*appgroup, 5),
 		verifydata: vdata,
@@ -60,11 +65,7 @@ func NewDiscoveryServer(c *stream.InstanceConfig, vdata []byte) (*discoveryserve
 	dupc.Onlinefunc = instance.onlinefunc
 	dupc.Userdatafunc = instance.userfunc
 	dupc.Offlinefunc = instance.offlinefunc
-	var e error
-	instance.instance, e = stream.NewInstance(&dupc)
-	if e != nil {
-		return nil, errors.New("[discovery.server.NewDiscoveryServer]new tcp instance error:" + e.Error())
-	}
+	instance.instance, _ = stream.NewInstance(&dupc, group, name)
 	return instance, nil
 }
 
@@ -84,7 +85,7 @@ func (s *discoveryserver) verifyfunc(ctx context.Context, appuniquename string, 
 	}
 	targetname := temp[index+1:]
 	vdata := temp[:index]
-	if targetname != s.selfname || vdata != common.Byte2str(s.verifydata) {
+	if targetname != s.instance.GetSelfName() || vdata != common.Byte2str(s.verifydata) {
 		return nil, false
 	}
 	return s.verifydata, true
@@ -263,10 +264,7 @@ func (s *discoveryserver) offlinefunc(p *stream.Peer, appuniquename string, star
 		for _, v := range node.bewatched {
 			v.lker.RLock()
 			if v.status != s_CLOSED {
-				if e := v.peer.SendMessage(offlinemsg, v.starttime, true); e != nil {
-					fmt.Println(e.Error())
-				}
-				fmt.Printf("send to:%s data:%s\n", v.appuniquename, offlinemsg)
+				v.peer.SendMessage(offlinemsg, v.starttime, true)
 			}
 			v.lker.RUnlock()
 		}

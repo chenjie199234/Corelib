@@ -25,7 +25,7 @@ func (this *Instance) StartTcpServer(listenaddr string) error {
 		return errors.New("[Stream.TCP.StartTcpServer] listen addr:" + listenaddr + " error:" + e.Error())
 	}
 	for {
-		p := this.getPeer(TCP, CLIENT, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, this.conf.SelfName)
+		p := this.getPeer(TCP, CLIENT, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, this.selfname)
 		conn, e := this.tcplistener.AcceptTCP()
 		if e != nil {
 			return errors.New("[Stream.TCP.Accept] accept connect error:" + e.Error())
@@ -56,7 +56,7 @@ func (this *Instance) StartUnixServer(listenaddr string) error {
 		return errors.New("[Stream.UNIX.StartUnixServer] listening addr:" + listenaddr + " error:" + e.Error())
 	}
 	for {
-		p := this.getPeer(UNIX, CLIENT, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, this.conf.SelfName)
+		p := this.getPeer(UNIX, CLIENT, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, this.selfname)
 		conn, e := this.unixlistener.AcceptUnix()
 		if e != nil {
 			return errors.New("[Stream.UNIX.Accept] accept connect error:" + e.Error())
@@ -157,7 +157,7 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) strin
 		log.Error("[Stream.TCP.StartTcpClient] error:", e)
 		return ""
 	}
-	p := this.getPeer(TCP, SERVER, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, this.conf.SelfName)
+	p := this.getPeer(TCP, SERVER, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, this.selfname)
 	p.conn = unsafe.Pointer(conn.(*net.TCPConn))
 	p.setbuffer(this.conf.TcpC.SocketReadBufferLen, this.conf.TcpC.SocketWriteBufferLen)
 	if p.reader == nil {
@@ -189,7 +189,7 @@ func (this *Instance) StartUnixClient(serveraddr string, verifydata []byte) stri
 		log.Error("[Stream.UNIX.StartUnixClient] error:", e)
 		return ""
 	}
-	p := this.getPeer(UNIX, SERVER, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, this.conf.SelfName)
+	p := this.getPeer(UNIX, SERVER, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, this.selfname)
 	p.conn = unsafe.Pointer(conn.(*net.UnixConn))
 	p.setbuffer(this.conf.UnixC.SocketReadBufferLen, this.conf.UnixC.SocketWriteBufferLen)
 	if p.reader == nil {

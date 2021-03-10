@@ -42,23 +42,27 @@ func StartWebServer() {
 			MaxAge:           24 * time.Hour,
 		}
 	}
-	s = web.NewWebServer(webc)
+	var e error
+	if s, e = web.NewWebServer(webc); e != nil {
+		log.Error("[xweb] new web server error:", e)
+		return
+	}
 
 	//this place can register global midwares
 	//s.Use(globalmidwares)
 
 	//you just need to register your service here
-	if e := api.RegisterStatusWebServer(s, service.SvcStatus, mids.AllMids()); e != nil {
+	if e = api.RegisterStatusWebServer(s, service.SvcStatus, mids.AllMids()); e != nil {
 		log.Error("[xweb] register handlers error:", e)
 		return
 	}
 	//example
-	//if e := api.RegisterExampleWebServer(s, service.SvcExample, mids.AllMids()); e != nil {
+	//if e = api.RegisterExampleWebServer(s, service.SvcExample, mids.AllMids()); e != nil {
 	//log.Error("[xweb] register handlers error:", e)
 	//return
 	//}
 
-	if e := s.StartWebServer(fmt.Sprintf(":%d", c.HttpPort), c.HttpCertFile, c.HttpKeyFile); e != nil {
+	if e = s.StartWebServer(fmt.Sprintf(":%d", c.HttpPort), c.HttpCertFile, c.HttpKeyFile); e != nil {
 		log.Error("[xweb] start web server error:", e)
 		return
 	}

@@ -58,10 +58,8 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 			normal2 = danger2
 		}
 	}
-	//more discoveryservers more safety,so 1 * 2's discoveryserver num
-	load1 := float64(normal1.Pickinfo.Activecalls) * math.Log(float64(normal2.Pickinfo.DServers+2))
-	//more discoveryservers more safety,so 2 * 1's discoveryserver num
-	load2 := float64(normal2.Pickinfo.Activecalls) * math.Log(float64(normal1.Pickinfo.DServers+2))
+	load1 := float64(normal1.Pickinfo.Activecalls) + math.Log(float64(normal2.Pickinfo.DServers+2))
+	load2 := float64(normal2.Pickinfo.Activecalls) + math.Log(float64(normal1.Pickinfo.DServers+2))
 	if load1 > load2 {
 		return normal2
 	} else if load1 < load2 {

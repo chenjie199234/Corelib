@@ -7,17 +7,15 @@ import (
 	"text/template"
 )
 
-const textbash = `#      Warning!!!!!!!!!!!Don't modify this file
+const textbash = `#      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
 
 help() {
-	echo "CurrentProject: {{.}}"
-	echo ""
 	echo "cmd.sh — every thing you need"
 	echo "         please install golang"
 	echo "         please install protoc"
 	echo "         please install protoc-gen-go"
-	echo "         please install protoc-gen-go-grpc"
-	echo "         please install protoc-gen-go-gin"
+	echo "         please install protoc-gen-go-rpc"
+	echo "         please install protoc-gen-go-web"
 	echo ""
 	echo "Usage:"
 	echo "   ./cmd.sh <option>"
@@ -49,11 +47,11 @@ build() {
 }
 
 new() {
-	codegen -n {{.}} -s $1
+	codegen -n {{.Pname}} -g {{.Gname}} -s $1
 }
 
 kubernetes() {
-	codegen -n {{.}} -k
+	codegen -n {{.Pname}} -g {{.Gname}} -k
 }
 
 if !(type git >/dev/null 2>&1);then
@@ -124,7 +122,7 @@ fi
 echo "option unsupport"
 help`
 const textbat = `@echo off
-REM       Warning!!!!!!!!!!!Don't modify this file
+REM      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
 
 where /q git.exe
 if %errorlevel% == 1 (
@@ -259,31 +257,30 @@ goto :end
 goto :end
 
 :kubernetes
-	codegen -n {{.}} -k
+	codegen -n {{.Pname}} -g {{.Gname}} -k
 goto :end
 
 :new
-	codegen -n {{.}} -s %2
+	codegen -n {{.Pname}} -g {{.Gname}} -s %2
 goto :end
 
 :help
-	echo CurrentProject: {{.}}
-	echo
-	echo cmd.sh — every thing you need
-	echo          please install golang
-	echo          please install protoc
-	echo          please install protoc-gen-go
-	echo          please install protoc-gen-go-grpc
-	echo          please install protoc-gen-go-gin
+	echo cmd.bat — every thing you need
+	echo           please install golang
+	echo           please install protoc
+	echo           please install protoc-gen-go
+	echo           please install protoc-gen-go-rpc
+	echo           please install protoc-gen-go-web
 	echo
 	echo Usage:
-	echo    ./cmd.sh <option^>
+	echo    ./cmd.bat <option^>
 	echo
 	echo Options:
-	echo    run                       Run this program
-	echo    build                     Complie this program to binary
-	echo    pb                        Generate the proto in this program
-	echo    new <sub service name^>    Create a new sub service
+	echo    run                       Run this program.
+	echo    build                     Complie this program to binary.
+	echo    pb                        Generate the proto in this program.
+	echo    new <sub service name^>    Create a new sub service.
+	echo    kubernetes                Update or add kubernetes config.
 	echo    h/-h/help/-help/--help    Show this message.
 
 :end
@@ -298,6 +295,11 @@ var tmlbash *template.Template
 var tmlbat *template.Template
 var filebash *os.File
 var filebat *os.File
+
+type Data struct {
+	Pname string
+	Gname string
+}
 
 func init() {
 	var e error
@@ -328,11 +330,11 @@ func CreatePathAndFile() {
 		panic(fmt.Sprintf("make file:%s error:%s", path+namebat, e))
 	}
 }
-func Execute(projectname string) {
-	if e := tmlbash.Execute(filebash, projectname); e != nil {
+func Execute(pname, gname string) {
+	if e := tmlbash.Execute(filebash, &Data{Pname: pname, Gname: gname}); e != nil {
 		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+namebash, e))
 	}
-	if e := tmlbat.Execute(filebat, projectname); e != nil {
+	if e := tmlbat.Execute(filebat, &Data{Pname: pname, Gname: gname}); e != nil {
 		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+namebat, e))
 	}
 }

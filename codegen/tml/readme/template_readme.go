@@ -14,6 +14,7 @@ const text = `# {{.}}
 ./cmd.sh build 编译该程序,会在根目录下生成一个可执行文件<br/>
 ./cmd.sh new 在该项目中创建一个新的子服务<br/>
 ./cmd.sh help 输出帮助信息<br/>
+./cmd.sh kubernetes 增加或者更新kubernetes的配置<br/>
 
 ## 配置文件
 AppConfig.json该文件配置了该服务需要使用的业务配置,可热更新<br/>

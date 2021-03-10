@@ -20,7 +20,6 @@ import (
 type OutsideHandler func(ctx *Context)
 
 type RpcServer struct {
-	selfname   string
 	timeout    time.Duration
 	global     []OutsideHandler
 	ctxpool    *sync.Pool
@@ -32,7 +31,17 @@ type RpcServer struct {
 	stopch     chan struct{}
 }
 
-func NewRpcServer(c *stream.InstanceConfig, globaltimeout time.Duration, vdata []byte) (*RpcServer, error) {
+func NewRpcServer(c *stream.InstanceConfig, group, name string, vdata []byte, globaltimeout time.Duration) (*RpcServer, error) {
+	if e := common.NameCheck(name, false, true, false, true); e != nil {
+		return nil, e
+	}
+	if e := common.NameCheck(group, false, true, false, true); e != nil {
+		return nil, e
+	}
+	appname := group + "." + name
+	if e := common.NameCheck(appname, false, true, false, true); e != nil {
+		return nil, e
+	}
 	serverinstance := &RpcServer{
 		timeout:    globaltimeout,
 		global:     make([]OutsideHandler, 0, 10),
@@ -46,11 +55,7 @@ func NewRpcServer(c *stream.InstanceConfig, globaltimeout time.Duration, vdata [
 	dupc.Onlinefunc = serverinstance.onlinefunc
 	dupc.Userdatafunc = serverinstance.userfunc
 	dupc.Offlinefunc = nil
-	var e error
-	serverinstance.instance, e = stream.NewInstance(&dupc)
-	if e != nil {
-		return nil, errors.New("[rpc.server.NewRpcServer]new tcp instance error:" + e.Error())
-	}
+	serverinstance.instance, _ = stream.NewInstance(&dupc, group, name)
 	return serverinstance, nil
 }
 func (s *RpcServer) StartRpcServer(listenaddr string) error {
@@ -196,7 +201,7 @@ func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerV
 	}
 	targetname := temp[index+1:]
 	vdata := temp[:index]
-	if targetname != s.selfname || vdata != common.Byte2str(s.verifydata) {
+	if targetname != s.instance.GetSelfName() || vdata != common.Byte2str(s.verifydata) {
 		return nil, false
 	}
 	return s.verifydata, true

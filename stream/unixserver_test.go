@@ -17,7 +17,6 @@ var unixserverinstance *Instance
 func Test_Unixserver(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	unixserverinstance, _ = NewInstance(&InstanceConfig{
-		SelfName:           "server",
 		HeartbeatTimeout:   1500 * time.Millisecond,
 		HeartprobeInterval: 500 * time.Millisecond,
 		RecvIdleTimeout:    30 * time.Second, //30s
@@ -26,7 +25,7 @@ func Test_Unixserver(t *testing.T) {
 		Onlinefunc:         unixserverhandleonline,
 		Userdatafunc:       unixclienthandleuserdata,
 		Offlinefunc:        unixclienthandleoffline,
-	})
+	}, "testgroup", "unixserver")
 	os.Remove("./test.socket")
 	go unixserverinstance.StartUnixServer("./test.socket")
 	go func() {

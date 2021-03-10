@@ -3,7 +3,6 @@ package rpc
 import (
 	"bytes"
 	"context"
-	"errors"
 	"math/rand"
 	"strings"
 	"sync"
@@ -21,7 +20,7 @@ import (
 )
 
 type PickHandler func(servers []*ServerForPick) *ServerForPick
-type DiscoveryHandler func(appname string, client *RpcClient)
+type DiscoveryHandler func(group, name string, client *RpcClient)
 
 //appuniquename = appname:addr
 type RpcClient struct {
@@ -37,8 +36,8 @@ type RpcClient struct {
 	callid  uint64
 	reqpool *sync.Pool
 
-	pick      PickHandler
-	discovery DiscoveryHandler
+	picker   PickHandler
+	discover DiscoveryHandler
 }
 
 type ServerForPick struct {
@@ -75,10 +74,16 @@ func init() {
 	all = make(map[string]*RpcClient)
 }
 
-func NewRpcClient(c *stream.InstanceConfig, vdata []byte, appname string, globaltimeout time.Duration, pick PickHandler, discovery DiscoveryHandler) (*RpcClient, error) {
-	e := common.NameCheck(appname, true)
-	if e != nil {
-		return nil, errors.New("[rpc.client]" + e.Error())
+func NewRpcClient(c *stream.InstanceConfig, group, name string, vdata []byte, globaltimeout time.Duration, pick PickHandler, discover DiscoveryHandler) (*RpcClient, error) {
+	if e := common.NameCheck(name, false, true, false, true); e != nil {
+		return nil, e
+	}
+	if e := common.NameCheck(group, false, true, false, true); e != nil {
+		return nil, e
+	}
+	appname := group + "." + name
+	if e := common.NameCheck(appname, true, true, false, true); e != nil {
+		return nil, e
 	}
 	lker.Lock()
 	defer lker.Unlock()
@@ -88,8 +93,8 @@ func NewRpcClient(c *stream.InstanceConfig, vdata []byte, appname string, global
 	if pick == nil {
 		pick = defaultPicker
 	}
-	if discovery == nil {
-		discovery = defaultdiscovery
+	if discover == nil {
+		discover = defaultdiscovery
 	}
 	client := &RpcClient{
 		timeout:    globaltimeout,
@@ -99,8 +104,8 @@ func NewRpcClient(c *stream.InstanceConfig, vdata []byte, appname string, global
 		servers:    make([]*ServerForPick, 0, 10),
 		callid:     0,
 		reqpool:    &sync.Pool{},
-		pick:       pick,
-		discovery:  discovery,
+		picker:     pick,
+		discover:   discover,
 	}
 	//tcp instalce
 	dupc := *c //duplicate to remove the callback func race
@@ -109,11 +114,8 @@ func NewRpcClient(c *stream.InstanceConfig, vdata []byte, appname string, global
 	dupc.Userdatafunc = client.userfunc
 	dupc.Offlinefunc = client.offlinefunc
 	client.c = &dupc
-	client.instance, e = stream.NewInstance(&dupc)
-	if e != nil {
-		return nil, errors.New("[rpc.client.NewRpcClient]new tcp instance error:" + e.Error())
-	}
-	go discovery(appname, client)
+	client.instance, _ = stream.NewInstance(&dupc, group, name)
+	go discover(group, name, client)
 	all[appname] = client
 	return client, nil
 }
@@ -398,7 +400,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 		for {
 			//pick server
 			c.lker.RLock()
-			server = c.pick(c.servers)
+			server = c.picker(c.servers)
 			if server == nil {
 				c.lker.RUnlock()
 				c.putreq(r)

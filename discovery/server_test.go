@@ -10,7 +10,6 @@ import (
 
 func Test_Server1(t *testing.T) {
 	instance, e := NewDiscoveryServer(&stream.InstanceConfig{
-		SelfName:           "server",
 		HeartbeatTimeout:   5 * time.Second,
 		HeartprobeInterval: 2 * time.Second,
 		GroupNum:           1,
@@ -20,7 +19,7 @@ func Test_Server1(t *testing.T) {
 			SocketWriteBufferLen: 1024,
 			AppWriteBufferNum:    256,
 		},
-	}, []byte{'t', 'e', 's', 't'})
+	}, "default", "discoverycenter1", []byte{'t', 'e', 's', 't'})
 	if e != nil {
 		panic(e)
 	}
@@ -28,13 +27,13 @@ func Test_Server1(t *testing.T) {
 		tker := time.NewTicker(time.Second)
 		for {
 			<-tker.C
-			if instance.groups["client1"] != nil {
-				fmt.Println("client1:", " apps:", instance.groups["client1"].apps, " bewatched:", instance.groups["client1"].bewatched)
+			if instance.groups["testgroup.testclient1"] != nil {
+				fmt.Println("client1:", " apps:", instance.groups["testgroup.testclient1"].apps, " bewatched:", instance.groups["testgroup.testclient1"].bewatched)
 			} else {
 				fmt.Println("client1: nil")
 			}
-			if instance.groups["client2"] != nil {
-				fmt.Println("client2:", " apps:", instance.groups["client2"].apps, " bewatched:", instance.groups["client2"].bewatched)
+			if instance.groups["testgroup.testclient2"] != nil {
+				fmt.Println("client2:", " apps:", instance.groups["testgroup.testclient2"].apps, " bewatched:", instance.groups["testgroup.testclient2"].bewatched)
 			} else {
 				fmt.Println("client2: nil")
 			}
@@ -44,7 +43,6 @@ func Test_Server1(t *testing.T) {
 }
 func Test_Server2(t *testing.T) {
 	instance, _ := NewDiscoveryServer(&stream.InstanceConfig{
-		SelfName:           "server",
 		HeartbeatTimeout:   5 * time.Second,
 		HeartprobeInterval: 2 * time.Second,
 		GroupNum:           1,
@@ -54,19 +52,19 @@ func Test_Server2(t *testing.T) {
 			SocketWriteBufferLen: 1024,
 			AppWriteBufferNum:    256,
 		},
-	}, []byte{'t', 'e', 's', 't'})
+	}, "default", "discoverycenter2", []byte{'t', 'e', 's', 't'})
 	go func() {
 		tker := time.NewTicker(time.Second)
 		for {
 			<-tker.C
 			if instance != nil {
-				if instance.groups["client1"] != nil {
-					fmt.Println("client1:", " apps:", instance.groups["client1"].apps, " bewatched:", instance.groups["client1"].bewatched)
+				if instance.groups["testgroup.testclient1"] != nil {
+					fmt.Println("client1:", " apps:", instance.groups["testgroup.testclient1"].apps, " bewatched:", instance.groups["testgroup.testclient1"].bewatched)
 				} else {
 					fmt.Println("client1: nil")
 				}
-				if instance.groups["client2"] != nil {
-					fmt.Println("client2:", " apps:", instance.groups["client2"].apps, " bewatched:", instance.groups["client2"].bewatched)
+				if instance.groups["testgroup.testclient2"] != nil {
+					fmt.Println("client2:", " apps:", instance.groups["testgroup.testclient2"].apps, " bewatched:", instance.groups["testgroup.testclient2"].bewatched)
 				} else {
 					fmt.Println("client2: nil")
 				}

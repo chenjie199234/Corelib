@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-
-	"github.com/chenjie199234/Corelib/util/common"
 )
 
 //Warning!!Don't write block logic in these callback,live for{}
@@ -130,9 +128,6 @@ func (c *UnixConfig) checkUnixConfig() {
 }
 
 type InstanceConfig struct {
-	//the name of this instance
-	SelfName string
-
 	//heartbeat timeout
 	HeartbeatTimeout time.Duration //default 5s
 	//must < HeartbeatTimeout
@@ -166,9 +161,6 @@ type InstanceConfig struct {
 }
 
 func checkInstanceConfig(c *InstanceConfig) error {
-	if e := common.NameCheck(c.SelfName, true); e != nil {
-		return fmt.Errorf("[Stream.checkInstanceConfig] " + e.Error())
-	}
 	if c.HeartbeatTimeout == 0 {
 		c.HeartbeatTimeout = 5 * time.Second
 	}
@@ -188,10 +180,10 @@ func checkInstanceConfig(c *InstanceConfig) error {
 	//user data deal func can't be nill
 	//online and offline func can be nill
 	if c.Verifyfunc == nil {
-		return fmt.Errorf("[Stream.checkInstanceConfig]missing verify function")
+		return fmt.Errorf("[Stream.checkInstanceConfig] missing verify function")
 	}
 	if c.Userdatafunc == nil {
-		return fmt.Errorf("[Stream.checkInstanceConfig]missing userdata function")
+		return fmt.Errorf("[Stream.checkInstanceConfig] missing userdata function")
 	}
 	if c.TcpC == nil {
 		c.TcpC = defaultTcpConfig

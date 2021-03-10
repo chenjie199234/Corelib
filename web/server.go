@@ -19,11 +19,12 @@ import (
 )
 
 type WebServer struct {
-	c       *Config
-	s       *http.Server
-	global  []OutsideHandler
-	router  *httprouter.Router
-	ctxpool *sync.Pool
+	selfname string
+	c        *Config
+	s        *http.Server
+	global   []OutsideHandler
+	router   *httprouter.Router
+	ctxpool  *sync.Pool
 }
 
 type Config struct {
@@ -126,13 +127,24 @@ func (c *Config) getExpose() string {
 	}
 }
 
-func NewWebServer(c *Config) *WebServer {
+func NewWebServer(c *Config, group, name string) (*WebServer, error) {
+	if e := common.NameCheck(name, false, true, false, true); e != nil {
+		return nil, e
+	}
+	if e := common.NameCheck(group, false, true, false, true); e != nil {
+		return nil, e
+	}
+	appname := group + "." + name
+	if e := common.NameCheck(appname, false, true, false, true); e != nil {
+		return nil, e
+	}
 	c.validate()
 	instance := &WebServer{
-		c:       c,
-		global:  make([]OutsideHandler, 0, 10),
-		router:  httprouter.New(),
-		ctxpool: &sync.Pool{},
+		selfname: appname,
+		c:        c,
+		global:   make([]OutsideHandler, 0, 10),
+		router:   httprouter.New(),
+		ctxpool:  &sync.Pool{},
 	}
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
@@ -196,7 +208,7 @@ func NewWebServer(c *Config) *WebServer {
 	if c.StaticFileRootPath != "" {
 		instance.router.ServeFiles("/src/*filepath", http.Dir(c.StaticFileRootPath))
 	}
-	return instance
+	return instance, nil
 }
 func (this *WebServer) StartWebServer(listenaddr string, cert, key string) error {
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)

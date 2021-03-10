@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -32,7 +31,6 @@ type DiscoveryServerFinder func(manually chan struct{})
 
 //serveruniquename = servername:ip:port
 type DiscoveryClient struct {
-	selfname   string
 	verifydata []byte
 	instance   *stream.Instance
 	regdata    []byte
@@ -65,12 +63,20 @@ var clientinstance *DiscoveryClient
 //this just start the client and sync the peers in the net
 //this will not register self into the net
 //please call the RegisterSelf() func to register self into the net
-func NewDiscoveryClient(c *stream.InstanceConfig, vdata []byte, finder DiscoveryServerFinder) error {
+func NewDiscoveryClient(c *stream.InstanceConfig, group, name string, vdata []byte, finder DiscoveryServerFinder) error {
+	if e := common.NameCheck(name, false, true, false, true); e != nil {
+		return e
+	}
+	if e := common.NameCheck(group, false, true, false, true); e != nil {
+		return e
+	}
+	if e := common.NameCheck(group+"."+name, true, true, false, true); e != nil {
+		return e
+	}
 	if finder == nil {
-		return errors.New("[Discovery.client] finder nil")
+		return errors.New("[discovery.client.NewDiscoveryClient] finder nil")
 	}
 	temp := &DiscoveryClient{
-		selfname:   c.SelfName,
 		verifydata: vdata,
 		status:     1,
 		finder:     finder,
@@ -90,11 +96,7 @@ func NewDiscoveryClient(c *stream.InstanceConfig, vdata []byte, finder Discovery
 	dupc.Onlinefunc = clientinstance.onlinefunc
 	dupc.Userdatafunc = clientinstance.userfunc
 	dupc.Offlinefunc = clientinstance.offlinefunc
-	var e error
-	clientinstance.instance, e = stream.NewInstance(&dupc)
-	if e != nil {
-		return errors.New("[discovery.client.NewDiscoveryClient]new tcp instance error:" + e.Error())
-	}
+	clientinstance.instance, _ = stream.NewInstance(&dupc, group, name)
 	go finder(clientinstance.manually)
 	return nil
 }
@@ -464,7 +466,6 @@ func (c *DiscoveryClient) userfunc(p *stream.Peer, serveruniquename string, orig
 		c.notice(appname)
 		c.nlker.RUnlock()
 	case msgoffline:
-		fmt.Println("offline")
 		appuniquename := getOfflineMsg(data)
 		if appuniquename == "" {
 			//this is impossible
