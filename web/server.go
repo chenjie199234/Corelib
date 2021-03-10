@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
@@ -25,6 +26,8 @@ type WebServer struct {
 	global   []OutsideHandler
 	router   *httprouter.Router
 	ctxpool  *sync.Pool
+	status   int32
+	stopch   chan struct{}
 }
 
 type Config struct {
@@ -145,6 +148,7 @@ func NewWebServer(c *Config, group, name string) (*WebServer, error) {
 		global:   make([]OutsideHandler, 0, 10),
 		router:   httprouter.New(),
 		ctxpool:  &sync.Pool{},
+		stopch:   make(chan struct{}, 1),
 	}
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
@@ -211,6 +215,9 @@ func NewWebServer(c *Config, group, name string) (*WebServer, error) {
 	return instance, nil
 }
 func (this *WebServer) StartWebServer(listenaddr string, cert, key string) error {
+	if atomic.SwapInt32(&this.status, 1) == 1 {
+		return nil
+	}
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
 		return errors.New("[web.server] resolve addr:" + listenaddr + " error:" + e.Error())
@@ -231,7 +238,6 @@ func (this *WebServer) StartWebServer(listenaddr string, cert, key string) error
 	}
 	if cert != "" && key != "" {
 		e = this.s.ServeTLS(l, cert, key)
-
 	} else {
 		this.s.Serve(l)
 	}
@@ -241,7 +247,22 @@ func (this *WebServer) StartWebServer(listenaddr string, cert, key string) error
 	return nil
 }
 func (this *WebServer) StopWebServer() {
-	this.s.Shutdown(context.Background())
+	if atomic.SwapInt32(&this.status, 0) == 0 {
+		return
+	}
+	tmer := time.NewTimer(time.Second)
+	for {
+		select {
+		case <-tmer.C:
+			this.s.Shutdown(context.Background())
+			return
+		case <-this.stopch:
+			tmer.Reset(time.Second)
+			for len(tmer.C) > 0 {
+				<-tmer.C
+			}
+		}
+	}
 }
 func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, handlers []OutsideHandler) *Context {
 	ctx, ok := this.ctxpool.Get().(*Context)
@@ -322,6 +343,21 @@ func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ..
 }
 
 func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	//check server status
+	if atomic.LoadInt32(&this.status) == 0 {
+		select {
+		case this.stopch <- struct{}{}:
+		default:
+		}
+		w.WriteHeader(888)
+		return
+	}
+	//check required target server
+	if targetserver := r.Header.Get("TargetServer"); targetserver != "" && targetserver != this.selfname {
+		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: this is not the required targetserver:", targetserver)
+		w.WriteHeader(888)
+		return
+	}
 	this.router.ServeHTTP(w, r)
 }
 

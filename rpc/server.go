@@ -27,7 +27,6 @@ type RpcServer struct {
 	instance   *stream.Instance
 	verifydata []byte
 	status     int32 //0 stop,1 starting
-	count      int32
 	stopch     chan struct{}
 }
 
@@ -77,14 +76,8 @@ func (s *RpcServer) StopRpcServer() {
 	for {
 		select {
 		case <-timer.C:
-			if atomic.LoadInt32(&s.count) == 0 {
-				s.instance.Stop()
-				return
-			}
-			timer.Reset(time.Second)
-			for len(timer.C) > 0 {
-				<-timer.C
-			}
+			s.instance.Stop()
+			return
 		case <-s.stopch:
 			timer.Reset(time.Second)
 			for len(timer.C) > 0 {
@@ -227,8 +220,6 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		return
 	}
 	go func() {
-		atomic.AddInt32(&s.count, 1)
-		defer atomic.AddInt32(&s.count, -1)
 		if atomic.LoadInt32(&s.status) == 0 {
 			select {
 			case s.stopch <- struct{}{}:

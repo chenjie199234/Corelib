@@ -6,7 +6,7 @@ import (
 	"text/template"
 )
 
-const dockerfiletext = `FROM busybox:latest
+const dockerfiletext = `FROM busybox:1.28
 
 RUN mkdir /root/app
 
@@ -42,7 +42,7 @@ spec:
     spec:
       containers:
         - name: {{.ProjectName}}
-          image: <IMAGE_NAME>:<IMAGE_TAG>
+          image: <IMAGE>
           imagePullPolicy: IfNotPresent
           resources:
             limits:
@@ -59,25 +59,21 @@ spec:
 	    - name: RUN_ENV
 	      value: <RUN_ENV>
           livenessProbe:
-            httpGet:
-              path: /{{.ProjectName}}.Status/Ping
+            tcpSocket:
               port: 8000
-              scheme: HTTP
             initialDelaySeconds: 2
             timeoutSeconds: 1
             periodSeconds: 1
             successThreshold: 1
-            failureThreshold: 5
+            failureThreshold: 3
           readinessProbe:
-            httpGet:
-              path: /{{.ProjectName}}.Status/Ping
+            tcpSocket:
               port: 8000
-              scheme: HTTP
             initialDelaySeconds: 2
             timeoutSeconds: 1
             periodSeconds: 1
             successThreshold: 1
-            failureThreshold: 5
+            failureThreshold: 3
           ports:
             - name: web
               containerPort: 8000

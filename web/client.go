@@ -22,6 +22,7 @@ type PickHandler func(servers []*ServerForPick) *ServerForPick
 type DiscoveryHandler func(group, name string, client *WebClient)
 
 type WebClient struct {
+	appname string
 	timeout time.Duration
 
 	lker  *sync.RWMutex
@@ -34,6 +35,7 @@ type ServerForPick struct {
 	host             string
 	client           *http.Client
 	discoveryservers map[string]struct{} //this server registered on how many discoveryservers
+	closing          bool
 	Pickinfo         *pickinfo
 }
 type pickinfo struct {
@@ -42,6 +44,10 @@ type pickinfo struct {
 	DServers       int32  //this server registered on how many discoveryservers
 	DServerOffline int64  //
 	Addition       []byte //addition info register on register center
+}
+
+func (s *ServerForPick) Pickable() bool {
+	return !s.closing
 }
 
 var lker *sync.Mutex
@@ -76,6 +82,7 @@ func NewWebClient(group, name string, globaltimeout time.Duration, picker PickHa
 		discover = defaultDiscover
 	}
 	instance := &WebClient{
+		appname: appname,
 		timeout: globaltimeout,
 
 		lker:  &sync.RWMutex{},
@@ -178,6 +185,14 @@ func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, pat
 	return this.call(http.MethodPatch, ctx, functimeout, pathwithquery, header, body)
 }
 func (this *WebClient) call(method string, ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body []byte) (*http.Response, error) {
+	if header == nil {
+		header = make(http.Header)
+	}
+	header.Set("TargetServer", this.appname)
+	if md := metadata.GetAllMetadata(ctx); len(md) > 0 {
+		d, _ := json.Marshal(md)
+		header.Set("Metadata", common.Byte2str(d))
+	}
 	var min time.Duration
 	if this.timeout != 0 {
 		min = this.timeout
@@ -195,56 +210,59 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		defer cancel()
 	}
 	dl, ok := ctx.Deadline()
-	if ok && dl.UnixNano() < time.Now().UnixNano()+int64(5*time.Millisecond) {
-		//ttl + server logic time
-		return nil, context.DeadlineExceeded
-	}
-	var server *ServerForPick
-	this.lker.RLock()
-	server = this.picker(this.hosts)
-	this.lker.RUnlock()
-	if server == nil {
-		return nil, ERRNOSERVER
-	}
-	add := false
-	del := false
-	if server.host[len(server.host)-1] == '/' && pathwithquery[0] == '/' {
-		del = true
-	} else if server.host[len(server.host)-1] != '/' && pathwithquery[0] != '/' {
-		add = true
-	}
-	url := ""
-	if add {
-		url = server.host + "/" + pathwithquery
-	} else if del {
-		url = server.host + pathwithquery[1:]
-	} else {
-		url = server.host + pathwithquery
-	}
-	var req *http.Request
-	var e error
-	if body != nil {
-		req, e = http.NewRequestWithContext(ctx, method, url, bytes.NewBuffer(body))
-	} else {
-		req, e = http.NewRequestWithContext(ctx, method, url, nil)
-	}
-	if e != nil {
-		return nil, e
-	}
-	req.Header = header
 	if ok {
-		req.Header.Set("Deadline", strconv.FormatInt(dl.UnixNano(), 10))
+		header.Set("Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
-	if md := metadata.GetAllMetadata(ctx); len(md) > 0 {
-		d, _ := json.Marshal(md)
-		req.Header.Set("Metadata", common.Byte2str(d))
+	for {
+		if ok && dl.UnixNano() < time.Now().UnixNano()+int64(5*time.Millisecond) {
+			//ttl + server logic time
+			return nil, context.DeadlineExceeded
+		}
+		var server *ServerForPick
+		this.lker.RLock()
+		server = this.picker(this.hosts)
+		this.lker.RUnlock()
+		if server == nil {
+			return nil, ERRNOSERVER
+		}
+		add := false
+		del := false
+		if server.host[len(server.host)-1] == '/' && pathwithquery[0] == '/' {
+			del = true
+		} else if server.host[len(server.host)-1] != '/' && pathwithquery[0] != '/' {
+			add = true
+		}
+		url := ""
+		if add {
+			url = server.host + "/" + pathwithquery
+		} else if del {
+			url = server.host + pathwithquery[1:]
+		} else {
+			url = server.host + pathwithquery
+		}
+		var req *http.Request
+		var e error
+		if body != nil {
+			req, e = http.NewRequestWithContext(ctx, method, url, bytes.NewBuffer(body))
+		} else {
+			req, e = http.NewRequestWithContext(ctx, method, url, nil)
+		}
+		if e != nil {
+			return nil, e
+		}
+		req.Header = header
+		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
+		resp, e := server.client.Do(req)
+		atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
+		if e != nil {
+			atomic.StoreInt64(&server.Pickinfo.Lastfail, time.Now().UnixNano())
+			return nil, e
+		}
+		if resp.StatusCode == 888 {
+			atomic.StoreInt64(&server.Pickinfo.Lastfail, time.Now().UnixNano())
+			server.closing = true
+			continue
+		}
+		return resp, nil
 	}
-	atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
-	defer atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
-	resp, e := server.client.Do(req)
-	if e != nil {
-		atomic.StoreInt64(&server.Pickinfo.Lastfail, time.Now().UnixNano())
-		return nil, e
-	}
-	return resp, nil
 }

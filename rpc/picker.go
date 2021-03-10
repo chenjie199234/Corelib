@@ -13,9 +13,8 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 	if len(servers) == 1 {
 		if servers[0].Pickable() {
 			return servers[0]
-		} else {
-			return nil
 		}
+		return nil
 	}
 	start := rand.Intn(len(servers))
 	i := start
@@ -76,9 +75,12 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 				return nightmare1
 			} else if nightmare2 != nil && nightmare1 == nil {
 				return nightmare2
-			} else {
+			} else if nightmare1 != nil && nightmare2 != nil {
 				normal1 = nightmare1
 				normal2 = nightmare2
+			} else {
+				//all servers are unpickable
+				return nil
 			}
 		}
 	}

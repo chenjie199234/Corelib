@@ -11,7 +11,10 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 		return nil
 	}
 	if len(servers) == 1 {
-		return servers[0]
+		if servers[0].Pickable() {
+			return servers[0]
+		}
+		return nil
 	}
 	start := rand.Intn(len(servers))
 	i := start
@@ -23,20 +26,22 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 			break
 		}
 		first = false
-		if servers[i].Pickinfo.DServers != 0 &&
-			servers[i].Pickinfo.DServerOffline < before.UnixNano() &&
-			servers[i].Pickinfo.Lastfail < before.UnixNano() {
-			if normal1 == nil {
-				normal1 = servers[i]
+		if servers[i].Pickable() {
+			if servers[i].Pickinfo.DServers != 0 &&
+				servers[i].Pickinfo.DServerOffline < before.UnixNano() &&
+				servers[i].Pickinfo.Lastfail < before.UnixNano() {
+				if normal1 == nil {
+					normal1 = servers[i]
+				} else {
+					normal2 = servers[i]
+					break
+				}
 			} else {
-				normal2 = servers[i]
-				break
-			}
-		} else {
-			if danger1 == nil {
-				danger1 = servers[i]
-			} else if danger2 == nil {
-				danger2 = servers[i]
+				if danger1 == nil {
+					danger1 = servers[i]
+				} else if danger2 == nil {
+					danger2 = servers[i]
+				}
 			}
 		}
 		i++
@@ -53,12 +58,17 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 			return danger1
 		} else if danger2 != nil && danger1 == nil {
 			return danger2
-		} else {
+		} else if danger1 != nil && danger2 != nil {
 			normal1 = danger1
 			normal2 = danger2
+		} else {
+			//all servers are unpickable
+			return nil
 		}
 	}
+	//more discoveryservers more safety,so 1 * 2's discoveryserver num
 	load1 := float64(normal1.Pickinfo.Activecalls) + math.Log(float64(normal2.Pickinfo.DServers+2))
+	//more discoveryservers more safety,so 2 * 1's discoveryserver num
 	load2 := float64(normal2.Pickinfo.Activecalls) + math.Log(float64(normal1.Pickinfo.DServers+2))
 	if load1 > load2 {
 		return normal2
