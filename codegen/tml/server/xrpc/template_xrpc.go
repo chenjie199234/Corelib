@@ -28,7 +28,6 @@ var s *rpc.RpcServer
 func StartRpcServer() {
 	c := source.GetRpcConfig()
 	rpcc := &stream.InstanceConfig{
-		SelfName:           "{{.}}",
 		HeartbeatTimeout:   time.Duration(c.RpcHeartTimeout),
 		HeartprobeInterval: time.Duration(c.RpcHeartProbe),
 		TcpC: &stream.TcpConfig{
@@ -37,7 +36,7 @@ func StartRpcServer() {
 		},
 	}
 	var e error
-	if s, e = rpc.NewRpcServer(rpcc, time.Duration(c.RpcTimeout), []byte(c.RpcVerifydata)); e != nil {
+	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name, []byte(c.RpcVerifydata), time.Duration(c.RpcTimeout)); e != nil {
 		log.Error("[xrpc] new rpc server error:", e)
 		return
 	}
@@ -64,7 +63,9 @@ func StartRpcServer() {
 
 //StopRpcServer -
 func StopRpcServer() {
-	s.StopRpcServer()
+	if s != nil {
+		s.StopRpcServer()
+	}
 }`
 
 const path = "./server/xrpc/"

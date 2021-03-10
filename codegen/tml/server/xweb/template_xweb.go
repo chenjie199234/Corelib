@@ -43,7 +43,7 @@ func StartWebServer() {
 		}
 	}
 	var e error
-	if s, e = web.NewWebServer(webc); e != nil {
+	if s, e = web.NewWebServer(webc, api.Group, api.Name); e != nil {
 		log.Error("[xweb] new web server error:", e)
 		return
 	}
@@ -70,7 +70,9 @@ func StartWebServer() {
 
 //StopWebServer -
 func StopWebServer() {
-	s.StopWebServer()
+	if s != nil {
+		s.StopWebServer()
+	}
 }`
 
 const path = "./server/xweb/"

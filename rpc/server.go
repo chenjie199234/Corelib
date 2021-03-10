@@ -39,7 +39,7 @@ func NewRpcServer(c *stream.InstanceConfig, group, name string, vdata []byte, gl
 		return nil, e
 	}
 	appname := group + "." + name
-	if e := common.NameCheck(appname, false, true, false, true); e != nil {
+	if e := common.NameCheck(appname, true, true, false, true); e != nil {
 		return nil, e
 	}
 	serverinstance := &RpcServer{

@@ -135,7 +135,7 @@ func NewWebServer(c *Config, group, name string) (*WebServer, error) {
 		return nil, e
 	}
 	appname := group + "." + name
-	if e := common.NameCheck(appname, false, true, false, true); e != nil {
+	if e := common.NameCheck(appname, true, true, false, true); e != nil {
 		return nil, e
 	}
 	c.validate()
