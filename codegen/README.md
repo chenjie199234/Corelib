@@ -16,8 +16,8 @@ go install
 ### 2.获取依赖:
 	终端切换工作目录到项目目录,执行```go mod tidy```
 ### 3.运行项目:
-	linux/mac: 	终端切换工作目录到项目目录,执行```./cmd.sh pb;./cmd.sh run```
-	windows: 	终端切换工作目录到项目目录,执行```./cmd.bat pb;./cmd.bat run```
+	linux/mac: 	终端切换工作目录到项目目录,执行```./cmd.sh run```
+	windows: 	终端切换工作目录到项目目录,执行```./cmd.bat run```
 ### 4.查看帮助:
 	linux/mac: 	终端切换工作目录到项目目录,执行```./cmd.sh```
 	windows: 	终端切换工作目录到项目目录,执行```./cmd.bat```
