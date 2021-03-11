@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -72,6 +73,22 @@ func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname string, vd
 		return e
 	}
 	if finder == nil {
+		group := os.Getenv("DISCOVERY_SERVER_GROUP")
+		if group == "" {
+			return errors.New("[Discovery.client] missing system env DISCOVERY_SERVER_GROUP")
+		}
+		name := os.Getenv("DISCOVERY_SERVER_NAME")
+		if name == "" {
+			return errors.New("[Discovery.client] missing system env DISCOVERY_SERVER_NAME")
+		}
+		port := os.Getenv("DISCOVERY_SERVER_PORT")
+		if port == "" {
+			return errors.New("[Discovery.client] missing system env DISCOVERY_SERVER_PORT")
+		}
+		n, e := strconv.Atoi(port)
+		if e != nil || n <= 0 || n > 65535 {
+			return errors.New("[Discovery.client] system env DISCOVERY_SERVER_PORT must be number: 1-65535")
+		}
 		finder = defaultfinder
 	}
 	temp := &DiscoveryClient{

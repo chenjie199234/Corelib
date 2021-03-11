@@ -4,29 +4,15 @@ import (
 	"context"
 	"net"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
 )
 
 func defaultfinder(manually chan struct{}) {
-	group := os.Getenv("DiscoveryServerGroup")
-	if group == "" {
-		panic("[Discovery.client.defaultfinder] missing system env DiscoveryServerGroup")
-	}
-	name := os.Getenv("DiscoveryServerName")
-	if name == "" {
-		panic("[Discovery.client.defaultfinder] missing system env DiscoveryServerName")
-	}
-	port := os.Getenv("DiscoveryServerPort")
-	n, e := strconv.Atoi(port)
-	if e != nil {
-		panic("[Discovery.client.defaultfinder] missing system env DiscoveryServerPort or not number")
-	}
-	if n <= 0 || n > 65535 {
-		panic("[Discovery.client.defaultfinder] system env DiscoveryServerPort out of range,(0-65535)")
-	}
+	group := os.Getenv("DISCOVERY_SERVER_GROUP")
+	name := os.Getenv("DISCOVERY_SERVER_NAME")
+	port := os.Getenv("DISCOVERY_SERVER_PORT")
 	host := name + "-service." + group
 	servername := group + "." + name
 	finder := func() {

@@ -13,16 +13,28 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
+	"{{.}}/api"
 	"{{.}}/config"
 	"{{.}}/server/xrpc"
 	"{{.}}/server/xweb"
 	"{{.}}/service"
+
+	"github.com/chenjie199234/Corelib/discovery"
+	"github.com/chenjie199234/Corelib/log"
 )
 
 func main() {
 	//stop watching config hot update
 	defer config.Close()
+	discoveryserververifydata := os.Getenv("DISCOVERY_SERVER_VERIFY_DATA")
+	if discoveryserververifydata != "" {
+		if e := discovery.NewDiscoveryClient(nil, api.Group, api.Name, []byte(discoveryserververifydata), nil); e != nil {
+			log.Error(e)
+			return
+		}
+	}
 	//start the whole business service
 	service.StartService()
 	//start low level net service
@@ -47,6 +59,33 @@ func main() {
 		default:
 		}
 		wg.Done()
+	}()
+	stop := make(chan struct{}, 1)
+	go func() {
+		tmer := time.NewTimer(time.Millisecond * 200)
+		select {
+		case <-tmer.C:
+			rpcc := config.GetRpcConfig()
+			webc := config.GetHttpConfig()
+			regmsg := &discovery.RegMsg{}
+			if webc != nil {
+				if webc.HttpKeyFile != "" && webc.HttpCertFile != "" {
+					regmsg.WebScheme = "https"
+				} else {
+					regmsg.WebScheme = "http"
+				}
+				if webc.HttpPort != 0 {
+					regmsg.WebPort = int(webc.HttpPort)
+				}
+			}
+			if rpcc != nil {
+				if rpcc.RpcPort != 0 {
+					regmsg.RpcPort = int(rpcc.RpcPort)
+				}
+			}
+			discovery.RegisterSelf(regmsg)
+		case <-stop:
+		}
 	}()
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-ch

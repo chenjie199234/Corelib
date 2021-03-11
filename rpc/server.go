@@ -26,7 +26,7 @@ type RpcServer struct {
 	handler    map[string]func(string, *Msg)
 	instance   *stream.Instance
 	verifydata []byte
-	status     int32 //0 stop,1 starting
+	status     int32 //0-created,not started 1-started 2-closed
 	stopch     chan struct{}
 }
 
@@ -63,13 +63,13 @@ func NewRpcServer(c *stream.InstanceConfig, group, name string, vdata []byte, gl
 	return serverinstance, nil
 }
 func (s *RpcServer) StartRpcServer(listenaddr string) error {
-	if atomic.SwapInt32(&s.status, 1) == 1 {
+	if !atomic.CompareAndSwapInt32(&s.status, 0, 1) {
 		return nil
 	}
 	return s.instance.StartTcpServer(listenaddr)
 }
 func (s *RpcServer) StopRpcServer() {
-	if atomic.SwapInt32(&s.status, 0) == 0 {
+	if atomic.SwapInt32(&s.status, 2) == 2 {
 		return
 	}
 	d, _ := proto.Marshal(&Msg{

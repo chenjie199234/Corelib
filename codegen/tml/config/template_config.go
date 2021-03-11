@@ -17,7 +17,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/discovery"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
 	"github.com/chenjie199234/Corelib/sql"

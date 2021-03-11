@@ -26,7 +26,7 @@ type WebServer struct {
 	global   []OutsideHandler
 	router   *httprouter.Router
 	ctxpool  *sync.Pool
-	status   int32
+	status   int32 //0-created,not started 1-started 2-stoped
 	stopch   chan struct{}
 }
 
@@ -215,7 +215,7 @@ func NewWebServer(c *Config, group, name string) (*WebServer, error) {
 	return instance, nil
 }
 func (this *WebServer) StartWebServer(listenaddr string, cert, key string) error {
-	if atomic.SwapInt32(&this.status, 1) == 1 {
+	if !atomic.CompareAndSwapInt32(&this.status, 0, 1) {
 		return nil
 	}
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
@@ -247,7 +247,7 @@ func (this *WebServer) StartWebServer(listenaddr string, cert, key string) error
 	return nil
 }
 func (this *WebServer) StopWebServer() {
-	if atomic.SwapInt32(&this.status, 0) == 0 {
+	if atomic.SwapInt32(&this.status, 2) == 2 {
 		return
 	}
 	tmer := time.NewTimer(time.Second)

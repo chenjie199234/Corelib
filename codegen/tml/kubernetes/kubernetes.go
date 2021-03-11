@@ -16,10 +16,6 @@ WORKDIR /root/app
 
 SHELL ["sh","-c"]
 
-ENV DiscoveryServerGroup <DiscoveryServerGroup>
-ENV DiscoveryServerName <DiscoveryServerName>
-ENV DiscoveryServerPort <DiscoveryServerPort>
-
 ENTRYPOINT ["./main"]`
 
 const deploymenttext = `apiVersion: apps/v1
@@ -64,6 +60,14 @@ spec:
               value: kubernetes
             - name: RUN_ENV
               value: <RUN_ENV>
+            - name: DISCOVERY_SERVER_GROUP
+              value: <DISCOVERY_SERVER_GROUP>
+            - name: DISCOVERY_SERVER_NAME
+              value: <DISCOVERY_SERVER_NAME>
+            - name: DISCOVERY_SERVER_PORT
+              value: <DISCOVERY_SERVER_PORT>
+            - name: DISCOVERY_SERVER_VERIFY_DATA
+              value: <DISCOVERY_SERVER_VERIFY_DATA>
           livenessProbe:
             tcpSocket:
               port: 8000
