@@ -2,7 +2,7 @@ package web
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -164,7 +164,7 @@ func (this *Context) GetForm(key string) string {
 }
 func (this *Context) GetBody() ([]byte, error) {
 	//return nil means not exists
-	return ioutil.ReadAll(this.r.Body)
+	return io.ReadAll(this.r.Body)
 }
 
 //param is the value in dynamic url,see httprouter's dynamic path

@@ -6,9 +6,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/rotatefile"
@@ -27,7 +25,6 @@ const (
 )
 
 type log struct {
-	inited int64
 	level  int
 	target int
 	rf     *rotatefile.RotateFile
@@ -109,94 +106,8 @@ func getenv() {
 	}
 }
 
-//func getflag() {
-//        var target = flag.String("logtarget", "", strings.Join([]string{
-//                "std,file,both",
-//                "this will overwrite the setting from os's env LOG_TARGET"}, "\n"))
-//        var level = flag.String("loglevel", "", strings.Join([]string{
-//                "Debug,Info,Warning,Error",
-//                "this will overwrite the setting from os's env LOG_LEVEL"}, "\n"))
-//        var caller = flag.String("logcaller", "", strings.Join([]string{
-//                "true,false",
-//                "this will overwrite the setting from os's env LOG_CALLER"}, "\n"))
-//        var name = flag.String("logname", "", strings.Join([]string{
-//                "this will only useful when log write to file",
-//                "this will overwrite the setting from os's env LOG_NAME"}, "\n"))
-//        var dir = flag.String("logdir", "", strings.Join([]string{
-//                "this will only useful when log write to file",
-//                "this will overwrite the setting from os's env LOG_DIR"}, "\n"))
-//        var cap = flag.String("logrotatecap", "", strings.Join([]string{
-//                "0 don't rotate by file size,unit is M",
-//                "this will only useful when log write to file",
-//                "this will overwrite the setting from os's env LOG_ROTATE_CAP"}, "\n"))
-//        var cycle = flag.String("logrotatecycle", "", strings.Join([]string{
-//                "0-don't rotate by time,1-every hour,2-every day,3-every week,4-every month",
-//                "this will only useful when log write to file",
-//                "this will overwrite the setting from os's env LOG_ROTATE_CYCLE"}, "\n"))
-//        var keep = flag.String("logkeepdays", "", strings.Join([]string{
-//                "0 don't delete old log file,unit day",
-//                "this will only useful when log write to file",
-//                "this will overwrite the setting from os's env LOG_KEEP_DAYS"}, "\n"))
-
-//        if target != nil && *target != "" {
-//                temp := strings.ToLower(*target)
-//                if temp != "std" && temp != "file" && temp != "both" {
-//                        panic("[log.getflag] input flag for logtarget error,must in [std,file,both]")
-//                }
-//                logtarget = temp
-//        }
-//        if level != nil && *level != "" {
-//                temp := strings.ToLower(*level)
-//                if temp != "debug" && temp != "info" && temp != "warning" && temp != "error" {
-//                        panic("[log.getflag] input flag for loglevel error,must in [Debug,Info,Warning,Error]")
-//                }
-//                loglevel = temp
-//        }
-//        if level != nil && *caller != "" {
-//                temp := strings.ToLower(*caller)
-//                if temp != "true" && temp != "false" {
-//                        panic("[log.getflag] input flag for logcaller error,must in [true,false]")
-//                }
-//                logcaller = temp == "true"
-//        }
-//        if logtarget == "file" || logtarget == "both" {
-//                if name != nil && *name != "" {
-//                        logname = *name
-//                }
-//                if dir != nil && *dir != "" {
-//                        logdir = *dir
-//                }
-//                if cap != nil && *cap != "" {
-//                        temp, e := strconv.ParseUint(*cap, 10, 64)
-//                        if e != nil {
-//                                panic("[log.getflag] input flag for logrotatecap must be integer,unit is M")
-//                        }
-//                        logrotatecap = temp
-//                }
-//                if cycle != nil && *cycle != "" {
-//                        temp, e := strconv.ParseUint(*cycle, 10, 64)
-//                        if e != nil {
-//                                panic("[log.getflag] input flag for logrotatecycle must be integer in [0-don't rotate by time,1-every hour,2-every day,3-every week,4-every month]")
-//                        }
-//                        if temp != 0 && temp != 1 && temp != 2 && temp != 3 && temp != 4 {
-//                                panic("[log.getflag] input flag for logrotatecycle must be integer in [0-don't rotate by time,1-every hour,2-every day,3-every week,4-every month]")
-//                        }
-//                        logrotatecycle = temp
-//                }
-//                if keep != nil && *keep != "" {
-//                        temp, e := strconv.ParseUint(*keep, 10, 64)
-//                        if e != nil {
-//                                panic("[log.getflag] input flag for logkeepdays must be integer,unit is day")
-//                        }
-//                        logkeepdays = temp
-//                }
-//        }
-//}
-
 func init() {
-	if !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&instance)), nil, unsafe.Pointer(&log{inited: 1})) {
-		return
-	}
+	instance = &log{}
 	getenv()
 	switch logtarget {
 	case "std":
@@ -295,9 +206,6 @@ func write(buf *bufpool.Buffer, datas ...interface{}) {
 	}
 }
 func Close() {
-	if atomic.SwapInt64(&(instance.inited), 0) == 0 {
-		return
-	}
 	if instance.target&targetFile > 0 && instance.rf != nil {
 		instance.rf.Close()
 	}

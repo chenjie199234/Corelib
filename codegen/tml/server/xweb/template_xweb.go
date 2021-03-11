@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"{{.}}/api"
+	"{{.}}/config"
 	"{{.}}/service"
-	"{{.}}/source"
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/web"
@@ -25,7 +25,7 @@ var s *web.WebServer
 
 //StartWebServer -
 func StartWebServer() {
-	c := source.GetHttpConfig()
+	c := config.GetHttpConfig()
 	webc := &web.Config{
 		Timeout:            time.Duration(c.HttpTimeout),
 		StaticFileRootPath: c.HttpStaticFile,

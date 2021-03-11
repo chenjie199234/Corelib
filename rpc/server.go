@@ -49,7 +49,12 @@ func NewRpcServer(c *stream.InstanceConfig, group, name string, vdata []byte, gl
 		verifydata: vdata,
 		stopch:     make(chan struct{}, 1),
 	}
-	dupc := *c //duplicate to remote the callback func race
+	var dupc stream.InstanceConfig
+	if c == nil {
+		dupc = stream.InstanceConfig{}
+	} else {
+		dupc = *c //duplicate to remote the callback func race
+	}
 	dupc.Verifyfunc = serverinstance.verifyfunc
 	dupc.Onlinefunc = serverinstance.onlinefunc
 	dupc.Userdatafunc = serverinstance.userfunc

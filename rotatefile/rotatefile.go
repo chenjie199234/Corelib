@@ -2,8 +2,8 @@ package rotatefile
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,8 +30,8 @@ type RotateFile struct {
 	tail *node
 	pool *sync.Pool
 
-	status int32 //0 closed,1 working
-	waitch chan struct{}
+	status  int32 //0 closed,1 working
+	closech chan struct{}
 }
 type Config struct {
 	Path        string
@@ -85,8 +85,8 @@ func NewRotateFile(c *Config) (*RotateFile, error) {
 
 		pool: &sync.Pool{},
 
-		status: 1,
-		waitch: make(chan struct{}, 1),
+		status:  1,
+		closech: make(chan struct{}),
 	}
 	tempnode := rf.getnode()
 	rf.head = tempnode
@@ -114,20 +114,21 @@ func createfile(path string, name string, ext string) (*os.File, *time.Time, err
 		if e == nil {
 			continue
 		} else if !os.IsNotExist(e) {
-			return nil, nil, fmt.Errorf("[rotate file]create rotate file error:%s", e)
+			return nil, nil, errors.New("[rotate file] create rotate file error:" + e.Error())
 		}
 		if e := os.MkdirAll(path, 0755); e != nil {
-			return nil, nil, fmt.Errorf("[rotate file]create rotate file error:%s", e)
+			return nil, nil, errors.New("[rotate file] create rotate file error:" + e.Error())
 		}
 		file, e := os.OpenFile(path+filename, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
 		if e != nil {
-			return nil, nil, fmt.Errorf("[rotate file]create rotate file error:%s", e)
+			return nil, nil, errors.New("[rotate file] create rotate file error:" + e.Error())
 		}
 		return file, &now, nil
 	}
 }
 
 func (f *RotateFile) run() {
+	defer close(f.closech)
 	f.runcleaner()
 	tker := time.NewTicker(time.Second)
 	cleantker := time.NewTicker(time.Hour)
@@ -150,9 +151,8 @@ func (f *RotateFile) run() {
 					<-tker.C
 				}
 				if e := f.buffile.Flush(); e != nil {
-					fmt.Printf("[rotate file]flush disk error:%s\n", e)
+					fmt.Println("[rotatefile] flush disk error:" + e.Error())
 				}
-				f.waitch <- struct{}{}
 				return
 			}
 			select {
@@ -172,9 +172,9 @@ func (f *RotateFile) runcleaner() {
 	}
 	now := time.Now()
 	now = now.UTC()
-	finfos, e := ioutil.ReadDir(f.c.Path)
+	finfos, e := os.ReadDir(f.c.Path)
 	if e != nil {
-		fmt.Printf("[rotate file] read file dir error:%s\n", e)
+		fmt.Println("[rotatefile.cleaner] read file dir error:" + e.Error())
 		return
 	}
 	for _, finfo := range finfos {
@@ -243,14 +243,14 @@ func (f *RotateFile) runcleaner() {
 		}
 		if now.Sub(t) >= time.Duration(f.c.KeepDays)*24*time.Hour {
 			if e = os.Remove(f.c.Path + "/" + filename); e != nil {
-				fmt.Printf("[rotate file] clean old file error:%s\n", e)
+				fmt.Println("[rotatefile.cleaner] clean old file error:" + e.Error())
 			}
 		}
 	}
 }
 func (f *RotateFile) runticker() {
 	if e := f.buffile.Flush(); e != nil {
-		fmt.Printf("[rotate file]flush disk error:%s\n", e)
+		fmt.Println("[rotatefile.ticker] flush disk error:" + e.Error())
 		return
 	}
 	now := time.Now()
@@ -291,7 +291,7 @@ func (f *RotateFile) runwriter(data *bufpool.Buffer) {
 	if f.maxcap > 0 {
 		if f.curcap+uint64(data.Len()) > f.maxcap {
 			if e := f.buffile.Flush(); e != nil {
-				fmt.Printf("[rotate file]flush disk error:%s\n", e)
+				fmt.Println("[rotatefile.writer] flush disk error:" + e.Error())
 				bufpool.PutBuffer(data)
 				return
 			}
@@ -326,12 +326,12 @@ func (f *RotateFile) runwriter(data *bufpool.Buffer) {
 		}
 		if n, e := f.buffile.Write(data.Bytes()); e != nil {
 			f.curcap += uint64(n)
-			fmt.Printf("[rotate file]write disk error:%s\n", e)
+			fmt.Println("[rotatefile.writer] write disk error:" + e.Error())
 		} else {
 			f.curcap += uint64(data.Len())
 		}
 	} else if _, e := f.buffile.Write(data.Bytes()); e != nil {
-		fmt.Printf("[rotate file]write disk error:%s\n", e)
+		fmt.Printf("[rotatefile.writer] write disk error:" + e.Error())
 	}
 	bufpool.PutBuffer(data)
 }
@@ -341,10 +341,10 @@ func (f *RotateFile) Write(data []byte) (int, error) {
 		return 0, nil
 	}
 	if f.maxcap != 0 && uint64(len(data)) > f.maxcap {
-		return 0, fmt.Errorf("[rotate file]data too large")
+		return 0, fmt.Errorf("[rotatefile.Write] data too large")
 	}
 	if atomic.LoadInt32(&f.status) == 0 {
-		return 0, fmt.Errorf("[rotate file]rotate file had been closed")
+		return 0, fmt.Errorf("[rotatefile.Write] rotate file had been closed")
 	}
 	buf := bufpool.GetBuffer()
 	buf.Append(common.Byte2str(data))
@@ -365,10 +365,10 @@ func (f *RotateFile) WriteBuf(data *bufpool.Buffer) (int, error) {
 		return 0, nil
 	}
 	if f.maxcap != 0 && uint64(data.Len()) > f.maxcap {
-		return 0, fmt.Errorf("[rotate file]data too large")
+		return 0, fmt.Errorf("[rotatefile.WriteBuf] data too large")
 	}
 	if atomic.LoadInt32(&f.status) == 0 {
-		return 0, fmt.Errorf("[rotate file]rotate file had been closed")
+		return 0, fmt.Errorf("[rotatefile.WriteBuf] rotate file had been closed")
 	}
 	f.Lock()
 	select {
@@ -384,8 +384,6 @@ func (f *RotateFile) WriteBuf(data *bufpool.Buffer) (int, error) {
 }
 
 func (f *RotateFile) Close() {
-	if atomic.SwapInt32(&f.status, 0) == 0 {
-		return
-	}
-	<-f.waitch
+	atomic.SwapInt32(&f.status, 0)
+	<-f.closech
 }

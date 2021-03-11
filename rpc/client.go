@@ -107,8 +107,13 @@ func NewRpcClient(c *stream.InstanceConfig, group, name string, vdata []byte, gl
 		picker:     pick,
 		discover:   discover,
 	}
+	var dupc stream.InstanceConfig
+	if c == nil {
+		dupc = stream.InstanceConfig{}
+	} else {
+		dupc = *c //duplicate to remove the callback func race
+	}
 	//tcp instalce
-	dupc := *c //duplicate to remove the callback func race
 	dupc.Verifyfunc = client.verifyfunc
 	dupc.Onlinefunc = client.onlinefunc
 	dupc.Userdatafunc = client.userfunc

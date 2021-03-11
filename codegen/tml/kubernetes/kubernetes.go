@@ -14,6 +14,12 @@ COPY main AppConfig.json SourceConfig.json /root/app
 
 WORKDIR /root/app
 
+SHELL ["sh","-c"]
+
+ENV DiscoveryServerGroup <DiscoveryServerGroup>
+ENV DiscoveryServerName <DiscoveryServerName>
+ENV DiscoveryServerPort <DiscoveryServerPort>
+
 ENTRYPOINT ["./main"]`
 
 const deploymenttext = `apiVersion: apps/v1
@@ -56,8 +62,8 @@ spec:
               value: {{.ProjectName}}
             - name: DEPLOY_ENV
               value: kubernetes
-	    - name: RUN_ENV
-	      value: <RUN_ENV>
+            - name: RUN_ENV
+              value: <RUN_ENV>
           livenessProbe:
             tcpSocket:
               port: 8000

@@ -91,6 +91,9 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 	if e := common.NameCheck(group+"."+name, true, true, false, true); e != nil {
 		return nil, e
 	}
+	if c == nil {
+		c = &InstanceConfig{}
+	}
 	if e := checkInstanceConfig(c); e != nil {
 		return nil, e
 	}

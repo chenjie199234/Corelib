@@ -59,8 +59,13 @@ func NewDiscoveryServer(c *stream.InstanceConfig, group, name string, vdata []by
 		groups:     make(map[string]*appgroup, 5),
 		verifydata: vdata,
 	}
+	var dupc stream.InstanceConfig
+	if c == nil {
+		dupc = stream.InstanceConfig{}
+	} else {
+		dupc = *c //duplicate to remote the callback func race
+	}
 	//tcp instance
-	dupc := *c //duplicate to remote the callback func race
 	dupc.Verifyfunc = instance.verifyfunc
 	dupc.Onlinefunc = instance.onlinefunc
 	dupc.Userdatafunc = instance.userfunc

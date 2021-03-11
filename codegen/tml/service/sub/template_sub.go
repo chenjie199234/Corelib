@@ -11,7 +11,7 @@ const text = `package {{.Sname}}
 import (
 	"context"
 
-	//"{{.Pname}}/source"
+	//"{{.Pname}}/config"
 	"{{.Pname}}/api"
 	{{.Sname}}dao "{{.Pname}}/dao/{{.Sname}}"
 )
@@ -24,7 +24,7 @@ type Service struct {
 //Start -
 func Start() *Service {
 	return &Service{
-		//{{.Sname}}Dao: {{.Sname}}dao.NewDao(source.GetDB("{{.Sname}}_db"), source.GetRedis("{{.Sname}}_redis")),
+		//{{.Sname}}Dao: {{.Sname}}dao.NewDao(config.GetDB("{{.Sname}}_db"), config.GetRedis("{{.Sname}}_redis")),
 	}
 }
 

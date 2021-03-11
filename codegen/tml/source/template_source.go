@@ -12,7 +12,6 @@ const text = `package source
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -121,7 +120,7 @@ var kafkaSubers map[string]*kafka.Reader
 var kafkaPubers map[string]*kafka.Writer
 
 func init() {
-	data, e := ioutil.ReadFile("SourceConfig.json")
+	data, e := os.ReadFile("SourceConfig.json")
 	if e != nil {
 		panic("[SourceConfig]read config file error:" + e.Error())
 	}

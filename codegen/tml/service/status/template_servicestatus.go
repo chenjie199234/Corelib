@@ -12,7 +12,7 @@ import (
 	"context"
 	"time"
 
-	//"{{.}}/source"
+	//"{{.}}/config"
 	"{{.}}/api"
 	statusdao "{{.}}/dao/status"
 )
@@ -25,7 +25,7 @@ type Service struct {
 //Start -
 func Start() *Service {
 	return &Service{
-		//statusDao: statusdao.NewDao(source.GetDB("status_db"), source.GetRedis("status_redis")),
+		//statusDao: statusdao.NewDao(config.GetDB("status_db"), config.GetRedis("status_redis")),
 		statusDao: statusdao.NewDao(nil, nil),
 	}
 }

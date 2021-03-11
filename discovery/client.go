@@ -60,21 +60,19 @@ type servernode struct {
 
 var clientinstance *DiscoveryClient
 
-//this just start the client and sync the peers in the net
-//this will not register self into the net
-//please call the RegisterSelf() func to register self into the net
-func NewDiscoveryClient(c *stream.InstanceConfig, group, name string, vdata []byte, finder DiscoveryServerFinder) error {
-	if e := common.NameCheck(name, false, true, false, true); e != nil {
+//finder is to find the discovery servers
+func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname string, vdata []byte, finder DiscoveryServerFinder) error {
+	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return e
 	}
-	if e := common.NameCheck(group, false, true, false, true); e != nil {
+	if e := common.NameCheck(selfgroup, false, true, false, true); e != nil {
 		return e
 	}
-	if e := common.NameCheck(group+"."+name, true, true, false, true); e != nil {
+	if e := common.NameCheck(selfgroup+"."+selfname, true, true, false, true); e != nil {
 		return e
 	}
 	if finder == nil {
-		return errors.New("[discovery.client.NewDiscoveryClient] finder nil")
+		finder = defaultfinder
 	}
 	temp := &DiscoveryClient{
 		verifydata: vdata,
@@ -90,13 +88,18 @@ func NewDiscoveryClient(c *stream.InstanceConfig, group, name string, vdata []by
 	if !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&clientinstance)), nil, unsafe.Pointer(temp)) {
 		return nil
 	}
+	var dupc stream.InstanceConfig
+	if c == nil {
+		dupc = stream.InstanceConfig{}
+	} else {
+		dupc = *c //duplicate to remote the callback func race
+	}
 	//tcp instance
-	dupc := *c //duplicate to remote the callback func race
 	dupc.Verifyfunc = clientinstance.verifyfunc
 	dupc.Onlinefunc = clientinstance.onlinefunc
 	dupc.Userdatafunc = clientinstance.userfunc
 	dupc.Offlinefunc = clientinstance.offlinefunc
-	clientinstance.instance, _ = stream.NewInstance(&dupc, group, name)
+	clientinstance.instance, _ = stream.NewInstance(&dupc, selfgroup, selfname)
 	go finder(clientinstance.manually)
 	return nil
 }
@@ -106,7 +109,6 @@ func UpdateDiscoveryServers(serveraddrs []string) {
 	clientinstance.lker.Lock()
 	defer clientinstance.lker.Unlock()
 	if clientinstance.status == 0 {
-		//clientinstance.lker.Unlock()
 		return
 	}
 	//delete offline server

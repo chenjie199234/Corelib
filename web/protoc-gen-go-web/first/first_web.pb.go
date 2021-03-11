@@ -10,7 +10,7 @@ import (
 	bufpool "github.com/chenjie199234/Corelib/bufpool"
 	common "github.com/chenjie199234/Corelib/util/common"
 	web "github.com/chenjie199234/Corelib/web"
-	ioutil "io/ioutil"
+	io "io"
 	http "net/http"
 	strconv "strconv"
 	time "time"
@@ -286,7 +286,7 @@ func (c *firstWebClient) Hello(ctx context.Context, req *Helloreq) (*Helloresp, 
 		return nil, fmt.Errorf("call error:" + e.Error())
 	}
 	defer callback.Body.Close()
-	data, e := ioutil.ReadAll(callback.Body)
+	data, e := io.ReadAll(callback.Body)
 	if e != nil {
 		return nil, fmt.Errorf("read response error:" + e.Error())
 	}
@@ -317,7 +317,7 @@ func (c *firstWebClient) World(ctx context.Context, req *Worldreq) (*Worldresp, 
 		return nil, fmt.Errorf("call error:" + e.Error())
 	}
 	defer callback.Body.Close()
-	data, e := ioutil.ReadAll(callback.Body)
+	data, e := io.ReadAll(callback.Body)
 	if e != nil {
 		return nil, fmt.Errorf("read response error:" + e.Error())
 	}

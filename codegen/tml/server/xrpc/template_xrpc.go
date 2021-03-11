@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"{{.}}/api"
+	"{{.}}/config"
 	"{{.}}/service"
-	"{{.}}/source"
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/rpc"
@@ -26,7 +26,7 @@ var s *rpc.RpcServer
 
 //StartRpcServer -
 func StartRpcServer() {
-	c := source.GetRpcConfig()
+	c := config.GetRpcConfig()
 	rpcc := &stream.InstanceConfig{
 		HeartbeatTimeout:   time.Duration(c.RpcHeartTimeout),
 		HeartprobeInterval: time.Duration(c.RpcHeartProbe),

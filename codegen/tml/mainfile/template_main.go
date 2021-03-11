@@ -18,12 +18,11 @@ import (
 	"{{.}}/server/xrpc"
 	"{{.}}/server/xweb"
 	"{{.}}/service"
-
-	"github.com/chenjie199234/Corelib/log"
 )
 
 func main() {
-	defer log.Close()
+	//stop watching config hot update
+	defer config.Close()
 	//start the whole business service
 	service.StartService()
 	//start low level net service
@@ -51,8 +50,6 @@ func main() {
 	}()
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-ch
-	//stop watching config hot update
-	config.Close()
 	//stop the whole business service
 	service.StopService()
 	//stop low level net service

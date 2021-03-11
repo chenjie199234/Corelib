@@ -20,7 +20,6 @@ const (
 	strconvPackage = protogen.GoImportPath("strconv")
 	httpPackage    = protogen.GoImportPath("net/http")
 	fmtPackage     = protogen.GoImportPath("fmt")
-	ioutilPackage  = protogen.GoImportPath("io/ioutil")
 	jsonPackage    = protogen.GoImportPath("encoding/json")
 	protoPackage   = protogen.GoImportPath("github.com/golang/protobuf/proto")
 	contextPackage = protogen.GoImportPath("context")

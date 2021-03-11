@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -29,7 +28,7 @@ import (
 	"github.com/chenjie199234/Corelib/codegen/tml/service"
 	servicestatus "github.com/chenjie199234/Corelib/codegen/tml/service/status"
 	subservice "github.com/chenjie199234/Corelib/codegen/tml/service/sub"
-	"github.com/chenjie199234/Corelib/codegen/tml/source"
+	//"github.com/chenjie199234/Corelib/codegen/tml/source"
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
@@ -70,7 +69,7 @@ func main() {
 	}
 }
 func checkBaseProjectName() {
-	data, e := ioutil.ReadFile("./api/client.go")
+	data, e := os.ReadFile("./api/client.go")
 	if e != nil {
 		panic("please change dir to project's root dir,then run this manually or run the cmd script")
 	}
@@ -170,7 +169,7 @@ func createBaseProject() {
 	} else if !finfo.IsDir() {
 		panic(fmt.Sprintf("project's dir:%s in project's create dir:%s is not a dir", "./"+*name, *dir))
 	} else {
-		files, e := ioutil.ReadDir("./" + *name)
+		files, e := os.ReadDir("./" + *name)
 		if e != nil {
 			panic(fmt.Sprintf("read project's dir:%s in project's create dir:%s error:%s", "./"+*name, *dir, e))
 		}
@@ -190,8 +189,8 @@ func createBaseProject() {
 	config.CreatePathAndFile()
 	config.Execute(*name)
 
-	source.CreatePathAndFile()
-	source.Execute(*name)
+	//source.CreatePathAndFile()
+	//source.Execute(*name)
 
 	configfile.CreatePathAndFile()
 	configfile.Execute(*name)
