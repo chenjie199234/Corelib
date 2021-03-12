@@ -77,7 +77,7 @@ func main() {
 				} else {
 					regmsg.WebScheme = "http"
 				}
-				if webc.HttpPort != 0 {
+				if webc.WebPort != 0 {
 					regmsg.WebPort = int(webc.WebPort)
 				}
 			}

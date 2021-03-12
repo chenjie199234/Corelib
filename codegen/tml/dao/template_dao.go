@@ -24,7 +24,7 @@ import (
 func NewApi() error {
 	//var e error
 	//rc := config.GetRpcConfig()
-	//if ExampleRpcApi, e = example.NewExampleRpcClient(rc.RpcTimeout, rc.RpcConnTimeout, rc.RpcHeartTimeout, rc.RpcHeartProbe, api.Group, api.Name, []byte(rc.RpcVerifyData), nil, nil); e != nil {
+	//if ExampleRpcApi, e = example.NewExampleRpcClient(time.Duration(rc.RpcTimeout), time.Duration(rc.RpcConnTimeout), time.Duration(rc.RpcHeartTimeout), time.Duration(rc.RpcHeartProbe), api.Group, api.Name, []byte(rc.RpcVerifydata), nil, nil); e != nil {
 	//        return e
 	//}
 	//wc := config.GetWebConfig()

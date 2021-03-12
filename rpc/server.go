@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -129,14 +130,14 @@ func (s *RpcServer) Use(globalMids ...OutsideHandler) {
 
 //thread unsafe
 func (s *RpcServer) RegisterHandler(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
-	h, e := s.insidehandler(functimeout, handlers...)
+	h, e := s.insidehandler(path, functimeout, handlers...)
 	if e != nil {
 		return e
 	}
 	s.handler[path] = h
 	return nil
 }
-func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...OutsideHandler) (func(string, *Msg), error) {
+func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handlers ...OutsideHandler) (func(string, *Msg), error) {
 	totalhandlers := make([]OutsideHandler, 1)
 	totalhandlers = append(totalhandlers, s.global...)
 	totalhandlers = append(totalhandlers, handlers...)
@@ -146,6 +147,9 @@ func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...Outside
 	return func(peeruniquename string, msg *Msg) {
 		defer func() {
 			if e := recover(); e != nil {
+				stack := make([]byte, 8192)
+				n := runtime.Stack(stack, false)
+				log.Error("[rpc.server] client:", peeruniquename, "path:", path, "panic:", e, "\n"+common.Byte2str(stack[:n]))
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
@@ -187,6 +191,9 @@ func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...Outside
 			defer cancel()
 		}
 		//delete port info
+		if msg.Metadata == nil {
+			msg.Metadata = make(map[string]string)
+		}
 		msg.Metadata["SourceServer"] = peeruniquename[:strings.LastIndex(peeruniquename, ":")]
 		ctx = metadata.SetAllMetadata(ctx, msg.Metadata)
 		workctx := s.getContext(ctx, peeruniquename, msg, totalhandlers)

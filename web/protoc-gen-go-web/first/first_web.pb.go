@@ -31,7 +31,7 @@ type firstWebClient struct {
 
 //has race,will only return the first's call's client,the config will use the first call's config
 func NewFirstWebClient(selfgroup, selfname string, globaltimeout time.Duration, picker web.PickHandler, discover web.DiscoveryHandler) (FirstWebClient, error) {
-	cc, e := web.NewWebClient(selfgroup, selfname, Group, Name, globaltimeout, picker, discover)
+	cc, e := web.NewWebClient(globaltimeout, selfgroup, selfname, Group, Name, picker, discover)
 	if e != nil {
 		return nil, e
 	}

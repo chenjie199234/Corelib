@@ -597,7 +597,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					//g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -694,7 +694,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					//g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -812,7 +812,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					//g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -909,7 +909,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					//g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1029,7 +1029,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					//g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1126,7 +1126,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					//g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1244,7 +1244,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					//g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1341,7 +1341,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					//g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1457,7 +1457,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					//g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1554,7 +1554,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					//g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1670,7 +1670,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					//g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1767,7 +1767,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					//g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1830,7 +1830,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("v!=", strconv.Quote(v), "||")
+							g.P("v!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("v!=", strconv.Quote(v), "{")
 						}
@@ -1887,7 +1887,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P(prefix, field.GoName, "!=", strconv.Quote(v), "||")
+							g.P(prefix, field.GoName, "!=", strconv.Quote(v), "&&")
 						} else {
 							g.P(prefix, field.GoName, "!=", strconv.Quote(v), "{")
 						}
@@ -1949,7 +1949,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("string(v)!=", strconv.Quote(v), "||")
+							g.P("string(v)!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("string(v)!=", strconv.Quote(v), "{")
 						}
@@ -2006,7 +2006,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("string(", prefix, field.GoName, ")!=", strconv.Quote(v), "||")
+							g.P("string(", prefix, field.GoName, ")!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("string(", prefix, field.GoName, ")!=", strconv.Quote(v), "{")
 						}
@@ -2132,7 +2132,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					//g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -2238,7 +2238,7 @@ func checkerandheader(prefix string, message *protogen.Message, g *protogen.Gene
 					//g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}

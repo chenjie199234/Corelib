@@ -7,6 +7,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -101,7 +102,9 @@ func NewWebServer(c *Config, selfgroup, selfname string) (*WebServer, error) {
 		)
 	})
 	instance.router.PanicHandler = func(w http.ResponseWriter, r *http.Request, msg interface{}) {
-		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "panic:", msg)
+		stack := make([]byte, 8192)
+		n := runtime.Stack(stack, false)
+		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "panic:", msg, "\n"+common.Byte2str(stack[:n]))
 		http.Error(w,
 			http.StatusText(http.StatusInternalServerError),
 			http.StatusInternalServerError,

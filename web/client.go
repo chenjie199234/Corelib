@@ -204,6 +204,9 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	}
 	header.Set("TargetServer", this.appname)
 	md := metadata.GetAllMetadata(ctx)
+	if md == nil {
+		md = make(map[string]string)
+	}
 	md["SourceServer"] = this.selfappname
 	d, _ := json.Marshal(md)
 	header.Set("Metadata", common.Byte2str(d))
