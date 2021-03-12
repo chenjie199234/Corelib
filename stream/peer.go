@@ -40,13 +40,13 @@ type Peer struct {
 	parentnode      *peernode
 	clientname      string
 	servername      string
-	peertype        int
-	protocoltype    int
+	peertype        uint
+	protocoltype    uint
 	starttime       uint64
 	closeread       bool
 	closewrite      bool
 	status          uint32 //0--(closed),1--(connected),2--(closing)
-	maxmsglen       int
+	maxmsglen       uint
 	reader          *bufio.Reader
 	writerbuffer    chan *bufpool.Buffer
 	heartbeatbuffer chan *bufpool.Buffer
@@ -179,7 +179,7 @@ func (p *Peer) setbuffer(readnum, writenum int) {
 	}
 }
 
-func (p *Peer) readMessage(max int) (*bufpool.Buffer, error) {
+func (p *Peer) readMessage(max uint) (*bufpool.Buffer, error) {
 	buf := bufpool.GetBuffer()
 	buf.Grow(4)
 	num := 0
@@ -195,7 +195,7 @@ func (p *Peer) readMessage(max int) (*bufpool.Buffer, error) {
 		}
 	}
 	num = int(binary.BigEndian.Uint32(buf.Bytes()))
-	if num > max || num < 0 {
+	if num > int(max) || num < 0 {
 		bufpool.PutBuffer(buf)
 		return nil, ERRMSGLENGTH
 	} else if num == 0 {
@@ -220,7 +220,7 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 	if len(userdata) == 0 {
 		return nil
 	}
-	if len(userdata) > p.maxmsglen {
+	if len(userdata) > int(p.maxmsglen) {
 		switch p.protocoltype {
 		case TCP:
 			switch p.peertype {

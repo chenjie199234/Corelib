@@ -14,6 +14,10 @@ import (
 	//"{{.Pname}}/config"
 	"{{.Pname}}/api"
 	{{.Sname}}dao "{{.Pname}}/dao/{{.Sname}}"
+
+	//"github.com/chenjie199234/Corelib/log"
+	//"github.com/chenjie199234/Corelib/rpc"
+	//"github.com/chenjie199234/Corelib/web"
 )
 
 //Service subservice for {{.Sname}} business

@@ -27,7 +27,7 @@ type Instance struct {
 	pool *sync.Pool
 }
 
-func (this *Instance) getPeer(protot, peert, writebuffernum, maxmsglen int, selfname string) *Peer {
+func (this *Instance) getPeer(protot, peert, writebuffernum, maxmsglen uint, selfname string) *Peer {
 	tempctx, tempcancel := context.WithCancel(context.Background())
 	if p, ok := this.pool.Get().(*Peer); ok {
 		p.reset()

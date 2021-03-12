@@ -8,21 +8,18 @@ import (
 
 const textsource = `{
 	"rpc":{
-		"rpc_port":9000,
 		"rpc_verifydata":"test",
-		"rpc_timeout":"200ms",
 		"rpc_timeout":"500ms",
 		"rpc_conn_timeout":"1s",
 		"rpc_heart_timeout":"5s",
 		"rpc_heart_probe":"1.5s"
 	},
-	"http":{
-		"http_port":8000,
-		"http_timeout":"200ms",
-		"http_staticfile":"./src",
-		"http_certfile":"",
-		"http_keyfile":"",
-		"http_cors":{
+	"web":{
+		"web_timeout":"200ms",
+		"web_staticfile":"./src",
+		"web_certfile":"",
+		"web_keyfile":"",
+		"web_cors":{
 			"cors_origin":["*"],
 			"cors_header":["*"],
 			"cors_expose":[]

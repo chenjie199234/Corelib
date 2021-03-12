@@ -17,10 +17,13 @@ import (
 var SvcStatus *status.Service
 
 //StartService start the whole service
-func StartService() {
-	dao.NewApi()
+func StartService() error {
+	if e := dao.NewApi(); e != nil {
+		return e
+	}
 	//start sub service
 	SvcStatus = status.Start()
+	return nil
 }
 
 //StopService stop the whole service

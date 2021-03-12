@@ -20,7 +20,7 @@ import (
 type OutsideHandler func(ctx *Context)
 
 type RpcServer struct {
-	timeout    time.Duration
+	c          *Config
 	global     []OutsideHandler
 	ctxpool    *sync.Pool
 	handler    map[string]func(string, *Msg)
@@ -30,36 +30,42 @@ type RpcServer struct {
 	stopch     chan struct{}
 }
 
-func NewRpcServer(c *stream.InstanceConfig, group, name string, vdata []byte, globaltimeout time.Duration) (*RpcServer, error) {
-	if e := common.NameCheck(name, false, true, false, true); e != nil {
+func NewRpcServer(c *Config, selfgroup, selfname string, verifydata []byte) (*RpcServer, error) {
+	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
 	}
-	if e := common.NameCheck(group, false, true, false, true); e != nil {
+	if e := common.NameCheck(selfgroup, false, true, false, true); e != nil {
 		return nil, e
 	}
-	appname := group + "." + name
+	appname := selfgroup + "." + selfname
 	if e := common.NameCheck(appname, true, true, false, true); e != nil {
 		return nil, e
 	}
 	serverinstance := &RpcServer{
-		timeout:    globaltimeout,
+		c:          c,
 		global:     make([]OutsideHandler, 0, 10),
 		ctxpool:    &sync.Pool{},
 		handler:    make(map[string]func(string, *Msg), 10),
-		verifydata: vdata,
+		verifydata: verifydata,
 		stopch:     make(chan struct{}, 1),
 	}
-	var dupc stream.InstanceConfig
-	if c == nil {
-		dupc = stream.InstanceConfig{}
-	} else {
-		dupc = *c //duplicate to remote the callback func race
+	dupc := &stream.InstanceConfig{
+		HeartbeatTimeout:   c.HeartTimeout,
+		HeartprobeInterval: c.HeartPorbe,
+		GroupNum:           c.GroupNum,
+		TcpC: &stream.TcpConfig{
+			ConnectTimeout:         c.ConnTimeout,
+			SocketRBufLen:          c.SocketRBuf,
+			SocketWBufLen:          c.SocketWBuf,
+			MaxMsgLen:              c.MaxMsgLen,
+			MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
+		},
 	}
 	dupc.Verifyfunc = serverinstance.verifyfunc
 	dupc.Onlinefunc = serverinstance.onlinefunc
 	dupc.Userdatafunc = serverinstance.userfunc
 	dupc.Offlinefunc = nil
-	serverinstance.instance, _ = stream.NewInstance(&dupc, group, name)
+	serverinstance.instance, _ = stream.NewInstance(dupc, selfgroup, selfname)
 	return serverinstance, nil
 }
 func (s *RpcServer) StartRpcServer(listenaddr string) error {
@@ -150,8 +156,8 @@ func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...Outside
 		var globaldl int64
 		var funcdl int64
 		now := time.Now()
-		if s.timeout != 0 {
-			globaldl = now.UnixNano() + int64(s.timeout)
+		if s.c.Timeout != 0 {
+			globaldl = now.UnixNano() + int64(s.c.Timeout)
 		}
 		if functimeout != 0 {
 			funcdl = now.UnixNano() + int64(functimeout)
@@ -180,9 +186,9 @@ func (s *RpcServer) insidehandler(functimeout time.Duration, handlers ...Outside
 			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, min))
 			defer cancel()
 		}
-		if len(msg.Metadata) > 0 {
-			ctx = metadata.SetAllMetadata(ctx, msg.Metadata)
-		}
+		//delete port info
+		msg.Metadata["SourceServer"] = peeruniquename[:strings.LastIndex(peeruniquename, ":")]
+		ctx = metadata.SetAllMetadata(ctx, msg.Metadata)
 		workctx := s.getContext(ctx, peeruniquename, msg, totalhandlers)
 		workctx.Next()
 		s.putContext(workctx)
@@ -256,6 +262,15 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		}
 		handler(peeruniquename, msg)
 		d, _ := proto.Marshal(msg)
+		if len(d) > int(s.c.MaxMsgLen) {
+			log.Error("[rpc.server.userfunc] send message too large")
+			msg.Path = ""
+			msg.Deadline = 0
+			msg.Body = nil
+			msg.Error = ERRRESPMSGLARGE.Error()
+			msg.Metadata = nil
+			d, _ = proto.Marshal(msg)
+		}
 		if e := p.SendMessage(d, starttime, true); e != nil {
 			log.Error("[rpc.server.userfunc] send message error:", e)
 		}

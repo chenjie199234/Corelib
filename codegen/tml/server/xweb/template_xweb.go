@@ -25,19 +25,19 @@ var s *web.WebServer
 
 //StartWebServer -
 func StartWebServer() {
-	c := config.GetHttpConfig()
+	c := config.GetWebConfig()
 	webc := &web.Config{
-		Timeout:            time.Duration(c.HttpTimeout),
-		StaticFileRootPath: c.HttpStaticFile,
+		Timeout:            time.Duration(c.WebTimeout),
+		StaticFileRootPath: c.WebStaticFile,
 		MaxHeader:          1024,
 		ReadBuffer:         1024,
 		WriteBuffer:        1024,
 	}
-	if c.HttpCors != nil {
+	if c.WebCors != nil {
 		webc.Cors = &web.CorsConfig{
-			AllowedOrigin:    c.HttpCors.CorsOrigin,
-			AllowedHeader:    c.HttpCors.CorsHeader,
-			ExposeHeader:     c.HttpCors.CorsExpose,
+			AllowedOrigin:    c.WebCors.CorsOrigin,
+			AllowedHeader:    c.WebCors.CorsHeader,
+			ExposeHeader:     c.WebCors.CorsExpose,
 			AllowCredentials: true,
 			MaxAge:           24 * time.Hour,
 		}
@@ -62,7 +62,7 @@ func StartWebServer() {
 	//return
 	//}
 
-	if e = s.StartWebServer(fmt.Sprintf(":%d", c.HttpPort), c.HttpCertFile, c.HttpKeyFile); e != nil {
+	if e = s.StartWebServer(fmt.Sprintf(":%d", c.WebPort), c.WebCertFile, c.WebKeyFile); e != nil {
 		log.Error("[xweb] start web server error:", e)
 		return
 	}

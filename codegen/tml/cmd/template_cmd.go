@@ -286,15 +286,29 @@ goto :end
 :end
 pause
 exit /b 0`
+const textprobe = `#!/bin/sh
+# kubernetes probe port
+port8000=*netstat -ltn | grep 8000 | wc -l*
+port9000=*netstat -ltn | grep 9000 | wc -l*
+if [[ $port9000 -eq 1 && $port8000 -eq 1 ]]
+then
+exit 0
+else
+exit 1
+fi
+`
 
 const path = "./"
 const namebash = "cmd.sh"
 const namebat = "cmd.bat"
+const nameprobe = "probe.sh"
 
 var tmlbash *template.Template
 var tmlbat *template.Template
+var tmlprobe *template.Template
 var filebash *os.File
 var filebat *os.File
+var fileprobe *os.File
 
 type Data struct {
 	Pname string
@@ -310,6 +324,10 @@ func init() {
 	tmlbat, e = template.New("bat").Parse(strings.Replace(textbat, "\n", "\r\n", -1))
 	if e != nil {
 		panic(fmt.Sprintf("create template for %s error:%s", path+namebat, e))
+	}
+	tmlprobe, e = template.New("probe").Parse(strings.Replace(textprobe, "*", "`", -1))
+	if e != nil {
+		panic(fmt.Sprintf("create template for %s error:%s", path+nameprobe, e))
 	}
 }
 func CreatePathAndFile() {
@@ -329,6 +347,14 @@ func CreatePathAndFile() {
 	if e != nil {
 		panic(fmt.Sprintf("make file:%s error:%s", path+namebat, e))
 	}
+	fileprobe, e = os.OpenFile(path+nameprobe, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if e != nil {
+		panic(fmt.Sprintf("make file:%s error:%s", path+nameprobe, e))
+	}
+	e = os.Chmod(path+nameprobe, 0755)
+	if e != nil {
+		panic(fmt.Sprintf("change file:%s execute right error:%s", path+nameprobe, e))
+	}
 }
 func Execute(pname, gname string) {
 	if e := tmlbash.Execute(filebash, &Data{Pname: pname, Gname: gname}); e != nil {
@@ -336,5 +362,8 @@ func Execute(pname, gname string) {
 	}
 	if e := tmlbat.Execute(filebat, &Data{Pname: pname, Gname: gname}); e != nil {
 		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+namebat, e))
+	}
+	if e := tmlprobe.Execute(fileprobe, nil); e != nil {
+		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+nameprobe, e))
 	}
 }

@@ -36,7 +36,10 @@ func main() {
 		}
 	}
 	//start the whole business service
-	service.StartService()
+	if e := service.StartService(); e != nil {
+		log.Error(e)
+		return
+	}
 	//start low level net service
 	ch := make(chan os.Signal, 1)
 	wg := &sync.WaitGroup{}
@@ -66,16 +69,16 @@ func main() {
 		select {
 		case <-tmer.C:
 			rpcc := config.GetRpcConfig()
-			webc := config.GetHttpConfig()
+			webc := config.GetWebConfig()
 			regmsg := &discovery.RegMsg{}
 			if webc != nil {
-				if webc.HttpKeyFile != "" && webc.HttpCertFile != "" {
+				if webc.WebKeyFile != "" && webc.WebCertFile != "" {
 					regmsg.WebScheme = "https"
 				} else {
 					regmsg.WebScheme = "http"
 				}
 				if webc.HttpPort != 0 {
-					regmsg.WebPort = int(webc.HttpPort)
+					regmsg.WebPort = int(webc.WebPort)
 				}
 			}
 			if rpcc != nil {

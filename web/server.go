@@ -20,80 +20,16 @@ import (
 )
 
 type WebServer struct {
-	selfname string
-	c        *Config
-	s        *http.Server
-	global   []OutsideHandler
-	router   *httprouter.Router
-	ctxpool  *sync.Pool
-	status   int32 //0-created,not started 1-started 2-stoped
-	stopch   chan struct{}
+	selfappname string
+	c           *Config
+	s           *http.Server
+	global      []OutsideHandler
+	router      *httprouter.Router
+	ctxpool     *sync.Pool
+	status      int32 //0-created,not started 1-started 2-stoped
+	stopch      chan struct{}
 }
 
-type Config struct {
-	Timeout            time.Duration
-	StaticFileRootPath string
-	MaxHeader          int
-	ReadBuffer         int //socket buffer
-	WriteBuffer        int //socker buffer
-	Cors               *CorsConfig
-}
-
-type CorsConfig struct {
-	AllowedOrigin    []string
-	AllowedHeader    []string
-	ExposeHeader     []string
-	AllowCredentials bool
-	MaxAge           time.Duration
-	allorigin        bool
-	allheader        bool
-	headerstr        string
-	exposestr        string
-}
-
-func (c *Config) validate() {
-	if c == nil {
-		c = &Config{}
-	}
-	if c.Cors == nil {
-		c.Cors = &CorsConfig{
-			AllowedOrigin:    []string{"*"},
-			AllowedHeader:    []string{"*"},
-			ExposeHeader:     nil,
-			AllowCredentials: false,
-			MaxAge:           time.Hour * 24,
-		}
-	}
-	if c.MaxHeader == 0 {
-		c.MaxHeader = 1024
-	}
-	if c.ReadBuffer == 0 {
-		c.ReadBuffer = 1024
-	}
-	if c.WriteBuffer == 0 {
-		c.WriteBuffer = 1024
-	}
-	for _, v := range c.Cors.AllowedOrigin {
-		if v == "*" {
-			c.Cors.allorigin = true
-			break
-		}
-	}
-	hasorigin := false
-	for _, v := range c.Cors.AllowedHeader {
-		if v == "*" {
-			c.Cors.allheader = true
-			break
-		} else if v == "Origin" {
-			hasorigin = true
-		}
-	}
-	if !c.Cors.allheader && !hasorigin {
-		c.Cors.AllowedHeader = append(c.Cors.AllowedHeader, "Origin")
-	}
-	c.Cors.headerstr = c.getHeaders()
-	c.Cors.exposestr = c.getExpose()
-}
 func (c *Config) getHeaders() string {
 	if c.Cors.allheader || len(c.Cors.AllowedHeader) == 0 {
 		return ""
@@ -130,25 +66,25 @@ func (c *Config) getExpose() string {
 	}
 }
 
-func NewWebServer(c *Config, group, name string) (*WebServer, error) {
-	if e := common.NameCheck(name, false, true, false, true); e != nil {
+func NewWebServer(c *Config, selfgroup, selfname string) (*WebServer, error) {
+	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
 	}
-	if e := common.NameCheck(group, false, true, false, true); e != nil {
+	if e := common.NameCheck(selfgroup, false, true, false, true); e != nil {
 		return nil, e
 	}
-	appname := group + "." + name
-	if e := common.NameCheck(appname, true, true, false, true); e != nil {
+	selfappname := selfgroup + "." + selfname
+	if e := common.NameCheck(selfappname, true, true, false, true); e != nil {
 		return nil, e
 	}
 	c.validate()
 	instance := &WebServer{
-		selfname: appname,
-		c:        c,
-		global:   make([]OutsideHandler, 0, 10),
-		router:   httprouter.New(),
-		ctxpool:  &sync.Pool{},
-		stopch:   make(chan struct{}, 1),
+		selfappname: selfappname,
+		c:           c,
+		global:      make([]OutsideHandler, 0, 10),
+		router:      httprouter.New(),
+		ctxpool:     &sync.Pool{},
+		stopch:      make(chan struct{}, 1),
 	}
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
@@ -353,7 +289,7 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//check required target server
-	if targetserver := r.Header.Get("TargetServer"); targetserver != "" && targetserver != this.selfname {
+	if targetserver := r.Header.Get("TargetServer"); targetserver != "" && targetserver != this.selfappname {
 		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: this is not the required targetserver:", targetserver)
 		w.WriteHeader(888)
 		return
@@ -448,6 +384,9 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
 				return
+			}
+			if sourceserver, ok := md["SourceServer"]; ok {
+				md["SourceServer"] = sourceserver + ":" + getclientip(r)
 			}
 			basectx = metadata.SetAllMetadata(basectx, md)
 		}

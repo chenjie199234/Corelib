@@ -35,47 +35,47 @@ type TcpConfig struct {
 	//include connect time and verify time
 	ConnectTimeout time.Duration //default 500ms
 
-	SocketReadBufferLen  int //default 1024 byte,max 65536 byte
-	SocketWriteBufferLen int //default 1024 byte,max 65536 byte
+	SocketRBufLen uint //default 1024 byte,max 65535 byte
+	SocketWBufLen uint //default 1024 byte,max 65535 byte
 
-	MaxMessageLen int //max 65536,default is max
+	MaxMsgLen uint //min 1024,max 65535,default is max
 
 	//write buffer can store the messages in buffer and send async in another goruntine
-	AppWriteBufferNum int //default 256 num(not the byte)
+	MaxBufferedWriteMsgNum uint //default 256 num(not the byte)
 }
 
 var defaultTcpConfig = &TcpConfig{
-	ConnectTimeout:       500 * time.Millisecond,
-	SocketReadBufferLen:  1024,
-	SocketWriteBufferLen: 1024,
-	MaxMessageLen:        65536,
-	AppWriteBufferNum:    256,
+	ConnectTimeout:         500 * time.Millisecond,
+	SocketRBufLen:          1024,
+	SocketWBufLen:          1024,
+	MaxMsgLen:              65535,
+	MaxBufferedWriteMsgNum: 256,
 }
 
 func (c *TcpConfig) checkTcpConfig() {
 	if c.ConnectTimeout <= 0 {
 		c.ConnectTimeout = 500 * time.Millisecond
 	}
-	if c.SocketReadBufferLen <= 0 {
-		c.SocketReadBufferLen = 1024
+	if c.SocketRBufLen <= 0 {
+		c.SocketRBufLen = 1024
 	}
-	if c.SocketReadBufferLen > 65536 {
-		c.SocketReadBufferLen = 65536
+	if c.SocketRBufLen > 65535 {
+		c.SocketRBufLen = 65535
 	}
-	if c.SocketWriteBufferLen <= 0 {
-		c.SocketWriteBufferLen = 1024
+	if c.SocketWBufLen <= 0 {
+		c.SocketWBufLen = 1024
 	}
-	if c.SocketWriteBufferLen > 65536 {
-		c.SocketReadBufferLen = 65536
+	if c.SocketWBufLen > 65535 {
+		c.SocketWBufLen = 65535
 	}
-	if c.MaxMessageLen <= 0 {
-		c.MaxMessageLen = 65536
+	if c.MaxMsgLen < 1024 {
+		c.MaxMsgLen = 65535
 	}
-	if c.MaxMessageLen > 65536 {
-		c.MaxMessageLen = 65536
+	if c.MaxMsgLen > 65535 {
+		c.MaxMsgLen = 65535
 	}
-	if c.AppWriteBufferNum == 0 {
-		c.AppWriteBufferNum = 256
+	if c.MaxBufferedWriteMsgNum == 0 {
+		c.MaxBufferedWriteMsgNum = 256
 	}
 }
 
@@ -83,21 +83,21 @@ type UnixConfig struct {
 	//include connect time and verify time
 	ConnectTimeout time.Duration //default 500ms
 
-	SocketReadBufferLen  int //default 1024 byte,max 65535 byte
-	SocketWriteBufferLen int //default 1024 byte,max 65535 byte
+	SocketReadBufferLen  uint //default 1024 byte,max 65535 byte
+	SocketWriteBufferLen uint //default 1024 byte,max 65535 byte
 
-	MaxMessageLen int //max 65536,default is max
+	MaxMessageLen uint //min 1024,max 65535,default is max
 
 	//write buffer can store the messages in buffer and send async in another goruntine
-	AppWriteBufferNum int //default 256 num(not the byte)
+	MaxBufferedWriteMsgNum uint //default 256 num(not the byte)
 }
 
 var defaultUnixConfig = &UnixConfig{
-	ConnectTimeout:       500 * time.Millisecond,
-	SocketReadBufferLen:  1024,
-	SocketWriteBufferLen: 1024,
-	MaxMessageLen:        65536,
-	AppWriteBufferNum:    256,
+	ConnectTimeout:         500 * time.Millisecond,
+	SocketReadBufferLen:    1024,
+	SocketWriteBufferLen:   1024,
+	MaxMessageLen:          65535,
+	MaxBufferedWriteMsgNum: 256,
 }
 
 func (c *UnixConfig) checkUnixConfig() {
@@ -107,23 +107,23 @@ func (c *UnixConfig) checkUnixConfig() {
 	if c.SocketReadBufferLen <= 0 {
 		c.SocketReadBufferLen = 1024
 	}
-	if c.SocketReadBufferLen > 65536 {
-		c.SocketReadBufferLen = 65536
+	if c.SocketReadBufferLen > 65535 {
+		c.SocketReadBufferLen = 65535
 	}
 	if c.SocketWriteBufferLen <= 0 {
 		c.SocketWriteBufferLen = 1024
 	}
-	if c.SocketWriteBufferLen > 65536 {
-		c.SocketReadBufferLen = 65536
+	if c.SocketWriteBufferLen > 65535 {
+		c.SocketReadBufferLen = 65535
 	}
-	if c.MaxMessageLen <= 0 {
-		c.MaxMessageLen = 65536
+	if c.MaxMessageLen < 1024 {
+		c.MaxMessageLen = 65535
 	}
-	if c.MaxMessageLen > 65536 {
-		c.MaxMessageLen = 65536
+	if c.MaxMessageLen > 65535 {
+		c.MaxMessageLen = 65535
 	}
-	if c.AppWriteBufferNum == 0 {
-		c.AppWriteBufferNum = 256
+	if c.MaxBufferedWriteMsgNum == 0 {
+		c.MaxBufferedWriteMsgNum = 256
 	}
 }
 

@@ -65,7 +65,7 @@ func init() {
 }
 func CreatePathAndFile() {
 	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
+	if e = os.MkdirAll(path+"deps", 0755); e != nil {
 		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
 	}
 	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)

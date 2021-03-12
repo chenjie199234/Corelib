@@ -9,13 +9,14 @@ import (
 const dockerfiletext = `FROM busybox:1.28
 
 RUN mkdir /root/app
-
-COPY main AppConfig.json SourceConfig.json /root/app
-
 WORKDIR /root/app
-
-SHELL ["sh","-c"]
-
+SHELL ["/bin/sh","-c"]
+ENV RUN_ENV <RUN_ENV>
+ENV DISCOVERY_SERVER_GROUP <DISCOVERY_SERVER_GROUP>
+ENV DISCOVERY_SERVER_NAME <DISCOVERY_SERVER_NAME>
+ENV DISCOVERY_SERVER_PORT <DISCOVERY_SERVER_PORT>
+ENV DISCOVERY_SERVER_VERIFY_DATA <DISCOVERY_SERVER_VERIFY_DATA>
+COPY main probe.sh AppConfig.json SourceConfig.json ./
 ENTRYPOINT ["./main"]`
 
 const deploymenttext = `apiVersion: apps/v1
@@ -58,27 +59,19 @@ spec:
               value: {{.ProjectName}}
             - name: DEPLOY_ENV
               value: kubernetes
-            - name: RUN_ENV
-              value: <RUN_ENV>
-            - name: DISCOVERY_SERVER_GROUP
-              value: <DISCOVERY_SERVER_GROUP>
-            - name: DISCOVERY_SERVER_NAME
-              value: <DISCOVERY_SERVER_NAME>
-            - name: DISCOVERY_SERVER_PORT
-              value: <DISCOVERY_SERVER_PORT>
-            - name: DISCOVERY_SERVER_VERIFY_DATA
-              value: <DISCOVERY_SERVER_VERIFY_DATA>
           livenessProbe:
-            tcpSocket:
-              port: 8000
+            exec:
+              command:
+                - ./probe.sh
             initialDelaySeconds: 2
             timeoutSeconds: 1
             periodSeconds: 1
             successThreshold: 1
             failureThreshold: 3
           readinessProbe:
-            tcpSocket:
-              port: 8000
+            exec:
+              command:
+                - ./probe.sh
             initialDelaySeconds: 2
             timeoutSeconds: 1
             periodSeconds: 1
@@ -148,7 +141,7 @@ spec:
       - path: /
         backend:
           serviceName: {{.ProjectName}}-service
-          serviceport: 80{{ end }}`
+          servicePort: 80{{ end }}`
 
 const path = "./"
 const dockerfilename = "Dockerfile"

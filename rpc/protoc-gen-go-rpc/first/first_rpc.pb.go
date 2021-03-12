@@ -6,10 +6,8 @@ import (
 	second "./second"
 	context "context"
 	rpc "github.com/chenjie199234/Corelib/rpc"
-	stream "github.com/chenjie199234/Corelib/stream"
 	proto "github.com/golang/protobuf/proto"
 	strconv "strconv"
-	time "time"
 )
 
 var RpcPathFirstHello = "/first.First/Hello"
@@ -26,8 +24,8 @@ type firstRpcClient struct {
 }
 
 //has race,will only return the first's call's client,the config will use the first call's config
-func NewFirstRpcClient(c *stream.InstanceConfig, verifydata []byte, globaltimeout time.Duration, picker rpc.PickHandler, discover rpc.DiscoveryHandler) (FirstRpcClient, error) {
-	cc, e := rpc.NewRpcClient(c, Group, Name, verifydata, globaltimeout, picker, discover)
+func NewFirstRpcClient(c *rpc.Config, selfgroup, selfname string, verifydata []byte, picker rpc.PickHandler, discover rpc.DiscoveryHandler) (FirstRpcClient, error) {
+	cc, e := rpc.NewRpcClient(c, selfgroup, selfname, verifydata, Group, Name, picker, discover)
 	if e != nil {
 		return nil, e
 	}

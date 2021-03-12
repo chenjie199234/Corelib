@@ -22,8 +22,9 @@ type PickHandler func(servers []*ServerForPick) *ServerForPick
 type DiscoveryHandler func(group, name string, client *WebClient)
 
 type WebClient struct {
-	appname string
-	timeout time.Duration
+	selfappname string
+	appname     string
+	timeout     time.Duration
 
 	lker  *sync.RWMutex
 	hosts []*ServerForPick
@@ -59,8 +60,14 @@ func init() {
 	all = make(map[string]*WebClient)
 }
 
-func NewWebClient(group, name string, globaltimeout time.Duration, picker PickHandler, discover DiscoveryHandler) (*WebClient, error) {
+func NewWebClient(globaltimeout time.Duration, selfgroup, selfname, group, name string, picker PickHandler, discover DiscoveryHandler) (*WebClient, error) {
+	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
+		return nil, e
+	}
 	if e := common.NameCheck(name, false, true, false, true); e != nil {
+		return nil, e
+	}
+	if e := common.NameCheck(selfgroup, false, true, false, true); e != nil {
 		return nil, e
 	}
 	if e := common.NameCheck(group, false, true, false, true); e != nil {
@@ -68,6 +75,10 @@ func NewWebClient(group, name string, globaltimeout time.Duration, picker PickHa
 	}
 	appname := group + "." + name
 	if e := common.NameCheck(appname, true, true, false, true); e != nil {
+		return nil, e
+	}
+	selfappname := selfgroup + "." + selfname
+	if e := common.NameCheck(selfappname, true, true, false, true); e != nil {
 		return nil, e
 	}
 	lker.Lock()
@@ -82,8 +93,9 @@ func NewWebClient(group, name string, globaltimeout time.Duration, picker PickHa
 		discover = defaultDiscover
 	}
 	instance := &WebClient{
-		appname: appname,
-		timeout: globaltimeout,
+		selfappname: selfappname,
+		appname:     appname,
+		timeout:     globaltimeout,
 
 		lker:  &sync.RWMutex{},
 		hosts: make([]*ServerForPick, 0, 10),
@@ -105,7 +117,7 @@ func (this *WebClient) UpdateDiscovery(all map[string]map[string]struct{}, addit
 	//check unregister
 	pos := 0
 	endpos := len(this.hosts) - 1
-	for {
+	for pos < len(this.hosts) {
 		if discoveryservers, ok := all[this.hosts[pos].host]; !ok || len(discoveryservers) == 0 {
 			this.hosts[pos], this.hosts[endpos] = this.hosts[endpos], this.hosts[pos]
 			endpos--
@@ -119,7 +131,9 @@ func (this *WebClient) UpdateDiscovery(all map[string]map[string]struct{}, addit
 			}
 		}
 	}
-	this.hosts = this.hosts[:endpos+1]
+	if endpos >= 0 {
+		this.hosts = this.hosts[:endpos+1]
+	}
 	//check register
 	for host, discoverservers := range all {
 		if len(discoverservers) == 0 {
@@ -189,10 +203,10 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		header = make(http.Header)
 	}
 	header.Set("TargetServer", this.appname)
-	if md := metadata.GetAllMetadata(ctx); len(md) > 0 {
-		d, _ := json.Marshal(md)
-		header.Set("Metadata", common.Byte2str(d))
-	}
+	md := metadata.GetAllMetadata(ctx)
+	md["SourceServer"] = this.selfappname
+	d, _ := json.Marshal(md)
+	header.Set("Metadata", common.Byte2str(d))
 	var min time.Duration
 	if this.timeout != 0 {
 		min = this.timeout

@@ -19,7 +19,6 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/rpc"
 	"github.com/chenjie199234/Corelib/rpc/mids"
-	"github.com/chenjie199234/Corelib/stream"
 )
 
 var s *rpc.RpcServer
@@ -27,16 +26,19 @@ var s *rpc.RpcServer
 //StartRpcServer -
 func StartRpcServer() {
 	c := config.GetRpcConfig()
-	rpcc := &stream.InstanceConfig{
-		HeartbeatTimeout:   time.Duration(c.RpcHeartTimeout),
-		HeartprobeInterval: time.Duration(c.RpcHeartProbe),
-		TcpC: &stream.TcpConfig{
-			ConnectTimeout:    time.Duration(c.RpcConnTimeout),
-			AppWriteBufferNum: 65535,
-		},
+	rpcc := &rpc.Config{
+		Timeout:                time.Duration(c.RpcTimeout),
+		ConnTimeout:            time.Duration(c.RpcConnTimeout),
+		HeartTimeout:           time.Duration(c.RpcHeartTimeout),
+		HeartPorbe:             time.Duration(c.RpcHeartProbe),
+		GroupNum:               1,
+		SocketRBuf:             1024,
+		SocketWBuf:             1024,
+		MaxMsgLen:              65535,
+		MaxBufferedWriteMsgNum: 1024,
 	}
 	var e error
-	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name, []byte(c.RpcVerifydata), time.Duration(c.RpcTimeout)); e != nil {
+	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name, []byte(c.RpcVerifydata)); e != nil {
 		log.Error("[xrpc] new rpc server error:", e)
 		return
 	}

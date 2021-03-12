@@ -15,6 +15,10 @@ import (
 	//"{{.}}/config"
 	"{{.}}/api"
 	statusdao "{{.}}/dao/status"
+
+	//"github.com/chenjie199234/Corelib/log"
+	//"github.com/chenjie199234/Corelib/rpc"
+	//"github.com/chenjie199234/Corelib/web"
 )
 
 //Service subservice for status business
@@ -31,6 +35,12 @@ func Start() *Service {
 }
 
 func (s *Service) Ping(context.Context, *api.Pingreq) (*api.Pingresp, error) {
+	//if _, ok := ctx.(*rpc.Context); ok {
+	//        log.Info("this is a rpc call")
+	//}
+	//if _, ok := ctx.(*web.Context); ok {
+	//        log.Info("this is a web call")
+	//}
 	return &api.Pingresp{Timestamp: time.Now().UnixNano()}, nil
 }
 

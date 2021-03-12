@@ -121,7 +121,7 @@ func Close() {
 //SourceConfig can't hot update
 type sourceConfig struct {
 	Rpc      *RpcConfig                 $json:"rpc"$
-	Http     *HttpConfig                $json:"http"$
+	Web      *WebConfig                 $json:"web"$
 	DB       map[string]*DBConfig       $json:"db"$        //key xx_db
 	Redis    map[string]*RedisConfig    $json:"redis"$     //key xx_redis
 	KafkaPub map[string]*KafkaPubConfig $json:"kafka_pub"$ //key topic name
@@ -138,20 +138,20 @@ type RpcConfig struct {
 	RpcHeartProbe   ctime.Duration $json:"rpc_heart_probe"$   //default 1.5s
 }
 
-//HttpConfig -
-type HttpConfig struct {
+//WebConfig -
+type WebConfig struct {
 	//server
-	HttpPort       uint           $json:"http_port"$
-	HttpTimeout    ctime.Duration $json:"http_timeout"$ //default 500ms
-	HttpStaticFile string         $json:"http_staticfile"$
-	HttpCertFile   string         $json:"http_certfile"$
-	HttpKeyFile    string         $json:"http_keyfile"$
+	WebPort       uint           $json:"web_port"$
+	WebTimeout    ctime.Duration $json:"web_timeout"$ //default 500ms
+	WebStaticFile string         $json:"web_staticfile"$
+	WebCertFile   string         $json:"web_certfile"$
+	WebKeyFile    string         $json:"web_keyfile"$
 	//cors
-	HttpCors *HttpCorsConfig $json:"http_cors"$
+	WebCors *WebCorsConfig $json:"web_cors"$
 }
 
-//HttpCorsConfig -
-type HttpCorsConfig struct {
+//WebCorsConfig -
+type WebCorsConfig struct {
 	CorsOrigin []string $json:"cors_origin"$
 	CorsHeader []string $json:"cors_header"$
 	CorsExpose []string $json:"cors_expose"$
@@ -230,11 +230,11 @@ func (c *sourceConfig) validate() {
 	if c.Rpc.RpcHeartProbe == 0 {
 		c.Rpc.RpcHeartProbe = ctime.Duration(1500 * time.Millisecond)
 	}
-	if c.Http.HttpPort == 0 {
-		c.Http.HttpPort = 8000
+	if c.Web.WebPort == 0 {
+		c.Web.WebPort = 8000
 	}
-	if c.Http.HttpTimeout == 0 {
-		c.Http.HttpTimeout = ctime.Duration(time.Millisecond * 500)
+	if c.Web.WebTimeout == 0 {
+		c.Web.WebTimeout = ctime.Duration(time.Millisecond * 500)
 	}
 	for _, dbc := range c.DB {
 		if dbc.Username == "" {
@@ -406,9 +406,9 @@ func GetRpcConfig() *RpcConfig {
 	return sc.Rpc
 }
 
-//GetHttpConfig get the http net config
-func GetHttpConfig() *HttpConfig {
-	return sc.Http
+//GetWebConfig get the web net config
+func GetWebConfig() *WebConfig {
+	return sc.Web
 }
 
 //GetDB get a db client by db's logic name

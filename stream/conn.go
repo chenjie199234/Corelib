@@ -25,7 +25,7 @@ func (this *Instance) StartTcpServer(listenaddr string) error {
 		return errors.New("[Stream.TCP.StartTcpServer] listen addr:" + listenaddr + " error:" + e.Error())
 	}
 	for {
-		p := this.getPeer(TCP, CLIENT, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, this.selfname)
+		p := this.getPeer(TCP, CLIENT, this.conf.TcpC.MaxBufferedWriteMsgNum, this.conf.TcpC.MaxMsgLen, this.selfname)
 		conn, e := this.tcplistener.AcceptTCP()
 		if e != nil {
 			return errors.New("[Stream.TCP.Accept] accept connect error:" + e.Error())
@@ -37,13 +37,13 @@ func (this *Instance) StartTcpServer(listenaddr string) error {
 			return errors.New("[Stream.TCP.Accept] server closed")
 		}
 		p.conn = unsafe.Pointer(conn)
-		p.setbuffer(this.conf.TcpC.SocketReadBufferLen, this.conf.TcpC.SocketWriteBufferLen)
+		p.setbuffer(int(this.conf.TcpC.SocketRBufLen), int(this.conf.TcpC.SocketWBufLen))
 		if p.reader == nil {
-			p.reader = bufio.NewReaderSize(conn, this.conf.TcpC.SocketReadBufferLen)
+			p.reader = bufio.NewReaderSize(conn, int(this.conf.TcpC.SocketRBufLen))
 		} else {
 			p.reader.Reset(conn)
 		}
-		go this.sworker(p, this.conf.TcpC.MaxMessageLen)
+		go this.sworker(p, this.conf.TcpC.MaxMsgLen)
 	}
 }
 func (this *Instance) StartUnixServer(listenaddr string) error {
@@ -56,7 +56,7 @@ func (this *Instance) StartUnixServer(listenaddr string) error {
 		return errors.New("[Stream.UNIX.StartUnixServer] listening addr:" + listenaddr + " error:" + e.Error())
 	}
 	for {
-		p := this.getPeer(UNIX, CLIENT, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, this.selfname)
+		p := this.getPeer(UNIX, CLIENT, this.conf.UnixC.MaxBufferedWriteMsgNum, this.conf.UnixC.MaxMessageLen, this.selfname)
 		conn, e := this.unixlistener.AcceptUnix()
 		if e != nil {
 			return errors.New("[Stream.UNIX.Accept] accept connect error:" + e.Error())
@@ -68,9 +68,9 @@ func (this *Instance) StartUnixServer(listenaddr string) error {
 			return errors.New("[Stream.UNIX.Accept] server closed")
 		}
 		p.conn = unsafe.Pointer(conn)
-		p.setbuffer(this.conf.UnixC.SocketReadBufferLen, this.conf.UnixC.SocketWriteBufferLen)
+		p.setbuffer(int(this.conf.UnixC.SocketReadBufferLen), int(this.conf.UnixC.SocketWriteBufferLen))
 		if p.reader == nil {
-			p.reader = bufio.NewReaderSize(conn, this.conf.UnixC.SocketReadBufferLen)
+			p.reader = bufio.NewReaderSize(conn, int(this.conf.UnixC.SocketReadBufferLen))
 		} else {
 			p.reader.Reset(conn)
 		}
@@ -78,7 +78,7 @@ func (this *Instance) StartUnixServer(listenaddr string) error {
 	}
 }
 
-func (this *Instance) sworker(p *Peer, maxlen int) {
+func (this *Instance) sworker(p *Peer, maxlen uint) {
 	//read first verify message from client
 	verifydata := this.verifypeer(p, maxlen)
 	if p.clientname == "" {
@@ -146,8 +146,8 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) strin
 		Timeout: this.conf.TcpC.ConnectTimeout,
 		Control: func(network, address string, c syscall.RawConn) error {
 			c.Control(func(fd uintptr) {
-				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, this.conf.TcpC.SocketReadBufferLen)
-				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, this.conf.TcpC.SocketWriteBufferLen)
+				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, int(this.conf.TcpC.SocketRBufLen))
+				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, int(this.conf.TcpC.SocketWBufLen))
 			})
 			return nil
 		},
@@ -157,15 +157,15 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) strin
 		log.Error("[Stream.TCP.StartTcpClient] error:", e)
 		return ""
 	}
-	p := this.getPeer(TCP, SERVER, this.conf.TcpC.AppWriteBufferNum, this.conf.TcpC.MaxMessageLen, this.selfname)
+	p := this.getPeer(TCP, SERVER, this.conf.TcpC.MaxBufferedWriteMsgNum, this.conf.TcpC.MaxMsgLen, this.selfname)
 	p.conn = unsafe.Pointer(conn.(*net.TCPConn))
-	p.setbuffer(this.conf.TcpC.SocketReadBufferLen, this.conf.TcpC.SocketWriteBufferLen)
+	p.setbuffer(int(this.conf.TcpC.SocketRBufLen), int(this.conf.TcpC.SocketWBufLen))
 	if p.reader == nil {
-		p.reader = bufio.NewReaderSize(conn, this.conf.TcpC.SocketReadBufferLen)
+		p.reader = bufio.NewReaderSize(conn, int(this.conf.TcpC.SocketRBufLen))
 	} else {
 		p.reader.Reset(conn)
 	}
-	return this.cworker(p, this.conf.TcpC.MaxMessageLen, verifydata)
+	return this.cworker(p, this.conf.TcpC.MaxMsgLen, verifydata)
 }
 
 // success return peeruniquename
@@ -178,8 +178,8 @@ func (this *Instance) StartUnixClient(serveraddr string, verifydata []byte) stri
 		Timeout: this.conf.UnixC.ConnectTimeout,
 		Control: func(network, address string, c syscall.RawConn) error {
 			c.Control(func(fd uintptr) {
-				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, this.conf.UnixC.SocketReadBufferLen)
-				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, this.conf.UnixC.SocketWriteBufferLen)
+				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, int(this.conf.UnixC.SocketReadBufferLen))
+				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, int(this.conf.UnixC.SocketWriteBufferLen))
 			})
 			return nil
 		},
@@ -189,18 +189,18 @@ func (this *Instance) StartUnixClient(serveraddr string, verifydata []byte) stri
 		log.Error("[Stream.UNIX.StartUnixClient] error:", e)
 		return ""
 	}
-	p := this.getPeer(UNIX, SERVER, this.conf.UnixC.AppWriteBufferNum, this.conf.UnixC.MaxMessageLen, this.selfname)
+	p := this.getPeer(UNIX, SERVER, this.conf.UnixC.MaxBufferedWriteMsgNum, this.conf.UnixC.MaxMessageLen, this.selfname)
 	p.conn = unsafe.Pointer(conn.(*net.UnixConn))
-	p.setbuffer(this.conf.UnixC.SocketReadBufferLen, this.conf.UnixC.SocketWriteBufferLen)
+	p.setbuffer(int(this.conf.UnixC.SocketReadBufferLen), int(this.conf.UnixC.SocketWriteBufferLen))
 	if p.reader == nil {
-		p.reader = bufio.NewReaderSize(conn, this.conf.UnixC.SocketReadBufferLen)
+		p.reader = bufio.NewReaderSize(conn, int(this.conf.UnixC.SocketReadBufferLen))
 	} else {
 		p.reader.Reset(conn)
 	}
 	return this.cworker(p, this.conf.UnixC.MaxMessageLen, verifydata)
 }
 
-func (this *Instance) cworker(p *Peer, maxlen int, verifydata []byte) string {
+func (this *Instance) cworker(p *Peer, maxlen uint, verifydata []byte) string {
 	//send self's verify message to server
 	verifymsg := makeVerifyMsg(p.clientname, verifydata, 0, true)
 	send := 0
@@ -259,7 +259,7 @@ func (this *Instance) cworker(p *Peer, maxlen int, verifydata []byte) string {
 	go this.write(p)
 	return uniquename
 }
-func (this *Instance) verifypeer(p *Peer, maxlen int) []byte {
+func (this *Instance) verifypeer(p *Peer, maxlen uint) []byte {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	switch p.protocoltype {
@@ -283,11 +283,10 @@ func (this *Instance) verifypeer(p *Peer, maxlen int) []byte {
 			e = errors.New("empty message")
 		} else {
 			var msgtype int
-			if msgtype, e = getMsgType(data.Bytes()); e == nil && msgtype != VERIFY {
-				e = errors.New("first msg is not verify msg")
-			}
-			if e == nil {
-				if sender, peerverifydata, starttime, e = getVerifyMsg(data.Bytes()); e == nil && (sender == "" || sender == p.getselfname()) {
+			if msgtype, e = getMsgType(data.Bytes()); e == nil {
+				if msgtype != VERIFY {
+					e = errors.New("first msg is not verify msg")
+				} else if sender, peerverifydata, starttime, e = getVerifyMsg(data.Bytes()); e == nil && (sender == "" || sender == p.getselfname()) {
 					e = errors.New("sender name illegal")
 				}
 			}
@@ -351,7 +350,7 @@ func (this *Instance) verifypeer(p *Peer, maxlen int) []byte {
 	}
 	return response
 }
-func (this *Instance) read(p *Peer, maxlen int) {
+func (this *Instance) read(p *Peer, maxlen uint) {
 	defer func() {
 		//every connection will have two goruntine to work for it
 		if old := atomic.SwapUint32(&p.status, 0); old > 0 {

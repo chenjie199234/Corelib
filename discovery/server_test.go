@@ -14,10 +14,10 @@ func Test_Server1(t *testing.T) {
 		HeartprobeInterval: 2 * time.Second,
 		GroupNum:           1,
 		TcpC: &stream.TcpConfig{
-			ConnectTimeout:       500 * time.Millisecond,
-			SocketReadBufferLen:  1024,
-			SocketWriteBufferLen: 1024,
-			AppWriteBufferNum:    256,
+			ConnectTimeout:         500 * time.Millisecond,
+			SocketRBufLen:          1024,
+			SocketWBufLen:          1024,
+			MaxBufferedWriteMsgNum: 256,
 		},
 	}, "default", "discoverycenter1", []byte{'t', 'e', 's', 't'})
 	if e != nil {
@@ -47,10 +47,10 @@ func Test_Server2(t *testing.T) {
 		HeartprobeInterval: 2 * time.Second,
 		GroupNum:           1,
 		TcpC: &stream.TcpConfig{
-			ConnectTimeout:       500 * time.Millisecond,
-			SocketReadBufferLen:  1024,
-			SocketWriteBufferLen: 1024,
-			AppWriteBufferNum:    256,
+			ConnectTimeout:         500 * time.Millisecond,
+			SocketRBufLen:          1024,
+			SocketWBufLen:          1024,
+			MaxBufferedWriteMsgNum: 256,
 		},
 	}, "default", "discoverycenter2", []byte{'t', 'e', 's', 't'})
 	go func() {

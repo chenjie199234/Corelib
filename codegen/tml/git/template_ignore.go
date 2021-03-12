@@ -32,13 +32,10 @@ const text = `*
 !/service/*
 !/service/**/
 !/service/**/*
-!/source/
-!/source/*
-!/source/**/
-!/source/**/*
 !AppConfig.json
 !cmd.sh
 !cmd.bat
+!probe.sh
 !deployment.yaml
 !Dockerfile
 !go.mod

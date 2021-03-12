@@ -11,7 +11,7 @@ const text = `module {{.}}
 go 1.15
 
 require (
-	github.com/chenjie199234/Corelib v0.0.7
+	github.com/chenjie199234/Corelib v0.0.8
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/golang/protobuf v1.4.3
 	github.com/segmentio/kafka-go v0.4.8

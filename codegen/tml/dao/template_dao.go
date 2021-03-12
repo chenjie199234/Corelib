@@ -9,15 +9,29 @@ import (
 const text = `package dao
 
 import (
-//"path/to/dependence/grpc/service/example"
+//"time"
+
+//"{{.}}/api"
+//example "{{.}}/api/deps/example"
+//"{{.}}/config"
 )
 
-//var ExampleApi *example.Client
+//var ExampleRpcApi example.ExampleRpcClient
+//var ExampleWebApi example.ExampleWebClient
 
 //NewApi create all dependent service's api we need in this program
 //example grpc client,http client
-func NewApi() {
-	//ExampleApi = example.NewClient()
+func NewApi() error {
+	//var e error
+	//rc := config.GetRpcConfig()
+	//if ExampleRpcApi, e = example.NewExampleRpcClient(rc.RpcTimeout, rc.RpcConnTimeout, rc.RpcHeartTimeout, rc.RpcHeartProbe, api.Group, api.Name, []byte(rc.RpcVerifyData), nil, nil); e != nil {
+	//        return e
+	//}
+	//wc := config.GetWebConfig()
+	//if ExampleWebApi, e = example.NewExampleWebClient(time.Duration(wc.WebTimeout), api.Group, api.Name, nil, nil); e != nil {
+	//        return e
+	//}
+	return nil
 }`
 
 const path = "./dao/"
