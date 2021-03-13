@@ -25,6 +25,7 @@ const (
 	contextPackage = protogen.GoImportPath("context")
 	rpcPackage     = protogen.GoImportPath("github.com/chenjie199234/Corelib/rpc")
 	commonPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
+	errorPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/error")
 	bufpoolPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/bufpool")
 )
 
@@ -114,7 +115,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	g.P("}")
 	g.P("cc,e:=", g.QualifiedGoIdent(rpcPackage.Ident("NewRpcClient")), "(c,selfgroup,selfname,verifydata,Group,Name,picker,discover)")
 	g.P("if e != nil {")
-	g.P("return nil,e")
+	g.P("return nil, e")
 	g.P("}")
 	g.P("return &", lowclientName, "{cc:cc},nil")
 	g.P("}")
@@ -141,8 +142,8 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 		}
 		g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
 		g.P("callback,e:=c.cc.Call(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, ",reqd)")
-		g.P("if e != nil {")
-		g.P("return nil, e")
+		g.P("if e.(*", g.QualifiedGoIdent(errorPackage.Ident("Error")), ") != nil {")
+		g.P("return nil,e")
 		g.P("}")
 		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(callback,resp);e!=nil{")
@@ -346,7 +347,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if vv:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatInt")), "(int64(v),10);")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -430,7 +431,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if vv:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatInt")), "(int64(", prefix, field.GoName, "),10);")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -536,7 +537,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if vv:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatUint")), "(uint64(v),10);")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -619,7 +620,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if vv:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatUint")), "(uint64(", prefix, field.GoName, "),10);")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -727,7 +728,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if vv:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatInt")), "(v,10);")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -811,7 +812,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if vv:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatInt")), "(", prefix, field.GoName, ",10);")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -917,7 +918,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if vv:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatUint")), "(v,10);")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1001,7 +1002,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if vv:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatUint")), "(", prefix, field.GoName, ",10);")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1105,7 +1106,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if vv:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(float64(v),'f',-1,32);")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1189,7 +1190,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if vv:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(", prefix, field.GoName, ",'f',-1,32);")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1293,7 +1294,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if vv:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(v,'f',-1,64);")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1377,7 +1378,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if vv:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(", prefix, field.GoName, ",'f',-1,64);")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1429,7 +1430,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("v!=", strconv.Quote(v), "||")
+							g.P("v!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("v!=", strconv.Quote(v), "{")
 						}
@@ -1480,7 +1481,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P(prefix, field.GoName, "!=", strconv.Quote(v), "||")
+							g.P(prefix, field.GoName, "!=", strconv.Quote(v), "&&")
 						} else {
 							g.P(prefix, field.GoName, "!=", strconv.Quote(v), "{")
 						}
@@ -1532,7 +1533,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("string(v)!=", strconv.Quote(v), "||")
+							g.P("string(v)!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("string(v)!=", strconv.Quote(v), "{")
 						}
@@ -1583,7 +1584,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if ")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("string(", prefix, field.GoName, ")!=", strconv.Quote(v), "||")
+							g.P("string(", prefix, field.GoName, ")!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("string(", prefix, field.GoName, ")!=", strconv.Quote(v), "{")
 						}
@@ -1698,7 +1699,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if vv:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatInt")), "(int64(v),10);")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}
@@ -1791,7 +1792,7 @@ func checker(prefix string, message *protogen.Message, g *protogen.GeneratedFile
 					g.P("if vv:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatInt")), "(int64(", prefix, field.GoName, "),10);")
 					for i, v := range r.in {
 						if i != len(r.in)-1 {
-							g.P("vv!=", strconv.Quote(v), "||")
+							g.P("vv!=", strconv.Quote(v), "&&")
 						} else {
 							g.P("vv!=", strconv.Quote(v), "{")
 						}

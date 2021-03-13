@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
@@ -15,6 +16,9 @@ func defaultfinder(manually chan struct{}) {
 	port := os.Getenv("DISCOVERY_SERVER_PORT")
 	host := name + "-service." + group
 	servername := group + "." + name
+
+	current := make([]string, 0)
+
 	finder := func() {
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second))
 		defer cancel()
@@ -23,11 +27,30 @@ func defaultfinder(manually chan struct{}) {
 			log.Error("[Discovery.client.defaultfinder] dns resolve host:", host, "error:", e)
 			return
 		}
-		for i, addr := range addrs {
-			addrs[i] = servername + ":" + addr + ":" + port
+		if len(addrs) == 0 {
+			log.Error("[Discovery.client.defaultfinder] dns resolve host:", host, "empty result")
+		} else {
+			sort.Strings(addrs)
+			for i, addr := range addrs {
+				addrs[i] = servername + ":" + addr + ":" + port
+			}
 		}
-		log.Info("[Discovery.client.defaultfinder] dns resolve host:", host, "success:", addrs)
-		UpdateDiscoveryServers(addrs)
+		different := false
+		if len(current) != len(addrs) {
+			different = true
+		} else {
+			for i, addr := range addrs {
+				if addr != current[i] {
+					different = true
+					break
+				}
+			}
+		}
+		if different {
+			current = addrs
+			log.Info("[Discovery.client.defaultfinder] dns resolve host:", host, "result:", current)
+			UpdateDiscoveryServers(addrs)
+		}
 	}
 	finder()
 	tker := time.NewTicker(time.Second * 5)

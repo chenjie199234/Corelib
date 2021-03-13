@@ -89,6 +89,16 @@ func StdErrorToError(e error) *Error {
 	return result
 }
 func (this *Error) Error() string {
+	if this == nil {
+		return ""
+	}
+	d, _ := json.Marshal(this)
+	return common.Byte2str(d)
+}
+func (this *Error) String() string {
+	if this == nil {
+		return ""
+	}
 	d, _ := json.Marshal(this)
 	return common.Byte2str(d)
 }

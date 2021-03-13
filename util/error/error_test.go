@@ -48,6 +48,11 @@ func Test_MError(t *testing.T) {
 	if temp := ErrorstrToError(eee.Error()); temp.Code != -1 || temp.Msg != "test" {
 		panic("translate error")
 	}
+	var nilerror *Error = nil
+	notnilerror := toerror(nilerror)
+	if notnilerror.Error() != "" {
+		panic("nil error's string should be empty")
+	}
 }
 func toerror(e *Error) error {
 	return e
