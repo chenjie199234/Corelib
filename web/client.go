@@ -170,7 +170,7 @@ func (this *WebClient) UpdateDiscovery(all map[string][]string, addition []byte)
 		//unregister on which discovery server
 		if exist.discoveryservers != nil {
 			pos = 0
-			endpos = len(exist.discoveryservers)
+			endpos = len(exist.discoveryservers) - 1
 			for pos <= endpos {
 				existdserver := exist.discoveryservers[pos]
 				find := false
