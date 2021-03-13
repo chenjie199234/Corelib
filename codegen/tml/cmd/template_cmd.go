@@ -26,7 +26,7 @@ help() {
 	echo "   pb                        Generate the proto in this program"
 	echo "   new <sub service name>    Create a new sub service"
 	echo "   kubernetes                Update or add kubernetes config"
-	echo "   h/-h/help/-help/--help    Show this message."
+	echo "   h/-h/help/-help/--help    Show this message"
 }
 
 pb() {
@@ -43,7 +43,12 @@ run() {
 
 build() {
 	go mod tidy
-	go build -o main
+	go build -ldflags "-s -w" -o main
+	if (type upx >/dev/null 2>&1);then
+		upx -9  main
+	else
+		echo "recommand to use upx to compress exec file"
+	fi
 }
 
 new() {
@@ -253,7 +258,13 @@ goto :end
 
 :build
 	go mod tidy
-	go build -o main.exe
+	go build -ldflags "-s -w" -o main.exe
+	where /q upx.exe
+	if %errorlevel% == 1 (
+		echo "recommand to use upx.exe to compress exec file"
+		goto :end
+	)
+	uxp.exe -9 main.exe
 goto :end
 
 :kubernetes

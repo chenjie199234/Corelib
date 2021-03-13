@@ -102,10 +102,16 @@ spec:
   metrics:
   - type: Resource
     resource:
+      name: memory
+      target:
+        type: AverageValue
+        averageValue: 3500Mi
+  - type: Resource
+    resource:
       name: cpu
       target:
-        type: Utilization
-        averageUtilization: 80{{ if .NeedService }}
+        type: AverageValue
+        averageValue: 3400m{{ if .NeedService }}
 ---
 apiVersion: v1
 kind: Service

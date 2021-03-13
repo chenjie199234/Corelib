@@ -7,6 +7,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"runtime"
 	"strconv"
 	"strings"
@@ -150,6 +151,19 @@ func NewWebServer(c *Config, selfgroup, selfname string) (*WebServer, error) {
 	})
 	if c.StaticFileRootPath != "" {
 		instance.router.ServeFiles("/src/*filepath", http.Dir(c.StaticFileRootPath))
+	}
+	if c.Pprof {
+		instance.router.HandlerFunc(http.MethodGet, "/debug/pprof/", pprof.Index)
+		instance.router.HandlerFunc(http.MethodGet, "/debug/pprof/allocs", pprof.Handler("allocs").ServeHTTP)
+		instance.router.HandlerFunc(http.MethodGet, "/debug/pprof/block", pprof.Handler("block").ServeHTTP)
+		instance.router.HandlerFunc(http.MethodGet, "/debug/pprof/cmdline", pprof.Cmdline)
+		instance.router.HandlerFunc(http.MethodGet, "/debug/pprof/goroutine", pprof.Handler("goroutine").ServeHTTP)
+		instance.router.HandlerFunc(http.MethodGet, "/debug/pprof/heap", pprof.Handler("heap").ServeHTTP)
+		instance.router.HandlerFunc(http.MethodGet, "/debug/pprof/mutex", pprof.Handler("mutex").ServeHTTP)
+		instance.router.HandlerFunc(http.MethodGet, "/debug/pprof/profile", pprof.Profile)
+		instance.router.HandlerFunc(http.MethodGet, "/debug/pprof/symbol", pprof.Symbol)
+		instance.router.HandlerFunc(http.MethodGet, "/debug/pprof/threadcreate", pprof.Handler("threadcreate").ServeHTTP)
+		instance.router.HandlerFunc(http.MethodGet, "/debug/pprof/trace", pprof.Trace)
 	}
 	return instance, nil
 }

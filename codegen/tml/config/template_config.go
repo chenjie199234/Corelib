@@ -141,13 +141,14 @@ type RpcConfig struct {
 //WebConfig -
 type WebConfig struct {
 	//server
+	UsePprof      bool           $json:"use_pprof"$
 	WebPort       uint           $json:"web_port"$
 	WebTimeout    ctime.Duration $json:"web_timeout"$ //default 500ms
 	WebStaticFile string         $json:"web_staticfile"$
 	WebCertFile   string         $json:"web_certfile"$
 	WebKeyFile    string         $json:"web_keyfile"$
 	//cors
-	WebCors *WebCorsConfig $json:"web_cors"$
+	WebCors  *WebCorsConfig $json:"web_cors"$
 }
 
 //WebCorsConfig -
