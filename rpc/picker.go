@@ -28,8 +28,7 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 		first = false
 		if servers[i].Pickable() {
 			if servers[i].Pickinfo.DServers != 0 &&
-				servers[i].Pickinfo.DServerOffline < before.UnixNano() &&
-				servers[i].Pickinfo.Lastfail < before.UnixNano() {
+				servers[i].Pickinfo.DServerOffline < before.UnixNano() {
 				if normal1 == nil {
 					normal1 = servers[i]
 				} else {
@@ -86,8 +85,16 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 	}
 	//more discoveryservers more safety,so 1 * 2's discoveryserver num
 	load1 := float64(normal1.Pickinfo.Activecalls) * math.Log(float64(normal2.Pickinfo.DServers+2))
+	if normal1.Pickinfo.Lastfail >= before.UnixNano() {
+		//punish
+		load1 *= 1.1
+	}
 	//more discoveryservers more safety,so 2 * 1's discoveryserver num
 	load2 := float64(normal2.Pickinfo.Activecalls) * math.Log(float64(normal1.Pickinfo.DServers+2))
+	if normal2.Pickinfo.Lastfail >= before.UnixNano() {
+		//punish
+		load2 *= 1.1
+	}
 	if load1 > load2 {
 		return normal2
 	} else if load1 < load2 {
