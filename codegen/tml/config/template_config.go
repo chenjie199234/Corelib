@@ -141,7 +141,6 @@ type RpcConfig struct {
 //WebConfig -
 type WebConfig struct {
 	//server
-	UsePprof      bool           $json:"use_pprof"$
 	WebPort       uint           $json:"web_port"$
 	WebTimeout    ctime.Duration $json:"web_timeout"$ //default 500ms
 	WebStaticFile string         $json:"web_staticfile"$

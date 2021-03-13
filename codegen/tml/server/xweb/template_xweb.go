@@ -27,7 +27,6 @@ var s *web.WebServer
 func StartWebServer() {
 	c := config.GetWebConfig()
 	webc := &web.Config{
-		Pprof:              c.UsePprof,
 		Timeout:            time.Duration(c.WebTimeout),
 		StaticFileRootPath: c.WebStaticFile,
 		MaxHeader:          1024,

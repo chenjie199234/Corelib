@@ -5,7 +5,6 @@ import (
 )
 
 type Config struct {
-	Pprof              bool
 	Timeout            time.Duration
 	StaticFileRootPath string
 	MaxHeader          int
