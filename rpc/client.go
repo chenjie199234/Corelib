@@ -41,7 +41,7 @@ type RpcClient struct {
 
 type ServerForPick struct {
 	addr             string
-	discoveryservers map[string]struct{} //this app registered on which discovery server
+	discoveryservers []string //this app registered on which discovery server
 	lker             *sync.Mutex
 	peer             *stream.Peer
 	starttime        uint64
@@ -73,7 +73,7 @@ func init() {
 	all = make(map[string]*RpcClient)
 }
 
-func NewRpcClient(c *Config, selfgroup, selfname string, verifydata []byte, group, name string, pick PickHandler, discover DiscoveryHandler) (*RpcClient, error) {
+func NewRpcClient(c *Config, selfgroup, selfname string, verifydata []byte, group, name string, picker PickHandler, discover DiscoveryHandler) (*RpcClient, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -99,11 +99,11 @@ func NewRpcClient(c *Config, selfgroup, selfname string, verifydata []byte, grou
 	if client, ok := all[appname]; ok {
 		return client, nil
 	}
-	if pick == nil {
-		pick = defaultPicker
+	if picker == nil {
+		picker = defaultPicker
 	}
 	if discover == nil {
-		discover = defaultdiscovery
+		discover = defaultDiscover
 	}
 	client := &RpcClient{
 		c:          c,
@@ -113,7 +113,7 @@ func NewRpcClient(c *Config, selfgroup, selfname string, verifydata []byte, grou
 		servers:    make([]*ServerForPick, 0, 10),
 		callid:     0,
 		reqpool:    &sync.Pool{},
-		picker:     pick,
+		picker:     picker,
 		discover:   discover,
 	}
 	dupc := &stream.InstanceConfig{
@@ -139,15 +139,17 @@ func NewRpcClient(c *Config, selfgroup, selfname string, verifydata []byte, grou
 	return client, nil
 }
 
-//first key:addr
-//second key:discovery server
-//value:addition data
-func (c *RpcClient) UpdateDiscovery(allapps map[string]map[string]struct{}, addition []byte) {
+//all:
+//key:addr
+//value:discovery servers
+//addition
+//addition info
+func (c *RpcClient) UpdateDiscovery(all map[string][]string, addition []byte) {
 	//offline app
 	c.lker.Lock()
 	defer c.lker.Unlock()
 	for _, server := range c.servers {
-		if _, ok := allapps[server.addr]; !ok {
+		if _, ok := all[server.addr]; !ok {
 			//this app unregistered
 			server.discoveryservers = nil
 			server.Pickinfo.DServers = 0
@@ -155,9 +157,8 @@ func (c *RpcClient) UpdateDiscovery(allapps map[string]map[string]struct{}, addi
 		}
 	}
 	//online app or update app's discoveryservers
-	for addr, discoveryservers := range allapps {
+	for addr, discoveryservers := range all {
 		var exist *ServerForPick
-		//appuniquename := fmt.Sprintf("%s:%s", c.appname, addr)
 		for _, existserver := range c.servers {
 			if existserver.addr == addr {
 				exist = existserver
@@ -187,16 +188,46 @@ func (c *RpcClient) UpdateDiscovery(allapps map[string]map[string]struct{}, addi
 		}
 		//this is not a new register
 		//unregister on which discovery server
-		for dserver := range exist.discoveryservers {
-			if _, ok := discoveryservers[dserver]; !ok {
-				delete(exist.discoveryservers, dserver)
+		if exist.discoveryservers != nil {
+			pos := 0
+			endpos := len(exist.discoveryservers) - 1
+			for pos <= endpos {
+				existdserver := exist.discoveryservers[pos]
+				find := false
+				for _, newdserver := range discoveryservers {
+					if newdserver == existdserver {
+						find = true
+						break
+					}
+				}
+				if find {
+					pos++
+				} else {
+					if pos != endpos {
+						exist.discoveryservers[pos], exist.discoveryservers[endpos] = exist.discoveryservers[endpos], exist.discoveryservers[pos]
+					}
+					endpos--
+				}
+			}
+			if pos != len(exist.discoveryservers) {
 				exist.Pickinfo.DServerOffline = time.Now().UnixNano()
+				exist.discoveryservers = exist.discoveryservers[:pos]
 			}
 		}
+		if exist.discoveryservers == nil {
+			exist.discoveryservers = make([]string, 0, 5)
+		}
 		//register on which new discovery server
-		for dserver := range discoveryservers {
-			if _, ok := exist.discoveryservers[dserver]; !ok {
-				exist.discoveryservers[dserver] = struct{}{}
+		for _, newdserver := range discoveryservers {
+			find := false
+			for _, existdserver := range exist.discoveryservers {
+				if existdserver == newdserver {
+					find = true
+					break
+				}
+			}
+			if !find {
+				exist.discoveryservers = append(exist.discoveryservers, newdserver)
 				exist.Pickinfo.DServerOffline = 0
 			}
 		}
@@ -330,7 +361,7 @@ func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, 
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
-		log.Error("[rpc.client.userfunc] server data format error:", e)
+		log.Error("[rpc.client.userfunc] server:", appuniquename, "data format error:", e)
 		return
 	}
 	server.lker.Lock()

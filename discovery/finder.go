@@ -27,9 +27,7 @@ func defaultfinder(manually chan struct{}) {
 			log.Error("[Discovery.client.defaultfinder] dns resolve host:", host, "error:", e)
 			return
 		}
-		if len(addrs) == 0 {
-			log.Error("[Discovery.client.defaultfinder] dns resolve host:", host, "empty result")
-		} else {
+		if len(addrs) != 0 {
 			sort.Strings(addrs)
 			for i, addr := range addrs {
 				addrs[i] = servername + ":" + addr + ":" + port

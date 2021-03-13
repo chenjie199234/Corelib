@@ -353,7 +353,7 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 			var e error
 			clientdl, e = strconv.ParseInt(temp, 10, 64)
 			if e != nil {
-				log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Deadline", temp, "format error")
+				log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Deadline:", temp, "format error")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
 				return
@@ -383,7 +383,7 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 		if mdstr := r.Header.Get("Metadata"); mdstr != "" {
 			md := make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(mdstr), &md); e != nil {
-				log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Metadata", mdstr, "format error")
+				log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Metadata:", mdstr, "format error")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
 				return

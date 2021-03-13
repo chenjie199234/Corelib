@@ -35,7 +35,7 @@ type WebClient struct {
 type ServerForPick struct {
 	host             string
 	client           *http.Client
-	discoveryservers map[string]struct{} //this server registered on how many discoveryservers
+	discoveryservers []string //this server registered on how many discoveryservers
 	closing          bool
 	Pickinfo         *pickinfo
 }
@@ -108,35 +108,39 @@ func NewWebClient(globaltimeout time.Duration, selfgroup, selfname, group, name 
 	return instance, nil
 }
 
-//firstkey:host
-//secontkey:discovery server name
-//value:addition data
-func (this *WebClient) UpdateDiscovery(all map[string]map[string]struct{}, addition []byte) {
+//all:
+//key:addr
+//value:discovery servers
+//addition
+//addition info
+func (this *WebClient) UpdateDiscovery(all map[string][]string, addition []byte) {
 	this.lker.Lock()
 	defer this.lker.Unlock()
 	//check unregister
 	pos := 0
 	endpos := len(this.hosts) - 1
-	for pos < len(this.hosts) {
-		if discoveryservers, ok := all[this.hosts[pos].host]; !ok || len(discoveryservers) == 0 {
-			this.hosts[pos], this.hosts[endpos] = this.hosts[endpos], this.hosts[pos]
-			endpos--
-			if endpos < pos {
-				break
-			}
-		} else {
-			pos++
-			if pos > endpos {
-				break
+	if this.hosts != nil {
+		for pos <= len(this.hosts) {
+			existhost := this.hosts[pos]
+			if discoveryservers, ok := all[existhost.host]; !ok || len(discoveryservers) == 0 {
+				if pos != endpos {
+					this.hosts[pos], this.hosts[endpos] = this.hosts[endpos], this.hosts[pos]
+				}
+				endpos--
+			} else {
+				pos++
 			}
 		}
+		if pos != len(this.hosts) {
+			this.hosts = this.hosts[:pos]
+		}
 	}
-	if endpos >= 0 {
-		this.hosts = this.hosts[:endpos+1]
+	if this.hosts == nil {
+		this.hosts = make([]*ServerForPick, 0, 5)
 	}
 	//check register
-	for host, discoverservers := range all {
-		if len(discoverservers) == 0 {
+	for host, discoveryservers := range all {
+		if len(discoveryservers) == 0 {
 			continue
 		}
 		var exist *ServerForPick
@@ -151,11 +155,11 @@ func (this *WebClient) UpdateDiscovery(all map[string]map[string]struct{}, addit
 			this.hosts = append(this.hosts, &ServerForPick{
 				host:             host,
 				client:           &http.Client{},
-				discoveryservers: discoverservers,
+				discoveryservers: discoveryservers,
 				Pickinfo: &pickinfo{
 					Lastfail:       0,
 					Activecalls:    0,
-					DServers:       int32(len(discoverservers)),
+					DServers:       int32(len(discoveryservers)),
 					DServerOffline: 0,
 					Addition:       addition,
 				},
@@ -164,16 +168,46 @@ func (this *WebClient) UpdateDiscovery(all map[string]map[string]struct{}, addit
 		}
 		//this is not a new register
 		//unregister on which discovery server
-		for dserver := range exist.discoveryservers {
-			if _, ok := discoverservers[dserver]; !ok {
-				delete(exist.discoveryservers, dserver)
+		if exist.discoveryservers != nil {
+			pos = 0
+			endpos = len(exist.discoveryservers)
+			for pos <= endpos {
+				existdserver := exist.discoveryservers[pos]
+				find := false
+				for _, newdserver := range discoveryservers {
+					if newdserver == existdserver {
+						find = true
+						break
+					}
+				}
+				if find {
+					pos++
+				} else {
+					if pos != endpos {
+						exist.discoveryservers[pos], exist.discoveryservers[endpos] = exist.discoveryservers[endpos], exist.discoveryservers[pos]
+					}
+					endpos--
+				}
+			}
+			if pos != len(exist.discoveryservers) {
 				exist.Pickinfo.DServerOffline = time.Now().UnixNano()
+				exist.discoveryservers = exist.discoveryservers[:pos]
 			}
 		}
+		if exist.discoveryservers == nil {
+			exist.discoveryservers = make([]string, 0, 5)
+		}
 		//register on which new discovery server
-		for dserver := range discoverservers {
-			if _, ok := exist.discoveryservers[dserver]; !ok {
-				exist.discoveryservers[dserver] = struct{}{}
+		for _, newdserver := range discoveryservers {
+			find := false
+			for _, existdserver := range exist.discoveryservers {
+				if existdserver == newdserver {
+					find = true
+					break
+				}
+			}
+			if !find {
+				exist.discoveryservers = append(exist.discoveryservers, newdserver)
 				exist.Pickinfo.DServerOffline = 0
 			}
 		}

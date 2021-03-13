@@ -201,16 +201,16 @@ func (this *Instance) heart(node *peernode) {
 				case TCP:
 					switch p.peertype {
 					case CLIENT:
-						log.Error("[Stream.TCP.heart] heart timeout client:", p.getpeername(), "addr:", p.getpeeraddr())
+						log.Error("[Stream.TCP.heart] heart timeout client:", p.getpeeruniquename())
 					case SERVER:
-						log.Error("[Stream.TCP.heart] heart timeout server:", p.getpeername(), "addr:", p.getpeeraddr())
+						log.Error("[Stream.TCP.heart] heart timeout server:", p.getpeeruniquename())
 					}
 				case UNIX:
 					switch p.peertype {
 					case CLIENT:
-						log.Error("[Stream.UNIX.heart] heart timeout client:", p.getpeername(), "addr:", p.getpeeraddr())
+						log.Error("[Stream.UNIX.heart] heart timeout client:", p.getpeeruniquename())
 					case SERVER:
-						log.Error("[Stream.UNIX.heart] heart timeout server:", p.getpeername(), "addr:", p.getpeeraddr())
+						log.Error("[Stream.UNIX.heart] heart timeout server:", p.getpeeruniquename())
 					}
 				}
 				p.closeconn()
@@ -222,16 +222,16 @@ func (this *Instance) heart(node *peernode) {
 				case TCP:
 					switch p.peertype {
 					case CLIENT:
-						log.Error("[Stream.TCP.heart] send idle timeout client:", p.getpeername(), "addr:", p.getpeeraddr())
+						log.Error("[Stream.TCP.heart] send idle timeout client:", p.getpeeruniquename())
 					case SERVER:
-						log.Error("[Stream.TCP.heart] send idle timeout server:", p.getpeername(), "addr:", p.getpeeraddr())
+						log.Error("[Stream.TCP.heart] send idle timeout server:", p.getpeeruniquename())
 					}
 				case SERVER:
 					switch p.peertype {
 					case CLIENT:
-						log.Error("[Stream.UNIX.heart] send idle timeout client:", p.getpeername(), "addr:", p.getpeeraddr())
+						log.Error("[Stream.UNIX.heart] send idle timeout client:", p.getpeeruniquename())
 					case SERVER:
-						log.Error("[Stream.UNIX.heart] send idle timeout server:", p.getpeername(), "addr:", p.getpeeraddr())
+						log.Error("[Stream.UNIX.heart] send idle timeout server:", p.getpeeruniquename())
 					}
 				}
 				p.closeconn()
@@ -243,16 +243,16 @@ func (this *Instance) heart(node *peernode) {
 				case TCP:
 					switch p.peertype {
 					case CLIENT:
-						log.Error("[Stream.TCP.heart] recv idle timeout client:", p.getpeername(), "addr:", p.getpeeraddr())
+						log.Error("[Stream.TCP.heart] recv idle timeout client:", p.getpeeruniquename())
 					case SERVER:
-						log.Error("[Stream.TCP.heart] recv idle timeout server:", p.getpeername(), "addr:", p.getpeeraddr())
+						log.Error("[Stream.TCP.heart] recv idle timeout server:", p.getpeeruniquename())
 					}
 				case UNIX:
 					switch p.peertype {
 					case CLIENT:
-						log.Error("[Stream.UNIX.heart] recv idle timeout client:", p.getpeername(), "addr:", p.getpeeraddr())
+						log.Error("[Stream.UNIX.heart] recv idle timeout client:", p.getpeeruniquename())
 					case SERVER:
-						log.Error("[Stream.UNIX.heart] recv idle timeout server:", p.getpeername(), "addr:", p.getpeeraddr())
+						log.Error("[Stream.UNIX.heart] recv idle timeout server:", p.getpeeruniquename())
 					}
 				}
 				p.closeconn()
@@ -267,16 +267,16 @@ func (this *Instance) heart(node *peernode) {
 				case TCP:
 					switch p.peertype {
 					case CLIENT:
-						log.Error("[Stream.TCP.heart] send heart msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error: heart buffer is full")
+						log.Error("[Stream.TCP.heart] send heart msg to client:", p.getpeeruniquename(), "error: heart buffer is full")
 					case SERVER:
-						log.Error("[Stream.TCP.heart] send heart msg to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error: heart buffer is full")
+						log.Error("[Stream.TCP.heart] send heart msg to server:", p.getpeeruniquename(), "error: heart buffer is full")
 					}
 				case UNIX:
 					switch p.peertype {
 					case CLIENT:
-						log.Error("[Stream.UNIX.heart] send heart msg to client:", p.getpeername(), "addr:", p.getpeeraddr(), "error: heart buffer is full")
+						log.Error("[Stream.UNIX.heart] send heart msg to client:", p.getpeeruniquename(), "error: heart buffer is full")
 					case SERVER:
-						log.Error("[Stream.UNIX.heart] send heart msg to server:", p.getpeername(), "addr:", p.getpeeraddr(), "error: heart buffer is full")
+						log.Error("[Stream.UNIX.heart] send heart msg to server:", p.getpeeruniquename(), "error: heart buffer is full")
 					}
 				}
 				bufpool.PutBuffer(data)

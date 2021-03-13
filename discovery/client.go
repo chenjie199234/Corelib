@@ -324,25 +324,29 @@ func NoticeRpcChanges(appname string) (chan struct{}, error) {
 	return ch, nil
 }
 
-//first key:app addr
-//second key:discovery addr
-//value:addition data
-func GetRpcInfos(appname string) (map[string]map[string]struct{}, []byte) {
+//first return value
+//key:app addr
+//value:discovery server addrs
+//second return value
+//addition info
+func GetRpcInfos(appname string) (map[string][]string, []byte) {
 	return getinfos(appname, 1)
 }
 
-//first key:app addr
-//second key:discovery addr
-//value:addition data
-func GetWebInfos(appname string) (map[string]map[string]struct{}, []byte) {
+//first return value
+//key:app addr
+//value:discovery server addrs
+//second return value
+//addition info
+func GetWebInfos(appname string) (map[string][]string, []byte) {
 	return getinfos(appname, 2)
 }
 
 //first key:app addr
 //second key:discovery addr
 //value:addition data
-func getinfos(appname string, t int) (map[string]map[string]struct{}, []byte) {
-	result := make(map[string]map[string]struct{}, 5)
+func getinfos(appname string, t int) (map[string][]string, []byte) {
+	result := make(map[string][]string, 5)
 	var resultaddition []byte
 	clientinstance.lker.RLock()
 	defer clientinstance.lker.RUnlock()
@@ -364,9 +368,9 @@ func getinfos(appname string, t int) (map[string]map[string]struct{}, []byte) {
 					addr = app.regmsg.WebScheme + "://" + app.regmsg.WebIp + ":" + strconv.Itoa(app.regmsg.WebPort)
 				}
 				if _, ok := result[addr]; !ok {
-					result[addr] = make(map[string]struct{}, 5)
+					result[addr] = make([]string, 0, 5)
 				}
-				result[addr][serveruniquename] = struct{}{}
+				result[addr] = append(result[addr], serveruniquename)
 				resultaddition = app.regmsg.Addition
 			}
 		}
