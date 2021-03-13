@@ -274,6 +274,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	if ok {
 		realheader.Set("Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
+	realheader.Del("Origin")
 	for {
 		if ok && dl.UnixNano() < time.Now().UnixNano()+int64(5*time.Millisecond) {
 			//ttl + server logic time
