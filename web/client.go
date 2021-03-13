@@ -233,17 +233,27 @@ func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, pat
 	return this.call(http.MethodPatch, ctx, functimeout, pathwithquery, header, body)
 }
 func (this *WebClient) call(method string, ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body []byte) (*http.Response, error) {
-	if header == nil {
-		header = make(http.Header)
+	var realheader http.Header
+	if realctx, ok := ctx.(*Context); ok {
+		realheader = realctx.r.Header
 	}
-	header.Set("TargetServer", this.appname)
+	if realheader == nil && header != nil {
+		realheader = header
+	} else if header == nil && realheader == nil {
+		realheader = make(http.Header)
+	} else if header != nil && realheader != nil {
+		for k, v := range header {
+			realheader[k] = v
+		}
+	}
+	realheader.Set("TargetServer", this.appname)
 	md := metadata.GetAllMetadata(ctx)
 	if md == nil {
 		md = make(map[string]string)
 	}
 	md["SourceServer"] = this.selfappname
 	d, _ := json.Marshal(md)
-	header.Set("Metadata", common.Byte2str(d))
+	realheader.Set("Metadata", common.Byte2str(d))
 	var min time.Duration
 	if this.timeout != 0 {
 		min = this.timeout
@@ -262,7 +272,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	}
 	dl, ok := ctx.Deadline()
 	if ok {
-		header.Set("Deadline", strconv.FormatInt(dl.UnixNano(), 10))
+		realheader.Set("Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
 	for {
 		if ok && dl.UnixNano() < time.Now().UnixNano()+int64(5*time.Millisecond) {
@@ -301,7 +311,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		if e != nil {
 			return nil, e
 		}
-		req.Header = header
+		req.Header = realheader
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 		resp, e := server.client.Do(req)
 		atomic.AddInt32(&server.Pickinfo.Activecalls, -1)

@@ -64,7 +64,7 @@ func (this *Context) SetHeader(k, v string) {
 	this.w.Header().Set(k, v)
 }
 func (this *Context) AddHeader(k, v string) {
-	this.w.Header().Set(k, v)
+	this.w.Header().Add(k, v)
 }
 
 func (this *Context) GetRequest() *http.Request {
@@ -84,6 +84,9 @@ func (this *Context) GetMethod() string {
 }
 func (this *Context) GetMetadata() map[string]string {
 	return metadata.GetAllMetadata(this.r.Context())
+}
+func (this *Context) GetHeaders() http.Header {
+	return this.r.Header
 }
 func (this *Context) GetHeader(key string) string {
 	//return "" means not exists
