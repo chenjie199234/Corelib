@@ -120,7 +120,7 @@ func (this *WebClient) UpdateDiscovery(all map[string][]string, addition []byte)
 	pos := 0
 	endpos := len(this.hosts) - 1
 	if this.hosts != nil {
-		for pos <= len(this.hosts) {
+		for pos <= endpos {
 			existhost := this.hosts[pos]
 			if discoveryservers, ok := all[existhost.host]; !ok || len(discoveryservers) == 0 {
 				if pos != endpos {
