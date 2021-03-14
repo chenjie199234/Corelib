@@ -3,7 +3,6 @@ package web
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"math/rand"
 	"net/http"
@@ -13,7 +12,6 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/util/common"
-	"github.com/chenjie199234/Corelib/util/metadata"
 )
 
 var ERRNOSERVER = errors.New("[web] no servers")
@@ -233,27 +231,11 @@ func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, pat
 	return this.call(http.MethodPatch, ctx, functimeout, pathwithquery, header, body)
 }
 func (this *WebClient) call(method string, ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body []byte) (*http.Response, error) {
-	var realheader http.Header
-	if realctx, ok := ctx.(*Context); ok {
-		realheader = realctx.r.Header
+	if header == nil {
+		header = make(http.Header)
 	}
-	if realheader == nil && header != nil {
-		realheader = header
-	} else if header == nil && realheader == nil {
-		realheader = make(http.Header)
-	} else if header != nil && realheader != nil {
-		for k, v := range header {
-			realheader[k] = v
-		}
-	}
-	realheader.Set("TargetServer", this.appname)
-	md := metadata.GetAllMetadata(ctx)
-	if md == nil {
-		md = make(map[string]string)
-	}
-	md["SourceServer"] = this.selfappname
-	d, _ := json.Marshal(md)
-	realheader.Set("Metadata", common.Byte2str(d))
+	header.Set("TargetServer", this.appname)
+	header.Set("SourceServer", this.selfappname)
 	var min time.Duration
 	if this.timeout != 0 {
 		min = this.timeout
@@ -272,9 +254,9 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	}
 	dl, ok := ctx.Deadline()
 	if ok {
-		realheader.Set("Deadline", strconv.FormatInt(dl.UnixNano(), 10))
+		header.Set("Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
-	realheader.Del("Origin")
+	header.Del("Origin")
 	for {
 		if ok && dl.UnixNano() < time.Now().UnixNano()+int64(5*time.Millisecond) {
 			//ttl + server logic time
@@ -312,7 +294,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		if e != nil {
 			return nil, e
 		}
-		req.Header = realheader
+		req.Header = header
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 		resp, e := server.client.Do(req)
 		atomic.AddInt32(&server.Pickinfo.Activecalls, -1)

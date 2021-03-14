@@ -9,6 +9,7 @@ import (
 	fmt "fmt"
 	bufpool "github.com/chenjie199234/Corelib/bufpool"
 	common "github.com/chenjie199234/Corelib/util/common"
+	metadata "github.com/chenjie199234/Corelib/util/metadata"
 	web "github.com/chenjie199234/Corelib/web"
 	io "io"
 	http "net/http"
@@ -30,7 +31,7 @@ type firstWebClient struct {
 }
 
 //has race,will only return the first's call's client,the config will use the first call's config
-func NewFirstWebClient(selfgroup, selfname string, globaltimeout time.Duration, picker web.PickHandler, discover web.DiscoveryHandler) (FirstWebClient, error) {
+func NewFirstWebClient(globaltimeout time.Duration, selfgroup, selfname string, picker web.PickHandler, discover web.DiscoveryHandler) (FirstWebClient, error) {
 	cc, e := web.NewWebClient(globaltimeout, selfgroup, selfname, Group, Name, picker, discover)
 	if e != nil {
 		return nil, e
@@ -57,8 +58,8 @@ func (c *firstWebClient) Hello(ctx context.Context, req *Helloreq) (*Helloresp, 
 	}
 	//in check
 	for _, v := range req.Ri32 {
-		if vv := strconv.FormatInt(int64(v), 10); vv != "1" ||
-			vv != "2" ||
+		if vv := strconv.FormatInt(int64(v), 10); vv != "1" &&
+			vv != "2" &&
 			vv != "3" {
 			return nil, fmt.Errorf("bad request:in check failed: ri32")
 		}
@@ -78,8 +79,8 @@ func (c *firstWebClient) Hello(ctx context.Context, req *Helloreq) (*Helloresp, 
 	}
 	//in check
 	for _, v := range req.Rui32 {
-		if vv := strconv.FormatUint(uint64(v), 10); vv != "1" ||
-			vv != "2" ||
+		if vv := strconv.FormatUint(uint64(v), 10); vv != "1" &&
+			vv != "2" &&
 			vv != "3" {
 			return nil, fmt.Errorf("bad request:in check failed: rui32")
 		}
@@ -138,7 +139,17 @@ func (c *firstWebClient) Hello(ctx context.Context, req *Helloreq) (*Helloresp, 
 	if len(req.Mb) == 0 {
 		return nil, fmt.Errorf("bad request:empty check failed: mb")
 	}
-	header := make(http.Header)
+	var header http.Header
+	if realcrx, ok := ctx.(*web.Context); ok {
+		header = realcrx.GetHeaders()
+	}
+	if header == nil {
+		header = make(http.Header)
+	}
+	if md := metadata.GetAllMetadata(ctx); len(md) != 0 {
+		d, _ := json.Marshal(md)
+		header.Set("Metadata", common.Byte2str(d))
+	}
 	header.Set("Content-Type", "application/x-www-form-urlencoded")
 	buf := bufpool.GetBuffer()
 	if req.I32 != 0 {
@@ -305,7 +316,17 @@ func (c *firstWebClient) World(ctx context.Context, req *Worldreq) (*Worldresp, 
 	if req == nil {
 		return nil, fmt.Errorf("bad request:nil")
 	}
-	header := make(http.Header)
+	var header http.Header
+	if realcrx, ok := ctx.(*web.Context); ok {
+		header = realcrx.GetHeaders()
+	}
+	if header == nil {
+		header = make(http.Header)
+	}
+	if md := metadata.GetAllMetadata(ctx); len(md) != 0 {
+		d, _ := json.Marshal(md)
+		header.Set("Metadata", common.Byte2str(d))
+	}
 	header.Set("Content-Type", "application/x-www-form-urlencoded")
 	buf := bufpool.GetBuffer()
 	if buf.Len() > 0 {
@@ -522,8 +543,8 @@ func _First_Hello_WebHandler(handler func(context.Context, *Helloreq) (*Hellores
 		}
 		//in check
 		for _, v := range req.Ri32 {
-			if vv := strconv.FormatInt(int64(v), 10); vv != "1" ||
-				vv != "2" ||
+			if vv := strconv.FormatInt(int64(v), 10); vv != "1" &&
+				vv != "2" &&
 				vv != "3" {
 				ctx.WriteString(http.StatusBadRequest, "bad request:in check failed: ri32")
 				return
@@ -556,8 +577,8 @@ func _First_Hello_WebHandler(handler func(context.Context, *Helloreq) (*Hellores
 		}
 		//in check
 		for _, v := range req.Rui32 {
-			if vv := strconv.FormatUint(uint64(v), 10); vv != "1" ||
-				vv != "2" ||
+			if vv := strconv.FormatUint(uint64(v), 10); vv != "1" &&
+				vv != "2" &&
 				vv != "3" {
 				ctx.WriteString(http.StatusBadRequest, "bad request:in check failed: rui32")
 				return

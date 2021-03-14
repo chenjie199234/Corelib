@@ -6,8 +6,11 @@ import (
 	second "./second"
 	context "context"
 	rpc "github.com/chenjie199234/Corelib/rpc"
+	error1 "github.com/chenjie199234/Corelib/util/error"
+	metadata "github.com/chenjie199234/Corelib/util/metadata"
 	proto "github.com/golang/protobuf/proto"
 	strconv "strconv"
+	time "time"
 )
 
 var RpcPathFirstHello = "/first.First/Hello"
@@ -24,7 +27,18 @@ type firstRpcClient struct {
 }
 
 //has race,will only return the first's call's client,the config will use the first call's config
-func NewFirstRpcClient(c *rpc.Config, selfgroup, selfname string, verifydata []byte, picker rpc.PickHandler, discover rpc.DiscoveryHandler) (FirstRpcClient, error) {
+func NewFirstRpcClient(timeout, conntimeout, hearttimeout, heartprobe time.Duration, selfgroup, selfname string, verifydata []byte, picker rpc.PickHandler, discover rpc.DiscoveryHandler) (FirstRpcClient, error) {
+	c := &rpc.Config{
+		Timeout:                time.Duration(timeout),
+		ConnTimeout:            time.Duration(conntimeout),
+		HeartTimeout:           time.Duration(hearttimeout),
+		HeartPorbe:             time.Duration(heartprobe),
+		GroupNum:               1,
+		SocketRBuf:             1024,
+		SocketWBuf:             1024,
+		MaxMsgLen:              65535,
+		MaxBufferedWriteMsgNum: 1024,
+	}
 	cc, e := rpc.NewRpcClient(c, selfgroup, selfname, verifydata, Group, Name, picker, discover)
 	if e != nil {
 		return nil, e
@@ -51,8 +65,8 @@ func (c *firstRpcClient) Hello(ctx context.Context, req *Helloreq) (*Helloresp, 
 	}
 	//in check
 	for _, v := range req.Ri32 {
-		if vv := strconv.FormatInt(int64(v), 10); vv != "1" ||
-			vv != "2" ||
+		if vv := strconv.FormatInt(int64(v), 10); vv != "1" &&
+			vv != "2" &&
 			vv != "3" {
 			return nil, rpc.ERRREQUEST
 		}
@@ -72,8 +86,8 @@ func (c *firstRpcClient) Hello(ctx context.Context, req *Helloreq) (*Helloresp, 
 	}
 	//in check
 	for _, v := range req.Rui32 {
-		if vv := strconv.FormatUint(uint64(v), 10); vv != "1" ||
-			vv != "2" ||
+		if vv := strconv.FormatUint(uint64(v), 10); vv != "1" &&
+			vv != "2" &&
 			vv != "3" {
 			return nil, rpc.ERRREQUEST
 		}
@@ -133,8 +147,8 @@ func (c *firstRpcClient) Hello(ctx context.Context, req *Helloreq) (*Helloresp, 
 		return nil, rpc.ERRREQUEST
 	}
 	reqd, _ := proto.Marshal(req)
-	callback, e := c.cc.Call(ctx, 200000000, RpcPathFirstHello, reqd)
-	if e != nil {
+	callback, e := c.cc.Call(ctx, 200000000, RpcPathFirstHello, reqd, metadata.GetAllMetadata(ctx))
+	if e.(*error1.Error) != nil {
 		return nil, e
 	}
 	resp := new(Helloresp)
@@ -148,8 +162,8 @@ func (c *firstRpcClient) World(ctx context.Context, req *Worldreq) (*Worldresp, 
 		return nil, rpc.ERRREQUEST
 	}
 	reqd, _ := proto.Marshal(req)
-	callback, e := c.cc.Call(ctx, 0, RpcPathFirstWorld, reqd)
-	if e != nil {
+	callback, e := c.cc.Call(ctx, 0, RpcPathFirstWorld, reqd, metadata.GetAllMetadata(ctx))
+	if e.(*error1.Error) != nil {
 		return nil, e
 	}
 	resp := new(Worldresp)
@@ -190,8 +204,8 @@ func _First_Hello_RpcHandler(handler func(context.Context, *Helloreq) (*Hellores
 		}
 		//in check
 		for _, v := range req.Ri32 {
-			if vv := strconv.FormatInt(int64(v), 10); vv != "1" ||
-				vv != "2" ||
+			if vv := strconv.FormatInt(int64(v), 10); vv != "1" &&
+				vv != "2" &&
 				vv != "3" {
 				ctx.Abort(rpc.ERRREQUEST)
 				return
@@ -215,8 +229,8 @@ func _First_Hello_RpcHandler(handler func(context.Context, *Helloreq) (*Hellores
 		}
 		//in check
 		for _, v := range req.Rui32 {
-			if vv := strconv.FormatUint(uint64(v), 10); vv != "1" ||
-				vv != "2" ||
+			if vv := strconv.FormatUint(uint64(v), 10); vv != "1" &&
+				vv != "2" &&
 				vv != "3" {
 				ctx.Abort(rpc.ERRREQUEST)
 				return

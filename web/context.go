@@ -66,7 +66,6 @@ func (this *Context) SetHeader(k, v string) {
 func (this *Context) AddHeader(k, v string) {
 	this.w.Header().Add(k, v)
 }
-
 func (this *Context) GetRequest() *http.Request {
 	return this.r
 }
@@ -105,8 +104,14 @@ func getclientip(r *http.Request) string {
 	}
 	return ip
 }
+func (this *Context) GetSourceServer() string {
+	return this.r.Header.Get("SourceServer")
+}
 func (this *Context) GetClientIp() string {
 	return getclientip(this.r)
+}
+func (this *Context) GetRemoteAddr() string {
+	return this.r.RemoteAddr
 }
 func (this *Context) GetUserAgent() string {
 	return this.r.Header.Get("User-Agent")

@@ -380,6 +380,9 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 			basectx, cancel = context.WithDeadline(basectx, time.Unix(0, min))
 			defer cancel()
 		}
+		if sourceserve := r.Header.Get("SourceServer"); sourceserve != "" {
+			r.Header.Set("SourceServer", sourceserve+":"+r.RemoteAddr)
+		}
 		if mdstr := r.Header.Get("Metadata"); mdstr != "" {
 			md := make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(mdstr), &md); e != nil {
@@ -387,9 +390,6 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
 				return
-			}
-			if sourceserver, ok := md["SourceServer"]; ok {
-				md["SourceServer"] = sourceserver + ":" + getclientip(r)
 			}
 			basectx = metadata.SetAllMetadata(basectx, md)
 		}

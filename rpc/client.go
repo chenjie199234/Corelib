@@ -14,7 +14,6 @@ import (
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
 	cerror "github.com/chenjie199234/Corelib/util/error"
-	"github.com/chenjie199234/Corelib/util/metadata"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -411,7 +410,7 @@ func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime 
 	}
 }
 
-func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path string, in []byte) ([]byte, error) {
+func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path string, in []byte, metadata map[string]string) ([]byte, error) {
 	var min time.Duration
 	if c.c.Timeout != 0 {
 		min = c.c.Timeout
@@ -438,7 +437,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 		Path:     path,
 		Deadline: dl.UnixNano(),
 		Body:     in,
-		Metadata: metadata.GetAllMetadata(ctx),
+		Metadata: metadata,
 	}
 	d, _ := proto.Marshal(msg)
 	if len(d) > int(c.c.MaxMsgLen) {

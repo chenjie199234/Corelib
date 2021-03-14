@@ -191,11 +191,9 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 			defer cancel()
 		}
 		//delete port info
-		if msg.Metadata == nil {
-			msg.Metadata = make(map[string]string)
+		if msg.Metadata != nil {
+			ctx = metadata.SetAllMetadata(ctx, msg.Metadata)
 		}
-		msg.Metadata["SourceServer"] = peeruniquename[:strings.LastIndex(peeruniquename, ":")]
-		ctx = metadata.SetAllMetadata(ctx, msg.Metadata)
 		workctx := s.getContext(ctx, peeruniquename, msg, totalhandlers)
 		workctx.Next()
 		s.putContext(workctx)

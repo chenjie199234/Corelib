@@ -46,14 +46,11 @@ func (c *Context) Write(resp []byte) {
 func (c *Context) GetBody() []byte {
 	return c.msg.Body
 }
-func (c *Context) GetPeerName() string {
+func (c *Context) GetSourceServer() string {
 	return c.peeruniquename
 }
 func (c *Context) GetPath() string {
 	return c.msg.Path
-}
-func (c *Context) GetDeadline() int64 {
-	return c.msg.Deadline
 }
 func (c *Context) GetMetadata() map[string]string {
 	return c.msg.Metadata

@@ -14,18 +14,20 @@ import (
 )
 
 const (
-	timePackage    = protogen.GoImportPath("time")
-	stringsPackage = protogen.GoImportPath("strings")
-	bytesPackage   = protogen.GoImportPath("bytes")
-	strconvPackage = protogen.GoImportPath("strconv")
-	httpPackage    = protogen.GoImportPath("net/http")
-	fmtPackage     = protogen.GoImportPath("fmt")
-	ioPackage      = protogen.GoImportPath("io")
-	jsonPackage    = protogen.GoImportPath("encoding/json")
-	contextPackage = protogen.GoImportPath("context")
-	webPackage     = protogen.GoImportPath("github.com/chenjie199234/Corelib/web")
-	commonPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
-	bufpoolPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/bufpool")
+	timePackage     = protogen.GoImportPath("time")
+	stringsPackage  = protogen.GoImportPath("strings")
+	bytesPackage    = protogen.GoImportPath("bytes")
+	strconvPackage  = protogen.GoImportPath("strconv")
+	httpPackage     = protogen.GoImportPath("net/http")
+	fmtPackage      = protogen.GoImportPath("fmt")
+	ioPackage       = protogen.GoImportPath("io")
+	jsonPackage     = protogen.GoImportPath("encoding/json")
+	contextPackage  = protogen.GoImportPath("context")
+	webPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/web")
+	logPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/log")
+	commonPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
+	metadataPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/metadata")
+	bufpoolPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/bufpool")
 )
 
 // generateFile generates a _web.pb.go file containing web service definitions.
@@ -128,8 +130,18 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 		if len(method.Input.Fields) > 0 && haschecker(method.Input) {
 			checkerandheader("req.", method.Input, g, 1)
 		}
+		g.P("var header ", g.QualifiedGoIdent(httpPackage.Ident("Header")))
+		g.P("if realcrx,ok:=ctx.(*", g.QualifiedGoIdent(webPackage.Ident("Context")), ");ok{")
+		g.P("header = realcrx.GetHeaders()")
+		g.P("}")
+		g.P("if header == nil {")
+		g.P("header = make(", g.QualifiedGoIdent(httpPackage.Ident("Header")), ")")
+		g.P("}")
+		g.P("if md:=", g.QualifiedGoIdent(metadataPackage.Ident("GetAllMetadata")), "(ctx);len(md)!=0{")
+		g.P("d,_:=", g.QualifiedGoIdent(jsonPackage.Ident("Marshal")), "(md)")
+		g.P("header.Set(\"Metadata\",", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(d))")
+		g.P("}")
 		if r.method == http.MethodGet || r.method == http.MethodDelete {
-			g.P("header:=make(", g.QualifiedGoIdent(httpPackage.Ident("Header")), ")")
 			g.P("header.Set(\"Content-Type\", \"application/x-www-form-urlencoded\")")
 			g.P("buf:=", g.QualifiedGoIdent(bufpoolPackage.Ident("GetBuffer")), "()")
 			if len(method.Input.Fields) != 0 {
@@ -262,9 +274,8 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 			}
 			g.P(g.QualifiedGoIdent(bufpoolPackage.Ident("PutBuffer")), "(buf)")
 		} else {
-			g.P("reqdata,_:=", g.QualifiedGoIdent(jsonPackage.Ident("Marshal")), "(req)")
-			g.P("header:=make(", g.QualifiedGoIdent(httpPackage.Ident("Header")), ")")
 			g.P("header.Set(\"Content-Type\", \"application/json\")")
+			g.P("reqdata,_:=", g.QualifiedGoIdent(jsonPackage.Ident("Marshal")), "(req)")
 			switch r.method {
 			case http.MethodPost:
 				g.P("callback,e:=c.cc.Post(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, ",header,reqdata)")
