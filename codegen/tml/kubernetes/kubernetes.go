@@ -144,7 +144,7 @@ spec:
   - host: {{.HostName}}
     http:
       paths:
-      - path: /
+      - path: /{{.ProjectName}}
         backend:
           serviceName: {{.ProjectName}}-service
           servicePort: 80{{ end }}`

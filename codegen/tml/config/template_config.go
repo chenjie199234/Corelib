@@ -147,7 +147,7 @@ type WebConfig struct {
 	WebCertFile   string         $json:"web_certfile"$
 	WebKeyFile    string         $json:"web_keyfile"$
 	//cors
-	WebCors  *WebCorsConfig $json:"web_cors"$
+	WebCors *WebCorsConfig $json:"web_cors"$
 }
 
 //WebCorsConfig -
@@ -259,7 +259,7 @@ func (c *sourceConfig) validate() {
 		}
 	}
 	for _, redisc := range c.Redis {
-		if redisc.Addr == ""  {
+		if redisc.Addr == "" {
 			redisc.Addr = "127.0.0.1:6379"
 		}
 		if redisc.MaxOpen == 0 {
@@ -308,14 +308,14 @@ func (c *sourceConfig) newsource() {
 			continue
 		}
 		dbs[k] = sql.NewMysql(&sql.Config{
-			Username    :dbc.Username,
-			Password    :dbc.Passwd,
-			Addr        :dbc.Addr,
-			Collation   :dbc.Collation,
-			MaxOpen     :dbc.MaxOpen,
-			MaxIdletime :time.Duration(dbc.MaxIdletime),
-			IOTimeout   :time.Duration(dbc.IoTimeout),
-			ConnTimeout :time.Duration(dbc.ConnTimeout),
+			Username:    dbc.Username,
+			Password:    dbc.Passwd,
+			Addr:        dbc.Addr,
+			Collation:   dbc.Collation,
+			MaxOpen:     dbc.MaxOpen,
+			MaxIdletime: time.Duration(dbc.MaxIdletime),
+			IOTimeout:   time.Duration(dbc.IoTimeout),
+			ConnTimeout: time.Duration(dbc.ConnTimeout),
 		})
 	}
 	caches = make(map[string]*redis.Pool, len(c.Redis))
@@ -413,7 +413,7 @@ func GetWebConfig() *WebConfig {
 
 //GetDB get a db client by db's logic name
 //return nil means not exist
-func GetDB(dbname string) *sql.Pool{
+func GetDB(dbname string) *sql.Pool {
 	return dbs[dbname]
 }
 
