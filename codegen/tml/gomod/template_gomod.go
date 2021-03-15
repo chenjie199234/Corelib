@@ -11,6 +11,7 @@ const text = `module {{.}}
 go 1.15
 
 require (
+	github.com/go-sql-driver/mysql v1.5.0
 	github.com/chenjie199234/Corelib v0.0.9
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/golang/protobuf v1.4.3
