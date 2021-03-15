@@ -10,6 +10,7 @@ import (
 const text = `package config
 
 import (
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -19,9 +20,9 @@ import (
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
-	"github.com/chenjie199234/Corelib/sql"
 	ctime "github.com/chenjie199234/Corelib/util/time"
 	"github.com/fsnotify/fsnotify"
+	"github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/scram"
 )
@@ -206,7 +207,7 @@ type KafkaSubConfig struct {
 //SC total source config instance
 var sc *sourceConfig
 
-var dbs map[string]*sql.Pool
+var dbs map[string]*sql.DB
 
 var caches map[string]*redis.Pool
 
@@ -302,21 +303,25 @@ func (c *sourceConfig) validate() {
 
 //don't change this function only if you known what you are changing
 func (c *sourceConfig) newsource() {
-	dbs = make(map[string]*sql.Pool, len(c.DB))
+	dbs = make(map[string]*sql.DB, len(c.DB))
 	for k, dbc := range c.DB {
 		if k == "example_db" {
 			continue
 		}
-		dbs[k] = sql.NewMysql(&sql.Config{
-			Username:    dbc.Username,
-			Password:    dbc.Passwd,
-			Addr:        dbc.Addr,
-			Collation:   dbc.Collation,
-			MaxOpen:     dbc.MaxOpen,
-			MaxIdletime: time.Duration(dbc.MaxIdletime),
-			IOTimeout:   time.Duration(dbc.IoTimeout),
-			ConnTimeout: time.Duration(dbc.ConnTimeout),
-		})
+		tempdb, _ := sql.Open("mysql", (&mysql.Config{
+			User:                 dbc.Username,
+			Passwd:               dbc.Passwd,
+			Net:                  "tcp",
+			Addr:                 dbc.Addr,
+			Timeout:              time.Duration(dbc.ConnTimeout),
+			WriteTimeout:         time.Duration(dbc.IoTimeout),
+			ReadTimeout:          time.Duration(dbc.IoTimeout),
+			AllowNativePasswords: true,
+			Collation:            dbc.Collation,
+		}).FormatDSN())
+		tempdb.SetMaxOpenConns(dbc.MaxOpen)
+		tempdb.SetConnMaxIdleTime(time.Duration(dbc.MaxIdletime))
+		dbs[k] = tempdb
 	}
 	caches = make(map[string]*redis.Pool, len(c.Redis))
 	for k, redisc := range c.Redis {
@@ -413,7 +418,7 @@ func GetWebConfig() *WebConfig {
 
 //GetDB get a db client by db's logic name
 //return nil means not exist
-func GetDB(dbname string) *sql.Pool {
+func GetDB(dbname string) *sql.DB {
 	return dbs[dbname]
 }
 
