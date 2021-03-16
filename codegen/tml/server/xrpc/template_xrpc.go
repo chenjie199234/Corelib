@@ -10,6 +10,7 @@ const text = `package xrpc
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"{{.}}/api"
@@ -38,7 +39,7 @@ func StartRpcServer() {
 		MaxBufferedWriteMsgNum: 1024,
 	}
 	var e error
-	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name, []byte(c.RpcVerifydata)); e != nil {
+	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name, []byte(os.Getenv("RPC_VERIFY_DATA"))); e != nil {
 		log.Error("[xrpc] new rpc server error:", e)
 		return
 	}

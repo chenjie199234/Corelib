@@ -138,7 +138,6 @@ type sourceConfig struct {
 //RpcConfig -
 type RpcConfig struct {
 	RpcPort         uint           $json:"rpc_port"$
-	RpcVerifydata   string         $json:"rpc_verifydata"$
 	RpcTimeout      ctime.Duration $json:"rpc_timeout"$       //default 500ms
 	RpcConnTimeout  ctime.Duration $json:"rpc_conn_timeout"$  //default 1s
 	RpcHeartTimeout ctime.Duration $json:"rpc_heart_timeout"$ //default 5s

@@ -8,7 +8,6 @@ import (
 
 const textsource = `{
 	"rpc":{
-		"rpc_verifydata":"test",
 		"rpc_timeout":"500ms",
 		"rpc_conn_timeout":"1s",
 		"rpc_heart_timeout":"5s",
