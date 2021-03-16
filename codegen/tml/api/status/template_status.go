@@ -26,12 +26,11 @@ service status{
 	//rpc example_rpc(examplereq)returns(exampleresp);//method:get|timeout:200ms|mids:["examplemid1","examplemid2"]
 }
 message pingreq{
-	//the timestamp when client call this request
 	int64 timestamp=1;
 }
 message pingresp{
-	//the timestamp when server start handle this request
-	int64 timestamp=1;
+	int64 client_timestamp=1;
+	int64 server_timestamp=2;
 }
 //message examplereq{
 	//comment option separate by '|',only request message support

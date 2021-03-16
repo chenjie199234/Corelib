@@ -25,7 +25,7 @@ const textsource = `{
 			"cors_expose":[]
 		}
 	},
-	"db":{
+	"sql":{
 		"example_db":{
 			"username":"root",
 			"passwd":"root",

@@ -25,6 +25,11 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/scram"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readconcern"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
 
 //AppConfig can hot update
@@ -123,10 +128,11 @@ func Close() {
 type sourceConfig struct {
 	Rpc      *RpcConfig                 $json:"rpc"$
 	Web      *WebConfig                 $json:"web"$
-	DB       map[string]*DBConfig       $json:"db"$        //key xx_db
-	Redis    map[string]*RedisConfig    $json:"redis"$     //key xx_redis
-	KafkaPub map[string]*KafkaPubConfig $json:"kafka_pub"$ //key topic name
-	KafkaSub map[string]*KafkaSubConfig $json:"kafka_sub"$ //key topic name
+	Mongo    map[string]*MongoConfig    $json:"mongo"$
+	Sql      map[string]*SqlConfig      $json:"sql"$       //key example:xx_sql
+	Redis    map[string]*RedisConfig    $json:"redis"$     //key example:xx_redis
+	KafkaPub map[string]*KafkaPubConfig $json:"kafka_pub"$ //key:topic name
+	KafkaSub map[string]*KafkaSubConfig $json:"kafka_sub"$ //key:topic name
 }
 
 //RpcConfig -
@@ -163,23 +169,35 @@ type RedisConfig struct {
 	Username    string         $json:"username"$
 	Passwd      string         $json:"passwd"$
 	Addr        string         $json:"addr"$
-	MaxOpen     int            $json:"max_open"$     //default 256 //max num of connections can be opened
-	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 1min //max time a connection can be idle,more then this time,connection will be closed
+	MaxOpen     int            $json:"max_open"$     //default 100
+	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 10min
 	IoTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms
 	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms
 }
 
-//DBConfig -
-type DBConfig struct {
+//SqlConfig -
+type SqlConfig struct {
 	Username    string         $json:"username"$
 	Passwd      string         $json:"passwd"$
 	Net         string         $json:"net"$
 	Addr        string         $json:"addr"$
 	Collation   string         $json:"collation"$
-	MaxOpen     int            $json:"max_open"$     //default 256 //max num of connections can be opened
-	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 1min //max time a connection can be idle,more then this time,connection will be closed
+	MaxOpen     int            $json:"max_open"$     //default 100
+	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 10min
 	IoTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms
 	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms
+}
+
+//MongoConfig -
+type MongoConfig struct {
+	Username       string         $json:"username"$
+	Passwd         string         $json:"passwd"$
+	Addrs          []string       $json:"addrs"$
+	ReplicaSetName string         $json:"replica_set_name"$
+	MaxOpen        uint64         $json:"max_open"$     //default 100
+	MaxIdletime    ctime.Duration $json:"max_idletime"$ //default 10min
+	IoTimeout      ctime.Duration $json:"io_timeout"$   //default 500ms
+	ConnTimeout    ctime.Duration $json:"conn_timeout"$ //default 250ms
 }
 
 //KafkaPubConfig -
@@ -207,9 +225,11 @@ type KafkaSubConfig struct {
 //SC total source config instance
 var sc *sourceConfig
 
-var dbs map[string]*sql.DB
+var mongos map[string]*mongo.Client
 
-var caches map[string]*redis.Pool
+var sqls map[string]*sql.DB
+
+var rediss map[string]*redis.Pool
 
 var kafkaSubers map[string]*kafka.Reader
 
@@ -237,26 +257,47 @@ func (c *sourceConfig) validate() {
 	if c.Web.WebTimeout == 0 {
 		c.Web.WebTimeout = ctime.Duration(time.Millisecond * 500)
 	}
-	for _, dbc := range c.DB {
-		if dbc.Username == "" {
-			dbc.Username = "root"
-			dbc.Passwd = "root"
+	for _, mongoc := range c.Mongo {
+		if mongoc.Username == "" {
+			mongoc.Username = "root"
+			mongoc.Passwd = "root"
 		}
-		if dbc.Addr == "" || dbc.Net == "" {
-			dbc.Addr = "127.0.0.1:3306"
-			dbc.Net = "tcp"
+		if len(mongoc.Addrs) == 0 {
+			mongoc.Addrs = []string{"127.0.0.1:27017"}
 		}
-		if dbc.MaxOpen == 0 {
-			dbc.MaxOpen = 100
+		if mongoc.MaxOpen == 0 {
+			mongoc.MaxOpen = 100
 		}
-		if dbc.MaxIdletime == 0 {
-			dbc.MaxIdletime = ctime.Duration(time.Minute * 10)
+		if mongoc.MaxIdletime == 0 {
+			mongoc.MaxIdletime = ctime.Duration(time.Minute * 10)
 		}
-		if dbc.IoTimeout == 0 {
-			dbc.IoTimeout = ctime.Duration(time.Millisecond * 500)
+		if mongoc.IoTimeout == 0 {
+			mongoc.IoTimeout = ctime.Duration(time.Millisecond * 500)
 		}
-		if dbc.ConnTimeout == 0 {
-			dbc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
+		if mongoc.ConnTimeout == 0 {
+			mongoc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
+		}
+	}
+	for _, sqlc := range c.Sql {
+		if sqlc.Username == "" {
+			sqlc.Username = "root"
+			sqlc.Passwd = "root"
+		}
+		if sqlc.Addr == "" || sqlc.Net == "" {
+			sqlc.Addr = "127.0.0.1:3306"
+			sqlc.Net = "tcp"
+		}
+		if sqlc.MaxOpen == 0 {
+			sqlc.MaxOpen = 100
+		}
+		if sqlc.MaxIdletime == 0 {
+			sqlc.MaxIdletime = ctime.Duration(time.Minute * 10)
+		}
+		if sqlc.IoTimeout == 0 {
+			sqlc.IoTimeout = ctime.Duration(time.Millisecond * 500)
+		}
+		if sqlc.ConnTimeout == 0 {
+			sqlc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
 		}
 	}
 	for _, redisc := range c.Redis {
@@ -303,32 +344,69 @@ func (c *sourceConfig) validate() {
 
 //don't change this function only if you known what you are changing
 func (c *sourceConfig) newsource() {
-	dbs = make(map[string]*sql.DB, len(c.DB))
-	for k, dbc := range c.DB {
+	mongos = make(map[string]*mongo.Client, len(c.Mongo))
+	for k, mongoc := range c.Mongo {
+		if k == "example_mongo" {
+			continue
+		}
+		op := &options.ClientOptions{}
+		op = op.SetAuth(options.Credential{Username: mongoc.Username, Password: mongoc.Passwd})
+		op = op.SetHosts(mongoc.Addrs)
+		if mongoc.ReplicaSetName != "" {
+			op.SetReplicaSet(mongoc.ReplicaSetName)
+		}
+		op = op.SetConnectTimeout(time.Duration(mongoc.ConnTimeout))
+		op = op.SetCompressors([]string{"zstd"})
+		op = op.SetMaxConnIdleTime(time.Duration(mongoc.MaxIdletime))
+		op = op.SetMaxPoolSize(mongoc.MaxOpen)
+		op = op.SetSocketTimeout(time.Duration(mongoc.IoTimeout))
+		//default heartbeat is 3s
+		op = op.SetHeartbeatInterval(time.Second * 3)
+		//default:secondary is preferred to be selected,if there is no secondary,primary will be selected
+		op = op.SetReadPreference(readpref.SecondaryPreferred())
+		//default:only read the selected server's data
+		op = op.SetReadConcern(readconcern.Local())
+		//default:data will be writeen to the primary's journal then return success
+		op = op.SetWriteConcern(writeconcern.New(writeconcern.WMajority(), writeconcern.J(true), writeconcern.WTimeout(time.Duration(mongoc.IoTimeout))))
+		tempdb, e := mongo.Connect(nil, op)
+		if e != nil {
+			log.Error("[SourceConfig] open mongodb:", k, "error:", e)
+			Close()
+			os.Exit(1)
+		}
+		mongos[k] = tempdb
+	}
+	sqls = make(map[string]*sql.DB, len(c.Sql))
+	for k, sqlc := range c.Sql {
 		if k == "example_db" {
 			continue
 		}
-		tempdb, _ := sql.Open("mysql", (&mysql.Config{
-			User:                 dbc.Username,
-			Passwd:               dbc.Passwd,
+		tempdb, e := sql.Open("mysql", (&mysql.Config{
+			User:                 sqlc.Username,
+			Passwd:               sqlc.Passwd,
 			Net:                  "tcp",
-			Addr:                 dbc.Addr,
-			Timeout:              time.Duration(dbc.ConnTimeout),
-			WriteTimeout:         time.Duration(dbc.IoTimeout),
-			ReadTimeout:          time.Duration(dbc.IoTimeout),
+			Addr:                 sqlc.Addr,
+			Timeout:              time.Duration(sqlc.ConnTimeout),
+			WriteTimeout:         time.Duration(sqlc.IoTimeout),
+			ReadTimeout:          time.Duration(sqlc.IoTimeout),
 			AllowNativePasswords: true,
-			Collation:            dbc.Collation,
+			Collation:            sqlc.Collation,
 		}).FormatDSN())
-		tempdb.SetMaxOpenConns(dbc.MaxOpen)
-		tempdb.SetConnMaxIdleTime(time.Duration(dbc.MaxIdletime))
-		dbs[k] = tempdb
+		if e != nil {
+			log.Error("[SourceConfig] open mysql:", k, "error:", e)
+			Close()
+			os.Exit(1)
+		}
+		tempdb.SetMaxOpenConns(sqlc.MaxOpen)
+		tempdb.SetConnMaxIdleTime(time.Duration(sqlc.MaxIdletime))
+		sqls[k] = tempdb
 	}
-	caches = make(map[string]*redis.Pool, len(c.Redis))
+	rediss = make(map[string]*redis.Pool, len(c.Redis))
 	for k, redisc := range c.Redis {
 		if k == "example_redis" {
 			continue
 		}
-		caches[k] = redis.NewRedis(&redis.Config{
+		rediss[k] = redis.NewRedis(&redis.Config{
 			Username:    redisc.Username,
 			Password:    redisc.Passwd,
 			Addr:        redisc.Addr,
@@ -416,16 +494,22 @@ func GetWebConfig() *WebConfig {
 	return sc.Web
 }
 
-//GetDB get a db client by db's logic name
+//GetMongo get a mongodb client by db's instance name
 //return nil means not exist
-func GetDB(dbname string) *sql.DB {
-	return dbs[dbname]
+func GetMongo(mongoname string) *mongo.Client {
+	return mongos[mongoname]
 }
 
-//GetRedis get a redis client by redis's logic name
+//GetSql get a mysql db client by db's instance name
+//return nil means not exist
+func GetSql(mysqlname string) *sql.DB {
+	return sqls[mysqlname]
+}
+
+//GetRedis get a redis client by redis's instance name
 //return nil means not exist
 func GetRedis(redisname string) *redis.Pool {
-	return caches[redisname]
+	return rediss[redisname]
 }
 
 //GetKafkaSuber get a kafka sub client by topic and groupid

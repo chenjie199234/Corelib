@@ -16,6 +16,7 @@ require (
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/golang/protobuf v1.4.3
 	github.com/segmentio/kafka-go v0.4.8
+	go.mongodb.org/mongo-driver v1.5.0
 	google.golang.org/protobuf v1.25.0
 )`
 

@@ -34,14 +34,14 @@ func Start() *Service {
 	}
 }
 
-func (s *Service) Ping(context.Context, *api.Pingreq) (*api.Pingresp, error) {
+func (s *Service) Ping(ctx context.Context,in *api.Pingreq) (*api.Pingresp, error) {
 	//if _, ok := ctx.(*rpc.Context); ok {
 	//        log.Info("this is a rpc call")
 	//}
 	//if _, ok := ctx.(*web.Context); ok {
 	//        log.Info("this is a web call")
 	//}
-	return &api.Pingresp{Timestamp: time.Now().UnixNano()}, nil
+	return &api.Pingresp{ClientTimestamp: in.Timestamp, ServerTimestamp: time.Now().UnixNano()}, nil
 }
 
 //Stop -
