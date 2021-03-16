@@ -18,8 +18,8 @@ const (
 	s_REGISTERED
 )
 
-type discoveryserver struct {
-	lker       *sync.Mutex
+type DiscoveryServer struct {
+	lker       *sync.RWMutex
 	groups     map[string]*appgroup //key appname
 	verifydata []byte
 	instance   *stream.Instance
@@ -27,8 +27,8 @@ type discoveryserver struct {
 
 //appuniquename = appname:ip:port
 type appgroup struct {
-	apps      map[string]*appnode //key appuniquename
-	bewatched map[string]*appnode //key appuniquename
+	apps     map[string]*appnode //key appuniquename
+	watchers map[string]*appnode //key appuniquename
 }
 
 //appuniquename = appname:ip:port
@@ -44,7 +44,7 @@ type appnode struct {
 	bewatched     map[string]*appnode //key appuniquename
 }
 
-func NewDiscoveryServer(c *stream.InstanceConfig, group, name string, vdata []byte) (*discoveryserver, error) {
+func NewDiscoveryServer(c *stream.InstanceConfig, group, name string, vdata []byte) (*DiscoveryServer, error) {
 	if e := common.NameCheck(name, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -54,8 +54,8 @@ func NewDiscoveryServer(c *stream.InstanceConfig, group, name string, vdata []by
 	if e := common.NameCheck(group+"."+name, true, true, false, true); e != nil {
 		return nil, e
 	}
-	instance := &discoveryserver{
-		lker:       &sync.Mutex{},
+	instance := &DiscoveryServer{
+		lker:       &sync.RWMutex{},
 		groups:     make(map[string]*appgroup, 5),
 		verifydata: vdata,
 	}
@@ -74,15 +74,41 @@ func NewDiscoveryServer(c *stream.InstanceConfig, group, name string, vdata []by
 	return instance, nil
 }
 
-func (s *discoveryserver) StartDiscoveryServer(listenaddr string) error {
+func (s *DiscoveryServer) StartDiscoveryServer(listenaddr string) error {
 	return s.instance.StartTcpServer(listenaddr)
 }
-func (s *discoveryserver) StopDiscoveryServer() {
+func (s *DiscoveryServer) StopDiscoveryServer() {
 	s.instance.Stop()
 }
 
+//one app's info
+type Info struct {
+	Apps     []string //value appuniquename
+	Watchers []string //value appuniquename
+}
+
+func (s *DiscoveryServer) GetAppInfos() map[string]*Info {
+	result := make(map[string]*Info)
+	s.lker.RLock()
+	defer s.lker.RUnlock()
+	for appname, group := range s.groups {
+		temp := &Info{
+			Apps:     make([]string, 0, len(group.apps)),
+			Watchers: make([]string, 0, len(group.watchers)),
+		}
+		for k := range group.apps {
+			temp.Apps = append(temp.Apps, k)
+		}
+		for k := range group.watchers {
+			temp.Watchers = append(temp.Watchers, k)
+		}
+		result[appname] = temp
+	}
+	return result
+}
+
 //appuniquename = appname:ip:port
-func (s *discoveryserver) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
+func (s *DiscoveryServer) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
 	temp := common.Byte2str(peerVerifyData)
 	index := strings.LastIndex(temp, "|")
 	if index == -1 {
@@ -97,7 +123,7 @@ func (s *discoveryserver) verifyfunc(ctx context.Context, appuniquename string, 
 }
 
 //appuniquename = appname:ip:port
-func (s *discoveryserver) onlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
+func (s *DiscoveryServer) onlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
 	s.lker.Lock()
 	appname := appuniquename[:strings.Index(appuniquename, ":")]
 	if g, ok := s.groups[appname]; ok {
@@ -109,8 +135,8 @@ func (s *discoveryserver) onlinefunc(p *stream.Peer, appuniquename string, start
 	}
 	if _, ok := s.groups[appname]; !ok {
 		s.groups[appname] = &appgroup{
-			apps:      make(map[string]*appnode, 5),
-			bewatched: make(map[string]*appnode, 5),
+			apps:     make(map[string]*appnode, 5),
+			watchers: make(map[string]*appnode, 5),
 		}
 	}
 	node := &appnode{
@@ -123,7 +149,7 @@ func (s *discoveryserver) onlinefunc(p *stream.Peer, appuniquename string, start
 		bewatched:     make(map[string]*appnode, 5),
 	}
 	//copy bewarched
-	for k, v := range s.groups[appname].bewatched {
+	for k, v := range s.groups[appname].watchers {
 		node.bewatched[k] = v
 	}
 	p.SetData(unsafe.Pointer(node))
@@ -134,7 +160,7 @@ func (s *discoveryserver) onlinefunc(p *stream.Peer, appuniquename string, start
 }
 
 //appuniquename = appname:ip:port
-func (s *discoveryserver) userfunc(p *stream.Peer, appuniquename string, origindata []byte, starttime uint64) {
+func (s *DiscoveryServer) userfunc(p *stream.Peer, appuniquename string, origindata []byte, starttime uint64) {
 	if len(origindata) == 0 {
 		return
 	}
@@ -200,11 +226,11 @@ func (s *discoveryserver) userfunc(p *stream.Peer, appuniquename string, origind
 		s.lker.Lock()
 		if _, ok := s.groups[appname]; !ok {
 			s.groups[appname] = &appgroup{
-				apps:      make(map[string]*appnode, 5),
-				bewatched: make(map[string]*appnode, 5),
+				apps:     make(map[string]*appnode, 5),
+				watchers: make(map[string]*appnode, 5),
 			}
 		}
-		s.groups[appname].bewatched[appuniquename] = node
+		s.groups[appname].watchers[appuniquename] = node
 		node.lker.Lock()
 		result := make(map[string][]byte, len(s.groups[appname].apps))
 		for _, v := range s.groups[appname].apps {
@@ -228,7 +254,7 @@ func (s *discoveryserver) userfunc(p *stream.Peer, appuniquename string, origind
 }
 
 //appuniquename = appname:ip:port
-func (s *discoveryserver) offlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
+func (s *DiscoveryServer) offlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
 	s.lker.Lock()
 	appname := appuniquename[:strings.Index(appuniquename, ":")]
 	group, ok := s.groups[appname]
@@ -244,7 +270,7 @@ func (s *discoveryserver) offlinefunc(p *stream.Peer, appuniquename string, star
 		return
 	}
 	delete(s.groups[appname].apps, appuniquename)
-	if len(s.groups[appname].apps) == 0 && len(s.groups[appname].bewatched) == 0 {
+	if len(s.groups[appname].apps) == 0 && len(s.groups[appname].watchers) == 0 {
 		delete(s.groups, appname)
 	}
 	for v := range node.watched {
@@ -252,13 +278,13 @@ func (s *discoveryserver) offlinefunc(p *stream.Peer, appuniquename string, star
 		if !ok {
 			continue
 		}
-		delete(group.bewatched, appuniquename)
+		delete(group.watchers, appuniquename)
 		for _, app := range group.apps {
 			app.lker.Lock()
 			delete(app.bewatched, appuniquename)
 			app.lker.Unlock()
 		}
-		if len(group.apps) == 0 && len(group.bewatched) == 0 {
+		if len(group.apps) == 0 && len(group.watchers) == 0 {
 			delete(s.groups, v)
 		}
 	}

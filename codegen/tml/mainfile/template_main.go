@@ -65,6 +65,7 @@ func main() {
 	}()
 	stop := make(chan struct{}, 1)
 	go func() {
+		//delay 200ms to register self,if error happened in this 200ms,this server will not be registered
 		tmer := time.NewTimer(time.Millisecond * 200)
 		select {
 		case <-tmer.C:
@@ -92,6 +93,7 @@ func main() {
 	}()
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-ch
+	stop <- struct{}{}
 	//stop the whole business service
 	service.StopService()
 	//stop low level net service

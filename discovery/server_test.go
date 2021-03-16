@@ -28,12 +28,12 @@ func Test_Server1(t *testing.T) {
 		for {
 			<-tker.C
 			if instance.groups["testgroup.testclient1"] != nil {
-				fmt.Println("client1:", " apps:", instance.groups["testgroup.testclient1"].apps, " bewatched:", instance.groups["testgroup.testclient1"].bewatched)
+				fmt.Println("client1:", " apps:", instance.groups["testgroup.testclient1"].apps, " bewatched:", instance.groups["testgroup.testclient1"].watchers)
 			} else {
 				fmt.Println("client1: nil")
 			}
 			if instance.groups["testgroup.testclient2"] != nil {
-				fmt.Println("client2:", " apps:", instance.groups["testgroup.testclient2"].apps, " bewatched:", instance.groups["testgroup.testclient2"].bewatched)
+				fmt.Println("client2:", " apps:", instance.groups["testgroup.testclient2"].apps, " bewatched:", instance.groups["testgroup.testclient2"].watchers)
 			} else {
 				fmt.Println("client2: nil")
 			}
@@ -59,12 +59,12 @@ func Test_Server2(t *testing.T) {
 			<-tker.C
 			if instance != nil {
 				if instance.groups["testgroup.testclient1"] != nil {
-					fmt.Println("client1:", " apps:", instance.groups["testgroup.testclient1"].apps, " bewatched:", instance.groups["testgroup.testclient1"].bewatched)
+					fmt.Println("client1:", " apps:", instance.groups["testgroup.testclient1"].apps, " bewatched:", instance.groups["testgroup.testclient1"].watchers)
 				} else {
 					fmt.Println("client1: nil")
 				}
 				if instance.groups["testgroup.testclient2"] != nil {
-					fmt.Println("client2:", " apps:", instance.groups["testgroup.testclient2"].apps, " bewatched:", instance.groups["testgroup.testclient2"].bewatched)
+					fmt.Println("client2:", " apps:", instance.groups["testgroup.testclient2"].apps, " bewatched:", instance.groups["testgroup.testclient2"].watchers)
 				} else {
 					fmt.Println("client2: nil")
 				}
