@@ -2,7 +2,7 @@ package stream
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
 )
 
@@ -161,6 +161,9 @@ type InstanceConfig struct {
 }
 
 func checkInstanceConfig(c *InstanceConfig) error {
+	if c == nil {
+		return errors.New("[Stream.checkInstanceConfig] config is nil")
+	}
 	if c.HeartbeatTimeout == 0 {
 		c.HeartbeatTimeout = 5 * time.Second
 	}
@@ -180,10 +183,10 @@ func checkInstanceConfig(c *InstanceConfig) error {
 	//user data deal func can't be nill
 	//online and offline func can be nill
 	if c.Verifyfunc == nil {
-		return fmt.Errorf("[Stream.checkInstanceConfig] missing verify function")
+		return errors.New("[Stream.checkInstanceConfig] missing verify function")
 	}
 	if c.Userdatafunc == nil {
-		return fmt.Errorf("[Stream.checkInstanceConfig] missing userdata function")
+		return errors.New("[Stream.checkInstanceConfig] missing userdata function")
 	}
 	if c.TcpC == nil {
 		c.TcpC = defaultTcpConfig

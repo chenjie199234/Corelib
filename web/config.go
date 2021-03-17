@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"time"
 )
 
@@ -11,6 +12,9 @@ type Config struct {
 	ReadBuffer         int //socket buffer
 	WriteBuffer        int //socker buffer
 	Cors               *CorsConfig
+	UsePprof           bool
+	OldPprofVerifyData string
+	PprofVerifyData    string
 }
 
 type CorsConfig struct {
@@ -25,9 +29,9 @@ type CorsConfig struct {
 	exposestr        string
 }
 
-func (c *Config) validate() {
-	if c == nil {
-		c = &Config{}
+func (c *Config) validate() error {
+	if c.UsePprof && c.PprofVerifyData == "" {
+		return errors.New("[web.server] missing pprof verifydata")
 	}
 	if c.Cors == nil {
 		c.Cors = &CorsConfig{
@@ -67,4 +71,5 @@ func (c *Config) validate() {
 	}
 	c.Cors.headerstr = c.getHeaders()
 	c.Cors.exposestr = c.getExpose()
+	return nil
 }

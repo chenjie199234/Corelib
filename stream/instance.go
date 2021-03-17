@@ -82,6 +82,9 @@ func (this *Instance) addPeer(p *Peer) bool {
 
 //be careful about the callback func race
 func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
+	if e := checkInstanceConfig(c); e != nil {
+		return nil, e
+	}
 	if e := common.NameCheck(name, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -89,12 +92,6 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 		return nil, e
 	}
 	if e := common.NameCheck(group+"."+name, true, true, false, true); e != nil {
-		return nil, e
-	}
-	if c == nil {
-		c = &InstanceConfig{}
-	}
-	if e := checkInstanceConfig(c); e != nil {
 		return nil, e
 	}
 	stream := &Instance{

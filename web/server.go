@@ -7,6 +7,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"runtime"
 	"strconv"
 	"strings"
@@ -78,7 +79,12 @@ func NewWebServer(c *Config, selfgroup, selfname string) (*WebServer, error) {
 	if e := common.NameCheck(selfappname, true, true, false, true); e != nil {
 		return nil, e
 	}
-	c.validate()
+	if c == nil {
+		c = &Config{}
+	}
+	if e := c.validate(); e != nil {
+		return nil, e
+	}
 	instance := &WebServer{
 		selfappname: selfappname,
 		c:           c,
@@ -150,6 +156,56 @@ func NewWebServer(c *Config, selfgroup, selfname string) (*WebServer, error) {
 	})
 	if c.StaticFileRootPath != "" {
 		instance.router.ServeFiles("/src/*filepath", http.Dir(c.StaticFileRootPath))
+	}
+	if c.UsePprof {
+		instance.router.HandlerFunc(http.MethodGet, "/debug/pprof/", func(w http.ResponseWriter, r *http.Request) {
+			if e := r.ParseForm(); e != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			form := r.Form.Get("PprofVerifyData")
+			if form != instance.c.PprofVerifyData && instance.c.OldPprofVerifyData != "" && form != instance.c.OldPprofVerifyData {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			pprof.Index(w, r)
+		})
+		instance.router.HandlerFunc(http.MethodGet, "/debug/pprof/:path", func(w http.ResponseWriter, r *http.Request) {
+			if e := r.ParseForm(); e != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			form := r.Form.Get("PprofVerifyData")
+			if form != instance.c.PprofVerifyData && instance.c.OldPprofVerifyData != "" && form != instance.c.OldPprofVerifyData {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			path := httprouter.ParamsFromContext(r.Context()).ByName("path")
+			switch path {
+			case "allocs":
+				fallthrough
+			case "block":
+				fallthrough
+			case "goroutine":
+				fallthrough
+			case "heap":
+				fallthrough
+			case "mutex":
+				fallthrough
+			case "threadcreate":
+				pprof.Handler(path).ServeHTTP(w, r)
+			case "cmdline":
+				pprof.Cmdline(w, r)
+			case "profile":
+				pprof.Profile(w, r)
+			case "trace":
+				pprof.Trace(w, r)
+			case "symbol":
+				pprof.Symbol(w, r)
+			default:
+				w.WriteHeader(http.StatusNotFound)
+			}
+		})
 	}
 	return instance, nil
 }

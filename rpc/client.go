@@ -25,7 +25,7 @@ type DiscoveryHandler func(group, name string, client *RpcClient)
 type RpcClient struct {
 	c          *Config
 	appname    string
-	verifydata []byte
+	verifydata string
 	instance   *stream.Instance
 
 	lker    *sync.RWMutex
@@ -72,7 +72,7 @@ func init() {
 	all = make(map[string]*RpcClient)
 }
 
-func NewRpcClient(c *Config, selfgroup, selfname string, verifydata []byte, group, name string, picker PickHandler, discover DiscoveryHandler) (*RpcClient, error) {
+func NewRpcClient(c *Config, selfgroup, selfname string, verifydata string, group, name string, picker PickHandler, discover DiscoveryHandler) (*RpcClient, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -115,17 +115,22 @@ func NewRpcClient(c *Config, selfgroup, selfname string, verifydata []byte, grou
 		picker:     picker,
 		discover:   discover,
 	}
-	dupc := &stream.InstanceConfig{
-		HeartbeatTimeout:   c.HeartTimeout,
-		HeartprobeInterval: c.HeartPorbe,
-		GroupNum:           c.GroupNum,
-		TcpC: &stream.TcpConfig{
-			ConnectTimeout:         c.ConnTimeout,
-			SocketRBufLen:          c.SocketRBuf,
-			SocketWBufLen:          c.SocketWBuf,
-			MaxMsgLen:              c.MaxMsgLen,
-			MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
-		},
+	var dupc *stream.InstanceConfig
+	if c != nil {
+		dupc = &stream.InstanceConfig{
+			HeartbeatTimeout:   c.HeartTimeout,
+			HeartprobeInterval: c.HeartPorbe,
+			GroupNum:           c.GroupNum,
+			TcpC: &stream.TcpConfig{
+				ConnectTimeout:         c.ConnTimeout,
+				SocketRBufLen:          c.SocketRBuf,
+				SocketWBufLen:          c.SocketWBuf,
+				MaxMsgLen:              c.MaxMsgLen,
+				MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
+			},
+		}
+	} else {
+		dupc = &stream.InstanceConfig{}
 	}
 	//tcp instalce
 	dupc.Verifyfunc = client.verifyfunc
@@ -235,7 +240,7 @@ func (c *RpcClient) UpdateDiscovery(all map[string][]string, addition []byte) {
 	}
 }
 func (c *RpcClient) start(addr string) {
-	tempverifydata := common.Byte2str(c.verifydata) + "|" + c.appname
+	tempverifydata := c.verifydata + "|" + c.appname
 	if r := c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata)); r == "" {
 		c.lker.RLock()
 		var exist *ServerForPick
@@ -299,7 +304,7 @@ func (c *RpcClient) unregister(addr string) {
 	}
 }
 func (c *RpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
-	if !bytes.Equal(peerVerifyData, c.verifydata) {
+	if !bytes.Equal(peerVerifyData, common.Str2byte(c.verifydata)) {
 		return nil, false
 	}
 	c.lker.RLock()

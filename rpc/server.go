@@ -21,17 +21,19 @@ import (
 type OutsideHandler func(ctx *Context)
 
 type RpcServer struct {
-	c          *Config
-	global     []OutsideHandler
-	ctxpool    *sync.Pool
-	handler    map[string]func(string, *Msg)
-	instance   *stream.Instance
-	verifydata []byte
-	status     int32 //0-created,not started 1-started 2-closed
-	stopch     chan struct{}
+	c             *Config
+	global        []OutsideHandler
+	ctxpool       *sync.Pool
+	handler       map[string]func(string, *Msg)
+	instance      *stream.Instance
+	oldverifydata string //this is useful when changing the verifydata
+	verifydata    string
+	status        int32 //0-created,not started 1-started 2-closed
+	stopch        chan struct{}
 }
 
-func NewRpcServer(c *Config, selfgroup, selfname string, verifydata []byte) (*RpcServer, error) {
+//old: true means oldverifydata is useful,false means oldverifydata is useless
+func NewRpcServer(c *Config, selfgroup, selfname string, oldverifydata, verifydata string) (*RpcServer, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -42,25 +44,34 @@ func NewRpcServer(c *Config, selfgroup, selfname string, verifydata []byte) (*Rp
 	if e := common.NameCheck(appname, true, true, false, true); e != nil {
 		return nil, e
 	}
-	serverinstance := &RpcServer{
-		c:          c,
-		global:     make([]OutsideHandler, 0, 10),
-		ctxpool:    &sync.Pool{},
-		handler:    make(map[string]func(string, *Msg), 10),
-		verifydata: verifydata,
-		stopch:     make(chan struct{}, 1),
+	if verifydata == "" {
+		return nil, errors.New("[rpc.server] missing verifydata")
 	}
-	dupc := &stream.InstanceConfig{
-		HeartbeatTimeout:   c.HeartTimeout,
-		HeartprobeInterval: c.HeartPorbe,
-		GroupNum:           c.GroupNum,
-		TcpC: &stream.TcpConfig{
-			ConnectTimeout:         c.ConnTimeout,
-			SocketRBufLen:          c.SocketRBuf,
-			SocketWBufLen:          c.SocketWBuf,
-			MaxMsgLen:              c.MaxMsgLen,
-			MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
-		},
+	serverinstance := &RpcServer{
+		c:             c,
+		global:        make([]OutsideHandler, 0, 10),
+		ctxpool:       &sync.Pool{},
+		handler:       make(map[string]func(string, *Msg), 10),
+		oldverifydata: oldverifydata,
+		verifydata:    verifydata,
+		stopch:        make(chan struct{}, 1),
+	}
+	var dupc *stream.InstanceConfig
+	if c != nil {
+		dupc = &stream.InstanceConfig{
+			HeartbeatTimeout:   c.HeartTimeout,
+			HeartprobeInterval: c.HeartPorbe,
+			GroupNum:           c.GroupNum,
+			TcpC: &stream.TcpConfig{
+				ConnectTimeout:         c.ConnTimeout,
+				SocketRBufLen:          c.SocketRBuf,
+				SocketWBufLen:          c.SocketWBuf,
+				MaxMsgLen:              c.MaxMsgLen,
+				MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
+			},
+		}
+	} else {
+		dupc = &stream.InstanceConfig{}
 	}
 	dupc.Verifyfunc = serverinstance.verifyfunc
 	dupc.Onlinefunc = serverinstance.onlinefunc
@@ -210,10 +221,16 @@ func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerV
 	}
 	targetname := temp[index+1:]
 	vdata := temp[:index]
-	if targetname != s.instance.GetSelfName() || vdata != common.Byte2str(s.verifydata) {
+	if targetname != s.instance.GetSelfName() {
 		return nil, false
 	}
-	return s.verifydata, true
+	if vdata == s.verifydata {
+		return common.Str2byte(s.verifydata), true
+	}
+	if s.oldverifydata != "" && vdata == s.oldverifydata {
+		return common.Str2byte(s.oldverifydata), true
+	}
+	return nil, false
 }
 func (s *RpcServer) onlinefunc(p *stream.Peer, peeruniquename string, starttime uint64) {
 	if atomic.LoadInt32(&s.status) == 0 {

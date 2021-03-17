@@ -32,7 +32,7 @@ type DiscoveryServerFinder func(manually chan struct{})
 
 //serveruniquename = servername:ip:port
 type DiscoveryClient struct {
-	verifydata []byte
+	verifydata string
 	instance   *stream.Instance
 	regdata    []byte
 	status     int //0-closing,1-working
@@ -62,7 +62,7 @@ type servernode struct {
 var clientinstance *DiscoveryClient
 
 //finder is to find the discovery servers
-func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname string, vdata []byte, finder DiscoveryServerFinder) error {
+func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname string, verifydata string, finder DiscoveryServerFinder) error {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return e
 	}
@@ -92,7 +92,7 @@ func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname string, vd
 		finder = defaultfinder
 	}
 	temp := &DiscoveryClient{
-		verifydata: vdata,
+		verifydata: verifydata,
 		status:     1,
 		finder:     finder,
 		manually:   make(chan struct{}, 1),
@@ -182,7 +182,7 @@ func UpdateDiscoveryServers(serveraddrs []string) {
 	}
 }
 func (c *DiscoveryClient) start(addr, servername string) {
-	tempverifydata := common.Byte2str(clientinstance.verifydata) + "|" + servername
+	tempverifydata := clientinstance.verifydata + "|" + servername
 	if r := c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata)); r == "" {
 		c.lker.RLock()
 		server, ok := c.servers[servername+":"+addr]
@@ -380,7 +380,7 @@ func getinfos(appname string, t int) (map[string][]string, []byte) {
 }
 
 func (c *DiscoveryClient) verifyfunc(ctx context.Context, serveruniquename string, peerVerifyData []byte) ([]byte, bool) {
-	if !bytes.Equal(peerVerifyData, c.verifydata) {
+	if !bytes.Equal(peerVerifyData, common.Str2byte(c.verifydata)) {
 		return nil, false
 	}
 	c.lker.RLock()

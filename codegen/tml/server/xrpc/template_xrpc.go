@@ -38,7 +38,15 @@ func StartRpcServer() {
 		MaxBufferedWriteMsgNum: 1024,
 	}
 	var e error
-	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name, []byte(os.Getenv("RPC_VERIFY_DATA"))); e != nil {
+	oldvd := os.Getenv("OLD_RPC_VERIFY_DATA")
+	if oldvd == "<OLD_RPC_VERIFY_DATA>" {
+		oldvd = ""
+	}
+	newvd := os.Getenv("RPC_VERIFY_DATA")
+	if newvd == "<RPC_VERIFY_DATA>" {
+		newvd = ""
+	}
+	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name, oldvd, newvd); e != nil {
 		log.Error("[xrpc] new rpc server error:", e)
 		return
 	}

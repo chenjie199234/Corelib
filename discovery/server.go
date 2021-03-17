@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"sync"
 	"unsafe"
@@ -19,10 +20,11 @@ const (
 )
 
 type DiscoveryServer struct {
-	lker       *sync.RWMutex
-	groups     map[string]*appgroup //key appname
-	verifydata []byte
-	instance   *stream.Instance
+	lker          *sync.RWMutex
+	groups        map[string]*appgroup //key appname
+	oldverifydata string
+	verifydata    string
+	instance      *stream.Instance
 }
 
 //appuniquename = appname:ip:port
@@ -44,7 +46,8 @@ type appnode struct {
 	bewatched     map[string]*appnode //key appuniquename
 }
 
-func NewDiscoveryServer(c *stream.InstanceConfig, group, name string, vdata []byte) (*DiscoveryServer, error) {
+//old: true means oldverifydata is useful,false means oldverifydata is useless
+func NewDiscoveryServer(c *stream.InstanceConfig, group, name string, oldverifydata, verifydata string) (*DiscoveryServer, error) {
 	if e := common.NameCheck(name, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -54,10 +57,14 @@ func NewDiscoveryServer(c *stream.InstanceConfig, group, name string, vdata []by
 	if e := common.NameCheck(group+"."+name, true, true, false, true); e != nil {
 		return nil, e
 	}
+	if verifydata == "" {
+		return nil, errors.New("[discovery.server] missing verifydata")
+	}
 	instance := &DiscoveryServer{
-		lker:       &sync.RWMutex{},
-		groups:     make(map[string]*appgroup, 5),
-		verifydata: vdata,
+		lker:          &sync.RWMutex{},
+		groups:        make(map[string]*appgroup, 5),
+		oldverifydata: oldverifydata,
+		verifydata:    verifydata,
 	}
 	var dupc stream.InstanceConfig
 	if c == nil {
@@ -135,10 +142,16 @@ func (s *DiscoveryServer) verifyfunc(ctx context.Context, appuniquename string, 
 	}
 	targetname := temp[index+1:]
 	vdata := temp[:index]
-	if targetname != s.instance.GetSelfName() || vdata != common.Byte2str(s.verifydata) {
+	if targetname != s.instance.GetSelfName() {
 		return nil, false
 	}
-	return s.verifydata, true
+	if vdata == s.verifydata {
+		return common.Str2byte(s.verifydata), true
+	}
+	if s.oldverifydata != "" && vdata == s.oldverifydata {
+		return common.Str2byte(s.oldverifydata), true
+	}
+	return nil, false
 }
 
 //appuniquename = appname:ip:port

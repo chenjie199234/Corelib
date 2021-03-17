@@ -26,15 +26,14 @@ import (
 )
 
 func main() {
-	//stop watching config hot update
-	defer config.Close()
-	discoveryserververifydata := os.Getenv("DISCOVERY_SERVER_VERIFY_DATA")
-	if discoveryserververifydata != "" {
-		if e := discovery.NewDiscoveryClient(nil, api.Group, api.Name, []byte(discoveryserververifydata), nil); e != nil {
+	if os.Getenv("DISCOVERY_SERVER_VERIFY_DATA") != "" {
+		if e := discovery.NewDiscoveryClient(nil, api.Group, api.Name, os.Getenv("DISCOVERY_SERVER_VERIFY_DATA"), nil); e != nil {
 			log.Error(e)
 			return
 		}
 	}
+	config.Init()
+	defer config.Close()
 	//start the whole business service
 	if e := service.StartService(); e != nil {
 		log.Error(e)
@@ -61,8 +60,9 @@ func main() {
 		}
 		wg.Done()
 	}()
-	stop := make(chan struct{}, 1)
-	go func() {
+	//try to register self to the discovery server
+	stop := make(chan struct{})
+	go func(){
 		//delay 200ms to register self,if error happened in this 200ms,this server will not be registered
 		tmer := time.NewTimer(time.Millisecond * 200)
 		select {
@@ -87,8 +87,8 @@ func main() {
 	}()
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-ch
-	stop <- struct{}{}
-	//stop the whole business service
+	close(stop)
+		//stop the whole business service
 	service.StopService()
 	//stop low level net service
 	//grpc server,if don't need,please comment this

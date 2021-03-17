@@ -43,7 +43,7 @@ func Test_Client1(t *testing.T) {
 			SocketWBufLen:          1024,
 			MaxBufferedWriteMsgNum: 256,
 		},
-	}, "testgroup", "testclient1", []byte{'t', 'e', 's', 't'}, finder)
+	}, "testgroup", "testclient1", "test", finder)
 	rch, e := NoticeRpcChanges("testgroup.testclient2")
 	if e != nil {
 		panic("notice grpc change error:" + e.Error())
@@ -116,7 +116,7 @@ func Test_Client2(t *testing.T) {
 			SocketWBufLen:          1024,
 			MaxBufferedWriteMsgNum: 256,
 		},
-	}, "testgroup", "testclient2", []byte{'t', 'e', 's', 't'}, finder)
+	}, "testgroup", "testclient2", "test", finder)
 	rch, e := NoticeRpcChanges("testgroup.testclient1")
 	if e != nil {
 		panic("notice grpc change error:" + e.Error())

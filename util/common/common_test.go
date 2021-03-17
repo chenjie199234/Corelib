@@ -9,6 +9,16 @@ import (
 	"time"
 )
 
+func Test_Nil(t *testing.T) {
+	a := ([]byte)(nil)
+	if Byte2str(a) != "" {
+		panic("nil")
+	}
+	b := make([]byte, 0)
+	if Byte2str(b) != "" {
+		panic("empty")
+	}
+}
 func Test_Common(t *testing.T) {
 	var sempty string = ""
 	var s string = "abc"

@@ -57,7 +57,6 @@ func init() {
 	lker = &sync.Mutex{}
 	all = make(map[string]*WebClient)
 }
-
 func NewWebClient(globaltimeout time.Duration, selfgroup, selfname, group, name string, picker PickHandler, discover DiscoveryHandler) (*WebClient, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e

@@ -19,7 +19,7 @@ func Test_Server1(t *testing.T) {
 			SocketWBufLen:          1024,
 			MaxBufferedWriteMsgNum: 256,
 		},
-	}, "default", "discoverycenter1", []byte{'t', 'e', 's', 't'})
+	}, "default", "discoverycenter1", "", "test")
 	if e != nil {
 		panic(e)
 	}
@@ -44,7 +44,7 @@ func Test_Server2(t *testing.T) {
 			SocketWBufLen:          1024,
 			MaxBufferedWriteMsgNum: 256,
 		},
-	}, "default", "discoverycenter2", []byte{'t', 'e', 's', 't'})
+	}, "default", "discoverycenter2", "", "test")
 	if e != nil {
 		panic(e)
 	}

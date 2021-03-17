@@ -14,6 +14,7 @@ const textsource = `{
 		"rpc_heart_probe":"1.5s"
 	},
 	"web":{
+		"use_pprof":false,
 		"web_timeout":"200ms",
 		"web_staticfile":"./src",
 		"web_certfile":"",

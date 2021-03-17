@@ -27,7 +27,7 @@ type firstRpcClient struct {
 }
 
 //has race,will only return the first's call's client,the config will use the first call's config
-func NewFirstRpcClient(timeout, conntimeout, hearttimeout, heartprobe time.Duration, selfgroup, selfname string, verifydata []byte, picker rpc.PickHandler, discover rpc.DiscoveryHandler) (FirstRpcClient, error) {
+func NewFirstRpcClient(timeout, conntimeout, hearttimeout, heartprobe time.Duration, selfgroup, selfname string, verifydata string, picker rpc.PickHandler, discover rpc.DiscoveryHandler) (FirstRpcClient, error) {
 	c := &rpc.Config{
 		Timeout:                time.Duration(timeout),
 		ConnTimeout:            time.Duration(conntimeout),

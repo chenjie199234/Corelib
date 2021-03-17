@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -44,7 +45,10 @@ var AC *AppConfig
 var watcher *fsnotify.Watcher
 var closech chan struct{}
 
-func init() {
+func Init() {
+	if strings.ToLower(os.Getenv("REMOTE_CONFIG")) == "true" {
+		//get remote config
+	}
 	data, e := os.ReadFile("SourceConfig.json")
 	if e != nil {
 		log.Error("[SourceConfig] read config file error:", e)
@@ -86,6 +90,7 @@ func init() {
 	closech = make(chan struct{})
 	go watch()
 }
+
 func watch() {
 	defer close(closech)
 	for {
@@ -146,10 +151,11 @@ type RpcConfig struct {
 //WebConfig -
 type WebConfig struct {
 	//server
-	WebTimeout    ctime.Duration $json:"web_timeout"$ //default 500ms
-	WebStaticFile string         $json:"web_staticfile"$
-	WebCertFile   string         $json:"web_certfile"$
-	WebKeyFile    string         $json:"web_keyfile"$
+	UsePprof        bool           $json:"use_pprof"$
+	WebTimeout      ctime.Duration $json:"web_timeout"$ //default 500ms
+	WebStaticFile   string         $json:"web_staticfile"$
+	WebCertFile     string         $json:"web_certfile"$
+	WebKeyFile      string         $json:"web_keyfile"$
 	//cors
 	WebCors *WebCorsConfig $json:"web_cors"$
 }

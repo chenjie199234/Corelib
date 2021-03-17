@@ -15,7 +15,11 @@ ENV DISCOVERY_SERVER_GROUP=<DISCOVERY_SERVER_GROUP> \
     DISCOVERY_SERVER_NAME=<DISCOVERY_SERVER_NAME> \
     DISCOVERY_SERVER_PORT=<DISCOVERY_SERVER_PORT>
 ENV DISCOVERY_SERVER_VERIFY_DATA=<DISCOVERY_SERVER_VERIFY_DATA> \
+    OLD_RPC_VERIFY_DATA=<OLD_RPC_VERIFY_DATA> \
     RPC_VERIFY_DATA=<RPC_VERIFY_DATA> \
+    OLD_PPROF_VERIFY_DATA=<OLD_PPROF_VERIFY_DATA> \
+    PPROF_VERIFY_DATA=<PPROF_VERIFY_DATA> \
+    REMOTE_CONFIG=<REMOTE_CONFIG> \
     RUN_ENV=<RUN_ENV>
 COPY main probe.sh AppConfig.json SourceConfig.json ./
 ENTRYPOINT ["./main"]`
@@ -56,8 +60,6 @@ spec:
               memory: 256Mi
               cpu: 250m
           env:
-            - name: APP_NAME
-              value: {{.ProjectName}}
             - name: DEPLOY_ENV
               value: kubernetes
           livenessProbe:
