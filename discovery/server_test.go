@@ -27,22 +27,14 @@ func Test_Server1(t *testing.T) {
 		tker := time.NewTicker(time.Second)
 		for {
 			<-tker.C
-			if instance.groups["testgroup.testclient1"] != nil {
-				fmt.Println("client1:", " apps:", instance.groups["testgroup.testclient1"].apps, " bewatched:", instance.groups["testgroup.testclient1"].watchers)
-			} else {
-				fmt.Println("client1: nil")
-			}
-			if instance.groups["testgroup.testclient2"] != nil {
-				fmt.Println("client2:", " apps:", instance.groups["testgroup.testclient2"].apps, " bewatched:", instance.groups["testgroup.testclient2"].watchers)
-			} else {
-				fmt.Println("client2: nil")
-			}
+			fmt.Println("client1:", instance.GetAppInfo("testgroup.testclient1")["testgroup.testclient1"])
+			fmt.Println("client2:", instance.GetAppInfo("testgroup.testclient2")["testgroup.testclient2"])
 		}
 	}()
 	instance.StartDiscoveryServer("127.0.0.1:9234")
 }
 func Test_Server2(t *testing.T) {
-	instance, _ := NewDiscoveryServer(&stream.InstanceConfig{
+	instance, e := NewDiscoveryServer(&stream.InstanceConfig{
 		HeartbeatTimeout:   5 * time.Second,
 		HeartprobeInterval: 2 * time.Second,
 		GroupNum:           1,
@@ -53,22 +45,15 @@ func Test_Server2(t *testing.T) {
 			MaxBufferedWriteMsgNum: 256,
 		},
 	}, "default", "discoverycenter2", []byte{'t', 'e', 's', 't'})
+	if e != nil {
+		panic(e)
+	}
 	go func() {
 		tker := time.NewTicker(time.Second)
 		for {
 			<-tker.C
-			if instance != nil {
-				if instance.groups["testgroup.testclient1"] != nil {
-					fmt.Println("client1:", " apps:", instance.groups["testgroup.testclient1"].apps, " bewatched:", instance.groups["testgroup.testclient1"].watchers)
-				} else {
-					fmt.Println("client1: nil")
-				}
-				if instance.groups["testgroup.testclient2"] != nil {
-					fmt.Println("client2:", " apps:", instance.groups["testgroup.testclient2"].apps, " bewatched:", instance.groups["testgroup.testclient2"].watchers)
-				} else {
-					fmt.Println("client2: nil")
-				}
-			}
+			fmt.Println("client1:", instance.GetAppInfo("testgroup.testclient1")["testgroup.testclient1"])
+			fmt.Println("client2:", instance.GetAppInfo("testgroup.testclient2")["testgroup.testclient2"])
 		}
 	}()
 	instance.StartDiscoveryServer("127.0.0.1:9235")
