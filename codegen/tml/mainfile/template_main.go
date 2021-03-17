@@ -43,7 +43,6 @@ func main() {
 	//start low level net service
 	ch := make(chan os.Signal, 1)
 	wg := &sync.WaitGroup{}
-	//grpc server,if don't need,please comment this
 	wg.Add(1)
 	go func() {
 		xrpc.StartRpcServer()
@@ -53,7 +52,6 @@ func main() {
 		}
 		wg.Done()
 	}()
-	//http server,if don't need,please comment this
 	wg.Add(1)
 	go func() {
 		xweb.StartWebServer()
@@ -78,14 +76,10 @@ func main() {
 				} else {
 					regmsg.WebScheme = "http"
 				}
-				if webc.WebPort != 0 {
-					regmsg.WebPort = int(webc.WebPort)
-				}
+				regmsg.WebPort = 8000
 			}
 			if rpcc != nil {
-				if rpcc.RpcPort != 0 {
-					regmsg.RpcPort = int(rpcc.RpcPort)
-				}
+				regmsg.RpcPort = 9000
 			}
 			discovery.RegisterSelf(regmsg)
 		case <-stop:

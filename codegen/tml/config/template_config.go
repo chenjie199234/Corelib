@@ -137,7 +137,6 @@ type sourceConfig struct {
 
 //RpcConfig -
 type RpcConfig struct {
-	RpcPort         uint           $json:"rpc_port"$
 	RpcTimeout      ctime.Duration $json:"rpc_timeout"$       //default 500ms
 	RpcConnTimeout  ctime.Duration $json:"rpc_conn_timeout"$  //default 1s
 	RpcHeartTimeout ctime.Duration $json:"rpc_heart_timeout"$ //default 5s
@@ -147,7 +146,6 @@ type RpcConfig struct {
 //WebConfig -
 type WebConfig struct {
 	//server
-	WebPort       uint           $json:"web_port"$
 	WebTimeout    ctime.Duration $json:"web_timeout"$ //default 500ms
 	WebStaticFile string         $json:"web_staticfile"$
 	WebCertFile   string         $json:"web_certfile"$
@@ -235,9 +233,6 @@ var kafkaSubers map[string]*kafka.Reader
 var kafkaPubers map[string]*kafka.Writer
 
 func (c *sourceConfig) validate() {
-	if c.Rpc.RpcPort == 0 {
-		c.Rpc.RpcPort = 9000
-	}
 	if c.Rpc.RpcTimeout == 0 {
 		c.Rpc.RpcTimeout = ctime.Duration(time.Millisecond * 500)
 	}
@@ -249,9 +244,6 @@ func (c *sourceConfig) validate() {
 	}
 	if c.Rpc.RpcHeartProbe == 0 {
 		c.Rpc.RpcHeartProbe = ctime.Duration(1500 * time.Millisecond)
-	}
-	if c.Web.WebPort == 0 {
-		c.Web.WebPort = 8000
 	}
 	if c.Web.WebTimeout == 0 {
 		c.Web.WebTimeout = ctime.Duration(time.Millisecond * 500)

@@ -9,7 +9,6 @@ import (
 const text = `package xweb
 
 import (
-	"fmt"
 	"time"
 
 	"{{.}}/api"
@@ -62,7 +61,7 @@ func StartWebServer() {
 	//return
 	//}
 
-	if e = s.StartWebServer(fmt.Sprintf(":%d", c.WebPort), c.WebCertFile, c.WebKeyFile); e != nil {
+	if e = s.StartWebServer(":8000", c.WebCertFile, c.WebKeyFile); e != nil {
 		log.Error("[xweb] start web server error:", e)
 		return
 	}

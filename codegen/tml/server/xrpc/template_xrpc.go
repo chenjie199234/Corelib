@@ -9,7 +9,6 @@ import (
 const text = `package xrpc
 
 import (
-	"fmt"
 	"os"
 	"time"
 
@@ -58,7 +57,7 @@ func StartRpcServer() {
 	//return
 	//}
 
-	if e = s.StartRpcServer(fmt.Sprintf(":%d", c.RpcPort)); e != nil {
+	if e = s.StartRpcServer(":9000"); e != nil {
 		log.Error("[xrpc] start rpc server error:", e)
 		return
 	}
