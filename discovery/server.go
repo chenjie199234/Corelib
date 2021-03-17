@@ -106,6 +106,25 @@ func (s *DiscoveryServer) GetAppInfos() map[string]*Info {
 	}
 	return result
 }
+func (s *DiscoveryServer) GetAppInfo(appname string) map[string]*Info {
+	s.lker.RLock()
+	defer s.lker.RUnlock()
+	group, ok := s.groups[appname]
+	if !ok {
+		return nil
+	}
+	temp := &Info{
+		Apps:     make(map[string]int, len(group.apps)),
+		Watchers: make([]string, 0, len(group.watchers)),
+	}
+	for k, app := range group.apps {
+		temp.Apps[k] = app.status
+	}
+	for k := range group.watchers {
+		temp.Watchers = append(temp.Watchers, k)
+	}
+	return map[string]*Info{appname: temp}
+}
 
 //appuniquename = appname:ip:port
 func (s *DiscoveryServer) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
