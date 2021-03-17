@@ -107,23 +107,23 @@ func (s *DiscoveryServer) GetAppInfos() map[string]*Info {
 	return result
 }
 func (s *DiscoveryServer) GetAppInfo(appname string) map[string]*Info {
+	result := make(map[string]*Info)
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	group, ok := s.groups[appname]
-	if !ok {
-		return nil
+	if group, ok := s.groups[appname]; ok {
+		temp := &Info{
+			Apps:     make(map[string]int, len(group.apps)),
+			Watchers: make([]string, 0, len(group.watchers)),
+		}
+		for k, app := range group.apps {
+			temp.Apps[k] = app.status
+		}
+		for k := range group.watchers {
+			temp.Watchers = append(temp.Watchers, k)
+		}
+		result[appname] = temp
 	}
-	temp := &Info{
-		Apps:     make(map[string]int, len(group.apps)),
-		Watchers: make([]string, 0, len(group.watchers)),
-	}
-	for k, app := range group.apps {
-		temp.Apps[k] = app.status
-	}
-	for k := range group.watchers {
-		temp.Watchers = append(temp.Watchers, k)
-	}
-	return map[string]*Info{appname: temp}
+	return result
 }
 
 //appuniquename = appname:ip:port
