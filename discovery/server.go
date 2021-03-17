@@ -83,8 +83,8 @@ func (s *DiscoveryServer) StopDiscoveryServer() {
 
 //one app's info
 type Info struct {
-	Apps     []string //value appuniquename
-	Watchers []string //value appuniquename
+	Apps     map[string]int //key appuniquename,value registered status
+	Watchers []string       //value appuniquename
 }
 
 func (s *DiscoveryServer) GetAppInfos() map[string]*Info {
@@ -93,11 +93,11 @@ func (s *DiscoveryServer) GetAppInfos() map[string]*Info {
 	defer s.lker.RUnlock()
 	for appname, group := range s.groups {
 		temp := &Info{
-			Apps:     make([]string, 0, len(group.apps)),
+			Apps:     make(map[string]int, len(group.apps)),
 			Watchers: make([]string, 0, len(group.watchers)),
 		}
-		for k := range group.apps {
-			temp.Apps = append(temp.Apps, k)
+		for k, app := range group.apps {
+			temp.Apps[k] = app.status
 		}
 		for k := range group.watchers {
 			temp.Watchers = append(temp.Watchers, k)
