@@ -60,7 +60,6 @@ type RpcConfig struct {
 	RpcConnTimeout  ctime.Duration $json:"rpc_conn_timeout"$  //default 1s
 	RpcHeartTimeout ctime.Duration $json:"rpc_heart_timeout"$ //default 5s
 	RpcHeartProbe   ctime.Duration $json:"rpc_heart_probe"$   //default 1.5s
-	VerifyDatas     []string       $json:"verify_datas"$
 }
 
 //WebConfig -
@@ -165,7 +164,22 @@ func init() {
 	initapp()
 }
 func initdiscovery() {
-	if verifydata, ok := os.LookupEnv("DISCOVERY_SERVER_VERIFY_DATA"); ok {
+	if str, ok := os.LookupEnv("DISCOVERY_SERVER_VERIFY_DATA"); ok {
+		verifydatas := make([]string, 0)
+		if str == "<DISCOVERY_SERVER_VERIFY_DATA>" {
+			str = ""
+		}
+		if str != "" {
+			if e := json.Unmarshal([]byte(str), &verifydatas); e != nil {
+				log.Error("[config.initdiscovery] system env:DISCOVERY_SERVER_VERIFY_DATA error:", e)
+				Close()
+				os.Exit(1)
+			}
+		}
+		var verifydata string
+		if len(verifydatas) > 0 {
+			verifydata = verifydatas[0]
+		}
 		port, e := strconv.Atoi(os.Getenv("DISCOVERY_SERVER_PORT"))
 		if e != nil {
 			log.Error("[config.initdiscovery] port must be number in [1-65535]")
