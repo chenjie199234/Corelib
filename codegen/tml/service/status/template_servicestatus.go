@@ -29,8 +29,8 @@ type Service struct {
 //Start -
 func Start() *Service {
 	return &Service{
-		//statusDao: statusdao.NewDao(config.GetDB("status_db"), config.GetRedis("status_redis")),
-		statusDao: statusdao.NewDao(nil, nil),
+		//statusDao: statusdao.NewDao(config.GetSql("status_sql"), config.GetRedis("status_redis"), config.GetMongo("status_mongo")),
+		statusDao: statusdao.NewDao(nil, nil, nil),
 	}
 }
 
