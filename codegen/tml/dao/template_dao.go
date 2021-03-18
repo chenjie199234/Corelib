@@ -9,6 +9,7 @@ import (
 const text = `package dao
 
 import (
+//"encoding/json"
 //"os"
 //"time"
 
@@ -25,9 +26,20 @@ import (
 func NewApi() error {
 	//var e error
 	//rc := config.GetRpcConfig()
+	//var verifydatas []string
+	//if str, ok := os.LookupEnv("RPC_SERVER_VERIFY_DATA"); ok {
+	//	if str == "<RPC_SERVER_VERIFY_DATA>" {
+	//		str = ""
+	//	}
+	//	if str != "" {
+	//		if e := json.Unmarshal([]byte(str), &verifydatas); e != nil {
+	//			return e
+	//		}
+	//	}
+	//}
 	//rpcverifydata := ""
-	//if len(rc.VerifyDatas) != 0 {
-	//	rpcverifydata = rc.VerifyDatas[0]
+	//if len(verifydatas) != 0 {
+	//	rpcverifydata = verifydatas[0]
 	//}
 	//if ExampleRpcApi, e = example.NewExampleRpcClient(time.Duration(rc.RpcTimeout), time.Duration(rc.RpcConnTimeout), time.Duration(rc.RpcHeartTimeout), time.Duration(rc.RpcHeartProbe), api.Group, api.Name, rpcverifydata, nil, nil); e != nil {
 	//        return e
