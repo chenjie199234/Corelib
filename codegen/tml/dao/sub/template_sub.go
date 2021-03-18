@@ -9,24 +9,27 @@ import (
 const text = `package {{.}}
 
 import (
-	"database/sql"
+	csql "database/sql"
 
-	"github.com/chenjie199234/Corelib/redis"
+	credis "github.com/chenjie199234/Corelib/redis"
+	cmongo "go.mongodb.org/mongo-driver/mongo"
 )
 
 //Dao this is a data operation layer to operate {{.}} service's data
 type Dao struct {
-	db    *sql.DB
-	cache *redis.Pool
+	sql   *csql.DB
+	redis *credis.Pool
+	mongo *cmongo.Client
 }
 
 //NewDao Dao is only a data operation layer
 //don't write business logic in this package
 //business logic should be written in service package
-func NewDao(db *sql.DB, cache *redis.Pool) *Dao {
+func NewDao(sql *csql.DB, redis *credis.Pool, mongo *cmongo.Client) *Dao {
 	return &Dao{
-		db:    db,
-		cache: cache,
+		sql:   sql,
+		redis: redis,
+		mongo: mongo,
 	}
 }`
 const textsql = `package {{.}}`
