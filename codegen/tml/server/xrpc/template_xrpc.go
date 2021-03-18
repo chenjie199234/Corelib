@@ -37,17 +37,18 @@ func StartRpcServer() {
 		MaxMsgLen:              65535,
 		MaxBufferedWriteMsgNum: 1024,
 	}
-	var e error
+	newvd := os.Getenv("RPC_VERIFY_DATA")
+	if newvd == "<RPC_VERIFY_DATA>" || newvd == "" {
+		log.Error("[xrpc] missing verifydata")
+		return
+	}
 	oldvd := os.Getenv("OLD_RPC_VERIFY_DATA")
 	if oldvd == "<OLD_RPC_VERIFY_DATA>" {
 		oldvd = ""
 	}
-	newvd := os.Getenv("RPC_VERIFY_DATA")
-	if newvd == "<RPC_VERIFY_DATA>" {
-		newvd = ""
-	}
+	var e error
 	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name, oldvd, newvd); e != nil {
-		log.Error("[xrpc] new rpc server error:", e)
+		log.Error("[xrpc] new error:", e)
 		return
 	}
 
@@ -66,7 +67,7 @@ func StartRpcServer() {
 	//}
 
 	if e = s.StartRpcServer(":9000"); e != nil {
-		log.Error("[xrpc] start rpc server error:", e)
+		log.Error("[xrpc] start error:", e)
 		return
 	}
 }

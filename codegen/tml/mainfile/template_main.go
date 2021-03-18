@@ -15,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	"{{.}}/api"
 	"{{.}}/config"
 	"{{.}}/server/xrpc"
 	"{{.}}/server/xweb"
@@ -26,13 +25,6 @@ import (
 )
 
 func main() {
-	if os.Getenv("DISCOVERY_SERVER_VERIFY_DATA") != "" {
-		if e := discovery.NewDiscoveryClient(nil, api.Group, api.Name, os.Getenv("DISCOVERY_SERVER_VERIFY_DATA"), nil); e != nil {
-			log.Error(e)
-			return
-		}
-	}
-	config.Init()
 	defer config.Close()
 	//start the whole business service
 	if e := service.StartService(); e != nil {
@@ -88,7 +80,7 @@ func main() {
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-ch
 	close(stop)
-		//stop the whole business service
+	//stop the whole business service
 	service.StopService()
 	//stop low level net service
 	//grpc server,if don't need,please comment this

@@ -14,11 +14,15 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
+	"{{.}}/api"
+
+	"github.com/chenjie199234/Corelib/discovery"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
 	ctime "github.com/chenjie199234/Corelib/util/time"
@@ -39,97 +43,7 @@ type AppConfig struct {
 	//add your config here
 }
 
-//AC -
-var AC *AppConfig
-
-var watcher *fsnotify.Watcher
-var closech chan struct{}
-
-func Init() {
-	if strings.ToLower(os.Getenv("REMOTE_CONFIG")) == "true" {
-		//get remote config
-	}
-	data, e := os.ReadFile("SourceConfig.json")
-	if e != nil {
-		log.Error("[SourceConfig] read config file error:", e)
-		Close()
-		os.Exit(1)
-	}
-	sc = &sourceConfig{}
-	if e = json.Unmarshal(data, sc); e != nil {
-		log.Error("[SourceConfig] config file format error:", e)
-		Close()
-		os.Exit(1)
-	}
-	sc.validate()
-	sc.newsource()
-
-	data, e = os.ReadFile("AppConfig.json")
-	if e != nil {
-		log.Error("[AppConfig] read config file error:", e)
-		Close()
-		os.Exit(1)
-	}
-	AC = &AppConfig{}
-	if e = json.Unmarshal(data, AC); e != nil {
-		log.Error("[AppConfig] config file format error:", e)
-		Close()
-		os.Exit(1)
-	}
-	watcher, e = fsnotify.NewWatcher()
-	if e != nil {
-		log.Error("[AppConfig] create watcher for hot update error:", e)
-		Close()
-		os.Exit(1)
-	}
-	if e = watcher.Add("./"); e != nil {
-		log.Error("[AppConfig] create watcher for hot update error:", e)
-		Close()
-		os.Exit(1)
-	}
-	closech = make(chan struct{})
-	go watch()
-}
-
-func watch() {
-	defer close(closech)
-	for {
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return
-			}
-			if filepath.Base(event.Name) != "AppConfig.json" || (event.Op&fsnotify.Create == 0 && event.Op&fsnotify.Write == 0) {
-				continue
-			}
-			data, e := os.ReadFile("AppConfig.json")
-			if e != nil {
-				log.Error("[AppConfig] hot update read config file error:", e)
-				continue
-			}
-			c := &AppConfig{}
-			if e = json.Unmarshal(data, c); e != nil {
-				log.Error("[AppConfig] hot update config file format error:", e)
-				continue
-			}
-			atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&AC)), unsafe.Pointer(c))
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				return
-			}
-			log.Error("[AppConfig] hot update watcher error:", err)
-		}
-	}
-}
-func Close() {
-	if watcher != nil {
-		watcher.Close()
-		<-closech
-	}
-	log.Close()
-}
-
-//SourceConfig can't hot update
+//sourceConfig can't hot update
 type sourceConfig struct {
 	Rpc      *RpcConfig                 $json:"rpc"$
 	Web      *WebConfig                 $json:"web"$
@@ -225,6 +139,12 @@ type KafkaSubConfig struct {
 	CommitInterval ctime.Duration $json:"commit_interval"$
 }
 
+//AC -
+var AC *AppConfig
+
+var watcher *fsnotify.Watcher
+var closech chan struct{}
+
 //SC total source config instance
 var sc *sourceConfig
 
@@ -238,23 +158,83 @@ var kafkaSubers map[string]*kafka.Reader
 
 var kafkaPubers map[string]*kafka.Writer
 
-func (c *sourceConfig) validate() {
-	if c.Rpc.RpcTimeout == 0 {
-		c.Rpc.RpcTimeout = ctime.Duration(time.Millisecond * 500)
+func init() {
+	initdiscovery()
+	initremote()
+	initsource()
+	initapp()
+}
+func initdiscovery() {
+	verifydata := os.Getenv("DISCOVERY_SERVER_VERIFY_DATA")
+	if verifydata == "<DISCOVERY_SERVER_VERIFY_DATA>" || verifydata == "" {
+		log.Error("[config.initdiscovery] missing verifydata")
+		Close()
+		os.Exit(1)
 	}
-	if c.Rpc.RpcConnTimeout == 0 {
-		c.Rpc.RpcConnTimeout = ctime.Duration(time.Second)
+	port, e := strconv.Atoi(os.Getenv("DISCOVERY_SERVER_PORT"))
+	if e != nil {
+		log.Error("[config.initdiscovery] port must be number in [1-65535]")
+		Close()
+		os.Exit(1)
 	}
-	if c.Rpc.RpcHeartTimeout == 0 {
-		c.Rpc.RpcHeartTimeout = ctime.Duration(5 * time.Second)
+	group := os.Getenv("DISCOVERY_SERVER_GROUP")
+	if group == "<DISCOVERY_SERVER_GROUP>" || group == "" {
+		log.Error("[config.initdiscovery] missing group")
+		Close()
+		os.Exit(1)
 	}
-	if c.Rpc.RpcHeartProbe == 0 {
-		c.Rpc.RpcHeartProbe = ctime.Duration(1500 * time.Millisecond)
+	name := os.Getenv("DISCOVERY_SERVER_NAME")
+	if name == "<DISCOVERY_SERVER_NAME>" || name == "" {
+		log.Error("[config.initdiscovery] missing name")
+		Close()
+		os.Exit(1)
 	}
-	if c.Web.WebTimeout == 0 {
-		c.Web.WebTimeout = ctime.Duration(time.Millisecond * 500)
+	finder, e := discovery.MakeDefaultFinder(group, name, port)
+	if e != nil {
+		log.Error("[config.initdiscovery] error:", e)
+		Close()
+		os.Exit(1)
 	}
-	for _, mongoc := range c.Mongo {
+	if e := discovery.NewDiscoveryClient(nil, api.Group, api.Name, os.Getenv("DISCOVERY_SERVER_VERIFY_DATA"), finder); e != nil {
+		log.Error("[config.initdiscovery] error:", e)
+		Close()
+		os.Exit(1)
+	}
+}
+func initremote() {
+	if strings.ToLower(os.Getenv("REMOTE_CONFIG")) == "true" {
+		//get remote config
+	}
+}
+func initsource() {
+	data, e := os.ReadFile("SourceConfig.json")
+	if e != nil {
+		log.Error("[config.initsource] read config file error:", e)
+		Close()
+		os.Exit(1)
+	}
+	sc = &sourceConfig{}
+	if e = json.Unmarshal(data, sc); e != nil {
+		log.Error("[config.initsource] config file format error:", e)
+		Close()
+		os.Exit(1)
+	}
+	if sc.Rpc.RpcTimeout == 0 {
+		sc.Rpc.RpcTimeout = ctime.Duration(time.Millisecond * 500)
+	}
+	if sc.Rpc.RpcConnTimeout == 0 {
+		sc.Rpc.RpcConnTimeout = ctime.Duration(time.Second)
+	}
+	if sc.Rpc.RpcHeartTimeout == 0 {
+		sc.Rpc.RpcHeartTimeout = ctime.Duration(5 * time.Second)
+	}
+	if sc.Rpc.RpcHeartProbe == 0 {
+		sc.Rpc.RpcHeartProbe = ctime.Duration(1500 * time.Millisecond)
+	}
+	if sc.Web.WebTimeout == 0 {
+		sc.Web.WebTimeout = ctime.Duration(time.Millisecond * 500)
+	}
+	for _, mongoc := range sc.Mongo {
 		if mongoc.Username == "" {
 			mongoc.Username = "root"
 			mongoc.Passwd = "root"
@@ -275,7 +255,7 @@ func (c *sourceConfig) validate() {
 			mongoc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
 		}
 	}
-	for _, sqlc := range c.Sql {
+	for _, sqlc := range sc.Sql {
 		if sqlc.Username == "" {
 			sqlc.Username = "root"
 			sqlc.Passwd = "root"
@@ -297,7 +277,7 @@ func (c *sourceConfig) validate() {
 			sqlc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
 		}
 	}
-	for _, redisc := range c.Redis {
+	for _, redisc := range sc.Redis {
 		if redisc.Addr == "" {
 			redisc.Addr = "127.0.0.1:6379"
 		}
@@ -314,7 +294,7 @@ func (c *sourceConfig) validate() {
 			redisc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
 		}
 	}
-	for _, pubc := range c.KafkaPub {
+	for _, pubc := range sc.KafkaPub {
 		if pubc.Addr == "" {
 			pubc.Addr = "127.0.0.1:9092"
 		}
@@ -323,7 +303,7 @@ func (c *sourceConfig) validate() {
 			pubc.Passwd = "root"
 		}
 	}
-	for topic, subc := range c.KafkaSub {
+	for topic, subc := range sc.KafkaSub {
 		if subc.Addr == "" {
 			subc.Addr = "127.0.0.1:9092"
 		}
@@ -332,17 +312,13 @@ func (c *sourceConfig) validate() {
 			subc.Passwd = "root"
 		}
 		if subc.GroupName == "" {
-			log.Error("[SourceConfig] sub topic:", topic, "groupname missing")
+			log.Error("[config.initsource] sub topic:", topic, "groupname missing")
 			Close()
 			os.Exit(1)
 		}
 	}
-}
-
-//don't change this function only if you known what you are changing
-func (c *sourceConfig) newsource() {
-	mongos = make(map[string]*mongo.Client, len(c.Mongo))
-	for k, mongoc := range c.Mongo {
+	mongos = make(map[string]*mongo.Client, len(sc.Mongo))
+	for k, mongoc := range sc.Mongo {
 		if k == "example_mongo" {
 			continue
 		}
@@ -367,14 +343,14 @@ func (c *sourceConfig) newsource() {
 		op = op.SetWriteConcern(writeconcern.New(writeconcern.WMajority(), writeconcern.J(true), writeconcern.WTimeout(time.Duration(mongoc.IoTimeout))))
 		tempdb, e := mongo.Connect(nil, op)
 		if e != nil {
-			log.Error("[SourceConfig] open mongodb:", k, "error:", e)
+			log.Error("[config.initsource] open mongodb:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
 		mongos[k] = tempdb
 	}
-	sqls = make(map[string]*sql.DB, len(c.Sql))
-	for k, sqlc := range c.Sql {
+	sqls = make(map[string]*sql.DB, len(sc.Sql))
+	for k, sqlc := range sc.Sql {
 		if k == "example_db" {
 			continue
 		}
@@ -390,7 +366,7 @@ func (c *sourceConfig) newsource() {
 			Collation:            sqlc.Collation,
 		}).FormatDSN())
 		if e != nil {
-			log.Error("[SourceConfig] open mysql:", k, "error:", e)
+			log.Error("[config.initsource] open mysql:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
@@ -398,8 +374,8 @@ func (c *sourceConfig) newsource() {
 		tempdb.SetConnMaxIdleTime(time.Duration(sqlc.MaxIdletime))
 		sqls[k] = tempdb
 	}
-	rediss = make(map[string]*redis.Pool, len(c.Redis))
-	for k, redisc := range c.Redis {
+	rediss = make(map[string]*redis.Pool, len(sc.Redis))
+	for k, redisc := range sc.Redis {
 		if k == "example_redis" {
 			continue
 		}
@@ -413,8 +389,8 @@ func (c *sourceConfig) newsource() {
 			ConnTimeout: time.Duration(redisc.ConnTimeout),
 		})
 	}
-	kafkaSubers = make(map[string]*kafka.Reader, len(c.KafkaSub))
-	for topic, subc := range c.KafkaSub {
+	kafkaSubers = make(map[string]*kafka.Reader, len(sc.KafkaSub))
+	for topic, subc := range sc.KafkaSub {
 		if topic == "example_topic" {
 			continue
 		}
@@ -426,7 +402,7 @@ func (c *sourceConfig) newsource() {
 			var e error
 			dialer.SASLMechanism, e = scram.Mechanism(scram.SHA512, subc.Username, subc.Passwd)
 			if e != nil {
-				log.Error("[SourceConfig] kafka topic:", topic, "sub group:", subc.GroupName, "username and password parse error:", e)
+				log.Error("[config.initsource] kafka topic:", topic, "sub group:", subc.GroupName, "username and password parse error:", e)
 				Close()
 				os.Exit(1)
 			}
@@ -447,8 +423,8 @@ func (c *sourceConfig) newsource() {
 		})
 		kafkaSubers[topic+subc.GroupName] = reader
 	}
-	kafkaPubers = make(map[string]*kafka.Writer, len(c.KafkaPub))
-	for topic, pubc := range c.KafkaPub {
+	kafkaPubers = make(map[string]*kafka.Writer, len(sc.KafkaPub))
+	for topic, pubc := range sc.KafkaPub {
 		if topic == "example_topic" {
 			continue
 		}
@@ -460,7 +436,7 @@ func (c *sourceConfig) newsource() {
 			var e error
 			dialer.SASLMechanism, e = scram.Mechanism(scram.SHA512, pubc.Username, pubc.Passwd)
 			if e != nil {
-				log.Error("[SourceConfig] kafka topic:", topic, "pub username and password parse error:", e)
+				log.Error("[config.initsource] kafka topic:", topic, "pub username and password parse error:", e)
 				Close()
 				os.Exit(1)
 			}
@@ -479,6 +455,71 @@ func (c *sourceConfig) newsource() {
 		})
 		kafkaPubers[topic] = writer
 	}
+}
+func initapp() {
+	data, e := os.ReadFile("AppConfig.json")
+	if e != nil {
+		log.Error("[config.initapp] read config file error:", e)
+		Close()
+		os.Exit(1)
+	}
+	AC = &AppConfig{}
+	if e = json.Unmarshal(data, AC); e != nil {
+		log.Error("[config.initapp] config file format error:", e)
+		Close()
+		os.Exit(1)
+	}
+	watcher, e = fsnotify.NewWatcher()
+	if e != nil {
+		log.Error("[config.initapp] create watcher for hot update error:", e)
+		Close()
+		os.Exit(1)
+	}
+	if e = watcher.Add("./"); e != nil {
+		log.Error("[config.initapp] create watcher for hot update error:", e)
+		Close()
+		os.Exit(1)
+	}
+	closech = make(chan struct{})
+	go func() {
+		defer close(closech)
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if filepath.Base(event.Name) != "AppConfig.json" || (event.Op&fsnotify.Create == 0 && event.Op&fsnotify.Write == 0) {
+					continue
+				}
+				data, e := os.ReadFile("AppConfig.json")
+				if e != nil {
+					log.Error("[config.initapp] hot update read config file error:", e)
+					continue
+				}
+				c := &AppConfig{}
+				if e = json.Unmarshal(data, c); e != nil {
+					log.Error("[config.initapp] hot update config file format error:", e)
+					continue
+				}
+				atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&AC)), unsafe.Pointer(c))
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Error("[config.initapp] hot update watcher error:", err)
+			}
+		}
+	}()
+}
+
+//Close -
+func Close() {
+	if watcher != nil {
+		watcher.Close()
+		<-closech
+	}
+	log.Close()
 }
 
 //GetRpcConfig get the rpc net config

@@ -27,8 +27,9 @@ var s *web.WebServer
 func StartWebServer() {
 	c := config.GetWebConfig()
 	newvd := os.Getenv("PPROF_VERIFY_DATA")
-	if newvd == "<PPROF_VERIFY_DATA>" {
-		newvd = ""
+	if c.UsePprof && (newvd == "<PPROF_VERIFY_DATA>" || newvd == "") {
+		log.Error("[xweb] missing verifydata")
+		return
 	}
 	oldvd := os.Getenv("OLD_PPROF_VERIFY_DATA")
 	if oldvd == "<OLD_PPROF_VERIFY_DATA>" {
@@ -55,7 +56,7 @@ func StartWebServer() {
 	}
 	var e error
 	if s, e = web.NewWebServer(webc, api.Group, api.Name); e != nil {
-		log.Error("[xweb] new web server error:", e)
+		log.Error("[xweb] new error:", e)
 		return
 	}
 
@@ -74,7 +75,7 @@ func StartWebServer() {
 	//}
 
 	if e = s.StartWebServer(":8000", c.WebCertFile, c.WebKeyFile); e != nil {
-		log.Error("[xweb] start web server error:", e)
+		log.Error("[xweb] start error:", e)
 		return
 	}
 }

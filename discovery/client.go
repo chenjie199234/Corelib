@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -62,7 +61,7 @@ type servernode struct {
 var clientinstance *DiscoveryClient
 
 //finder is to find the discovery servers
-func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname string, verifydata string, finder DiscoveryServerFinder) error {
+func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname, verifydata string, finder DiscoveryServerFinder) error {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return e
 	}
@@ -72,24 +71,11 @@ func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname string, ve
 	if e := common.NameCheck(selfgroup+"."+selfname, true, true, false, true); e != nil {
 		return e
 	}
+	if verifydata == "" {
+		return errors.New("[Discovery.client] missing verifydata")
+	}
 	if finder == nil {
-		group := os.Getenv("DISCOVERY_SERVER_GROUP")
-		if group == "" {
-			return errors.New("[Discovery.client] missing system env DISCOVERY_SERVER_GROUP")
-		}
-		name := os.Getenv("DISCOVERY_SERVER_NAME")
-		if name == "" {
-			return errors.New("[Discovery.client] missing system env DISCOVERY_SERVER_NAME")
-		}
-		port := os.Getenv("DISCOVERY_SERVER_PORT")
-		if port == "" {
-			return errors.New("[Discovery.client] missing system env DISCOVERY_SERVER_PORT")
-		}
-		n, e := strconv.Atoi(port)
-		if e != nil || n <= 0 || n > 65535 {
-			return errors.New("[Discovery.client] system env DISCOVERY_SERVER_PORT must be number: 1-65535")
-		}
-		finder = defaultfinder
+		return errors.New("[Discovery.client] missing finder")
 	}
 	temp := &DiscoveryClient{
 		verifydata: verifydata,
