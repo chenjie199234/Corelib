@@ -9,6 +9,8 @@ import (
 const text = `package xrpc
 
 import (
+	"encoding/json"
+	"os"
 	"time"
 
 	"{{.}}/api"
