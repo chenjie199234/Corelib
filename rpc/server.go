@@ -225,7 +225,7 @@ func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerV
 	}
 	for _, verifydata := range s.verifydatas {
 		if vdata == verifydata {
-			return common.Str2byte(vdata), true
+			return common.Str2byte(verifydata), true
 		}
 	}
 	return nil, false

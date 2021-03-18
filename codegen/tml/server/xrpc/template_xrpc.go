@@ -50,6 +50,7 @@ func StartRpcServer() {
 			}
 		}
 	}
+	log.Info("[xrpc] server's verifydata:", verifydatas)
 	var e error
 	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name, verifydatas); e != nil {
 		log.Error("[xrpc] new error:", e)
