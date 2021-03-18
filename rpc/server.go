@@ -21,19 +21,17 @@ import (
 type OutsideHandler func(ctx *Context)
 
 type RpcServer struct {
-	c             *Config
-	global        []OutsideHandler
-	ctxpool       *sync.Pool
-	handler       map[string]func(string, *Msg)
-	instance      *stream.Instance
-	oldverifydata string //this is useful when changing the verifydata
-	verifydata    string
-	status        int32 //0-created,not started 1-started 2-closed
-	stopch        chan struct{}
+	c           *Config
+	global      []OutsideHandler
+	ctxpool     *sync.Pool
+	handler     map[string]func(string, *Msg)
+	instance    *stream.Instance
+	verifydatas []string
+	status      int32 //0-created,not started 1-started 2-closed
+	stopch      chan struct{}
 }
 
-//old: true means oldverifydata is useful,false means oldverifydata is useless
-func NewRpcServer(c *Config, selfgroup, selfname string, oldverifydata, verifydata string) (*RpcServer, error) {
+func NewRpcServer(c *Config, selfgroup, selfname string, verifydatas []string) (*RpcServer, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -44,17 +42,13 @@ func NewRpcServer(c *Config, selfgroup, selfname string, oldverifydata, verifyda
 	if e := common.NameCheck(appname, true, true, false, true); e != nil {
 		return nil, e
 	}
-	if verifydata == "" {
-		return nil, errors.New("[rpc.server] missing verifydata")
-	}
 	serverinstance := &RpcServer{
-		c:             c,
-		global:        make([]OutsideHandler, 0, 10),
-		ctxpool:       &sync.Pool{},
-		handler:       make(map[string]func(string, *Msg), 10),
-		oldverifydata: oldverifydata,
-		verifydata:    verifydata,
-		stopch:        make(chan struct{}, 1),
+		c:           c,
+		global:      make([]OutsideHandler, 0, 10),
+		ctxpool:     &sync.Pool{},
+		handler:     make(map[string]func(string, *Msg), 10),
+		verifydatas: verifydatas,
+		stopch:      make(chan struct{}, 1),
 	}
 	var dupc *stream.InstanceConfig
 	if c != nil {
@@ -224,11 +218,15 @@ func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerV
 	if targetname != s.instance.GetSelfName() {
 		return nil, false
 	}
-	if vdata == s.verifydata {
-		return common.Str2byte(s.verifydata), true
+	if len(s.verifydatas) == 0 {
+		dup := make([]byte, len(vdata))
+		copy(dup, vdata)
+		return dup, true
 	}
-	if s.oldverifydata != "" && vdata == s.oldverifydata {
-		return common.Str2byte(s.oldverifydata), true
+	for _, verifydata := range s.verifydatas {
+		if vdata == verifydata {
+			return common.Str2byte(vdata), true
+		}
 	}
 	return nil, false
 }

@@ -60,12 +60,12 @@ type RpcConfig struct {
 	RpcConnTimeout  ctime.Duration $json:"rpc_conn_timeout"$  //default 1s
 	RpcHeartTimeout ctime.Duration $json:"rpc_heart_timeout"$ //default 5s
 	RpcHeartProbe   ctime.Duration $json:"rpc_heart_probe"$   //default 1.5s
+	VerifyDatas     []string       $json:"verify_datas"$
 }
 
 //WebConfig -
 type WebConfig struct {
 	//server
-	UsePprof        bool           $json:"use_pprof"$
 	WebTimeout      ctime.Duration $json:"web_timeout"$ //default 500ms
 	WebStaticFile   string         $json:"web_staticfile"$
 	WebCertFile     string         $json:"web_certfile"$
@@ -165,40 +165,30 @@ func init() {
 	initapp()
 }
 func initdiscovery() {
-	verifydata := os.Getenv("DISCOVERY_SERVER_VERIFY_DATA")
-	if verifydata == "<DISCOVERY_SERVER_VERIFY_DATA>" || verifydata == "" {
-		log.Error("[config.initdiscovery] missing verifydata")
-		Close()
-		os.Exit(1)
-	}
-	port, e := strconv.Atoi(os.Getenv("DISCOVERY_SERVER_PORT"))
-	if e != nil {
-		log.Error("[config.initdiscovery] port must be number in [1-65535]")
-		Close()
-		os.Exit(1)
-	}
-	group := os.Getenv("DISCOVERY_SERVER_GROUP")
-	if group == "<DISCOVERY_SERVER_GROUP>" || group == "" {
-		log.Error("[config.initdiscovery] missing group")
-		Close()
-		os.Exit(1)
-	}
-	name := os.Getenv("DISCOVERY_SERVER_NAME")
-	if name == "<DISCOVERY_SERVER_NAME>" || name == "" {
-		log.Error("[config.initdiscovery] missing name")
-		Close()
-		os.Exit(1)
-	}
-	finder, e := discovery.MakeDefaultFinder(group, name, port)
-	if e != nil {
-		log.Error("[config.initdiscovery] error:", e)
-		Close()
-		os.Exit(1)
-	}
-	if e := discovery.NewDiscoveryClient(nil, api.Group, api.Name, os.Getenv("DISCOVERY_SERVER_VERIFY_DATA"), finder); e != nil {
-		log.Error("[config.initdiscovery] error:", e)
-		Close()
-		os.Exit(1)
+	if verifydata, ok := os.LookupEnv("DISCOVERY_SERVER_VERIFY_DATA"); ok {
+		port, e := strconv.Atoi(os.Getenv("DISCOVERY_SERVER_PORT"))
+		if e != nil {
+			log.Error("[config.initdiscovery] port must be number in [1-65535]")
+			Close()
+			os.Exit(1)
+		}
+		group := os.Getenv("DISCOVERY_SERVER_GROUP")
+		if group == "<DISCOVERY_SERVER_GROUP>" || group == "" {
+			log.Error("[config.initdiscovery] missing group")
+			Close()
+			os.Exit(1)
+		}
+		name := os.Getenv("DISCOVERY_SERVER_NAME")
+		if name == "<DISCOVERY_SERVER_NAME>" || name == "" {
+			log.Error("[config.initdiscovery] missing name")
+			Close()
+			os.Exit(1)
+		}
+		if e := discovery.NewDiscoveryClient(nil, api.Group, api.Name, verifydata, discovery.MakeDefaultFinder(group, name, port)); e != nil {
+			log.Error("[config.initdiscovery] error:", e)
+			Close()
+			os.Exit(1)
+		}
 	}
 }
 func initremote() {

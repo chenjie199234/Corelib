@@ -8,7 +8,7 @@ import (
 	"github.com/chenjie199234/Corelib/stream"
 )
 
-func finder(manually chan struct{}) {
+func testfinder(manually chan struct{}) {
 	UpdateDiscoveryServers([]string{"default.discoverycenter1:127.0.0.1:9234", "default.discoverycenter2:127.0.0.1:9235"})
 	//UpdateDiscoveryServers([]string{"server:127.0.0.1:9234"})
 }
@@ -43,15 +43,9 @@ func Test_Client1(t *testing.T) {
 			SocketWBufLen:          1024,
 			MaxBufferedWriteMsgNum: 256,
 		},
-	}, "testgroup", "testclient1", "test", finder)
-	rch, e := NoticeRpcChanges("testgroup.testclient2")
-	if e != nil {
-		panic("notice grpc change error:" + e.Error())
-	}
-	wch, e := NoticeWebChanges("testgroup.testclient2")
-	if e != nil {
-		panic("notice http change error:" + e.Error())
-	}
+	}, "testgroup", "testclient1", "test", testfinder)
+	rch := NoticeRpcChanges("testgroup.testclient2")
+	wch := NoticeWebChanges("testgroup.testclient2")
 	go func() {
 		for {
 			select {
@@ -116,15 +110,9 @@ func Test_Client2(t *testing.T) {
 			SocketWBufLen:          1024,
 			MaxBufferedWriteMsgNum: 256,
 		},
-	}, "testgroup", "testclient2", "test", finder)
-	rch, e := NoticeRpcChanges("testgroup.testclient1")
-	if e != nil {
-		panic("notice grpc change error:" + e.Error())
-	}
-	wch, e := NoticeWebChanges("testgroup.testclient1")
-	if e != nil {
-		panic("notice http change error:" + e.Error())
-	}
+	}, "testgroup", "testclient2", "test", testfinder)
+	rch := NoticeRpcChanges("testgroup.testclient1")
+	wch := NoticeWebChanges("testgroup.testclient1")
 	go func() {
 		for {
 			select {

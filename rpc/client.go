@@ -72,7 +72,7 @@ func init() {
 	all = make(map[string]*RpcClient)
 }
 
-func NewRpcClient(c *Config, selfgroup, selfname string, verifydata string, group, name string, picker PickHandler, discover DiscoveryHandler) (*RpcClient, error) {
+func NewRpcClient(c *Config, selfgroup, selfname, verifydata, group, name string, picker PickHandler, discover DiscoveryHandler) (*RpcClient, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
 	}

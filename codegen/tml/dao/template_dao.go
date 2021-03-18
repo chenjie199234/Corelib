@@ -25,7 +25,11 @@ import (
 func NewApi() error {
 	//var e error
 	//rc := config.GetRpcConfig()
-	//if ExampleRpcApi, e = example.NewExampleRpcClient(time.Duration(rc.RpcTimeout), time.Duration(rc.RpcConnTimeout), time.Duration(rc.RpcHeartTimeout), time.Duration(rc.RpcHeartProbe), api.Group, api.Name, os.Getenv("RPC_VERIFY_DATA"), nil, nil); e != nil {
+	//rpcverifydata := ""
+	//if len(rc.VerifyDatas) != 0 {
+	//	rpcverifydata = rc.VerifyDatas[0]
+	//}
+	//if ExampleRpcApi, e = example.NewExampleRpcClient(time.Duration(rc.RpcTimeout), time.Duration(rc.RpcConnTimeout), time.Duration(rc.RpcHeartTimeout), time.Duration(rc.RpcHeartProbe), api.Group, api.Name, rpcverifydata, nil, nil); e != nil {
 	//        return e
 	//}
 	//wc := config.GetWebConfig()

@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -18,35 +17,26 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-var (
-	ERRINIT        = errors.New("[Discovery.client] not init,call NewDiscoveryClient first")
-	ERRREG         = errors.New("[Discovery.client] already registered self")
-	ERRREGMSG_PORT = errors.New("[Discovery.client] reg message port conflict")
-	ERRREGMSG_CHAR = errors.New("[Discovery.client] reg message contains illegal character '|'")
-	ERRREGMSG_NIL  = errors.New("[Discovery.client] reg message empty")
-)
-
 //in this function,call UpdateDiscoveryServers() to update the discovery servers
 type DiscoveryServerFinder func(manually chan struct{})
 
-//serveruniquename = servername:ip:port
 type DiscoveryClient struct {
 	verifydata string
 	instance   *stream.Instance
 	regdata    []byte
-	status     int //0-closing,1-working
+	status     int32 //0-closing,1-starting,2-working
 
-	//finder
-	finder   DiscoveryServerFinder
 	manually chan struct{}
-	//other
+
 	lker    *sync.RWMutex
-	servers map[string]*servernode //key serveruniquename
-	//key appname
-	rpcnotices map[string]map[chan struct{}]struct{}
-	webnotices map[string]map[chan struct{}]struct{}
+	servers map[string]*servernode //key serveruniquename = servername:ip:port
+
+	rpcnotices map[string]map[chan struct{}]struct{} //key appname(without ip and port)
+	webnotices map[string]map[chan struct{}]struct{} //key appname(without ip and port)
 	nlker      *sync.RWMutex
 }
+
+var clientinstance *DiscoveryClient
 
 //appuniquename = appname:ip:port
 type servernode struct {
@@ -58,7 +48,20 @@ type servernode struct {
 	regdata   []byte
 }
 
-var clientinstance *DiscoveryClient
+func init() {
+	clientinstance = &DiscoveryClient{
+		status: 1,
+
+		manually: make(chan struct{}, 1),
+
+		lker:    &sync.RWMutex{},
+		servers: make(map[string]*servernode, 5),
+
+		webnotices: make(map[string]map[chan struct{}]struct{}, 5),
+		rpcnotices: make(map[string]map[chan struct{}]struct{}, 5),
+		nlker:      &sync.RWMutex{},
+	}
+}
 
 //finder is to find the discovery servers
 func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname, verifydata string, finder DiscoveryServerFinder) error {
@@ -71,26 +74,23 @@ func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname, verifydat
 	if e := common.NameCheck(selfgroup+"."+selfname, true, true, false, true); e != nil {
 		return e
 	}
-	if verifydata == "" {
-		return errors.New("[Discovery.client] missing verifydata")
-	}
 	if finder == nil {
 		return errors.New("[Discovery.client] missing finder")
 	}
-	temp := &DiscoveryClient{
-		verifydata: verifydata,
-		status:     1,
-		finder:     finder,
-		manually:   make(chan struct{}, 1),
-		lker:       &sync.RWMutex{},
-		servers:    make(map[string]*servernode, 5),
-		webnotices: make(map[string]map[chan struct{}]struct{}, 5),
-		rpcnotices: make(map[string]map[chan struct{}]struct{}, 5),
-		nlker:      &sync.RWMutex{},
+
+	clientinstance.lker.Lock()
+	defer clientinstance.lker.Unlock()
+	if clientinstance.status == 0 {
+		return errors.New("[Discovery.client] already closed")
 	}
-	if !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&clientinstance)), nil, unsafe.Pointer(temp)) {
-		return nil
+	if clientinstance.status == 2 {
+		if clientinstance.verifydata == verifydata {
+			return nil
+		}
+		return errors.New("[Discovery.client] already started")
 	}
+	clientinstance.verifydata = verifydata
+	clientinstance.status = 2
 	var dupc stream.InstanceConfig
 	if c == nil {
 		dupc = stream.InstanceConfig{}
@@ -194,11 +194,8 @@ func (c *DiscoveryClient) start(addr, servername string) {
 	}
 }
 func RegisterSelf(regmsg *RegMsg) error {
-	if clientinstance == nil {
-		return ERRINIT
-	}
 	if regmsg == nil {
-		return ERRREGMSG_NIL
+		return errors.New("[Discovery.client] register message empty")
 	}
 	temp := make(map[int]struct{})
 	count := 0
@@ -211,19 +208,22 @@ func RegisterSelf(regmsg *RegMsg) error {
 		count++
 	}
 	if count == 0 {
-		return ERRREGMSG_NIL
+		return errors.New("[Discovery.client] register message empty")
 	}
 	if len(temp) != count {
-		return ERRREGMSG_PORT
+		return errors.New("[Discovery.client] register message port conflict")
 	}
 	d, _ := json.Marshal(regmsg)
 	if bytes.Contains(d, []byte{split}) {
-		return ERRREGMSG_CHAR
+		return errors.New("[Discovery.client] register message contains illegal character '|'")
 	}
 	clientinstance.lker.Lock()
 	defer clientinstance.lker.Unlock()
 	if clientinstance.regdata != nil {
-		return ERRREG
+		if bytes.Equal(clientinstance.regdata, d) {
+			return nil
+		}
+		return errors.New("[Discovery.client] already registered")
 	}
 	clientinstance.regdata = d
 	for serveruniquename, server := range clientinstance.servers {
@@ -238,32 +238,25 @@ func RegisterSelf(regmsg *RegMsg) error {
 	}
 	return nil
 }
-func UnRegisterSelf() error {
-	if clientinstance == nil {
-		return ERRINIT
-	}
+func UnRegisterSelf() {
 	clientinstance.lker.Lock()
-	if clientinstance.status == 0 {
-		clientinstance.lker.Unlock()
-		return nil
-	}
-	clientinstance.status = 0
-	for k, server := range clientinstance.servers {
-		server.lker.Lock()
-		server.status = 0
-		server.regdata = nil
-		delete(clientinstance.servers, k)
-		server.lker.Unlock()
+	if clientinstance.status != 0 {
+		clientinstance.status = 0
+		for k, server := range clientinstance.servers {
+			server.lker.Lock()
+			server.status = 0
+			server.regdata = nil
+			delete(clientinstance.servers, k)
+			server.lker.Unlock()
+		}
 	}
 	clientinstance.lker.Unlock()
-	clientinstance.instance.Stop()
-	return nil
+	if clientinstance.instance != nil {
+		clientinstance.instance.Stop()
+	}
 }
 
-func NoticeWebChanges(appname string) (chan struct{}, error) {
-	if clientinstance == nil {
-		return nil, ERRINIT
-	}
+func NoticeWebChanges(appname string) chan struct{} {
 	pullmsg := makePullMsg(appname)
 	clientinstance.lker.RLock()
 	for _, server := range clientinstance.servers {
@@ -282,13 +275,10 @@ func NoticeWebChanges(appname string) (chan struct{}, error) {
 	ch := make(chan struct{}, 1)
 	ch <- struct{}{}
 	clientinstance.webnotices[appname][ch] = struct{}{}
-	return ch, nil
+	return ch
 }
 
-func NoticeRpcChanges(appname string) (chan struct{}, error) {
-	if clientinstance == nil {
-		return nil, ERRINIT
-	}
+func NoticeRpcChanges(appname string) chan struct{} {
 	pullmsg := makePullMsg(appname)
 	clientinstance.lker.RLock()
 	for _, server := range clientinstance.servers {
@@ -307,7 +297,7 @@ func NoticeRpcChanges(appname string) (chan struct{}, error) {
 	ch := make(chan struct{}, 1)
 	ch <- struct{}{}
 	clientinstance.rpcnotices[appname][ch] = struct{}{}
-	return ch, nil
+	return ch
 }
 
 //first return value

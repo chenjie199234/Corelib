@@ -26,10 +26,6 @@ DISCOVERY_SERVER_GROUP 			指定注册中心服务器所属的group名字
 DISCOVERY_SERVER_NAME 			指定注册中心服务器自身的名字
 DISCOVERY_SERVER_PORT  			指定注册中心服务器监听的端口
 DISCOVERY_SERVER_VERIFY_DATA 		连接注册中心服务器使用的校验数据
-OLD_RPC_VERIFY_DATA 			自身启动rpc服务时,当进行校验数据更新时才使用
-RPC_VERIFY_DATA 			自身启动rpc服务时,当前正在使用的最新的校验数据
-OLD_PPROF_VERIFY_DATA 			web服务器使用pprof时才有效,当进行校验数据更新时才使用
-PPROF_VERIFY_DATA 			web服务器使用pprof时才有效,当前正在使用的最新的校验数据
 REMOTE_CONFIG 				是否使用远程配置中心的配置[true/false]
 RUN_ENV 				当前运行环境,如:test,pre,prod
 DEPLOY_ENV 				部署环境,如:k8s,host

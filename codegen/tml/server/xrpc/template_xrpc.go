@@ -9,7 +9,6 @@ import (
 const text = `package xrpc
 
 import (
-	"os"
 	"time"
 
 	"{{.}}/api"
@@ -37,17 +36,8 @@ func StartRpcServer() {
 		MaxMsgLen:              65535,
 		MaxBufferedWriteMsgNum: 1024,
 	}
-	newvd := os.Getenv("RPC_VERIFY_DATA")
-	if newvd == "<RPC_VERIFY_DATA>" || newvd == "" {
-		log.Error("[xrpc] missing verifydata")
-		return
-	}
-	oldvd := os.Getenv("OLD_RPC_VERIFY_DATA")
-	if oldvd == "<OLD_RPC_VERIFY_DATA>" {
-		oldvd = ""
-	}
 	var e error
-	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name, oldvd, newvd); e != nil {
+	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name, c.VerifyDatas); e != nil {
 		log.Error("[xrpc] new error:", e)
 		return
 	}

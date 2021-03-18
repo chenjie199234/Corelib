@@ -3,7 +3,7 @@ package discovery
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"unsafe"
@@ -20,11 +20,10 @@ const (
 )
 
 type DiscoveryServer struct {
-	lker          *sync.RWMutex
-	groups        map[string]*appgroup //key appname
-	oldverifydata string
-	verifydata    string
-	instance      *stream.Instance
+	lker        *sync.RWMutex
+	groups      map[string]*appgroup //key appname
+	verifydatas []string
+	instance    *stream.Instance
 }
 
 //appuniquename = appname:ip:port
@@ -47,7 +46,7 @@ type appnode struct {
 }
 
 //old: true means oldverifydata is useful,false means oldverifydata is useless
-func NewDiscoveryServer(c *stream.InstanceConfig, group, name string, oldverifydata, verifydata string) (*DiscoveryServer, error) {
+func NewDiscoveryServer(c *stream.InstanceConfig, group, name string, verifydatas []string) (*DiscoveryServer, error) {
 	if e := common.NameCheck(name, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -57,14 +56,10 @@ func NewDiscoveryServer(c *stream.InstanceConfig, group, name string, oldverifyd
 	if e := common.NameCheck(group+"."+name, true, true, false, true); e != nil {
 		return nil, e
 	}
-	if verifydata == "" {
-		return nil, errors.New("[discovery.server] missing verifydata")
-	}
 	instance := &DiscoveryServer{
-		lker:          &sync.RWMutex{},
-		groups:        make(map[string]*appgroup, 5),
-		oldverifydata: oldverifydata,
-		verifydata:    verifydata,
+		lker:        &sync.RWMutex{},
+		groups:      make(map[string]*appgroup, 5),
+		verifydatas: verifydatas,
 	}
 	var dupc stream.InstanceConfig
 	if c == nil {
@@ -138,19 +133,26 @@ func (s *DiscoveryServer) verifyfunc(ctx context.Context, appuniquename string, 
 	temp := common.Byte2str(peerVerifyData)
 	index := strings.LastIndex(temp, "|")
 	if index == -1 {
+		fmt.Println(1)
 		return nil, false
 	}
 	targetname := temp[index+1:]
 	vdata := temp[:index]
 	if targetname != s.instance.GetSelfName() {
+		fmt.Println(2)
 		return nil, false
 	}
-	if vdata == s.verifydata {
-		return common.Str2byte(s.verifydata), true
+	if len(s.verifydatas) == 0 {
+		dup := make([]byte, len(vdata))
+		copy(dup, vdata)
+		return dup, true
 	}
-	if s.oldverifydata != "" && vdata == s.oldverifydata {
-		return common.Str2byte(s.oldverifydata), true
+	for _, verifydata := range s.verifydatas {
+		if verifydata == vdata {
+			return common.Str2byte(verifydata), true
+		}
 	}
+	fmt.Println(3)
 	return nil, false
 }
 

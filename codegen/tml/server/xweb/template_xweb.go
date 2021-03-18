@@ -9,7 +9,6 @@ import (
 const text = `package xweb
 
 import (
-	"os"
 	"time"
 
 	"{{.}}/api"
@@ -26,24 +25,12 @@ var s *web.WebServer
 //StartWebServer -
 func StartWebServer() {
 	c := config.GetWebConfig()
-	newvd := os.Getenv("PPROF_VERIFY_DATA")
-	if c.UsePprof && (newvd == "<PPROF_VERIFY_DATA>" || newvd == "") {
-		log.Error("[xweb] missing verifydata")
-		return
-	}
-	oldvd := os.Getenv("OLD_PPROF_VERIFY_DATA")
-	if oldvd == "<OLD_PPROF_VERIFY_DATA>" {
-		oldvd = ""
-	}
 	webc := &web.Config{
-		UsePprof:           c.UsePprof,
 		Timeout:            time.Duration(c.WebTimeout),
 		StaticFileRootPath: c.WebStaticFile,
 		MaxHeader:          1024,
 		ReadBuffer:         1024,
 		WriteBuffer:        1024,
-		PprofVerifyData:    newvd,
-		OldPprofVerifyData: oldvd,
 	}
 	if c.WebCors != nil {
 		webc.Cors = &web.CorsConfig{

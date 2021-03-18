@@ -1,7 +1,8 @@
 package web
 
 import (
-	"errors"
+	"net/http"
+	"strings"
 	"time"
 )
 
@@ -12,9 +13,6 @@ type Config struct {
 	ReadBuffer         int //socket buffer
 	WriteBuffer        int //socker buffer
 	Cors               *CorsConfig
-	UsePprof           bool
-	OldPprofVerifyData string
-	PprofVerifyData    string
 }
 
 type CorsConfig struct {
@@ -29,10 +27,7 @@ type CorsConfig struct {
 	exposestr        string
 }
 
-func (c *Config) validate() error {
-	if c.UsePprof && c.PprofVerifyData == "" {
-		return errors.New("[web.server] missing pprof verifydata")
-	}
+func (c *Config) validate() {
 	if c.Cors == nil {
 		c.Cors = &CorsConfig{
 			AllowedOrigin:    []string{"*"},
@@ -71,5 +66,40 @@ func (c *Config) validate() error {
 	}
 	c.Cors.headerstr = c.getHeaders()
 	c.Cors.exposestr = c.getExpose()
-	return nil
+}
+
+func (c *Config) getHeaders() string {
+	if c.Cors.allheader || len(c.Cors.AllowedHeader) == 0 {
+		return ""
+	}
+	removedup := make(map[string]struct{}, len(c.Cors.AllowedHeader))
+	for _, v := range c.Cors.AllowedHeader {
+		if v != "*" {
+			removedup[http.CanonicalHeaderKey(v)] = struct{}{}
+		}
+	}
+	unique := make([]string, len(removedup))
+	index := 0
+	for v := range removedup {
+		unique[index] = v
+		index++
+	}
+	return strings.Join(unique, ", ")
+}
+func (c *Config) getExpose() string {
+	if len(c.Cors.ExposeHeader) > 0 {
+		removedup := make(map[string]struct{}, len(c.Cors.ExposeHeader))
+		for _, v := range c.Cors.ExposeHeader {
+			removedup[http.CanonicalHeaderKey(v)] = struct{}{}
+		}
+		unique := make([]string, len(removedup))
+		index := 0
+		for v := range removedup {
+			unique[index] = v
+			index++
+		}
+		return strings.Join(unique, ", ")
+	} else {
+		return ""
+	}
 }

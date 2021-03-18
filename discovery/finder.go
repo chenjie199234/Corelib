@@ -2,7 +2,6 @@ package discovery
 
 import (
 	"context"
-	"errors"
 	"net"
 	"sort"
 	"strconv"
@@ -12,18 +11,22 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-func MakeDefaultFinder(servergroup, servername string, serverport int) (func(manually chan struct{}), error) {
+func MakeDefaultFinder(servergroup, servername string, serverport int) func(manually chan struct{}) {
 	if e := common.NameCheck(servergroup, false, true, false, true); e != nil {
-		return nil, e
+		log.Error("[Discovery.client.MakeDefaultFinder] error:", e)
+		return nil
 	}
 	if e := common.NameCheck(servername, false, true, false, true); e != nil {
-		return nil, e
+		log.Error("[Discovery.client.MakeDefaultFinder] error:", e)
+		return nil
 	}
 	if e := common.NameCheck(servergroup+"."+servername, true, true, false, true); e != nil {
-		return nil, e
+		log.Error("[Discovery.client.MakeDefaultFinder] error:", e)
+		return nil
 	}
 	if serverport <= 0 || serverport > 65535 {
-		return nil, errors.New("[Discovery.client.MakeDefaultFinder] discovery server port out of range")
+		log.Error("[Discovery.client.MakeDefaultFinder] discovery server port out of range")
+		return nil
 	}
 	return func(manually chan struct{}) {
 		host := servername + "-service." + servergroup
@@ -72,5 +75,5 @@ func MakeDefaultFinder(servergroup, servername string, serverport int) (func(man
 				finder()
 			}
 		}
-	}, nil
+	}
 }
