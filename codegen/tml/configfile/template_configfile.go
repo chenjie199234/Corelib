@@ -39,7 +39,7 @@ const textsource = `{
 	"sql":{
 		"example_sql":{
 			"username":"root",
-			"passwd":"root",
+			"passwd":"",
 			"net":"tcp",
 			"addr":"127.0.0.1:3306",
 			"collation":"utf8mb4",
