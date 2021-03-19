@@ -327,18 +327,19 @@ func initsource() {
 			continue
 		}
 		op := &options.ClientOptions{}
-		op = op.SetAuth(options.Credential{Username: mongoc.Username, Password: mongoc.Passwd})
-		op = op.SetHosts(mongoc.Addrs)
+		if mongoc.Username != "" && mongoc.Passwd != "" {
+			op = op.SetAuth(options.Credential{Username: mongoc.Username, Password: mongoc.Passwd})
+		}
 		if mongoc.ReplicaSetName != "" {
 			op.SetReplicaSet(mongoc.ReplicaSetName)
 		}
+		op = op.SetHosts(mongoc.Addrs)
 		op = op.SetConnectTimeout(time.Duration(mongoc.ConnTimeout))
-		op = op.SetCompressors([]string{"zstd"})
+		op = op.SetCompressors([]string{"zstd"}).SetZstdLevel(3)
 		op = op.SetMaxConnIdleTime(time.Duration(mongoc.MaxIdletime))
 		op = op.SetMaxPoolSize(mongoc.MaxOpen)
 		op = op.SetSocketTimeout(time.Duration(mongoc.IoTimeout))
-		//default heartbeat is 3s
-		op = op.SetHeartbeatInterval(time.Second * 3)
+		op = op.SetHeartbeatInterval(time.Second)
 		//default:secondary is preferred to be selected,if there is no secondary,primary will be selected
 		op = op.SetReadPreference(readpref.SecondaryPreferred())
 		//default:only read the selected server's data
