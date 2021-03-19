@@ -77,6 +77,7 @@ func NewDiscoveryServer(c *stream.InstanceConfig, group, name string, verifydata
 }
 
 func (s *DiscoveryServer) StartDiscoveryServer(listenaddr string) error {
+	log.Info("[Discovery.server] start with verifydatas:", s.verifydatas)
 	return s.instance.StartTcpServer(listenaddr)
 }
 func (s *DiscoveryServer) StopDiscoveryServer() {

@@ -9,8 +9,6 @@ import (
 const text = `package xrpc
 
 import (
-	"encoding/json"
-	"os"
 	"time"
 
 	"{{.}}/api"
@@ -38,21 +36,8 @@ func StartRpcServer() {
 		MaxMsgLen:              65535,
 		MaxBufferedWriteMsgNum: 1024,
 	}
-	var verifydatas []string
-	if str, ok := os.LookupEnv("RPC_SERVER_VERIFY_DATA"); ok {
-		if str == "<RPC_SERVER_VERIFY_DATA>" {
-			str = ""
-		}
-		if str != "" {
-			if e := json.Unmarshal([]byte(str), &verifydatas); e != nil {
-				log.Error("[xrpc] system env:RPC_SERVER_VERIFY_DATA error:", e)
-				return
-			}
-		}
-	}
-	log.Info("[xrpc] server's verifydata:", verifydatas)
 	var e error
-	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name, verifydatas); e != nil {
+	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name, config.EC.ServerVerifyDatas); e != nil {
 		log.Error("[xrpc] new error:", e)
 		return
 	}

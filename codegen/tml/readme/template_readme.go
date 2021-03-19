@@ -25,8 +25,7 @@ $$$
 DISCOVERY_SERVER_GROUP 			指定注册中心服务器所属的group名字
 DISCOVERY_SERVER_NAME 			指定注册中心服务器自身的名字
 DISCOVERY_SERVER_PORT  			指定注册中心服务器监听的端口
-DISCOVERY_SERVER_VERIFY_DATA 		连接注册中心服务器使用的校验数据,数据格式为json字符串数据["xxx1","xxx2"]
-RPC_SERVER_VERIFY_DATA                  连接业务rpc服务器使用的校验数据,数据格式为json字符串数据["xxx1","xxx2"]
+SERVER_VERIFY_DATA                      内部服务连接使用的校验数据,数据格式为json字符串数据["xxx1","xxx2"]
 REMOTE_CONFIG 				是否使用远程配置中心的配置[true/false]
 RUN_ENV 				当前运行环境,如:test,pre,prod
 DEPLOY_ENV 				部署环境,如:k8s,host
