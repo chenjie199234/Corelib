@@ -240,8 +240,8 @@ func initsource() {
 	}
 	for _, mongoc := range sc.Mongo {
 		if mongoc.Username == "" {
-			mongoc.Username = "root"
-			mongoc.Passwd = "root"
+			mongoc.Username = ""
+			mongoc.Passwd = ""
 		}
 		if len(mongoc.Addrs) == 0 {
 			mongoc.Addrs = []string{"127.0.0.1:27017"}
@@ -262,7 +262,7 @@ func initsource() {
 	for _, sqlc := range sc.Sql {
 		if sqlc.Username == "" {
 			sqlc.Username = "root"
-			sqlc.Passwd = "root"
+			sqlc.Passwd = ""
 		}
 		if sqlc.Addr == "" || sqlc.Net == "" {
 			sqlc.Addr = "127.0.0.1:3306"
