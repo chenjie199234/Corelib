@@ -24,8 +24,20 @@ const textsource = `{
 			"cors_expose":[]
 		}
 	},
+	"mongo":{
+		"example_mongo":{
+			"username":"",
+			"passwd":"",
+			"addr":[],
+			"replica_set_name":"",
+			"max_open":100,
+			"max_idletime":"10m",
+			"io_timeout":"500ms",
+			"conn_timeout":"500ms"
+		}
+	},
 	"sql":{
-		"example_db":{
+		"example_sql":{
 			"username":"root",
 			"passwd":"root",
 			"net":"tcp",

@@ -355,7 +355,7 @@ func initsource() {
 	}
 	sqls = make(map[string]*sql.DB, len(sc.Sql))
 	for k, sqlc := range sc.Sql {
-		if k == "example_db" {
+		if k == "example_sql" {
 			continue
 		}
 		tempdb, e := sql.Open("mysql", (&mysql.Config{
