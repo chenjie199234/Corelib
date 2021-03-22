@@ -344,7 +344,7 @@ func initsource() {
 		op = op.SetReadPreference(readpref.SecondaryPreferred())
 		//default:only read the selected server's data
 		op = op.SetReadConcern(readconcern.Local())
-		//default:data will be writeen to the primary's journal then return success
+		//default:data will be writeen to most nodes' journal then return success
 		op = op.SetWriteConcern(writeconcern.New(writeconcern.WMajority(), writeconcern.J(true), writeconcern.WTimeout(time.Duration(mongoc.IoTimeout))))
 		tempdb, e := mongo.Connect(nil, op)
 		if e != nil {
