@@ -78,6 +78,7 @@ func (s *RpcServer) StartRpcServer(listenaddr string) error {
 	if !atomic.CompareAndSwapInt32(&s.status, 0, 1) {
 		return nil
 	}
+	log.Info("[rpc.server] start with verifydatas:", s.verifydatas)
 	return s.instance.StartTcpServer(listenaddr)
 }
 func (s *RpcServer) StopRpcServer() {

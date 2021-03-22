@@ -103,6 +103,7 @@ func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname, verifydat
 	dupc.Userdatafunc = clientinstance.userfunc
 	dupc.Offlinefunc = clientinstance.offlinefunc
 	clientinstance.instance, _ = stream.NewInstance(&dupc, selfgroup, selfname)
+	log.Info("[Discovery.client] start with verifydata:", verifydata)
 	go finder(clientinstance.manually)
 	return nil
 }

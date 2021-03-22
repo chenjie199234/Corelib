@@ -42,7 +42,17 @@ import (
 type AppConfig struct {
 	//add your config here
 }
-
+//EnvConfig can't hot update,all these data is from system env setting
+//each field:nil means system env not exist
+type EnvConfig struct {
+	DiscoveryGroup    *string
+	DiscoveryName     *string
+	DiscoveryPort     *int
+	ServerVerifyDatas []string
+	RemoteConfig      *bool
+	RunEnv            *string
+	DeployEnv         *string
+}
 //sourceConfig can't hot update
 type sourceConfig struct {
 	Rpc      *RpcConfig                 $json:"rpc"$
@@ -144,6 +154,9 @@ var AC *AppConfig
 var watcher *fsnotify.Watcher
 var closech chan struct{}
 
+//EC -
+var EC *EnvConfig
+
 //SC total source config instance
 var sc *sourceConfig
 
@@ -158,47 +171,88 @@ var kafkaSubers map[string]*kafka.Reader
 var kafkaPubers map[string]*kafka.Writer
 
 func init() {
+	initenv()
 	initdiscovery()
 	initremote()
 	initsource()
 	initapp()
 }
-func initdiscovery() {
-	if str, ok := os.LookupEnv("DISCOVERY_SERVER_VERIFY_DATA"); ok {
-		verifydatas := make([]string, 0)
-		if str == "<DISCOVERY_SERVER_VERIFY_DATA>" {
-			str = ""
-		}
+
+func initenv(){
+	EC = &EnvConfig{}
+	if str, ok := os.LookupEnv("SERVER_VERIFY_DATA"); ok && str != "<SERVER_VERIFY_DATA>" {
+		temp := make([]string, 0)
 		if str != "" {
-			if e := json.Unmarshal([]byte(str), &verifydatas); e != nil {
-				log.Error("[config.initdiscovery] system env:DISCOVERY_SERVER_VERIFY_DATA error:", e)
-				Close()
-				os.Exit(1)
-			}
+			EC.ServerVerifyDatas = temp
+		} else if e := json.Unmarshal([]byte(str), &temp); e!= nil {
+			log.Error("[config.initenv] SERVER_VERIFY_DATA must be json string array like:[\"abc\",\"123\"]")
+			Close()
+			os.Exit(1)
 		}
-		var verifydata string
-		if len(verifydatas) > 0 {
-			verifydata = verifydatas[0]
-		}
-		port, e := strconv.Atoi(os.Getenv("DISCOVERY_SERVER_PORT"))
+		EC.ServerVerifyDatas = temp
+	} else {
+		log.Warning("[config.initenv] missing SERVER_VERIFY_DATA")
+	}
+	if str, ok := os.LookupEnv("DISCOVERY_SERVER_GROUP"); ok && str != "<DISCOVERY_SERVER_GROUP>" && str != "" {
+		EC.DiscoveryGroup = &str
+	} else if EC.ServerVerifyDatas != nil {
+		log.Error("[config.initenv] missing DISCOVERY_SERVER_GROUP")
+		Close()
+		os.Exit(1)
+	} else {
+		log.Warning("[config.initenv] missing DISCOVERY_SERVER_GROUP")
+	}
+	if str, ok := os.LookupEnv("DISCOVERY_SERVER_NAME"); ok && str != "<DISCOVERY_SERVER_NAME>" && str != "" {
+		EC.DiscoveryName = &str
+	} else if EC.ServerVerifyDatas != nil {
+		log.Error("[config.initenv] missing DISCOVERY_SERVER_NAME")
+		Close()
+		os.Exit(1)
+	} else {
+		log.Warning("[config.initenv] missing DISCOVERY_SERVER_NAME")
+	}
+	if str, ok := os.LookupEnv("DISCOVERY_SERVER_PORT"); ok && str != "<DISCOVERY_SERVER_PORT>" && str != "" {
+		port, e := strconv.Atoi(str)
 		if e != nil {
-			log.Error("[config.initdiscovery] port must be number in [1-65535]")
+			log.Error("[config.initenv] DISCOVERY_SERVER_PORT must be number in [1-65535]")
 			Close()
 			os.Exit(1)
 		}
-		group := os.Getenv("DISCOVERY_SERVER_GROUP")
-		if group == "<DISCOVERY_SERVER_GROUP>" || group == "" {
-			log.Error("[config.initdiscovery] missing group")
-			Close()
-			os.Exit(1)
+		EC.DiscoveryPort = &port
+	} else if EC.ServerVerifyDatas != nil {
+		log.Error("[config.initenv] missing DISCOVERY_SERVER_PORT")
+		Close()
+		os.Exit(1)
+	} else {
+		log.Warning("[config.initenv] missing DISCOVERY_SERVER_PORT")
+	}
+	if str, ok := os.LookupEnv("REMOTE_CONFIG"); ok && str != "<REMOTE_CONFIG>" && str != "" {
+		use := false
+		if strings.ToLower(str) == "true" {
+			use = true
 		}
-		name := os.Getenv("DISCOVERY_SERVER_NAME")
-		if name == "<DISCOVERY_SERVER_NAME>" || name == "" {
-			log.Error("[config.initdiscovery] missing name")
-			Close()
-			os.Exit(1)
+		EC.RemoteConfig = &use
+	} else {
+		log.Warning("[config.initenv] missing REMOTE_CONFIG")
+	}
+	if str, ok := os.LookupEnv("RUN_ENV"); ok && str != "<RUN_ENV>" && str != "" {
+		EC.RunEnv = &str
+	} else {
+		log.Warning("[config.initenv] missing RUN_ENV")
+	}
+	if str, ok := os.LookupEnv("DEPLOY_ENV"); ok && str != "<DEPLOY_ENV>" && str != "" {
+		EC.DeployEnv = &str
+	} else {
+		log.Warning("[config.initenv] missing DEPLOY_ENV")
+	}
+}
+func initdiscovery() {
+	if EC.ServerVerifyDatas != nil {
+		vd := ""
+		if len(EC.ServerVerifyDatas) > 0 {
+			vd = EC.ServerVerifyDatas[0]
 		}
-		if e := discovery.NewDiscoveryClient(nil, api.Group, api.Name, verifydata, discovery.MakeDefaultFinder(group, name, port)); e != nil {
+		if e := discovery.NewDiscoveryClient(nil, api.Group, api.Name, vd, discovery.MakeDefaultFinder(*EC.DiscoveryGroup, *EC.DiscoveryName, *EC.DiscoveryPort)); e != nil {
 			log.Error("[config.initdiscovery] error:", e)
 			Close()
 			os.Exit(1)
@@ -206,7 +260,7 @@ func initdiscovery() {
 	}
 }
 func initremote() {
-	if strings.ToLower(os.Getenv("REMOTE_CONFIG")) == "true" {
+	if EC.RemoteConfig != nil && *EC.RemoteConfig == true {
 		//get remote config
 	}
 }
