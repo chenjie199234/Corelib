@@ -42,6 +42,7 @@ import (
 type AppConfig struct {
 	//add your config here
 }
+
 //EnvConfig can't hot update,all these data is from system env setting
 //each field:nil means system env not exist
 type EnvConfig struct {
@@ -53,6 +54,7 @@ type EnvConfig struct {
 	RunEnv            *string
 	DeployEnv         *string
 }
+
 //sourceConfig can't hot update
 type sourceConfig struct {
 	Rpc      *RpcConfig                 $json:"rpc"$
@@ -277,20 +279,35 @@ func initsource() {
 		Close()
 		os.Exit(1)
 	}
-	if sc.Rpc.RpcTimeout == 0 {
-		sc.Rpc.RpcTimeout = ctime.Duration(time.Millisecond * 500)
+	if sc.Rpc == nil {
+		sc.Rpc = &RpcConfig{
+			RpcTimeout:      ctime.Duration(time.Millisecond * 500),
+			RpcConnTimeout:  ctime.Duration(time.Second),
+			RpcHeartTimeout: ctime.Duration(5 * time.Second),
+			RpcHeartProbe:   ctime.Duration(1500 * time.Millisecond),
+		}
+	} else {
+		if sc.Rpc.RpcTimeout == 0 {
+			sc.Rpc.RpcTimeout = ctime.Duration(time.Millisecond * 500)
+		}
+		if sc.Rpc.RpcConnTimeout == 0 {
+			sc.Rpc.RpcConnTimeout = ctime.Duration(time.Second)
+		}
+		if sc.Rpc.RpcHeartTimeout == 0 {
+			sc.Rpc.RpcHeartTimeout = ctime.Duration(5 * time.Second)
+		}
+		if sc.Rpc.RpcHeartProbe == 0 {
+			sc.Rpc.RpcHeartProbe = ctime.Duration(1500 * time.Millisecond)
+		}
 	}
-	if sc.Rpc.RpcConnTimeout == 0 {
-		sc.Rpc.RpcConnTimeout = ctime.Duration(time.Second)
-	}
-	if sc.Rpc.RpcHeartTimeout == 0 {
-		sc.Rpc.RpcHeartTimeout = ctime.Duration(5 * time.Second)
-	}
-	if sc.Rpc.RpcHeartProbe == 0 {
-		sc.Rpc.RpcHeartProbe = ctime.Duration(1500 * time.Millisecond)
-	}
-	if sc.Web.WebTimeout == 0 {
-		sc.Web.WebTimeout = ctime.Duration(time.Millisecond * 500)
+	if sc.Web == nil {
+		sc.Web = &WebConfig{
+			WebTimeout: ctime.Duration(time.Millisecond * 500),
+		}
+	} else {
+		if sc.Web.WebTimeout == 0 {
+			sc.Web.WebTimeout = ctime.Duration(time.Millisecond * 500)
+		}
 	}
 	for _, mongoc := range sc.Mongo {
 		if mongoc.Username == "" {
