@@ -76,9 +76,6 @@ spec:
             periodSeconds: 1
             successThreshold: 1
             failureThreshold: 3
-          volumeMounts:
-            - name: {{.ProjectName}}-volume
-              mountPath: /root/app
           ports:
             - name: web
               containerPort: 8000
@@ -86,15 +83,6 @@ spec:
             - name: rpc
               containerPort: 9000
               protocol: TCP
-      volumes:
-        - name: {{.ProjectName}}-volume
-          configMap:
-            name: {{.ProjectName}}-config
-            items:
-              - key: app-config
-                path: AppConfig.json
-              - key: source-config
-                path: SourceConfig.json
       imagePullSecrets:
         - name: {{.NameSpace}}-secret
 ---
@@ -122,16 +110,7 @@ spec:
       name: cpu
       target:
         type: AverageValue
-        averageValue: 3400m
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{.ProjectName}}-config
-  namespace: {{.NameSpace}}
-data:
-  app-config: {}
-  source-config: {}{{ if .NeedService }}
+        averageValue: 3400m{{ if .NeedService }}
 ---
 apiVersion: v1
 kind: Service
