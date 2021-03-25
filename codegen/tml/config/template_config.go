@@ -167,7 +167,11 @@ type KafkaSubConfig struct {
 }
 
 //AC -
-var AC *AppConfig
+var ac *AppConfig
+
+func GetAppConfig() *AppConfig {
+	return (*AppConfig)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&ac))))
+}
 
 var watcher *fsnotify.Watcher
 var closech chan struct{}
@@ -629,8 +633,8 @@ func initapp(path string) {
 		Close()
 		os.Exit(1)
 	}
-	AC = &AppConfig{}
-	if e = json.Unmarshal(data, AC); e != nil {
+	ac = &AppConfig{}
+	if e = json.Unmarshal(data, ac); e != nil {
 		log.Error("[config.initapp] config file format error:", e)
 		Close()
 		os.Exit(1)
@@ -641,7 +645,7 @@ func initapp(path string) {
 		Close()
 		os.Exit(1)
 	}
-	if e = watcher.Add("./"); e != nil {
+	if e = watcher.Add(path); e != nil {
 		log.Error("[config.initapp] create watcher for hot update error:", e)
 		Close()
 		os.Exit(1)
@@ -655,10 +659,17 @@ func initapp(path string) {
 				if !ok {
 					return
 				}
-				if filepath.Base(event.Name) != "AppConfig.json" || (event.Op&fsnotify.Create == 0 && event.Op&fsnotify.Write == 0) {
-					continue
+				if *EC.ConfigType == 0 || *EC.ConfigType == 2 {
+					if filepath.Base(event.Name) != "AppConfig.json" || (event.Op&fsnotify.Create == 0 && event.Op&fsnotify.Write == 0) {
+						continue
+					}
+				} else {
+					//k8s mount volume is different
+					if filepath.Base(event.Name) != "..data" || event.Op&fsnotify.Create == 0 {
+						continue
+					}
 				}
-				data, e := os.ReadFile("AppConfig.json")
+				data, e := os.ReadFile(path + "AppConfig.json")
 				if e != nil {
 					log.Error("[config.initapp] hot update read config file error:", e)
 					continue
@@ -668,7 +679,7 @@ func initapp(path string) {
 					log.Error("[config.initapp] hot update config file format error:", e)
 					continue
 				}
-				atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&AC)), unsafe.Pointer(c))
+				atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&ac)), unsafe.Pointer(c))
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					return
