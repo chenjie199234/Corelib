@@ -9,11 +9,14 @@ import (
 const text = `package dao
 
 import (
-//"time"
+	"time"
 
-//"{{.}}/api"
-//example "{{.}}/api/deps/example"
-//"{{.}}/config"
+	//"{{.}}/api"
+	//example "{{.}}/api/deps/example"
+	"{{.}}/config"
+
+	"github.com/chenjie199234/Corelib/rpc"
+	"github.com/chenjie199234/Corelib/web"
 )
 
 //var ExampleRpcApi example.ExampleRpcClient
@@ -22,20 +25,56 @@ import (
 //NewApi create all dependent service's api we need in this program
 //example grpc client,http client
 func NewApi() error {
-	//var e error
-	//rc := config.GetRpcConfig()
-	//rpcverifydata := ""
-	//if len(config.EC.ServerVerifyDatas) != 0 {
-	//	rpcverifydata = config.EC.ServerVerifyDatas[0]
-	//}
-	//if ExampleRpcApi, e = example.NewExampleRpcClient(time.Duration(rc.RpcTimeout), time.Duration(rc.RpcConnTimeout), time.Duration(rc.RpcHeartTimeout), time.Duration(rc.RpcHeartProbe), api.Group, api.Name, rpcverifydata, nil, nil); e != nil {
+	var e error
+	_ = e //avoid unuse
+
+	rpcc := getRpcClientConfig()
+	_ = rpcc //avoid unuse
+
+	//init rpc client below
+	//if ExampleRpcApi, e = example.NewExampleRpcClient(rpcc, api.Group, api.Name); e != nil {
 	//        return e
 	//}
-	//wc := config.GetWebConfig()
-	//if ExampleWebApi, e = example.NewExampleWebClient(time.Duration(wc.WebTimeout), api.Group, api.Name, nil, nil); e != nil {
+
+	webc := getWebClientConfig()
+	_ = webc //avoid unuse
+
+	//init web client below
+	//if ExampleWebApi, e = example.NewExampleWebClient(webc, api.Group, api.Name); e != nil {
 	//        return e
 	//}
 	return nil
+}
+func getRpcClientConfig() *rpc.ClientConfig {
+	rc := config.GetRpcClientConfig()
+	rpcverifydata := ""
+	if len(config.EC.ServerVerifyDatas) != 0 {
+		rpcverifydata = config.EC.ServerVerifyDatas[0]
+	}
+	return &rpc.ClientConfig{
+		ConnTimeout:            time.Duration(rc.ConnTimeout),
+		GlobalTimeout:          time.Duration(rc.GlobalTimeout),
+		HeartTimeout:           time.Duration(rc.HeartTimeout),
+		HeartPorbe:             time.Duration(rc.HeartProbe),
+		GroupNum:               1,
+		SocketRBuf:             1024,
+		SocketWBuf:             1024,
+		MaxMsgLen:              65535,
+		MaxBufferedWriteMsgNum: 256,
+		VerifyData:             rpcverifydata,
+	}
+}
+func getWebClientConfig() *web.ClientConfig {
+	wc := config.GetWebClientConfig()
+	return &web.ClientConfig{
+		GlobalTimeout: time.Duration(wc.GlobalTimeout),
+		IdleTimeout:   time.Duration(wc.IdleTimeout),
+		MaxHeader:     1024,
+		SocketRBuf:    1024,
+		SocketWBuf:    1024,
+		SkipVerifyTLS: wc.SkipVerifyTls,
+		CAs:           wc.Cas,
+	}
 }`
 
 const path = "./dao/"

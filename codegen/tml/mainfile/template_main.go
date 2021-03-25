@@ -54,24 +54,20 @@ func main() {
 	}()
 	//try to register self to the discovery server
 	stop := make(chan struct{})
-	go func(){
+	go func() {
 		//delay 200ms to register self,if error happened in this 200ms,this server will not be registered
 		tmer := time.NewTimer(time.Millisecond * 200)
 		select {
 		case <-tmer.C:
-			rpcc := config.GetRpcConfig()
-			webc := config.GetWebConfig()
-			regmsg := &discovery.RegMsg{}
-			if webc != nil {
-				if webc.WebKeyFile != "" && webc.WebCertFile != "" {
-					regmsg.WebScheme = "https"
-				} else {
-					regmsg.WebScheme = "http"
-				}
-				regmsg.WebPort = 8000
+			regmsg := &discovery.RegMsg{
+				WebPort: 8000,
+				RpcPort: 9000,
 			}
-			if rpcc != nil {
-				regmsg.RpcPort = 9000
+			webc := config.GetWebServerConfig()
+			if webc != nil && len(webc.CertKey) > 0 {
+				regmsg.WebScheme = "https"
+			} else {
+				regmsg.WebScheme = "http"
 			}
 			discovery.RegisterSelf(regmsg)
 		case <-stop:

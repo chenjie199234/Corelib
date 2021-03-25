@@ -52,17 +52,17 @@ var defaultTcpConfig = &TcpConfig{
 	MaxBufferedWriteMsgNum: 256,
 }
 
-func (c *TcpConfig) checkTcpConfig() {
+func (c *TcpConfig) validate() {
 	if c.ConnectTimeout <= 0 {
 		c.ConnectTimeout = 500 * time.Millisecond
 	}
-	if c.SocketRBufLen <= 0 {
+	if c.SocketRBufLen == 0 {
 		c.SocketRBufLen = 1024
 	}
 	if c.SocketRBufLen > 65535 {
 		c.SocketRBufLen = 65535
 	}
-	if c.SocketWBufLen <= 0 {
+	if c.SocketWBufLen == 0 {
 		c.SocketWBufLen = 1024
 	}
 	if c.SocketWBufLen > 65535 {
@@ -100,7 +100,7 @@ var defaultUnixConfig = &UnixConfig{
 	MaxBufferedWriteMsgNum: 256,
 }
 
-func (c *UnixConfig) checkUnixConfig() {
+func (c *UnixConfig) validate() {
 	if c.ConnectTimeout <= 0 {
 		c.ConnectTimeout = 500 * time.Millisecond
 	}
@@ -160,18 +160,18 @@ type InstanceConfig struct {
 	Offlinefunc HandleOfflineFunc
 }
 
-func checkInstanceConfig(c *InstanceConfig) error {
-	if c == nil {
-		return errors.New("[Stream.checkInstanceConfig] config is nil")
-	}
-	if c.HeartbeatTimeout == 0 {
+func (c *InstanceConfig) validate() error {
+	if c.HeartbeatTimeout <= 0 {
 		c.HeartbeatTimeout = 5 * time.Second
 	}
-	if c.HeartprobeInterval == 0 {
+	if c.HeartprobeInterval <= 0 {
 		c.HeartprobeInterval = 1500 * time.Millisecond
 	}
 	if c.HeartprobeInterval >= c.HeartbeatTimeout {
 		c.HeartprobeInterval = c.HeartbeatTimeout / 3
+	}
+	if c.RecvIdleTimeout < 0 {
+		c.RecvIdleTimeout = 0
 	}
 	if c.SendIdleTimeout <= c.HeartprobeInterval {
 		c.SendIdleTimeout = c.HeartprobeInterval + time.Second
@@ -191,12 +191,12 @@ func checkInstanceConfig(c *InstanceConfig) error {
 	if c.TcpC == nil {
 		c.TcpC = defaultTcpConfig
 	} else {
-		c.TcpC.checkTcpConfig()
+		c.TcpC.validate()
 	}
 	if c.UnixC == nil {
 		c.UnixC = defaultUnixConfig
 	} else {
-		c.UnixC.checkUnixConfig()
+		c.UnixC.validate()
 	}
 	return nil
 }

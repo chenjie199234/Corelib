@@ -25,7 +25,7 @@ func (this *Instance) StartTcpServer(listenaddr string) error {
 		return errors.New("[Stream.TCP.StartTcpServer] listen addr:" + listenaddr + " error:" + e.Error())
 	}
 	for {
-		p := this.getPeer(TCP, CLIENT, this.conf.TcpC.MaxBufferedWriteMsgNum, this.conf.TcpC.MaxMsgLen, this.selfname)
+		p := this.getPeer(TCP, CLIENT, this.c.TcpC.MaxBufferedWriteMsgNum, this.c.TcpC.MaxMsgLen, this.selfname)
 		conn, e := this.tcplistener.AcceptTCP()
 		if e != nil {
 			return errors.New("[Stream.TCP.Accept] accept connect error:" + e.Error())
@@ -37,13 +37,13 @@ func (this *Instance) StartTcpServer(listenaddr string) error {
 			return errors.New("[Stream.TCP.Accept] server closed")
 		}
 		p.conn = unsafe.Pointer(conn)
-		p.setbuffer(int(this.conf.TcpC.SocketRBufLen), int(this.conf.TcpC.SocketWBufLen))
+		p.setbuffer(int(this.c.TcpC.SocketRBufLen), int(this.c.TcpC.SocketWBufLen))
 		if p.reader == nil {
-			p.reader = bufio.NewReaderSize(conn, int(this.conf.TcpC.SocketRBufLen))
+			p.reader = bufio.NewReaderSize(conn, int(this.c.TcpC.SocketRBufLen))
 		} else {
 			p.reader.Reset(conn)
 		}
-		go this.sworker(p, this.conf.TcpC.MaxMsgLen)
+		go this.sworker(p, this.c.TcpC.MaxMsgLen)
 	}
 }
 func (this *Instance) StartUnixServer(listenaddr string) error {
@@ -56,7 +56,7 @@ func (this *Instance) StartUnixServer(listenaddr string) error {
 		return errors.New("[Stream.UNIX.StartUnixServer] listening addr:" + listenaddr + " error:" + e.Error())
 	}
 	for {
-		p := this.getPeer(UNIX, CLIENT, this.conf.UnixC.MaxBufferedWriteMsgNum, this.conf.UnixC.MaxMessageLen, this.selfname)
+		p := this.getPeer(UNIX, CLIENT, this.c.UnixC.MaxBufferedWriteMsgNum, this.c.UnixC.MaxMessageLen, this.selfname)
 		conn, e := this.unixlistener.AcceptUnix()
 		if e != nil {
 			return errors.New("[Stream.UNIX.Accept] accept connect error:" + e.Error())
@@ -68,13 +68,13 @@ func (this *Instance) StartUnixServer(listenaddr string) error {
 			return errors.New("[Stream.UNIX.Accept] server closed")
 		}
 		p.conn = unsafe.Pointer(conn)
-		p.setbuffer(int(this.conf.UnixC.SocketReadBufferLen), int(this.conf.UnixC.SocketWriteBufferLen))
+		p.setbuffer(int(this.c.UnixC.SocketReadBufferLen), int(this.c.UnixC.SocketWriteBufferLen))
 		if p.reader == nil {
-			p.reader = bufio.NewReaderSize(conn, int(this.conf.UnixC.SocketReadBufferLen))
+			p.reader = bufio.NewReaderSize(conn, int(this.c.UnixC.SocketReadBufferLen))
 		} else {
 			p.reader.Reset(conn)
 		}
-		go this.sworker(p, this.conf.UnixC.MaxMessageLen)
+		go this.sworker(p, this.c.UnixC.MaxMessageLen)
 	}
 }
 
@@ -128,8 +128,8 @@ func (this *Instance) sworker(p *Peer, maxlen uint) {
 		send += num
 	}
 	bufpool.PutBuffer(verifymsg)
-	if this.conf.Onlinefunc != nil {
-		this.conf.Onlinefunc(p, p.getpeeruniquename(), p.starttime)
+	if this.c.Onlinefunc != nil {
+		this.c.Onlinefunc(p, p.getpeeruniquename(), p.starttime)
 	}
 	go this.read(p, maxlen)
 	go this.write(p)
@@ -143,11 +143,11 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) strin
 		return ""
 	}
 	dialer := net.Dialer{
-		Timeout: this.conf.TcpC.ConnectTimeout,
+		Timeout: this.c.TcpC.ConnectTimeout,
 		Control: func(network, address string, c syscall.RawConn) error {
 			c.Control(func(fd uintptr) {
-				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, int(this.conf.TcpC.SocketRBufLen))
-				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, int(this.conf.TcpC.SocketWBufLen))
+				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, int(this.c.TcpC.SocketRBufLen))
+				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, int(this.c.TcpC.SocketWBufLen))
 			})
 			return nil
 		},
@@ -157,15 +157,15 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) strin
 		log.Error("[Stream.TCP.StartTcpClient] dial error:", e)
 		return ""
 	}
-	p := this.getPeer(TCP, SERVER, this.conf.TcpC.MaxBufferedWriteMsgNum, this.conf.TcpC.MaxMsgLen, this.selfname)
+	p := this.getPeer(TCP, SERVER, this.c.TcpC.MaxBufferedWriteMsgNum, this.c.TcpC.MaxMsgLen, this.selfname)
 	p.conn = unsafe.Pointer(conn.(*net.TCPConn))
-	p.setbuffer(int(this.conf.TcpC.SocketRBufLen), int(this.conf.TcpC.SocketWBufLen))
+	p.setbuffer(int(this.c.TcpC.SocketRBufLen), int(this.c.TcpC.SocketWBufLen))
 	if p.reader == nil {
-		p.reader = bufio.NewReaderSize(conn, int(this.conf.TcpC.SocketRBufLen))
+		p.reader = bufio.NewReaderSize(conn, int(this.c.TcpC.SocketRBufLen))
 	} else {
 		p.reader.Reset(conn)
 	}
-	return this.cworker(p, this.conf.TcpC.MaxMsgLen, verifydata)
+	return this.cworker(p, this.c.TcpC.MaxMsgLen, verifydata)
 }
 
 // success return peeruniquename
@@ -175,11 +175,11 @@ func (this *Instance) StartUnixClient(serveraddr string, verifydata []byte) stri
 		return ""
 	}
 	dialer := net.Dialer{
-		Timeout: this.conf.UnixC.ConnectTimeout,
+		Timeout: this.c.UnixC.ConnectTimeout,
 		Control: func(network, address string, c syscall.RawConn) error {
 			c.Control(func(fd uintptr) {
-				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, int(this.conf.UnixC.SocketReadBufferLen))
-				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, int(this.conf.UnixC.SocketWriteBufferLen))
+				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, int(this.c.UnixC.SocketReadBufferLen))
+				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, int(this.c.UnixC.SocketWriteBufferLen))
 			})
 			return nil
 		},
@@ -189,15 +189,15 @@ func (this *Instance) StartUnixClient(serveraddr string, verifydata []byte) stri
 		log.Error("[Stream.UNIX.StartUnixClient] dial error:", e)
 		return ""
 	}
-	p := this.getPeer(UNIX, SERVER, this.conf.UnixC.MaxBufferedWriteMsgNum, this.conf.UnixC.MaxMessageLen, this.selfname)
+	p := this.getPeer(UNIX, SERVER, this.c.UnixC.MaxBufferedWriteMsgNum, this.c.UnixC.MaxMessageLen, this.selfname)
 	p.conn = unsafe.Pointer(conn.(*net.UnixConn))
-	p.setbuffer(int(this.conf.UnixC.SocketReadBufferLen), int(this.conf.UnixC.SocketWriteBufferLen))
+	p.setbuffer(int(this.c.UnixC.SocketReadBufferLen), int(this.c.UnixC.SocketWriteBufferLen))
 	if p.reader == nil {
-		p.reader = bufio.NewReaderSize(conn, int(this.conf.UnixC.SocketReadBufferLen))
+		p.reader = bufio.NewReaderSize(conn, int(this.c.UnixC.SocketReadBufferLen))
 	} else {
 		p.reader.Reset(conn)
 	}
-	return this.cworker(p, this.conf.UnixC.MaxMessageLen, verifydata)
+	return this.cworker(p, this.c.UnixC.MaxMessageLen, verifydata)
 }
 
 func (this *Instance) cworker(p *Peer, maxlen uint, verifydata []byte) string {
@@ -251,8 +251,8 @@ func (this *Instance) cworker(p *Peer, maxlen uint, verifydata []byte) string {
 		this.noticech <- p
 		return ""
 	}
-	if this.conf.Onlinefunc != nil {
-		this.conf.Onlinefunc(p, p.getpeeruniquename(), p.starttime)
+	if this.c.Onlinefunc != nil {
+		this.c.Onlinefunc(p, p.getpeeruniquename(), p.starttime)
 	}
 	uniquename := p.getpeeruniquename()
 	go this.read(p, maxlen)
@@ -264,11 +264,11 @@ func (this *Instance) verifypeer(p *Peer, maxlen uint) []byte {
 	var cancel context.CancelFunc
 	switch p.protocoltype {
 	case TCP:
-		(*net.TCPConn)(p.conn).SetReadDeadline(time.Now().Add(this.conf.TcpC.ConnectTimeout))
-		ctx, cancel = context.WithTimeout(p, this.conf.TcpC.ConnectTimeout)
+		(*net.TCPConn)(p.conn).SetReadDeadline(time.Now().Add(this.c.TcpC.ConnectTimeout))
+		ctx, cancel = context.WithTimeout(p, this.c.TcpC.ConnectTimeout)
 	case UNIX:
-		(*net.UnixConn)(p.conn).SetReadDeadline(time.Now().Add(this.conf.UnixC.ConnectTimeout))
-		ctx, cancel = context.WithTimeout(p, this.conf.UnixC.ConnectTimeout)
+		(*net.UnixConn)(p.conn).SetReadDeadline(time.Now().Add(this.c.UnixC.ConnectTimeout))
+		ctx, cancel = context.WithTimeout(p, this.c.UnixC.ConnectTimeout)
 	}
 	defer cancel()
 	data, e := p.readMessage(maxlen)
@@ -326,7 +326,7 @@ func (this *Instance) verifypeer(p *Peer, maxlen uint) []byte {
 		p.servername = common.Byte2str(dup)
 		p.starttime = starttime
 	}
-	response, success := this.conf.Verifyfunc(ctx, p.getpeeruniquename(), peerverifydata)
+	response, success := this.c.Verifyfunc(ctx, p.getpeeruniquename(), peerverifydata)
 	if !success {
 		switch p.protocoltype {
 		case TCP:
@@ -360,8 +360,8 @@ func (this *Instance) read(p *Peer, maxlen uint) {
 			p.writerbuffer <- (*bufpool.Buffer)(nil)
 			p.heartbeatbuffer <- (*bufpool.Buffer)(nil)
 		} else {
-			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, p.getpeeruniquename(), p.starttime)
+			if this.c.Offlinefunc != nil {
+				this.c.Offlinefunc(p, p.getpeeruniquename(), p.starttime)
 			}
 			//when second goruntine return,put connection back to the pool
 			this.noticech <- p
@@ -421,7 +421,7 @@ func (this *Instance) read(p *Peer, maxlen uint) {
 					//update lastactive time
 					p.lastactive = uint64(time.Now().UnixNano())
 					p.recvidlestart = p.lastactive
-					this.conf.Userdatafunc(p, p.getpeeruniquename(), userdata, starttime)
+					this.c.Userdatafunc(p, p.getpeeruniquename(), userdata, starttime)
 				}
 				//drop race data
 			}
@@ -468,8 +468,8 @@ func (this *Instance) write(p *Peer) {
 			//when first goruntine return,close the connection,cause read goruntine return
 			p.closeconn()
 		} else {
-			if this.conf.Offlinefunc != nil {
-				this.conf.Offlinefunc(p, p.getpeeruniquename(), p.starttime)
+			if this.c.Offlinefunc != nil {
+				this.c.Offlinefunc(p, p.getpeeruniquename(), p.starttime)
 			}
 			//when second goruntine return,put connection back to the pool
 			this.noticech <- p

@@ -26,13 +26,17 @@ DISCOVERY_SERVER_GROUP 			指定注册中心服务器所属的group名字
 DISCOVERY_SERVER_NAME 			指定注册中心服务器自身的名字
 DISCOVERY_SERVER_PORT  			指定注册中心服务器监听的端口
 SERVER_VERIFY_DATA                      内部服务连接使用的校验数据,数据格式为json字符串数据["xxx1","xxx2"]
-REMOTE_CONFIG 				是否使用远程配置中心的配置[true/false]
+CONFIG_TYPE 				配置类型
+					0-使用本地配置,路径:./
+					1-使用k8s的configmap,路径:./k8sconfig
+					2-使用远程配置中心配置,路径./remoteconfig
 RUN_ENV 				当前运行环境,如:test,pre,prod
 DEPLOY_ENV 				部署环境,如:k8s,host
 $$$
 
 ## 配置文件
 $$$
+根据环境变量CONFIG_TYPE的不同,配置文件的路径也不同,详情见环境变量CONFIG_TYPE
 AppConfig.json该文件配置了该服务需要使用的业务配置,可热更新
 SourceConfig.json该文件配置了该服务需要使用的资源配置,不热更新
 $$$

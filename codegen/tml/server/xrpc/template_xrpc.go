@@ -24,20 +24,20 @@ var s *rpc.RpcServer
 
 //StartRpcServer -
 func StartRpcServer() {
-	c := config.GetRpcConfig()
-	rpcc := &rpc.Config{
-		Timeout:                time.Duration(c.RpcTimeout),
-		ConnTimeout:            time.Duration(c.RpcConnTimeout),
-		HeartTimeout:           time.Duration(c.RpcHeartTimeout),
-		HeartPorbe:             time.Duration(c.RpcHeartProbe),
+	c := config.GetRpcServerConfig()
+	rpcc := &rpc.ServerConfig{
+		GlobalTimeout:          time.Duration(c.GlobalTimeout),
+		HeartTimeout:           time.Duration(c.HeartTimeout),
+		HeartPorbe:             time.Duration(c.HeartProbe),
 		GroupNum:               1,
 		SocketRBuf:             1024,
 		SocketWBuf:             1024,
 		MaxMsgLen:              65535,
 		MaxBufferedWriteMsgNum: 1024,
+		VerifyDatas:            config.EC.ServerVerifyDatas,
 	}
 	var e error
-	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name, config.EC.ServerVerifyDatas); e != nil {
+	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name); e != nil {
 		log.Error("[xrpc] new error:", e)
 		return
 	}

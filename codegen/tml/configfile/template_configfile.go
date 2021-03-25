@@ -7,22 +7,35 @@ import (
 )
 
 const textsource = `{
-	"rpc":{
-		"rpc_timeout":"500ms",
-		"rpc_conn_timeout":"1s",
-		"rpc_heart_timeout":"5s",
-		"rpc_heart_probe":"1.5s"
+	"rpc_server":{
+		"global_timeout":"200ms",
+		"heart_timeout":"5s",
+		"heart_probe":"1.5s"
 	},
-	"web":{
-		"web_timeout":"200ms",
-		"web_staticfile":"./src",
-		"web_certfile":"",
-		"web_keyfile":"",
+	"rpc_client":{
+		"conn_timeout":"1s",
+		"global_timeout":"200ms",
+		"heart_timeout":"5s",
+		"heart_probe":"1.5s"
+	},
+	"web_server":{
+		"global_timeout":"200ms",
+		"idle_timeout":"10m",
+		"static_file":"./src",
+		"cert_key":{
+			"path_to_example_cert":"path_to_example_key"
+		},
 		"web_cors":{
 			"cors_origin":["*"],
 			"cors_header":["*"],
 			"cors_expose":[]
 		}
+	},
+	"web_client":{
+		"global_timeout":"200ms",
+		"idle_timeout":"10m",
+		"skip_verify_tls":false,
+		"cas":["path_to_example_ca"]
 	},
 	"mongo":{
 		"example_mongo":{

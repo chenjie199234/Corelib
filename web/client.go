@@ -3,12 +3,17 @@ package web
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"math/rand"
+	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/chenjie199234/Corelib/util/common"
@@ -19,16 +24,59 @@ var ERRNOSERVER = errors.New("[web] no servers")
 type PickHandler func(servers []*ServerForPick) *ServerForPick
 type DiscoveryHandler func(group, name string, client *WebClient)
 
+type ClientConfig struct {
+	GlobalTimeout time.Duration
+	IdleTimeout   time.Duration
+	MaxHeader     uint
+	SocketRBuf    uint
+	SocketWBuf    uint
+	SkipVerifyTLS bool     //don't verify the server's cert
+	CAs           []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
+	Picker        PickHandler
+	Discover      DiscoveryHandler
+}
+
+func (c *ClientConfig) validate() {
+	if c.GlobalTimeout < 0 {
+		c.GlobalTimeout = 0
+	}
+	if c.IdleTimeout < 0 {
+		c.IdleTimeout = 0
+	}
+	if c.MaxHeader == 0 {
+		c.MaxHeader = 1024
+	}
+	if c.MaxHeader > 65535 {
+		c.MaxHeader = 65535
+	}
+	if c.SocketRBuf == 0 {
+		c.SocketRBuf = 1024
+	}
+	if c.SocketRBuf > 65535 {
+		c.SocketRBuf = 65535
+	}
+	if c.SocketWBuf == 0 {
+		c.SocketWBuf = 1024
+	}
+	if c.SocketWBuf > 65535 {
+		c.SocketWBuf = 65535
+	}
+	if c.Picker == nil {
+		c.Picker = defaultPicker
+	}
+	if c.Discover == nil {
+		c.Discover = defaultDiscover
+	}
+}
+
 type WebClient struct {
 	selfappname string
 	appname     string
-	timeout     time.Duration
+	c           *ClientConfig
+	certpool    *x509.CertPool
 
 	lker  *sync.RWMutex
 	hosts []*ServerForPick
-
-	picker   PickHandler
-	discover DiscoveryHandler
 }
 type ServerForPick struct {
 	host             string
@@ -57,7 +105,9 @@ func init() {
 	lker = &sync.Mutex{}
 	all = make(map[string]*WebClient)
 }
-func NewWebClient(globaltimeout time.Duration, selfgroup, selfname, group, name string, picker PickHandler, discover DiscoveryHandler) (*WebClient, error) {
+
+//has race,will only return the first call's client,the config will use the first call's config
+func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*WebClient, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -78,31 +128,40 @@ func NewWebClient(globaltimeout time.Duration, selfgroup, selfname, group, name 
 	if e := common.NameCheck(selfappname, true, true, false, true); e != nil {
 		return nil, e
 	}
+	if c == nil {
+		c = &ClientConfig{}
+	}
+	c.validate()
+	var certpool *x509.CertPool
+	if len(c.CAs) != 0 {
+		certpool = x509.NewCertPool()
+		for _, cert := range c.CAs {
+			certPEM, e := os.ReadFile(cert)
+			if e != nil {
+				return nil, errors.New("[web.client] read cert file:" + cert + " error:" + e.Error())
+			}
+			if !certpool.AppendCertsFromPEM(certPEM) {
+				return nil, errors.New("[web.client] load cert file:" + cert + " error:" + e.Error())
+			}
+		}
+	}
 	lker.Lock()
 	defer lker.Unlock()
-	if c, ok := all[appname]; ok {
-		return c, nil
+	if client, ok := all[appname]; ok {
+		return client, nil
 	}
-	if picker == nil {
-		picker = defaultPicker
-	}
-	if discover == nil {
-		discover = defaultDiscover
-	}
-	instance := &WebClient{
+	client := &WebClient{
 		selfappname: selfappname,
 		appname:     appname,
-		timeout:     globaltimeout,
+		c:           c,
+		certpool:    certpool,
 
 		lker:  &sync.RWMutex{},
 		hosts: make([]*ServerForPick, 0, 10),
-
-		picker:   picker,
-		discover: discover,
 	}
-	all[appname] = instance
-	go instance.discover(group, name, instance)
-	return instance, nil
+	all[appname] = client
+	go c.Discover(group, name, client)
+	return client, nil
 }
 
 //all:
@@ -114,23 +173,21 @@ func (this *WebClient) UpdateDiscovery(all map[string][]string, addition []byte)
 	this.lker.Lock()
 	defer this.lker.Unlock()
 	//check unregister
-	pos := 0
-	endpos := len(this.hosts) - 1
-	if this.hosts != nil {
-		for pos <= endpos {
-			existhost := this.hosts[pos]
-			if discoveryservers, ok := all[existhost.host]; !ok || len(discoveryservers) == 0 {
-				if pos != endpos {
-					this.hosts[pos], this.hosts[endpos] = this.hosts[endpos], this.hosts[pos]
-				}
-				endpos--
-			} else {
-				pos++
+	head := 0
+	tail := len(this.hosts) - 1
+	for head <= tail {
+		existhost := this.hosts[head]
+		if discoveryservers, ok := all[existhost.host]; !ok || len(discoveryservers) == 0 {
+			if head != tail {
+				this.hosts[head], this.hosts[tail] = this.hosts[tail], this.hosts[head]
 			}
+			tail--
+		} else {
+			head++
 		}
-		if pos != len(this.hosts) {
-			this.hosts = this.hosts[:pos]
-		}
+	}
+	if this.hosts != nil && head != len(this.hosts) {
+		this.hosts = this.hosts[:head]
 	}
 	if this.hosts == nil {
 		this.hosts = make([]*ServerForPick, 0, 5)
@@ -147,11 +204,36 @@ func (this *WebClient) UpdateDiscovery(all map[string][]string, addition []byte)
 				break
 			}
 		}
+		//this is a new register
 		if exist == nil {
-			//this is a new register
 			this.hosts = append(this.hosts, &ServerForPick{
-				host:             host,
-				client:           &http.Client{},
+				host: host,
+				client: &http.Client{
+					Transport: &http.Transport{
+						Proxy: http.ProxyFromEnvironment,
+						DialContext: (&net.Dialer{
+							KeepAlive: time.Second,
+							Control: func(network, address string, c syscall.RawConn) error {
+								c.Control(func(fd uintptr) {
+									syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, int(this.c.SocketRBuf))
+									syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, int(this.c.SocketWBuf))
+								})
+								return nil
+							},
+						}).DialContext,
+						TLSClientConfig: &tls.Config{
+							InsecureSkipVerify: this.c.SkipVerifyTLS,
+							RootCAs:            this.certpool,
+						},
+						ForceAttemptHTTP2:      true,
+						MaxIdleConnsPerHost:    50,
+						IdleConnTimeout:        this.c.IdleTimeout,
+						MaxResponseHeaderBytes: int64(this.c.MaxHeader),
+						ReadBufferSize:         int(this.c.SocketRBuf),
+						WriteBufferSize:        int(this.c.SocketWBuf),
+					},
+					Timeout: this.c.GlobalTimeout,
+				},
 				discoveryservers: discoveryservers,
 				Pickinfo: &pickinfo{
 					Lastfail:       0,
@@ -165,31 +247,29 @@ func (this *WebClient) UpdateDiscovery(all map[string][]string, addition []byte)
 		}
 		//this is not a new register
 		//unregister on which discovery server
-		if exist.discoveryservers != nil {
-			pos = 0
-			endpos = len(exist.discoveryservers) - 1
-			for pos <= endpos {
-				existdserver := exist.discoveryservers[pos]
-				find := false
-				for _, newdserver := range discoveryservers {
-					if newdserver == existdserver {
-						find = true
-						break
-					}
-				}
-				if find {
-					pos++
-				} else {
-					if pos != endpos {
-						exist.discoveryservers[pos], exist.discoveryservers[endpos] = exist.discoveryservers[endpos], exist.discoveryservers[pos]
-					}
-					endpos--
+		head = 0
+		tail = len(exist.discoveryservers) - 1
+		for head <= tail {
+			existdserver := exist.discoveryservers[head]
+			find := false
+			for _, newdserver := range discoveryservers {
+				if newdserver == existdserver {
+					find = true
+					break
 				}
 			}
-			if pos != len(exist.discoveryservers) {
-				exist.Pickinfo.DServerOffline = time.Now().UnixNano()
-				exist.discoveryservers = exist.discoveryservers[:pos]
+			if find {
+				head++
+			} else {
+				if head != tail {
+					exist.discoveryservers[head], exist.discoveryservers[tail] = exist.discoveryservers[tail], exist.discoveryservers[head]
+				}
+				tail--
 			}
+		}
+		if exist.discoveryservers != nil && head != len(exist.discoveryservers) {
+			exist.Pickinfo.DServerOffline = time.Now().UnixNano()
+			exist.discoveryservers = exist.discoveryservers[:head]
 		}
 		if exist.discoveryservers == nil {
 			exist.discoveryservers = make([]string, 0, 5)
@@ -236,8 +316,8 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	header.Set("TargetServer", this.appname)
 	header.Set("SourceServer", this.selfappname)
 	var min time.Duration
-	if this.timeout != 0 {
-		min = this.timeout
+	if this.c.GlobalTimeout != 0 {
+		min = this.c.GlobalTimeout
 	}
 	if functimeout != 0 {
 		if min == 0 {
@@ -263,7 +343,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		}
 		var server *ServerForPick
 		this.lker.RLock()
-		server = this.picker(this.hosts)
+		server = this.c.Picker(this.hosts)
 		this.lker.RUnlock()
 		if server == nil {
 			return nil, ERRNOSERVER

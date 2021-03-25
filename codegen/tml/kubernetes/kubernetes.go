@@ -9,13 +9,16 @@ import (
 const dockerfiletext = `FROM busybox:1.28
 
 RUN mkdir /root/app
+RUN mkdir /root/app/k8sconfig
+RUN mkdir /root/app/remoteconfig
 WORKDIR /root/app
 SHELL ["/bin/sh","-c"]
+RUN alias ll='ls -alh --color=auto'
 ENV DISCOVERY_SERVER_GROUP='<DISCOVERY_SERVER_GROUP>' \
     DISCOVERY_SERVER_NAME='<DISCOVERY_SERVER_NAME>' \
     DISCOVERY_SERVER_PORT='<DISCOVERY_SERVER_PORT>'
 ENV SERVER_VERIFY_DATA='<SERVER_VERIFY_DATA>' \
-    REMOTE_CONFIG='<REMOTE_CONFIG>' \
+    CONFIG_TYPE='<CONFIG_TYPE>' \
     RUN_ENV='<RUN_ENV>'
 COPY main probe.sh AppConfig.json SourceConfig.json ./
 ENTRYPOINT ["./main"]`
@@ -83,6 +86,18 @@ spec:
             - name: rpc
               containerPort: 9000
               protocol: TCP
+          volumeMounts:
+            - name: {{.ProjectName}}-config-volume
+              mountPath: /root/app/k8sconfig
+      volumes:
+        - name: {{.ProjectName}}-config-volume
+          configMap:
+            name: {{.ProjectName}}-config
+            items:
+              - key: app-config
+                path: AppConfig.json
+              - key: source-config
+                path: SourceConfig.json
       imagePullSecrets:
         - name: {{.NameSpace}}-secret
 ---

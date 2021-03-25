@@ -14,7 +14,7 @@ import (
 
 type Instance struct {
 	selfname     string
-	conf         *InstanceConfig
+	c            *InstanceConfig
 	peernodes    []*peernode
 	stop         int32
 	tcplistener  *net.TCPListener
@@ -82,9 +82,6 @@ func (this *Instance) addPeer(p *Peer) bool {
 
 //be careful about the callback func race
 func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
-	if e := checkInstanceConfig(c); e != nil {
-		return nil, e
-	}
 	if e := common.NameCheck(name, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -94,9 +91,15 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 	if e := common.NameCheck(group+"."+name, true, true, false, true); e != nil {
 		return nil, e
 	}
+	if c == nil {
+		c = &InstanceConfig{}
+	}
+	if e := c.validate(); e != nil {
+		return nil, e
+	}
 	stream := &Instance{
 		selfname:  group + "." + name,
-		conf:      c,
+		c:         c,
 		peernodes: make([]*peernode, c.GroupNum),
 		stop:      0,
 		noticech:  make(chan *Peer, 1024),
@@ -180,7 +183,7 @@ func (this *Instance) SendMessageAll(data []byte, block bool) {
 }
 
 func (this *Instance) heart(node *peernode) {
-	tker := time.NewTicker(time.Duration(this.conf.HeartprobeInterval) * time.Millisecond)
+	tker := time.NewTicker(time.Duration(this.c.HeartprobeInterval) * time.Millisecond)
 	for {
 		<-tker.C
 		now := uint64(time.Now().UnixNano())
@@ -192,7 +195,7 @@ func (this *Instance) heart(node *peernode) {
 			templastactive := atomic.LoadUint64(&p.lastactive)
 			temprecvidlestart := atomic.LoadUint64(&p.recvidlestart)
 			tempsendidlestart := atomic.LoadUint64(&p.sendidlestart)
-			if now >= templastactive && now-templastactive > uint64(this.conf.HeartbeatTimeout) {
+			if now >= templastactive && now-templastactive > uint64(this.c.HeartbeatTimeout) {
 				//heartbeat timeout
 				switch p.protocoltype {
 				case TCP:
@@ -213,7 +216,7 @@ func (this *Instance) heart(node *peernode) {
 				p.closeconn()
 				continue
 			}
-			if now >= tempsendidlestart && now-tempsendidlestart > uint64(this.conf.SendIdleTimeout) {
+			if now >= tempsendidlestart && now-tempsendidlestart > uint64(this.c.SendIdleTimeout) {
 				//send idle timeout
 				switch p.protocoltype {
 				case TCP:
@@ -234,7 +237,7 @@ func (this *Instance) heart(node *peernode) {
 				p.closeconn()
 				continue
 			}
-			if this.conf.RecvIdleTimeout != 0 && now >= temprecvidlestart && now-temprecvidlestart > uint64(this.conf.RecvIdleTimeout) {
+			if this.c.RecvIdleTimeout != 0 && now >= temprecvidlestart && now-temprecvidlestart > uint64(this.c.RecvIdleTimeout) {
 				//recv idle timeout
 				switch p.protocoltype {
 				case TCP:
@@ -283,5 +286,5 @@ func (this *Instance) heart(node *peernode) {
 	}
 }
 func (this *Instance) getindex(peername string) uint {
-	return uint(common.BkdrhashString(peername, uint64(this.conf.GroupNum)))
+	return uint(common.BkdrhashString(peername, uint64(this.c.GroupNum)))
 }

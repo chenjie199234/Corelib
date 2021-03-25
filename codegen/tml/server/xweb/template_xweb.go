@@ -24,19 +24,20 @@ var s *web.WebServer
 
 //StartWebServer -
 func StartWebServer() {
-	c := config.GetWebConfig()
-	webc := &web.Config{
-		Timeout:            time.Duration(c.WebTimeout),
-		StaticFileRootPath: c.WebStaticFile,
+	c := config.GetWebServerConfig()
+	webc := &web.ServerConfig{
+		GlobalTimeout:      time.Duration(c.GlobalTimeout),
+		IdleTimeout:        time.Duration(c.IdleTimeout),
+		StaticFileRootPath: c.StaticFile,
 		MaxHeader:          1024,
-		ReadBuffer:         1024,
-		WriteBuffer:        1024,
+		SocketRBuf:         1024,
+		SocketWBuf:         1024,
 	}
-	if c.WebCors != nil {
+	if c.Cors != nil {
 		webc.Cors = &web.CorsConfig{
-			AllowedOrigin:    c.WebCors.CorsOrigin,
-			AllowedHeader:    c.WebCors.CorsHeader,
-			ExposeHeader:     c.WebCors.CorsExpose,
+			AllowedOrigin:    c.Cors.CorsOrigin,
+			AllowedHeader:    c.Cors.CorsHeader,
+			ExposeHeader:     c.Cors.CorsExpose,
 			AllowCredentials: true,
 			MaxAge:           24 * time.Hour,
 		}
@@ -61,7 +62,7 @@ func StartWebServer() {
 	//return
 	//}
 
-	if e = s.StartWebServer(":8000", c.WebCertFile, c.WebKeyFile); e != nil {
+	if e = s.StartWebServer(":8000", c.CertKey); e != nil {
 		log.Error("[xweb] start error:", e)
 		return
 	}

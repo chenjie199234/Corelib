@@ -21,21 +21,78 @@ import (
 type PickHandler func(servers []*ServerForPick) *ServerForPick
 type DiscoveryHandler func(group, name string, client *RpcClient)
 
+type ClientConfig struct {
+	ConnTimeout            time.Duration
+	GlobalTimeout          time.Duration //global timeout for every rpc call
+	HeartTimeout           time.Duration
+	HeartPorbe             time.Duration
+	GroupNum               uint
+	SocketRBuf             uint
+	SocketWBuf             uint
+	MaxMsgLen              uint
+	MaxBufferedWriteMsgNum uint
+	VerifyData             string
+	Picker                 PickHandler
+	Discover               DiscoveryHandler
+}
+
+func (c *ClientConfig) validate() {
+	if c.ConnTimeout <= 0 {
+		c.ConnTimeout = time.Millisecond * 500
+	}
+	if c.GlobalTimeout < 0 {
+		c.GlobalTimeout = 0
+	}
+	if c.HeartTimeout <= 0 {
+		c.HeartTimeout = 5 * time.Second
+	}
+	if c.HeartPorbe <= 0 {
+		c.HeartPorbe = 1500 * time.Millisecond
+	}
+	if c.GroupNum == 0 {
+		c.GroupNum = 1
+	}
+	if c.SocketRBuf == 0 {
+		c.SocketRBuf = 1024
+	}
+	if c.SocketRBuf > 65535 {
+		c.SocketRBuf = 65535
+	}
+	if c.SocketWBuf == 0 {
+		c.SocketWBuf = 1024
+	}
+	if c.SocketWBuf > 65535 {
+		c.SocketWBuf = 65535
+	}
+	if c.MaxMsgLen < 1024 {
+		c.MaxMsgLen = 65535
+	}
+	if c.MaxMsgLen > 65535 {
+		c.MaxMsgLen = 65535
+	}
+	if c.MaxBufferedWriteMsgNum == 0 {
+		c.MaxBufferedWriteMsgNum = 256
+	}
+	if c.Picker == nil {
+		c.Picker = defaultPicker
+	}
+	if c.Discover == nil {
+		c.Discover = defaultDiscover
+	}
+}
+
 //appuniquename = appname:addr
 type RpcClient struct {
-	c          *Config
-	appname    string
-	verifydata string
-	instance   *stream.Instance
+	selfappname string
+	appname     string
+	c           *ClientConfig
+	instance    *stream.Instance
 
 	lker    *sync.RWMutex
 	servers []*ServerForPick
 
 	callid  uint64
 	reqpool *sync.Pool
-
-	picker   PickHandler
-	discover DiscoveryHandler
 }
 
 type ServerForPick struct {
@@ -72,7 +129,7 @@ func init() {
 	all = make(map[string]*RpcClient)
 }
 
-func NewRpcClient(c *Config, selfgroup, selfname, verifydata, group, name string, picker PickHandler, discover DiscoveryHandler) (*RpcClient, error) {
+func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*RpcClient, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -93,44 +150,35 @@ func NewRpcClient(c *Config, selfgroup, selfname, verifydata, group, name string
 	if e := common.NameCheck(selfappname, true, true, false, true); e != nil {
 		return nil, e
 	}
+	if c == nil {
+		c = &ClientConfig{}
+	}
+	c.validate()
 	lker.Lock()
 	defer lker.Unlock()
 	if client, ok := all[appname]; ok {
 		return client, nil
 	}
-	if picker == nil {
-		picker = defaultPicker
-	}
-	if discover == nil {
-		discover = defaultDiscover
-	}
 	client := &RpcClient{
-		c:          c,
-		appname:    appname,
-		verifydata: verifydata,
-		lker:       &sync.RWMutex{},
-		servers:    make([]*ServerForPick, 0, 10),
-		callid:     0,
-		reqpool:    &sync.Pool{},
-		picker:     picker,
-		discover:   discover,
+		selfappname: selfappname,
+		appname:     appname,
+		c:           c,
+		lker:        &sync.RWMutex{},
+		servers:     make([]*ServerForPick, 0, 10),
+		callid:      0,
+		reqpool:     &sync.Pool{},
 	}
-	var dupc *stream.InstanceConfig
-	if c != nil {
-		dupc = &stream.InstanceConfig{
-			HeartbeatTimeout:   c.HeartTimeout,
-			HeartprobeInterval: c.HeartPorbe,
-			GroupNum:           c.GroupNum,
-			TcpC: &stream.TcpConfig{
-				ConnectTimeout:         c.ConnTimeout,
-				SocketRBufLen:          c.SocketRBuf,
-				SocketWBufLen:          c.SocketWBuf,
-				MaxMsgLen:              c.MaxMsgLen,
-				MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
-			},
-		}
-	} else {
-		dupc = &stream.InstanceConfig{}
+	dupc := &stream.InstanceConfig{
+		HeartbeatTimeout:   c.HeartTimeout,
+		HeartprobeInterval: c.HeartPorbe,
+		GroupNum:           c.GroupNum,
+		TcpC: &stream.TcpConfig{
+			ConnectTimeout:         c.ConnTimeout,
+			SocketRBufLen:          c.SocketRBuf,
+			SocketWBufLen:          c.SocketWBuf,
+			MaxMsgLen:              c.MaxMsgLen,
+			MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
+		},
 	}
 	//tcp instalce
 	dupc.Verifyfunc = client.verifyfunc
@@ -138,8 +186,8 @@ func NewRpcClient(c *Config, selfgroup, selfname, verifydata, group, name string
 	dupc.Userdatafunc = client.userfunc
 	dupc.Offlinefunc = client.offlinefunc
 	client.instance, _ = stream.NewInstance(dupc, selfgroup, selfname)
-	log.Info("[rpc.client] start with verifydata:", verifydata)
-	go discover(group, name, client)
+	log.Info("[rpc.client] start with verifydata:", c.VerifyData)
+	go c.Discover(group, name, client)
 	all[appname] = client
 	return client, nil
 }
@@ -193,31 +241,29 @@ func (c *RpcClient) UpdateDiscovery(all map[string][]string, addition []byte) {
 		}
 		//this is not a new register
 		//unregister on which discovery server
-		if exist.discoveryservers != nil {
-			pos := 0
-			endpos := len(exist.discoveryservers) - 1
-			for pos <= endpos {
-				existdserver := exist.discoveryservers[pos]
-				find := false
-				for _, newdserver := range discoveryservers {
-					if newdserver == existdserver {
-						find = true
-						break
-					}
-				}
-				if find {
-					pos++
-				} else {
-					if pos != endpos {
-						exist.discoveryservers[pos], exist.discoveryservers[endpos] = exist.discoveryservers[endpos], exist.discoveryservers[pos]
-					}
-					endpos--
+		head := 0
+		tail := len(exist.discoveryservers) - 1
+		for head <= tail {
+			existdserver := exist.discoveryservers[head]
+			find := false
+			for _, newdserver := range discoveryservers {
+				if newdserver == existdserver {
+					find = true
+					break
 				}
 			}
-			if pos != len(exist.discoveryservers) {
-				exist.Pickinfo.DServerOffline = time.Now().UnixNano()
-				exist.discoveryservers = exist.discoveryservers[:pos]
+			if find {
+				head++
+			} else {
+				if head != tail {
+					exist.discoveryservers[head], exist.discoveryservers[tail] = exist.discoveryservers[tail], exist.discoveryservers[head]
+				}
+				tail--
 			}
+		}
+		if exist.discoveryservers != nil && head != len(exist.discoveryservers) {
+			exist.Pickinfo.DServerOffline = time.Now().UnixNano()
+			exist.discoveryservers = exist.discoveryservers[:head]
 		}
 		if exist.discoveryservers == nil {
 			exist.discoveryservers = make([]string, 0, 5)
@@ -241,7 +287,7 @@ func (c *RpcClient) UpdateDiscovery(all map[string][]string, addition []byte) {
 	}
 }
 func (c *RpcClient) start(addr string) {
-	tempverifydata := c.verifydata + "|" + c.appname
+	tempverifydata := c.c.VerifyData + "|" + c.appname
 	if r := c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata)); r == "" {
 		c.lker.RLock()
 		var exist *ServerForPick
@@ -305,7 +351,7 @@ func (c *RpcClient) unregister(addr string) {
 	}
 }
 func (c *RpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
-	if !bytes.Equal(peerVerifyData, common.Str2byte(c.verifydata)) {
+	if !bytes.Equal(peerVerifyData, common.Str2byte(c.c.VerifyData)) {
 		return nil, false
 	}
 	c.lker.RLock()
@@ -418,8 +464,8 @@ func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime 
 
 func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path string, in []byte, metadata map[string]string) ([]byte, error) {
 	var min time.Duration
-	if c.c.Timeout != 0 {
-		min = c.c.Timeout
+	if c.c.GlobalTimeout != 0 {
+		min = c.c.GlobalTimeout
 	}
 	if functimeout != 0 {
 		if min == 0 {
@@ -455,7 +501,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 		for {
 			//pick server
 			c.lker.RLock()
-			server = c.picker(c.servers)
+			server = c.c.Picker(c.servers)
 			if server == nil {
 				c.lker.RUnlock()
 				c.putreq(r)
