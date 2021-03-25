@@ -13,7 +13,6 @@ RUN mkdir /root/app/k8sconfig
 RUN mkdir /root/app/remoteconfig
 WORKDIR /root/app
 SHELL ["/bin/sh","-c"]
-RUN alias ll='ls -alh --color=auto'
 ENV DISCOVERY_SERVER_GROUP='<DISCOVERY_SERVER_GROUP>' \
     DISCOVERY_SERVER_NAME='<DISCOVERY_SERVER_NAME>' \
     DISCOVERY_SERVER_PORT='<DISCOVERY_SERVER_PORT>'
