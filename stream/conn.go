@@ -36,6 +36,9 @@ func (this *Instance) StartTcpServer(listenaddr string) error {
 			this.tcplistener.Close()
 			return errors.New("[Stream.TCP.Accept] server closed")
 		}
+		//disable system's keep alive probe
+		//use self's heartbeat probe
+		conn.SetKeepAlive(false)
 		p.conn = unsafe.Pointer(conn)
 		p.setbuffer(int(this.c.TcpC.SocketRBufLen), int(this.c.TcpC.SocketWBufLen))
 		if p.reader == nil {
@@ -143,7 +146,8 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) strin
 		return ""
 	}
 	dialer := net.Dialer{
-		Timeout: this.c.TcpC.ConnectTimeout,
+		Timeout:   this.c.TcpC.ConnectTimeout,
+		KeepAlive: -time.Second, //disable system's tcp keep alive probe,use self's heartbeat probe
 		Control: func(network, address string, c syscall.RawConn) error {
 			c.Control(func(fd uintptr) {
 				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, int(this.c.TcpC.SocketRBufLen))
@@ -157,6 +161,9 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) strin
 		log.Error("[Stream.TCP.StartTcpClient] dial error:", e)
 		return ""
 	}
+	//disable system's tcp keep alive probe
+	//use self's heartbeat probe
+	(conn.(*net.TCPConn)).SetKeepAlive(false)
 	p := this.getPeer(TCP, SERVER, this.c.TcpC.MaxBufferedWriteMsgNum, this.c.TcpC.MaxMsgLen, this.selfname)
 	p.conn = unsafe.Pointer(conn.(*net.TCPConn))
 	p.setbuffer(int(this.c.TcpC.SocketRBufLen), int(this.c.TcpC.SocketWBufLen))

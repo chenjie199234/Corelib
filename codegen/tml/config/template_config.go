@@ -86,7 +86,8 @@ type RpcClientConfig struct {
 //WebServerConfig -
 type WebServerConfig struct {
 	GlobalTimeout ctime.Duration    $json:"global_timeout"$ //default 500ms
-	IdleTimeout   ctime.Duration    $json:"idle_timeout"$   //default 10min
+	IdleTimeout   ctime.Duration    $json:"idle_timeout"$   //default 5s
+	HeartProbe    ctime.Duration    $json:"heart_probe"$    //default 1.5s
 	StaticFile    string            $json:"static_file"$
 	CertKey       map[string]string $json:"cert_key"$
 	//cors
@@ -103,7 +104,8 @@ type WebCorsConfig struct {
 //WebClientConfig -
 type WebClientConfig struct {
 	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
-	IdleTimeout   ctime.Duration $json:"idle_timeout"$   //default 10min
+	IdleTimeout   ctime.Duration $json:"idle_timeout"$   //default 5s
+	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
 	SkipVerifyTls bool           $json:"skip_verify_tls"$
 	Cas           []string       $json:"cas"$
 }
@@ -347,7 +349,8 @@ func initsource(path string) {
 	if sc.WebServer == nil {
 		sc.WebServer = &WebServerConfig{
 			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
-			IdleTimeout:   ctime.Duration(time.Minute * 10),
+			IdleTimeout:   ctime.Duration(time.Second * 5),
+			HeartProbe:    ctime.Duration(time.Millisecond * 1500),
 			StaticFile:    "./src",
 			Cors: &WebCorsConfig{
 				CorsOrigin: []string{"*"},
@@ -360,7 +363,10 @@ func initsource(path string) {
 			sc.WebServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if sc.WebServer.IdleTimeout <= 0 {
-			sc.WebServer.IdleTimeout = ctime.Duration(time.Minute * 10)
+			sc.WebServer.IdleTimeout = ctime.Duration(time.Second * 5)
+		}
+		if sc.WebServer.HeartProbe <= 0 {
+			sc.WebServer.HeartProbe = ctime.Duration(time.Millisecond * 1500)
 		}
 		if len(sc.WebServer.CertKey) != 0 {
 			delete(sc.WebServer.CertKey, "path_to_example_cert")
@@ -376,7 +382,8 @@ func initsource(path string) {
 	if sc.WebClient == nil {
 		sc.WebClient = &WebClientConfig{
 			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
-			IdleTimeout:   ctime.Duration(time.Minute * 10),
+			IdleTimeout:   ctime.Duration(time.Second * 5),
+			HeartProbe:    ctime.Duration(time.Millisecond * 1500),
 			SkipVerifyTls: true,
 			Cas:           nil,
 		}
@@ -385,7 +392,10 @@ func initsource(path string) {
 			sc.WebClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if sc.WebClient.IdleTimeout <= 0 {
-			sc.WebClient.IdleTimeout = ctime.Duration(time.Minute * 10)
+			sc.WebClient.IdleTimeout = ctime.Duration(time.Second * 5)
+		}
+		if sc.WebServer.HeartProbe <= 0 {
+			sc.WebClient.HeartProbe = ctime.Duration(time.Millisecond * 1500)
 		}
 		head := 0
 		tail := len(sc.WebClient.Cas) - 1

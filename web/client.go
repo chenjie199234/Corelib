@@ -25,8 +25,13 @@ type PickHandler func(servers []*ServerForPick) *ServerForPick
 type DiscoveryHandler func(group, name string, client *WebClient)
 
 type ClientConfig struct {
+	//request's max handling time
 	GlobalTimeout time.Duration
-	IdleTimeout   time.Duration
+	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
+	//if this is 0,means useless,connection will keep alive until it is closed
+	IdleTimeout time.Duration
+	//system's tcp keep alive probe interval,negative disable keep alive,0 will be set to default 15s
+	HeartProbe    time.Duration
 	MaxHeader     uint
 	SocketRBuf    uint
 	SocketWBuf    uint
@@ -40,8 +45,8 @@ func (c *ClientConfig) validate() {
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
 	}
-	if c.IdleTimeout < 0 {
-		c.IdleTimeout = 0
+	if c.HeartProbe == 0 {
+		c.HeartProbe = time.Second * 15
 	}
 	if c.MaxHeader == 0 {
 		c.MaxHeader = 1024
@@ -212,7 +217,7 @@ func (this *WebClient) UpdateDiscovery(all map[string][]string, addition []byte)
 					Transport: &http.Transport{
 						Proxy: http.ProxyFromEnvironment,
 						DialContext: (&net.Dialer{
-							KeepAlive: time.Second,
+							KeepAlive: this.c.HeartProbe,
 							Control: func(network, address string, c syscall.RawConn) error {
 								c.Control(func(fd uintptr) {
 									syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, int(this.c.SocketRBuf))

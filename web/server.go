@@ -22,12 +22,17 @@ import (
 )
 
 type ServerConfig struct {
-	GlobalTimeout      time.Duration
-	IdleTimeout        time.Duration //default 10min
+	//request's max handling time
+	GlobalTimeout time.Duration
+	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
+	//if this is 0,GlobalTimeout will be used as IdleTimeout
+	IdleTimeout time.Duration
+	//system's tcp keep alive probe interval,negative disable keep alive,0 will be set to default 15s
+	HeartProbe         time.Duration
 	StaticFileRootPath string
 	MaxHeader          uint
-	SocketRBuf         uint //socket buffer
-	SocketWBuf         uint //socker buffer
+	SocketRBuf         uint
+	SocketWBuf         uint
 	Cors               *CorsConfig
 }
 
@@ -56,8 +61,8 @@ func (c *ServerConfig) validate() {
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
 	}
-	if c.IdleTimeout < 0 {
-		c.IdleTimeout = 0
+	if c.HeartProbe == 0 {
+		c.HeartProbe = time.Second * 15
 	}
 	if c.MaxHeader == 0 {
 		c.MaxHeader = 1024
@@ -172,6 +177,10 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 			IdleTimeout:    c.IdleTimeout,
 			MaxHeaderBytes: int(c.MaxHeader),
 			ConnContext: func(ctx context.Context, conn net.Conn) context.Context {
+				if c.HeartProbe > 0 {
+					(conn.(*net.TCPConn)).SetKeepAlive(true)
+					(conn.(*net.TCPConn)).SetKeepAlivePeriod(c.HeartProbe)
+				}
 				(conn.(*net.TCPConn)).SetReadBuffer(int(c.SocketRBuf))
 				(conn.(*net.TCPConn)).SetWriteBuffer(int(c.SocketWBuf))
 				return ctx
@@ -181,6 +190,11 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		router:  httprouter.New(),
 		ctxpool: &sync.Pool{},
 		stopch:  make(chan struct{}, 1),
+	}
+	if c.HeartProbe < 0 {
+		instance.s.SetKeepAlivesEnabled(false)
+	} else {
+		instance.s.SetKeepAlivesEnabled(true)
 	}
 	instance.s.Handler = instance
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

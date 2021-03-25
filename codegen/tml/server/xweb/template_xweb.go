@@ -28,6 +28,7 @@ func StartWebServer() {
 	webc := &web.ServerConfig{
 		GlobalTimeout:      time.Duration(c.GlobalTimeout),
 		IdleTimeout:        time.Duration(c.IdleTimeout),
+		HeartProbe:         time.Duration(c.HeartProbe),
 		StaticFileRootPath: c.StaticFile,
 		MaxHeader:          1024,
 		SocketRBuf:         1024,
