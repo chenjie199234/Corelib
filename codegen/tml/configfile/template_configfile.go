@@ -13,14 +13,15 @@ const textsource = `{
 		"heart_probe":"1.5s"
 	},
 	"rpc_client":{
-		"conn_timeout":"1s",
+		"conn_timeout":"200ms",
 		"global_timeout":"200ms",
 		"heart_timeout":"5s",
 		"heart_probe":"1.5s"
 	},
 	"web_server":{
 		"global_timeout":"200ms",
-		"idle_timeout":"10m",
+		"idle_timeout":"5s",
+		"heart_probe":"1.5s",
 		"static_file":"./src",
 		"cert_key":{
 			"path_to_example_cert":"path_to_example_key"
@@ -33,7 +34,8 @@ const textsource = `{
 	},
 	"web_client":{
 		"global_timeout":"200ms",
-		"idle_timeout":"10m",
+		"idle_timeout":"5s",
+		"heart_probe":"1.5s",
 		"skip_verify_tls":false,
 		"cas":["path_to_example_ca"]
 	},

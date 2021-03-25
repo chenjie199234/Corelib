@@ -77,7 +77,7 @@ type RpcServerConfig struct {
 
 //RpcClientConfig -
 type RpcClientConfig struct {
-	ConnTimeout   ctime.Duration $json:"conn_timeout"$   //default 1s
+	ConnTimeout   ctime.Duration $json:"conn_timeout"$   //default 500ms
 	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
 	HeartTimeout  ctime.Duration $json:"heart_timeout"$  //default 5s
 	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
@@ -327,14 +327,14 @@ func initsource(path string) {
 	}
 	if sc.RpcClient == nil {
 		sc.RpcClient = &RpcClientConfig{
-			ConnTimeout:   ctime.Duration(time.Second),
+			ConnTimeout:   ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
 			HeartTimeout:  ctime.Duration(time.Second * 5),
 			HeartProbe:    ctime.Duration(time.Millisecond * 1500),
 		}
 	} else {
 		if sc.RpcClient.ConnTimeout <= 0 {
-			sc.RpcClient.ConnTimeout = ctime.Duration(time.Second)
+			sc.RpcClient.ConnTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if sc.RpcClient.GlobalTimeout <= 0 {
 			sc.RpcClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
