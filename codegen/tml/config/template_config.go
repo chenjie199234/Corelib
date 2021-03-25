@@ -669,7 +669,7 @@ func initapp(path string) {
 				if !ok {
 					return
 				}
-				if *EC.ConfigType == 0 || *EC.ConfigType == 2 {
+				if EC.ConfigType == nil || *EC.ConfigType == 0 || *EC.ConfigType == 2 {
 					if filepath.Base(event.Name) != "AppConfig.json" || (event.Op&fsnotify.Create == 0 && event.Op&fsnotify.Write == 0) {
 						continue
 					}
