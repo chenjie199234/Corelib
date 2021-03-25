@@ -288,9 +288,6 @@ func initdiscovery() {
 	}
 }
 func initremote() {
-	if EC.RemoteConfig != nil && *EC.RemoteConfig == true {
-		//get remote config
-	}
 }
 func initsource(path string) {
 	data, e := os.ReadFile(path + "SourceConfig.json")
