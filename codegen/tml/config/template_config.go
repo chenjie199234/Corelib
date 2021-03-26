@@ -527,8 +527,8 @@ func initsource(path string) {
 		op = op.SetReadPreference(readpref.SecondaryPreferred())
 		//default:only read the selected server's data
 		op = op.SetReadConcern(readconcern.Local())
-		//default:data will be writeen to most nodes' journal then return success
-		op = op.SetWriteConcern(writeconcern.New(writeconcern.WMajority(), writeconcern.J(true), writeconcern.WTimeout(time.Duration(mongoc.IoTimeout))))
+		//default:data will be writeen to promary node's journal then return success
+		op = op.SetWriteConcern(writeconcern.New(writeconcern.W(1), writeconcern.J(true)))
 		tempdb, e := mongo.Connect(nil, op)
 		if e != nil {
 			log.Error("[config.initsource] open mongodb:", k, "error:", e)
