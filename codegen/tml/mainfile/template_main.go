@@ -20,8 +20,8 @@ import (
 	"{{.}}/server/xweb"
 	"{{.}}/service"
 
-	"github.com/chenjie199234/Corelib/discovery"
 	"github.com/chenjie199234/Corelib/log"
+	discoverysdk "github.com/chenjie199234/Discovery/sdk"
 )
 
 func main() {
@@ -59,17 +59,12 @@ func main() {
 		tmer := time.NewTimer(time.Millisecond * 200)
 		select {
 		case <-tmer.C:
-			regmsg := &discovery.RegMsg{
-				WebPort: 8000,
-				RpcPort: 9000,
-			}
 			webc := config.GetWebServerConfig()
 			if webc != nil && len(webc.CertKey) > 0 {
-				regmsg.WebScheme = "https"
+				discoverysdk.RegisterSelf(9000, 8000, "https", nil)
 			} else {
-				regmsg.WebScheme = "http"
+				discoverysdk.RegisterSelf(9000, 8000, "http", nil)
 			}
-			discovery.RegisterSelf(regmsg)
 		case <-stop:
 		}
 	}()

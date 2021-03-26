@@ -21,10 +21,11 @@ import (
 
 	"{{.}}/api"
 
-	"github.com/chenjie199234/Corelib/discovery"
+	configsdk "github.com/chenjie199234/Config/sdk"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
 	ctime "github.com/chenjie199234/Corelib/util/time"
+	discoverysdk "github.com/chenjie199234/Discovery/sdk"
 	"github.com/fsnotify/fsnotify"
 	"github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
@@ -203,8 +204,8 @@ func init() {
 	} else if *EC.ConfigType == 1 {
 		path = "./k8sconfig/"
 	} else {
-		initremote()
 		path = "./remoteconfig/"
+		initremote(path)
 	}
 	initsource(path)
 	initapp(path)
@@ -282,18 +283,25 @@ func initenv(){
 }
 func initdiscovery() {
 	if EC.ServerVerifyDatas != nil {
-		vd := ""
+		verifydata := ""
 		if len(EC.ServerVerifyDatas) > 0 {
-			vd = EC.ServerVerifyDatas[0]
+			verifydata = EC.ServerVerifyDatas[0]
 		}
-		if e := discovery.NewDiscoveryClient(nil, api.Group, api.Name, vd, discovery.MakeDefaultFinder(*EC.DiscoveryGroup, *EC.DiscoveryName, *EC.DiscoveryPort)); e != nil {
-			log.Error("[config.initdiscovery] error:", e)
+		if e := discoverysdk.NewSdk(api.Group, api.Name, verifydata); e != nil {
+			log.Error("[config.initdiscovery] new sdk error:", e)
 			Close()
 			os.Exit(1)
 		}
 	}
 }
-func initremote() {
+func initremote(path string) {
+	if EC.ConfigType != nil && *EC.ConfigType == 2 {
+		if e := configsdk.NewRpcSdk(500*time.Millisecond, time.Second, path, api.Group, api.Name); e != nil {
+			log.Error("[config.initremote] new sdk error:", e)
+			Close()
+			os.Exit(1)
+		}
+	}
 }
 func initsource(path string) {
 	data, e := os.ReadFile(path + "SourceConfig.json")
