@@ -3,7 +3,6 @@ package rpc
 import (
 	"bytes"
 	"context"
-	"math/rand"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -120,15 +119,6 @@ func (s *ServerForPick) Pickable() bool {
 	return s.status == 3
 }
 
-var lker *sync.Mutex
-var all map[string]*RpcClient
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-	lker = &sync.Mutex{}
-	all = make(map[string]*RpcClient)
-}
-
 func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*RpcClient, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
@@ -154,11 +144,6 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 		c = &ClientConfig{}
 	}
 	c.validate()
-	lker.Lock()
-	defer lker.Unlock()
-	if client, ok := all[appname]; ok {
-		return client, nil
-	}
 	client := &RpcClient{
 		selfappname: selfappname,
 		appname:     appname,
@@ -186,9 +171,8 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 	dupc.Userdatafunc = client.userfunc
 	dupc.Offlinefunc = client.offlinefunc
 	client.instance, _ = stream.NewInstance(dupc, selfgroup, selfname)
-	log.Info("[rpc.client] start with verifydata:", c.VerifyData)
+	log.Info("[rpc.client]", group+"."+name, "start finding server with verifydata:", c.VerifyData)
 	go c.Discover(group, name, client)
-	all[appname] = client
 	return client, nil
 }
 

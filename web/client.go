@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
@@ -102,15 +103,6 @@ func (s *ServerForPick) Pickable() bool {
 	return !s.closing
 }
 
-var lker *sync.Mutex
-var all map[string]*WebClient
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-	lker = &sync.Mutex{}
-	all = make(map[string]*WebClient)
-}
-
 //has race,will only return the first call's client,the config will use the first call's config
 func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*WebClient, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
@@ -150,11 +142,6 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 			}
 		}
 	}
-	lker.Lock()
-	defer lker.Unlock()
-	if client, ok := all[appname]; ok {
-		return client, nil
-	}
 	client := &WebClient{
 		selfappname: selfappname,
 		appname:     appname,
@@ -164,7 +151,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 		lker:  &sync.RWMutex{},
 		hosts: make([]*ServerForPick, 0, 10),
 	}
-	all[appname] = client
+	log.Info("[web.client]", group+"."+name, "start finding server")
 	go c.Discover(group, name, client)
 	return client, nil
 }
