@@ -97,7 +97,6 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	g.P("type ", lowclientName, " struct{")
 	g.P("cc *", g.QualifiedGoIdent(rpcPackage.Ident("RpcClient")))
 	g.P("}")
-	g.P("//has race,will only return the first call's client,the config will use the first call's config")
 	g.P("func New", clientName, "(c *", g.QualifiedGoIdent(rpcPackage.Ident("ClientConfig")), ",selfgroup,selfname string)(", clientName, ",error){")
 	g.P("cc,e:=", g.QualifiedGoIdent(rpcPackage.Ident("NewRpcClient")), "(c,selfgroup,selfname,Group,Name)")
 	g.P("if e != nil {")

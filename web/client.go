@@ -102,7 +102,6 @@ func (s *ServerForPick) Pickable() bool {
 	return !s.closing
 }
 
-//has race,will only return the first call's client,the config will use the first call's config
 func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*WebClient, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
