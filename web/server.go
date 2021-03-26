@@ -149,6 +149,8 @@ type WebServer struct {
 	ctxpool     *sync.Pool
 	status      int32 //0-created,not started 1-started 2-stoped
 	stopch      chan struct{}
+
+	reqnum int32
 }
 
 func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, error) {
@@ -306,13 +308,17 @@ func (this *WebServer) StopWebServer() {
 	for {
 		select {
 		case <-tmer.C:
-			this.s.Shutdown(context.Background())
-			return
+			if this.reqnum != 0 {
+				tmer.Reset(time.Second)
+			} else {
+				this.s.Shutdown(context.Background())
+				return
+			}
 		case <-this.stopch:
-			tmer.Reset(time.Second)
-			for len(tmer.C) > 0 {
+			if !tmer.Stop() {
 				<-tmer.C
 			}
+			tmer.Reset(time.Second)
 		}
 	}
 }
@@ -509,7 +515,16 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 		r = r.WithContext(basectx)
 		//logic
 		ctx := this.getContext(w, r, totalhandlers)
+		atomic.AddInt32(&this.reqnum, 1)
+		defer atomic.AddInt32(&this.reqnum, -1)
 		ctx.Next()
 		this.putContext(ctx)
+		//double check server check
+		if atomic.LoadInt32(&this.status) == 0 {
+			select {
+			case this.stopch <- struct{}{}:
+			default:
+			}
+		}
 	}, nil
 }

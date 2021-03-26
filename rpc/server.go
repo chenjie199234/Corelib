@@ -76,6 +76,8 @@ type RpcServer struct {
 	instance *stream.Instance
 	status   int32 //0-created,not started 1-started 2-closed
 	stopch   chan struct{}
+
+	reqnum int32
 }
 
 func NewRpcServer(c *ServerConfig, selfgroup, selfname string) (*RpcServer, error) {
@@ -138,13 +140,17 @@ func (s *RpcServer) StopRpcServer() {
 	for {
 		select {
 		case <-timer.C:
-			s.instance.Stop()
-			return
+			if s.reqnum != 0 {
+				timer.Reset(time.Second)
+			} else {
+				s.instance.Stop()
+				return
+			}
 		case <-s.stopch:
-			timer.Reset(time.Second)
-			for len(timer.C) > 0 {
+			if !timer.Stop() {
 				<-timer.C
 			}
+			timer.Reset(time.Second)
 		}
 	}
 }
@@ -327,6 +333,8 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			}
 			return
 		}
+		atomic.AddInt32(&s.reqnum, 1)
+		defer atomic.AddInt32(&s.reqnum, -1)
 		handler(peeruniquename, msg)
 		d, _ := proto.Marshal(msg)
 		if len(d) > int(s.c.MaxMsgLen) {
@@ -340,6 +348,13 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		}
 		if e := p.SendMessage(d, starttime, true); e != nil {
 			log.Error("[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
+		}
+		//double check server status
+		if atomic.LoadInt32(&s.status) == 0 {
+			select {
+			case s.stopch <- struct{}{}:
+			default:
+			}
 		}
 	}()
 }
