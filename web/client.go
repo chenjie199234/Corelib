@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -151,7 +150,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 		lker:  &sync.RWMutex{},
 		hosts: make([]*ServerForPick, 0, 10),
 	}
-	log.Info("[web.client]", group+"."+name, "start finding server")
+	log.Info("[web.client] start finding server", group+"."+name)
 	go c.Discover(group, name, client)
 	return client, nil
 }

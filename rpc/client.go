@@ -171,7 +171,7 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 	dupc.Userdatafunc = client.userfunc
 	dupc.Offlinefunc = client.offlinefunc
 	client.instance, _ = stream.NewInstance(dupc, selfgroup, selfname)
-	log.Info("[rpc.client]", group+"."+name, "start finding server with verifydata:", c.VerifyData)
+	log.Info("[rpc.client] start finding server", group+"."+name, "with verifydata:", c.VerifyData)
 	go c.Discover(group, name, client)
 	return client, nil
 }
