@@ -402,7 +402,7 @@ func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ..
 
 func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	//check server status
-	if atomic.LoadInt32(&this.status) == 0 {
+	if atomic.LoadInt32(&this.status) != 1 {
 		select {
 		case this.stopch <- struct{}{}:
 		default:
@@ -520,7 +520,7 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 		ctx.Next()
 		this.putContext(ctx)
 		//double check server check
-		if atomic.LoadInt32(&this.status) == 0 {
+		if atomic.LoadInt32(&this.status) != 1 {
 			select {
 			case this.stopch <- struct{}{}:
 			default:

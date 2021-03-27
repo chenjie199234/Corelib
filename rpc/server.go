@@ -256,7 +256,7 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 	}, nil
 }
 func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
-	if atomic.LoadInt32(&s.status) == 0 {
+	if atomic.LoadInt32(&s.status) != 1 {
 		return nil, false
 	}
 	temp := common.Byte2str(peerVerifyData)
@@ -282,7 +282,7 @@ func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerV
 	return nil, false
 }
 func (s *RpcServer) onlinefunc(p *stream.Peer, peeruniquename string, starttime uint64) {
-	if atomic.LoadInt32(&s.status) == 0 {
+	if atomic.LoadInt32(&s.status) != 1 {
 		d, _ := proto.Marshal(&Msg{
 			Callid: 0,
 			Error:  ERRCLOSING.Error(),
@@ -304,7 +304,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		return
 	}
 	go func() {
-		if atomic.LoadInt32(&s.status) == 0 {
+		if atomic.LoadInt32(&s.status) != 1 {
 			select {
 			case s.stopch <- struct{}{}:
 			default:
@@ -350,7 +350,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			log.Error("[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
 		}
 		//double check server status
-		if atomic.LoadInt32(&s.status) == 0 {
+		if atomic.LoadInt32(&s.status) != 1 {
 			select {
 			case s.stopch <- struct{}{}:
 			default:
