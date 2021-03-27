@@ -8,8 +8,8 @@ import (
 	"github.com/chenjie199234/Corelib/stream"
 )
 
-func testfinder(manually chan struct{}) {
-	UpdateDiscoveryServers([]string{"default.discoverycenter1:127.0.0.1:9234", "default.discoverycenter2:127.0.0.1:9235"})
+func testfinder(manually chan struct{}, client *DiscoveryClient) {
+	client.UpdateDiscoveryServers([]string{"default.discoverycenter1:127.0.0.1:9234", "default.discoverycenter2:127.0.0.1:9235"})
 	//UpdateDiscoveryServers([]string{"server:127.0.0.1:9234"})
 }
 func Test_Client1(t *testing.T) {

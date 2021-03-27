@@ -11,7 +11,7 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-func MakeDefaultFinder(servergroup, servername string, serverport int) func(manually chan struct{}) {
+func MakeDefaultFinder(servergroup, servername string, serverport int) func(chan struct{}, *DiscoveryClient) {
 	if e := common.NameCheck(servergroup, false, true, false, true); e != nil {
 		log.Error("[Discovery.client.MakeDefaultFinder] error:", e)
 		return nil
@@ -28,7 +28,7 @@ func MakeDefaultFinder(servergroup, servername string, serverport int) func(manu
 		log.Error("[Discovery.client.MakeDefaultFinder] discovery server port out of range")
 		return nil
 	}
-	return func(manually chan struct{}) {
+	return func(manually chan struct{}, client *DiscoveryClient) {
 		host := servername + "-service." + servergroup
 		appname := servergroup + "." + servername
 
@@ -62,7 +62,7 @@ func MakeDefaultFinder(servergroup, servername string, serverport int) func(manu
 			if different {
 				current = addrs
 				log.Info("[Discovery.client.DefaultFinder] dns resolve host:", host, "result:", current)
-				UpdateDiscoveryServers(addrs)
+				client.UpdateDiscoveryServers(addrs)
 			}
 		}
 		finder()

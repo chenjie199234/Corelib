@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -92,11 +93,18 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 		return nil, e
 	}
 	if c == nil {
-		c = &InstanceConfig{}
+		return nil, errors.New("[Stream.NewInstance] config is nil")
 	}
-	if e := c.validate(); e != nil {
-		return nil, e
+	//verify func can't be nill
+	//user data deal func can't be nill
+	//online and offline func can be nill
+	if c.Verifyfunc == nil {
+		return nil, errors.New("[Stream.NewInstance] missing verify function")
 	}
+	if c.Userdatafunc == nil {
+		return nil, errors.New("[Stream.NewInstance] missing userdata function")
+	}
+	c.validate()
 	stream := &Instance{
 		selfname:  group + "." + name,
 		c:         c,

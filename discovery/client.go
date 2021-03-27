@@ -17,8 +17,8 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-//in this function,call UpdateDiscoveryServers() to update the discovery servers
-type DiscoveryServerFinder func(manually chan struct{})
+//in this function,call DiscoveryClient.UpdateDiscoveryServers() to update the discovery servers
+type DiscoveryServerFinder func(chan struct{}, *DiscoveryClient)
 
 type DiscoveryClient struct {
 	verifydata string
@@ -77,7 +77,6 @@ func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname, verifydat
 	if finder == nil {
 		return errors.New("[Discovery.client] missing finder")
 	}
-
 	clientinstance.lker.Lock()
 	defer clientinstance.lker.Unlock()
 	if clientinstance.status == 0 {
@@ -104,19 +103,19 @@ func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname, verifydat
 	dupc.Offlinefunc = clientinstance.offlinefunc
 	clientinstance.instance, _ = stream.NewInstance(&dupc, selfgroup, selfname)
 	log.Info("[Discovery.client] start with verifydata:", verifydata)
-	go finder(clientinstance.manually)
+	go finder(clientinstance.manually, clientinstance)
 	return nil
 }
 
 //server addr format: servername:ip:port
-func UpdateDiscoveryServers(serveraddrs []string) {
-	clientinstance.lker.Lock()
-	defer clientinstance.lker.Unlock()
-	if clientinstance.status == 0 {
+func (c *DiscoveryClient) UpdateDiscoveryServers(serveraddrs []string) {
+	c.lker.Lock()
+	defer c.lker.Unlock()
+	if c.status == 0 {
 		return
 	}
 	//delete offline server
-	for serveruniquename, server := range clientinstance.servers {
+	for serveruniquename, server := range c.servers {
 		find := false
 		for _, saddr := range serveraddrs {
 			if saddr == serveruniquename {
@@ -126,7 +125,7 @@ func UpdateDiscoveryServers(serveraddrs []string) {
 		}
 		if !find {
 			server.lker.Lock()
-			delete(clientinstance.servers, serveruniquename)
+			delete(c.servers, serveruniquename)
 			server.status = 0
 			if server.peer != nil {
 				server.peer.Close()
@@ -147,7 +146,7 @@ func UpdateDiscoveryServers(serveraddrs []string) {
 			continue
 		}
 		var server *servernode
-		for serveruniquename, v := range clientinstance.servers {
+		for serveruniquename, v := range c.servers {
 			if serveruniquename == saddr {
 				server = v
 				break
@@ -161,15 +160,15 @@ func UpdateDiscoveryServers(serveraddrs []string) {
 				starttime: 0,
 				allapps:   make(map[string]map[string]*appnode, 5),
 				status:    1,
-				regdata:   clientinstance.regdata,
+				regdata:   c.regdata,
 			}
-			clientinstance.servers[saddr] = server
-			go clientinstance.start(saddr[findex+1:], saddr[:findex])
+			c.servers[saddr] = server
+			go c.start(saddr[findex+1:], saddr[:findex])
 		}
 	}
 }
 func (c *DiscoveryClient) start(addr, servername string) {
-	tempverifydata := clientinstance.verifydata + "|" + servername
+	tempverifydata := c.verifydata + "|" + servername
 	if r := c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata)); r == "" {
 		c.lker.RLock()
 		server, ok := c.servers[servername+":"+addr]
@@ -402,15 +401,15 @@ func (c *DiscoveryClient) onlinefunc(p *stream.Peer, serveruniquename string, st
 		log.Info("[Discovery.client.onlinefunc] register to server:", serveruniquename, "with data:", common.Byte2str(server.regdata))
 		server.peer.SendMessage(makeOnlineMsg("useless", server.regdata), server.starttime, true)
 	}
-	clientinstance.nlker.RLock()
+	c.nlker.RLock()
 	result := make(map[string]struct{}, 5)
-	for k := range clientinstance.rpcnotices {
+	for k := range c.rpcnotices {
 		result[k] = struct{}{}
 	}
-	for k := range clientinstance.webnotices {
+	for k := range c.webnotices {
 		result[k] = struct{}{}
 	}
-	clientinstance.nlker.RUnlock()
+	c.nlker.RUnlock()
 	for k := range result {
 		server.peer.SendMessage(makePullMsg(k), server.starttime, true)
 	}

@@ -2,7 +2,6 @@ package stream
 
 import (
 	"context"
-	"errors"
 	"time"
 )
 
@@ -160,7 +159,7 @@ type InstanceConfig struct {
 	Offlinefunc HandleOfflineFunc
 }
 
-func (c *InstanceConfig) validate() error {
+func (c *InstanceConfig) validate() {
 	if c.HeartbeatTimeout <= 0 {
 		c.HeartbeatTimeout = 5 * time.Second
 	}
@@ -179,15 +178,6 @@ func (c *InstanceConfig) validate() error {
 	if c.GroupNum == 0 {
 		c.GroupNum = 1
 	}
-	//verify func can't be nill
-	//user data deal func can't be nill
-	//online and offline func can be nill
-	if c.Verifyfunc == nil {
-		return errors.New("[Stream.checkInstanceConfig] missing verify function")
-	}
-	if c.Userdatafunc == nil {
-		return errors.New("[Stream.checkInstanceConfig] missing userdata function")
-	}
 	if c.TcpC == nil {
 		c.TcpC = defaultTcpConfig
 	} else {
@@ -198,5 +188,4 @@ func (c *InstanceConfig) validate() error {
 	} else {
 		c.UnixC.validate()
 	}
-	return nil
 }
