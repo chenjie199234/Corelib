@@ -194,24 +194,20 @@ func (c *DiscoveryClient) start(addr, servername string) {
 	}
 }
 func RegisterSelf(regmsg *RegMsg) error {
-	if regmsg == nil {
+	if regmsg == nil || (regmsg.RpcPort == 0 && regmsg.WebPort == 0) {
 		return errors.New("[Discovery.client] register message empty")
 	}
-	temp := make(map[int]struct{})
-	count := 0
-	if regmsg.WebPort != 0 && regmsg.WebScheme != "" {
-		temp[regmsg.WebPort] = struct{}{}
-		count++
+	if regmsg.RpcPort > 65535 || regmsg.RpcPort < 0 {
+		return errors.New("[Discovery.client] regmsg's RpcPort out of range")
 	}
-	if regmsg.RpcPort != 0 {
-		temp[regmsg.RpcPort] = struct{}{}
-		count++
+	if regmsg.WebPort > 65535 || regmsg.WebPort < 0 {
+		return errors.New("[Discovery.client] regmsg's WebPort out of range")
 	}
-	if count == 0 {
-		return errors.New("[Discovery.client] register message empty")
+	if regmsg.RpcPort == regmsg.WebPort {
+		return errors.New("[Discovery.client] regmsg's RpcPort and WebPort conflict")
 	}
-	if len(temp) != count {
-		return errors.New("[Discovery.client] register message port conflict")
+	if regmsg.WebPort != 0 && regmsg.WebScheme != "http" && regmsg.WebScheme != "https" {
+		return errors.New("[Discovery.client] regmsg missing WebScheme")
 	}
 	d, _ := json.Marshal(regmsg)
 	if bytes.Contains(d, []byte{split}) {

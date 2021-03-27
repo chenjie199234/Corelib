@@ -225,10 +225,10 @@ func (s *DiscoveryServer) userfunc(p *stream.Peer, appuniquename string, origind
 		findex := strings.Index(appuniquename, ":")
 		lindex := strings.LastIndex(appuniquename, ":")
 		ip := appuniquename[findex+1 : lindex]
-		if reg.WebPort != 0 && reg.WebScheme != "" && reg.WebIp == "" {
+		if reg.WebPort != 0 && reg.WebScheme != "" {
 			reg.WebIp = ip
 		}
-		if reg.RpcPort != 0 && reg.RpcIp == "" {
+		if reg.RpcPort != 0 {
 			reg.RpcIp = ip
 		}
 		regdata, _ = json.Marshal(reg)
