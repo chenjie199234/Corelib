@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"sort"
+	"time"
 
 	"github.com/chenjie199234/Corelib/discovery"
 	"github.com/chenjie199234/Corelib/log"
@@ -11,7 +12,17 @@ import (
 )
 
 func defaultDiscover(group, name string, client *RpcClient) {
-	notice := discovery.NoticeRpcChanges(group + "." + name)
+	var notice chan struct{}
+	var e error
+	for {
+		notice, e = discovery.NoticeRpcChanges(group + "." + name)
+		if e != nil {
+			log.Error("[rpc.client.defaultDiscover] register notice error:", e)
+			time.Sleep(time.Millisecond * 100)
+		} else {
+			break
+		}
+	}
 
 	currentinfos := []byte("{}")
 	currentaddition := []byte(nil)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"sort"
+	"time"
 
 	"github.com/chenjie199234/Corelib/discovery"
 	"github.com/chenjie199234/Corelib/log"
@@ -11,7 +12,17 @@ import (
 )
 
 func defaultDiscover(group, name string, client *WebClient) {
-	notice := discovery.NoticeWebChanges(group + "." + name)
+	var notice chan struct{}
+	var e error
+	for {
+		notice, e = discovery.NoticeWebChanges(group + "." + name)
+		if e != nil {
+			log.Error("[web.client.defaultDiscover] register notice error:", e)
+			time.Sleep(time.Millisecond * 10)
+		} else {
+			break
+		}
+	}
 
 	currentinfos := []byte("{}")
 	currentaddition := []byte(nil)

@@ -44,8 +44,8 @@ func Test_Client1(t *testing.T) {
 			MaxBufferedWriteMsgNum: 256,
 		},
 	}, "testgroup", "testclient1", "test", testfinder)
-	rch := NoticeRpcChanges("testgroup.testclient2")
-	wch := NoticeWebChanges("testgroup.testclient2")
+	rch, _ := NoticeRpcChanges("testgroup.testclient2")
+	wch, _ := NoticeWebChanges("testgroup.testclient2")
 	go func() {
 		for {
 			select {
@@ -111,8 +111,8 @@ func Test_Client2(t *testing.T) {
 			MaxBufferedWriteMsgNum: 256,
 		},
 	}, "testgroup", "testclient2", "test", testfinder)
-	rch := NoticeRpcChanges("testgroup.testclient1")
-	wch := NoticeWebChanges("testgroup.testclient1")
+	rch, _ := NoticeRpcChanges("testgroup.testclient1")
+	wch, _ := NoticeWebChanges("testgroup.testclient1")
 	go func() {
 		for {
 			select {

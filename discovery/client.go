@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -21,10 +22,10 @@ import (
 type DiscoveryServerFinder func(chan struct{}, *DiscoveryClient)
 
 type DiscoveryClient struct {
-	verifydata string
-	instance   *stream.Instance
-	regdata    []byte
-	status     int32 //0-closing,1-starting,2-working
+	verifydata  string
+	tcpinstance *stream.Instance
+	regdata     []byte
+	status      int32 //0-closing,1-working
 
 	manually chan struct{}
 
@@ -36,7 +37,7 @@ type DiscoveryClient struct {
 	nlker      *sync.RWMutex
 }
 
-var clientinstance *DiscoveryClient
+var instance *DiscoveryClient
 
 //appuniquename = appname:ip:port
 type servernode struct {
@@ -48,8 +49,22 @@ type servernode struct {
 	regdata   []byte
 }
 
-func init() {
-	clientinstance = &DiscoveryClient{
+//finder is to find the discovery servers
+func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname, verifydata string, finder DiscoveryServerFinder) error {
+	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
+		return errors.New("[Discovery.client] selfname:" + selfname + " check error:" + e.Error())
+	}
+	if e := common.NameCheck(selfgroup, false, true, false, true); e != nil {
+		return errors.New("[Discovery.client] selfgroup:" + selfgroup + " check error:" + e.Error())
+	}
+	selfappname := selfgroup + "." + selfname
+	if e := common.NameCheck(selfappname, true, true, false, true); e != nil {
+		return errors.New("[Discovery.client] selfappname:" + selfappname + " check error:" + e.Error())
+	}
+	if finder == nil {
+		return errors.New("[Discovery.client] missing finder")
+	}
+	temp := &DiscoveryClient{
 		status: 1,
 
 		manually: make(chan struct{}, 1),
@@ -61,35 +76,7 @@ func init() {
 		rpcnotices: make(map[string]map[chan struct{}]struct{}, 5),
 		nlker:      &sync.RWMutex{},
 	}
-}
-
-//finder is to find the discovery servers
-func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname, verifydata string, finder DiscoveryServerFinder) error {
-	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
-		return e
-	}
-	if e := common.NameCheck(selfgroup, false, true, false, true); e != nil {
-		return e
-	}
-	if e := common.NameCheck(selfgroup+"."+selfname, true, true, false, true); e != nil {
-		return e
-	}
-	if finder == nil {
-		return errors.New("[Discovery.client] missing finder")
-	}
-	clientinstance.lker.Lock()
-	defer clientinstance.lker.Unlock()
-	if clientinstance.status == 0 {
-		return errors.New("[Discovery.client] already closed")
-	}
-	if clientinstance.status == 2 {
-		if clientinstance.verifydata == verifydata {
-			return nil
-		}
-		return errors.New("[Discovery.client] already started")
-	}
-	clientinstance.verifydata = verifydata
-	clientinstance.status = 2
+	temp.verifydata = verifydata
 	var dupc stream.InstanceConfig
 	if c == nil {
 		dupc = stream.InstanceConfig{}
@@ -97,13 +84,16 @@ func NewDiscoveryClient(c *stream.InstanceConfig, selfgroup, selfname, verifydat
 		dupc = *c //duplicate to remote the callback func race
 	}
 	//tcp instance
-	dupc.Verifyfunc = clientinstance.verifyfunc
-	dupc.Onlinefunc = clientinstance.onlinefunc
-	dupc.Userdatafunc = clientinstance.userfunc
-	dupc.Offlinefunc = clientinstance.offlinefunc
-	clientinstance.instance, _ = stream.NewInstance(&dupc, selfgroup, selfname)
+	dupc.Verifyfunc = temp.verifyfunc
+	dupc.Onlinefunc = temp.onlinefunc
+	dupc.Userdatafunc = temp.userfunc
+	dupc.Offlinefunc = temp.offlinefunc
+	temp.tcpinstance, _ = stream.NewInstance(&dupc, selfgroup, selfname)
+	if !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&instance)), nil, unsafe.Pointer(temp)) {
+		return nil
+	}
 	log.Info("[Discovery.client] start with verifydata:", verifydata)
-	go finder(clientinstance.manually, clientinstance)
+	go finder(instance.manually, instance)
 	return nil
 }
 
@@ -169,7 +159,7 @@ func (c *DiscoveryClient) UpdateDiscoveryServers(serveraddrs []string) {
 }
 func (c *DiscoveryClient) start(addr, servername string) {
 	tempverifydata := c.verifydata + "|" + servername
-	if r := c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata)); r == "" {
+	if r := c.tcpinstance.StartTcpClient(addr, common.Str2byte(tempverifydata)); r == "" {
 		c.lker.RLock()
 		server, ok := c.servers[servername+":"+addr]
 		if !ok {
@@ -194,6 +184,9 @@ func (c *DiscoveryClient) start(addr, servername string) {
 	}
 }
 func RegisterSelf(regmsg *RegMsg) error {
+	if instance == nil {
+		return errors.New("[Discovery.client] not inited")
+	}
 	if regmsg == nil || (regmsg.RpcPort == 0 && regmsg.WebPort == 0) {
 		return errors.New("[Discovery.client] register message empty")
 	}
@@ -213,87 +206,97 @@ func RegisterSelf(regmsg *RegMsg) error {
 	if bytes.Contains(d, []byte{split}) {
 		return errors.New("[Discovery.client] register message contains illegal character '|'")
 	}
-	clientinstance.lker.Lock()
-	defer clientinstance.lker.Unlock()
-	if clientinstance.regdata != nil {
-		if bytes.Equal(clientinstance.regdata, d) {
+	instance.lker.Lock()
+	defer instance.lker.Unlock()
+	if instance.regdata != nil {
+		if bytes.Equal(instance.regdata, d) {
 			return nil
 		}
 		return errors.New("[Discovery.client] already registered")
 	}
-	clientinstance.regdata = d
-	for serveruniquename, server := range clientinstance.servers {
+	instance.regdata = d
+	for serveruniquename, server := range instance.servers {
 		server.lker.Lock()
 		server.regdata = d
 		if server.status == 3 {
 			server.status = 4
-			log.Info("[Discovery.client.RegisterSelf] register to server:", serveruniquename, "with data:", common.Byte2str(clientinstance.regdata))
-			server.peer.SendMessage(makeOnlineMsg("useless", clientinstance.regdata), server.starttime, true)
+			log.Info("[Discovery.client.RegisterSelf] register to server:", serveruniquename, "with data:", common.Byte2str(instance.regdata))
+			server.peer.SendMessage(makeOnlineMsg("useless", instance.regdata), server.starttime, true)
 		}
 		server.lker.Unlock()
 	}
 	return nil
 }
-func UnRegisterSelf() {
-	clientinstance.lker.Lock()
-	if clientinstance.status != 0 {
-		clientinstance.status = 0
-		for k, server := range clientinstance.servers {
+func UnRegisterSelf() error {
+	if instance == nil {
+		return errors.New("[Discovery.client] not inited")
+	}
+	instance.lker.Lock()
+	if instance.status != 0 {
+		instance.status = 0
+		for k, server := range instance.servers {
 			server.lker.Lock()
 			server.status = 0
 			server.regdata = nil
-			delete(clientinstance.servers, k)
+			delete(instance.servers, k)
 			server.lker.Unlock()
 		}
 	}
-	clientinstance.lker.Unlock()
-	if clientinstance.instance != nil {
-		clientinstance.instance.Stop()
+	instance.lker.Unlock()
+	if instance.tcpinstance != nil {
+		instance.tcpinstance.Stop()
 	}
+	return nil
 }
 
-func NoticeWebChanges(appname string) chan struct{} {
+func NoticeWebChanges(appname string) (chan struct{}, error) {
+	if instance == nil {
+		return nil, errors.New("[Discovery.client] not inited")
+	}
 	pullmsg := makePullMsg(appname)
-	clientinstance.lker.RLock()
-	for _, server := range clientinstance.servers {
+	instance.lker.RLock()
+	for _, server := range instance.servers {
 		server.lker.Lock()
 		if server.status >= 3 {
 			server.peer.SendMessage(pullmsg, server.starttime, true)
 		}
 		server.lker.Unlock()
 	}
-	clientinstance.lker.RUnlock()
-	clientinstance.nlker.Lock()
-	defer clientinstance.nlker.Unlock()
-	if _, ok := clientinstance.webnotices[appname]; !ok {
-		clientinstance.webnotices[appname] = make(map[chan struct{}]struct{}, 10)
+	instance.lker.RUnlock()
+	instance.nlker.Lock()
+	defer instance.nlker.Unlock()
+	if _, ok := instance.webnotices[appname]; !ok {
+		instance.webnotices[appname] = make(map[chan struct{}]struct{}, 10)
 	}
 	ch := make(chan struct{}, 1)
 	ch <- struct{}{}
-	clientinstance.webnotices[appname][ch] = struct{}{}
-	return ch
+	instance.webnotices[appname][ch] = struct{}{}
+	return ch, nil
 }
 
-func NoticeRpcChanges(appname string) chan struct{} {
+func NoticeRpcChanges(appname string) (chan struct{}, error) {
+	if instance == nil {
+		return nil, errors.New("[Discovery.client] not inited")
+	}
 	pullmsg := makePullMsg(appname)
-	clientinstance.lker.RLock()
-	for _, server := range clientinstance.servers {
+	instance.lker.RLock()
+	for _, server := range instance.servers {
 		server.lker.Lock()
 		if server.status >= 3 {
 			server.peer.SendMessage(pullmsg, server.starttime, true)
 		}
 		server.lker.Unlock()
 	}
-	clientinstance.lker.RUnlock()
-	clientinstance.nlker.Lock()
-	defer clientinstance.nlker.Unlock()
-	if _, ok := clientinstance.rpcnotices[appname]; !ok {
-		clientinstance.rpcnotices[appname] = make(map[chan struct{}]struct{}, 10)
+	instance.lker.RUnlock()
+	instance.nlker.Lock()
+	defer instance.nlker.Unlock()
+	if _, ok := instance.rpcnotices[appname]; !ok {
+		instance.rpcnotices[appname] = make(map[chan struct{}]struct{}, 10)
 	}
 	ch := make(chan struct{}, 1)
 	ch <- struct{}{}
-	clientinstance.rpcnotices[appname][ch] = struct{}{}
-	return ch
+	instance.rpcnotices[appname][ch] = struct{}{}
+	return ch, nil
 }
 
 //first return value
@@ -302,6 +305,9 @@ func NoticeRpcChanges(appname string) chan struct{} {
 //second return value
 //addition info
 func GetRpcInfos(appname string) (map[string][]string, []byte) {
+	if instance == nil {
+		return nil, nil
+	}
 	return getinfos(appname, 1)
 }
 
@@ -311,6 +317,9 @@ func GetRpcInfos(appname string) (map[string][]string, []byte) {
 //second return value
 //addition info
 func GetWebInfos(appname string) (map[string][]string, []byte) {
+	if instance == nil {
+		return nil, nil
+	}
 	return getinfos(appname, 2)
 }
 
@@ -320,9 +329,9 @@ func GetWebInfos(appname string) (map[string][]string, []byte) {
 func getinfos(appname string, t int) (map[string][]string, []byte) {
 	result := make(map[string][]string, 5)
 	var resultaddition []byte
-	clientinstance.lker.RLock()
-	defer clientinstance.lker.RUnlock()
-	for serveruniquename, server := range clientinstance.servers {
+	instance.lker.RLock()
+	defer instance.lker.RUnlock()
+	for serveruniquename, server := range instance.servers {
 		server.lker.Lock()
 		if appgroup, ok := server.allapps[appname]; ok {
 			for _, app := range appgroup {
