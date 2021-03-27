@@ -296,7 +296,7 @@ func initdiscovery() {
 }
 func initremote(path string) {
 	if EC.ConfigType != nil && *EC.ConfigType == 2 {
-		if e := configsdk.NewRpcSdk(500*time.Millisecond, time.Second, path, api.Group, api.Name); e != nil {
+		if e := configsdk.NewServerSdk(3, time.Second, path, api.Group, api.Name); e != nil {
 			log.Error("[config.initremote] new sdk error:", e)
 			Close()
 			os.Exit(1)

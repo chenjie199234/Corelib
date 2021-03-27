@@ -9,6 +9,7 @@ import (
 const text = `package xweb
 
 import (
+	"sync"
 	"time"
 
 	"{{.}}/api"
@@ -18,12 +19,13 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/web"
 	"github.com/chenjie199234/Corelib/web/mids"
+	discoverysdk "github.com/chenjie199234/Discovery/sdk"
 )
 
 var s *web.WebServer
 
 //StartWebServer -
-func StartWebServer() {
+func StartWebServer(wg *sync.WaitGroup) {
 	c := config.GetWebServerConfig()
 	webc := &web.ServerConfig{
 		GlobalTimeout:      time.Duration(c.GlobalTimeout),
@@ -63,6 +65,18 @@ func StartWebServer() {
 	//return
 	//}
 
+	if config.EC.ServerVerifyDatas != nil {
+		if len(c.CertKey) > 0 {
+			e = discoverysdk.RegWeb(8000, "http")
+		} else {
+			e = discoverysdk.RegWeb(8000, "https")
+		}
+		if e != nil {
+			log.Error("[xweb] register web to discovery server error:", e)
+			return
+		}
+	}
+	wg.Done()
 	if e = s.StartWebServer(":8000", c.CertKey); e != nil {
 		log.Error("[xweb] start error:", e)
 		return

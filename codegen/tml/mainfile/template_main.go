@@ -34,6 +34,9 @@ func main() {
 	//start low level net service
 	ch := make(chan os.Signal, 1)
 	wg := &sync.WaitGroup{}
+	registerwg := &sync.WaitGroup{}
+	//start the rpc server,if don't need rpc server,comment below and modify the probe.sh
+	registerwg.Add(1)
 	wg.Add(1)
 	go func() {
 		xrpc.StartRpcServer()
@@ -43,6 +46,8 @@ func main() {
 		}
 		wg.Done()
 	}()
+	//start the web server,if don't need web server,comment below and modify the probe.sh
+	registerwg.Add(1)
 	wg.Add(1)
 	go func() {
 		xweb.StartWebServer()
@@ -53,24 +58,29 @@ func main() {
 		wg.Done()
 	}()
 	//try to register self to the discovery server
-	stop := make(chan struct{})
-	go func() {
-		//delay 200ms to register self,if error happened in this 200ms,this server will not be registered
-		tmer := time.NewTimer(time.Millisecond * 200)
-		select {
-		case <-tmer.C:
-			webc := config.GetWebServerConfig()
-			if webc != nil && len(webc.CertKey) > 0 {
-				discoverysdk.RegisterSelf(9000, 8000, "https", nil)
-			} else {
-				discoverysdk.RegisterSelf(9000, 8000, "http", nil)
+	stopreg := make(chan struct{})
+	if config.EC.ServerVerifyDatas != nil {
+		go func() {
+			registerwg.Wait()
+			//delay 200ms,wait rpc and web server to start their tpc listener
+			//if error happened in this 200ms,server will not be registered
+			tmer := time.NewTimer(time.Millisecond * 200)
+			select {
+			case <-tmer.C:
+				if e := discoverysdk.RegisterSelf(nil); e != nil {
+					log.Error("[main] register self to discovery server error:", e)
+					select {
+					case ch <- syscall.SIGTERM:
+					default:
+					}
+				}
+			case <-stopreg:
 			}
-		case <-stop:
-		}
-	}()
+		}()
+	}
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-ch
-	close(stop)
+	close(stopreg)
 	//stop the whole business service
 	service.StopService()
 	//stop low level net service
