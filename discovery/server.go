@@ -282,6 +282,23 @@ func (s *DiscoveryServer) userfunc(p *stream.Peer, appuniquename string, origind
 			node.peer.SendMessage(makeOnlineMsg(k, v), node.starttime, true)
 		}
 		node.lker.Unlock()
+	case msgoffline:
+		node := (*appnode)(p.GetData())
+		node.lker.Lock()
+		defer node.lker.Unlock()
+		if node.status == s_REGISTERED {
+			node.status = s_CONNECTED
+			if len(node.bewatched) > 0 {
+				offlinemsg := makeOfflineMsg(appuniquename)
+				for _, v := range node.bewatched {
+					v.lker.RLock()
+					if v.status != s_CLOSED {
+						v.peer.SendMessage(offlinemsg, v.starttime, true)
+					}
+					v.lker.RUnlock()
+				}
+			}
+		}
 	default:
 		log.Error("[Discovery.server.userfunc] unknown message type from app:", appuniquename)
 		p.Close()
