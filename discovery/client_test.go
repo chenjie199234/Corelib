@@ -62,10 +62,8 @@ func Test_Client1(t *testing.T) {
 	}()
 	time.Sleep(3 * time.Second)
 	fmt.Println("register start")
-	RegisterSelf(&RegMsg{
-		RpcIp:     "",
+	RegisterSelf(&RegInfo{
 		RpcPort:   9000,
-		WebIp:     "",
 		WebPort:   8000,
 		WebScheme: "https",
 	})
@@ -129,10 +127,8 @@ func Test_Client2(t *testing.T) {
 	}()
 	time.Sleep(3 * time.Second)
 	fmt.Println("register start")
-	RegisterSelf(&RegMsg{
-		RpcIp:     "",
+	RegisterSelf(&RegInfo{
 		RpcPort:   9001,
-		WebIp:     "",
 		WebPort:   8001,
 		WebScheme: "https",
 	})

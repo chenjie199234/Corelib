@@ -2,7 +2,6 @@ package discovery
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -11,6 +10,7 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -39,8 +39,7 @@ type appnode struct {
 	peer          *stream.Peer
 	starttime     uint64
 	status        int
-	regmsg        *RegMsg
-	regdata       []byte
+	reginfo       *RegInfo
 	watched       map[string]struct{} //key appname
 	bewatched     map[string]*appnode //key appuniquename
 }
@@ -160,15 +159,14 @@ func (s *DiscoveryServer) verifyfunc(ctx context.Context, appuniquename string, 
 //appuniquename = appname:ip:port
 func (s *DiscoveryServer) onlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
 	s.lker.Lock()
+	defer s.lker.Unlock()
 	appname := appuniquename[:strings.Index(appuniquename, ":")]
 	if g, ok := s.groups[appname]; ok {
 		if _, ok := g.apps[appuniquename]; ok {
 			p.Close()
-			s.lker.Unlock()
 			return
 		}
-	}
-	if _, ok := s.groups[appname]; !ok {
+	} else {
 		s.groups[appname] = &appgroup{
 			apps:     make(map[string]*appnode, 5),
 			watchers: make(map[string]*appnode, 5),
@@ -189,7 +187,6 @@ func (s *DiscoveryServer) onlinefunc(p *stream.Peer, appuniquename string, start
 	}
 	p.SetData(unsafe.Pointer(node))
 	s.groups[appname].apps[appuniquename] = node
-	s.lker.Unlock()
 	log.Info("[Discovery.server.onlinefunc] app:", appuniquename, "online")
 	return
 }
@@ -201,43 +198,46 @@ func (s *DiscoveryServer) userfunc(p *stream.Peer, appuniquename string, origind
 	}
 	data := make([]byte, len(origindata))
 	copy(data, origindata)
-	switch data[0] {
-	case msgonline:
-		_, regdata := getOnlineMsg(data)
-		if len(regdata) == 0 {
-			log.Error("[Discovery.server.userfunc] app:", appuniquename, "online message:", common.Byte2str(regdata), "format error")
-			p.Close()
-			return
-		}
-		reg := &RegMsg{}
-		if e := json.Unmarshal(regdata, reg); e != nil {
-			//this is impossible
-			log.Error("[Discovery.server.userfunc] app:", appuniquename, "register message:", common.Byte2str(regdata), "format error:", e)
-			p.Close()
-			return
-		}
-		if (reg.WebPort == 0 || reg.WebScheme == "") && reg.RpcPort == 0 {
+	msg := &Msg{}
+	if e := proto.Unmarshal(data, msg); e != nil {
+		log.Error("[Discovery.server.userfunc] message from:", appuniquename, "format error:", e)
+		p.Close()
+		return
+	}
+	switch msg.MsgType {
+	case MsgType_Reg:
+		reg := msg.GetRegMsg()
+		if reg == nil || reg.RegInfo == nil || ((reg.RegInfo.WebPort == 0 || reg.RegInfo.WebScheme == "") && reg.RegInfo.RpcPort == 0) {
 			//register with empty data
-			log.Error("[Discovery.server.userfunc] app:", appuniquename, "with empty register message:", common.Byte2str(regdata))
+			log.Error("[Discovery.server.userfunc] empty reginfo from:", appuniquename)
 			p.Close()
 			return
 		}
 		findex := strings.Index(appuniquename, ":")
 		lindex := strings.LastIndex(appuniquename, ":")
 		ip := appuniquename[findex+1 : lindex]
-		if reg.WebPort != 0 && reg.WebScheme != "" {
-			reg.WebIp = ip
+		reg.RegInfo.WebIp = ""
+		if reg.RegInfo.WebPort != 0 && reg.RegInfo.WebScheme != "" {
+			reg.RegInfo.WebIp = ip
 		}
-		if reg.RpcPort != 0 {
-			reg.RpcIp = ip
+		reg.RegInfo.RpcIp = ""
+		if reg.RegInfo.RpcPort != 0 {
+			reg.RegInfo.RpcIp = ip
 		}
-		regdata, _ = json.Marshal(reg)
 		node := (*appnode)(p.GetData())
 		node.lker.Lock()
 		defer node.lker.Unlock()
-		node.regdata = regdata
+		node.reginfo = reg.RegInfo
 		node.status = s_REGISTERED
-		onlinemsg := makeOnlineMsg(appuniquename, regdata)
+		onlinemsg, _ := proto.Marshal(&Msg{
+			MsgType: MsgType_Reg,
+			MsgContent: &Msg_RegMsg{
+				RegMsg: &RegMsg{
+					AppUniqueName: appuniquename,
+					RegInfo:       reg.RegInfo,
+				},
+			},
+		})
 		for _, v := range node.bewatched {
 			v.lker.RLock()
 			if v.status != s_CLOSED {
@@ -245,62 +245,84 @@ func (s *DiscoveryServer) userfunc(p *stream.Peer, appuniquename string, origind
 			}
 			v.lker.RUnlock()
 		}
-		log.Info("[Discovery.server.userfunc] app:", appuniquename, "registered with data:", common.Byte2str(regdata))
-	case msgpull:
-		temp := make([]byte, len(data))
-		copy(temp, data)
-		appname := getPullMsg(temp)
-		if appname == "" {
+		if reg.RegInfo.WebIp != "" && reg.RegInfo.RpcIp != "" {
+			log.Info("[Discovery.server.userfunc] app:", appuniquename, "reg with rpc:", ip, reg.RegInfo.RpcPort, "web:", reg.RegInfo.WebScheme, ip, reg.RegInfo.WebPort)
+		} else if reg.RegInfo.WebIp != "" {
+			log.Info("[Discovery.server.userfunc] app:", appuniquename, "reg with web:", reg.RegInfo.WebScheme, ip, reg.RegInfo.WebPort)
+		} else {
+			log.Info("[Discovery.server.userfunc] app:", appuniquename, "reg with rpc:", ip, reg.RegInfo.RpcPort)
+		}
+	case MsgType_Watch:
+		watch := msg.GetWatchMsg()
+		if watch.AppName == "" {
+			log.Error("[Discovery.server.userfunc] app:", appuniquename, "watch empty")
+			p.Close()
 			return
 		}
-		if appname == appuniquename[:strings.Index(appuniquename, ":")] {
-			log.Error("[Discovery.server.userfunc] app:", appuniquename, "self watching")
+		if watch.AppName == appuniquename[:strings.Index(appuniquename, ":")] {
+			log.Error("[Discovery.server.userfunc] app:", appuniquename, "watch self")
+			p.Close()
 			return
 		}
 		node := (*appnode)(p.GetData())
 		s.lker.Lock()
-		if _, ok := s.groups[appname]; !ok {
-			s.groups[appname] = &appgroup{
+		if _, ok := s.groups[watch.AppName]; !ok {
+			s.groups[watch.AppName] = &appgroup{
 				apps:     make(map[string]*appnode, 5),
 				watchers: make(map[string]*appnode, 5),
 			}
 		}
-		s.groups[appname].watchers[appuniquename] = node
-		node.lker.Lock()
-		result := make(map[string][]byte, len(s.groups[appname].apps))
-		for _, v := range s.groups[appname].apps {
-			v.lker.Lock()
-			v.bewatched[appuniquename] = node
-			if v.status == s_REGISTERED {
-				result[v.appuniquename] = v.regdata
+		s.groups[watch.AppName].watchers[appuniquename] = node
+		apps := make(map[string]*RegInfo, len(s.groups[watch.AppName].apps))
+		for _, app := range s.groups[watch.AppName].apps {
+			app.lker.Lock()
+			app.bewatched[appuniquename] = node
+			if app.status == s_REGISTERED {
+				apps[app.appuniquename] = app.reginfo
 			}
-			v.lker.Unlock()
+			app.lker.Unlock()
 		}
+		node.lker.Lock()
 		s.lker.Unlock()
-		node.watched[appname] = struct{}{}
-		for k, v := range result {
-			node.peer.SendMessage(makeOnlineMsg(k, v), node.starttime, true)
-		}
+		node.watched[watch.AppName] = struct{}{}
+		pushmsg, _ := proto.Marshal(&Msg{
+			MsgType: MsgType_Push,
+			MsgContent: &Msg_PushMsg{
+				PushMsg: &PushMsg{
+					AppName: watch.AppName,
+					Apps:    apps,
+				},
+			},
+		})
+		node.peer.SendMessage(pushmsg, node.starttime, true)
 		node.lker.Unlock()
-	case msgoffline:
+	case MsgType_UnReg:
 		node := (*appnode)(p.GetData())
 		node.lker.Lock()
 		defer node.lker.Unlock()
 		if node.status == s_REGISTERED {
 			node.status = s_CONNECTED
 			if len(node.bewatched) > 0 {
-				offlinemsg := makeOfflineMsg(appuniquename)
-				for _, v := range node.bewatched {
-					v.lker.RLock()
-					if v.status != s_CLOSED {
-						v.peer.SendMessage(offlinemsg, v.starttime, true)
+				offlinemsg, _ := proto.Marshal(&Msg{
+					MsgType: MsgType_UnReg,
+					MsgContent: &Msg_UnregMsg{
+						UnregMsg: &UnregMsg{
+							AppUniqueName: appuniquename,
+						},
+					},
+				})
+				for _, watchedapp := range node.bewatched {
+					watchedapp.lker.RLock()
+					if watchedapp.status != s_CLOSED {
+						watchedapp.peer.SendMessage(offlinemsg, watchedapp.starttime, true)
 					}
-					v.lker.RUnlock()
+					watchedapp.lker.RUnlock()
 				}
 			}
 		}
+		log.Info("[Discovery.server.userfunc] app:", appuniquename, "unreg")
 	default:
-		log.Error("[Discovery.server.userfunc] unknown message type from app:", appuniquename)
+		log.Error("[Discovery.server.userfunc] unknown message type:", msg.MsgType, "from app:", appuniquename)
 		p.Close()
 	}
 }
@@ -343,7 +365,14 @@ func (s *DiscoveryServer) offlinefunc(p *stream.Peer, appuniquename string, star
 	node.lker.Lock()
 	s.lker.Unlock()
 	if node.status == s_REGISTERED && len(node.bewatched) > 0 {
-		offlinemsg := makeOfflineMsg(appuniquename)
+		offlinemsg, _ := proto.Marshal(&Msg{
+			MsgType: MsgType_UnReg,
+			MsgContent: &Msg_UnregMsg{
+				UnregMsg: &UnregMsg{
+					AppUniqueName: appuniquename,
+				},
+			},
+		})
 		for _, v := range node.bewatched {
 			v.lker.RLock()
 			if v.status != s_CLOSED {

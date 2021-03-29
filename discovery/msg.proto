@@ -1,0 +1,40 @@
+syntax="proto3";
+package discovery;
+option go_package=".;discovery";
+enum MsgType{
+	Reg=0;
+	UnReg=1;
+	Watch=2;
+	Push=3;
+}
+message msg {
+	MsgType msg_type=1;
+	oneof msg_content {
+		RegMsg reg_msg=2;
+		UnregMsg unreg_msg=3;
+		WatchMsg watch_msg=4;
+		PushMsg push_msg=5;
+	}
+}
+message RegInfo{
+	string web_scheme=1;
+	string web_ip=2;
+	int64 web_port=3;
+	string rpc_ip=4;
+	int64 rpc_port=5;
+	bytes addition=6;
+}
+message RegMsg {
+	string app_unique_name=1;
+	RegInfo reg_info=2;
+}
+message UnregMsg {
+	string app_unique_name=1;
+}
+message WatchMsg {
+	string app_name=1;
+}
+message PushMsg {
+	string app_name=1;
+	map<string,RegInfo> apps=2;
+}
