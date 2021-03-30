@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"io"
 	"net"
 	"strconv"
 	"sync"
@@ -15,15 +16,44 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 )
 
-const (
-	TCP = iota + 1
-	UNIX
-)
+type protocol int
 
 const (
-	CLIENT = iota + 1
+	TCP protocol = iota + 1
+	UNIX
+	WS
+)
+
+func (p protocol) protoname() string {
+	switch p {
+	case TCP:
+		return "tcp"
+	case UNIX:
+		return "unix"
+	case WS:
+		return "ws"
+	default:
+		return ""
+	}
+}
+
+type peertype int
+
+const (
+	CLIENT peertype = iota + 1
 	SERVER
 )
+
+func (t peertype) typename() string {
+	switch t {
+	case CLIENT:
+		return "client"
+	case SERVER:
+		return "server"
+	default:
+		return ""
+	}
+}
 
 var (
 	ERRCONNCLOSED  = errors.New("connection is closed")
@@ -40,8 +70,8 @@ type Peer struct {
 	parentnode      *peernode
 	clientname      string
 	servername      string
-	peertype        uint
-	protocoltype    uint
+	peertype        peertype
+	protocol        protocol
 	starttime       uint64
 	closeread       bool
 	closewrite      bool
@@ -51,12 +81,12 @@ type Peer struct {
 	writerbuffer    chan *bufpool.Buffer
 	heartbeatbuffer chan *bufpool.Buffer
 	conn            unsafe.Pointer
-	lastactive      uint64 //unixnano timestamp
-	recvidlestart   uint64 //unixnano timestamp
-	sendidlestart   uint64 //unixnano timestamp
+	lastactive      uint64         //unixnano timestamp
+	recvidlestart   uint64         //unixnano timestamp
+	sendidlestart   uint64         //unixnano timestamp
+	data            unsafe.Pointer //user data
 	context.Context
 	context.CancelFunc
-	data unsafe.Pointer //user data
 }
 
 func (p *Peer) reset() {
@@ -110,7 +140,7 @@ func (p *Peer) getselfname() string {
 	return ""
 }
 func (p *Peer) getpeeraddr() string {
-	switch p.protocoltype {
+	switch p.protocol {
 	case TCP:
 		return (*net.TCPConn)(p.conn).RemoteAddr().String()
 	case UNIX:
@@ -127,7 +157,7 @@ func (p *Peer) getpeeraddr() string {
 	return ""
 }
 func (p *Peer) getselfaddr() string {
-	switch p.protocoltype {
+	switch p.protocol {
 	case TCP:
 		return (*net.TCPConn)(p.conn).LocalAddr().String()
 	case UNIX:
@@ -147,7 +177,7 @@ func (p *Peer) getselfaddr() string {
 //closeconn close the under layer socket
 func (p *Peer) closeconn() {
 	if p.conn != nil {
-		switch p.protocoltype {
+		switch p.protocol {
 		case TCP:
 			(*net.TCPConn)(p.conn).Close()
 		case UNIX:
@@ -169,7 +199,7 @@ func (p *Peer) closeWrite() {
 }
 
 func (p *Peer) setbuffer(readnum, writenum int) {
-	switch p.protocoltype {
+	switch p.protocol {
 	case TCP:
 		(*net.TCPConn)(p.conn).SetReadBuffer(readnum)
 		(*net.TCPConn)(p.conn).SetWriteBuffer(writenum)
@@ -179,23 +209,15 @@ func (p *Peer) setbuffer(readnum, writenum int) {
 	}
 }
 
-func (p *Peer) readMessage(max uint) (*bufpool.Buffer, error) {
+func (p *Peer) readMessage() (*bufpool.Buffer, error) {
 	buf := bufpool.GetBuffer()
 	buf.Grow(4)
-	num := 0
-	for {
-		n, e := p.reader.Read(buf.Bytes()[num:])
-		if e != nil {
-			bufpool.PutBuffer(buf)
-			return nil, e
-		}
-		num += n
-		if num == 4 {
-			break
-		}
+	if _, e := io.ReadFull(p.reader, buf.Bytes()); e != nil {
+		bufpool.PutBuffer(buf)
+		return nil, e
 	}
-	num = int(binary.BigEndian.Uint32(buf.Bytes()))
-	if num > int(max) || num < 0 {
+	num := int(binary.BigEndian.Uint32(buf.Bytes()))
+	if num > int(p.maxmsglen) || num < 0 {
 		bufpool.PutBuffer(buf)
 		return nil, ERRMSGLENGTH
 	} else if num == 0 {
@@ -203,16 +225,9 @@ func (p *Peer) readMessage(max uint) (*bufpool.Buffer, error) {
 		return nil, nil
 	}
 	buf.Grow(num)
-	for {
-		n, e := p.reader.Read(buf.Bytes()[buf.Len()-num:])
-		if e != nil {
-			bufpool.PutBuffer(buf)
-			return nil, e
-		}
-		num -= n
-		if num == 0 {
-			break
-		}
+	if _, e := io.ReadFull(p.reader, buf.Bytes()); e != nil {
+		bufpool.PutBuffer(buf)
+		return nil, e
 	}
 	return buf, nil
 }
@@ -221,22 +236,7 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 		return nil
 	}
 	if len(userdata) > int(p.maxmsglen) {
-		switch p.protocoltype {
-		case TCP:
-			switch p.peertype {
-			case CLIENT:
-				log.Error("[Stream.TCP.SendMessage] send message to client:", p.getpeeruniquename(), "error:", ERRMSGLENGTH)
-			case SERVER:
-				log.Error("[Stream.TCP.SendMessage] send message to server:", p.getpeeruniquename(), "error:", ERRMSGLENGTH)
-			}
-		case UNIX:
-			switch p.peertype {
-			case CLIENT:
-				log.Error("[Stream.UNIX.SendMessage] send message to client:", p.getpeeruniquename(), "error:", ERRMSGLENGTH)
-			case SERVER:
-				log.Error("[Stream.UNIX.SendMessage] send message to server:", p.getpeeruniquename(), "error:", ERRMSGLENGTH)
-			}
-		}
+		log.Error("[Stream.SendMessage] to", p.protocol.protoname(), p.peertype.typename()+":", p.getpeeruniquename(), "error:", ERRMSGLENGTH)
 		return ERRMSGLENGTH
 	}
 	if p.closeread || p.status == 0 || p.status == 2 || p.starttime != starttime {
@@ -251,22 +251,7 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 		select {
 		case p.writerbuffer <- data:
 		default:
-			switch p.protocoltype {
-			case TCP:
-				switch p.peertype {
-				case CLIENT:
-					log.Error("[Stream.TCP.SendMessage] send message to client:", p.getpeeruniquename(), "error:", ERRSENDBUFFULL)
-				case SERVER:
-					log.Error("[Stream.TCP.SendMessage] send message to server:", p.getpeeruniquename(), "error:", ERRSENDBUFFULL)
-				}
-			case UNIX:
-				switch p.peertype {
-				case CLIENT:
-					log.Error("[Stream.UNIX.SendMessage] send message to client:", p.getpeeruniquename(), "error:", ERRSENDBUFFULL)
-				case SERVER:
-					log.Error("[Stream.UNIX.SendMessage] send message to server:", p.getpeeruniquename(), "error:", ERRSENDBUFFULL)
-				}
-			}
+			log.Error("[Stream.SendMessage] to", p.protocol.protoname(), p.peertype.typename()+":", p.getpeeruniquename(), "error:", ERRSENDBUFFULL)
 			return ERRSENDBUFFULL
 		}
 	}

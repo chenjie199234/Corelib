@@ -28,11 +28,11 @@ type Instance struct {
 	pool *sync.Pool
 }
 
-func (this *Instance) getPeer(protot, peert, writebuffernum, maxmsglen uint, selfname string) *Peer {
+func (this *Instance) getPeer(protot protocol, peert peertype, writebuffernum, maxmsglen uint, selfname string) *Peer {
 	tempctx, tempcancel := context.WithCancel(context.Background())
 	if p, ok := this.pool.Get().(*Peer); ok {
 		p.reset()
-		p.protocoltype = protot
+		p.protocol = protot
 		p.peertype = peert
 		p.status = 1
 		p.maxmsglen = maxmsglen
@@ -47,7 +47,7 @@ func (this *Instance) getPeer(protot, peert, writebuffernum, maxmsglen uint, sel
 	}
 	p := &Peer{
 		peertype:        peert,
-		protocoltype:    protot,
+		protocol:        protot,
 		status:          1,
 		maxmsglen:       maxmsglen,
 		writerbuffer:    make(chan *bufpool.Buffer, writebuffernum),
@@ -205,64 +205,19 @@ func (this *Instance) heart(node *peernode) {
 			tempsendidlestart := atomic.LoadUint64(&p.sendidlestart)
 			if now >= templastactive && now-templastactive > uint64(this.c.HeartbeatTimeout) {
 				//heartbeat timeout
-				switch p.protocoltype {
-				case TCP:
-					switch p.peertype {
-					case CLIENT:
-						log.Error("[Stream.TCP.heart] heart timeout client:", p.getpeeruniquename())
-					case SERVER:
-						log.Error("[Stream.TCP.heart] heart timeout server:", p.getpeeruniquename())
-					}
-				case UNIX:
-					switch p.peertype {
-					case CLIENT:
-						log.Error("[Stream.UNIX.heart] heart timeout client:", p.getpeeruniquename())
-					case SERVER:
-						log.Error("[Stream.UNIX.heart] heart timeout server:", p.getpeeruniquename())
-					}
-				}
+				log.Error("[Stream.heart] heartbeat timeout", p.protocol.protoname(), p.peertype.typename()+":", p.getpeeruniquename())
 				p.closeconn()
 				continue
 			}
 			if now >= tempsendidlestart && now-tempsendidlestart > uint64(this.c.SendIdleTimeout) {
 				//send idle timeout
-				switch p.protocoltype {
-				case TCP:
-					switch p.peertype {
-					case CLIENT:
-						log.Error("[Stream.TCP.heart] send idle timeout client:", p.getpeeruniquename())
-					case SERVER:
-						log.Error("[Stream.TCP.heart] send idle timeout server:", p.getpeeruniquename())
-					}
-				case SERVER:
-					switch p.peertype {
-					case CLIENT:
-						log.Error("[Stream.UNIX.heart] send idle timeout client:", p.getpeeruniquename())
-					case SERVER:
-						log.Error("[Stream.UNIX.heart] send idle timeout server:", p.getpeeruniquename())
-					}
-				}
+				log.Error("[Stream.heart] send idle timeout", p.protocol.protoname(), p.peertype.typename()+":", p.getpeeruniquename())
 				p.closeconn()
 				continue
 			}
 			if this.c.RecvIdleTimeout != 0 && now >= temprecvidlestart && now-temprecvidlestart > uint64(this.c.RecvIdleTimeout) {
 				//recv idle timeout
-				switch p.protocoltype {
-				case TCP:
-					switch p.peertype {
-					case CLIENT:
-						log.Error("[Stream.TCP.heart] recv idle timeout client:", p.getpeeruniquename())
-					case SERVER:
-						log.Error("[Stream.TCP.heart] recv idle timeout server:", p.getpeeruniquename())
-					}
-				case UNIX:
-					switch p.peertype {
-					case CLIENT:
-						log.Error("[Stream.UNIX.heart] recv idle timeout client:", p.getpeeruniquename())
-					case SERVER:
-						log.Error("[Stream.UNIX.heart] recv idle timeout server:", p.getpeeruniquename())
-					}
-				}
+				log.Error("[Stream.heart] recv idle timeout", p.protocol.protoname(), p.peertype.typename()+":", p.getpeeruniquename())
 				p.closeconn()
 				continue
 			}
@@ -271,22 +226,7 @@ func (this *Instance) heart(node *peernode) {
 			select {
 			case p.heartbeatbuffer <- data:
 			default:
-				switch p.protocoltype {
-				case TCP:
-					switch p.peertype {
-					case CLIENT:
-						log.Error("[Stream.TCP.heart] send heart msg to client:", p.getpeeruniquename(), "error: heart buffer is full")
-					case SERVER:
-						log.Error("[Stream.TCP.heart] send heart msg to server:", p.getpeeruniquename(), "error: heart buffer is full")
-					}
-				case UNIX:
-					switch p.peertype {
-					case CLIENT:
-						log.Error("[Stream.UNIX.heart] send heart msg to client:", p.getpeeruniquename(), "error: heart buffer is full")
-					case SERVER:
-						log.Error("[Stream.UNIX.heart] send heart msg to server:", p.getpeeruniquename(), "error: heart buffer is full")
-					}
-				}
+				log.Error("[Stream.heart] to", p.protocol.protoname(), p.peertype.typename()+":", p.getpeeruniquename(), "error: heart buffer full")
 				bufpool.PutBuffer(data)
 			}
 		}

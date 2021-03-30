@@ -78,14 +78,62 @@ func (c *TcpConfig) validate() {
 	}
 }
 
+type WsConfig struct {
+	//include connect time and verify time
+	ConnectTimeout time.Duration //default 500ms
+
+	SocketRBufLen uint //default 1024 byte,max 65535 byte
+	SocketWBufLen uint //default 1024 byte,max 65535 byte
+
+	MaxMsgLen uint //min 1024,max 65535,default is max
+
+	//write buffer can store the messages in buffer and send async in another goruntine
+	MaxBufferedWriteMsgNum uint //default 256 num(not the byte)
+}
+
+var defaultWsConfig = &TcpConfig{
+	ConnectTimeout:         500 * time.Millisecond,
+	SocketRBufLen:          1024,
+	SocketWBufLen:          1024,
+	MaxMsgLen:              65535,
+	MaxBufferedWriteMsgNum: 256,
+}
+
+func (c *WsConfig) validate() {
+	if c.ConnectTimeout <= 0 {
+		c.ConnectTimeout = 500 * time.Millisecond
+	}
+	if c.SocketRBufLen == 0 {
+		c.SocketRBufLen = 1024
+	}
+	if c.SocketRBufLen > 65535 {
+		c.SocketRBufLen = 65535
+	}
+	if c.SocketWBufLen == 0 {
+		c.SocketWBufLen = 1024
+	}
+	if c.SocketWBufLen > 65535 {
+		c.SocketWBufLen = 65535
+	}
+	if c.MaxMsgLen < 1024 {
+		c.MaxMsgLen = 65535
+	}
+	if c.MaxMsgLen > 65535 {
+		c.MaxMsgLen = 65535
+	}
+	if c.MaxBufferedWriteMsgNum == 0 {
+		c.MaxBufferedWriteMsgNum = 256
+	}
+}
+
 type UnixConfig struct {
 	//include connect time and verify time
 	ConnectTimeout time.Duration //default 500ms
 
-	SocketReadBufferLen  uint //default 1024 byte,max 65535 byte
-	SocketWriteBufferLen uint //default 1024 byte,max 65535 byte
+	SocketRBufLen uint //default 1024 byte,max 65535 byte
+	SocketWBufLen uint //default 1024 byte,max 65535 byte
 
-	MaxMessageLen uint //min 1024,max 65535,default is max
+	MaxMsgLen uint //min 1024,max 65535,default is max
 
 	//write buffer can store the messages in buffer and send async in another goruntine
 	MaxBufferedWriteMsgNum uint //default 256 num(not the byte)
@@ -93,9 +141,9 @@ type UnixConfig struct {
 
 var defaultUnixConfig = &UnixConfig{
 	ConnectTimeout:         500 * time.Millisecond,
-	SocketReadBufferLen:    1024,
-	SocketWriteBufferLen:   1024,
-	MaxMessageLen:          65535,
+	SocketRBufLen:          1024,
+	SocketWBufLen:          1024,
+	MaxMsgLen:              65535,
 	MaxBufferedWriteMsgNum: 256,
 }
 
@@ -103,23 +151,23 @@ func (c *UnixConfig) validate() {
 	if c.ConnectTimeout <= 0 {
 		c.ConnectTimeout = 500 * time.Millisecond
 	}
-	if c.SocketReadBufferLen <= 0 {
-		c.SocketReadBufferLen = 1024
+	if c.SocketRBufLen <= 0 {
+		c.SocketRBufLen = 1024
 	}
-	if c.SocketReadBufferLen > 65535 {
-		c.SocketReadBufferLen = 65535
+	if c.SocketRBufLen > 65535 {
+		c.SocketRBufLen = 65535
 	}
-	if c.SocketWriteBufferLen <= 0 {
-		c.SocketWriteBufferLen = 1024
+	if c.SocketWBufLen <= 0 {
+		c.SocketWBufLen = 1024
 	}
-	if c.SocketWriteBufferLen > 65535 {
-		c.SocketReadBufferLen = 65535
+	if c.SocketWBufLen > 65535 {
+		c.SocketWBufLen = 65535
 	}
-	if c.MaxMessageLen < 1024 {
-		c.MaxMessageLen = 65535
+	if c.MaxMsgLen < 1024 {
+		c.MaxMsgLen = 65535
 	}
-	if c.MaxMessageLen > 65535 {
-		c.MaxMessageLen = 65535
+	if c.MaxMsgLen > 65535 {
+		c.MaxMsgLen = 65535
 	}
 	if c.MaxBufferedWriteMsgNum == 0 {
 		c.MaxBufferedWriteMsgNum = 256
