@@ -29,19 +29,28 @@ type Instance struct {
 }
 
 func (this *Instance) getPeer(protot protocol, peert peertype, writebuffernum, maxmsglen uint, selfname string) *Peer {
-	tempctx, tempcancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	if p, ok := this.pool.Get().(*Peer); ok {
-		p.reset()
 		p.protocol = protot
 		p.peertype = peert
 		p.status = 1
 		p.maxmsglen = maxmsglen
-		p.Context = tempctx
-		p.CancelFunc = tempcancel
+		p.Context = ctx
+		p.CancelFunc = cancel
 		if peert == CLIENT {
 			p.servername = selfname
 		} else {
 			p.clientname = selfname
+		}
+		for len(p.writerbuffer) > 0 {
+			if v := <-p.writerbuffer; v != nil {
+				bufpool.PutBuffer(v)
+			}
+		}
+		for len(p.heartbeatbuffer) > 0 {
+			if v := <-p.heartbeatbuffer; v != nil {
+				bufpool.PutBuffer(v)
+			}
 		}
 		return p
 	}
@@ -52,22 +61,60 @@ func (this *Instance) getPeer(protot protocol, peert peertype, writebuffernum, m
 		maxmsglen:       maxmsglen,
 		writerbuffer:    make(chan *bufpool.Buffer, writebuffernum),
 		heartbeatbuffer: make(chan *bufpool.Buffer, 1),
-		Context:         tempctx,
-		CancelFunc:      tempcancel,
+		Context:         ctx,
+		CancelFunc:      cancel,
 	}
 	if peert == CLIENT {
 		p.servername = selfname
 	} else {
 		p.clientname = selfname
 	}
+	for len(p.writerbuffer) > 0 {
+		if v := <-p.writerbuffer; v != nil {
+			bufpool.PutBuffer(v)
+		}
+	}
+	for len(p.heartbeatbuffer) > 0 {
+		if v := <-p.heartbeatbuffer; v != nil {
+			bufpool.PutBuffer(v)
+		}
+	}
 	return p
 }
 func (this *Instance) putPeer(p *Peer) {
 	p.CancelFunc()
+	p.parentnode = nil
+	p.clientname = ""
+	p.servername = ""
+	p.peertype = 0
+	p.protocol = 0
+	p.starttime = 0
+	p.closeread = true
+	p.closewrite = true
+	p.status = 0
+	p.maxmsglen = 0
+	for len(p.writerbuffer) > 0 {
+		if v := <-p.writerbuffer; v != nil {
+			bufpool.PutBuffer(v)
+		}
+	}
+	for len(p.heartbeatbuffer) > 0 {
+		if v := <-p.heartbeatbuffer; v != nil {
+			bufpool.PutBuffer(v)
+		}
+	}
+	p.conn = nil
+	p.fd = 0
+	p.lastactive = 0
+	p.recvidlestart = 0
+	p.sendidlestart = 0
+	p.data = nil
+	p.Context = nil
+	p.CancelFunc = nil
 	this.pool.Put(p)
 }
 func (this *Instance) addPeer(p *Peer) bool {
-	uniquename := p.getpeeruniquename()
+	uniquename := p.getUniqueName()
 	node := this.peernodes[this.getindex(uniquename)]
 	node.Lock()
 	if _, ok := node.peers[uniquename]; ok {
@@ -127,7 +174,7 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 				if p.parentnode != nil {
 					p.parentnode.Lock()
 					atomic.AddInt64(&stream.totalpeernum, -1)
-					delete(p.parentnode.peers, p.getpeeruniquename())
+					delete(p.parentnode.peers, p.getUniqueName())
 					p.parentnode.Unlock()
 				}
 				stream.putPeer(p)
@@ -205,19 +252,19 @@ func (this *Instance) heart(node *peernode) {
 			tempsendidlestart := atomic.LoadUint64(&p.sendidlestart)
 			if now >= templastactive && now-templastactive > uint64(this.c.HeartbeatTimeout) {
 				//heartbeat timeout
-				log.Error("[Stream.heart] heartbeat timeout", p.protocol.protoname(), p.peertype.typename()+":", p.getpeeruniquename())
+				log.Error("[Stream.heart] heartbeat timeout", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName())
 				p.closeconn()
 				continue
 			}
 			if now >= tempsendidlestart && now-tempsendidlestart > uint64(this.c.SendIdleTimeout) {
 				//send idle timeout
-				log.Error("[Stream.heart] send idle timeout", p.protocol.protoname(), p.peertype.typename()+":", p.getpeeruniquename())
+				log.Error("[Stream.heart] send idle timeout", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName())
 				p.closeconn()
 				continue
 			}
 			if this.c.RecvIdleTimeout != 0 && now >= temprecvidlestart && now-temprecvidlestart > uint64(this.c.RecvIdleTimeout) {
 				//recv idle timeout
-				log.Error("[Stream.heart] recv idle timeout", p.protocol.protoname(), p.peertype.typename()+":", p.getpeeruniquename())
+				log.Error("[Stream.heart] recv idle timeout", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName())
 				p.closeconn()
 				continue
 			}
@@ -226,7 +273,7 @@ func (this *Instance) heart(node *peernode) {
 			select {
 			case p.heartbeatbuffer <- data:
 			default:
-				log.Error("[Stream.heart] to", p.protocol.protoname(), p.peertype.typename()+":", p.getpeeruniquename(), "error: heart buffer full")
+				log.Error("[Stream.heart] to", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName(), "error: heart buffer full")
 				bufpool.PutBuffer(data)
 			}
 		}

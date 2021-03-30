@@ -81,6 +81,7 @@ type Peer struct {
 	writerbuffer    chan *bufpool.Buffer
 	heartbeatbuffer chan *bufpool.Buffer
 	conn            unsafe.Pointer
+	fd              uint64
 	lastactive      uint64         //unixnano timestamp
 	recvidlestart   uint64         //unixnano timestamp
 	sendidlestart   uint64         //unixnano timestamp
@@ -89,95 +90,34 @@ type Peer struct {
 	context.CancelFunc
 }
 
-func (p *Peer) reset() {
-	p.parentnode = nil
-	p.clientname = ""
-	p.servername = ""
-	//p.peertype = 0
-	//p.protocoltype = 0
-	p.starttime = 0
-	p.closeread = false
-	p.closewrite = false
-	//p.status = 0
-	for len(p.writerbuffer) > 0 {
-		if v := <-p.writerbuffer; v != nil {
-			bufpool.PutBuffer(v)
-		}
-	}
-	for len(p.heartbeatbuffer) > 0 {
-		if v := <-p.heartbeatbuffer; v != nil {
-			bufpool.PutBuffer(v)
-		}
-	}
-	p.conn = nil
-	p.lastactive = 0
-	p.recvidlestart = 0
-	p.sendidlestart = 0
-	p.data = nil
-}
-func (p *Peer) getpeeruniquename() string {
-	return p.getpeername() + ":" + p.getpeeraddr()
-}
-func (p *Peer) getpeername() string {
+func (p *Peer) getUniqueName() string {
+	var name, addr string
 	switch p.peertype {
 	case CLIENT:
-		return p.clientname
+		name = p.clientname
 	case SERVER:
-		return p.servername
+		name = p.servername
 	}
-	return ""
-}
-func (p *Peer) getselfuniquename() string {
-	return p.getselfname() + ":" + p.getselfaddr()
-}
-func (p *Peer) getselfname() string {
-	switch p.peertype {
-	case CLIENT:
-		return p.servername
-	case SERVER:
-		return p.clientname
-	}
-	return ""
-}
-func (p *Peer) getpeeraddr() string {
 	switch p.protocol {
+	case WS:
+		fallthrough
 	case TCP:
-		return (*net.TCPConn)(p.conn).RemoteAddr().String()
+		addr = (*net.TCPConn)(p.conn).RemoteAddr().String()
 	case UNIX:
-		c, e := (*net.UnixConn)(p.conn).SyscallConn()
-		if e != nil {
-			return ""
-		}
-		var fd uintptr
-		c.Control(func(tempfd uintptr) {
-			fd = tempfd
-		})
-		return (*net.UnixConn)(p.conn).RemoteAddr().String() + ":" + strconv.FormatUint(uint64(fd), 10)
+		addr = "fd:" + strconv.FormatUint(p.fd, 10)
 	}
-	return ""
-}
-func (p *Peer) getselfaddr() string {
-	switch p.protocol {
-	case TCP:
-		return (*net.TCPConn)(p.conn).LocalAddr().String()
-	case UNIX:
-		c, e := (*net.UnixConn)(p.conn).SyscallConn()
-		if e != nil {
-			return ""
-		}
-		var fd uintptr
-		c.Control(func(tempfd uintptr) {
-			fd = tempfd
-		})
-		return (*net.UnixConn)(p.conn).RemoteAddr().String() + ":" + strconv.FormatUint(uint64(fd), 10)
+	if name != "" {
+		return addr
 	}
-	return ""
+	return name + ":" + addr
 }
 
 //closeconn close the under layer socket
 func (p *Peer) closeconn() {
 	if p.conn != nil {
 		switch p.protocol {
+		case WS:
+			fallthrough
 		case TCP:
 			(*net.TCPConn)(p.conn).Close()
 		case UNIX:
@@ -200,6 +140,8 @@ func (p *Peer) closeWrite() {
 
 func (p *Peer) setbuffer(readnum, writenum int) {
 	switch p.protocol {
+	case WS:
+		fallthrough
 	case TCP:
 		(*net.TCPConn)(p.conn).SetReadBuffer(readnum)
 		(*net.TCPConn)(p.conn).SetWriteBuffer(writenum)
@@ -236,7 +178,7 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 		return nil
 	}
 	if len(userdata) > int(p.maxmsglen) {
-		log.Error("[Stream.SendMessage] to", p.protocol.protoname(), p.peertype.typename()+":", p.getpeeruniquename(), "error:", ERRMSGLENGTH)
+		log.Error("[Stream.SendMessage] to", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName(), "error:", ERRMSGLENGTH)
 		return ERRMSGLENGTH
 	}
 	if p.closeread || p.status == 0 || p.status == 2 || p.starttime != starttime {
@@ -251,7 +193,7 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 		select {
 		case p.writerbuffer <- data:
 		default:
-			log.Error("[Stream.SendMessage] to", p.protocol.protoname(), p.peertype.typename()+":", p.getpeeruniquename(), "error:", ERRSENDBUFFULL)
+			log.Error("[Stream.SendMessage] to", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName(), "error:", ERRSENDBUFFULL)
 			return ERRSENDBUFFULL
 		}
 	}
