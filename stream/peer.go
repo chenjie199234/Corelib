@@ -60,13 +60,13 @@ var (
 	ERRSENDBUFFULL = errors.New("send buffer full")
 )
 
-type peernode struct {
+type peergroup struct {
 	sync.RWMutex
 	peers map[string]*Peer
 }
 
 type Peer struct {
-	parentnode      *peernode
+	parentgroup     *peergroup
 	clientname      string
 	servername      string
 	peertype        peertype

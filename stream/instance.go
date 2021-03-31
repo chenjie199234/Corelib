@@ -16,7 +16,7 @@ import (
 type Instance struct {
 	selfname     string
 	c            *InstanceConfig
-	peernodes    []*peernode
+	peergroups   []*peergroup
 	stop         int32
 	tcplistener  *net.TCPListener
 	unixlistener *net.UnixListener
@@ -83,7 +83,7 @@ func (this *Instance) getPeer(protot protocol, peert peertype, writebuffernum, m
 }
 func (this *Instance) putPeer(p *Peer) {
 	p.CancelFunc()
-	p.parentnode = nil
+	p.parentgroup = nil
 	p.clientname = ""
 	p.servername = ""
 	p.peertype = 0
@@ -113,16 +113,16 @@ func (this *Instance) putPeer(p *Peer) {
 }
 func (this *Instance) addPeer(p *Peer) bool {
 	uniquename := p.getUniqueName()
-	node := this.peernodes[this.getindex(uniquename)]
-	node.Lock()
-	if _, ok := node.peers[uniquename]; ok {
-		node.Unlock()
+	group := this.peergroups[this.getindex(uniquename)]
+	group.Lock()
+	if _, ok := group.peers[uniquename]; ok {
+		group.Unlock()
 		return false
 	}
-	p.parentnode = node
-	node.peers[uniquename] = p
+	p.parentgroup = group
+	group.peers[uniquename] = p
 	atomic.AddInt64(&this.totalpeernum, 1)
-	node.Unlock()
+	group.Unlock()
 	return true
 }
 
@@ -151,42 +151,42 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 	}
 	c.validate()
 	stream := &Instance{
-		selfname:  group + "." + name,
-		c:         c,
-		peernodes: make([]*peernode, c.GroupNum),
-		stop:      0,
-		noticech:  make(chan *Peer, 1024),
-		closech:   make(chan struct{}, 1),
-		pool:      &sync.Pool{},
+		selfname:   group + "." + name,
+		c:          c,
+		peergroups: make([]*peergroup, c.GroupNum),
+		stop:       0,
+		noticech:   make(chan *Peer, 1024),
+		closech:    make(chan struct{}, 1),
+		pool:       &sync.Pool{},
 	}
-	for i := range stream.peernodes {
-		stream.peernodes[i] = &peernode{
+	for i := range stream.peergroups {
+		stream.peergroups[i] = &peergroup{
 			peers: make(map[string]*Peer, 10),
 		}
-		go stream.heart(stream.peernodes[i])
+		go stream.heart(stream.peergroups[i])
 	}
 	go func() {
 		for {
 			p := <-stream.noticech
 			if p != nil {
-				if p.parentnode != nil {
-					p.parentnode.Lock()
-					delete(p.parentnode.peers, p.getUniqueName())
+				if p.parentgroup != nil {
+					p.parentgroup.Lock()
+					delete(p.parentgroup.peers, p.getUniqueName())
 					atomic.AddInt64(&stream.totalpeernum, -1)
-					p.parentnode.Unlock()
+					p.parentgroup.Unlock()
 				}
 				stream.putPeer(p)
 			}
 			if atomic.LoadInt32(&stream.stop) == 1 {
 				finish := true
-				for _, node := range stream.peernodes {
-					node.RLock()
-					if len(node.peers) != 0 {
+				for _, group := range stream.peergroups {
+					group.RLock()
+					if len(group.peers) != 0 {
 						finish = false
-						node.RUnlock()
+						group.RUnlock()
 						break
 					}
-					node.RUnlock()
+					group.RUnlock()
 				}
 				if finish {
 					select {
@@ -209,12 +209,12 @@ func (this *Instance) Stop() {
 	if this.unixlistener != nil {
 		this.unixlistener.Close()
 	}
-	for _, node := range this.peernodes {
-		node.RLock()
-		for _, peer := range node.peers {
+	for _, group := range this.peergroups {
+		group.RLock()
+		for _, peer := range group.peers {
 			peer.Close()
 		}
-		node.RUnlock()
+		group.RUnlock()
 	}
 	//prevent notice block on empty chan
 	this.noticech <- (*Peer)(nil)
@@ -225,27 +225,27 @@ func (this *Instance) GetSelfName() string {
 }
 func (this *Instance) SendMessageAll(data []byte, block bool) {
 	wg := &sync.WaitGroup{}
-	for _, node := range this.peernodes {
-		node.RWMutex.RLock()
-		for _, peer := range node.peers {
+	for _, group := range this.peergroups {
+		group.RWMutex.RLock()
+		for _, peer := range group.peers {
 			wg.Add(1)
 			go func(p *Peer) {
 				p.SendMessage(data, p.starttime, block)
 				wg.Done()
 			}(peer)
 		}
-		node.RWMutex.RUnlock()
+		group.RWMutex.RUnlock()
 	}
 	wg.Wait()
 }
 
-func (this *Instance) heart(node *peernode) {
+func (this *Instance) heart(group *peergroup) {
 	tker := time.NewTicker(time.Duration(this.c.HeartprobeInterval) * time.Millisecond)
 	for {
 		<-tker.C
 		now := uint64(time.Now().UnixNano())
-		node.RLock()
-		for _, p := range node.peers {
+		group.RLock()
+		for _, p := range group.peers {
 			if p.status == 0 {
 				continue
 			}
@@ -279,7 +279,7 @@ func (this *Instance) heart(node *peernode) {
 				bufpool.PutBuffer(data)
 			}
 		}
-		node.RUnlock()
+		group.RUnlock()
 	}
 }
 func (this *Instance) getindex(peername string) uint {
