@@ -65,7 +65,7 @@ func makePongMsg(pongdata []byte, needprefix bool) *bufpool.Buffer {
 		buf.Grow(1 + len(pongdata))
 		data = buf.Bytes()
 	}
-	data[0] = byte(PING << 5)
+	data[0] = byte(PONG << 5)
 	copy(data[1:], pongdata)
 	return buf
 }
