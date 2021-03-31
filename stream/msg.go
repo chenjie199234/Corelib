@@ -13,8 +13,6 @@ const (
 	PONG
 	VERIFY
 	USER
-	CLOSEREAD
-	CLOSEWRITE
 )
 
 //   each row is one byte
@@ -179,16 +177,6 @@ func getMsgType(data []byte) (int, error) {
 			return -1, errors.New("empty message")
 		}
 		return USER, nil
-	case (data[0] >> 5) == CLOSEREAD:
-		if len(data) < 9 {
-			return -1, errors.New("empty message")
-		}
-		return CLOSEREAD, nil
-	case (data[0] >> 5) == CLOSEWRITE:
-		if len(data) < 9 {
-			return -1, errors.New("empty message")
-		}
-		return CLOSEWRITE, nil
 	default:
 		return -1, errors.New("unknown message type")
 	}

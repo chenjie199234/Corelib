@@ -371,7 +371,7 @@ func (this *Instance) read(p *Peer) {
 				e = errors.New("empty message")
 			} else {
 				msgtype, e = getMsgType(data.Bytes())
-				if e == nil && msgtype != PING && msgtype != PONG && msgtype != USER && msgtype != CLOSEREAD && msgtype != CLOSEWRITE {
+				if e == nil && msgtype != PING && msgtype != PONG && msgtype != USER {
 					e = errors.New("unknown msg type")
 				}
 			}
