@@ -13,7 +13,6 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/bufpool"
-	"github.com/chenjie199234/Corelib/log"
 )
 
 type protocol int
@@ -106,7 +105,7 @@ func (p *Peer) getUniqueName() string {
 	case UNIX:
 		addr = "fd:" + strconv.FormatUint(p.fd, 10)
 	}
-	if name != "" {
+	if name == "" {
 		return addr
 	}
 	return name + ":" + addr
@@ -178,7 +177,6 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 		return nil
 	}
 	if len(userdata) > int(p.maxmsglen) {
-		log.Error("[Stream.SendMessage] to", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName(), "error:", ERRMSGLENGTH)
 		return ERRMSGLENGTH
 	}
 	if p.closeread || p.status == 0 || p.status == 2 || p.starttime != starttime {
@@ -193,7 +191,6 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 		select {
 		case p.writerbuffer <- data:
 		default:
-			log.Error("[Stream.SendMessage] to", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName(), "error:", ERRSENDBUFFULL)
 			return ERRSENDBUFFULL
 		}
 	}
@@ -204,7 +201,7 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 //this is only safe to use in callback func in sync mode
 func (p *Peer) Close() {
 	old := p.status
-	if atomic.CompareAndSwapUint32(&p.status, old, 2) {
+	if old == 1 && atomic.CompareAndSwapUint32(&p.status, old, 2) {
 		p.closeRead()
 	}
 }

@@ -124,6 +124,7 @@ func (this *Instance) sworker(p *Peer) {
 	}
 	//verify client success,send self's verify message to client
 	verifymsg := makeVerifyMsg(p.servername, verifydata, p.starttime, true)
+	defer bufpool.PutBuffer(verifymsg)
 	send := 0
 	num := 0
 	var e error
@@ -136,14 +137,13 @@ func (this *Instance) sworker(p *Peer) {
 		}
 		if e != nil {
 			log.Error("[Stream.sworker] write verify msg to", p.protocol.protoname(), "client:", p.getUniqueName(), "error:", e)
-			bufpool.PutBuffer(verifymsg)
 			p.closeconn()
-			this.putPeer(p)
+			//after addpeer should use this way to delete this peer
+			this.noticech <- p
 			return
 		}
 		send += num
 	}
-	bufpool.PutBuffer(verifymsg)
 	if this.c.Onlinefunc != nil {
 		this.c.Onlinefunc(p, p.getUniqueName(), p.starttime)
 	}
@@ -246,6 +246,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 	defer cancel()
 	//send self's verify message to server
 	verifymsg := makeVerifyMsg(p.clientname, verifydata, 0, true)
+	defer bufpool.PutBuffer(verifymsg)
 	send := 0
 	num := 0
 	var e error
@@ -258,14 +259,12 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 		}
 		if e != nil {
 			log.Error("[Stream.cworker] write verify msg to", p.protocol.protoname(), "server:", p.getUniqueName(), "error:", e)
-			bufpool.PutBuffer(verifymsg)
 			p.closeconn()
 			this.putPeer(p)
 			return ""
 		}
 		send += num
 	}
-	bufpool.PutBuffer(verifymsg)
 	//read first verify message from server
 	_ = this.verifypeer(ctx, p)
 	if p.servername == "" {
@@ -296,9 +295,6 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 }
 func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 	data, e := p.readMessage()
-	if data != nil {
-		defer bufpool.PutBuffer(data)
-	}
 	var sender string
 	var peerverifydata []byte
 	var starttime uint64
@@ -306,6 +302,7 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 		if data == nil {
 			e = errors.New("empty message")
 		} else {
+			defer bufpool.PutBuffer(data)
 			var msgtype int
 			if msgtype, e = getMsgType(data.Bytes()); e == nil {
 				if msgtype != VERIFY {
@@ -317,7 +314,7 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 		}
 	}
 	if e != nil {
-		log.Error("[Stream.verifypeer] read verify msg from", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName(), "error:", e)
+		log.Error("[Stream.verifypeer] read msg from", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName(), "error:", e)
 		return nil
 	}
 	p.lastactive = uint64(time.Now().UnixNano())
@@ -404,22 +401,22 @@ func (this *Instance) read(p *Peer) {
 			}
 		case CLOSEREAD:
 			starttime, _ := getCloseReadMsg(data.Bytes())
-			if starttime == p.starttime {
+			if starttime == p.starttime && !p.closeread {
 				p.closeread = true
+				p.closeWrite()
 				if p.closewrite {
 					return
 				}
-				p.writerbuffer <- makeCloseWriteMsg(p.starttime, true)
 			}
 			//drop race data
 		case CLOSEWRITE:
 			starttime, _ := getCloseWriteMsg(data.Bytes())
-			if starttime == p.starttime {
+			if starttime == p.starttime && !p.closewrite {
 				p.closewrite = true
+				p.closeRead()
 				if p.closeread {
 					return
 				}
-				p.writerbuffer <- makeCloseReadMsg(p.starttime, true)
 			}
 			//drop race data
 		}

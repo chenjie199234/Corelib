@@ -109,8 +109,6 @@ func (this *Instance) putPeer(p *Peer) {
 	p.recvidlestart = 0
 	p.sendidlestart = 0
 	p.data = nil
-	p.Context = nil
-	p.CancelFunc = nil
 	this.pool.Put(p)
 }
 func (this *Instance) addPeer(p *Peer) bool {
@@ -173,20 +171,24 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 			if p != nil {
 				if p.parentnode != nil {
 					p.parentnode.Lock()
-					atomic.AddInt64(&stream.totalpeernum, -1)
 					delete(p.parentnode.peers, p.getUniqueName())
+					atomic.AddInt64(&stream.totalpeernum, -1)
 					p.parentnode.Unlock()
 				}
 				stream.putPeer(p)
 			}
 			if atomic.LoadInt32(&stream.stop) == 1 {
-				count := 0
+				finish := true
 				for _, node := range stream.peernodes {
 					node.RLock()
-					count += len(node.peers)
+					if len(node.peers) != 0 {
+						finish = false
+						node.RUnlock()
+						break
+					}
 					node.RUnlock()
 				}
-				if count == 0 {
+				if finish {
 					select {
 					case stream.closech <- struct{}{}:
 					default:
