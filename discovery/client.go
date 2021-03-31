@@ -1,7 +1,6 @@
 package discovery
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"net"
@@ -381,7 +380,7 @@ func getinfos(appname string, t int) (map[string][]string, []byte) {
 }
 
 func (c *DiscoveryClient) verifyfunc(ctx context.Context, serveruniquename string, peerVerifyData []byte) ([]byte, bool) {
-	if !bytes.Equal(peerVerifyData, common.Str2byte(c.verifydata)) {
+	if common.Byte2str(peerVerifyData) != c.verifydata {
 		return nil, false
 	}
 	c.lker.RLock()

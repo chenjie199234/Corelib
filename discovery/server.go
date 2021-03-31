@@ -2,7 +2,6 @@ package discovery
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"unsafe"
@@ -133,13 +132,11 @@ func (s *DiscoveryServer) verifyfunc(ctx context.Context, appuniquename string, 
 	temp := common.Byte2str(peerVerifyData)
 	index := strings.LastIndex(temp, "|")
 	if index == -1 {
-		fmt.Println(1)
 		return nil, false
 	}
 	targetname := temp[index+1:]
 	vdata := temp[:index]
 	if targetname != s.instance.GetSelfName() {
-		fmt.Println(2)
 		return nil, false
 	}
 	if len(s.verifydatas) == 0 {
@@ -152,7 +149,6 @@ func (s *DiscoveryServer) verifyfunc(ctx context.Context, appuniquename string, 
 			return common.Str2byte(verifydata), true
 		}
 	}
-	fmt.Println(3)
 	return nil, false
 }
 

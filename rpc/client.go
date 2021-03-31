@@ -1,7 +1,6 @@
 package rpc
 
 import (
-	"bytes"
 	"context"
 	"strings"
 	"sync"
@@ -335,7 +334,7 @@ func (c *RpcClient) unregister(addr string) {
 	}
 }
 func (c *RpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
-	if !bytes.Equal(peerVerifyData, common.Str2byte(c.c.VerifyData)) {
+	if common.Byte2str(peerVerifyData) != c.c.VerifyData {
 		return nil, false
 	}
 	c.lker.RLock()
