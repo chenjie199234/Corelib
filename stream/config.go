@@ -18,17 +18,18 @@ type HandleVerifyFunc func(ctx context.Context, peeruniquename string, peerVerif
 
 //This is a notice after two peers verify each other success
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
-type HandleOnlineFunc func(p *Peer, peeruniquename string, starttime uint64)
+type HandleOnlineFunc func(p *Peer, peeruniquename string, starttime int64)
 
 //This is a func to deal the user message
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
 //Don't reuse 'data' in this function,the under layer data in 'data' will change when this function return
-type HandleUserdataFunc func(p *Peer, peeruniquename string, data []byte, starttime uint64)
+type HandleUserdataFunc func(p *Peer, peeruniquename string, data []byte, starttime int64)
 
 //This is a notice before two peers disconnect with each other
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
 //After this notice the peer is unknown,dont't use it anymore
-type HandleOfflineFunc func(p *Peer, peeruniquename string, starttime uint64)
+//type HandleOfflineFunc func(p *Peer, peeruniquename string, starttime uint64)
+type HandleOfflineFunc func(p *Peer, peeruniquename string)
 
 type TcpConfig struct {
 	//include connect time and verify time

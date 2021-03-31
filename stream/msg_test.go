@@ -10,26 +10,8 @@ func Test_Msg(t *testing.T) {
 	testheartmsg()
 	testverifymsg()
 	testusermsg()
-	testclosemsg()
 }
-func testclosemsg() {
-	data := makeCloseReadMsg(1, true)
-	msgtype, e := getMsgType(data.Bytes()[4:])
-	if e != nil {
-		panic("get msg type error:" + e.Error())
-	}
-	if msgtype != CLOSEREAD {
-		panic(fmt.Sprintf("get msg type error:type:%d wrong", msgtype))
-	}
-	data = makeCloseWriteMsg(1, true)
-	msgtype, e = getMsgType(data.Bytes()[4:])
-	if e != nil {
-		panic("get msg type error:" + e.Error())
-	}
-	if msgtype != CLOSEWRITE {
-		panic(fmt.Sprintf("get msg type error:type:%d wrong", msgtype))
-	}
-}
+
 func testheartmsg() {
 	data := makePingMsg([]byte("ping"), true)
 	msgtype, e := getMsgType(data.Bytes()[4:])

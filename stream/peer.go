@@ -66,25 +66,22 @@ type peergroup struct {
 }
 
 type Peer struct {
-	parentgroup     *peergroup
-	clientname      string
-	servername      string
-	peertype        peertype
-	protocol        protocol
-	starttime       uint64
-	closeread       bool
-	closewrite      bool
-	status          uint32 //0--(closed),1--(connected),2--(closing)
-	maxmsglen       uint
-	reader          *bufio.Reader
-	writerbuffer    chan *bufpool.Buffer
-	heartbeatbuffer chan *bufpool.Buffer
-	conn            unsafe.Pointer
-	fd              uint64
-	lastactive      uint64         //unixnano timestamp
-	recvidlestart   uint64         //unixnano timestamp
-	sendidlestart   uint64         //unixnano timestamp
-	data            unsafe.Pointer //user data
+	parentgroup    *peergroup
+	clientname     string
+	servername     string
+	peertype       peertype
+	protocol       protocol
+	starttime      int64 //'<0'---(closing),'0'---(closed),'>0'---(connected)
+	maxmsglen      uint
+	reader         *bufio.Reader
+	writerbuffer   chan *bufpool.Buffer
+	pingpongbuffer chan *bufpool.Buffer
+	conn           unsafe.Pointer
+	fd             uint64
+	lastactive     int64          //unixnano timestamp
+	recvidlestart  int64          //unixnano timestamp
+	sendidlestart  int64          //unixnano timestamp
+	data           unsafe.Pointer //user data
 	context.Context
 	context.CancelFunc
 }
@@ -125,18 +122,6 @@ func (p *Peer) closeconn() {
 	}
 }
 
-//closeRead just stop read
-//write goruntine can still write data
-func (p *Peer) closeRead() {
-	p.writerbuffer <- makeCloseReadMsg(p.starttime, true)
-}
-
-//closeWrite just stop write
-//read goruntine can still read data
-func (p *Peer) closeWrite() {
-	p.writerbuffer <- makeCloseWriteMsg(p.starttime, true)
-}
-
 func (p *Peer) setbuffer(readnum, writenum int) {
 	switch p.protocol {
 	case WS:
@@ -172,14 +157,17 @@ func (p *Peer) readMessage() (*bufpool.Buffer, error) {
 	}
 	return buf, nil
 }
-func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error {
+
+//if block is false,when the send buffer is full(depend on the MaxBufferedWriteMsgNum in config),error will return
+//if block is true,when the send buffer is full(depend on the MaxBufferedWriteMsgNum in config),this call will block until send the data
+func (p *Peer) SendMessage(userdata []byte, starttime int64, block bool) error {
 	if len(userdata) == 0 {
 		return nil
 	}
 	if len(userdata) > int(p.maxmsglen) {
 		return ERRMSGLENGTH
 	}
-	if p.closeread || p.status == 0 || p.status == 2 || p.starttime != starttime {
+	if p.starttime != starttime {
 		//starttime for aba check
 		return ERRCONNCLOSED
 	}
@@ -196,26 +184,12 @@ func (p *Peer) SendMessage(userdata []byte, starttime uint64, block bool) error 
 	}
 	return nil
 }
-
-//warning!has data race
-//this is only safe to use in callback func in sync mode
-func (p *Peer) Close() {
-	old := p.status
-	if old == 1 && atomic.CompareAndSwapUint32(&p.status, old, 2) {
-		p.closeRead()
+func (p *Peer) Close(starttime int64) {
+	if atomic.CompareAndSwapInt64(&p.starttime, starttime, -1) {
+		//wake up write goroutine
+		p.pingpongbuffer <- (*bufpool.Buffer)(nil)
+		p.writerbuffer <- (*bufpool.Buffer)(nil)
 	}
-}
-
-//warning!has data race
-//this is only safe to use in callback func in sync mode
-func (p *Peer) CloseRead() {
-	p.closeRead()
-}
-
-//warning!has data race
-//this is only safe to use in callback func in sync mode
-func (p *Peer) CloseWrite() {
-	p.closeWrite()
 }
 
 //warning!has data race

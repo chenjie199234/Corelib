@@ -43,11 +43,11 @@ func unixserverhandleVerify(ctx context.Context, peeruniquename string, peerVeri
 	}
 	return []byte{'t', 'e', 's', 't'}, true
 }
-func unixserverhandleonline(p *Peer, peeruniquename string, starttime uint64) {
+func unixserverhandleonline(p *Peer, peeruniquename string, starttime int64) {
 }
-func unixserverhandleuserdata(ctx context.Context, p *Peer, peeruniquename string, data []byte, starttime uint64) {
+func unixserverhandleuserdata(ctx context.Context, p *Peer, peeruniquename string, data []byte, starttime int64) {
 	fmt.Printf("%s:%s\n", peeruniquename, data)
 	p.SendMessage(data, starttime, true)
 }
-func unixserverhandleoffline(p *Peer, peeruniquename string, starttime uint64) {
+func unixserverhandleoffline(p *Peer, peeruniquename string) {
 }

@@ -43,7 +43,7 @@ func unixclienthandleVerify(ctx context.Context, peeruniquename string, peerVeri
 
 var firstunixclient int64
 
-func unixclienthandleonline(p *Peer, peeruniquename string, starttime uint64) {
+func unixclienthandleonline(p *Peer, peeruniquename string, starttime int64) {
 	if atomic.SwapInt64(&firstunixclient, 1) == 0 {
 		go func() {
 			for {
@@ -54,9 +54,9 @@ func unixclienthandleonline(p *Peer, peeruniquename string, starttime uint64) {
 	}
 }
 
-func unixclienthandleuserdata(p *Peer, peeruniquename string, data []byte, starttime uint64) {
+func unixclienthandleuserdata(p *Peer, peeruniquename string, data []byte, starttime int64) {
 	fmt.Printf("%s\n", data)
 }
 
-func unixclienthandleoffline(p *Peer, peeruniquename string, starttime uint64) {
+func unixclienthandleoffline(p *Peer, peeruniquename string) {
 }

@@ -281,7 +281,7 @@ func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerV
 	}
 	return nil, false
 }
-func (s *RpcServer) onlinefunc(p *stream.Peer, peeruniquename string, starttime uint64) {
+func (s *RpcServer) onlinefunc(p *stream.Peer, peeruniquename string, starttime int64) {
 	if atomic.LoadInt32(&s.status) != 1 {
 		d, _ := proto.Marshal(&Msg{
 			Callid: 0,
@@ -296,11 +296,11 @@ func (s *RpcServer) onlinefunc(p *stream.Peer, peeruniquename string, starttime 
 		log.Info("[rpc.server.onlinefunc] client:", peeruniquename, "online")
 	}
 }
-func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, starttime uint64) {
+func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, starttime int64) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		log.Error("[rpc.server.userfunc] client:", peeruniquename, "data format error:", e)
-		p.Close()
+		p.Close(starttime)
 		return
 	}
 	go func() {
@@ -358,6 +358,6 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		}
 	}()
 }
-func (s *RpcServer) offlinefunc(p *stream.Peer, peeruniquename string, starttime uint64) {
+func (s *RpcServer) offlinefunc(p *stream.Peer, peeruniquename string) {
 	log.Info("[rpc.server.offlinefunc] client:", peeruniquename, "offline")
 }

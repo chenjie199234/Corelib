@@ -37,7 +37,7 @@ type appnode struct {
 	lker          *sync.RWMutex
 	appuniquename string
 	peer          *stream.Peer
-	starttime     uint64
+	starttime     int64
 	status        int
 	reginfo       *RegInfo
 	watched       map[string]struct{} //key appname
@@ -157,13 +157,13 @@ func (s *DiscoveryServer) verifyfunc(ctx context.Context, appuniquename string, 
 }
 
 //appuniquename = appname:ip:port
-func (s *DiscoveryServer) onlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
+func (s *DiscoveryServer) onlinefunc(p *stream.Peer, appuniquename string, starttime int64) {
 	s.lker.Lock()
 	defer s.lker.Unlock()
 	appname := appuniquename[:strings.Index(appuniquename, ":")]
 	if g, ok := s.groups[appname]; ok {
 		if _, ok := g.apps[appuniquename]; ok {
-			p.Close()
+			p.Close(starttime)
 			return
 		}
 	} else {
@@ -192,7 +192,7 @@ func (s *DiscoveryServer) onlinefunc(p *stream.Peer, appuniquename string, start
 }
 
 //appuniquename = appname:ip:port
-func (s *DiscoveryServer) userfunc(p *stream.Peer, appuniquename string, origindata []byte, starttime uint64) {
+func (s *DiscoveryServer) userfunc(p *stream.Peer, appuniquename string, origindata []byte, starttime int64) {
 	if len(origindata) == 0 {
 		return
 	}
@@ -201,7 +201,7 @@ func (s *DiscoveryServer) userfunc(p *stream.Peer, appuniquename string, origind
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		log.Error("[Discovery.server.userfunc] message from:", appuniquename, "format error:", e)
-		p.Close()
+		p.Close(starttime)
 		return
 	}
 	switch msg.MsgType {
@@ -210,7 +210,7 @@ func (s *DiscoveryServer) userfunc(p *stream.Peer, appuniquename string, origind
 		if reg == nil || reg.RegInfo == nil || ((reg.RegInfo.WebPort == 0 || reg.RegInfo.WebScheme == "") && reg.RegInfo.RpcPort == 0) {
 			//register with empty data
 			log.Error("[Discovery.server.userfunc] empty reginfo from:", appuniquename)
-			p.Close()
+			p.Close(starttime)
 			return
 		}
 		findex := strings.Index(appuniquename, ":")
@@ -256,12 +256,12 @@ func (s *DiscoveryServer) userfunc(p *stream.Peer, appuniquename string, origind
 		watch := msg.GetWatchMsg()
 		if watch.AppName == "" {
 			log.Error("[Discovery.server.userfunc] app:", appuniquename, "watch empty")
-			p.Close()
+			p.Close(starttime)
 			return
 		}
 		if watch.AppName == appuniquename[:strings.Index(appuniquename, ":")] {
 			log.Error("[Discovery.server.userfunc] app:", appuniquename, "watch self")
-			p.Close()
+			p.Close(starttime)
 			return
 		}
 		node := (*appnode)(p.GetData())
@@ -323,12 +323,12 @@ func (s *DiscoveryServer) userfunc(p *stream.Peer, appuniquename string, origind
 		log.Info("[Discovery.server.userfunc] app:", appuniquename, "unreg")
 	default:
 		log.Error("[Discovery.server.userfunc] unknown message type:", msg.MsgType, "from app:", appuniquename)
-		p.Close()
+		p.Close(starttime)
 	}
 }
 
 //appuniquename = appname:ip:port
-func (s *DiscoveryServer) offlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
+func (s *DiscoveryServer) offlinefunc(p *stream.Peer, appuniquename string) {
 	s.lker.Lock()
 	appname := appuniquename[:strings.Index(appuniquename, ":")]
 	group, ok := s.groups[appname]

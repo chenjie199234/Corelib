@@ -43,7 +43,7 @@ var instance *DiscoveryClient
 type servernode struct {
 	lker      *sync.Mutex
 	peer      *stream.Peer
-	starttime uint64
+	starttime int64
 	allapps   map[string]map[string]*appnode //first key:appname,second key:appuniquename
 	status    int                            //0-closing,1-start,2-verified,3-connected,4-registered
 	reginfo   *RegInfo
@@ -118,7 +118,7 @@ func (c *DiscoveryClient) UpdateDiscoveryServers(serveraddrs []string) {
 			delete(c.servers, serveruniquename)
 			server.status = 0
 			if server.peer != nil {
-				server.peer.Close()
+				server.peer.Close(server.starttime)
 			}
 			server.lker.Unlock()
 		}
@@ -400,11 +400,11 @@ func (c *DiscoveryClient) verifyfunc(ctx context.Context, serveruniquename strin
 	server.status = 2
 	return nil, true
 }
-func (c *DiscoveryClient) onlinefunc(p *stream.Peer, serveruniquename string, starttime uint64) {
+func (c *DiscoveryClient) onlinefunc(p *stream.Peer, serveruniquename string, starttime int64) {
 	c.lker.RLock()
 	server, ok := c.servers[serveruniquename]
 	if !ok {
-		p.Close()
+		p.Close(starttime)
 		//discovery server removed
 		c.lker.RUnlock()
 		return
@@ -413,7 +413,7 @@ func (c *DiscoveryClient) onlinefunc(p *stream.Peer, serveruniquename string, st
 	defer server.lker.Unlock()
 	c.lker.RUnlock()
 	if server.peer != nil || server.status != 2 || server.starttime != 0 {
-		p.Close()
+		p.Close(starttime)
 		return
 	}
 	log.Info("[Discovery.client.onlinefunc] server:", serveruniquename, "online")
@@ -456,7 +456,7 @@ func (c *DiscoveryClient) onlinefunc(p *stream.Peer, serveruniquename string, st
 	}
 	return
 }
-func (c *DiscoveryClient) userfunc(p *stream.Peer, serveruniquename string, origindata []byte, starttime uint64) {
+func (c *DiscoveryClient) userfunc(p *stream.Peer, serveruniquename string, origindata []byte, starttime int64) {
 	if len(origindata) == 0 {
 		return
 	}
@@ -465,7 +465,7 @@ func (c *DiscoveryClient) userfunc(p *stream.Peer, serveruniquename string, orig
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		log.Error("[Discovery.client.userfunc] message from:", serveruniquename, "format error:", e)
-		p.Close()
+		p.Close(starttime)
 		return
 	}
 	server := (*servernode)(p.GetData())
@@ -479,7 +479,7 @@ func (c *DiscoveryClient) userfunc(p *stream.Peer, serveruniquename string, orig
 		reg := msg.GetRegMsg()
 		if reg == nil || reg.AppUniqueName == "" || reg.RegInfo == nil || ((reg.RegInfo.WebPort == 0 || reg.RegInfo.WebScheme == "") && reg.RegInfo.RpcPort == 0) {
 			log.Error("[Discovery.client.userfunc] empty reg msg from:", serveruniquename)
-			p.Close()
+			p.Close(starttime)
 			return
 		}
 		appname := reg.AppUniqueName[:strings.Index(reg.AppUniqueName, ":")]
@@ -503,7 +503,7 @@ func (c *DiscoveryClient) userfunc(p *stream.Peer, serveruniquename string, orig
 		unreg := msg.GetUnregMsg()
 		if unreg.AppUniqueName == "" {
 			log.Error("[Discovery.client.userfunc] empty unreg msg from:", serveruniquename)
-			p.Close()
+			p.Close(starttime)
 			return
 		}
 		appname := unreg.AppUniqueName[:strings.Index(unreg.AppUniqueName, ":")]
@@ -518,7 +518,7 @@ func (c *DiscoveryClient) userfunc(p *stream.Peer, serveruniquename string, orig
 		push := msg.GetPushMsg()
 		if push == nil || push.AppName == "" {
 			log.Error("[Discovery.client.userfunc] empty push msg from:", serveruniquename)
-			p.Close()
+			p.Close(starttime)
 			return
 		}
 		if _, ok := server.allapps[push.AppName]; !ok {
@@ -542,10 +542,10 @@ func (c *DiscoveryClient) userfunc(p *stream.Peer, serveruniquename string, orig
 		c.nlker.RUnlock()
 	default:
 		log.Error("[Discovery.client.userfunc] unknown message type")
-		p.Close()
+		p.Close(starttime)
 	}
 }
-func (c *DiscoveryClient) offlinefunc(p *stream.Peer, serveruniquename string, starttime uint64) {
+func (c *DiscoveryClient) offlinefunc(p *stream.Peer, serveruniquename string) {
 	server := (*servernode)(p.GetData())
 	if server == nil {
 		return

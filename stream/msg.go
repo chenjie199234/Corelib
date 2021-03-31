@@ -94,7 +94,7 @@ func getPongMsg(data []byte) ([]byte, error) {
 //x  |---------------------------------sender|
 //...|---------------------------------------|
 //y  |--------------------------specific data|
-func makeVerifyMsg(sender string, verifydata []byte, starttime uint64, needprefix bool) *bufpool.Buffer {
+func makeVerifyMsg(sender string, verifydata []byte, starttime int64, needprefix bool) *bufpool.Buffer {
 	buf := bufpool.GetBuffer()
 	var data []byte
 	if needprefix {
@@ -106,19 +106,19 @@ func makeVerifyMsg(sender string, verifydata []byte, starttime uint64, needprefi
 		data = buf.Bytes()
 	}
 	data[0] = byte((VERIFY << 5) | len(sender))
-	binary.BigEndian.PutUint64(data[1:9], starttime)
+	binary.BigEndian.PutUint64(data[1:9], uint64(starttime))
 	copy(data[9:], sender)
 	if len(verifydata) > 0 {
 		copy(data[9+len(sender):], verifydata)
 	}
 	return buf
 }
-func getVerifyMsg(data []byte) (string, []byte, uint64, error) {
+func getVerifyMsg(data []byte) (string, []byte, int64, error) {
 	senderlen := int(data[0] ^ (VERIFY << 5))
 	if len(data) < (9 + senderlen) {
 		return "", nil, 0, errors.New("empty message")
 	}
-	return common.Byte2str(data[9 : 9+senderlen]), data[9+senderlen:], binary.BigEndian.Uint64(data[1:9]), nil
+	return common.Byte2str(data[9 : 9+senderlen]), data[9+senderlen:], int64(binary.BigEndian.Uint64(data[1:9])), nil
 }
 
 //   each row is one byte
@@ -134,7 +134,7 @@ func getVerifyMsg(data []byte) (string, []byte, uint64, error) {
 //9  |------------------------------starttime|
 //...|---------------------------------------|
 //y  |--------------------------specific data|
-func makeUserMsg(userdata []byte, starttime uint64, needprefix bool) *bufpool.Buffer {
+func makeUserMsg(userdata []byte, starttime int64, needprefix bool) *bufpool.Buffer {
 	buf := bufpool.GetBuffer()
 	var data []byte
 	if needprefix {
@@ -146,84 +146,19 @@ func makeUserMsg(userdata []byte, starttime uint64, needprefix bool) *bufpool.Bu
 		data = buf.Bytes()
 	}
 	data[0] = byte(USER << 5)
-	binary.BigEndian.PutUint64(data[1:9], starttime)
+	binary.BigEndian.PutUint64(data[1:9], uint64(starttime))
 	if len(userdata) > 0 {
 		copy(data[9:], userdata)
 	}
 	return buf
 }
-func getUserMsg(data []byte) ([]byte, uint64, error) {
+func getUserMsg(data []byte) ([]byte, int64, error) {
 	if len(data) <= 9 {
 		return nil, 0, errors.New("empty message")
 	}
-	return data[9:], binary.BigEndian.Uint64(data[1:9]), nil
+	return data[9:], int64(binary.BigEndian.Uint64(data[1:9])), nil
 }
 
-//   each row is one byte
-//   |8   |7   |6   |5   |4   |3   |2   |1   |
-//1  |-----type-----|------------------------|
-//2  |---------------------------------------|
-//3  |---------------------------------------|
-//4  |---------------------------------------|
-//5  |---------------------------------------|
-//6  |---------------------------------------|
-//7  |---------------------------------------|
-//8  |---------------------------------------|
-//9  |------------------------------starttime|
-func makeCloseReadMsg(starttime uint64, needprefix bool) *bufpool.Buffer {
-	buf := bufpool.GetBuffer()
-	var data []byte
-	if needprefix {
-		buf.Grow(4 + 1 + 8)
-		binary.BigEndian.PutUint32(buf.Bytes(), 1+8)
-		data = buf.Bytes()[4:]
-	} else {
-		buf.Grow(1 + 8)
-		data = buf.Bytes()
-	}
-	data[0] = byte(CLOSEREAD << 5)
-	binary.BigEndian.PutUint64(data[1:9], starttime)
-	return buf
-}
-func getCloseReadMsg(data []byte) (uint64, error) {
-	if len(data) < 9 {
-		return 0, errors.New("empty message")
-	}
-	return binary.BigEndian.Uint64(data[1:9]), nil
-}
-
-//   each row is one byte
-//   |8   |7   |6   |5   |4   |3   |2   |1   |
-//1  |-----type-----|------------------------|
-//2  |---------------------------------------|
-//3  |---------------------------------------|
-//4  |---------------------------------------|
-//5  |---------------------------------------|
-//6  |---------------------------------------|
-//7  |---------------------------------------|
-//8  |---------------------------------------|
-//9  |------------------------------starttime|
-func makeCloseWriteMsg(starttime uint64, needprefix bool) *bufpool.Buffer {
-	buf := bufpool.GetBuffer()
-	var data []byte
-	if needprefix {
-		buf.Grow(4 + 1 + 8)
-		binary.BigEndian.PutUint32(buf.Bytes(), 1+8)
-		data = buf.Bytes()[4:]
-	} else {
-		buf.Grow(1 + 8)
-		data = buf.Bytes()
-	}
-	data[0] = byte(CLOSEWRITE << 5)
-	binary.BigEndian.PutUint64(data[1:9], starttime)
-	return buf
-}
-func getCloseWriteMsg(data []byte) (uint64, error) {
-	if len(data) < 9 {
-		return 0, errors.New("empty message")
-	}
-	return binary.BigEndian.Uint64(data[1:9]), nil
-}
 func getMsgType(data []byte) (int, error) {
 	if len(data) == 0 {
 		return -1, errors.New("empty message")

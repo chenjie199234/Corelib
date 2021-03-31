@@ -297,7 +297,7 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 	data, e := p.readMessage()
 	var sender string
 	var peerverifydata []byte
-	var starttime uint64
+	var starttime int64
 	if e == nil {
 		if data == nil {
 			e = errors.New("empty message")
@@ -317,7 +317,7 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 		log.Error("[Stream.verifypeer] read msg from", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName(), "error:", e)
 		return nil
 	}
-	p.lastactive = uint64(time.Now().UnixNano())
+	p.lastactive = time.Now().UnixNano()
 	p.recvidlestart = p.lastactive
 	p.sendidlestart = p.lastactive
 	dup := make([]byte, len(sender))
@@ -341,18 +341,18 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 }
 func (this *Instance) read(p *Peer) {
 	defer func() {
-		//every connection will have two goruntine to work for it
-		if old := atomic.SwapUint32(&p.status, 0); old > 0 {
-			//cause write goruntine return,this will be useful when there is nothing in writebuffer
+		//every connection will have two goroutine to work for it
+		if atomic.SwapInt64(&p.starttime, 0) != 0 {
+			//when first goroutine return,close the connection,cause write goroutine return
 			p.closeconn()
-			//prevent write goruntine block on read channel
+			//wake up write goroutine,because it may block on channel
 			p.writerbuffer <- (*bufpool.Buffer)(nil)
-			p.heartbeatbuffer <- (*bufpool.Buffer)(nil)
+			p.pingpongbuffer <- (*bufpool.Buffer)(nil)
 		} else {
 			if this.c.Offlinefunc != nil {
-				this.c.Offlinefunc(p, p.getUniqueName(), p.starttime)
+				this.c.Offlinefunc(p, p.getUniqueName())
 			}
-			//when second goruntine return,put connection back to the pool
+			//when second goroutine return,put connection back to the pool
 			this.noticech <- p
 		}
 	}()
@@ -387,43 +387,21 @@ func (this *Instance) read(p *Peer) {
 		switch msgtype {
 		case PING:
 			//update lastactive time
-			p.lastactive = uint64(time.Now().UnixNano())
+			p.lastactive = time.Now().UnixNano()
 			//write back
 			pingdata, _ := getPingMsg(data.Bytes())
 			pongdata := makePongMsg(pingdata, true)
-			p.writerbuffer <- pongdata
+			p.pingpongbuffer <- pongdata
 		case PONG:
 			//update lastactive time
-			p.lastactive = uint64(time.Now().UnixNano())
+			p.lastactive = time.Now().UnixNano()
 		case USER:
-			if !p.closewrite {
-				userdata, starttime, _ := getUserMsg(data.Bytes())
-				if starttime == p.starttime {
-					//update lastactive time
-					p.lastactive = uint64(time.Now().UnixNano())
-					p.recvidlestart = p.lastactive
-					this.c.Userdatafunc(p, p.getUniqueName(), userdata, starttime)
-				}
-				//drop race data
-			}
-		case CLOSEREAD:
-			starttime, _ := getCloseReadMsg(data.Bytes())
-			if starttime == p.starttime && !p.closeread {
-				p.closeread = true
-				p.closeWrite()
-				if p.closewrite {
-					return
-				}
-			}
-			//drop race data
-		case CLOSEWRITE:
-			starttime, _ := getCloseWriteMsg(data.Bytes())
-			if starttime == p.starttime && !p.closewrite {
-				p.closewrite = true
-				p.closeRead()
-				if p.closeread {
-					return
-				}
+			userdata, starttime, _ := getUserMsg(data.Bytes())
+			if starttime == p.starttime {
+				//update lastactive time
+				p.lastactive = time.Now().UnixNano()
+				p.recvidlestart = p.lastactive
+				this.c.Userdatafunc(p, p.getUniqueName(), userdata, starttime)
 			}
 			//drop race data
 		}
@@ -439,20 +417,20 @@ func (this *Instance) write(p *Peer) {
 				bufpool.PutBuffer(v)
 			}
 		}
-		for len(p.heartbeatbuffer) > 0 {
-			if v := <-p.heartbeatbuffer; v != nil {
+		for len(p.pingpongbuffer) > 0 {
+			if v := <-p.pingpongbuffer; v != nil {
 				bufpool.PutBuffer(v)
 			}
 		}
-		//every connection will have two goruntine to work for it
-		if old := atomic.SwapUint32(&p.status, 0); old > 0 {
-			//when first goruntine return,close the connection,cause read goruntine return
+		//every connection will have two goroutine to work for it
+		if atomic.SwapInt64(&p.starttime, 0) != 0 {
+			//when first goroutine return,close the connection,cause read goroutine return
 			p.closeconn()
 		} else {
 			if this.c.Offlinefunc != nil {
-				this.c.Offlinefunc(p, p.getUniqueName(), p.starttime)
+				this.c.Offlinefunc(p, p.getUniqueName())
 			}
-			//when second goruntine return,put connection back to the pool
+			//when second goroutine return,put connection back to the pool
 			this.noticech <- p
 		}
 	}()
@@ -469,43 +447,34 @@ func (this *Instance) write(p *Peer) {
 	var num int
 	var e error
 	for {
-		status := atomic.LoadUint32(&p.status)
-		if (status == 0 || status == 2) && len(p.writerbuffer) == 0 {
+		if atomic.LoadInt64(&p.starttime) <= 0 && len(p.writerbuffer) == 0 {
 			return
 		}
-		if len(p.heartbeatbuffer) > 0 {
-			data, ok = <-p.heartbeatbuffer
+		if len(p.pingpongbuffer) > 0 {
+			data, ok = <-p.pingpongbuffer
 		} else {
 			select {
 			case data, ok = <-p.writerbuffer:
-			case data, ok = <-p.heartbeatbuffer:
+			case data, ok = <-p.pingpongbuffer:
 			}
-		}
-		if p.closeread && p.closewrite {
-			if data != nil {
-				bufpool.PutBuffer(data)
-			}
-			return
 		}
 		if !ok || data == nil {
 			continue
 		}
-		if !p.closeread {
-			p.sendidlestart = uint64(time.Now().UnixNano())
-			send = 0
-			for send < data.Len() {
-				switch p.protocol {
-				case TCP:
-					num, e = (*net.TCPConn)(p.conn).Write(data.Bytes()[send:])
-				case UNIX:
-					num, e = (*net.UnixConn)(p.conn).Write(data.Bytes()[send:])
-				}
-				if e != nil {
-					log.Error("[Stream.write] to", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName(), "error:", e)
-					return
-				}
-				send += num
+		p.sendidlestart = time.Now().UnixNano()
+		send = 0
+		for send < data.Len() {
+			switch p.protocol {
+			case TCP:
+				num, e = (*net.TCPConn)(p.conn).Write(data.Bytes()[send:])
+			case UNIX:
+				num, e = (*net.UnixConn)(p.conn).Write(data.Bytes()[send:])
 			}
+			if e != nil {
+				log.Error("[Stream.write] to", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName(), "error:", e)
+				return
+			}
+			send += num
 		}
 		bufpool.PutBuffer(data)
 	}

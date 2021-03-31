@@ -99,7 +99,7 @@ type ServerForPick struct {
 	discoveryservers []string //this app registered on which discovery server
 	lker             *sync.Mutex
 	peer             *stream.Peer
-	starttime        uint64
+	starttime        int64
 	status           int //0-idle,1-start,2-verify,3-connected,4-closing
 
 	//active calls
@@ -361,7 +361,7 @@ func (c *RpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVe
 	exist.lker.Unlock()
 	return nil, true
 }
-func (c *RpcClient) onlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
+func (c *RpcClient) onlinefunc(p *stream.Peer, appuniquename string, starttime int64) {
 	c.lker.RLock()
 	var exist *ServerForPick
 	for _, existserver := range c.servers {
@@ -372,14 +372,14 @@ func (c *RpcClient) onlinefunc(p *stream.Peer, appuniquename string, starttime u
 	}
 	if exist == nil {
 		//this is impossible
-		p.Close()
+		p.Close(starttime)
 		c.lker.RUnlock()
 		return
 	}
 	exist.lker.Lock()
 	c.lker.RUnlock()
 	if exist.peer != nil || exist.starttime != 0 || exist.status != 2 {
-		p.Close()
+		p.Close(starttime)
 		exist.lker.Unlock()
 		return
 	}
@@ -391,7 +391,7 @@ func (c *RpcClient) onlinefunc(p *stream.Peer, appuniquename string, starttime u
 	exist.lker.Unlock()
 }
 
-func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, starttime uint64) {
+func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, starttime int64) {
 	server := (*ServerForPick)(p.GetData())
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
@@ -416,7 +416,9 @@ func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, 
 	}
 	server.lker.Unlock()
 }
-func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
+
+//func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
+func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string) {
 	server := (*ServerForPick)(p.GetData())
 	if server == nil {
 		return

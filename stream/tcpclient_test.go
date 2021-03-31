@@ -46,7 +46,7 @@ func tcpclienthandleVerify(ctx context.Context, peeruniquename string, peerVerif
 
 var firsttcpclient int64
 
-func tcpclienthandleonline(p *Peer, peeruniquename string, starttime uint64) {
+func tcpclienthandleonline(p *Peer, peeruniquename string, starttime int64) {
 	if atomic.SwapInt64(&firsttcpclient, 1) == 0 {
 		go func() {
 			for {
@@ -57,9 +57,9 @@ func tcpclienthandleonline(p *Peer, peeruniquename string, starttime uint64) {
 	}
 }
 
-func tcpclienthandleuserdata(p *Peer, peeruniquename string, data []byte, starttime uint64) {
+func tcpclienthandleuserdata(p *Peer, peeruniquename string, data []byte, starttime int64) {
 	fmt.Printf("%s\n", data)
 }
 
-func tcpclienthandleoffline(p *Peer, peeruniquename string, starttime uint64) {
+func tcpclienthandleoffline(p *Peer, peeruniquename string) {
 }
