@@ -371,7 +371,7 @@ func (this *Instance) read(p *Peer) {
 				e = errors.New("empty message")
 			} else {
 				msgtype, e = getMsgType(data.Bytes())
-				if e == nil && msgtype != HEART && msgtype != USER && msgtype != CLOSEREAD && msgtype != CLOSEWRITE {
+				if e == nil && msgtype != PING && msgtype != PONG && msgtype != USER && msgtype != CLOSEREAD && msgtype != CLOSEWRITE {
 					e = errors.New("unknown msg type")
 				}
 			}
@@ -385,7 +385,14 @@ func (this *Instance) read(p *Peer) {
 		}
 		//deal message
 		switch msgtype {
-		case HEART:
+		case PING:
+			//update lastactive time
+			p.lastactive = uint64(time.Now().UnixNano())
+			//write back
+			pingdata, _ := getPingMsg(data.Bytes())
+			pongdata := makePongMsg(pingdata, true)
+			p.writerbuffer <- pongdata
+		case PONG:
 			//update lastactive time
 			p.lastactive = uint64(time.Now().UnixNano())
 		case USER:

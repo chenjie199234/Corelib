@@ -31,12 +31,12 @@ func testclosemsg() {
 	}
 }
 func testheartmsg() {
-	data := makeHeartMsg(true)
+	data := makePingMsg([]byte("ping"), true)
 	msgtype, e := getMsgType(data.Bytes()[4:])
 	if e != nil {
 		panic("get msg type error:" + e.Error())
 	}
-	if msgtype != HEART {
+	if msgtype != PING {
 		panic(fmt.Sprintf("get msg type error:type:%d wrong", msgtype))
 	}
 }

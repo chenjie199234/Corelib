@@ -271,7 +271,7 @@ func (this *Instance) heart(group *peergroup) {
 				continue
 			}
 			//send heart beat data
-			data := makeHeartMsg(true)
+			data := makePingMsg(nil, true)
 			select {
 			case p.heartbeatbuffer <- data:
 			default:
