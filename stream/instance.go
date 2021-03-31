@@ -67,16 +67,6 @@ func (this *Instance) getPeer(protot protocol, peert peertype, writebuffernum, m
 	} else {
 		p.clientname = selfname
 	}
-	for len(p.writerbuffer) > 0 {
-		if v := <-p.writerbuffer; v != nil {
-			bufpool.PutBuffer(v)
-		}
-	}
-	for len(p.pingpongbuffer) > 0 {
-		if v := <-p.pingpongbuffer; v != nil {
-			bufpool.PutBuffer(v)
-		}
-	}
 	return p
 }
 func (this *Instance) putPeer(p *Peer) {
