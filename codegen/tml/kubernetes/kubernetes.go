@@ -78,13 +78,6 @@ spec:
             periodSeconds: 1
             successThreshold: 1
             failureThreshold: 3
-          ports:
-            - name: web
-              containerPort: 8000
-              protocol: TCP
-            - name: rpc
-              containerPort: 9000
-              protocol: TCP
           volumeMounts:
             - name: {{.ProjectName}}-config-volume
               mountPath: /root/app/k8sconfig
@@ -136,14 +129,14 @@ metadata:
 spec:
   type: ClusterIP
   ports:
+  - name: webtls
+    protocol: TCP
+    port: 443
+    targetPort: 8001
   - name: web
     protocol: TCP
     port: 80
     targetPort: 8000
-  - name: rpc
-    protocol: TCP
-    port: 90
-    targetPort: 9000
   selector:
     app: {{.ProjectName}}{{ end }}{{ if .NeedIngress}}
 ---
