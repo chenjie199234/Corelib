@@ -13,7 +13,6 @@ import (
 	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
-	"github.com/gobwas/ws"
 )
 
 func (this *Instance) StartTcpServer(listenaddr string) error {
@@ -51,7 +50,7 @@ func (this *Instance) StartTcpServer(listenaddr string) error {
 		} else {
 			p.reader.Reset(conn)
 		}
-		go this.sworker(p, nil)
+		go this.sworker(p)
 	}
 }
 func (this *Instance) StartUnixServer(listenaddr string) error {
@@ -86,11 +85,11 @@ func (this *Instance) StartUnixServer(listenaddr string) error {
 		} else {
 			p.reader.Reset(conn)
 		}
-		go this.sworker(p, nil)
+		go this.sworker(p)
 	}
 }
 
-func (this *Instance) sworker(p *Peer, u *ws.Upgrader) {
+func (this *Instance) sworker(p *Peer) {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	switch p.protocol {

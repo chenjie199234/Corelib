@@ -73,47 +73,6 @@ func (c *TcpConfig) validate() {
 	}
 }
 
-type WsConfig struct {
-	//include connect time and verify time
-	ConnectTimeout time.Duration //default 500ms
-
-	SocketRBufLen uint //default 1024 byte,max 65535 byte
-	SocketWBufLen uint //default 1024 byte,max 65535 byte
-
-	MaxMsgLen uint //min 1024,max 65535,default is max
-}
-
-var defaultWsConfig = &WsConfig{
-	ConnectTimeout: 500 * time.Millisecond,
-	SocketRBufLen:  1024,
-	SocketWBufLen:  1024,
-	MaxMsgLen:      65535,
-}
-
-func (c *WsConfig) validate() {
-	if c.ConnectTimeout <= 0 {
-		c.ConnectTimeout = 500 * time.Millisecond
-	}
-	if c.SocketRBufLen == 0 {
-		c.SocketRBufLen = 1024
-	}
-	if c.SocketRBufLen > 65535 {
-		c.SocketRBufLen = 65535
-	}
-	if c.SocketWBufLen == 0 {
-		c.SocketWBufLen = 1024
-	}
-	if c.SocketWBufLen > 65535 {
-		c.SocketWBufLen = 65535
-	}
-	if c.MaxMsgLen < 1024 {
-		c.MaxMsgLen = 65535
-	}
-	if c.MaxMsgLen > 65535 {
-		c.MaxMsgLen = 65535
-	}
-}
-
 type UnixConfig struct {
 	//include connect time and verify time
 	ConnectTimeout time.Duration //default 500ms
@@ -176,8 +135,6 @@ type InstanceConfig struct {
 
 	//specify the tcp socket connection's config
 	TcpC *TcpConfig
-	//specify the web socket connection's config
-	WsC *WsConfig
 	//specify the unix socket connection's config
 	UnixC *UnixConfig
 
@@ -218,11 +175,6 @@ func (c *InstanceConfig) validate() {
 		c.TcpC = defaultTcpConfig
 	} else {
 		c.TcpC.validate()
-	}
-	if c.WsC == nil {
-		c.WsC = defaultWsConfig
-	} else {
-		c.WsC.validate()
 	}
 	if c.UnixC == nil {
 		c.UnixC = defaultUnixConfig
