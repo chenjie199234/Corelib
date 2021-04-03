@@ -256,12 +256,7 @@ func (this *Instance) heart(group *peergroup) {
 				continue
 			}
 			//send heart beat data
-			var data *bufpool.Buffer
-			if p.protocol == WS {
-				data = makeWsPingMsg(nil)
-			} else {
-				data = makePingMsg(nil, true)
-			}
+			data := makePingMsg(nil)
 			select {
 			case p.pingpongbuffer <- data:
 			default:

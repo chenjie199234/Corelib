@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"net"
-	"net/http"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -90,74 +89,11 @@ func (this *Instance) StartUnixServer(listenaddr string) error {
 		go this.sworker(p, nil)
 	}
 }
-func (this *Instance) StartWsServer(listenaddr, uri string) error {
-	if uri == "" {
-		uri = "/"
-	}
-	if uri[0] != '/' {
-		uri = "/" + uri
-	}
-	upgrader := &ws.Upgrader{
-		OnRequest: func(requri []byte) error {
-			if common.Byte2str(requri) != uri {
-				return ws.RejectConnectionError(
-					ws.RejectionStatus(http.StatusNotFound),
-					ws.RejectionReason("handshake error: 404 Not Found"),
-				)
-			}
-			return nil
-		},
-	}
-	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
-	if e != nil {
-		return errors.New("[Stream] resolve ws addr:" + listenaddr + " error:" + e.Error())
-	}
-	this.tcplistener, e = net.ListenTCP(laddr.Network(), laddr)
-	if e != nil {
-		return errors.New("[Stream] listen ws addr:" + listenaddr + " error:" + e.Error())
-	}
-	for {
-		p := this.getPeer(WS, CLIENT, this.c.MaxBufferedWriteMsgNum, this.c.WsC.MaxMsgLen, this.selfname)
-		conn, e := this.tcplistener.AcceptTCP()
-		if e != nil {
-			return errors.New("[Stream] accept ws connection error:" + e.Error())
-		}
-		if atomic.LoadInt32(&this.stop) == 1 {
-			conn.Close()
-			this.putPeer(p)
-			this.tcplistener.Close()
-			return errors.New("[Stream] accept ws connection error: server closed")
-		}
-		//disable system's keep alive probe
-		//use self's heartbeat probe
-		conn.SetKeepAlive(false)
-		rc, _ := conn.SyscallConn()
-		rc.Control(func(fd uintptr) {
-			p.fd = uint64(fd)
-		})
-		p.conn = unsafe.Pointer(conn)
-		p.setbuffer(int(this.c.WsC.SocketRBufLen), int(this.c.WsC.SocketWBufLen))
-		if p.reader == nil {
-			p.reader = bufio.NewReaderSize(conn, int(this.c.WsC.SocketRBufLen))
-		} else {
-			p.reader.Reset(conn)
-		}
-		go this.sworker(p, upgrader)
-	}
-}
 
 func (this *Instance) sworker(p *Peer, u *ws.Upgrader) {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	switch p.protocol {
-	case WS:
-		(*net.TCPConn)(p.conn).SetReadDeadline(time.Now().Add(this.c.WsC.ConnectTimeout))
-		(*net.TCPConn)(p.conn).SetWriteDeadline(time.Now().Add(this.c.WsC.ConnectTimeout))
-		if _, e := u.Upgrade((*net.TCPConn)(p.conn)); e != nil {
-			log.Error("[Stream.sworker] upgrade websocket error:", e)
-			return
-		}
-		ctx, cancel = context.WithTimeout(p, this.c.WsC.ConnectTimeout)
 	case TCP:
 		(*net.TCPConn)(p.conn).SetReadDeadline(time.Now().Add(this.c.TcpC.ConnectTimeout))
 		(*net.TCPConn)(p.conn).SetWriteDeadline(time.Now().Add(this.c.TcpC.ConnectTimeout))
@@ -188,17 +124,10 @@ func (this *Instance) sworker(p *Peer, u *ws.Upgrader) {
 		return
 	}
 	//verify client success,send self's verify message to client
-	var verifymsg *bufpool.Buffer
-	if p.protocol == WS {
-		verifymsg = makeVerifyMsg(p.servername, verifydata, p.sid, false)
-	} else {
-		verifymsg = makeVerifyMsg(p.servername, verifydata, p.sid, true)
-	}
+	verifymsg := makeVerifyMsg(p.servername, verifydata, p.sid)
 	defer bufpool.PutBuffer(verifymsg)
 	var e error
 	switch p.protocol {
-	case WS:
-		e = ws.WriteFrame((*net.TCPConn)(p.conn), ws.NewBinaryFrame(verifymsg.Bytes()))
 	case TCP:
 		_, e = (*net.TCPConn)(p.conn).Write(verifymsg.Bytes())
 	case UNIX:
@@ -297,17 +226,10 @@ func (this *Instance) StartUnixClient(serveraddr string, verifydata []byte) stri
 	return this.cworker(p, verifydata, dl)
 }
 
-// success return peeruniquename
-// fail return empty
-func (this *Instance) StartWsClient(serveraddr string, verifydata []byte) string {
-	return ""
-}
 func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	switch p.protocol {
-	case WS:
-		fallthrough
 	case TCP:
 		(*net.TCPConn)(p.conn).SetReadDeadline(dl)
 		(*net.TCPConn)(p.conn).SetWriteDeadline(dl)
@@ -319,12 +241,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 	}
 	defer cancel()
 	//send self's verify message to server
-	var verifymsg *bufpool.Buffer
-	if p.protocol == WS {
-		verifymsg = makeVerifyMsg(p.clientname, verifydata, 0, false)
-	} else {
-		verifymsg = makeVerifyMsg(p.clientname, verifydata, 0, true)
-	}
+	verifymsg := makeVerifyMsg(p.clientname, verifydata, 0)
 	defer bufpool.PutBuffer(verifymsg)
 	send := 0
 	num := 0
@@ -439,8 +356,6 @@ func (this *Instance) read(p *Peer) {
 	}()
 	//after verify,the conntimeout is useless,heartbeat will work for this
 	switch p.protocol {
-	case WS:
-		fallthrough
 	case TCP:
 		(*net.TCPConn)(p.conn).SetReadDeadline(time.Time{})
 	case UNIX:
@@ -454,7 +369,7 @@ func (this *Instance) read(p *Peer) {
 				e = errors.New("empty message")
 			} else {
 				msgtype, e = getMsgType(data.Bytes())
-				if e == nil && msgtype != PING && msgtype != PONG && msgtype != WSPING && msgtype != WSPONG && msgtype != USER {
+				if e == nil && msgtype != PING && msgtype != PONG && msgtype != USER {
 					e = errors.New("unknown msg type")
 				}
 			}
@@ -468,34 +383,17 @@ func (this *Instance) read(p *Peer) {
 		}
 		//deal message
 		switch msgtype {
-		case WSPING:
-			//update lastactive time
-			p.lastactive = time.Now().UnixNano()
-			//write back
-			pingdata, _ := getPingMsg(data.Bytes())
-			pongdata := makeWsPongMsg(pingdata)
-			p.pingpongbuffer <- pongdata
 		case PING:
 			//update lastactive time
 			p.lastactive = time.Now().UnixNano()
 			//write back
 			pingdata, _ := getPingMsg(data.Bytes())
-			var pongdata *bufpool.Buffer
-			if p.protocol == WS {
-				pongdata = makePongMsg(pingdata, false)
-			} else {
-				pongdata = makePongMsg(pingdata, true)
-			}
-			p.pingpongbuffer <- pongdata
-		case WSPONG:
-			fallthrough
+			p.pingpongbuffer <- makePongMsg(pingdata)
 		case PONG:
 			//update lastactive time
 			p.lastactive = time.Now().UnixNano()
 		case USER:
 			userdata, sid, _ := getUserMsg(data.Bytes())
-			log.Info(sid)
-			log.Info(p.sid)
 			if sid == p.sid {
 				//update lastactive time
 				p.lastactive = time.Now().UnixNano()
@@ -535,8 +433,6 @@ func (this *Instance) write(p *Peer) {
 	}()
 	//after verify,the conntimeout is useless,heartbeat will work for this
 	switch p.protocol {
-	case WS:
-		fallthrough
 	case TCP:
 		(*net.TCPConn)(p.conn).SetWriteDeadline(time.Time{})
 	case UNIX:
@@ -562,19 +458,6 @@ func (this *Instance) write(p *Peer) {
 		}
 		p.sendidlestart = time.Now().UnixNano()
 		switch p.protocol {
-		case WS:
-			t, _ := getMsgType(data.Bytes())
-			if t == WSPING {
-				//ws ping
-				pingdata, _ := getPingMsg(data.Bytes())
-				e = ws.WriteFrame((*net.TCPConn)(p.conn), ws.NewPingFrame(pingdata))
-			} else if t == WSPONG {
-				//ws pong
-				pongdata, _ := getPongMsg(data.Bytes())
-				e = ws.WriteFrame((*net.TCPConn)(p.conn), ws.NewPongFrame(pongdata))
-			} else {
-				e = ws.WriteFrame((*net.TCPConn)(p.conn), ws.NewBinaryFrame(data.Bytes()))
-			}
 		case TCP:
 			_, e = (*net.TCPConn)(p.conn).Write(data.Bytes())
 		case UNIX:

@@ -13,7 +13,7 @@ func Test_Msg(t *testing.T) {
 }
 
 func testheartmsg() {
-	data := makePingMsg([]byte("ping"), true)
+	data := makePingMsg([]byte("ping"))
 	msgtype, e := getMsgType(data.Bytes()[4:])
 	if e != nil {
 		panic("get msg type error:" + e.Error())
@@ -23,7 +23,7 @@ func testheartmsg() {
 	}
 }
 func testverifymsg() {
-	data := makeVerifyMsg("test", []byte{'t', 'e', 's', 't'}, 1654, true)
+	data := makeVerifyMsg("test", []byte{'t', 'e', 's', 't'}, 1654)
 	msgtype, e := getMsgType(data.Bytes()[4:])
 	if e != nil {
 		panic("get msg type error:" + e.Error())
@@ -40,7 +40,7 @@ func testverifymsg() {
 	}
 }
 func testusermsg() {
-	data := makeUserMsg([]byte{'a', 'b', 'c', 'd', 'e', 'f', 'g'}, 1654, true)
+	data := makeUserMsg([]byte{'a', 'b', 'c', 'd', 'e', 'f', 'g'}, 1654)
 	msgtype, e := getMsgType(data.Bytes()[4:])
 	if e != nil {
 		panic("get msg type error:" + e.Error())
