@@ -76,7 +76,7 @@ func (this *Instance) putPeer(p *Peer) {
 	p.servername = ""
 	p.peertype = 0
 	p.protocol = 0
-	p.starttime = 0
+	p.sid = 0
 	p.maxmsglen = 0
 	for len(p.writerbuffer) > 0 {
 		if v := <-p.writerbuffer; v != nil {
@@ -197,7 +197,7 @@ func (this *Instance) Stop() {
 	for _, group := range this.peergroups {
 		group.RLock()
 		for _, peer := range group.peers {
-			peer.Close(peer.starttime)
+			peer.Close(peer.sid)
 		}
 		group.RUnlock()
 	}
@@ -215,7 +215,7 @@ func (this *Instance) SendMessageAll(data []byte, block bool) {
 		for _, peer := range group.peers {
 			wg.Add(1)
 			go func(p *Peer) {
-				p.SendMessage(data, p.starttime, block)
+				p.SendMessage(data, p.sid, block)
 				wg.Done()
 			}(peer)
 		}
@@ -225,13 +225,13 @@ func (this *Instance) SendMessageAll(data []byte, block bool) {
 }
 
 func (this *Instance) heart(group *peergroup) {
-	tker := time.NewTicker(time.Duration(this.c.HeartprobeInterval) * time.Millisecond)
+	tker := time.NewTicker(this.c.HeartprobeInterval)
 	for {
 		<-tker.C
 		now := time.Now().UnixNano()
 		group.RLock()
 		for _, p := range group.peers {
-			if p.starttime <= 0 {
+			if p.sid <= 0 {
 				continue
 			}
 			templastactive := atomic.LoadInt64(&p.lastactive)
@@ -256,7 +256,12 @@ func (this *Instance) heart(group *peergroup) {
 				continue
 			}
 			//send heart beat data
-			data := makePingMsg(nil, true)
+			var data *bufpool.Buffer
+			if p.protocol == WS {
+				data = makeWsPingMsg(nil)
+			} else {
+				data = makePingMsg(nil, true)
+			}
 			select {
 			case p.pingpongbuffer <- data:
 			default:

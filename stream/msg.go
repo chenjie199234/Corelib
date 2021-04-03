@@ -13,6 +13,8 @@ const (
 	PONG
 	VERIFY
 	USER
+	WSPING
+	WSPONG
 )
 
 //   each row is one byte
@@ -25,7 +27,7 @@ func makePingMsg(pingdata []byte, needprefix bool) *bufpool.Buffer {
 	var data []byte
 	if needprefix {
 		buf.Grow(4 + 1 + len(pingdata))
-		binary.BigEndian.PutUint32(buf.Bytes(), 1)
+		binary.BigEndian.PutUint32(buf.Bytes(), uint32(1+len(pingdata)))
 		data = buf.Bytes()[4:]
 	} else {
 		buf.Grow(1 + len(pingdata))
@@ -37,6 +39,18 @@ func makePingMsg(pingdata []byte, needprefix bool) *bufpool.Buffer {
 	}
 	return buf
 }
+
+func makeWsPingMsg(pingdata []byte) *bufpool.Buffer {
+	buf := bufpool.GetBuffer()
+	buf.Grow(1 + len(pingdata))
+	buf.Bytes()[0] = byte(WSPING << 5)
+	if len(pingdata) > 0 {
+		copy(buf.Bytes()[1:], pingdata)
+	}
+	return buf
+}
+
+//data must without prefix
 func getPingMsg(data []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return nil, errors.New("empty message")
@@ -57,16 +71,30 @@ func makePongMsg(pongdata []byte, needprefix bool) *bufpool.Buffer {
 	var data []byte
 	if needprefix {
 		buf.Grow(4 + 1 + len(pongdata))
-		binary.BigEndian.PutUint32(buf.Bytes(), 1)
+		binary.BigEndian.PutUint32(buf.Bytes(), uint32(1+len(pongdata)))
 		data = buf.Bytes()[4:]
 	} else {
 		buf.Grow(1 + len(pongdata))
 		data = buf.Bytes()
 	}
 	data[0] = byte(PONG << 5)
-	copy(data[1:], pongdata)
+	if len(pongdata) > 0 {
+		copy(data[1:], pongdata)
+	}
 	return buf
 }
+
+func makeWsPongMsg(pongdata []byte) *bufpool.Buffer {
+	buf := bufpool.GetBuffer()
+	buf.Grow(1 + len(pongdata))
+	buf.Bytes()[0] = byte(WSPONG << 5)
+	if len(pongdata) > 0 {
+		copy(buf.Bytes()[1:], pongdata)
+	}
+	return buf
+}
+
+//data must without prefix
 func getPongMsg(data []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return nil, errors.New("empty message")
@@ -111,6 +139,8 @@ func makeVerifyMsg(sender string, verifydata []byte, starttime int64, needprefix
 	}
 	return buf
 }
+
+//data must without prefix
 func getVerifyMsg(data []byte) (string, []byte, int64, error) {
 	senderlen := int(data[0] ^ (VERIFY << 5))
 	if len(data) < (9 + senderlen) {
@@ -150,6 +180,8 @@ func makeUserMsg(userdata []byte, starttime int64, needprefix bool) *bufpool.Buf
 	}
 	return buf
 }
+
+//data must without prefix
 func getUserMsg(data []byte) ([]byte, int64, error) {
 	if len(data) <= 9 {
 		return nil, 0, errors.New("empty message")
@@ -157,27 +189,26 @@ func getUserMsg(data []byte) ([]byte, int64, error) {
 	return data[9:], int64(binary.BigEndian.Uint64(data[1:9])), nil
 }
 
+//data must without prefix
 func getMsgType(data []byte) (int, error) {
 	if len(data) == 0 {
 		return -1, errors.New("empty message")
 	}
-	switch {
-	case (data[0] >> 5) == PING:
-		return PING, nil
-	case (data[0] >> 5) == PONG:
-		return PONG, nil
-	case (data[0] >> 5) == VERIFY:
+	t := int(data[0] >> 5)
+	if t != PING && t != PONG && t != WSPING && t != WSPONG && t != VERIFY && t != USER {
+		//if t != PING && t != PONG && t != VERIFY && t != USER {
+		return -1, errors.New("unknown message type")
+	}
+	if t == VERIFY {
 		senderlen := int(data[0] ^ (VERIFY << 5))
 		if len(data) < (9 + senderlen) {
 			return -1, errors.New("empty message")
 		}
-		return VERIFY, nil
-	case (data[0] >> 5) == USER:
+	}
+	if t == USER {
 		if len(data) <= 9 {
 			return -1, errors.New("empty message")
 		}
-		return USER, nil
-	default:
-		return -1, errors.New("unknown message type")
 	}
+	return t, nil
 }

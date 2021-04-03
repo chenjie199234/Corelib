@@ -10,14 +10,14 @@ import (
 
 func Test_Server1(t *testing.T) {
 	instance, e := NewDiscoveryServer(&stream.InstanceConfig{
-		HeartbeatTimeout:   5 * time.Second,
-		HeartprobeInterval: 2 * time.Second,
-		GroupNum:           1,
+		HeartbeatTimeout:       5 * time.Second,
+		HeartprobeInterval:     2 * time.Second,
+		MaxBufferedWriteMsgNum: 256,
+		GroupNum:               1,
 		TcpC: &stream.TcpConfig{
-			ConnectTimeout:         500 * time.Millisecond,
-			SocketRBufLen:          1024,
-			SocketWBufLen:          1024,
-			MaxBufferedWriteMsgNum: 256,
+			ConnectTimeout: 500 * time.Millisecond,
+			SocketRBufLen:  1024,
+			SocketWBufLen:  1024,
 		},
 	}, "default", "discoverycenter1", []string{"test"})
 	if e != nil {
@@ -35,14 +35,14 @@ func Test_Server1(t *testing.T) {
 }
 func Test_Server2(t *testing.T) {
 	instance, e := NewDiscoveryServer(&stream.InstanceConfig{
-		HeartbeatTimeout:   5 * time.Second,
-		HeartprobeInterval: 2 * time.Second,
-		GroupNum:           1,
+		HeartbeatTimeout:       5 * time.Second,
+		HeartprobeInterval:     2 * time.Second,
+		MaxBufferedWriteMsgNum: 256,
+		GroupNum:               1,
 		TcpC: &stream.TcpConfig{
-			ConnectTimeout:         500 * time.Millisecond,
-			SocketRBufLen:          1024,
-			SocketWBufLen:          1024,
-			MaxBufferedWriteMsgNum: 256,
+			ConnectTimeout: 500 * time.Millisecond,
+			SocketRBufLen:  1024,
+			SocketWBufLen:  1024,
 		},
 	}, "default", "discoverycenter2", []string{"test"})
 	if e != nil {

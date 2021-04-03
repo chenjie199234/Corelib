@@ -103,14 +103,14 @@ func NewRpcServer(c *ServerConfig, selfgroup, selfname string) (*RpcServer, erro
 		stopch:  make(chan struct{}, 1),
 	}
 	instancec := &stream.InstanceConfig{
-		HeartbeatTimeout:   c.HeartTimeout,
-		HeartprobeInterval: c.HeartPorbe,
-		GroupNum:           c.GroupNum,
+		HeartbeatTimeout:       c.HeartTimeout,
+		HeartprobeInterval:     c.HeartPorbe,
+		MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
+		GroupNum:               c.GroupNum,
 		TcpC: &stream.TcpConfig{
-			SocketRBufLen:          c.SocketRBuf,
-			SocketWBufLen:          c.SocketWBuf,
-			MaxMsgLen:              c.MaxMsgLen,
-			MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
+			SocketRBufLen: c.SocketRBuf,
+			SocketWBufLen: c.SocketWBuf,
+			MaxMsgLen:     c.MaxMsgLen,
 		},
 	}
 	instancec.Verifyfunc = serverinstance.verifyfunc
@@ -281,7 +281,7 @@ func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerV
 	}
 	return nil, false
 }
-func (s *RpcServer) onlinefunc(p *stream.Peer, peeruniquename string, starttime int64) {
+func (s *RpcServer) onlinefunc(p *stream.Peer, peeruniquename string, sid int64) {
 	if atomic.LoadInt32(&s.status) != 1 {
 		d, _ := proto.Marshal(&Msg{
 			Callid: 0,
@@ -291,16 +291,16 @@ func (s *RpcServer) onlinefunc(p *stream.Peer, peeruniquename string, starttime 
 		case s.stopch <- struct{}{}:
 		default:
 		}
-		p.SendMessage(d, starttime, true)
+		p.SendMessage(d, sid, true)
 	} else {
 		log.Info("[rpc.server.onlinefunc] client:", peeruniquename, "online")
 	}
 }
-func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, starttime int64) {
+func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, sid int64) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		log.Error("[rpc.server.userfunc] client:", peeruniquename, "data format error:", e)
-		p.Close(starttime)
+		p.Close(sid)
 		return
 	}
 	go func() {
@@ -315,7 +315,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			msg.Error = ERRCLOSING.Error()
 			msg.Metadata = nil
 			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(d, starttime, true); e != nil {
+			if e := p.SendMessage(d, sid, true); e != nil {
 				log.Error("[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
 			}
 			return
@@ -328,7 +328,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			msg.Error = ERRNOAPI.Error()
 			msg.Metadata = nil
 			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(d, starttime, true); e != nil {
+			if e := p.SendMessage(d, sid, true); e != nil {
 				log.Error("[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
 			}
 			return
@@ -346,7 +346,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			msg.Metadata = nil
 			d, _ = proto.Marshal(msg)
 		}
-		if e := p.SendMessage(d, starttime, true); e != nil {
+		if e := p.SendMessage(d, sid, true); e != nil {
 			log.Error("[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
 		}
 		//double check server status

@@ -98,7 +98,7 @@ type ServerForPick struct {
 	discoveryservers []string //this app registered on which discovery server
 	lker             *sync.Mutex
 	peer             *stream.Peer
-	starttime        int64
+	sid              int64
 	status           int //0-idle,1-start,2-verify,3-connected,4-closing
 
 	//active calls
@@ -153,15 +153,15 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 		reqpool:     &sync.Pool{},
 	}
 	dupc := &stream.InstanceConfig{
-		HeartbeatTimeout:   c.HeartTimeout,
-		HeartprobeInterval: c.HeartPorbe,
-		GroupNum:           c.GroupNum,
+		HeartbeatTimeout:       c.HeartTimeout,
+		HeartprobeInterval:     c.HeartPorbe,
+		MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
+		GroupNum:               c.GroupNum,
 		TcpC: &stream.TcpConfig{
-			ConnectTimeout:         c.ConnTimeout,
-			SocketRBufLen:          c.SocketRBuf,
-			SocketWBufLen:          c.SocketWBuf,
-			MaxMsgLen:              c.MaxMsgLen,
-			MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
+			ConnectTimeout: c.ConnTimeout,
+			SocketRBufLen:  c.SocketRBuf,
+			SocketWBufLen:  c.SocketWBuf,
+			MaxMsgLen:      c.MaxMsgLen,
 		},
 	}
 	//tcp instalce
@@ -207,7 +207,7 @@ func (c *RpcClient) UpdateDiscovery(all map[string][]string, addition []byte) {
 				addr:             addr,
 				discoveryservers: discoveryservers,
 				peer:             nil,
-				starttime:        0,
+				sid:              0,
 				status:           1,
 				reqs:             make(map[uint64]*req, 10),
 				lker:             &sync.Mutex{},
@@ -352,7 +352,7 @@ func (c *RpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVe
 	}
 	exist.lker.Lock()
 	c.lker.RUnlock()
-	if exist.peer != nil || exist.starttime != 0 || exist.status != 1 {
+	if exist.peer != nil || exist.sid != 0 || exist.status != 1 {
 		exist.lker.Unlock()
 		return nil, false
 	}
@@ -360,7 +360,7 @@ func (c *RpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVe
 	exist.lker.Unlock()
 	return nil, true
 }
-func (c *RpcClient) onlinefunc(p *stream.Peer, appuniquename string, starttime int64) {
+func (c *RpcClient) onlinefunc(p *stream.Peer, appuniquename string, sid int64) {
 	c.lker.RLock()
 	var exist *ServerForPick
 	for _, existserver := range c.servers {
@@ -371,26 +371,26 @@ func (c *RpcClient) onlinefunc(p *stream.Peer, appuniquename string, starttime i
 	}
 	if exist == nil {
 		//this is impossible
-		p.Close(starttime)
+		p.Close(sid)
 		c.lker.RUnlock()
 		return
 	}
 	exist.lker.Lock()
 	c.lker.RUnlock()
-	if exist.peer != nil || exist.starttime != 0 || exist.status != 2 {
-		p.Close(starttime)
+	if exist.peer != nil || exist.sid != 0 || exist.status != 2 {
+		p.Close(sid)
 		exist.lker.Unlock()
 		return
 	}
 	exist.peer = p
-	exist.starttime = starttime
+	exist.sid = sid
 	exist.status = 3
 	p.SetData(unsafe.Pointer(exist))
 	log.Info("[rpc.client.onlinefunc] server:", appuniquename, "online")
 	exist.lker.Unlock()
 }
 
-func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, starttime int64) {
+func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, sid int64) {
 	server := (*ServerForPick)(p.GetData())
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
@@ -416,7 +416,6 @@ func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, 
 	server.lker.Unlock()
 }
 
-//func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string, starttime uint64) {
 func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string) {
 	server := (*ServerForPick)(p.GetData())
 	if server == nil {
@@ -425,7 +424,7 @@ func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string) {
 	log.Info("[rpc.client.offlinefunc] server:", appuniquename, "offline")
 	server.lker.Lock()
 	server.peer = nil
-	server.starttime = 0
+	server.sid = 0
 	//all req failed
 	for _, req := range server.reqs {
 		if req.callid != 0 {
@@ -504,7 +503,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 				return nil, ERRCTXTIMEOUT
 			}
 			//send message
-			if e := server.peer.SendMessage(d, server.starttime, false); e != nil {
+			if e := server.peer.SendMessage(d, server.sid, false); e != nil {
 				if e == stream.ERRMSGLENGTH {
 					server.lker.Unlock()
 					return nil, ERRREQMSGLARGE

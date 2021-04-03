@@ -34,14 +34,14 @@ func Test_Client1(t *testing.T) {
 	//        }
 	//}()
 	NewDiscoveryClient(&stream.InstanceConfig{
-		HeartbeatTimeout:   5 * time.Second,
-		HeartprobeInterval: 2 * time.Second,
-		GroupNum:           1,
+		HeartbeatTimeout:       5 * time.Second,
+		HeartprobeInterval:     2 * time.Second,
+		MaxBufferedWriteMsgNum: 256,
+		GroupNum:               1,
 		TcpC: &stream.TcpConfig{
-			ConnectTimeout:         500 * time.Millisecond,
-			SocketRBufLen:          1024,
-			SocketWBufLen:          1024,
-			MaxBufferedWriteMsgNum: 256,
+			ConnectTimeout: 500 * time.Millisecond,
+			SocketRBufLen:  1024,
+			SocketWBufLen:  1024,
 		},
 	}, "testgroup", "testclient1", "test", testfinder)
 	rch, _ := NoticeRpcChanges("testgroup.testclient2")
@@ -99,14 +99,14 @@ func Test_Client2(t *testing.T) {
 	//        }
 	//}()
 	NewDiscoveryClient(&stream.InstanceConfig{
-		HeartbeatTimeout:   5 * time.Second,
-		HeartprobeInterval: 2 * time.Second,
-		GroupNum:           1,
+		HeartbeatTimeout:       5 * time.Second,
+		HeartprobeInterval:     2 * time.Second,
+		MaxBufferedWriteMsgNum: 256,
+		GroupNum:               1,
 		TcpC: &stream.TcpConfig{
-			ConnectTimeout:         500 * time.Millisecond,
-			SocketRBufLen:          1024,
-			SocketWBufLen:          1024,
-			MaxBufferedWriteMsgNum: 256,
+			ConnectTimeout: 500 * time.Millisecond,
+			SocketRBufLen:  1024,
+			SocketWBufLen:  1024,
 		},
 	}, "testgroup", "testclient2", "test", testfinder)
 	rch, _ := NoticeRpcChanges("testgroup.testclient1")

@@ -18,17 +18,16 @@ type HandleVerifyFunc func(ctx context.Context, peeruniquename string, peerVerif
 
 //This is a notice after two peers verify each other success
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
-type HandleOnlineFunc func(p *Peer, peeruniquename string, starttime int64)
+type HandleOnlineFunc func(p *Peer, peeruniquename string, sid int64)
 
 //This is a func to deal the user message
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
 //Don't reuse 'data' in this function,the under layer data in 'data' will change when this function return
-type HandleUserdataFunc func(p *Peer, peeruniquename string, data []byte, starttime int64)
+type HandleUserdataFunc func(p *Peer, peeruniquename string, data []byte, sid int64)
 
 //This is a notice before two peers disconnect with each other
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
 //After this notice the peer is unknown,dont't use it anymore
-//type HandleOfflineFunc func(p *Peer, peeruniquename string, starttime uint64)
 type HandleOfflineFunc func(p *Peer, peeruniquename string)
 
 type TcpConfig struct {
@@ -41,15 +40,13 @@ type TcpConfig struct {
 	MaxMsgLen uint //min 1024,max 65535,default is max
 
 	//write buffer can store the messages in buffer and send async in another goruntine
-	MaxBufferedWriteMsgNum uint //default 256 num(not the byte)
 }
 
 var defaultTcpConfig = &TcpConfig{
-	ConnectTimeout:         500 * time.Millisecond,
-	SocketRBufLen:          1024,
-	SocketWBufLen:          1024,
-	MaxMsgLen:              65535,
-	MaxBufferedWriteMsgNum: 256,
+	ConnectTimeout: 500 * time.Millisecond,
+	SocketRBufLen:  1024,
+	SocketWBufLen:  1024,
+	MaxMsgLen:      65535,
 }
 
 func (c *TcpConfig) validate() {
@@ -74,9 +71,6 @@ func (c *TcpConfig) validate() {
 	if c.MaxMsgLen > 65535 {
 		c.MaxMsgLen = 65535
 	}
-	if c.MaxBufferedWriteMsgNum == 0 {
-		c.MaxBufferedWriteMsgNum = 256
-	}
 }
 
 type WsConfig struct {
@@ -87,17 +81,13 @@ type WsConfig struct {
 	SocketWBufLen uint //default 1024 byte,max 65535 byte
 
 	MaxMsgLen uint //min 1024,max 65535,default is max
-
-	//write buffer can store the messages in buffer and send async in another goruntine
-	MaxBufferedWriteMsgNum uint //default 256 num(not the byte)
 }
 
-var defaultWsConfig = &TcpConfig{
-	ConnectTimeout:         500 * time.Millisecond,
-	SocketRBufLen:          1024,
-	SocketWBufLen:          1024,
-	MaxMsgLen:              65535,
-	MaxBufferedWriteMsgNum: 256,
+var defaultWsConfig = &WsConfig{
+	ConnectTimeout: 500 * time.Millisecond,
+	SocketRBufLen:  1024,
+	SocketWBufLen:  1024,
+	MaxMsgLen:      65535,
 }
 
 func (c *WsConfig) validate() {
@@ -122,9 +112,6 @@ func (c *WsConfig) validate() {
 	if c.MaxMsgLen > 65535 {
 		c.MaxMsgLen = 65535
 	}
-	if c.MaxBufferedWriteMsgNum == 0 {
-		c.MaxBufferedWriteMsgNum = 256
-	}
 }
 
 type UnixConfig struct {
@@ -135,17 +122,13 @@ type UnixConfig struct {
 	SocketWBufLen uint //default 1024 byte,max 65535 byte
 
 	MaxMsgLen uint //min 1024,max 65535,default is max
-
-	//write buffer can store the messages in buffer and send async in another goruntine
-	MaxBufferedWriteMsgNum uint //default 256 num(not the byte)
 }
 
 var defaultUnixConfig = &UnixConfig{
-	ConnectTimeout:         500 * time.Millisecond,
-	SocketRBufLen:          1024,
-	SocketWBufLen:          1024,
-	MaxMsgLen:              65535,
-	MaxBufferedWriteMsgNum: 256,
+	ConnectTimeout: 500 * time.Millisecond,
+	SocketRBufLen:  1024,
+	SocketWBufLen:  1024,
+	MaxMsgLen:      65535,
 }
 
 func (c *UnixConfig) validate() {
@@ -170,9 +153,6 @@ func (c *UnixConfig) validate() {
 	if c.MaxMsgLen > 65535 {
 		c.MaxMsgLen = 65535
 	}
-	if c.MaxBufferedWriteMsgNum == 0 {
-		c.MaxBufferedWriteMsgNum = 256
-	}
 }
 
 type InstanceConfig struct {
@@ -186,6 +166,8 @@ type InstanceConfig struct {
 	RecvIdleTimeout time.Duration
 	//if this is not 0,this must > HeartprobeInterval,this is useful for slow read attact
 	SendIdleTimeout time.Duration //default HeartprobeInterval + (1 second)
+	//write buffer can store the messages in buffer and send async in another goruntine
+	MaxBufferedWriteMsgNum uint //default 256 num(not the byte)
 
 	//split connections into groups
 	//every group will have an independence RWMutex to control online and offline
@@ -194,6 +176,8 @@ type InstanceConfig struct {
 
 	//specify the tcp socket connection's config
 	TcpC *TcpConfig
+	//specify the web socket connection's config
+	WsC *WsConfig
 	//specify the unix socket connection's config
 	UnixC *UnixConfig
 
@@ -224,6 +208,9 @@ func (c *InstanceConfig) validate() {
 	if c.SendIdleTimeout <= c.HeartprobeInterval {
 		c.SendIdleTimeout = c.HeartprobeInterval + time.Second
 	}
+	if c.MaxBufferedWriteMsgNum == 0 {
+		c.MaxBufferedWriteMsgNum = 256
+	}
 	if c.GroupNum == 0 {
 		c.GroupNum = 1
 	}
@@ -231,6 +218,11 @@ func (c *InstanceConfig) validate() {
 		c.TcpC = defaultTcpConfig
 	} else {
 		c.TcpC.validate()
+	}
+	if c.WsC == nil {
+		c.WsC = defaultWsConfig
+	} else {
+		c.WsC.validate()
 	}
 	if c.UnixC == nil {
 		c.UnixC = defaultUnixConfig
