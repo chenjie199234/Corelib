@@ -14,9 +14,9 @@ var serverid uint64
 var rollback uint64
 
 //64bit data
-//00000000000000000000000000000000         000                000000                    00000000000000000000000
-//----32 bit timestamp(second)------3bit time rollback-----6bit serverid------------------------23bit id-------
-//-----can support 136 years--------rollback 8 times/s---can support 63 servers-----can make 8,000,000+ ids in one second
+//00000000000000000000000000000000         000000                000                    00000000000000000000000
+//----32 bit timestamp(second)----------6bit rollback-----3bit serverid------------------------23bit id-------
+//-----can support 136 years---------rollback 60 seconds---can support 8 servers-----can make 8,000,000+ ids in one second per server
 var base uint64
 
 var inited int64
@@ -26,17 +26,17 @@ func New(sid uint64) {
 	if atomic.SwapInt64(&inited, 1) == 1 {
 		return
 	}
-	if sid <= 0 || sid >= 64 {
-		panic(fmt.Sprintf("[ID.init]serviceid:%d range wrong,only support [1-63]", sid))
+	if sid < 0 || sid > 7 {
+		panic(fmt.Sprintf("[ID.init]serviceid:%d range wrong,only support [0-7]", sid))
 	}
 	serverid = sid
 	now := uint64(time.Now().Unix())
 	templasttime := now - offset
-	if now <= offset || templasttime > (1<<32-1) {
+	if now < offset || templasttime > (1<<32-1) {
 		panic("[ID.init]server time wrong")
 	}
 	lasttime = templasttime
-	rollback = 1
+	rollback = 0
 	base = getlasttime() + getrollback() + getserverid()
 	go func() {
 		tker := time.NewTicker(200 * time.Millisecond)
@@ -44,15 +44,20 @@ func New(sid uint64) {
 			<-tker.C
 			now = uint64(time.Now().Unix())
 			templasttime = now - offset
-			if now <= offset || templasttime > (1<<32-1) {
+			if now < offset || templasttime > (1<<32-1) {
 				panic("[ID.init]server time wrong")
 			}
-			if lasttime != templasttime {
-				if templasttime < lasttime {
-					rollback++
-					fmt.Printf("[ID.init]server time rollback,old time:%d current time:%d rollback:%d\n", lasttime, templasttime, rollback&7)
-				}
+			if templasttime > lasttime {
+				//refresh base
 				lasttime = templasttime
+				rollback = 0
+				base = getlasttime() + getrollback() + getserverid()
+			} else if templasttime < lasttime {
+				//rollback
+				rollback++
+				if rollback > 63 {
+					panic("[ID.init] server time rollback more then 60s")
+				}
 				base = getlasttime() + getrollback() + getserverid()
 			}
 		}
@@ -62,7 +67,7 @@ func getlasttime() uint64 {
 	return lasttime << 32
 }
 func getrollback() uint64 {
-	return (rollback & 7) << 29
+	return (rollback & 63) << 26
 }
 func getserverid() uint64 {
 	return serverid << 23
