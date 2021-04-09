@@ -9,12 +9,10 @@ enum MsgType{
 }
 message msg {
 	MsgType msg_type=1;
-	oneof msg_content {
-		RegMsg reg_msg=2;
-		UnregMsg unreg_msg=3;
-		WatchMsg watch_msg=4;
-		PushMsg push_msg=5;
-	}
+	RegMsg reg_msg=2;
+	UnregMsg unreg_msg=3;
+	WatchMsg watch_msg=4;
+	PushMsg push_msg=5;
 }
 message RegInfo{
 	string web_scheme=1;

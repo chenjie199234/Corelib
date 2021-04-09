@@ -220,10 +220,8 @@ func RegisterSelf(reginfo *RegInfo) error {
 			log.Info("[Discovery.client.RegisterSelf] reg to server:", serveruniquename, "with rpc:", reginfo.RpcPort, "web:", reginfo.WebScheme, reginfo.WebPort)
 			onlinemsg, _ := proto.Marshal(&Msg{
 				MsgType: MsgType_Reg,
-				MsgContent: &Msg_RegMsg{
-					RegMsg: &RegMsg{
-						RegInfo: reginfo,
-					},
+				RegMsg: &RegMsg{
+					RegInfo: reginfo,
 				},
 			})
 			server.peer.SendMessage(onlinemsg, server.sid, true)
@@ -260,10 +258,8 @@ func NoticeWebChanges(appname string) (chan struct{}, error) {
 	}
 	watchmsg, _ := proto.Marshal(&Msg{
 		MsgType: MsgType_Watch,
-		MsgContent: &Msg_WatchMsg{
-			WatchMsg: &WatchMsg{
-				AppName: appname,
-			},
+		WatchMsg: &WatchMsg{
+			AppName: appname,
 		},
 	})
 	instance.lker.RLock()
@@ -292,10 +288,8 @@ func NoticeRpcChanges(appname string) (chan struct{}, error) {
 	}
 	watchmsg, _ := proto.Marshal(&Msg{
 		MsgType: MsgType_Watch,
-		MsgContent: &Msg_WatchMsg{
-			WatchMsg: &WatchMsg{
-				AppName: appname,
-			},
+		WatchMsg: &WatchMsg{
+			AppName: appname,
 		},
 	})
 	instance.lker.RLock()
@@ -425,10 +419,8 @@ func (c *DiscoveryClient) onlinefunc(p *stream.Peer, serveruniquename string, si
 		log.Info("[Discovery.client.onlinefunc] reg to server:", serveruniquename, "with rpc:", server.reginfo.RpcPort, "web:", server.reginfo.WebScheme, server.reginfo.WebPort)
 		onlinemsg, _ := proto.Marshal(&Msg{
 			MsgType: MsgType_Reg,
-			MsgContent: &Msg_RegMsg{
-				RegMsg: &RegMsg{
-					RegInfo: server.reginfo,
-				},
+			RegMsg: &RegMsg{
+				RegInfo: server.reginfo,
 			},
 		})
 		server.peer.SendMessage(onlinemsg, server.sid, true)
@@ -445,10 +437,8 @@ func (c *DiscoveryClient) onlinefunc(p *stream.Peer, serveruniquename string, si
 	for k := range result {
 		watchmsg, _ := proto.Marshal(&Msg{
 			MsgType: MsgType_Watch,
-			MsgContent: &Msg_WatchMsg{
-				WatchMsg: &WatchMsg{
-					AppName: k,
-				},
+			WatchMsg: &WatchMsg{
+				AppName: k,
 			},
 		})
 		server.peer.SendMessage(watchmsg, server.sid, true)

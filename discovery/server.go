@@ -227,11 +227,9 @@ func (s *DiscoveryServer) userfunc(p *stream.Peer, appuniquename string, origind
 		node.status = s_REGISTERED
 		onlinemsg, _ := proto.Marshal(&Msg{
 			MsgType: MsgType_Reg,
-			MsgContent: &Msg_RegMsg{
-				RegMsg: &RegMsg{
-					AppUniqueName: appuniquename,
-					RegInfo:       reg.RegInfo,
-				},
+			RegMsg: &RegMsg{
+				AppUniqueName: appuniquename,
+				RegInfo:       reg.RegInfo,
 			},
 		})
 		for _, v := range node.bewatched {
@@ -283,11 +281,9 @@ func (s *DiscoveryServer) userfunc(p *stream.Peer, appuniquename string, origind
 		node.watched[watch.AppName] = struct{}{}
 		pushmsg, _ := proto.Marshal(&Msg{
 			MsgType: MsgType_Push,
-			MsgContent: &Msg_PushMsg{
-				PushMsg: &PushMsg{
-					AppName: watch.AppName,
-					Apps:    apps,
-				},
+			PushMsg: &PushMsg{
+				AppName: watch.AppName,
+				Apps:    apps,
 			},
 		})
 		node.peer.SendMessage(pushmsg, node.sid, true)
@@ -301,10 +297,8 @@ func (s *DiscoveryServer) userfunc(p *stream.Peer, appuniquename string, origind
 			if len(node.bewatched) > 0 {
 				offlinemsg, _ := proto.Marshal(&Msg{
 					MsgType: MsgType_UnReg,
-					MsgContent: &Msg_UnregMsg{
-						UnregMsg: &UnregMsg{
-							AppUniqueName: appuniquename,
-						},
+					UnregMsg: &UnregMsg{
+						AppUniqueName: appuniquename,
 					},
 				})
 				for _, watchedapp := range node.bewatched {
@@ -363,10 +357,8 @@ func (s *DiscoveryServer) offlinefunc(p *stream.Peer, appuniquename string) {
 	if node.status == s_REGISTERED && len(node.bewatched) > 0 {
 		offlinemsg, _ := proto.Marshal(&Msg{
 			MsgType: MsgType_UnReg,
-			MsgContent: &Msg_UnregMsg{
-				UnregMsg: &UnregMsg{
-					AppUniqueName: appuniquename,
-				},
+			UnregMsg: &UnregMsg{
+				AppUniqueName: appuniquename,
 			},
 		})
 		for _, v := range node.bewatched {
