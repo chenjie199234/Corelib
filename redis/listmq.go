@@ -153,12 +153,12 @@ return 0`
 var hpub = ""
 
 //key is used to decide which list will the value send to
-func (l *ListMQ) Pub(ctx context.Context, mqname string, listnum uint64, key string, value []byte) error {
+func (l *ListMQ) Pub(ctx context.Context, key string, value []byte) error {
 	c, e := l.p.GetContext(ctx)
 	if e != nil {
 		return e
 	}
-	listname := mqname + "_" + strconv.FormatUint(common.BkdrhashString(key, listnum), 10)
+	listname := l.name + "_" + strconv.FormatUint(common.BkdrhashString(key, l.num), 10)
 	var r int
 	if r, e = redis.Int(c.DoContext(ctx, "EVALSHA", hpub, 1, listname, value)); e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
 		r, e = redis.Int(c.DoContext(ctx, "EVAL", pub, 1, listname, value))
