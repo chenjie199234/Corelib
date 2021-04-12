@@ -38,17 +38,23 @@ func NewRedis(c *Config) *Pool {
 	return &Pool{
 		p: &redis.Pool{
 			DialContext: func(ctx context.Context) (redis.Conn, error) {
-				conn, e := redis.Dial("tcp", c.Addr, redis.DialReadTimeout(c.IOTimeout), redis.DialWriteTimeout(c.IOTimeout), redis.DialConnectTimeout(c.ConnTimeout))
+				if c.ConnTimeout > 0 {
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithTimeout(ctx, c.ConnTimeout)
+					defer cancel()
+				}
+				conn, e := redis.DialContext(ctx, "tcp", c.Addr, redis.DialReadTimeout(c.IOTimeout), redis.DialWriteTimeout(c.IOTimeout))
 				if e != nil {
 					return nil, e
 				}
+				cc := &Conn{c: conn}
 				if c.Username != "" && c.Password != "" {
-					if _, e = conn.Do("AUTH", c.Username, c.Password); e != nil {
+					if _, e = cc.DoContext(ctx, "AUTH", c.Username, c.Password); e != nil {
 						conn.Close()
 						return nil, e
 					}
 				} else if c.Password != "" {
-					if _, e = conn.Do("AUTH", c.Password); e != nil {
+					if _, e = cc.DoContext(ctx, "AUTH", c.Password); e != nil {
 						conn.Close()
 						return nil, e
 					}

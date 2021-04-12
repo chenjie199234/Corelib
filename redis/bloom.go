@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/chenjie199234/Corelib/util/common"
@@ -14,24 +15,44 @@ import (
 )
 
 type Bloom struct {
-	p        *redis.Pool
-	bitnum   uint64
-	groupnum uint64
-	bloomkey string
-	expire   int64
+	p      *Pool
+	c      *BloomConfig
+	bitnum uint64
+	expire int64
 }
 type BloomConfig struct {
-	//useful in cluster mode,to balance all nodes' request
-	//every group will have a key bloom[0-Groupnum)
-	//default 10
-	Groupnum uint64
+	// make sure don't use duplicate BloomName between different blooms
+	BloomName string
+	//Groupnum decide there are how many keys will be used in redis for this bloom
+	//this is useful to balance all redis nodes' request
+	//every special key will have a name like BloomName_[0,Groupnum)
+	Groupnum uint64 //default 10
 	//unit is byte
 	//single hash list's capacity in every group
 	//so this bloom will use memory: Capacity * hash_func_num(6) * Groupnum
-	//default 1024*1024(1M)
-	Capacity uint64
-	//default 30day
-	Expire time.Duration
+	Capacity uint64        //default 1024*1024(1M)
+	Expire   time.Duration //default 30day,min 1hour
+}
+
+func (c *BloomConfig) validate() error {
+	if c == nil {
+		return errors.New("config is empty")
+	}
+	if c.BloomName == "" {
+		return errors.New("BloomName is empty")
+	}
+	if c.Groupnum == 0 {
+		c.Groupnum = 10
+	}
+	if c.Capacity == 0 {
+		c.Capacity = 1024 * 1024
+	}
+	if c.Expire == 0 {
+		c.Expire = 30 * 24 * time.Hour
+	} else if c.Expire < time.Hour {
+		c.Expire = time.Hour
+	}
+	return nil
 }
 
 func init() {
@@ -50,7 +71,7 @@ then
 end
 redis.call("SET",KEYS[1],ARGV[1],"EX",ARGV[2])`
 
-var initlua = `local e,k1,k2,k3,k4,k5,k6="{"..KEYS[1].."}e","{"..KEYS[1].."}1","{"..KEYS[1].."}2","{"..KEYS[1].."}3","{"..KEYS[1].."}4","{"..KEYS[1].."}5","{"..KEYS[1].."}6"
+var initlua = `local e,k1,k2,k3,k4,k5,k6="{"..KEYS[1].."}_e","{"..KEYS[1].."}_bkdr","{"..KEYS[1].."}_djb","{"..KEYS[1].."}_fnv","{"..KEYS[1].."}_dek","{"..KEYS[1].."}_rs","{"..KEYS[1].."}_sdbm"
 if(redis.call("EXISTS",e)==0)
 then
 local r1=redis.call("SETBIT",k1,ARGV[1],1)
@@ -69,31 +90,21 @@ redis.call("EXPIRE",k6,ARGV[2])
 end`
 
 // NewRedisBitFilter -
-// make sure don't use duplicate bloomkey
-func (p *Pool) NewBloom(ctx context.Context, bloomkey string, c *BloomConfig) (*Bloom, error) {
+func (p *Pool) NewBloom(ctx context.Context, c *BloomConfig) (*Bloom, error) {
 	if p.p == nil {
 		return nil, errors.New("redis client not inited")
 	}
-	if bloomkey == "" {
-		return nil, errors.New("bloom key is empty")
-	}
-	if c.Groupnum == 0 {
-		c.Groupnum = 10
-	}
-	if c.Capacity == 0 {
-		c.Capacity = 1024 * 1024
-	}
-	if c.Expire == 0 {
-		c.Expire = 30 * 24 * time.Hour
+	if e := c.validate(); e != nil {
+		return nil, e
 	}
 	//check exist or not
 	var exist bool = true
 	d, _ := json.Marshal(c)
-	conn, e := p.p.GetContext(ctx)
+	conn, e := p.GetContext(ctx)
 	if e != nil {
 		return nil, e
 	}
-	cstr, e := redis.String(conn.Do("EVAL", existlua, 1, bloomkey, d, int64(c.Expire.Seconds())))
+	cstr, e := redis.String(conn.DoContext(ctx, "EVAL", existlua, 1, c.BloomName, d, int64(c.Expire.Seconds())))
 	if e != nil {
 		if e == redis.ErrNil {
 			exist = false
@@ -107,33 +118,32 @@ func (p *Pool) NewBloom(ctx context.Context, bloomkey string, c *BloomConfig) (*
 	c = &BloomConfig{}
 	if exist {
 		if e = json.Unmarshal([]byte(cstr), c); e != nil {
-			return nil, errors.New("bloom key conflict")
+			return nil, errors.New("BloomName conflict")
 		}
 		if c.Groupnum == 0 || c.Capacity == 0 || c.Expire < time.Hour {
-			return nil, errors.New("bloom key conflict")
+			return nil, errors.New("BloomName conflict")
 		}
 	}
 	instance := &Bloom{
-		p:        p.p,
-		bitnum:   c.Capacity * 8, //capacity's unit is byte,transform to bit
-		groupnum: c.Groupnum,
-		expire:   int64(c.Expire.Seconds()),
-		bloomkey: bloomkey,
+		p:      p,
+		c:      c,
+		bitnum: c.Capacity * 8,
+		expire: int64(c.Expire.Seconds()),
 	}
 	//init memory in redis
-	ch := make(chan error, instance.groupnum)
-	for i := uint64(0); i < instance.groupnum; i++ {
+	ch := make(chan error, c.Groupnum)
+	for i := uint64(0); i < c.Groupnum; i++ {
 		tempindex := i
 		go func() {
-			key := instance.bloomkey + strconv.FormatUint(tempindex, 10)
-			bit := instance.bitnum
-			conn, e := p.p.GetContext(ctx)
+			key := c.BloomName + "_" + strconv.FormatUint(tempindex, 10)
+			bit := c.Capacity * 8 //capacity's unit is byte,transform to bit
+			conn, e := p.GetContext(ctx)
 			if e != nil {
 				ch <- e
 				return
 			}
 			defer conn.Close()
-			_, e = conn.Do("EVAL", initlua, 1, key, bit, instance.expire)
+			_, e = conn.DoContext(ctx, "EVAL", initlua, 1, key, bit, int64(c.Expire.Seconds()))
 			if e != nil && e != redis.ErrNil {
 				ch <- e
 				return
@@ -141,7 +151,7 @@ func (p *Pool) NewBloom(ctx context.Context, bloomkey string, c *BloomConfig) (*
 			ch <- nil
 		}()
 	}
-	for i := uint64(0); i < instance.groupnum; i++ {
+	for i := uint64(0); i < c.Groupnum; i++ {
 		if e := <-ch; e != nil {
 			return nil, e
 		}
@@ -150,12 +160,12 @@ func (p *Pool) NewBloom(ctx context.Context, bloomkey string, c *BloomConfig) (*
 		if string(d) == cstr {
 			return instance, nil
 		}
-		return nil, errors.New("bloom key conflict")
+		return nil, errors.New("BloomName conflict")
 	}
 	return instance, nil
 }
 
-const setlua = `local e,k1,k2,k3,k4,k5,k6="{"..KEYS[1].."}e","{"..KEYS[1].."}1","{"..KEYS[1].."}2","{"..KEYS[1].."}3","{"..KEYS[1].."}4","{"..KEYS[1].."}5","{"..KEYS[1].."}6"
+const setlua = `local e,k1,k2,k3,k4,k5,k6="{"..KEYS[1].."}_e","{"..KEYS[1].."}_bkdr","{"..KEYS[1].."}_djb","{"..KEYS[1].."}_fnv","{"..KEYS[1].."}_dek","{"..KEYS[1].."}_rs","{"..KEYS[1].."}_sdbm"
 if(redis.call("EXISTS",e)==0)
 then
 	return -1
@@ -200,20 +210,20 @@ func (b *Bloom) Set(ctx context.Context, key string) (bool, error) {
 		return false, e
 	}
 	defer c.Close()
-	r, e := redis.Int(c.Do("EVALSHA", hsetlua, 1, filterkey, bit1, bit2, bit3, bit4, bit5, bit6, b.expire))
-	if e != nil && e.Error() == "NOSCRIPT No matching script. Please use EVAL." {
-		r, e = redis.Int(c.Do("EVAL", setlua, 1, filterkey, bit1, bit2, bit3, bit4, bit5, bit6, b.expire))
+	r, e := redis.Int(c.DoContext(ctx, "EVALSHA", hsetlua, 1, filterkey, bit1, bit2, bit3, bit4, bit5, bit6, b.expire))
+	if e != nil && strings.Contains(e.Error(), "NOSCRIPT") {
+		r, e = redis.Int(c.DoContext(ctx, "EVAL", setlua, 1, filterkey, bit1, bit2, bit3, bit4, bit5, bit6, b.expire))
 	}
 	if e != nil {
 		return false, e
 	}
 	if r == -1 {
-		return false, errors.New("bloom key expired")
+		return false, errors.New("bloom expired")
 	}
 	return r == 0, nil
 }
 
-var checklua = `local e,k1,k2,k3,k4,k5,k6="{"..KEYS[1].."}e","{"..KEYS[1].."}1","{"..KEYS[1].."}2","{"..KEYS[1].."}3","{"..KEYS[1].."}4","{"..KEYS[1].."}5","{"..KEYS[1].."}6"
+var checklua = `local e,k1,k2,k3,k4,k5,k6="{"..KEYS[1].."}_e","{"..KEYS[1].."}_bkdr","{"..KEYS[1].."}_djb","{"..KEYS[1].."}_fnv","{"..KEYS[1].."}_dek","{"..KEYS[1].."}_rs","{"..KEYS[1].."}_sdbm"
 if(redis.call("EXISTS",e)==0)
 then
 	return -1
@@ -258,19 +268,19 @@ func (b *Bloom) Check(ctx context.Context, key string) (bool, error) {
 		return false, e
 	}
 	defer c.Close()
-	r, e := redis.Int(c.Do("EVALSHA", hchecklua, 1, filterkey, bit1, bit2, bit3, bit4, bit5, bit6, b.expire))
-	if e != nil && e.Error() == "NOSCRIPT No matching script. Please use EVAL." {
-		r, e = redis.Int(c.Do("EVAL", checklua, 1, filterkey, bit1, bit2, bit3, bit4, bit5, bit6, b.expire))
+	r, e := redis.Int(c.DoContext(ctx, "EVALSHA", hchecklua, 1, filterkey, bit1, bit2, bit3, bit4, bit5, bit6, b.expire))
+	if e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
+		r, e = redis.Int(c.DoContext(ctx, "EVAL", checklua, 1, filterkey, bit1, bit2, bit3, bit4, bit5, bit6, b.expire))
 	}
 	if e != nil {
 		return false, e
 	}
 	if r == -1 {
-		return false, errors.New("bloom key expired")
+		return false, errors.New("bloom expired")
 	}
 	return r == 0, nil
 }
 
 func (b *Bloom) getbloomkey(userkey string) string {
-	return b.bloomkey + strconv.FormatUint(common.BkdrhashString(userkey, uint64(b.groupnum)), 10)
+	return b.c.BloomName + "_" + strconv.FormatUint(common.BkdrhashString(userkey, uint64(b.c.Groupnum)), 10)
 }
