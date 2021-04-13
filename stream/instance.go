@@ -175,7 +175,10 @@ func (this *Instance) Stop() {
 		group.RUnlock()
 	}
 	//prevent notice block on empty chan
-	this.noticech <- nil
+	select {
+	case this.noticech <- nil:
+	default:
+	}
 	<-this.closech
 }
 func (this *Instance) GetSelfName() string {
