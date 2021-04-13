@@ -266,6 +266,8 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	return instance, nil
 }
 
+var ErrServerClosed = errors.New("[web.server] closed")
+
 //certkeys mapkey: cert path,mapvalue: key path
 func (this *WebServer) StartWebServer(listenaddr string, certkeys map[string]string) error {
 	if !atomic.CompareAndSwapInt32(&this.status, 0, 1) {
@@ -296,6 +298,9 @@ func (this *WebServer) StartWebServer(listenaddr string, certkeys map[string]str
 		e = this.s.Serve(l)
 	}
 	if e != nil {
+		if e == http.ErrServerClosed {
+			return ErrServerClosed
+		}
 		return errors.New("[web.server] serve error:" + e.Error())
 	}
 	return nil

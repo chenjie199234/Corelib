@@ -15,6 +15,8 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
+var ErrServerClosed = errors.New("[Stream.server] closed")
+
 func (this *Instance) StartTcpServer(listenaddr string) error {
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
@@ -28,13 +30,18 @@ func (this *Instance) StartTcpServer(listenaddr string) error {
 		p := this.getPeer(TCP, CLIENT, this.c.MaxBufferedWriteMsgNum, this.c.TcpC.MaxMsgLen, this.selfname)
 		conn, e := this.tcplistener.AcceptTCP()
 		if e != nil {
+			this.putPeer(p)
+			this.tcplistener.Close()
+			if atomic.LoadInt32(&this.stop) == 1 {
+				return ErrServerClosed
+			}
 			return errors.New("[Stream] accept tcp connection error:" + e.Error())
 		}
 		if atomic.LoadInt32(&this.stop) == 1 {
 			conn.Close()
 			this.putPeer(p)
 			this.tcplistener.Close()
-			return errors.New("[Stream] accept tcp connection error: server closed")
+			return ErrServerClosed
 		}
 		//disable system's keep alive probe
 		//use self's heartbeat probe
@@ -66,13 +73,18 @@ func (this *Instance) StartUnixServer(listenaddr string) error {
 		p := this.getPeer(UNIX, CLIENT, this.c.MaxBufferedWriteMsgNum, this.c.UnixC.MaxMsgLen, this.selfname)
 		conn, e := this.unixlistener.AcceptUnix()
 		if e != nil {
+			this.putPeer(p)
+			this.unixlistener.Close()
+			if atomic.LoadInt32(&this.stop) == 1 {
+				return ErrServerClosed
+			}
 			return errors.New("[Stream] accept unix connection error:" + e.Error())
 		}
 		if atomic.LoadInt32(&this.stop) == 1 {
 			conn.Close()
 			this.putPeer(p)
 			this.unixlistener.Close()
-			return errors.New("[Stream] accept unix connection error: server closed")
+			return ErrServerClosed
 		}
 		rc, _ := conn.SyscallConn()
 		rc.Control(func(fd uintptr) {
