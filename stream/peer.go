@@ -15,42 +15,6 @@ import (
 	"github.com/chenjie199234/Corelib/bufpool"
 )
 
-type protocol int
-
-const (
-	TCP protocol = iota + 1
-	UNIX
-)
-
-func (p protocol) protoname() string {
-	switch p {
-	case TCP:
-		return "tcp"
-	case UNIX:
-		return "unix"
-	default:
-		return ""
-	}
-}
-
-type peertype int
-
-const (
-	CLIENT peertype = iota + 1
-	SERVER
-)
-
-func (t peertype) typename() string {
-	switch t {
-	case CLIENT:
-		return "client"
-	case SERVER:
-		return "server"
-	default:
-		return ""
-	}
-}
-
 var (
 	ERRCONNCLOSED  = errors.New("connection is closed")
 	ERRMSGLENGTH   = errors.New("message length error")
@@ -64,17 +28,14 @@ type peergroup struct {
 
 type Peer struct {
 	parentgroup    *peergroup
-	clientname     string
-	servername     string
-	peertype       peertype
-	protocol       protocol
+	peername       string
 	sid            int64 //'<0'---(closing),'0'---(closed),'>0'---(connected)
 	maxmsglen      uint
 	reader         *bufio.Reader
 	writerbuffer   chan *bufpool.Buffer
 	pingpongbuffer chan *bufpool.Buffer
 	conn           unsafe.Pointer
-	fd             uint64
+	fd             uint64         //this will be used when this is a unixsocket connection
 	lastactive     int64          //unixnano timestamp
 	recvidlestart  int64          //unixnano timestamp
 	sendidlestart  int64          //unixnano timestamp
@@ -84,43 +45,40 @@ type Peer struct {
 }
 
 func (p *Peer) getUniqueName() string {
-	var name, addr string
-	switch p.peertype {
-	case CLIENT:
-		name = p.clientname
-	case SERVER:
-		name = p.servername
-	}
-	switch p.protocol {
-	case TCP:
+	var addr string
+	if p.fd == 0 {
+		//tcp
 		addr = (*net.TCPConn)(p.conn).RemoteAddr().String()
-	case UNIX:
+	} else {
+		//unix
 		addr = "fd:" + strconv.FormatUint(p.fd, 10)
 	}
-	if name == "" {
+	if p.peername == "" {
 		return addr
 	}
-	return name + ":" + addr
+	return p.peername + ":" + addr
 }
 
 //closeconn close the under layer socket
 func (p *Peer) closeconn() {
 	if p.conn != nil {
-		switch p.protocol {
-		case TCP:
+		if p.fd == 0 {
+			//tcp
 			(*net.TCPConn)(p.conn).Close()
-		case UNIX:
+		} else {
+			//unix
 			(*net.UnixConn)(p.conn).Close()
 		}
 	}
 }
 
 func (p *Peer) setbuffer(readnum, writenum int) {
-	switch p.protocol {
-	case TCP:
+	if p.fd == 0 {
+		//tcp
 		(*net.TCPConn)(p.conn).SetReadBuffer(readnum)
 		(*net.TCPConn)(p.conn).SetWriteBuffer(writenum)
-	case UNIX:
+	} else {
+		//unix
 		(*net.UnixConn)(p.conn).SetReadBuffer(readnum)
 		(*net.UnixConn)(p.conn).SetWriteBuffer(writenum)
 	}

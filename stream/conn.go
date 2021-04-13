@@ -27,7 +27,7 @@ func (this *Instance) StartTcpServer(listenaddr string) error {
 		return errors.New("[Stream] listen tcp addr:" + listenaddr + " error:" + e.Error())
 	}
 	for {
-		p := this.getPeer(TCP, CLIENT, this.c.MaxBufferedWriteMsgNum, this.c.TcpC.MaxMsgLen, this.selfname)
+		p := this.getPeer(this.c.MaxBufferedWriteMsgNum, this.c.TcpC.MaxMsgLen)
 		conn, e := this.tcplistener.AcceptTCP()
 		if e != nil {
 			this.putPeer(p)
@@ -46,10 +46,6 @@ func (this *Instance) StartTcpServer(listenaddr string) error {
 		//disable system's keep alive probe
 		//use self's heartbeat probe
 		conn.SetKeepAlive(false)
-		rc, _ := conn.SyscallConn()
-		rc.Control(func(fd uintptr) {
-			p.fd = uint64(fd)
-		})
 		p.conn = unsafe.Pointer(conn)
 		p.setbuffer(int(this.c.TcpC.SocketRBufLen), int(this.c.TcpC.SocketWBufLen))
 		if p.reader == nil {
@@ -70,7 +66,7 @@ func (this *Instance) StartUnixServer(listenaddr string) error {
 		return errors.New("[Stream] listen unix addr:" + listenaddr + " error:" + e.Error())
 	}
 	for {
-		p := this.getPeer(UNIX, CLIENT, this.c.MaxBufferedWriteMsgNum, this.c.UnixC.MaxMsgLen, this.selfname)
+		p := this.getPeer(this.c.MaxBufferedWriteMsgNum, this.c.UnixC.MaxMsgLen)
 		conn, e := this.unixlistener.AcceptUnix()
 		if e != nil {
 			this.putPeer(p)
@@ -104,26 +100,27 @@ func (this *Instance) StartUnixServer(listenaddr string) error {
 func (this *Instance) sworker(p *Peer) {
 	var ctx context.Context
 	var cancel context.CancelFunc
-	switch p.protocol {
-	case TCP:
+	if p.fd == 0 {
+		//tcp
 		(*net.TCPConn)(p.conn).SetReadDeadline(time.Now().Add(this.c.TcpC.ConnectTimeout))
 		(*net.TCPConn)(p.conn).SetWriteDeadline(time.Now().Add(this.c.TcpC.ConnectTimeout))
 		ctx, cancel = context.WithTimeout(p, this.c.TcpC.ConnectTimeout)
-	case UNIX:
+	} else {
+		//unix
 		(*net.UnixConn)(p.conn).SetReadDeadline(time.Now().Add(this.c.UnixC.ConnectTimeout))
 		(*net.UnixConn)(p.conn).SetWriteDeadline(time.Now().Add(this.c.UnixC.ConnectTimeout))
 		ctx, cancel = context.WithTimeout(p, this.c.UnixC.ConnectTimeout)
 	}
 	defer cancel()
 	//read first verify message from client
-	verifydata := this.verifypeer(ctx, p)
-	if p.clientname == "" {
+	verifydata := this.verifypeer(ctx, p, false)
+	if p.peername == "" {
 		p.closeconn()
 		this.putPeer(p)
 		return
 	}
 	if !this.addPeer(p) {
-		log.Error("[Stream.sworker] dup", p.protocol.protoname(), "connection from client:", p.getUniqueName())
+		log.Error("[Stream.sworker] dup connection from client:", p.getUniqueName())
 		p.closeconn()
 		this.putPeer(p)
 		return
@@ -135,17 +132,18 @@ func (this *Instance) sworker(p *Peer) {
 		return
 	}
 	//verify client success,send self's verify message to client
-	verifymsg := makeVerifyMsg(p.servername, verifydata, p.sid)
+	verifymsg := makeVerifyMsg(this.selfname, verifydata, p.sid)
 	defer bufpool.PutBuffer(verifymsg)
 	var e error
-	switch p.protocol {
-	case TCP:
+	if p.fd == 0 {
+		//tcp
 		_, e = (*net.TCPConn)(p.conn).Write(verifymsg.Bytes())
-	case UNIX:
+	} else {
+		//unix
 		_, e = (*net.UnixConn)(p.conn).Write(verifymsg.Bytes())
 	}
 	if e != nil {
-		log.Error("[Stream.sworker] write verify msg to", p.protocol.protoname(), "client:", p.getUniqueName(), "error:", e)
+		log.Error("[Stream.sworker] write verify msg to client:", p.getUniqueName(), "error:", e)
 		p.closeconn()
 		//after addpeer should use this way to delete this peer
 		this.noticech <- p
@@ -185,11 +183,7 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) strin
 	//disable system's tcp keep alive probe
 	//use self's heartbeat probe
 	(conn.(*net.TCPConn)).SetKeepAlive(false)
-	p := this.getPeer(TCP, SERVER, this.c.MaxBufferedWriteMsgNum, this.c.TcpC.MaxMsgLen, this.selfname)
-	rc, _ := conn.(*net.TCPConn).SyscallConn()
-	rc.Control(func(fd uintptr) {
-		p.fd = uint64(fd)
-	})
+	p := this.getPeer(this.c.MaxBufferedWriteMsgNum, this.c.TcpC.MaxMsgLen)
 	p.conn = unsafe.Pointer(conn.(*net.TCPConn))
 	p.setbuffer(int(this.c.TcpC.SocketRBufLen), int(this.c.TcpC.SocketWBufLen))
 	if p.reader == nil {
@@ -222,7 +216,7 @@ func (this *Instance) StartUnixClient(serveraddr string, verifydata []byte) stri
 		log.Error("[Stream] dial unix server error:", e)
 		return ""
 	}
-	p := this.getPeer(UNIX, SERVER, this.c.MaxBufferedWriteMsgNum, this.c.UnixC.MaxMsgLen, this.selfname)
+	p := this.getPeer(this.c.MaxBufferedWriteMsgNum, this.c.UnixC.MaxMsgLen)
 	rc, _ := conn.(*net.UnixConn).SyscallConn()
 	rc.Control(func(fd uintptr) {
 		p.fd = uint64(fd)
@@ -240,48 +234,45 @@ func (this *Instance) StartUnixClient(serveraddr string, verifydata []byte) stri
 func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 	var ctx context.Context
 	var cancel context.CancelFunc
-	switch p.protocol {
-	case TCP:
+	if p.fd == 0 {
+		//tcp
 		(*net.TCPConn)(p.conn).SetReadDeadline(dl)
 		(*net.TCPConn)(p.conn).SetWriteDeadline(dl)
 		ctx, cancel = context.WithDeadline(p, dl)
-	case UNIX:
+	} else {
+		//unix
 		(*net.UnixConn)(p.conn).SetReadDeadline(dl)
 		(*net.UnixConn)(p.conn).SetWriteDeadline(dl)
 		ctx, cancel = context.WithDeadline(p, dl)
 	}
 	defer cancel()
 	//send self's verify message to server
-	verifymsg := makeVerifyMsg(p.clientname, verifydata, 0)
+	verifymsg := makeVerifyMsg(this.selfname, verifydata, 0)
 	defer bufpool.PutBuffer(verifymsg)
-	send := 0
-	num := 0
 	var e error
-	for send < verifymsg.Len() {
-		switch p.protocol {
-		case TCP:
-			num, e = (*net.TCPConn)(p.conn).Write(verifymsg.Bytes()[send:])
-		case UNIX:
-			num, e = (*net.UnixConn)(p.conn).Write(verifymsg.Bytes()[send:])
-		}
-		if e != nil {
-			log.Error("[Stream.cworker] write verify msg to", p.protocol.protoname(), "server:", p.getUniqueName(), "error:", e)
-			p.closeconn()
-			this.putPeer(p)
-			return ""
-		}
-		send += num
+	if p.fd == 0 {
+		//tcp
+		_, e = (*net.TCPConn)(p.conn).Write(verifymsg.Bytes())
+	} else {
+		//unix
+		_, e = (*net.UnixConn)(p.conn).Write(verifymsg.Bytes())
+	}
+	if e != nil {
+		log.Error("[Stream.cworker] write verify msg to server:", p.getUniqueName(), "error:", e)
+		p.closeconn()
+		this.putPeer(p)
+		return ""
 	}
 	//read first verify message from server
-	_ = this.verifypeer(ctx, p)
-	if p.servername == "" {
+	_ = this.verifypeer(ctx, p, true)
+	if p.peername == "" {
 		p.closeconn()
 		this.putPeer(p)
 		return ""
 	}
 	//verify server success
 	if !this.addPeer(p) {
-		log.Error("[Stream.cworker] dup", p.protocol.protoname(), "connection to server:", p.getUniqueName())
+		log.Error("[Stream.cworker] dup connection to server:", p.getUniqueName())
 		p.closeconn()
 		this.putPeer(p)
 		return ""
@@ -300,7 +291,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 	go this.write(p)
 	return uniquename
 }
-func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
+func (this *Instance) verifypeer(ctx context.Context, p *Peer, clientorserver bool) []byte {
 	data, e := p.readMessage()
 	var sender string
 	var peerverifydata []byte
@@ -314,14 +305,14 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 			if msgtype, e = getMsgType(data.Bytes()); e == nil {
 				if msgtype != VERIFY {
 					e = errors.New("first msg is not verify msg")
-				} else if sender, peerverifydata, sid, e = getVerifyMsg(data.Bytes()); e == nil && (sender == p.clientname || sender == p.servername) {
+				} else if sender, peerverifydata, sid, e = getVerifyMsg(data.Bytes()); e == nil && sender == this.selfname {
 					e = errors.New("sender name illegal")
 				}
 			}
 		}
 	}
 	if e != nil {
-		log.Error("[Stream.verifypeer] read msg from", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName(), "error:", e)
+		log.Error("[Stream.verifypeer] read msg from:", p.getUniqueName(), "error:", e)
 		return nil
 	}
 	p.lastactive = time.Now().UnixNano()
@@ -329,19 +320,18 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 	p.sendidlestart = p.lastactive
 	dup := make([]byte, len(sender))
 	copy(dup, sender)
-	switch p.peertype {
-	case CLIENT:
-		p.clientname = common.Byte2str(dup)
-		p.sid = p.lastactive
-	case SERVER:
-		p.servername = common.Byte2str(dup)
+	p.peername = common.Byte2str(dup)
+	if clientorserver {
+		//self is client
 		p.sid = sid
+	} else {
+		//self is server
+		p.sid = p.lastactive
 	}
 	response, success := this.c.Verifyfunc(ctx, p.getUniqueName(), peerverifydata)
 	if !success {
-		log.Error("[Stream.verifypeer]", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName(), "verify failed")
-		p.clientname = ""
-		p.servername = ""
+		log.Error("[Stream.verifypeer]", p.getUniqueName(), "verify failed")
+		p.peername = ""
 		return nil
 	}
 	return response
@@ -366,10 +356,11 @@ func (this *Instance) read(p *Peer) {
 		}
 	}()
 	//after verify,the conntimeout is useless,heartbeat will work for this
-	switch p.protocol {
-	case TCP:
+	if p.fd == 0 {
+		//tcp
 		(*net.TCPConn)(p.conn).SetReadDeadline(time.Time{})
-	case UNIX:
+	} else {
+		//unix
 		(*net.UnixConn)(p.conn).SetReadDeadline(time.Time{})
 	}
 	for {
@@ -386,7 +377,7 @@ func (this *Instance) read(p *Peer) {
 			}
 		}
 		if e != nil {
-			log.Error("[Stream.read] from", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName(), "error:", e)
+			log.Error("[Stream.read] from:", p.getUniqueName(), "error:", e)
 			if data != nil {
 				bufpool.PutBuffer(data)
 			}
@@ -443,10 +434,11 @@ func (this *Instance) write(p *Peer) {
 		}
 	}()
 	//after verify,the conntimeout is useless,heartbeat will work for this
-	switch p.protocol {
-	case TCP:
+	if p.fd == 0 {
+		//tcp
 		(*net.TCPConn)(p.conn).SetWriteDeadline(time.Time{})
-	case UNIX:
+	} else {
+		//unix
 		(*net.UnixConn)(p.conn).SetWriteDeadline(time.Time{})
 	}
 	var data *bufpool.Buffer
@@ -468,14 +460,15 @@ func (this *Instance) write(p *Peer) {
 			continue
 		}
 		p.sendidlestart = time.Now().UnixNano()
-		switch p.protocol {
-		case TCP:
+		if p.fd == 0 {
+			//tcp
 			_, e = (*net.TCPConn)(p.conn).Write(data.Bytes())
-		case UNIX:
+		} else {
+			//unix
 			_, e = (*net.UnixConn)(p.conn).Write(data.Bytes())
 		}
 		if e != nil {
-			log.Error("[Stream.write] to", p.protocol.protoname(), p.peertype.typename()+":", p.getUniqueName(), "error:", e)
+			log.Error("[Stream.write] to:", p.getUniqueName(), "error:", e)
 			return
 		}
 		bufpool.PutBuffer(data)
