@@ -140,7 +140,7 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 		stream.peergroups[i] = &peergroup{
 			peers: make(map[string]*Peer, 10),
 		}
-		go stream.heart(stream.peergroups[i])
+		go stream.heart(stream.peergroups[i], i)
 	}
 	go func() {
 		defer close(stream.closech)
@@ -200,10 +200,8 @@ func (this *Instance) SendMessageAll(data []byte, block bool) {
 	wg.Wait()
 }
 
-func (this *Instance) heart(group *peergroup) {
-	tker := time.NewTicker(this.c.HeartprobeInterval)
-	for {
-		<-tker.C
+func (this *Instance) heart(group *peergroup, index int) {
+	check := func() {
 		now := time.Now().UnixNano()
 		group.RLock()
 		for _, p := range group.peers {
@@ -242,8 +240,17 @@ func (this *Instance) heart(group *peergroup) {
 		}
 		group.RUnlock()
 	}
+	var tker *time.Ticker
+	delay := int64(float64(index) / float64(this.c.GroupNum) * float64(this.c.HeartprobeInterval.Nanoseconds()))
+	if delay != 0 {
+		time.Sleep(time.Duration(delay))
+		tker = time.NewTicker(this.c.HeartprobeInterval)
+		check()
+	} else {
+		tker = time.NewTicker(this.c.HeartprobeInterval)
+	}
+	for {
+		<-tker.C
+		check()
+	}
 }
-
-//func (this *Instance) getindex(peername string) uint {
-//        return uint(common.BkdrhashString(peername, uint64(this.c.GroupNum)))
-//}

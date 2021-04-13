@@ -120,12 +120,19 @@ func NewRpcServer(c *ServerConfig, selfgroup, selfname string) (*RpcServer, erro
 	serverinstance.instance, _ = stream.NewInstance(instancec, selfgroup, selfname)
 	return serverinstance, nil
 }
+
+var ErrServerClosed = errors.New("[rpc.server] closed")
+
 func (s *RpcServer) StartRpcServer(listenaddr string) error {
 	if !atomic.CompareAndSwapInt32(&s.status, 0, 1) {
 		return nil
 	}
 	log.Info("[rpc.server] start with verifydatas:", s.c.VerifyDatas)
-	return s.instance.StartTcpServer(listenaddr)
+	e := s.instance.StartTcpServer(listenaddr)
+	if e == stream.ErrServerClosed {
+		return ErrServerClosed
+	}
+	return e
 }
 func (s *RpcServer) StopRpcServer() {
 	if atomic.SwapInt32(&s.status, 2) == 2 {
