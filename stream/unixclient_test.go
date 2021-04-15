@@ -21,7 +21,7 @@ func Test_Unixclient(t *testing.T) {
 			unixclientinstance, _ := NewInstance(&InstanceConfig{
 				HeartbeatTimeout:   1500 * time.Millisecond,
 				HeartprobeInterval: 500 * time.Millisecond,
-				GroupNum:           10,
+				GroupNum:           1,
 				Verifyfunc:         unixclienthandleVerify,
 				Onlinefunc:         unixclienthandleonline,
 				Userdatafunc:       unixclienthandleuserdata,
