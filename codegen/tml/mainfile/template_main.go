@@ -39,7 +39,7 @@ func main() {
 	registerwg.Add(1)
 	wg.Add(1)
 	go func() {
-		xrpc.StartRpcServer()
+		xrpc.StartRpcServer(registerwg)
 		select {
 		case ch <- syscall.SIGTERM:
 		default:
@@ -50,7 +50,7 @@ func main() {
 	registerwg.Add(1)
 	wg.Add(1)
 	go func() {
-		xweb.StartWebServer()
+		xweb.StartWebServer(registerwg)
 		select {
 		case ch <- syscall.SIGTERM:
 		default:

@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -71,12 +72,6 @@ func (c *ClientConfig) validate() {
 	if c.MaxBufferedWriteMsgNum == 0 {
 		c.MaxBufferedWriteMsgNum = 256
 	}
-	if c.Picker == nil {
-		c.Picker = defaultPicker
-	}
-	if c.Discover == nil {
-		c.Discover = defaultDiscover
-	}
 }
 
 //appuniquename = appname:addr
@@ -140,7 +135,14 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 		return nil, e
 	}
 	if c == nil {
-		c = &ClientConfig{}
+		return nil, errors.New("[rpc.client] missing config")
+	}
+	if c.Discover == nil {
+		return nil, errors.New("[rpc.client] missing discover in config")
+	}
+	if c.Picker == nil {
+		log.Warning("[rpc.client] missing picker in config,default picker will be used")
+		c.Picker = defaultPicker
 	}
 	c.validate()
 	client := &RpcClient{

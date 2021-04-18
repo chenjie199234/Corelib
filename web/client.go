@@ -66,12 +66,6 @@ func (c *ClientConfig) validate() {
 	if c.SocketWBuf > 65535 {
 		c.SocketWBuf = 65535
 	}
-	if c.Picker == nil {
-		c.Picker = defaultPicker
-	}
-	if c.Discover == nil {
-		c.Discover = defaultDiscover
-	}
 }
 
 type WebClient struct {
@@ -124,7 +118,14 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 		return nil, e
 	}
 	if c == nil {
-		c = &ClientConfig{}
+		return nil, errors.New("[web.client] missing config")
+	}
+	if c.Discover == nil {
+		return nil, errors.New("[web.client] missing discover in config")
+	}
+	if c.Picker == nil {
+		log.Warning("[web.client] missing picker in config,default picker will be used")
+		c.Picker = defaultPicker
 	}
 	c.validate()
 	var certpool *x509.CertPool
