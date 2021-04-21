@@ -17,9 +17,9 @@ import (
 type Bloom struct {
 	p      *Pool
 	c      *BloomConfig
-	bitnum uint64
 	expire int64
 }
+
 type BloomConfig struct {
 	// make sure don't use duplicate BloomName between different blooms
 	BloomName string
@@ -27,10 +27,10 @@ type BloomConfig struct {
 	//this is useful to balance all redis nodes' request
 	//every special key will have a name like BloomName_[0,Groupnum)
 	Groupnum uint64 //default 10
-	//unit is byte
+	//unit is bit
 	//single hash list's capacity in every group
-	//so this bloom will use memory: Capacity * hash_func_num(6) * Groupnum
-	Capacity uint64        //default 1024*1024(1M)
+	//so this bloom will use memory: Capacity / 8 * hash_func_num(6) * Groupnum
+	Capacity uint64        //default 1024*1024*8(1M)
 	Expire   time.Duration //default 30day,min 1hour
 }
 
@@ -45,7 +45,7 @@ func (c *BloomConfig) validate() error {
 		c.Groupnum = 10
 	}
 	if c.Capacity == 0 {
-		c.Capacity = 1024 * 1024
+		c.Capacity = 1024 * 1024 * 8
 	}
 	if c.Expire == 0 {
 		c.Expire = 30 * 24 * time.Hour
@@ -71,29 +71,28 @@ then
 end
 redis.call("SET",KEYS[1],ARGV[1],"EX",ARGV[2])`
 
-var initlua = `local e,k1,k2,k3,k4,k5,k6="{"..KEYS[1].."}_e","{"..KEYS[1].."}_bkdr","{"..KEYS[1].."}_djb","{"..KEYS[1].."}_fnv","{"..KEYS[1].."}_dek","{"..KEYS[1].."}_rs","{"..KEYS[1].."}_sdbm"
-if(redis.call("EXISTS",e)==0)
+var initlua = `if(redis.call("EXISTS",KEYS[7])==0)
 then
-local r1=redis.call("SETBIT",k1,ARGV[1],1)
-local r2=redis.call("SETBIT",k2,ARGV[1],1)
-local r3=redis.call("SETBIT",k3,ARGV[1],1)
-local r4=redis.call("SETBIT",k4,ARGV[1],1)
-local r5=redis.call("SETBIT",k5,ARGV[1],1)
-local r6=redis.call("SETBIT",k6,ARGV[1],1)
-redis.call("SET",e,1,"EX",ARGV[2])
-redis.call("EXPIRE",k1,ARGV[2])
-redis.call("EXPIRE",k2,ARGV[2])
-redis.call("EXPIRE",k3,ARGV[2])
-redis.call("EXPIRE",k4,ARGV[2])
-redis.call("EXPIRE",k5,ARGV[2])
-redis.call("EXPIRE",k6,ARGV[2])
+local r1=redis.call("SETBIT",KEYS[1],ARGV[1],1)
+local r2=redis.call("SETBIT",KEYS[2],ARGV[1],1)
+local r3=redis.call("SETBIT",KEYS[3],ARGV[1],1)
+local r4=redis.call("SETBIT",KEYS[4],ARGV[1],1)
+local r5=redis.call("SETBIT",KEYS[5],ARGV[1],1)
+local r6=redis.call("SETBIT",KEYS[6],ARGV[1],1)
+redis.call("SET",KEYS[7],1,"EX",ARGV[2])
+redis.call("EXPIRE",KEYS[1],ARGV[2])
+redis.call("EXPIRE",KEYS[2],ARGV[2])
+redis.call("EXPIRE",KEYS[3],ARGV[2])
+redis.call("EXPIRE",KEYS[4],ARGV[2])
+redis.call("EXPIRE",KEYS[5],ARGV[2])
+redis.call("EXPIRE",KEYS[6],ARGV[2])
 end`
+
+var ErrBloomConflict = errors.New("bloom conflict")
+var ErrBloomExpired = errors.New("bloom expired")
 
 // NewRedisBitFilter -
 func (p *Pool) NewBloom(ctx context.Context, c *BloomConfig) (*Bloom, error) {
-	if p.p == nil {
-		return nil, errors.New("redis client not inited")
-	}
 	if e := c.validate(); e != nil {
 		return nil, e
 	}
@@ -114,20 +113,19 @@ func (p *Pool) NewBloom(ctx context.Context, c *BloomConfig) (*Bloom, error) {
 		}
 	}
 	conn.Close()
-	//if exist,use exist's config to replace this config
-	c = &BloomConfig{}
 	if exist {
-		if e = json.Unmarshal([]byte(cstr), c); e != nil {
-			return nil, errors.New("BloomName conflict")
+		//if exist,use exist's config to replace this config
+		c = &BloomConfig{}
+		if e = json.Unmarshal(common.Str2byte(cstr), c); e != nil {
+			return nil, ErrBloomConflict
 		}
 		if c.Groupnum == 0 || c.Capacity == 0 || c.Expire < time.Hour {
-			return nil, errors.New("BloomName conflict")
+			return nil, ErrBloomConflict
 		}
 	}
 	instance := &Bloom{
 		p:      p,
 		c:      c,
-		bitnum: c.Capacity * 8,
 		expire: int64(c.Expire.Seconds()),
 	}
 	//init memory in redis
@@ -136,14 +134,20 @@ func (p *Pool) NewBloom(ctx context.Context, c *BloomConfig) (*Bloom, error) {
 		tempindex := i
 		go func() {
 			key := c.BloomName + "_" + strconv.FormatUint(tempindex, 10)
-			bit := c.Capacity * 8 //capacity's unit is byte,transform to bit
+			keybkdr := "{" + key + "}_bkdr"
+			keydjb := "{" + key + "}_djb"
+			keyfnv := "{" + key + "}_fnv"
+			keydek := "{" + key + "}_dek"
+			keyrs := "{" + key + "}_rs"
+			keysdbm := "{" + key + "}_sdbm"
+			keyexist := "{" + key + "}_exist"
 			conn, e := p.GetContext(ctx)
 			if e != nil {
 				ch <- e
 				return
 			}
 			defer conn.Close()
-			_, e = conn.DoContext(ctx, "EVAL", initlua, 1, key, bit, int64(c.Expire.Seconds()))
+			_, e = conn.DoContext(ctx, "EVAL", initlua, 7, keybkdr, keydjb, keyfnv, keydek, keyrs, keysdbm, keyexist, c.Capacity, instance.expire)
 			if e != nil && e != redis.ErrNil {
 				ch <- e
 				return
@@ -160,30 +164,29 @@ func (p *Pool) NewBloom(ctx context.Context, c *BloomConfig) (*Bloom, error) {
 		if string(d) == cstr {
 			return instance, nil
 		}
-		return nil, errors.New("BloomName conflict")
+		return nil, ErrBloomConflict
 	}
 	return instance, nil
 }
 
-const setlua = `local e,k1,k2,k3,k4,k5,k6="{"..KEYS[1].."}_e","{"..KEYS[1].."}_bkdr","{"..KEYS[1].."}_djb","{"..KEYS[1].."}_fnv","{"..KEYS[1].."}_dek","{"..KEYS[1].."}_rs","{"..KEYS[1].."}_sdbm"
-if(redis.call("EXISTS",e)==0)
+const setlua = `if(redis.call("EXISTS",KEYS[7])==0)
 then
 	return -1
 end
-local r1=redis.call("SETBIT",k1,ARGV[1],1)
-local r2=redis.call("SETBIT",k2,ARGV[2],1)
-local r3=redis.call("SETBIT",k3,ARGV[3],1)
-local r4=redis.call("SETBIT",k4,ARGV[4],1)
-local r5=redis.call("SETBIT",k5,ARGV[5],1)
-local r6=redis.call("SETBIT",k6,ARGV[6],1)
-if(redis.call("EXISTS",e)==0)
+local r1=redis.call("SETBIT",KEYS[1],ARGV[1],1)
+local r2=redis.call("SETBIT",KEYS[2],ARGV[2],1)
+local r3=redis.call("SETBIT",KEYS[3],ARGV[3],1)
+local r4=redis.call("SETBIT",KEYS[4],ARGV[4],1)
+local r5=redis.call("SETBIT",KEYS[5],ARGV[5],1)
+local r6=redis.call("SETBIT",KEYS[6],ARGV[6],1)
+if(redis.call("EXISTS",KEYS[7])==0)
 then
-	redis.call("DEL",k1)
-	redis.call("DEL",k2)
-	redis.call("DEL",k3)
-	redis.call("DEL",k4)
-	redis.call("DEL",k5)
-	redis.call("DEL",k6)
+	redis.call("DEL",KEYS[1])
+	redis.call("DEL",kEYS[2])
+	redis.call("DEL",KEYS[3])
+	redis.call("DEL",KEYS[4])
+	redis.call("DEL",KEYS[5])
+	redis.call("DEL",KEYS[6])
 	return -1
 end
 if(r1==0 or r2==0 or r3==0 or r4==0 or r5==0 or r6==0)
@@ -197,51 +200,57 @@ var hsetlua string
 // Set add key into the bloom
 //true,this key is not in this bloom and add success
 //false,this key maybe already in this bloom,can't 100% confirm
-func (b *Bloom) Set(ctx context.Context, key string) (bool, error) {
-	filterkey := b.getbloomkey(key)
-	bit1 := common.BkdrhashString(key, b.bitnum)
-	bit2 := common.DjbhashString(key, b.bitnum)
-	bit3 := common.FnvhashString(key, b.bitnum)
-	bit4 := common.DekhashString(key, b.bitnum)
-	bit5 := common.RshashString(key, b.bitnum)
-	bit6 := common.SdbmhashString(key, b.bitnum)
+func (b *Bloom) Set(ctx context.Context, userkey string) (bool, error) {
+	key := b.c.BloomName + "_" + strconv.FormatUint(common.BkdrhashString(userkey, uint64(b.c.Groupnum)), 10)
+	keybkdr := "{" + key + "}_bkdr"
+	keydjb := "{" + key + "}_djb"
+	keyfnv := "{" + key + "}_fnv"
+	keydek := "{" + key + "}_dek"
+	keyrs := "{" + key + "}_rs"
+	keysdbm := "{" + key + "}_sdbm"
+	keyexist := "{" + key + "}_exist"
+	bit1 := common.BkdrhashString(key, b.c.Capacity)
+	bit2 := common.DjbhashString(key, b.c.Capacity)
+	bit3 := common.FnvhashString(key, b.c.Capacity)
+	bit4 := common.DekhashString(key, b.c.Capacity)
+	bit5 := common.RshashString(key, b.c.Capacity)
+	bit6 := common.SdbmhashString(key, b.c.Capacity)
 	c, e := b.p.GetContext(ctx)
 	if e != nil {
 		return false, e
 	}
 	defer c.Close()
-	r, e := redis.Int(c.DoContext(ctx, "EVALSHA", hsetlua, 1, filterkey, bit1, bit2, bit3, bit4, bit5, bit6, b.expire))
+	r, e := redis.Int(c.DoContext(ctx, "EVALSHA", hsetlua, 7, keybkdr, keydjb, keyfnv, keydek, keyrs, keysdbm, keyexist, bit1, bit2, bit3, bit4, bit5, bit6))
 	if e != nil && strings.Contains(e.Error(), "NOSCRIPT") {
-		r, e = redis.Int(c.DoContext(ctx, "EVAL", setlua, 1, filterkey, bit1, bit2, bit3, bit4, bit5, bit6, b.expire))
+		r, e = redis.Int(c.DoContext(ctx, "EVAL", setlua, 7, keybkdr, keydjb, keyfnv, keydek, keyrs, keysdbm, keyexist, bit1, bit2, bit3, bit4, bit5, bit6))
 	}
 	if e != nil {
 		return false, e
 	}
 	if r == -1 {
-		return false, errors.New("bloom expired")
+		return false, ErrBloomExpired
 	}
 	return r == 0, nil
 }
 
-var checklua = `local e,k1,k2,k3,k4,k5,k6="{"..KEYS[1].."}_e","{"..KEYS[1].."}_bkdr","{"..KEYS[1].."}_djb","{"..KEYS[1].."}_fnv","{"..KEYS[1].."}_dek","{"..KEYS[1].."}_rs","{"..KEYS[1].."}_sdbm"
-if(redis.call("EXISTS",e)==0)
+var checklua = `if(redis.call("EXISTS",KEYS[7])==0)
 then
 	return -1
 end
-local r1=redis.call("GETBIT",k1,ARGV[1])
-local r2=redis.call("GETBIT",k2,ARGV[2])
-local r3=redis.call("GETBIT",k3,ARGV[3])
-local r4=redis.call("GETBIT",k4,ARGV[4])
-local r5=redis.call("GETBIT",k5,ARGV[5])
-local r6=redis.call("GETBIT",k6,ARGV[6])
-if(redis.call("EXISTS",e)==0)
+local r1=redis.call("GETBIT",KEYS[1],ARGV[1])
+local r2=redis.call("GETBIT",KEYS[2],ARGV[2])
+local r3=redis.call("GETBIT",KEYS[3],ARGV[3])
+local r4=redis.call("GETBIT",KEYS[4],ARGV[4])
+local r5=redis.call("GETBIT",KEYS[5],ARGV[5])
+local r6=redis.call("GETBIT",KEYS[6],ARGV[6])
+if(redis.call("EXISTS",KEYS[7])==0)
 then
-	redis.call("DEL",k1)
-	redis.call("DEL",k2)
-	redis.call("DEL",k3)
-	redis.call("DEL",k4)
-	redis.call("DEL",k5)
-	redis.call("DEL",k6)
+	redis.call("DEL",KEYS[1])
+	redis.call("DEL",KEYS[2])
+	redis.call("DEL",KEYS[3])
+	redis.call("DEL",KEYS[4])
+	redis.call("DEL",KEYS[5])
+	redis.call("DEL",KEYS[6])
 	return -1
 end
 if(r1==0 or r2==0 or r3==0 or r4==0 or r5==0 or r6==0)
@@ -255,32 +264,35 @@ var hchecklua string
 // Check -
 //true,this key 100% not in this bloom
 //false,this key maybe in this bloom,can't 100% confirm
-func (b *Bloom) Check(ctx context.Context, key string) (bool, error) {
-	filterkey := b.getbloomkey(key)
-	bit1 := common.BkdrhashString(key, b.bitnum)
-	bit2 := common.DjbhashString(key, b.bitnum)
-	bit3 := common.FnvhashString(key, b.bitnum)
-	bit4 := common.DekhashString(key, b.bitnum)
-	bit5 := common.RshashString(key, b.bitnum)
-	bit6 := common.SdbmhashString(key, b.bitnum)
+func (b *Bloom) Check(ctx context.Context, userkey string) (bool, error) {
+	key := b.c.BloomName + "_" + strconv.FormatUint(common.BkdrhashString(userkey, uint64(b.c.Groupnum)), 10)
+	keybkdr := "{" + key + "}_bkdr"
+	keydjb := "{" + key + "}_djb"
+	keyfnv := "{" + key + "}_fnv"
+	keydek := "{" + key + "}_dek"
+	keyrs := "{" + key + "}_rs"
+	keysdbm := "{" + key + "}_sdbm"
+	keyexist := "{" + key + "}_exist"
+	bit1 := common.BkdrhashString(key, b.c.Capacity)
+	bit2 := common.DjbhashString(key, b.c.Capacity)
+	bit3 := common.FnvhashString(key, b.c.Capacity)
+	bit4 := common.DekhashString(key, b.c.Capacity)
+	bit5 := common.RshashString(key, b.c.Capacity)
+	bit6 := common.SdbmhashString(key, b.c.Capacity)
 	c, e := b.p.GetContext(ctx)
 	if e != nil {
 		return false, e
 	}
 	defer c.Close()
-	r, e := redis.Int(c.DoContext(ctx, "EVALSHA", hchecklua, 1, filterkey, bit1, bit2, bit3, bit4, bit5, bit6, b.expire))
+	r, e := redis.Int(c.DoContext(ctx, "EVALSHA", hchecklua, 7, keybkdr, keydjb, keyfnv, keydek, keyrs, keysdbm, keyexist, bit1, bit2, bit3, bit4, bit5, bit6))
 	if e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
-		r, e = redis.Int(c.DoContext(ctx, "EVAL", checklua, 1, filterkey, bit1, bit2, bit3, bit4, bit5, bit6, b.expire))
+		r, e = redis.Int(c.DoContext(ctx, "EVAL", checklua, 7, keybkdr, keydjb, keyfnv, keydek, keyrs, keysdbm, keyexist, bit1, bit2, bit3, bit4, bit5, bit6))
 	}
 	if e != nil {
 		return false, e
 	}
 	if r == -1 {
-		return false, errors.New("bloom expired")
+		return false, ErrBloomExpired
 	}
 	return r == 0, nil
-}
-
-func (b *Bloom) getbloomkey(userkey string) string {
-	return b.c.BloomName + "_" + strconv.FormatUint(common.BkdrhashString(userkey, uint64(b.c.Groupnum)), 10)
 }

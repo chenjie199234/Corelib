@@ -20,7 +20,7 @@ const (
 	httpPackage     = protogen.GoImportPath("net/http")
 	fmtPackage      = protogen.GoImportPath("fmt")
 	jsonPackage     = protogen.GoImportPath("encoding/json")
-	protoPackage    = protogen.GoImportPath("github.com/golang/protobuf/proto")
+	protoPackage    = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	contextPackage  = protogen.GoImportPath("context")
 	rpcPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/rpc")
 	commonPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
