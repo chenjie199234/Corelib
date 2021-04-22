@@ -13,3 +13,9 @@
 	日志
 ## superd
 	守护进程引擎,类似supervisor,fork子进程执行任务,可用于构建cicd平台,或者作为子进程监控器
+## discovery
+	服务注册和发现
+	https://github.com/chenjie199234/Discovery
+## config
+	配置中心
+	https://github.com/chenjie199234/Config
