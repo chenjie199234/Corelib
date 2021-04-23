@@ -15,9 +15,8 @@ import (
 )
 
 type Bloom struct {
-	p      *Pool
-	c      *BloomConfig
-	expire int64
+	p *Pool
+	c *BloomConfig
 }
 
 type BloomConfig struct {
@@ -124,9 +123,8 @@ func (p *Pool) NewBloom(ctx context.Context, c *BloomConfig) (*Bloom, error) {
 		}
 	}
 	instance := &Bloom{
-		p:      p,
-		c:      c,
-		expire: int64(c.Expire.Seconds()),
+		p: p,
+		c: c,
 	}
 	//init memory in redis
 	ch := make(chan error, c.Groupnum)
@@ -147,7 +145,7 @@ func (p *Pool) NewBloom(ctx context.Context, c *BloomConfig) (*Bloom, error) {
 				return
 			}
 			defer conn.Close()
-			_, e = conn.DoContext(ctx, "EVAL", initlua, 7, keybkdr, keydjb, keyfnv, keydek, keyrs, keysdbm, keyexist, c.Capacity, instance.expire)
+			_, e = conn.DoContext(ctx, "EVAL", initlua, 7, keybkdr, keydjb, keyfnv, keydek, keyrs, keysdbm, keyexist, c.Capacity, int64(c.Expire.Seconds()))
 			if e != nil && e != redis.ErrNil {
 				ch <- e
 				return

@@ -9,13 +9,12 @@ import (
 )
 
 func Test_Once(t *testing.T) {
-	o := NewSingleCall()
 	wg := new(sync.WaitGroup)
 	wg.Add(10)
 	for i := 0; i < 10; i++ {
 		go func() {
 			defer wg.Done()
-			r, e := o.Do("test", testcall)
+			r, e := Do("test", testcall)
 			if e != nil {
 				panic(e)
 			}
