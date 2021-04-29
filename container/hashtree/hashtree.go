@@ -4,15 +4,15 @@ package hashtree
 import (
 	"bytes"
 	"crypto/md5"
-	"fmt"
+	"errors"
 	"hash"
 	"math"
 	"unsafe"
 )
 
 var (
-	ERROUTOFRANGE      = fmt.Errorf("index out of range")
-	ERRDIFFERENTLENGTH = fmt.Errorf("length not equal")
+	ERROUTOFRANGE      = errors.New("index out of range")
+	ERRDIFFERENTLENGTH = errors.New("length not equal")
 )
 
 type Hashtree struct {

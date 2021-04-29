@@ -6,7 +6,7 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-//if error was not in merror format,code will return -1,msg will use the origin error.Error()
+//if error was not in this error's format,code will return -1,msg will use the origin error.Error()
 
 type Error struct {
 	Code int64  `json:"code"`

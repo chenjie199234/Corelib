@@ -1,7 +1,7 @@
 package id
 
 import (
-	"fmt"
+	"errors"
 	"sync/atomic"
 	"time"
 )
@@ -27,7 +27,7 @@ func New(sid uint64) {
 		return
 	}
 	if sid < 0 || sid > 7 {
-		panic(fmt.Sprintf("[ID.init]serviceid:%d range wrong,only support [0-7]", sid))
+		panic("[ID.init]serviceid range wrong,only support [0-7]")
 	}
 	serverid = sid
 	now := uint64(time.Now().Unix())
@@ -82,7 +82,7 @@ func checkserverid(id uint64) bool {
 	return false
 }
 
-var ERRMAX = fmt.Errorf("[ID.GetID]Max id was used up in this second")
+var ERRMAX = errors.New("[ID.GetID]Max id was used up in this second")
 
 func GetID() (uint64, error) {
 	if !checkserverid(base) {
@@ -95,7 +95,7 @@ func GetID() (uint64, error) {
 	return newid, nil
 }
 
-var ERRMAXONCE = fmt.Errorf("[ID.GetID]Too many ids required in once")
+var ERRMAXONCE = errors.New("[ID.GetID]Too many ids required once")
 
 func GetIDs(delta uint64) (start uint64, end uint64, e error) {
 	if delta > 5000 {

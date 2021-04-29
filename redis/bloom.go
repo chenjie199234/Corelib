@@ -55,10 +55,8 @@ func (c *BloomConfig) validate() error {
 }
 
 func init() {
-	//计算setlua脚本的hash值
 	h := sha1.Sum([]byte(setlua))
 	hsetlua = hex.EncodeToString(h[:])
-	//计算check脚本的hash值
 	h = sha1.Sum([]byte(checklua))
 	hchecklua = hex.EncodeToString(h[:])
 }
