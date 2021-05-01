@@ -58,6 +58,9 @@ func (d *Duration) UnmarshalText(data []byte) error {
 	}
 	return nil
 }
+func (d *Duration) StdDuration() time.Duration {
+	return time.Duration(*d)
+}
 func (t *Time) UnmarshalJSON(data []byte) error {
 	if data[0] == '"' && data[len(data)-1] == '"' {
 		if len(data) == 2 {
@@ -107,4 +110,7 @@ func (t *Time) UnmarshalText(data []byte) error {
 		return errors.New("format wrong for MTime,supported: \"2006-01-02 15:04:05\"(time zone is utc)/\"2006-01-02 15:04:05 +01(time zone is +01)\"")
 	}
 	return nil
+}
+func (t *Time) StdTime() time.Time {
+	return time.Time(*t)
 }
