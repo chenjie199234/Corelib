@@ -23,9 +23,6 @@ const textsource = `{
 		"idle_timeout":"5s",
 		"heart_probe":"1.5s",
 		"static_file":"./src",
-		"cert_key":{
-			"path_to_example_cert":"path_to_example_key"
-		},
 		"web_cors":{
 			"cors_origin":["*"],
 			"cors_header":["*"],

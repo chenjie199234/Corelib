@@ -127,12 +127,9 @@ metadata:
   labels:
     app: {{.ProjectName}}
 spec:
-  type: ClusterIP
+  type: ClusterIP{{ if .HeadlessService }}
+  clusterIP: None{{ end }}
   ports:
-  - name: webtls
-    protocol: TCP
-    port: 443
-    targetPort: 8001
   - name: web
     protocol: TCP
     port: 80
@@ -194,19 +191,27 @@ func CreatePathAndFile() {
 }
 
 type data struct {
-	ProjectName string
-	NameSpace   string
-	NeedService bool
-	NeedIngress bool
-	HostName    string
+	ProjectName     string
+	NameSpace       string
+	NeedService     bool
+	HeadlessService bool
+	NeedIngress     bool
+	HostName        string
 }
 
-func Execute(projectname string, namespace string, needservice bool, needingress bool, hostname string) {
+func Execute(projectname string, namespace string, needservice bool, needheadlessservice bool, needingress bool, hostname string) {
 	if e := dockerfiletml.Execute(dockerfilefile, projectname); e != nil {
 		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+dockerfilename, e))
 	}
-
-	if e := deploymenttml.Execute(deploymentfile, &data{ProjectName: projectname, NameSpace: namespace, NeedService: needservice, NeedIngress: needingress, HostName: hostname}); e != nil {
+	tempdata := &data{
+		ProjectName:     projectname,
+		NameSpace:       namespace,
+		NeedService:     needservice,
+		HeadlessService: needheadlessservice,
+		NeedIngress:     needingress,
+		HostName:        hostname,
+	}
+	if e := deploymenttml.Execute(deploymentfile, tempdata); e != nil {
 		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+deploymentname, e))
 	}
 }

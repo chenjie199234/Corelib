@@ -29,7 +29,7 @@ SERVER_VERIFY_DATA                      内部服务连接使用的校验数据,
 CONFIG_TYPE 				配置类型
 					0-使用本地配置,路径:./
 					1-使用k8s的configmap,路径:./k8sconfig
-					2-使用远程配置中心配置,路径./remoteconfig
+					2-使用远程配置中心配置,路径:./remoteconfig
 RUN_ENV 				当前运行环境,如:test,pre,prod
 DEPLOY_ENV 				部署环境,如:k8s,host
 $$$

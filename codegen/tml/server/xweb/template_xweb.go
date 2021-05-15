@@ -66,22 +66,13 @@ func StartWebServer(wg *sync.WaitGroup) {
 	//}
 
 	if config.EC.ServerVerifyDatas != nil {
-		if len(c.CertKey) > 0 {
-			e = discoverysdk.RegWeb(8000, "http")
-		} else {
-			e = discoverysdk.RegWeb(8001, "https")
-		}
-		if e != nil {
+		if e = discoverysdk.RegWeb(8000, "http"); e != nil {
 			log.Error("[xweb] register web to discovery server error:", e)
 			return
 		}
 	}
 	wg.Done()
-	addr := ":8000"
-	if len(c.CertKey) > 0 {
-		addr = ":8001"
-	}
-	if e = s.StartWebServer(addr, c.CertKey); e != nil {
+	if e = s.StartWebServer(":8000", nil); e != nil {
 		log.Error("[xweb] start error:", e)
 		return
 	}
