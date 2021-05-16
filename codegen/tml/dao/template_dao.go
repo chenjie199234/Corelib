@@ -37,7 +37,7 @@ func NewApi() error {
 	//        return e
 	//}
 
-	webc := getWebClientConfig()
+	webc := getWebClientConfig(true)
 	_ = webc //avoid unuse
 
 	//init web client below
@@ -66,9 +66,9 @@ func getRpcClientConfig() *rpc.ClientConfig {
 		Discover:               sdk.DefaultRpcDiscover,
 	}
 }
-func getWebClientConfig() *web.ClientConfig {
+func getWebClientConfig(kubernetesdns bool) *web.ClientConfig {
 	wc := config.GetWebClientConfig()
-	return &web.ClientConfig{
+	result := &web.ClientConfig{
 		GlobalTimeout: time.Duration(wc.GlobalTimeout),
 		IdleTimeout:   time.Duration(wc.IdleTimeout),
 		HeartProbe:    time.Duration(wc.HeartProbe),
@@ -79,6 +79,14 @@ func getWebClientConfig() *web.ClientConfig {
 		CAs:           wc.Cas,
 		Discover:      sdk.DefaultWebDiscover,
 	}
+	if kubernetesdns {
+		result.Discover = func(group, name string, client *web.WebClient) {
+			serveraddr := make(map[string][]string)
+			serveraddr[name+"-service."+group] = []string{"kubernetesdns"}
+			client.UpdateDiscovery(serveraddr, nil)
+		}
+	}
+	return result
 }`
 
 const path = "./dao/"

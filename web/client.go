@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -185,6 +186,19 @@ func (this *WebClient) UpdateDiscovery(all map[string][]string, addition []byte)
 	}
 	//check register
 	for host, discoveryservers := range all {
+		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+			continue
+		} else if host == "http://" {
+			continue
+		} else if host == "https://" {
+			continue
+		}
+		for len(host) > 0 && host[len(host)-1] == '/' {
+			host = host[:len(host)-1]
+		}
+		if len(host) <= 6 {
+			continue
+		}
 		if len(discoveryservers) == 0 {
 			continue
 		}
@@ -301,6 +315,9 @@ func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, pat
 	return this.call(http.MethodPatch, ctx, functimeout, pathwithquery, header, body)
 }
 func (this *WebClient) call(method string, ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body []byte) (*http.Response, error) {
+	if len(pathwithquery) == 0 || pathwithquery[0] != '/' {
+		pathwithquery = "/" + pathwithquery
+	}
 	if header == nil {
 		header = make(http.Header)
 	}
@@ -339,27 +356,12 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		if server == nil {
 			return nil, ERRNOSERVER
 		}
-		add := false
-		del := false
-		if server.host[len(server.host)-1] == '/' && pathwithquery[0] == '/' {
-			del = true
-		} else if server.host[len(server.host)-1] != '/' && pathwithquery[0] != '/' {
-			add = true
-		}
-		url := ""
-		if add {
-			url = server.host + "/" + pathwithquery
-		} else if del {
-			url = server.host + pathwithquery[1:]
-		} else {
-			url = server.host + pathwithquery
-		}
 		var req *http.Request
 		var e error
 		if body != nil {
-			req, e = http.NewRequestWithContext(ctx, method, url, bytes.NewBuffer(body))
+			req, e = http.NewRequestWithContext(ctx, method, server.host+pathwithquery, bytes.NewBuffer(body))
 		} else {
-			req, e = http.NewRequestWithContext(ctx, method, url, nil)
+			req, e = http.NewRequestWithContext(ctx, method, server.host+pathwithquery, nil)
 		}
 		if e != nil {
 			return nil, e
@@ -377,6 +379,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			server.closing = true
 			continue
 		}
+		server.closing = false
 		return resp, nil
 	}
 }
