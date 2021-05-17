@@ -22,6 +22,9 @@ import (
 )
 
 type ServerConfig struct {
+	//when server close,server will wait this time before close,every request will refresh the time,when this time is working
+	//min is 1 second
+	WaitCloseTime time.Duration
 	//request's max handling time
 	GlobalTimeout time.Duration
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
@@ -57,6 +60,9 @@ func (c *ServerConfig) validate() {
 			AllowCredentials: false,
 			MaxAge:           time.Hour * 24,
 		}
+	}
+	if c.WaitCloseTime < time.Second {
+		c.WaitCloseTime = time.Second
 	}
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
@@ -309,12 +315,12 @@ func (this *WebServer) StopWebServer() {
 	if atomic.SwapInt32(&this.status, 2) == 2 {
 		return
 	}
-	tmer := time.NewTimer(time.Second)
+	tmer := time.NewTimer(this.c.WaitCloseTime)
 	for {
 		select {
 		case <-tmer.C:
 			if this.reqnum != 0 {
-				tmer.Reset(time.Second)
+				tmer.Reset(this.c.WaitCloseTime)
 			} else {
 				this.s.Shutdown(context.Background())
 				return
@@ -323,7 +329,7 @@ func (this *WebServer) StopWebServer() {
 			if !tmer.Stop() {
 				<-tmer.C
 			}
-			tmer.Reset(time.Second)
+			tmer.Reset(this.c.WaitCloseTime)
 		}
 	}
 }
@@ -412,8 +418,6 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case this.stopch <- struct{}{}:
 		default:
 		}
-		w.WriteHeader(888)
-		return
 	}
 	//check required target server
 	if targetserver := r.Header.Get("TargetServer"); targetserver != "" && targetserver != this.selfappname {

@@ -82,7 +82,6 @@ type ServerForPick struct {
 	host             string
 	client           *http.Client
 	discoveryservers []string //this server registered on how many discoveryservers
-	closing          bool
 	Pickinfo         *pickinfo
 }
 type pickinfo struct {
@@ -91,10 +90,6 @@ type pickinfo struct {
 	DServers       int32  //this server registered on how many discoveryservers
 	DServerOffline int64  //
 	Addition       []byte //addition info register on register center
-}
-
-func (s *ServerForPick) Pickable() bool {
-	return !s.closing
 }
 
 func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*WebClient, error) {
@@ -376,10 +371,8 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		}
 		if resp.StatusCode == 888 {
 			atomic.StoreInt64(&server.Pickinfo.Lastfail, time.Now().UnixNano())
-			server.closing = true
 			continue
 		}
-		server.closing = false
 		return resp, nil
 	}
 }

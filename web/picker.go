@@ -11,10 +11,7 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 		return nil
 	}
 	if len(servers) == 1 {
-		if servers[0].Pickable() {
-			return servers[0]
-		}
-		return nil
+		return servers[0]
 	}
 	start := rand.Intn(len(servers))
 	i := start
@@ -26,21 +23,19 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 			break
 		}
 		first = false
-		if servers[i].Pickable() {
-			if servers[i].Pickinfo.DServers != 0 &&
-				servers[i].Pickinfo.DServerOffline < before.UnixNano() {
-				if normal1 == nil {
-					normal1 = servers[i]
-				} else {
-					normal2 = servers[i]
-					break
-				}
+		if servers[i].Pickinfo.DServers != 0 &&
+			servers[i].Pickinfo.DServerOffline < before.UnixNano() {
+			if normal1 == nil {
+				normal1 = servers[i]
 			} else {
-				if danger1 == nil {
-					danger1 = servers[i]
-				} else if danger2 == nil {
-					danger2 = servers[i]
-				}
+				normal2 = servers[i]
+				break
+			}
+		} else {
+			if danger1 == nil {
+				danger1 = servers[i]
+			} else if danger2 == nil {
+				danger2 = servers[i]
 			}
 		}
 		i++

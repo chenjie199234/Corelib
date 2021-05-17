@@ -21,7 +21,11 @@ import (
 type OutsideHandler func(ctx *Context)
 
 type ServerConfig struct {
-	GlobalTimeout          time.Duration //global timeout for every rpc call
+	//when server close,server will wait this time before close,every request will refresh the time,when this time is working
+	//min is 1 second
+	WaitCloseTime time.Duration
+	//global timeout for every rpc call
+	GlobalTimeout          time.Duration
 	HeartTimeout           time.Duration
 	HeartPorbe             time.Duration
 	GroupNum               uint
@@ -143,12 +147,12 @@ func (s *RpcServer) StopRpcServer() {
 		Error:  ERRCLOSING.Error(),
 	})
 	s.instance.SendMessageAll(d, true)
-	timer := time.NewTimer(time.Second)
+	timer := time.NewTimer(s.c.WaitCloseTime)
 	for {
 		select {
 		case <-timer.C:
 			if s.reqnum != 0 {
-				timer.Reset(time.Second)
+				timer.Reset(s.c.WaitCloseTime)
 			} else {
 				s.instance.Stop()
 				return
@@ -157,7 +161,7 @@ func (s *RpcServer) StopRpcServer() {
 			if !timer.Stop() {
 				<-timer.C
 			}
-			timer.Reset(time.Second)
+			timer.Reset(s.c.WaitCloseTime)
 		}
 	}
 }
