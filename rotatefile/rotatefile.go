@@ -36,7 +36,6 @@ type RotateFile struct {
 type Config struct {
 	Path        string
 	Name        string
-	Ext         string
 	RotateCap   uint //unit M
 	RotateCycle uint //0-off,1-hour,2-day,3-week,4-month
 	KeepDays    uint //unit day
@@ -66,12 +65,15 @@ func (f *RotateFile) putnode(n *node) {
 //rotatecycle 0-off,1-hour,2-day,3-week,4-month
 //keeydays unit day
 func NewRotateFile(c *Config) (*RotateFile, error) {
-	//create the first file
+	if c.Name == "" {
+		return nil, errors.New("[rotate file] init error:name is empty")
+	}
 	if c.Path == "" {
 		//default current dir
 		c.Path = "./"
 	}
-	tempfile, now, e := createfile(c.Path, c.Name, c.Ext)
+	//create the first file
+	tempfile, now, e := createfile(c.Path, c.Name)
 	if e != nil {
 		return nil, e
 	}
@@ -94,21 +96,15 @@ func NewRotateFile(c *Config) (*RotateFile, error) {
 	go rf.run()
 	return rf, nil
 }
-func createfile(path string, name string, ext string) (*os.File, *time.Time, error) {
+func createfile(path string, name string) (*os.File, *time.Time, error) {
 	for {
 		now := time.Now()
 		now = now.UTC()
 		var filename string
 		if name != "" {
-			filename = fmt.Sprintf("/%s_%s", now.Format("2006-01-02_15:04:05:000000000"), name)
+			filename = fmt.Sprintf("/%s_%s", now.Format("2006-01-02_15:04:05.000000000"), name)
 		} else {
-			filename = fmt.Sprintf("/%s", now.Format("2006-01-02_15:04:05:000000000"))
-		}
-		if ext != "" {
-			if ext[0] != '.' {
-				filename += "."
-			}
-			filename += ext
+			filename = fmt.Sprintf("/%s", now.Format("2006-01-02_15:04:05.000000000"))
 		}
 		_, e := os.Stat(path + filename)
 		if e == nil {
@@ -187,57 +183,20 @@ func (f *RotateFile) runcleaner() {
 		}
 		filename := filepath.Base(finfo.Name())
 		var timestr string
-		if f.c.Name != "" {
-			index1 := strings.Index(filename, "_")
-			if index1 == -1 {
-				continue
-			}
-			index2 := strings.Index(filename[index1+1:], "_")
-			if index2 == -1 {
-				continue
-			}
-			timestr = filename[:index1+index2+1]
-			reststr := filename[index1+index2+2:]
-			if !strings.HasPrefix(reststr, f.c.Name) {
-				continue
-			}
-			extstr := reststr[len(f.c.Name):]
-			if f.c.Ext == "" {
-				if extstr != "" {
-					continue
-				}
-			} else {
-				if extstr == "" {
-					continue
-				}
-				if extstr[0] != '.' {
-					continue
-				}
-				if extstr != f.c.Ext && extstr[1:] != f.c.Ext {
-					continue
-				}
-			}
-		} else {
-			index := strings.Index(filename, ".")
-			if index == -1 {
-				continue
-			}
-			timestr = filename[:index]
-			extstr := filename[index:]
-			if f.c.Ext == "" {
-				if extstr != "" {
-					continue
-				}
-			} else {
-				if extstr == "" {
-					continue
-				}
-				if extstr != f.c.Ext && extstr[1:] != f.c.Ext {
-					continue
-				}
-			}
+		index1 := strings.Index(filename, "_")
+		if index1 == -1 {
+			continue
 		}
-		t, e := time.Parse("2006-01-02_15:04:05:000000000", timestr)
+		index2 := strings.Index(filename[index1+1:], "_")
+		if index2 == -1 {
+			continue
+		}
+		timestr = filename[:index1+index2+1]
+		reststr := filename[index1+index2+2:]
+		if reststr != f.c.Name {
+			continue
+		}
+		t, e := time.Parse("2006-01-02_15:04:05.000000000", timestr)
 		if e != nil {
 			continue
 		}
@@ -274,9 +233,8 @@ func (f *RotateFile) runticker() {
 			need = true
 		}
 	}
-	need = true
 	if need {
-		tempfile, now, e := createfile(f.c.Path, f.c.Name, f.c.Ext)
+		tempfile, now, e := createfile(f.c.Path, f.c.Name)
 		if e != nil {
 			fmt.Println(e)
 			return
@@ -295,7 +253,7 @@ func (f *RotateFile) runwriter(data *bufpool.Buffer) {
 				bufpool.PutBuffer(data)
 				return
 			}
-			tempfile, now, e := createfile(f.c.Path, f.c.Name, f.c.Ext)
+			tempfile, now, e := createfile(f.c.Path, f.c.Name)
 			if e != nil {
 				fmt.Println(e)
 				bufpool.PutBuffer(data)

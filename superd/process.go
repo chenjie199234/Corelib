@@ -5,10 +5,12 @@ import (
 	"io"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
-	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/bufpool"
+	"github.com/chenjie199234/Corelib/rotatefile"
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
@@ -28,154 +30,117 @@ type process struct {
 	lker        *sync.RWMutex
 	stime       int64
 	status      int //0 closing,1 starting,2 working
-	branchname  string
-	tagname     string
-	commitid    string
+	binbranch   string
+	bintag      string
+	bincommitid string
 	restart     int
 	init        bool
+	logfile     *rotatefile.RotateFile
 	autorestart bool
 }
 
+func (p *process) log(datas ...interface{}) {
+	buf := bufpool.GetBuffer()
+	buf.Append(time.Now().Format("2006-01-02_15:04:06.000000000"))
+	for _, data := range datas {
+		buf.Append(" ")
+		buf.Append(data)
+	}
+	buf.Append("\n")
+	p.logfile.WriteBuf(buf)
+}
 func (p *process) startProcess() {
 	for {
-		p.g.lker.RLock()
-		if p.g.status == g_CLOSING {
-			p.g.lker.RUnlock()
-			break
+		//if !p.run() {
+		//break
+		//}
+		if p.bintag != "" {
+			p.log("[start] start with tag:", p.bintag, "commitid:", p.bincommitid, "logicpid:", p.logicpid, "restart:", p.restart, "cmd:", p.g.runcmd.Cmd, "args:", p.g.runcmd.Args, "env:", p.g.runcmd.Env)
+		} else {
+			p.log("[start] start with branch:", p.binbranch, "commitid:", p.bincommitid, "logicpid:", p.logicpid, "restart", p.restart, "cmd:", p.g.runcmd.Cmd, "args:", p.g.runcmd.Args, "env:", p.g.runcmd.Env)
 		}
-		if p.g.status == g_BUILDFAILED {
-			p.g.lker.RUnlock()
-			p.restart++
-			log.Error("[process.start] start in group:", p.g.name, "error:last build is failed")
-			if p.autorestart {
-				time.Sleep(time.Second)
-				continue
+		if p.run() {
+			p.output()
+			if e := p.cmd.Wait(); e != nil {
+				p.log("[start] exit process error:", e)
 			} else {
-				break
+				p.log("[start] exir process success")
 			}
 		}
 		p.lker.Lock()
-		if p.status == p_CLOSING {
+		if !p.autorestart || p.status == p_CLOSING {
 			p.lker.Unlock()
-			p.g.lker.RUnlock()
 			break
 		}
-		if p.g.branchname != p.branchname || p.g.tagname != p.tagname || p.g.commitid != p.commitid || p.init {
-			//a new build version
-			p.restart = 0
-			p.init = false
-		} else {
-			p.restart++
-		}
-
-		p.branchname = p.g.branchname
-		p.tagname = p.g.tagname
-		p.commitid = p.g.commitid
-		p.stime = time.Now().UnixNano()
-		p.cmd = exec.Command(p.g.runcmd.Cmd, p.g.runcmd.Args...)
-		p.cmd.Env = p.g.runcmd.Env
-		p.cmd.Dir = "./app/" + p.g.name
-		if p.tagname != "" {
-			log.Info("[process.start] start in group:", p.g.name, "tag:", p.tagname, "commitid:", p.commitid, "logicpid:", p.logicpid)
-		} else {
-			log.Info("[process.start] start in group:", p.g.name, "branch:", p.branchname, "commitid:", p.commitid, "logicpid:", p.logicpid)
-		}
-		out, e := p.cmd.StdoutPipe()
-		if e != nil {
-			p.lker.Unlock()
-			p.g.lker.RUnlock()
-			if p.tagname != "" {
-				log.Error("[process.start] in group:", p.g.name, "tag:", p.tagname, "commitid", p.commitid, "logicpid:", p.logicpid, "pipe stdout error:", e)
-			} else {
-				log.Error("[process.start] in group:", p.g.name, "branch:", p.branchname, "commitid", p.commitid, "logicpid:", p.logicpid, "pipe stdout error:", e)
-			}
-			if p.autorestart {
-				time.Sleep(time.Millisecond * 50)
-				continue
-			} else {
-				break
-			}
-		}
-		err, e := p.cmd.StderrPipe()
-		if e != nil {
-			p.lker.Unlock()
-			p.g.lker.RUnlock()
-			if p.tagname != "" {
-				log.Error("[process.start] in group:", p.g.name, "tag:", p.tagname, "commitid", p.commitid, "logicpid:", p.logicpid, "pipe stderr error:", e)
-			} else {
-				log.Error("[process.start] in group:", p.g.name, "branch:", p.branchname, "commitid", p.commitid, "logicpid:", p.logicpid, "pipe stderr error:", e)
-			}
-			if p.autorestart {
-				time.Sleep(time.Millisecond * 50)
-				continue
-			} else {
-				break
-			}
-		}
-		p.out = bufio.NewReaderSize(out, 4096)
-		p.err = bufio.NewReaderSize(err, 4096)
-		if e = p.cmd.Start(); e != nil {
-			p.lker.Unlock()
-			p.g.lker.RUnlock()
-			if p.tagname != "" {
-				log.Error("[process.start] in group:", p.g.name, "tag:", p.tagname, "commitid", p.commitid, "logicpid:", p.logicpid, "start new process error:", e)
-			} else {
-				log.Error("[process.start] in group:", p.g.name, "branch:", p.branchname, "commitid", p.commitid, "logicpid:", p.logicpid, "start new process error:", e)
-			}
-			if p.autorestart {
-				time.Sleep(time.Millisecond * 50)
-				continue
-			} else {
-				break
-			}
-		}
-		p.status = p_WORKING
+		p.status = p_STARTING
 		p.lker.Unlock()
-		p.g.lker.RUnlock()
-		p.log()
-		if e = p.cmd.Wait(); e != nil {
-			if p.tagname != "" {
-				log.Error("[process.start] in group:", p.g.name, "tag:", p.tagname, "commitid", p.commitid, "logicpid:", p.logicpid, "exit process error:", e)
-			} else {
-				log.Error("[process.start] in group:", p.g.name, "branch:", p.branchname, "commitid", p.commitid, "logicpid:", p.logicpid, "exit process error:", e)
-			}
-		} else {
-			if p.tagname != "" {
-				log.Info("[process.start] in group:", p.g.name, "tag:", p.tagname, "commitid", p.commitid, "logicpid:", p.logicpid, "exit process success")
-			} else {
-				log.Info("[process.start] in group:", p.g.name, "branch:", p.branchname, "commitid", p.commitid, "logicpid:", p.logicpid, "exit process success")
-
-			}
-		}
-		p.lker.Lock()
-		if p.autorestart && p.status == p_WORKING {
-			p.status = p_STARTING
-			p.lker.Unlock()
-			time.Sleep(time.Millisecond * 50)
-		} else {
-			p.status = p_CLOSING
-			p.lker.Unlock()
-		}
+		time.Sleep(time.Millisecond * 500)
 	}
+	p.logfile.Close()
 	p.g.notice <- p.logicpid
 }
-func (p *process) log() {
+func (p *process) run() bool {
+	if atomic.SwapInt32(&p.g.opstatus, 1) == 1 {
+		p.log("[run] can't run now,group is updating")
+		return false
+	}
+	defer atomic.StoreInt32(&p.g.opstatus, 0)
+	p.lker.Lock()
+	defer p.lker.Unlock()
+	if p.g.status == g_CLOSING || p.status == p_CLOSING {
+		p.log("[run] can't run now,group or process is closing")
+		return false
+	}
+	if p.g.status == g_BUILDFAILED || p.g.bincommitid == "" {
+		p.log("[run] can't run now,last build failed")
+		return true
+	}
+	if p.g.binbranch != p.binbranch || p.g.bintag != p.bintag || p.g.bincommitid != p.bincommitid || p.init {
+		//a new build version
+		p.restart = 0
+		p.init = false
+	} else {
+		p.restart++
+	}
+	p.binbranch = p.g.binbranch
+	p.bintag = p.g.bintag
+	p.bincommitid = p.g.bincommitid
+	p.stime = time.Now().UnixNano()
+	p.cmd = exec.Command(p.g.runcmd.Cmd, p.g.runcmd.Args...)
+	p.cmd.Env = p.g.runcmd.Env
+	p.cmd.Dir = "./app/" + p.g.name
+	out, e := p.cmd.StdoutPipe()
+	if e != nil {
+		p.log("[run] pipe stdout error:", e)
+		return false
+	}
+	err, e := p.cmd.StderrPipe()
+	if e != nil {
+		p.log("[run] pipe stderr error:", e)
+		return false
+	}
+	p.out = bufio.NewReaderSize(out, 4096)
+	p.err = bufio.NewReaderSize(err, 4096)
+	if e = p.cmd.Start(); e != nil {
+		p.log("[run] start new process error:", e)
+		return false
+	}
+	p.status = p_WORKING
+	return true
+}
+func (p *process) output() {
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
 		for {
 			line, _, e := p.out.ReadLine()
 			if e != nil && e != io.EOF {
-				if p.tagname != "" {
-					log.Error("[process.log] in group:", p.g.name, "tag:", p.tagname, "commitid", p.commitid, "logicpid:", p.logicpid, "read stdout error:", e)
-				} else {
-					log.Error("[process.log] in group:", p.g.name, "branch:", p.branchname, "commitid", p.commitid, "logicpid:", p.logicpid, "read stdout error:", e)
-				}
+				p.log("[output] read stdout error:", e)
 				break
 			} else if e != nil {
 				break
 			}
-			p.g.log(p.logicpid, p.branchname, p.tagname, p.commitid[:8], common.Byte2str(line))
+			p.log("[output] ", common.Byte2str(line))
 		}
 		wg.Done()
 	}()
@@ -183,16 +148,12 @@ func (p *process) log() {
 		for {
 			line, _, e := p.err.ReadLine()
 			if e != nil && e != io.EOF {
-				if p.tagname != "" {
-					log.Error("[process.log] in group:", p.g.name, "tag:", p.tagname, "commitid", p.commitid, "logicpid:", p.logicpid, "read stderr error:", e)
-				} else {
-					log.Error("[process.log] in group:", p.g.name, "branch:", p.branchname, "commitid", p.commitid, "logicpid:", p.logicpid, "read stderr error:", e)
-				}
+				p.log("[output] read stderr error:", e)
 				break
 			} else if e != nil {
 				break
 			}
-			p.g.log(p.logicpid, p.branchname, p.tagname, p.commitid[:8], common.Byte2str(line))
+			p.log("[output] ", common.Byte2str(line))
 		}
 		wg.Done()
 	}()
@@ -202,7 +163,6 @@ func (p *process) restartProcess() {
 	p.lker.Lock()
 	defer p.lker.Unlock()
 	if p.status == p_WORKING && p.cmd != nil {
-		p.restart = 0
 		p.init = true
 		p.cmd.Process.Signal(syscall.SIGTERM)
 	}

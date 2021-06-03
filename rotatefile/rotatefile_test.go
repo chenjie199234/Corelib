@@ -8,8 +8,7 @@ import (
 func Test_RotateFile(t *testing.T) {
 	c := &Config{
 		Path:        "./log",
-		Name:        "",
-		Ext:         ".log",
+		Name:        "test",
 		RotateCap:   1,
 		RotateCycle: 1,
 		KeepDays:    1,
@@ -18,6 +17,6 @@ func Test_RotateFile(t *testing.T) {
 	if e != nil {
 		panic(e)
 	}
-	//time.Sleep(10 * time.Second)
-	time.Sleep(time.Second)
+	time.Sleep(10 * time.Second)
+	//time.Sleep(time.Second)
 }

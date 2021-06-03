@@ -7,7 +7,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/rotatefile"
 	"github.com/chenjie199234/Corelib/util/common"
 )
@@ -19,7 +18,6 @@ const (
 
 //struct
 type Super struct {
-	c         *GroupConfig
 	processid uint64
 	lker      *sync.RWMutex
 	groups    map[string]*group
@@ -27,34 +25,15 @@ type Super struct {
 	notice    chan string
 	closech   chan struct{}
 }
-type GroupConfig struct {
-	SuperName      string
-	LogRotateCap   uint //unit M
-	LogRotateCycle uint //0-off,1-hour,2-day,3-week,4-month
-	LogKeepDays    uint //unit day
-}
 
 //maxlogsize unit M
-func NewSuper(c *GroupConfig) (*Super, error) {
-	if c.SuperName == "" {
-		c.SuperName = "super"
-	}
+func NewSuper() *Super {
 	instance := &Super{
-		c:       c,
 		lker:    new(sync.RWMutex),
 		groups:  make(map[string]*group, 5),
 		status:  s_WORKING,
 		notice:  make(chan string, 100),
 		closech: make(chan struct{}, 1),
-	}
-	var e error
-	//app dir
-	if e = dirop("./app"); e != nil {
-		return nil, e
-	}
-	//app stdout and stderr log dir
-	if e = dirop("./app_log"); e != nil {
-		return nil, e
 	}
 	go func() {
 		defer func() {
@@ -66,7 +45,6 @@ func NewSuper(c *GroupConfig) (*Super, error) {
 				if !ok {
 					return
 				}
-				log.Info("[super.group] stop group:", groupname)
 				instance.lker.Lock()
 				delete(instance.groups, groupname)
 				if instance.status == s_CLOSING && len(instance.groups) == 0 {
@@ -77,7 +55,7 @@ func NewSuper(c *GroupConfig) (*Super, error) {
 			}
 		}
 	}()
-	return instance, nil
+	return instance
 }
 func (s *Super) CloseSuper() {
 	s.lker.Lock()
@@ -90,7 +68,7 @@ func (s *Super) CloseSuper() {
 		close(s.notice)
 	} else {
 		for _, g := range s.groups {
-			go g.closeGroup()
+			go g.stopGroup(true)
 		}
 	}
 	s.lker.Unlock()
@@ -117,7 +95,7 @@ type Cmd struct {
 	Env  []string `json:"env"`
 }
 
-func (s *Super) CreateGroup(groupname, appname, url string, buildcmds []*Cmd, runcmd *Cmd, logkeepdays uint64) error {
+func (s *Super) CreateGroup(groupname, appname, url string, buildcmds []*Cmd, runcmd *Cmd) error {
 	//check group name
 	if e := common.NameCheck(appname, false, true, false, true); e != nil {
 		return e
@@ -132,22 +110,22 @@ func (s *Super) CreateGroup(groupname, appname, url string, buildcmds []*Cmd, ru
 	s.lker.Lock()
 	defer s.lker.Unlock()
 	if s.status == s_CLOSING {
-		return errors.New("[create group] Superd is closing")
+		return errors.New("[create] Superd is closing")
 	}
 	g, ok := s.groups[fullappname]
 	if !ok {
 		var e error
-		if e = os.RemoveAll("./app_log"); e != nil {
-			return errors.New("[create group] remove old dir error:" + e.Error())
+		if e = os.RemoveAll("./app_log/" + fullappname); e != nil {
+			return errors.New("[create] remove old dir error:" + e.Error())
 		}
 		if e = os.RemoveAll("./app/" + fullappname); e != nil {
-			return errors.New("[create group] remote old dir error:" + e.Error())
+			return errors.New("[create] remote old dir error:" + e.Error())
 		}
 		if e = dirop("./app_log/" + fullappname); e != nil {
-			return errors.New("[create group] " + e.Error())
+			return errors.New("[create] " + e.Error())
 		}
 		if e = dirop("./app/" + fullappname); e != nil {
-			return errors.New("[create group] " + e.Error())
+			return errors.New("[create] " + e.Error())
 		}
 		g = &group{
 			s:         s,
@@ -157,97 +135,123 @@ func (s *Super) CreateGroup(groupname, appname, url string, buildcmds []*Cmd, ru
 			runcmd:    runcmd,
 			status:    g_UPDATING,
 			processes: make(map[uint64]*process, 5),
-			lker:      new(sync.RWMutex),
+			opstatus:  1,
 			plker:     new(sync.RWMutex),
 			notice:    make(chan uint64, 100),
 		}
 		g.logfile, e = rotatefile.NewRotateFile(&rotatefile.Config{
-			Path:        "./app_log/" + fullappname,
-			Name:        fullappname,
-			Ext:         "log",
-			RotateCap:   s.c.LogRotateCap,
-			RotateCycle: s.c.LogRotateCycle,
-			KeepDays:    s.c.LogKeepDays,
+			Path: "./app_log/" + fullappname,
+			Name: fullappname,
 		})
 		if e != nil {
-			return errors.New("[create group] " + e.Error())
+			return errors.New("[create] " + e.Error())
 		}
 		s.groups[fullappname] = g
 		go g.startGroup()
 		return nil
 	} else {
-		return errors.New("[create group] Group already exist")
+		return errors.New("[create] group already exist")
 	}
 }
-func (s *Super) BuildGroup(groupname, branchname, tagname string) error {
-	if branchname == "" && tagname == "" {
-		return errors.New("[build group] Missing branch or tag.")
-	}
+func (s *Super) UpdateGroup(groupname, appname string) error {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	g, ok := s.groups[groupname]
+	g, ok := s.groups[groupname+"."+appname]
 	if !ok {
-		return errors.New("[build group] Group doesn't exist.")
+		return errors.New("[update] group doesn't exist")
 	}
-	go g.build(branchname, tagname)
+	go g.updateGroup()
 	return nil
 }
-func (s *Super) StopGroup(groupname string) {
+func (s *Super) BuildGroup(groupname, appname, branchname, tagname string) error {
+	if branchname == "" && tagname == "" {
+		return errors.New("[build] missing branch or tag")
+	}
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	if g, ok := s.groups[groupname]; ok {
-		go g.stopGroup()
+	g, ok := s.groups[groupname+"."+appname]
+	if !ok {
+		return errors.New("[build] group doesn't exist")
 	}
+	go g.buildGroup(branchname, tagname)
+	return nil
 }
-func (s *Super) DeleteGroup(groupname string) {
+func (s *Super) StopGroup(groupname, appname string) error {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	if g, ok := s.groups[groupname]; ok {
-		go g.closeGroup()
+	g, ok := s.groups[groupname+"."+appname]
+	if !ok {
+		return errors.New("[stop] group doesn't exist")
 	}
+	g.stopGroup(false)
+	return nil
 }
-func (s *Super) StartProcess(groupname string, autorestart bool) {
+func (s *Super) DeleteGroup(groupname, appname string) error {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	if g, ok := s.groups[groupname]; ok {
-		go g.startProcess(atomic.AddUint64(&s.processid, 1), autorestart)
+	g, ok := s.groups[groupname+"."+appname]
+	if !ok {
+		return errors.New("[delete] group doesn't exist")
 	}
+	g.stopGroup(true)
+	return nil
 }
-func (s *Super) RestartProcess(groupname string, pid uint64) {
+func (s *Super) StartProcess(groupname, appname string, autorestart bool) error {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	if g, ok := s.groups[groupname]; ok {
-		go g.restartProcess(pid)
+	g, ok := s.groups[groupname+"."+appname]
+	if !ok {
+		return errors.New("[startprocess] group doesn't exist")
 	}
+	if e := g.startProcess(atomic.AddUint64(&s.processid, 1), autorestart); e != nil {
+		return errors.New("[startprocess] " + e.Error())
+	}
+	return nil
 }
-func (s *Super) StopProcess(groupname string, pid uint64) {
+func (s *Super) RestartProcess(groupname, appname string, pid uint64) error {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	if g, ok := s.groups[groupname]; ok {
-		go g.stopProcess(pid)
+	g, ok := s.groups[groupname+"."+appname]
+	if !ok {
+		return errors.New("[restartprocess] group doesn't exist")
 	}
+	if e := g.restartProcess(pid); e != nil {
+		return errors.New("[restartprocess] " + e.Error())
+	}
+	return nil
+}
+func (s *Super) StopProcess(groupname, appname string, pid uint64) error {
+	s.lker.RLock()
+	defer s.lker.RUnlock()
+	g, ok := s.groups[groupname+"."+appname]
+	if !ok {
+		return errors.New("[stopprocess] group doesn't exist")
+	}
+	g.stopProcess(pid)
+	return nil
 }
 
 type GroupInfo struct {
-	Name       string         `json:"name"`
-	Url        string         `json:"url"`
-	BuildCmds  []*Cmd         `json:"build_cmds"`
-	RunCmd     *Cmd           `json:"run_cmd"`
-	AllBranch  []string       `json:"all_branch"`
-	BranchName string         `json:"branch_name"`
-	AllTag     []string       `json:"all_tag"`
-	TagName    string         `json:"tag_name"`
-	Commitid   string         `json:"commitid"`
-	Status     int            `json:"status"` //0 closing,1 updating,2 building,3 working
-	Pinfo      []*ProcessInfo `json:"process_info"`
+	Name        string         `json:"name"`
+	Url         string         `json:"url"`
+	BuildCmds   []*Cmd         `json:"build_cmds"`
+	RunCmd      *Cmd           `json:"run_cmd"`
+	Status      int32          `json:"status"`    //0 closing,1 updating,2 updatefailed,3 updatesuccess,4 building,5 buildfailed,6 buildsuccess
+	OpStatus    int32          `json:"op_status"` //0 idle,1 some operation is happening on this group
+	AllBranch   []string       `json:"all_branch"`
+	CurBranch   string         `json:"cur_branch"`
+	AllTag      []string       `json:"all_tag"`
+	CurTag      string         `json:"cur_tag"`
+	CurCommitid string         `json:"commitid"`
+	Pinfo       []*ProcessInfo `json:"process_info"`
 }
 type ProcessInfo struct {
 	Lpid        uint64 `json:"logic_pid"`
 	Ppid        uint64 `json:"physic_pid"`
 	Stime       int64  `json:"start_time"`
-	BranchName  string `json:"branch_name"`
-	TagName     string `json:"tag_name"`
-	Commitid    string `json:"commitid"`
+	BinBranch   string `json:"bin_branch"`
+	BinTag      string `json:"bin_tag"`
+	BinCommitid string `json:"bin_commitid"`
 	Status      int    `json:"status"` //0 closing,1 starting,2 working
 	Restart     int    `json:"restart"`
 	AutoRestart bool   `json:"auto_restart"`
@@ -263,12 +267,12 @@ func (s *Super) GetGroupList() []string {
 	sort.Strings(result)
 	return result
 }
-func (s *Super) GetGroupInfo(groupname string) (*GroupInfo, error) {
+func (s *Super) GetGroupInfo(groupname, appname string) (*GroupInfo, error) {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	g, ok := s.groups[groupname]
+	g, ok := s.groups[groupname+"."+appname]
 	if !ok {
-		return nil, errors.New("[group info] Group doesn't exist.")
+		return nil, errors.New("[groupinfo] group doesn't exist")
 	}
 	result := new(GroupInfo)
 	result.Name = g.name
@@ -276,11 +280,12 @@ func (s *Super) GetGroupInfo(groupname string) (*GroupInfo, error) {
 	result.BuildCmds = g.buildcmds
 	result.RunCmd = g.runcmd
 	result.Status = g.status
-	result.BranchName = g.branchname
-	result.TagName = g.tagname
-	result.Commitid = g.commitid
+	result.OpStatus = g.opstatus
 	result.AllBranch = g.allbranch
+	result.CurBranch = g.curbranch
 	result.AllTag = g.alltag
+	result.CurTag = g.curtag
+	result.CurCommitid = g.curcommitid
 	g.plker.RLock()
 	defer g.plker.RUnlock()
 	result.Pinfo = make([]*ProcessInfo, 0, len(g.processes))
@@ -294,9 +299,9 @@ func (s *Super) GetGroupInfo(groupname string) (*GroupInfo, error) {
 			Lpid:        p.logicpid,
 			Ppid:        uint64(ppid),
 			Stime:       p.stime,
-			BranchName:  p.branchname,
-			TagName:     p.tagname,
-			Commitid:    p.commitid,
+			BinBranch:   p.binbranch,
+			BinTag:      p.bintag,
+			BinCommitid: p.bincommitid,
 			Status:      p.status,
 			Restart:     p.restart,
 			AutoRestart: p.autorestart,

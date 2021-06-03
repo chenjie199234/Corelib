@@ -132,7 +132,6 @@ func init() {
 		instance.rf, e = rotatefile.NewRotateFile(&rotatefile.Config{
 			Path:        logdir,
 			Name:        logname,
-			Ext:         "log",
 			RotateCap:   uint(logrotatecap),
 			RotateCycle: uint(logrotatecycle),
 			KeepDays:    uint(logkeepdays),
