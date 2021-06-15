@@ -6,13 +6,9 @@ import (
 	"text/template"
 )
 
-const dockerfiletext = `FROM busybox:1.28
-
-RUN mkdir /root/app
-RUN mkdir /root/app/k8sconfig
-RUN mkdir /root/app/remoteconfig
+const dockerfiletext = `FROM debian:stable-slim
+RUN apt-get update && apt-get install -y ca-certificates && mkdir /root/app && mkdir /root/app/k8sconfig && mkdir /root/app/remoteconfig
 WORKDIR /root/app
-SHELL ["/bin/sh","-c"]
 ENV DISCOVERY_SERVER_GROUP='<DISCOVERY_SERVER_GROUP>' \
     DISCOVERY_SERVER_NAME='<DISCOVERY_SERVER_NAME>' \
     DISCOVERY_SERVER_PORT='<DISCOVERY_SERVER_PORT>'
