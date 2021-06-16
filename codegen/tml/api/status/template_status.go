@@ -50,7 +50,7 @@ message pingresp{
 //}`
 
 const path = "./api/"
-const name = "status.proto"
+const name = "status_%s.proto"
 
 var tml *template.Template
 var file *os.File
@@ -62,12 +62,12 @@ func init() {
 		panic(fmt.Sprintf("create template for %s error:%s", path+name, e))
 	}
 }
-func CreatePathAndFile() {
+func CreatePathAndFile(projectname string) {
 	var e error
 	if e = os.MkdirAll(path+"deps", 0755); e != nil {
 		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
 	}
-	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e = os.OpenFile(path+fmt.Sprintf(name, projectname), os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
 		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
 	}
