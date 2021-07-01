@@ -14,6 +14,7 @@ import (
 	"{{.Pname}}/config"
 	"{{.Pname}}/api"
 	{{.Sname}}dao "{{.Pname}}/dao/{{.Sname}}"
+	"{{.Pname}}/ecode"
 
 	//"github.com/chenjie199234/Corelib/log"
 	//"github.com/chenjie199234/Corelib/rpc"
@@ -51,7 +52,7 @@ func init() {
 	var e error
 	tml, e = template.New("sub").Parse(text)
 	if e != nil {
-		panic(fmt.Sprintf("create template for subservice error:%s", e))
+		panic(fmt.Sprintf("create template error:%s", e))
 	}
 }
 func CreatePathAndFile(sname string) {
@@ -66,6 +67,6 @@ func CreatePathAndFile(sname string) {
 }
 func Execute(pname, sname string) {
 	if e := tml.Execute(file, &data{Pname: pname, Sname: sname}); e != nil {
-		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+sname+"/"+sname+".go", e))
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+sname+"/"+sname+".go", e))
 	}
 }

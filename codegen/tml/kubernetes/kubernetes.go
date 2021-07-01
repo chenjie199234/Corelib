@@ -162,12 +162,12 @@ func init() {
 	var e error
 	dockerfiletml, e = template.New("dockerfile").Parse(dockerfiletext)
 	if e != nil {
-		panic(fmt.Sprintf("create template for %s error:%s", path+dockerfilename, e))
+		panic(fmt.Sprintf("create template error:%s", e))
 	}
 
 	deploymenttml, e = template.New("deployment").Parse(deploymenttext)
 	if e != nil {
-		panic(fmt.Sprintf("create template for %s error:%s", path+deploymentname, e))
+		panic(fmt.Sprintf("create template error:%s", e))
 	}
 }
 func CreatePathAndFile() {
@@ -197,7 +197,7 @@ type data struct {
 
 func Execute(projectname string, namespace string, needservice bool, needheadlessservice bool, needingress bool, hostname string) {
 	if e := dockerfiletml.Execute(dockerfilefile, projectname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+dockerfilename, e))
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+dockerfilename, e))
 	}
 	tempdata := &data{
 		ProjectName:     projectname,
@@ -208,6 +208,6 @@ func Execute(projectname string, namespace string, needservice bool, needheadles
 		HostName:        hostname,
 	}
 	if e := deploymenttml.Execute(deploymentfile, tempdata); e != nil {
-		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+deploymentname, e))
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+deploymentname, e))
 	}
 }

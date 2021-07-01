@@ -31,7 +31,7 @@ func init() {
 	var e error
 	tml, e = template.New("gomod").Parse(text)
 	if e != nil {
-		panic(fmt.Sprintf("create template for %s error:%s", path+name, e))
+		panic(fmt.Sprintf("create template error:%s", e))
 	}
 }
 func CreatePathAndFile() {
@@ -46,6 +46,6 @@ func CreatePathAndFile() {
 }
 func Execute(projectname string) {
 	if e := tml.Execute(file, projectname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+name, e))
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
 	}
 }

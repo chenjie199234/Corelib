@@ -330,15 +330,15 @@ func init() {
 	var e error
 	tmlbash, e = template.New("bash").Parse(textbash)
 	if e != nil {
-		panic(fmt.Sprintf("create template for %s error:%s", path+namebash, e))
+		panic(fmt.Sprintf("create template error:%s", e))
 	}
 	tmlbat, e = template.New("bat").Parse(strings.Replace(textbat, "\n", "\r\n", -1))
 	if e != nil {
-		panic(fmt.Sprintf("create template for %s error:%s", path+namebat, e))
+		panic(fmt.Sprintf("create template error:%s", e))
 	}
 	tmlprobe, e = template.New("probe").Parse(strings.Replace(textprobe, "*", "`", -1))
 	if e != nil {
-		panic(fmt.Sprintf("create template for %s error:%s", path+nameprobe, e))
+		panic(fmt.Sprintf("create template error:%s", e))
 	}
 }
 func CreatePathAndFile() {
@@ -369,12 +369,12 @@ func CreatePathAndFile() {
 }
 func Execute(pname, gname string) {
 	if e := tmlbash.Execute(filebash, &Data{Pname: pname, Gname: gname}); e != nil {
-		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+namebash, e))
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+namebash, e))
 	}
 	if e := tmlbat.Execute(filebat, &Data{Pname: pname, Gname: gname}); e != nil {
-		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+namebat, e))
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+namebat, e))
 	}
 	if e := tmlprobe.Execute(fileprobe, nil); e != nil {
-		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+nameprobe, e))
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+nameprobe, e))
 	}
 }

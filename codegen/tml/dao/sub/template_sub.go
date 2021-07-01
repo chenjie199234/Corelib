@@ -61,19 +61,19 @@ func init() {
 	var e error
 	tml, e = template.New("dao").Parse(text)
 	if e != nil {
-		panic(fmt.Sprintf("create template for subservice error:%s", e))
+		panic(fmt.Sprintf("create template error:%s", e))
 	}
 	tmlsql, e = template.New("sql").Parse(textsql)
 	if e != nil {
-		panic(fmt.Sprintf("create template for subservice error:%s", e))
+		panic(fmt.Sprintf("create template error:%s", e))
 	}
 	tmlredis, e = template.New("redis").Parse(textredis)
 	if e != nil {
-		panic(fmt.Sprintf("create template for subservice error:%s", e))
+		panic(fmt.Sprintf("create template error:%s", e))
 	}
 	tmlmongo, e = template.New("mongo").Parse(textmongo)
 	if e != nil {
-		panic(fmt.Sprintf("create template for subservice error:%s", e))
+		panic(fmt.Sprintf("create template error:%s", e))
 	}
 }
 func CreatePathAndFile(sname string) {
@@ -100,15 +100,15 @@ func CreatePathAndFile(sname string) {
 }
 func Execute(sname string) {
 	if e := tml.Execute(file, sname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+sname+"/"+name, e))
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+sname+"/"+name, e))
 	}
 	if e := tmlsql.Execute(filesql, sname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+sname+"/"+namesql, e))
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+sname+"/"+namesql, e))
 	}
 	if e := tmlredis.Execute(fileredis, sname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+sname+"/"+nameredis, e))
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+sname+"/"+nameredis, e))
 	}
 	if e := tmlmongo.Execute(filemongo, sname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+sname+"/"+namemongo, e))
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+sname+"/"+namemongo, e))
 	}
 }

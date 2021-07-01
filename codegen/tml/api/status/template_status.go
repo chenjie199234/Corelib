@@ -59,7 +59,7 @@ func init() {
 	var e error
 	tml, e = template.New("api").Parse(text)
 	if e != nil {
-		panic(fmt.Sprintf("create template for %s error:%s", path+name, e))
+		panic(fmt.Sprintf("create template error:%s", e))
 	}
 }
 func CreatePathAndFile(projectname string) {
@@ -69,11 +69,11 @@ func CreatePathAndFile(projectname string) {
 	}
 	file, e = os.OpenFile(path+fmt.Sprintf(name, projectname), os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
+		panic(fmt.Sprintf("make file:%s error:%s", path+fmt.Sprintf(name, projectname), e))
 	}
 }
 func Execute(projectname string) {
 	if e := tml.Execute(file, projectname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+name, e))
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+fmt.Sprintf(name, projectname), e))
 	}
 }

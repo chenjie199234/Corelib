@@ -53,7 +53,7 @@ func init() {
 	var e error
 	tml, e = template.New("api").Parse(text)
 	if e != nil {
-		panic(fmt.Sprintf("create template for subservice error:%s", e))
+		panic(fmt.Sprintf("create template error:%s", e))
 	}
 }
 func CreatePathAndFile(sname string) {
@@ -68,6 +68,6 @@ func CreatePathAndFile(sname string) {
 }
 func Execute(pname, sname string) {
 	if e := tml.Execute(file, &data{Pname: pname, Sname: sname}); e != nil {
-		panic(fmt.Sprintf("write content into file:%s from template error:%s", path+sname+".proto", e))
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+sname+".proto", e))
 	}
 }
