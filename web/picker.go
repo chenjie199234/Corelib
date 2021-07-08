@@ -6,41 +6,27 @@ import (
 	"time"
 )
 
-func defaultPicker(servers []*ServerForPick) *ServerForPick {
+func defaultPicker(servers map[string]*ServerForPick) *ServerForPick {
 	if len(servers) == 0 {
 		return nil
 	}
-	if len(servers) == 1 {
-		return servers[0]
-	}
-	start := rand.Intn(len(servers))
-	i := start
-	first := true
 	var normal1, normal2, danger1, danger2 *ServerForPick
 	before := time.Now().Add(-time.Millisecond * 100)
-	for {
-		if !first && i == start {
-			break
-		}
-		first = false
-		if servers[i].Pickinfo.DServers != 0 &&
-			servers[i].Pickinfo.DServerOffline < before.UnixNano() {
+	for _, server := range servers {
+		if server.Pickinfo.DServerNum != 0 &&
+			server.Pickinfo.DServerOffline < before.UnixNano() {
 			if normal1 == nil {
-				normal1 = servers[i]
+				normal1 = server
 			} else {
-				normal2 = servers[i]
+				normal2 = server
 				break
 			}
 		} else {
 			if danger1 == nil {
-				danger1 = servers[i]
+				danger1 = server
 			} else if danger2 == nil {
-				danger2 = servers[i]
+				danger2 = server
 			}
-		}
-		i++
-		if i >= len(servers) {
-			i = 0
 		}
 	}
 	if normal1 != nil && normal2 == nil {
@@ -61,12 +47,12 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 		}
 	}
 	//more discoveryservers more safety,so 1 * 2's discoveryserver num
-	load1 := float64(normal1.Pickinfo.Activecalls) + math.Log(float64(normal2.Pickinfo.DServers+2))
+	load1 := float64(normal1.Pickinfo.Activecalls) + math.Log(float64(normal2.Pickinfo.DServerNum+2))
 	if normal1.Pickinfo.Lastfail >= before.UnixNano() {
 		load1 *= 1.1
 	}
 	//more discoveryservers more safety,so 2 * 1's discoveryserver num
-	load2 := float64(normal2.Pickinfo.Activecalls) + math.Log(float64(normal1.Pickinfo.DServers+2))
+	load2 := float64(normal2.Pickinfo.Activecalls) + math.Log(float64(normal1.Pickinfo.DServerNum+2))
 	if normal2.Pickinfo.Lastfail >= before.UnixNano() {
 		load2 *= 1.1
 	}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -22,8 +23,8 @@ import (
 
 var ERRNOSERVER = errors.New("[web] no servers")
 
-type PickHandler func(servers []*ServerForPick) *ServerForPick
-type DiscoveryHandler func(group, name string, client *WebClient)
+type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
+type DiscoveryHandler func(group, name string, manually <-chan struct{}, client *WebClient)
 
 type ClientConfig struct {
 	//request's max handling time
@@ -75,19 +76,21 @@ type WebClient struct {
 	c           *ClientConfig
 	certpool    *x509.CertPool
 
-	lker  *sync.RWMutex
-	hosts []*ServerForPick
+	lker     *sync.RWMutex
+	servers  map[string]*ServerForPick
+	addrdata []byte
+	manually chan struct{}
 }
 type ServerForPick struct {
-	host             string
-	client           *http.Client
-	discoveryservers []string //this server registered on how many discoveryservers
-	Pickinfo         *pickinfo
+	host     string
+	client   *http.Client
+	dservers map[string]struct{} //this server registered on how many discoveryservers
+	Pickinfo *pickinfo
 }
 type pickinfo struct {
 	Lastfail       int64  //last fail timestamp nano second
 	Activecalls    int32  //current active calls
-	DServers       int32  //this server registered on how many discoveryservers
+	DServerNum     int32  //this server registered on how many discoveryservers
 	DServerOffline int64  //
 	Addition       []byte //addition info register on register center
 }
@@ -143,44 +146,43 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 		c:           c,
 		certpool:    certpool,
 
-		lker:  &sync.RWMutex{},
-		hosts: make([]*ServerForPick, 0, 10),
+		lker:     &sync.RWMutex{},
+		servers:  make(map[string]*ServerForPick, 10),
+		addrdata: nil,
+		manually: make(chan struct{}, 1),
 	}
 	log.Info("[web.client] start finding server", group+"."+name)
-	go c.Discover(group, name, client)
+	go c.Discover(group, name, client.manually, client)
 	return client, nil
 }
 
-//all:
-//key:addr
-//value:discovery servers
-//addition
-//addition info
-func (this *WebClient) UpdateDiscovery(all map[string][]string, addition []byte) {
+type RegisterData struct {
+	DServers map[string]struct{} //server register on which discovery server
+	Addition []byte
+}
+
+//all: key server's addr
+func (this *WebClient) UpdateDiscovery(all map[string]*RegisterData) {
+	//check need update
+	addrdata, _ := json.Marshal(all)
 	this.lker.Lock()
 	defer this.lker.Unlock()
-	//check unregister
-	head := 0
-	tail := len(this.hosts) - 1
-	for head <= tail {
-		existhost := this.hosts[head]
-		if discoveryservers, ok := all[existhost.host]; !ok || len(discoveryservers) == 0 {
-			if head != tail {
-				this.hosts[head], this.hosts[tail] = this.hosts[tail], this.hosts[head]
-			}
-			tail--
-		} else {
-			head++
+	if bytes.Equal(this.addrdata, addrdata) {
+		return
+	}
+	this.addrdata = addrdata
+	//offline app
+	for _, server := range this.servers {
+		if _, ok := all[server.host]; !ok {
+			//this app unregistered
+			delete(this.servers, server.host)
 		}
 	}
-	if this.hosts != nil && head != len(this.hosts) {
-		this.hosts = this.hosts[:head]
-	}
-	if this.hosts == nil {
-		this.hosts = make([]*ServerForPick, 0, 5)
-	}
-	//check register
-	for host, discoveryservers := range all {
+	//online app or update app's dservers
+	for host, registerdata := range all {
+		if len(registerdata.DServers) == 0 {
+			delete(this.servers, host)
+		}
 		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
 			continue
 		} else if host == "http://" {
@@ -194,19 +196,10 @@ func (this *WebClient) UpdateDiscovery(all map[string][]string, addition []byte)
 		if len(host) <= 6 {
 			continue
 		}
-		if len(discoveryservers) == 0 {
-			continue
-		}
-		var exist *ServerForPick
-		for _, existhost := range this.hosts {
-			if existhost.host == host {
-				exist = existhost
-				break
-			}
-		}
-		//this is a new register
-		if exist == nil {
-			this.hosts = append(this.hosts, &ServerForPick{
+		exist, ok := this.servers[host]
+		if !ok {
+			//this is a new register
+			this.servers[host] = &ServerForPick{
 				host: host,
 				client: &http.Client{
 					Transport: &http.Transport{
@@ -234,63 +227,35 @@ func (this *WebClient) UpdateDiscovery(all map[string][]string, addition []byte)
 					},
 					Timeout: this.c.GlobalTimeout,
 				},
-				discoveryservers: discoveryservers,
+				dservers: registerdata.DServers,
 				Pickinfo: &pickinfo{
 					Lastfail:       0,
 					Activecalls:    0,
-					DServers:       int32(len(discoveryservers)),
+					DServerNum:     int32(len(registerdata.DServers)),
 					DServerOffline: 0,
-					Addition:       addition,
+					Addition:       registerdata.Addition,
 				},
-			})
-			continue
-		}
-		//this is not a new register
-		//unregister on which discovery server
-		head = 0
-		tail = len(exist.discoveryservers) - 1
-		for head <= tail {
-			existdserver := exist.discoveryservers[head]
-			find := false
-			for _, newdserver := range discoveryservers {
-				if newdserver == existdserver {
-					find = true
+			}
+		} else {
+			//this is not a new register
+			//unregister on which discovery server
+			for dserver := range exist.dservers {
+				if _, ok := registerdata.DServers[dserver]; !ok {
+					exist.Pickinfo.DServerOffline = time.Now().UnixNano()
 					break
 				}
 			}
-			if find {
-				head++
-			} else {
-				if head != tail {
-					exist.discoveryservers[head], exist.discoveryservers[tail] = exist.discoveryservers[tail], exist.discoveryservers[head]
-				}
-				tail--
-			}
-		}
-		if exist.discoveryservers != nil && head != len(exist.discoveryservers) {
-			exist.Pickinfo.DServerOffline = time.Now().UnixNano()
-			exist.discoveryservers = exist.discoveryservers[:head]
-		}
-		if exist.discoveryservers == nil {
-			exist.discoveryservers = make([]string, 0, 5)
-		}
-		//register on which new discovery server
-		for _, newdserver := range discoveryservers {
-			find := false
-			for _, existdserver := range exist.discoveryservers {
-				if existdserver == newdserver {
-					find = true
+			//register on which new discovery server
+			for dserver := range registerdata.DServers {
+				if _, ok := exist.dservers[dserver]; !ok {
+					exist.Pickinfo.DServerOffline = 0
 					break
 				}
 			}
-			if !find {
-				exist.discoveryservers = append(exist.discoveryservers, newdserver)
-				exist.Pickinfo.DServerOffline = 0
-			}
+			exist.dservers = registerdata.DServers
+			exist.Pickinfo.Addition = registerdata.Addition
+			exist.Pickinfo.DServerNum = int32(len(registerdata.DServers))
 		}
-		//
-		exist.Pickinfo.Addition = addition
-		exist.Pickinfo.DServers = int32(len(exist.discoveryservers))
 	}
 }
 
@@ -346,7 +311,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		}
 		var server *ServerForPick
 		this.lker.RLock()
-		server = this.c.Picker(this.hosts)
+		server = this.c.Picker(this.servers)
 		this.lker.RUnlock()
 		if server == nil {
 			return nil, ERRNOSERVER

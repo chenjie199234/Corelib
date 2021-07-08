@@ -6,52 +6,36 @@ import (
 	"time"
 )
 
-func defaultPicker(servers []*ServerForPick) *ServerForPick {
+func defaultPicker(servers map[string]*ServerForPick) *ServerForPick {
 	if len(servers) == 0 {
 		return nil
 	}
-	if len(servers) == 1 {
-		if servers[0].Pickable() {
-			return servers[0]
-		}
-		return nil
-	}
-	start := rand.Intn(len(servers))
-	i := start
-	first := true
 	var normal1, normal2, danger1, danger2, nightmare1, nightmare2 *ServerForPick
 	before := time.Now().Add(-time.Millisecond * 100)
-	for {
-		if !first && i == start {
-			break
-		}
-		first = false
-		if servers[i].Pickable() {
-			if servers[i].Pickinfo.DServers != 0 &&
-				servers[i].Pickinfo.DServerOffline < before.UnixNano() {
+	for _, server := range servers {
+		if server.Pickable() {
+			if server.Pickinfo.DServerNum != 0 &&
+				server.Pickinfo.DServerOffline < before.UnixNano() {
 				if normal1 == nil {
-					normal1 = servers[i]
+					normal1 = server
 				} else {
-					normal2 = servers[i]
+					normal2 = server
 					break
 				}
-			} else if servers[i].Pickinfo.DServers == 0 {
+			} else if server.Pickinfo.DServerNum == 0 {
 				if nightmare1 == nil {
-					nightmare1 = servers[i]
+					nightmare1 = server
 				} else if nightmare2 == nil {
-					nightmare2 = servers[i]
+					nightmare2 = server
 				}
 			} else {
 				if danger1 == nil {
-					danger1 = servers[i]
+					danger1 = server
 				} else if danger2 == nil {
-					danger2 = servers[i]
+					danger2 = server
 				}
 			}
-		}
-		i++
-		if i >= len(servers) {
-			i = 0
+
 		}
 	}
 	//check normal
@@ -68,29 +52,27 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 		} else if danger1 != nil && danger2 != nil {
 			normal1 = danger1
 			normal2 = danger2
-		} else {
+		} else if nightmare1 != nil && nightmare2 == nil {
 			//check nightmare
-			if nightmare1 != nil && nightmare2 == nil {
-				return nightmare1
-			} else if nightmare2 != nil && nightmare1 == nil {
-				return nightmare2
-			} else if nightmare1 != nil && nightmare2 != nil {
-				normal1 = nightmare1
-				normal2 = nightmare2
-			} else {
-				//all servers are unpickable
-				return nil
-			}
+			return nightmare1
+		} else if nightmare2 != nil && nightmare1 == nil {
+			return nightmare2
+		} else if nightmare1 != nil && nightmare2 != nil {
+			normal1 = nightmare1
+			normal2 = nightmare2
+		} else {
+			//all servers are unpickable
+			return nil
 		}
 	}
-	//more discoveryservers more safety,so 1 * 2's discoveryserver num
-	load1 := float64(normal1.Pickinfo.Activecalls) * math.Log(float64(normal2.Pickinfo.DServers+2))
+	//more discoveryservers more safety,so 1 * 2's dserver num
+	load1 := float64(normal1.Pickinfo.Activecalls) * math.Log(float64(normal2.Pickinfo.DServerNum+2))
 	if normal1.Pickinfo.Lastfail >= before.UnixNano() {
 		//punish
 		load1 *= 1.1
 	}
-	//more discoveryservers more safety,so 2 * 1's discoveryserver num
-	load2 := float64(normal2.Pickinfo.Activecalls) * math.Log(float64(normal1.Pickinfo.DServers+2))
+	//more discoveryservers more safety,so 2 * 1's dserver num
+	load2 := float64(normal2.Pickinfo.Activecalls) * math.Log(float64(normal1.Pickinfo.DServerNum+2))
 	if normal2.Pickinfo.Lastfail >= before.UnixNano() {
 		//punish
 		load2 *= 1.1
