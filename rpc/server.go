@@ -21,7 +21,7 @@ import (
 type OutsideHandler func(ctx *Context)
 
 type ServerConfig struct {
-	//when server close,server will wait this time before close,every request will refresh the time,when this time is working
+	//when server close,server will wait this time before close,every request will refresh the time
 	//min is 1 second
 	WaitCloseTime time.Duration
 	//global timeout for every rpc call

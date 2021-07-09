@@ -22,6 +22,7 @@ import (
 )
 
 var ERRNOSERVER = errors.New("[web] no servers")
+var ERRHEADER = errors.New("[web] forbidden header")
 
 type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
 type DiscoveryHandler func(group, name string, manually <-chan struct{}, client *WebClient)
@@ -87,6 +88,8 @@ type ServerForPick struct {
 	host     string
 	client   *http.Client
 	dservers map[string]struct{} //this server registered on how many discoveryservers
+	status   int                 //1-working,0-closing
+
 	Pickinfo *pickinfo
 }
 type pickinfo struct {
@@ -95,6 +98,10 @@ type pickinfo struct {
 	DServerNum     int32  //this server registered on how many discoveryservers
 	DServerOffline int64  //
 	Addition       []byte //addition info register on register center
+}
+
+func (s *ServerForPick) Pickable() bool {
+	return s.status == 1
 }
 
 func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*WebClient, error) {
@@ -271,22 +278,62 @@ func (this *WebClient) UpdateDiscovery(all map[string]*RegisterData) {
 	}
 }
 
-func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header) (*http.Response, error) {
-	return this.call(http.MethodGet, ctx, functimeout, pathwithquery, header, nil)
+func forbiddenHeader(header http.Header) bool {
+	if _, ok := header["TargetServer"]; ok {
+		return true
+	}
+	if _, ok := header["SourceServer"]; ok {
+		return true
+	}
+	if _, ok := header["Deadline"]; ok {
+		return true
+	}
+	if _, ok := header["Metadata"]; ok {
+		return true
+	}
+	return false
 }
-func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header) (*http.Response, error) {
-	return this.call(http.MethodDelete, ctx, functimeout, pathwithquery, header, nil)
+
+//"TargetServer" "SourceServer" "Deadline" and "Metadata" are forbidden in header
+func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, metadata map[string]string) (*http.Response, error) {
+	if forbiddenHeader(header) {
+		return nil, ERRHEADER
+	}
+	return this.call(http.MethodGet, ctx, functimeout, pathwithquery, header, metadata, nil)
 }
-func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body []byte) (*http.Response, error) {
-	return this.call(http.MethodPost, ctx, functimeout, pathwithquery, header, body)
+
+//"TargetServer" "SourceServer" "Deadline" and "Metadata" are forbidden in header
+func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, metadata map[string]string) (*http.Response, error) {
+	if forbiddenHeader(header) {
+		return nil, ERRHEADER
+	}
+	return this.call(http.MethodDelete, ctx, functimeout, pathwithquery, header, metadata, nil)
 }
-func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body []byte) (*http.Response, error) {
-	return this.call(http.MethodPut, ctx, functimeout, pathwithquery, header, body)
+
+//"TargetServer" "SourceServer" "Deadline" and "Metadata" are forbidden in header
+func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, metadata map[string]string, body []byte) (*http.Response, error) {
+	if forbiddenHeader(header) {
+		return nil, ERRHEADER
+	}
+	return this.call(http.MethodPost, ctx, functimeout, pathwithquery, header, metadata, body)
 }
-func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body []byte) (*http.Response, error) {
-	return this.call(http.MethodPatch, ctx, functimeout, pathwithquery, header, body)
+
+//"TargetServer" "SourceServer" "Deadline" and "Metadata" are forbidden in header
+func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, metadata map[string]string, body []byte) (*http.Response, error) {
+	if forbiddenHeader(header) {
+		return nil, ERRHEADER
+	}
+	return this.call(http.MethodPut, ctx, functimeout, pathwithquery, header, metadata, body)
 }
-func (this *WebClient) call(method string, ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, body []byte) (*http.Response, error) {
+
+//"TargetServer" "SourceServer" "Deadline" and "Metadata" are forbidden in header
+func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, metadata map[string]string, body []byte) (*http.Response, error) {
+	if forbiddenHeader(header) {
+		return nil, ERRHEADER
+	}
+	return this.call(http.MethodPatch, ctx, functimeout, pathwithquery, header, metadata, body)
+}
+func (this *WebClient) call(method string, ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, metadata map[string]string, body []byte) (*http.Response, error) {
 	if len(pathwithquery) == 0 || pathwithquery[0] != '/' {
 		pathwithquery = "/" + pathwithquery
 	}
@@ -295,6 +342,10 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	}
 	header.Set("TargetServer", this.appname)
 	header.Set("SourceServer", this.selfappname)
+	if len(metadata) != 0 {
+		d, _ := json.Marshal(metadata)
+		header.Set("Metadata", common.Byte2str(d))
+	}
 	var min time.Duration
 	if this.c.GlobalTimeout != 0 {
 		min = this.c.GlobalTimeout
@@ -347,6 +398,9 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 				return nil, ctx.Err()
 			}
 		}
+		if !server.Pickable() {
+			continue
+		}
 		if ok && dl.UnixNano() < time.Now().UnixNano()+int64(5*time.Millisecond) {
 			//ttl + server logic time
 			return nil, context.DeadlineExceeded
@@ -366,11 +420,12 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		resp, e := server.client.Do(req)
 		atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 		if e != nil {
-			atomic.StoreInt64(&server.Pickinfo.Lastfail, time.Now().UnixNano())
+			server.Pickinfo.Lastfail = time.Now().UnixNano()
 			return nil, e
 		}
 		if resp.StatusCode == 888 {
-			atomic.StoreInt64(&server.Pickinfo.Lastfail, time.Now().UnixNano())
+			server.Pickinfo.Lastfail = time.Now().UnixNano()
+			server.status = 0
 			continue
 		}
 		return resp, nil

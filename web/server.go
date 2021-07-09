@@ -22,7 +22,7 @@ import (
 )
 
 type ServerConfig struct {
-	//when server close,server will wait this time before close,every request will refresh the time,when this time is working
+	//when server close,server will wait this time before close,every request will refresh the time
 	//min is 1 second
 	WaitCloseTime time.Duration
 	//request's max handling time
@@ -106,11 +106,11 @@ func (c *ServerConfig) validate() {
 	if !c.Cors.allheader && !hasorigin {
 		c.Cors.AllowedHeader = append(c.Cors.AllowedHeader, "Origin")
 	}
-	c.Cors.headerstr = c.getHeaders()
-	c.Cors.exposestr = c.getExpose()
+	c.Cors.headerstr = c.getCorsHeaders()
+	c.Cors.exposestr = c.getCorsExpose()
 }
 
-func (c *ServerConfig) getHeaders() string {
+func (c *ServerConfig) getCorsHeaders() string {
 	if c.Cors.allheader || len(c.Cors.AllowedHeader) == 0 {
 		return ""
 	}
@@ -128,7 +128,7 @@ func (c *ServerConfig) getHeaders() string {
 	}
 	return strings.Join(unique, ", ")
 }
-func (c *ServerConfig) getExpose() string {
+func (c *ServerConfig) getCorsExpose() string {
 	if len(c.Cors.ExposeHeader) > 0 {
 		removedup := make(map[string]struct{}, len(c.Cors.ExposeHeader))
 		for _, v := range c.Cors.ExposeHeader {
@@ -412,16 +412,18 @@ func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ..
 }
 
 func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	//check required target server
+	if targetserver := r.Header.Get("TargetServer"); targetserver != "" && targetserver != this.selfappname {
+		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: this is not the required targetserver:", targetserver)
+		w.WriteHeader(888)
+		return
+	}
 	//check server status
 	if atomic.LoadInt32(&this.status) != 1 {
 		select {
 		case this.stopch <- struct{}{}:
 		default:
 		}
-	}
-	//check required target server
-	if targetserver := r.Header.Get("TargetServer"); targetserver != "" && targetserver != this.selfappname {
-		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: this is not the required targetserver:", targetserver)
 		w.WriteHeader(888)
 		return
 	}
@@ -528,7 +530,7 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 		defer atomic.AddInt32(&this.reqnum, -1)
 		ctx.Next()
 		this.putContext(ctx)
-		//double check server check
+		//double check server status
 		if atomic.LoadInt32(&this.status) != 1 {
 			select {
 			case this.stopch <- struct{}{}:

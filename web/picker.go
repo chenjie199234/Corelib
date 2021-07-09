@@ -13,19 +13,21 @@ func defaultPicker(servers map[string]*ServerForPick) *ServerForPick {
 	var normal1, normal2, danger1, danger2 *ServerForPick
 	before := time.Now().Add(-time.Millisecond * 100)
 	for _, server := range servers {
-		if server.Pickinfo.DServerNum != 0 &&
-			server.Pickinfo.DServerOffline < before.UnixNano() {
-			if normal1 == nil {
-				normal1 = server
+		if server.Pickable() {
+			if server.Pickinfo.DServerNum != 0 &&
+				server.Pickinfo.DServerOffline < before.UnixNano() {
+				if normal1 == nil {
+					normal1 = server
+				} else {
+					normal2 = server
+					break
+				}
 			} else {
-				normal2 = server
-				break
-			}
-		} else {
-			if danger1 == nil {
-				danger1 = server
-			} else if danger2 == nil {
-				danger2 = server
+				if danger1 == nil {
+					danger1 = server
+				} else if danger2 == nil {
+					danger2 = server
+				}
 			}
 		}
 	}
