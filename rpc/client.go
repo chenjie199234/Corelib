@@ -83,10 +83,12 @@ type RpcClient struct {
 	c           *ClientConfig
 	instance    *stream.Instance
 
-	lker     *sync.RWMutex
-	servers  map[string]*ServerForPick //key server addr
-	addrdata []byte
-	manually chan struct{}
+	lker         *sync.RWMutex
+	servers      map[string]*ServerForPick //key server addr
+	addrdata     []byte
+	manually     chan struct{}
+	manualNotice map[chan struct{}]struct{}
+	mlker        *sync.Mutex
 
 	callid  uint64
 	reqpool *sync.Pool
@@ -150,15 +152,17 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 	}
 	c.validate()
 	client := &RpcClient{
-		selfappname: selfappname,
-		appname:     appname,
-		c:           c,
-		lker:        &sync.RWMutex{},
-		servers:     make(map[string]*ServerForPick, 10),
-		addrdata:    nil,
-		manually:    make(chan struct{}, 1),
-		callid:      0,
-		reqpool:     &sync.Pool{},
+		selfappname:  selfappname,
+		appname:      appname,
+		c:            c,
+		lker:         &sync.RWMutex{},
+		servers:      make(map[string]*ServerForPick, 10),
+		addrdata:     nil,
+		manually:     make(chan struct{}, 1),
+		manualNotice: make(map[chan struct{}]struct{}, 100),
+		mlker:        &sync.Mutex{},
+		callid:       0,
+		reqpool:      &sync.Pool{},
 	}
 	dupc := &stream.InstanceConfig{
 		HeartbeatTimeout:       c.HeartTimeout,
@@ -193,7 +197,15 @@ func (c *RpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 	//check need update
 	addrdata, _ := json.Marshal(all)
 	c.lker.Lock()
-	defer c.lker.Unlock()
+	defer func() {
+		c.mlker.Lock()
+		for notice := range c.manualNotice {
+			notice <- struct{}{}
+			delete(c.manualNotice, notice)
+		}
+		c.mlker.Unlock()
+		c.lker.Unlock()
+	}()
 	if bytes.Equal(c.addrdata, addrdata) {
 		return
 	}
@@ -477,14 +489,43 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 	var server *ServerForPick
 	r := c.getreq(msg.Callid)
 	for {
+		manual := false
 		for {
 			//pick server
 			c.lker.RLock()
 			server = c.c.Picker(c.servers)
 			if server == nil {
 				c.lker.RUnlock()
-				c.putreq(r)
-				return nil, ERRNOSERVER
+				if manual {
+					c.putreq(r)
+					return nil, ERRNOSERVER
+				}
+				c.mlker.Lock()
+				manualNotice := make(chan struct{}, 1)
+				c.manualNotice[manualNotice] = struct{}{}
+				c.mlker.Unlock()
+				//manually update server discover info
+				select {
+				case c.manually <- struct{}{}:
+				default:
+				}
+				//wait manual update finish
+				select {
+				case <-manualNotice:
+					manual = true
+					continue
+				case <-ctx.Done():
+					c.mlker.Lock()
+					delete(c.manualNotice, manualNotice)
+					c.mlker.Unlock()
+					if ctx.Err() == context.DeadlineExceeded {
+						return nil, ERRCTXTIMEOUT
+					} else if ctx.Err() == context.Canceled {
+						return nil, ERRCTXCANCEL
+					} else {
+						return nil, ERRUNKNOWN
+					}
+				}
 			}
 			server.lker.Lock()
 			c.lker.RUnlock()

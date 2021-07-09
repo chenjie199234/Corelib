@@ -76,10 +76,12 @@ type WebClient struct {
 	c           *ClientConfig
 	certpool    *x509.CertPool
 
-	lker     *sync.RWMutex
-	servers  map[string]*ServerForPick
-	addrdata []byte
-	manually chan struct{}
+	lker         *sync.RWMutex
+	servers      map[string]*ServerForPick
+	addrdata     []byte
+	manually     chan struct{}
+	manualNotice map[chan struct{}]struct{}
+	mlker        *sync.Mutex
 }
 type ServerForPick struct {
 	host     string
@@ -146,10 +148,12 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 		c:           c,
 		certpool:    certpool,
 
-		lker:     &sync.RWMutex{},
-		servers:  make(map[string]*ServerForPick, 10),
-		addrdata: nil,
-		manually: make(chan struct{}, 1),
+		lker:         &sync.RWMutex{},
+		servers:      make(map[string]*ServerForPick, 10),
+		addrdata:     nil,
+		manually:     make(chan struct{}, 1),
+		manualNotice: make(map[chan struct{}]struct{}, 100),
+		mlker:        &sync.Mutex{},
 	}
 	log.Info("[web.client] start finding server", group+"."+name)
 	go c.Discover(group, name, client.manually, client)
@@ -166,7 +170,15 @@ func (this *WebClient) UpdateDiscovery(all map[string]*RegisterData) {
 	//check need update
 	addrdata, _ := json.Marshal(all)
 	this.lker.Lock()
-	defer this.lker.Unlock()
+	defer func() {
+		this.mlker.Lock()
+		for notice := range this.manualNotice {
+			notice <- struct{}{}
+			delete(this.manualNotice, notice)
+		}
+		this.mlker.Unlock()
+		this.lker.Unlock()
+	}()
 	if bytes.Equal(this.addrdata, addrdata) {
 		return
 	}
@@ -304,17 +316,40 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		header.Set("Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
 	header.Del("Origin")
+	manual := false
 	for {
-		if ok && dl.UnixNano() < time.Now().UnixNano()+int64(5*time.Millisecond) {
-			//ttl + server logic time
-			return nil, context.DeadlineExceeded
-		}
 		var server *ServerForPick
 		this.lker.RLock()
 		server = this.c.Picker(this.servers)
 		this.lker.RUnlock()
 		if server == nil {
-			return nil, ERRNOSERVER
+			if manual {
+				return nil, ERRNOSERVER
+			}
+			this.mlker.Lock()
+			manualNotice := make(chan struct{}, 1)
+			this.manualNotice[manualNotice] = struct{}{}
+			this.mlker.Unlock()
+			//manual update server discover info
+			select {
+			case this.manually <- struct{}{}:
+			default:
+			}
+			//wait manual update finish
+			select {
+			case <-manualNotice:
+				manual = true
+				continue
+			case <-ctx.Done():
+				this.mlker.Lock()
+				delete(this.manualNotice, manualNotice)
+				this.mlker.Unlock()
+				return nil, ctx.Err()
+			}
+		}
+		if ok && dl.UnixNano() < time.Now().UnixNano()+int64(5*time.Millisecond) {
+			//ttl + server logic time
+			return nil, context.DeadlineExceeded
 		}
 		var req *http.Request
 		var e error
