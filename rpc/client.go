@@ -486,76 +486,73 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 	if len(d) > int(c.c.MaxMsgLen) {
 		return nil, ERRREQMSGLARGE
 	}
-	var server *ServerForPick
 	r := c.getreq(msg.Callid)
+	manual := false
 	for {
-		manual := false
-		for {
-			//pick server
-			c.lker.RLock()
-			server = c.c.Picker(c.servers)
-			if server == nil {
-				c.lker.RUnlock()
-				if manual {
-					c.putreq(r)
-					return nil, ERRNOSERVER
-				}
-				c.mlker.Lock()
-				manualNotice := make(chan struct{}, 1)
-				c.manualNotice[manualNotice] = struct{}{}
-				c.mlker.Unlock()
-				//manually update server discover info
-				select {
-				case c.manually <- struct{}{}:
-				default:
-				}
-				//wait manual update finish
-				select {
-				case <-manualNotice:
-					manual = true
-					continue
-				case <-ctx.Done():
-					c.mlker.Lock()
-					delete(c.manualNotice, manualNotice)
-					c.mlker.Unlock()
-					if ctx.Err() == context.DeadlineExceeded {
-						return nil, ERRCTXTIMEOUT
-					} else if ctx.Err() == context.Canceled {
-						return nil, ERRCTXCANCEL
-					} else {
-						return nil, ERRUNKNOWN
-					}
-				}
-			}
-			server.lker.Lock()
+		var server *ServerForPick
+		//pick server
+		c.lker.RLock()
+		server = c.c.Picker(c.servers)
+		if server == nil {
 			c.lker.RUnlock()
-			if !server.Pickable() {
-				server.lker.Unlock()
+			if manual {
+				c.putreq(r)
+				return nil, ERRNOSERVER
+			}
+			c.mlker.Lock()
+			manualNotice := make(chan struct{}, 1)
+			c.manualNotice[manualNotice] = struct{}{}
+			c.mlker.Unlock()
+			//manually update server discover info
+			select {
+			case c.manually <- struct{}{}:
+			default:
+			}
+			//wait manual update finish
+			select {
+			case <-manualNotice:
+				manual = true
 				continue
-			}
-			//check timeout
-			if msg.Deadline != 0 && msg.Deadline <= time.Now().UnixNano()+int64(5*time.Millisecond) {
-				server.lker.Unlock()
-				return nil, ERRCTXTIMEOUT
-			}
-			//send message
-			if e := server.peer.SendMessage(d, server.sid, false); e != nil {
-				if e == stream.ERRMSGLENGTH {
-					server.lker.Unlock()
-					return nil, ERRREQMSGLARGE
+			case <-ctx.Done():
+				c.mlker.Lock()
+				delete(c.manualNotice, manualNotice)
+				c.mlker.Unlock()
+				if ctx.Err() == context.DeadlineExceeded {
+					return nil, ERRCTXTIMEOUT
+				} else if ctx.Err() == context.Canceled {
+					return nil, ERRCTXCANCEL
+				} else {
+					return nil, ERRUNKNOWN
 				}
-				if e == stream.ERRCONNCLOSED {
-					server.status = 4
-				}
-				server.lker.Unlock()
-				continue
 			}
-			//send message success,store req,add req num
-			server.reqs[msg.Callid] = r
-			atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
-			server.lker.Unlock()
-			break
 		}
+		server.lker.Lock()
+		c.lker.RUnlock()
+		if !server.Pickable() {
+			server.lker.Unlock()
+			continue
+		}
+		//check timeout
+		if msg.Deadline != 0 && msg.Deadline <= time.Now().UnixNano()+int64(5*time.Millisecond) {
+			server.lker.Unlock()
+			return nil, ERRCTXTIMEOUT
+		}
+		//send message
+		if e := server.peer.SendMessage(d, server.sid, false); e != nil {
+			if e == stream.ERRMSGLENGTH {
+				server.lker.Unlock()
+				return nil, ERRREQMSGLARGE
+			}
+			if e == stream.ERRCONNCLOSED {
+				server.status = 4
+			}
+			server.lker.Unlock()
+			continue
+		}
+		//send message success,store req,add req num
+		server.reqs[msg.Callid] = r
+		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
+		server.lker.Unlock()
 		select {
 		case <-r.finish:
 			//req finished,delete req,reduce req num
