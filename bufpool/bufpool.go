@@ -1055,10 +1055,12 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 			b.buf = append(b.buf, '{')
 			t := d.Type()
 			for i := 0; i < d.NumField(); i++ {
-				b.buf = append(b.buf, t.Field(i).Name...)
-				b.buf = append(b.buf, ':')
-				b.appendreflect(d.Field(i))
-				b.buf = append(b.buf, ',')
+				if t.Field(i).Name[0] >= 65 || t.Field(i).Name[0] <= 90 {
+					b.buf = append(b.buf, t.Field(i).Name...)
+					b.buf = append(b.buf, ':')
+					b.appendreflect(d.Field(i))
+					b.buf = append(b.buf, ',')
+				}
 			}
 			b.buf[len(b.buf)-1] = '}'
 		} else {
