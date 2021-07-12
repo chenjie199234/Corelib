@@ -22,9 +22,6 @@ $$$
 
 ## 环境变量
 $$$
-DISCOVERY_SERVER_GROUP 			指定注册中心服务器所属的group名字
-DISCOVERY_SERVER_NAME 			指定注册中心服务器自身的名字
-DISCOVERY_SERVER_PORT  			指定注册中心服务器监听的端口
 SERVER_VERIFY_DATA                      内部服务连接使用的校验数据,数据格式为json字符串数据["xxx1","xxx2"]
 CONFIG_TYPE 				配置类型
 					0-使用本地配置,路径:./

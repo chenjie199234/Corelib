@@ -225,39 +225,6 @@ func initenv(){
 	} else {
 		log.Warning("[config.initenv] missing SERVER_VERIFY_DATA")
 	}
-	if str, ok := os.LookupEnv("DISCOVERY_SERVER_GROUP"); ok && str != "<DISCOVERY_SERVER_GROUP>" && str != "" {
-		EC.DiscoveryGroup = &str
-	} else if EC.ServerVerifyDatas != nil {
-		log.Error("[config.initenv] missing DISCOVERY_SERVER_GROUP")
-		Close()
-		os.Exit(1)
-	} else {
-		log.Warning("[config.initenv] missing DISCOVERY_SERVER_GROUP")
-	}
-	if str, ok := os.LookupEnv("DISCOVERY_SERVER_NAME"); ok && str != "<DISCOVERY_SERVER_NAME>" && str != "" {
-		EC.DiscoveryName = &str
-	} else if EC.ServerVerifyDatas != nil {
-		log.Error("[config.initenv] missing DISCOVERY_SERVER_NAME")
-		Close()
-		os.Exit(1)
-	} else {
-		log.Warning("[config.initenv] missing DISCOVERY_SERVER_NAME")
-	}
-	if str, ok := os.LookupEnv("DISCOVERY_SERVER_PORT"); ok && str != "<DISCOVERY_SERVER_PORT>" && str != "" {
-		port, e := strconv.Atoi(str)
-		if e != nil || port < 1 || port > 65535 {
-			log.Error("[config.initenv] DISCOVERY_SERVER_PORT must be number in [1-65535]")
-			Close()
-			os.Exit(1)
-		}
-		EC.DiscoveryPort = &port
-	} else if EC.ServerVerifyDatas != nil {
-		log.Error("[config.initenv] missing DISCOVERY_SERVER_PORT")
-		Close()
-		os.Exit(1)
-	} else {
-		log.Warning("[config.initenv] missing DISCOVERY_SERVER_PORT")
-	}
 	if str, ok := os.LookupEnv("CONFIG_TYPE"); ok && str != "<CONFIG_TYPE>" && str != "" {
 		configtype, e := strconv.Atoi(str)
 		if e != nil || (configtype != 0 && configtype != 1 && configtype != 2) {
@@ -295,7 +262,7 @@ func initdiscovery() {
 }
 func initremote(path string) {
 	if EC.ConfigType != nil && *EC.ConfigType == 2 {
-		if e := configsdk.NewWebSdk(path, api.Group, api.Name, false, time.Second, true); e != nil {
+		if e := configsdk.NewWebSdk(path, api.Group, api.Name, false, time.Second); e != nil {
 			log.Error("[config.initremote] new sdk error:", e)
 			Close()
 			os.Exit(1)
