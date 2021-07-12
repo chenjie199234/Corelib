@@ -62,7 +62,7 @@ func main() {
 	if config.EC.ServerVerifyDatas != nil {
 		go func() {
 			registerwg.Wait()
-			//delay 200ms,wait rpc and web server to start their tpc listener
+			//delay 200ms,wait rpc and web server to start their tcp listener
 			//if error happened in this 200ms,server will not be registered
 			tmer := time.NewTimer(time.Millisecond * 200)
 			select {

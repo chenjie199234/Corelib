@@ -14,7 +14,6 @@ import (
 )
 
 const (
-	//timePackage     = protogen.GoImportPath("time")
 	stringsPackage  = protogen.GoImportPath("strings")
 	bytesPackage    = protogen.GoImportPath("bytes")
 	strconvPackage  = protogen.GoImportPath("strconv")
@@ -133,10 +132,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 		g.P("if header == nil {")
 		g.P("header = make(", g.QualifiedGoIdent(httpPackage.Ident("Header")), ")")
 		g.P("}")
-		g.P("if md:=", g.QualifiedGoIdent(metadataPackage.Ident("GetAllMetadata")), "(ctx);len(md)!=0{")
-		g.P("d,_:=", g.QualifiedGoIdent(jsonPackage.Ident("Marshal")), "(md)")
-		g.P("header.Set(\"Metadata\",", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(d))")
-		g.P("}")
+		g.P("md:=", g.QualifiedGoIdent(metadataPackage.Ident("GetAllMetadata")), "(ctx)")
 		if r.method == http.MethodGet || r.method == http.MethodDelete {
 			g.P("header.Set(\"Content-Type\", \"application/x-www-form-urlencoded\")")
 			g.P("buf:=", g.QualifiedGoIdent(bufpoolPackage.Ident("GetBuffer")), "()")
@@ -264,9 +260,9 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 			g.P("}")
 			switch r.method {
 			case http.MethodGet:
-				g.P("callback,e:=c.cc.Get(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, "+buf.String(),header)")
+				g.P("callback,e:=c.cc.Get(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, "+buf.String(),header,md)")
 			case http.MethodDelete:
-				g.P("callback,e:=c.cc.Delete(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, "+buf.String(),header)")
+				g.P("callback,e:=c.cc.Delete(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, "+buf.String(),header,md)")
 			}
 			g.P(g.QualifiedGoIdent(bufpoolPackage.Ident("PutBuffer")), "(buf)")
 		} else {
@@ -274,11 +270,11 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 			g.P("reqdata,_:=", g.QualifiedGoIdent(jsonPackage.Ident("Marshal")), "(req)")
 			switch r.method {
 			case http.MethodPost:
-				g.P("callback,e:=c.cc.Post(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, ",header,reqdata)")
+				g.P("callback,e:=c.cc.Post(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, ",header,md,reqdata)")
 			case http.MethodPut:
-				g.P("callback,e:=c.cc.Put(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, "header,reqdata)")
+				g.P("callback,e:=c.cc.Put(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, "header,md,reqdata)")
 			case http.MethodPatch:
-				g.P("callback,e:=c.cc.Patch(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, "header,reqdata)")
+				g.P("callback,e:=c.cc.Patch(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, "header,md,reqdata)")
 			}
 		}
 		g.P("if e != nil {")

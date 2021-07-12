@@ -9,12 +9,6 @@ import (
 const dockerfiletext = `FROM debian:stable-slim
 RUN apt-get update && apt-get install -y ca-certificates && mkdir /root/app && mkdir /root/app/k8sconfig && mkdir /root/app/remoteconfig
 WORKDIR /root/app
-ENV DISCOVERY_SERVER_GROUP='<DISCOVERY_SERVER_GROUP>' \
-    DISCOVERY_SERVER_NAME='<DISCOVERY_SERVER_NAME>' \
-    DISCOVERY_SERVER_PORT='<DISCOVERY_SERVER_PORT>'
-ENV SERVER_VERIFY_DATA='<SERVER_VERIFY_DATA>' \
-    CONFIG_TYPE='<CONFIG_TYPE>' \
-    RUN_ENV='<RUN_ENV>'
 COPY main probe.sh AppConfig.json SourceConfig.json ./
 ENTRYPOINT ["./main"]`
 
@@ -56,6 +50,12 @@ spec:
           env:
             - name: DEPLOY_ENV
               value: kubernetes
+            - name: RUN_ENV
+              value: <RUN_ENV>
+            - name: SERVER_VERIFY_DATA
+              value: <SERVER_VERIFY_DATA>
+            - name: CONFIG_TYPE
+              value: <CONFIG_TYPE>
           livenessProbe:
             exec:
               command:
@@ -118,7 +118,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{.ProjectName}}-service
+  name: {{.ProjectName}}-service{{ if .HeadlessService }}-headless{{ end }}
   namespace: {{.NameSpace}}
   labels:
     app: {{.ProjectName}}

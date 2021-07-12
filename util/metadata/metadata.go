@@ -48,3 +48,23 @@ func SetAllMetadata(ctx context.Context, data map[string]string) context.Context
 	}
 	return ctx
 }
+func CleanMetadata(ctx context.Context, key string) {
+	tempresult := ctx.Value(metadatakey{})
+	if tempresult == nil {
+		return
+	}
+	result := tempresult.(map[string]string)
+	delete(result, key)
+	return
+}
+func CleanAllMetadata(ctx context.Context) {
+	tempresult := ctx.Value(metadatakey{})
+	if tempresult == nil {
+		return
+	}
+	result := tempresult.(map[string]string)
+	for k := range result {
+		delete(result, k)
+	}
+	return
+}
