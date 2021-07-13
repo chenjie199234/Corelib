@@ -46,9 +46,6 @@ type AppConfig struct {
 //EnvConfig can't hot update,all these data is from system env setting
 //each field:nil means system env not exist
 type EnvConfig struct {
-	DiscoveryGroup    *string
-	DiscoveryName     *string
-	DiscoveryPort     *int
 	ServerVerifyDatas []string
 	ConfigType        *int
 	RunEnv            *string

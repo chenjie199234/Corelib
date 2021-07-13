@@ -22,9 +22,12 @@ import (
 )
 
 type ServerConfig struct {
-	//when server close,server will wait this time before close,every request will refresh the time
+	//when server close,server will wait at least this time before close,every request will refresh the time
 	//min is 1 second
 	WaitCloseTime time.Duration
+	//when server is waiting close,every request during this time will refresh the wait time or not
+	//if this is true,during waiting close time,constant requests will block the close,because the wait time refreshed every time
+	WaitCloseRefresh bool
 	//request's max handling time
 	GlobalTimeout time.Duration
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
@@ -420,9 +423,11 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	//check server status
 	if atomic.LoadInt32(&this.status) != 1 {
-		select {
-		case this.stopch <- struct{}{}:
-		default:
+		if this.c.WaitCloseRefresh {
+			select {
+			case this.stopch <- struct{}{}:
+			default:
+			}
 		}
 		w.WriteHeader(888)
 		return
