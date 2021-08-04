@@ -1048,14 +1048,14 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 			b.appendemptyobj()
 		}
 	case reflect.Struct:
-		if d.Type().Name() == "Time" || d.Type().Name() == "MTime" {
+		if d.Type().Name() == "Time" {
 			t := (*time.Time)(unsafe.Pointer(d.Addr().Pointer()))
 			b.appendbasic(t)
 		} else if d.NumField() > 0 {
 			b.buf = append(b.buf, '{')
 			t := d.Type()
 			for i := 0; i < d.NumField(); i++ {
-				if t.Field(i).Name[0] >= 65 || t.Field(i).Name[0] <= 90 {
+				if t.Field(i).Name[0] >= 65 && t.Field(i).Name[0] <= 90 {
 					b.buf = append(b.buf, t.Field(i).Name...)
 					b.buf = append(b.buf, ':')
 					b.appendreflect(d.Field(i))
@@ -1206,8 +1206,8 @@ func (b *Buffer) Len() int {
 func (b *Buffer) Cap() int {
 	return cap(b.buf)
 }
-func (b *Buffer) Grow(n int) {
-	if cap(b.buf) >= n {
+func (b *Buffer) Grow(n uint64) {
+	if uint64(cap(b.buf)) >= n {
 		(*[3]uintptr)(unsafe.Pointer(&(b.buf)))[1] = uintptr(n)
 	} else {
 		b.buf = make([]byte, n)

@@ -88,6 +88,11 @@ func StdErrorToError(e error) *Error {
 	}
 	return result
 }
+func Equal(a, b error) bool {
+	aa := StdErrorToError(a)
+	bb := StdErrorToError(b)
+	return aa.Code == bb.Code && aa.Msg == bb.Msg
+}
 func (this *Error) Error() string {
 	if this == nil {
 		return ""

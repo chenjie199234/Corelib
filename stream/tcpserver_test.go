@@ -51,7 +51,8 @@ func tcpserverhandleVerify(ctx context.Context, peeruniquename string, peerVerif
 	}
 	return []byte{'t', 'e', 's', 't'}, true
 }
-func tcpserverhandleonline(p *Peer, peeruniquename string, starttime int64) {
+func tcpserverhandleonline(p *Peer, peeruniquename string, starttime int64) bool {
+	return true
 }
 func tcpserverhandleuserdata(p *Peer, peeruniquename string, data []byte, starttime int64) {
 	fmt.Printf("%s:%s\n", peeruniquename, data)

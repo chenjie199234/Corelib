@@ -28,15 +28,18 @@ type ServerConfig struct {
 	GlobalTimeout          time.Duration
 	HeartTimeout           time.Duration
 	HeartPorbe             time.Duration
-	GroupNum               uint
-	SocketRBuf             uint
-	SocketWBuf             uint
-	MaxMsgLen              uint
-	MaxBufferedWriteMsgNum uint
+	GroupNum               uint32
+	SocketRBuf             uint32
+	SocketWBuf             uint32
+	MaxMsgLen              uint32
+	MaxBufferedWriteMsgNum uint32
 	VerifyDatas            []string
 }
 
 func (c *ServerConfig) validate() {
+	if c.WaitCloseTime < time.Second {
+		c.WaitCloseTime = time.Second
+	}
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
 	}
@@ -73,15 +76,14 @@ func (c *ServerConfig) validate() {
 }
 
 type RpcServer struct {
-	c        *ServerConfig
-	global   []OutsideHandler
-	ctxpool  *sync.Pool
-	handler  map[string]func(string, *Msg)
-	instance *stream.Instance
-	status   int32 //0-created,not started 1-started 2-closed
-	stopch   chan struct{}
-
-	reqnum int32
+	c                  *ServerConfig
+	global             []OutsideHandler
+	ctxpool            *sync.Pool
+	handler            map[string]func(string, *Msg)
+	instance           *stream.Instance
+	closewait          *sync.WaitGroup
+	totalreqnum        int32
+	refreshclosewaitch chan struct{}
 }
 
 func NewRpcServer(c *ServerConfig, selfgroup, selfname string) (*RpcServer, error) {
@@ -100,12 +102,14 @@ func NewRpcServer(c *ServerConfig, selfgroup, selfname string) (*RpcServer, erro
 	}
 	c.validate()
 	serverinstance := &RpcServer{
-		c:       c,
-		global:  make([]OutsideHandler, 0, 10),
-		ctxpool: &sync.Pool{},
-		handler: make(map[string]func(string, *Msg), 10),
-		stopch:  make(chan struct{}, 1),
+		c:                  c,
+		global:             make([]OutsideHandler, 0, 10),
+		ctxpool:            &sync.Pool{},
+		handler:            make(map[string]func(string, *Msg), 10),
+		closewait:          &sync.WaitGroup{},
+		refreshclosewaitch: make(chan struct{}, 1),
 	}
+	serverinstance.closewait.Add(1)
 	instancec := &stream.InstanceConfig{
 		HeartbeatTimeout:       c.HeartTimeout,
 		HeartprobeInterval:     c.HeartPorbe,
@@ -126,43 +130,69 @@ func NewRpcServer(c *ServerConfig, selfgroup, selfname string) (*RpcServer, erro
 }
 
 var ErrServerClosed = errors.New("[rpc.server] closed")
+var ErrAlreadyStarted = errors.New("[rpc.server] already started")
 
 func (s *RpcServer) StartRpcServer(listenaddr string) error {
-	if !atomic.CompareAndSwapInt32(&s.status, 0, 1) {
-		return nil
-	}
 	log.Info("[rpc.server] start with verifydatas:", s.c.VerifyDatas)
 	e := s.instance.StartTcpServer(listenaddr)
 	if e == stream.ErrServerClosed {
 		return ErrServerClosed
+	} else if e == stream.ErrAlreadyStarted {
+		return ErrAlreadyStarted
 	}
 	return e
 }
 func (s *RpcServer) StopRpcServer() {
-	if atomic.SwapInt32(&s.status, 2) == 2 {
-		return
-	}
-	d, _ := proto.Marshal(&Msg{
-		Callid: 0,
-		Error:  ERRCLOSING.Error(),
-	})
-	s.instance.SendMessageAll(d, true)
-	timer := time.NewTimer(s.c.WaitCloseTime)
+	stop := false
 	for {
-		select {
-		case <-timer.C:
-			if s.reqnum != 0 {
-				timer.Reset(s.c.WaitCloseTime)
-			} else {
-				s.instance.Stop()
-				return
+		old := s.totalreqnum
+		if old >= 0 {
+			if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old-math.MaxInt32) {
+				stop = true
+				break
 			}
-		case <-s.stopch:
-			if !timer.Stop() {
-				<-timer.C
-			}
-			timer.Reset(s.c.WaitCloseTime)
+		} else {
+			break
 		}
+	}
+	if stop {
+		//tel all peers self closed
+		d, _ := proto.Marshal(&Msg{
+			Callid: 0,
+			Error:  ERRCLOSING.Error(),
+		})
+		s.instance.SendMessageAll(d, true)
+		//wait at least s.c.WaitCloseTime before stop the under layer socket
+		tmer := time.NewTimer(s.c.WaitCloseTime)
+		for {
+			select {
+			case <-tmer.C:
+				if s.totalreqnum != -math.MaxInt32 {
+					tmer.Reset(s.c.WaitCloseTime)
+				} else {
+					s.instance.Stop()
+					s.closewait.Done()
+					break
+				}
+			case <-s.refreshclosewaitch:
+				tmer.Reset(s.c.WaitCloseTime)
+				for len(tmer.C) > 0 {
+					<-tmer.C
+				}
+			}
+		}
+	}
+	s.closewait.Wait()
+}
+func (s *RpcServer) GetClientNum() int32 {
+	return s.instance.GetPeerNum()
+}
+func (s *RpcServer) GetReqNum() int32 {
+	totalreqnum := atomic.LoadInt32(&s.totalreqnum)
+	if totalreqnum < 0 {
+		return totalreqnum + math.MaxInt32
+	} else {
+		return totalreqnum
 	}
 }
 func (s *RpcServer) getContext(ctx context.Context, peeruniquename string, msg *Msg, handlers []OutsideHandler) *Context {
@@ -204,12 +234,13 @@ func (s *RpcServer) RegisterHandler(path string, functimeout time.Duration, hand
 	s.handler[path] = h
 	return nil
 }
+
 func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handlers ...OutsideHandler) (func(string, *Msg), error) {
 	totalhandlers := make([]OutsideHandler, 1)
 	totalhandlers = append(totalhandlers, s.global...)
 	totalhandlers = append(totalhandlers, handlers...)
 	if len(totalhandlers) > math.MaxInt8 {
-		return nil, errors.New("[rpc.server] too many handlers for one single path")
+		return nil, errors.New("[rpc.server] too many handlers for one path")
 	}
 	return func(peeruniquename string, msg *Msg) {
 		defer func() {
@@ -249,7 +280,7 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
-				msg.Error = ERRCTXTIMEOUT.Error()
+				msg.Error = context.DeadlineExceeded.Error()
 				msg.Metadata = nil
 				return
 			}
@@ -267,7 +298,8 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 	}, nil
 }
 func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
-	if atomic.LoadInt32(&s.status) != 1 {
+	if s.totalreqnum < 0 {
+		//self closed
 		return nil, false
 	}
 	temp := common.Byte2str(peerVerifyData)
@@ -292,20 +324,13 @@ func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerV
 	}
 	return nil, false
 }
-func (s *RpcServer) onlinefunc(p *stream.Peer, peeruniquename string, sid int64) {
-	if atomic.LoadInt32(&s.status) != 1 {
-		d, _ := proto.Marshal(&Msg{
-			Callid: 0,
-			Error:  ERRCLOSING.Error(),
-		})
-		select {
-		case s.stopch <- struct{}{}:
-		default:
-		}
-		p.SendMessage(d, sid, true)
-	} else {
-		log.Info("[rpc.server.onlinefunc] client:", peeruniquename, "online")
+func (s *RpcServer) onlinefunc(p *stream.Peer, peeruniquename string, sid int64) bool {
+	if s.totalreqnum < 0 {
+		//self closed
+		return false
 	}
+	log.Info("[rpc.server.onlinefunc] client:", peeruniquename, "online")
+	return true
 }
 func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, sid int64) {
 	msg := &Msg{}
@@ -314,12 +339,33 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		p.Close(sid)
 		return
 	}
-	go func() {
-		if atomic.LoadInt32(&s.status) != 1 {
+	handler, ok := s.handler[msg.Path]
+	if !ok {
+		msg.Path = ""
+		msg.Deadline = 0
+		msg.Body = nil
+		msg.Error = ERRNOAPI.Error()
+		msg.Metadata = nil
+		d, _ := proto.Marshal(msg)
+		if e := p.SendMessage(d, sid, true); e != nil {
+			log.Error("[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
+		}
+		return
+	}
+	for {
+		old := s.totalreqnum
+		if old >= 0 {
+			//add req num
+			if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old+1) {
+				break
+			}
+		} else {
+			//refresh close wait
 			select {
-			case s.stopch <- struct{}{}:
+			case s.refreshclosewaitch <- struct{}{}:
 			default:
 			}
+			//tel peer self closed
 			msg.Path = ""
 			msg.Deadline = 0
 			msg.Body = nil
@@ -331,42 +377,29 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			}
 			return
 		}
-		handler, ok := s.handler[msg.Path]
-		if !ok {
-			msg.Path = ""
-			msg.Deadline = 0
-			msg.Body = nil
-			msg.Error = ERRNOAPI.Error()
-			msg.Metadata = nil
-			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(d, sid, true); e != nil {
-				log.Error("[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
-			}
-			return
-		}
-		atomic.AddInt32(&s.reqnum, 1)
-		defer atomic.AddInt32(&s.reqnum, -1)
+	}
+	go func() {
 		handler(peeruniquename, msg)
 		d, _ := proto.Marshal(msg)
-		if len(d) > int(s.c.MaxMsgLen) {
-			log.Error("[rpc.server.userfunc] send message to client:", peeruniquename, "error:message too large")
-			msg.Path = ""
-			msg.Deadline = 0
-			msg.Body = nil
-			msg.Error = ERRRESPMSGLARGE.Error()
-			msg.Metadata = nil
-			d, _ = proto.Marshal(msg)
-		}
 		if e := p.SendMessage(d, sid, true); e != nil {
 			log.Error("[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
+			if e == stream.ErrMsgLarge {
+				msg.Path = ""
+				msg.Deadline = 0
+				msg.Body = nil
+				msg.Error = ERRRESPMSGLARGE.Error()
+				msg.Metadata = nil
+				d, _ = proto.Marshal(msg)
+				p.SendMessage(d, sid, true)
+			}
 		}
-		//double check server status
-		if atomic.LoadInt32(&s.status) != 1 {
+		if s.totalreqnum < 0 {
 			select {
-			case s.stopch <- struct{}{}:
+			case s.refreshclosewaitch <- struct{}{}:
 			default:
 			}
 		}
+		atomic.AddInt32(&s.totalreqnum, -1)
 	}()
 }
 func (s *RpcServer) offlinefunc(p *stream.Peer, peeruniquename string) {

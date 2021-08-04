@@ -43,21 +43,13 @@ func NewRedis(c *Config) *Pool {
 					ctx, cancel = context.WithTimeout(ctx, c.ConnTimeout)
 					defer cancel()
 				}
-				conn, e := redis.DialContext(ctx, "tcp", c.Addr, redis.DialReadTimeout(c.IOTimeout), redis.DialWriteTimeout(c.IOTimeout))
+				conn, e := redis.DialContext(ctx, "tcp", c.Addr,
+					redis.DialReadTimeout(c.IOTimeout),
+					redis.DialWriteTimeout(c.IOTimeout),
+					redis.DialUsername(c.Username),
+					redis.DialPassword(c.Password))
 				if e != nil {
 					return nil, e
-				}
-				cc := &Conn{c: conn}
-				if c.Username != "" && c.Password != "" {
-					if _, e = cc.DoContext(ctx, "AUTH", c.Username, c.Password); e != nil {
-						conn.Close()
-						return nil, e
-					}
-				} else if c.Password != "" {
-					if _, e = cc.DoContext(ctx, "AUTH", c.Password); e != nil {
-						conn.Close()
-						return nil, e
-					}
 				}
 				return conn, nil
 			},
@@ -100,6 +92,10 @@ func (c *Conn) DoContext(ctx context.Context, cmd string, args ...interface{}) (
 	} else {
 		return c.c.Do(cmd, args...)
 	}
+}
+func (c *Conn) Ping(ctx context.Context) error {
+	_, e := c.DoContext(ctx, "PING")
+	return e
 }
 func (c *Conn) Send(cmd string, args ...interface{}) error {
 	return c.c.Send(cmd, args...)

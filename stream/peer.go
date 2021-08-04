@@ -1,13 +1,11 @@
 package stream
 
 import (
-	"bufio"
 	"context"
 	"encoding/binary"
 	"errors"
 	"io"
 	"net"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -16,9 +14,11 @@ import (
 )
 
 var (
-	ERRCONNCLOSED  = errors.New("connection is closed")
-	ERRMSGLENGTH   = errors.New("message length error")
-	ERRSENDBUFFULL = errors.New("send buffer full")
+	ErrConnClosed  = errors.New("connection closed")
+	ErrMsgLarge    = errors.New("message too large")
+	ErrMsgEmpty    = errors.New("message empty")
+	ErrMsgUnknown  = errors.New("message type unknown")
+	ErrSendBufFull = errors.New("send buffer full")
 )
 
 type peergroup struct {
@@ -30,12 +30,11 @@ type Peer struct {
 	parentgroup    *peergroup
 	peername       string
 	sid            int64 //'<0'---(closing),'0'---(closed),'>0'---(connected)
-	maxmsglen      uint
-	reader         *bufio.Reader
+	selfmaxmsglen  uint32
+	peermaxmsglen  uint32
 	writerbuffer   chan *bufpool.Buffer
 	pingpongbuffer chan *bufpool.Buffer
-	conn           unsafe.Pointer
-	fd             uint64         //this will be used when this is a unixsocket connection
+	conn           *net.TCPConn
 	lastactive     int64          //unixnano timestamp
 	recvidlestart  int64          //unixnano timestamp
 	sendidlestart  int64          //unixnano timestamp
@@ -46,61 +45,41 @@ type Peer struct {
 
 func (p *Peer) getUniqueName() string {
 	var addr string
-	if p.fd == 0 {
-		//tcp
-		addr = (*net.TCPConn)(p.conn).RemoteAddr().String()
-	} else {
-		//unix
-		addr = "fd:" + strconv.FormatUint(p.fd, 10)
-	}
+	addr = p.conn.RemoteAddr().String()
 	if p.peername == "" {
 		return addr
 	}
 	return p.peername + ":" + addr
 }
 
-//closeconn close the under layer socket
 func (p *Peer) closeconn() {
 	if p.conn != nil {
-		if p.fd == 0 {
-			//tcp
-			(*net.TCPConn)(p.conn).Close()
-		} else {
-			//unix
-			(*net.UnixConn)(p.conn).Close()
-		}
+		p.conn.Close()
 	}
 }
 
 func (p *Peer) setbuffer(readnum, writenum int) {
-	if p.fd == 0 {
-		//tcp
-		(*net.TCPConn)(p.conn).SetReadBuffer(readnum)
-		(*net.TCPConn)(p.conn).SetWriteBuffer(writenum)
-	} else {
-		//unix
-		(*net.UnixConn)(p.conn).SetReadBuffer(readnum)
-		(*net.UnixConn)(p.conn).SetWriteBuffer(writenum)
-	}
+	p.conn.SetReadBuffer(readnum)
+	p.conn.SetWriteBuffer(writenum)
 }
 
 func (p *Peer) readMessage() (*bufpool.Buffer, error) {
 	buf := bufpool.GetBuffer()
 	buf.Grow(4)
-	if _, e := io.ReadFull(p.reader, buf.Bytes()); e != nil {
+	if _, e := io.ReadFull(p.conn, buf.Bytes()); e != nil {
 		bufpool.PutBuffer(buf)
 		return nil, e
 	}
-	num := int(binary.BigEndian.Uint32(buf.Bytes()))
-	if num > int(p.maxmsglen) || num < 0 {
+	num := binary.BigEndian.Uint32(buf.Bytes())
+	if num > p.selfmaxmsglen || num < 0 {
 		bufpool.PutBuffer(buf)
-		return nil, ERRMSGLENGTH
+		return nil, ErrMsgLarge
 	} else if num == 0 {
 		bufpool.PutBuffer(buf)
 		return nil, nil
 	}
-	buf.Grow(num)
-	if _, e := io.ReadFull(p.reader, buf.Bytes()); e != nil {
+	buf.Grow(uint64(num))
+	if _, e := io.ReadFull(p.conn, buf.Bytes()); e != nil {
 		bufpool.PutBuffer(buf)
 		return nil, e
 	}
@@ -113,12 +92,12 @@ func (p *Peer) SendMessage(userdata []byte, sid int64, block bool) error {
 	if len(userdata) == 0 {
 		return nil
 	}
-	if len(userdata) > int(p.maxmsglen) {
-		return ERRMSGLENGTH
+	if len(userdata) > int(p.peermaxmsglen) {
+		return ErrMsgLarge
 	}
 	if p.sid != sid {
 		//sid for aba check
-		return ERRCONNCLOSED
+		return ErrConnClosed
 	}
 	var data *bufpool.Buffer
 	data = makeUserMsg(userdata, sid)
@@ -129,11 +108,12 @@ func (p *Peer) SendMessage(userdata []byte, sid int64, block bool) error {
 		select {
 		case p.writerbuffer <- data:
 		default:
-			return ERRSENDBUFFULL
+			return ErrSendBufFull
 		}
 	}
 	return nil
 }
+
 func (p *Peer) Close(sid int64) {
 	if atomic.CompareAndSwapInt64(&p.sid, sid, -1) {
 		//wake up write goroutine

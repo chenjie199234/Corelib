@@ -89,7 +89,6 @@ func (this *Context) GetHeaders() http.Header {
 	return this.r.Header
 }
 func (this *Context) GetHeader(key string) string {
-	//return "" means not exists
 	return this.r.Header.Get(key)
 }
 func getclientip(r *http.Request) string {
@@ -138,13 +137,9 @@ func (this *Context) GetAcceptEncoding() string {
 func (this *Context) GetAcceptLanguage() string {
 	return this.r.Header.Get("Accept-Language")
 }
-
-//Cookies
 func (this *Context) GetCookies() []*http.Cookie {
 	return this.r.Cookies()
 }
-
-//return nil means not exists
 func (this *Context) GetCookie(key string) *http.Cookie {
 	result, e := this.r.Cookie(key)
 	if e == http.ErrNoCookie {
@@ -152,7 +147,6 @@ func (this *Context) GetCookie(key string) *http.Cookie {
 	}
 	return result
 }
-
 func (this *Context) ParseForm() error {
 	if e := this.r.ParseForm(); e != nil {
 		return e
@@ -168,24 +162,20 @@ func (this *Context) GetForm(key string) string {
 	if len(this.r.Form) == 0 {
 		return ""
 	}
-	//return "" means not exists
 	return this.r.Form.Get(key)
 }
 func (this *Context) GetBody() ([]byte, error) {
-	//return nil means not exists
 	return io.ReadAll(this.r.Body)
 }
 
 //param is the value in dynamic url,see httprouter's dynamic path
 //https://github.com/julienschmidt/httprouter
 func (this *Context) GetParams() httprouter.Params {
-	//return nil means not exists
 	return httprouter.ParamsFromContext(this.Context)
 }
 
 //param is the value in dynamic url,see httprouter's dynamic path
 //https://github.com/julienschmidt/httprouter
 func (this *Context) GetParam(key string) string {
-	//return "" means not exists
 	return httprouter.ParamsFromContext(this.Context).ByName(key)
 }

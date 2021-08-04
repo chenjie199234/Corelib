@@ -23,7 +23,7 @@ func testheartmsg() {
 	}
 }
 func testverifymsg() {
-	data := makeVerifyMsg("test", []byte{'t', 'e', 's', 't'}, 1654)
+	data := makeVerifyMsg("test", []byte{'t', 'e', 's', 't'}, 1654, 10)
 	msgtype, e := getMsgType(data.Bytes()[4:])
 	if e != nil {
 		panic("get msg type error:" + e.Error())
@@ -31,11 +31,11 @@ func testverifymsg() {
 	if msgtype != VERIFY {
 		panic(fmt.Sprintf("get msg type error:type:%d wrong", msgtype))
 	}
-	sender, verifydata, starttime, e := getVerifyMsg(data.Bytes()[4:])
+	sender, verifydata, starttime, maxmsglength, e := getVerifyMsg(data.Bytes()[4:])
 	if e != nil {
 		panic("get verify msg error:" + e.Error())
 	}
-	if sender != "test" || !bytes.Equal(verifydata, []byte{'t', 'e', 's', 't'}) || starttime != 1654 {
+	if sender != "test" || !bytes.Equal(verifydata, []byte{'t', 'e', 's', 't'}) || starttime != 1654 || maxmsglength != 10 {
 		panic("get verify msg error:data wrong")
 	}
 }

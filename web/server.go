@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -25,15 +26,15 @@ type ServerConfig struct {
 	//when server close,server will wait at least this time before close,every request will refresh the time
 	//min is 1 second
 	WaitCloseTime time.Duration
-	//when server is waiting close,every request during this time will refresh the wait time or not
-	//if this is true,during waiting close time,constant requests will block the close,because the wait time refreshed every time
+	//when server is waiting close,every new request during this time will refresh the wait time or not
+	//if this is true,during waiting close time,constant new requests will block the close,because the wait time will be refreshed every time new request comes
 	WaitCloseRefresh bool
 	//request's max handling time
 	GlobalTimeout time.Duration
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
 	//if this is 0,GlobalTimeout will be used as IdleTimeout
 	IdleTimeout time.Duration
-	//system's tcp keep alive probe interval,negative disable keep alive,0 will be set to default 15s
+	//system's tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
 	HeartProbe         time.Duration
 	StaticFileRootPath string
 	MaxHeader          uint
@@ -72,6 +73,8 @@ func (c *ServerConfig) validate() {
 	}
 	if c.HeartProbe == 0 {
 		c.HeartProbe = time.Second * 15
+	} else if c.HeartProbe > 0 && c.HeartProbe < time.Second {
+		c.HeartProbe = time.Second
 	}
 	if c.MaxHeader == 0 {
 		c.MaxHeader = 1024
@@ -114,7 +117,7 @@ func (c *ServerConfig) validate() {
 }
 
 func (c *ServerConfig) getCorsHeaders() string {
-	if c.Cors.allheader || len(c.Cors.AllowedHeader) == 0 {
+	if len(c.Cors.AllowedHeader) == 0 {
 		return ""
 	}
 	removedup := make(map[string]struct{}, len(c.Cors.AllowedHeader))
@@ -132,34 +135,32 @@ func (c *ServerConfig) getCorsHeaders() string {
 	return strings.Join(unique, ", ")
 }
 func (c *ServerConfig) getCorsExpose() string {
-	if len(c.Cors.ExposeHeader) > 0 {
-		removedup := make(map[string]struct{}, len(c.Cors.ExposeHeader))
-		for _, v := range c.Cors.ExposeHeader {
-			removedup[http.CanonicalHeaderKey(v)] = struct{}{}
-		}
-		unique := make([]string, len(removedup))
-		index := 0
-		for v := range removedup {
-			unique[index] = v
-			index++
-		}
-		return strings.Join(unique, ", ")
-	} else {
+	if len(c.Cors.ExposeHeader) == 0 {
 		return ""
 	}
+	removedup := make(map[string]struct{}, len(c.Cors.ExposeHeader))
+	for _, v := range c.Cors.ExposeHeader {
+		removedup[http.CanonicalHeaderKey(v)] = struct{}{}
+	}
+	unique := make([]string, len(removedup))
+	index := 0
+	for v := range removedup {
+		unique[index] = v
+		index++
+	}
+	return strings.Join(unique, ", ")
 }
 
 type WebServer struct {
-	selfappname string
-	c           *ServerConfig
-	s           *http.Server
-	global      []OutsideHandler
-	router      *httprouter.Router
-	ctxpool     *sync.Pool
-	status      int32 //0-created,not started 1-started 2-stoped
-	stopch      chan struct{}
-
-	reqnum int32
+	selfappname      string
+	c                *ServerConfig
+	ctxpool          *sync.Pool
+	global           []OutsideHandler
+	router           *httprouter.Router
+	s                *http.Server
+	closewait        *sync.WaitGroup
+	totalreqnum      int32
+	refreshclosewait chan struct{}
 }
 
 func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, error) {
@@ -180,34 +181,15 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	c.validate()
 	//new server
 	instance := &WebServer{
-		selfappname: selfappname,
-		c:           c,
-		s: &http.Server{
-			ReadTimeout:    c.GlobalTimeout,
-			WriteTimeout:   c.GlobalTimeout,
-			IdleTimeout:    c.IdleTimeout,
-			MaxHeaderBytes: int(c.MaxHeader),
-			ConnContext: func(ctx context.Context, conn net.Conn) context.Context {
-				if c.HeartProbe > 0 {
-					(conn.(*net.TCPConn)).SetKeepAlive(true)
-					(conn.(*net.TCPConn)).SetKeepAlivePeriod(c.HeartProbe)
-				}
-				(conn.(*net.TCPConn)).SetReadBuffer(int(c.SocketRBuf))
-				(conn.(*net.TCPConn)).SetWriteBuffer(int(c.SocketWBuf))
-				return ctx
-			},
-		},
-		global:  make([]OutsideHandler, 0, 10),
-		router:  httprouter.New(),
-		ctxpool: &sync.Pool{},
-		stopch:  make(chan struct{}, 1),
+		selfappname:      selfappname,
+		c:                c,
+		ctxpool:          &sync.Pool{},
+		global:           make([]OutsideHandler, 0, 10),
+		router:           httprouter.New(),
+		closewait:        &sync.WaitGroup{},
+		refreshclosewait: make(chan struct{}, 1),
 	}
-	if c.HeartProbe < 0 {
-		instance.s.SetKeepAlivesEnabled(false)
-	} else {
-		instance.s.SetKeepAlivesEnabled(true)
-	}
-	instance.s.Handler = instance
+	instance.closewait.Add(1)
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
 		http.Error(w,
@@ -276,11 +258,44 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 }
 
 var ErrServerClosed = errors.New("[web.server] closed")
+var ErrAlreadyStarted = errors.New("[web.server] already started")
 
 //certkeys mapkey: cert path,mapvalue: key path
 func (this *WebServer) StartWebServer(listenaddr string, certkeys map[string]string) error {
-	if !atomic.CompareAndSwapInt32(&this.status, 0, 1) {
-		return nil
+	s := &http.Server{
+		ReadTimeout:    this.c.GlobalTimeout,
+		WriteTimeout:   this.c.GlobalTimeout,
+		IdleTimeout:    this.c.IdleTimeout,
+		MaxHeaderBytes: int(this.c.MaxHeader),
+		ConnContext: func(ctx context.Context, conn net.Conn) context.Context {
+			if this.c.HeartProbe > 0 {
+				(conn.(*net.TCPConn)).SetKeepAlive(true)
+				(conn.(*net.TCPConn)).SetKeepAlivePeriod(this.c.HeartProbe)
+			}
+			(conn.(*net.TCPConn)).SetReadBuffer(int(this.c.SocketRBuf))
+			(conn.(*net.TCPConn)).SetWriteBuffer(int(this.c.SocketWBuf))
+			return ctx
+		},
+	}
+	if this.c.HeartProbe < 0 {
+		s.SetKeepAlivesEnabled(false)
+	} else {
+		s.SetKeepAlivesEnabled(true)
+	}
+	s.Handler = this
+	if len(certkeys) > 0 {
+		certificates := make([]tls.Certificate, 0, len(certkeys))
+		for cert, key := range certkeys {
+			temp, e := tls.LoadX509KeyPair(cert, key)
+			if e != nil {
+				return errors.New("[web.server] load cert:" + cert + " key:" + key + " error:" + e.Error())
+			}
+			certificates = append(certificates, temp)
+		}
+		s.TLSConfig = &tls.Config{Certificates: certificates}
+	}
+	if !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&this.s)), nil, unsafe.Pointer(s)) {
+		return ErrAlreadyStarted
 	}
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
@@ -290,18 +305,7 @@ func (this *WebServer) StartWebServer(listenaddr string, certkeys map[string]str
 	if e != nil {
 		return errors.New("[web.server] listen addr:" + listenaddr + " error:" + e.Error())
 	}
-	certificates := make([]tls.Certificate, 0, len(certkeys))
-	for cert, key := range certkeys {
-		if cert != "" && key != "" {
-			temp, e := tls.LoadX509KeyPair(cert, key)
-			if e != nil {
-				return errors.New("[web.server] load cert:" + cert + " key:" + key + " error:" + e.Error())
-			}
-			certificates = append(certificates, temp)
-		}
-	}
-	if len(certificates) > 0 {
-		this.s.TLSConfig = &tls.Config{Certificates: certificates}
+	if len(certkeys) > 0 {
 		e = this.s.ServeTLS(l, "", "")
 	} else {
 		e = this.s.Serve(l)
@@ -315,26 +319,40 @@ func (this *WebServer) StartWebServer(listenaddr string, certkeys map[string]str
 	return nil
 }
 func (this *WebServer) StopWebServer() {
-	if atomic.SwapInt32(&this.status, 2) == 2 {
-		return
-	}
-	tmer := time.NewTimer(this.c.WaitCloseTime)
+	stop := false
 	for {
-		select {
-		case <-tmer.C:
-			if this.reqnum != 0 {
-				tmer.Reset(this.c.WaitCloseTime)
-			} else {
-				this.s.Shutdown(context.Background())
-				return
+		old := this.totalreqnum
+		if old >= 0 {
+			if atomic.CompareAndSwapInt32(&this.totalreqnum, old, old-math.MaxInt32) {
+				stop = true
+				break
 			}
-		case <-this.stopch:
-			if !tmer.Stop() {
-				<-tmer.C
-			}
-			tmer.Reset(this.c.WaitCloseTime)
+		} else {
+			break
 		}
 	}
+	if stop {
+		tmer := time.NewTimer(this.c.WaitCloseTime)
+		for {
+			select {
+			case <-tmer.C:
+				if this.totalreqnum != -math.MaxInt32 {
+					tmer.Reset(this.c.WaitCloseTime)
+				} else {
+					this.s.Shutdown(context.Background())
+					this.closewait.Done()
+					break
+				}
+			case <-this.refreshclosewait:
+				tmer.Reset(this.c.WaitCloseTime)
+				for len(tmer.C) > 0 {
+					<-tmer.C
+				}
+			}
+		}
+	}
+	this.closewait.Wait()
+
 }
 func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, handlers []OutsideHandler) *Context {
 	ctx, ok := this.ctxpool.Get().(*Context)
@@ -418,21 +436,30 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	//check required target server
 	if targetserver := r.Header.Get("TargetServer"); targetserver != "" && targetserver != this.selfappname {
 		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: this is not the required targetserver:", targetserver)
-		w.WriteHeader(888)
+		http.Error(w, "target server unusable", 888)
 		return
 	}
 	//check server status
-	if atomic.LoadInt32(&this.status) != 1 {
-		if this.c.WaitCloseRefresh {
-			select {
-			case this.stopch <- struct{}{}:
-			default:
+	for {
+		old := this.totalreqnum
+		if old >= 0 {
+			//add req num
+			if atomic.CompareAndSwapInt32(&this.totalreqnum, old, old+1) {
+				break
 			}
+		} else {
+			if this.c.WaitCloseRefresh {
+				select {
+				case this.refreshclosewait <- struct{}{}:
+				default:
+				}
+			}
+			http.Error(w, "target server unusable", 888)
+			return
 		}
-		w.WriteHeader(888)
-		return
 	}
 	this.router.ServeHTTP(w, r)
+	atomic.AddInt32(&this.totalreqnum, -1)
 }
 
 func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHandler) (http.HandlerFunc, error) {
@@ -531,14 +558,11 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 		r = r.WithContext(basectx)
 		//logic
 		ctx := this.getContext(w, r, totalhandlers)
-		atomic.AddInt32(&this.reqnum, 1)
-		defer atomic.AddInt32(&this.reqnum, -1)
 		ctx.Next()
 		this.putContext(ctx)
-		//double check server status
-		if atomic.LoadInt32(&this.status) != 1 {
+		if this.totalreqnum < 0 {
 			select {
-			case this.stopch <- struct{}{}:
+			case this.refreshclosewait <- struct{}{}:
 			default:
 			}
 		}

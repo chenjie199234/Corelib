@@ -9,23 +9,26 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
+	cerror "github.com/chenjie199234/Corelib/util/error"
 )
 
 var ERRNOSERVER = errors.New("[web] no servers")
 var ERRHEADER = errors.New("[web] forbidden header")
 
+//param's key is server's addr "scheme://host:port"
 type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
-type DiscoveryHandler func(group, name string, manually <-chan struct{}, client *WebClient)
+
+//return data's key is server's addr "scheme://host:port"
+type DiscoveryHandler func(group, name string) map[string]*RegisterData
 
 type ClientConfig struct {
 	//request's max handling time
@@ -33,15 +36,16 @@ type ClientConfig struct {
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
 	//if this is 0,means useless,connection will keep alive until it is closed
 	IdleTimeout time.Duration
-	//system's tcp keep alive probe interval,negative disable keep alive,0 will be set to default 15s
-	HeartProbe    time.Duration
-	MaxHeader     uint
-	SocketRBuf    uint
-	SocketWBuf    uint
-	SkipVerifyTLS bool     //don't verify the server's cert
-	CAs           []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
-	Picker        PickHandler
-	Discover      DiscoveryHandler
+	//system's tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
+	HeartProbe       time.Duration
+	MaxHeader        uint
+	SocketRBuf       uint
+	SocketWBuf       uint
+	SkipVerifyTLS    bool     //don't verify the server's cert
+	CAs              []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
+	Picker           PickHandler
+	DiscoverFunction DiscoveryHandler
+	DiscoverInterval time.Duration //min 1 second
 }
 
 func (c *ClientConfig) validate() {
@@ -50,6 +54,8 @@ func (c *ClientConfig) validate() {
 	}
 	if c.HeartProbe == 0 {
 		c.HeartProbe = time.Second * 15
+	} else if c.HeartProbe > 0 && c.HeartProbe < time.Second {
+		c.HeartProbe = time.Second
 	}
 	if c.MaxHeader == 0 {
 		c.MaxHeader = 1024
@@ -69,6 +75,9 @@ func (c *ClientConfig) validate() {
 	if c.SocketWBuf > 65535 {
 		c.SocketWBuf = 65535
 	}
+	if c.DiscoverInterval < time.Second {
+		c.DiscoverInterval = time.Second
+	}
 }
 
 type WebClient struct {
@@ -77,9 +86,9 @@ type WebClient struct {
 	c           *ClientConfig
 	certpool    *x509.CertPool
 
-	lker         *sync.RWMutex
-	servers      map[string]*ServerForPick
-	addrdata     []byte
+	lker    *sync.RWMutex
+	servers map[string]*ServerForPick
+
 	manually     chan struct{}
 	manualNotice map[chan struct{}]struct{}
 	mlker        *sync.Mutex
@@ -128,7 +137,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 	if c == nil {
 		return nil, errors.New("[web.client] missing config")
 	}
-	if c.Discover == nil {
+	if c.DiscoverFunction == nil {
 		return nil, errors.New("[web.client] missing discover in config")
 	}
 	if c.Picker == nil {
@@ -157,13 +166,17 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 
 		lker:         &sync.RWMutex{},
 		servers:      make(map[string]*ServerForPick, 10),
-		addrdata:     nil,
 		manually:     make(chan struct{}, 1),
 		manualNotice: make(map[chan struct{}]struct{}, 100),
 		mlker:        &sync.Mutex{},
 	}
-	log.Info("[web.client] start finding server", group+"."+name)
-	go c.Discover(group, name, client.manually, client)
+	//init discover
+	log.Info("[web.client] start discovering server", group+"."+name)
+	client.manually <- struct{}{}
+	manualNotice := make(chan struct{}, 1)
+	client.manualNotice[manualNotice] = struct{}{}
+	go defaultDiscover(group, name, client)
+	<-manualNotice
 	return client, nil
 }
 
@@ -172,48 +185,30 @@ type RegisterData struct {
 	Addition []byte
 }
 
-//all: key server's addr
+//all: key server's addr "scheme://host:port"
 func (this *WebClient) UpdateDiscovery(all map[string]*RegisterData) {
 	//check need update
-	addrdata, _ := json.Marshal(all)
 	this.lker.Lock()
-	defer func() {
-		this.mlker.Lock()
-		for notice := range this.manualNotice {
-			notice <- struct{}{}
-			delete(this.manualNotice, notice)
-		}
-		this.mlker.Unlock()
-		this.lker.Unlock()
-	}()
-	if bytes.Equal(this.addrdata, addrdata) {
-		return
-	}
-	this.addrdata = addrdata
+	defer this.lker.Unlock()
 	//offline app
-	for _, server := range this.servers {
-		if _, ok := all[server.host]; !ok {
+	for _, exist := range this.servers {
+		if _, ok := all[exist.host]; !ok {
 			//this app unregistered
-			delete(this.servers, server.host)
+			delete(this.servers, exist.host)
 		}
 	}
 	//online app or update app's dservers
 	for host, registerdata := range all {
 		if len(registerdata.DServers) == 0 {
 			delete(this.servers, host)
-		}
-		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-			continue
-		} else if host == "http://" {
-			continue
-		} else if host == "https://" {
 			continue
 		}
-		for len(host) > 0 && host[len(host)-1] == '/' {
-			host = host[:len(host)-1]
-		}
-		if len(host) <= 6 {
+		if u, e := url.Parse(host); e != nil {
 			continue
+		} else if u.Host == "" || u.Scheme == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			continue
+		} else {
+			host = u.Scheme + "://" + u.Host
 		}
 		exist, ok := this.servers[host]
 		if !ok {
@@ -225,13 +220,6 @@ func (this *WebClient) UpdateDiscovery(all map[string]*RegisterData) {
 						Proxy: http.ProxyFromEnvironment,
 						DialContext: (&net.Dialer{
 							KeepAlive: this.c.HeartProbe,
-							Control: func(network, address string, c syscall.RawConn) error {
-								c.Control(func(fd uintptr) {
-									syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, int(this.c.SocketRBuf))
-									syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, int(this.c.SocketWBuf))
-								})
-								return nil
-							},
 						}).DialContext,
 						TLSClientConfig: &tls.Config{
 							InsecureSkipVerify: this.c.SkipVerifyTLS,
@@ -380,12 +368,10 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			this.mlker.Lock()
 			manualNotice := make(chan struct{}, 1)
 			this.manualNotice[manualNotice] = struct{}{}
-			this.mlker.Unlock()
-			//manual update server discover info
-			select {
-			case this.manually <- struct{}{}:
-			default:
+			if len(this.manualNotice) == 1 {
+				this.manually <- struct{}{}
 			}
+			this.mlker.Unlock()
 			//wait manual update finish
 			select {
 			case <-manualNotice:
@@ -395,7 +381,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 				this.mlker.Lock()
 				delete(this.manualNotice, manualNotice)
 				this.mlker.Unlock()
-				return nil, ctx.Err()
+				return nil, cerror.StdErrorToError(ctx.Err())
 			}
 		}
 		if !server.Pickable() {
@@ -403,7 +389,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		}
 		if ok && dl.UnixNano() < time.Now().UnixNano()+int64(5*time.Millisecond) {
 			//ttl + server logic time
-			return nil, context.DeadlineExceeded
+			return nil, cerror.StdErrorToError(context.DeadlineExceeded)
 		}
 		var req *http.Request
 		var e error
@@ -413,7 +399,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			req, e = http.NewRequestWithContext(ctx, method, server.host+pathwithquery, nil)
 		}
 		if e != nil {
-			return nil, e
+			return nil, cerror.StdErrorToError(e)
 		}
 		req.Header = header
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
@@ -421,7 +407,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 		if e != nil {
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
-			return nil, e
+			return nil, cerror.StdErrorToError(e)
 		}
 		if resp.StatusCode == 888 {
 			server.Pickinfo.Lastfail = time.Now().UnixNano()

@@ -2,7 +2,6 @@ package stream
 
 import (
 	"encoding/binary"
-	"errors"
 
 	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -22,7 +21,7 @@ const (
 //x  |--------------------------specific data|
 func makePingMsg(pingdata []byte) *bufpool.Buffer {
 	buf := bufpool.GetBuffer()
-	buf.Grow(4 + 1 + len(pingdata))
+	buf.Grow(uint64(4 + 1 + len(pingdata)))
 	binary.BigEndian.PutUint32(buf.Bytes(), uint32(1+len(pingdata)))
 	buf.Bytes()[4] = byte(PING << 5)
 	if len(pingdata) > 0 {
@@ -33,7 +32,7 @@ func makePingMsg(pingdata []byte) *bufpool.Buffer {
 
 func getPingMsg(data []byte) ([]byte, error) {
 	if len(data) == 0 {
-		return nil, errors.New("empty message")
+		return nil, ErrMsgEmpty
 	}
 	if len(data) > 1 {
 		return data[1:], nil
@@ -48,7 +47,7 @@ func getPingMsg(data []byte) ([]byte, error) {
 //x  |--------------------------specific data|
 func makePongMsg(pongdata []byte) *bufpool.Buffer {
 	buf := bufpool.GetBuffer()
-	buf.Grow(4 + 1 + len(pongdata))
+	buf.Grow(uint64(4 + 1 + len(pongdata)))
 	binary.BigEndian.PutUint32(buf.Bytes(), uint32(1+len(pongdata)))
 	buf.Bytes()[4] = byte(PONG << 5)
 	if len(pongdata) > 0 {
@@ -59,7 +58,7 @@ func makePongMsg(pongdata []byte) *bufpool.Buffer {
 
 func getPongMsg(data []byte) ([]byte, error) {
 	if len(data) == 0 {
-		return nil, errors.New("empty message")
+		return nil, ErrMsgEmpty
 	}
 	if len(data) > 1 {
 		return data[1:], nil
@@ -77,30 +76,35 @@ func getPongMsg(data []byte) ([]byte, error) {
 //6  |---------------------------------------|
 //7  |---------------------------------------|
 //8  |---------------------------------------|
-//9  |------------------------------starttime|
+//9  |------------------------------------sid|
+//10 |---------------------------------------|
+//11 |---------------------------------------|
+//12 |---------------------------------------|
+//13 |---------------------------maxmsglength|
 //...|---------------------------------------|
 //x  |---------------------------------sender|
 //...|---------------------------------------|
 //y  |--------------------------specific data|
-func makeVerifyMsg(sender string, verifydata []byte, starttime int64) *bufpool.Buffer {
+func makeVerifyMsg(sender string, verifydata []byte, sid int64, maxmsglength uint32) *bufpool.Buffer {
 	buf := bufpool.GetBuffer()
-	buf.Grow(4 + 1 + 8 + len(sender) + len(verifydata))
-	binary.BigEndian.PutUint32(buf.Bytes(), uint32(1+8+len(sender)+len(verifydata)))
+	buf.Grow(uint64(4 + 1 + 8 + 4 + len(sender) + len(verifydata)))
+	binary.BigEndian.PutUint32(buf.Bytes(), uint32(1+8+4+len(sender)+len(verifydata)))
 	buf.Bytes()[4] = byte((VERIFY << 5) | len(sender))
-	binary.BigEndian.PutUint64(buf.Bytes()[5:13], uint64(starttime))
-	copy(buf.Bytes()[13:], sender)
+	binary.BigEndian.PutUint64(buf.Bytes()[5:13], uint64(sid))
+	binary.BigEndian.PutUint32(buf.Bytes()[13:17], maxmsglength)
+	copy(buf.Bytes()[17:], sender)
 	if len(verifydata) > 0 {
-		copy(buf.Bytes()[13+len(sender):], verifydata)
+		copy(buf.Bytes()[17+len(sender):], verifydata)
 	}
 	return buf
 }
 
-func getVerifyMsg(data []byte) (string, []byte, int64, error) {
+func getVerifyMsg(data []byte) (string, []byte, int64, uint32, error) {
 	senderlen := int(data[0] ^ (VERIFY << 5))
-	if len(data) < (9 + senderlen) {
-		return "", nil, 0, errors.New("empty message")
+	if len(data) < (13 + senderlen) {
+		return "", nil, 0, 0, ErrMsgEmpty
 	}
-	return common.Byte2str(data[9 : 9+senderlen]), data[9+senderlen:], int64(binary.BigEndian.Uint64(data[1:9])), nil
+	return common.Byte2str(data[13 : 13+senderlen]), data[13+senderlen:], int64(binary.BigEndian.Uint64(data[1:9])), binary.BigEndian.Uint32(data[9:13]), nil
 }
 
 //   each row is one byte
@@ -113,15 +117,15 @@ func getVerifyMsg(data []byte) (string, []byte, int64, error) {
 //6  |---------------------------------------|
 //7  |---------------------------------------|
 //8  |---------------------------------------|
-//9  |------------------------------starttime|
+//9  |------------------------------------sid|
 //...|---------------------------------------|
-//y  |--------------------------specific data|
-func makeUserMsg(userdata []byte, starttime int64) *bufpool.Buffer {
+//x  |--------------------------specific data|
+func makeUserMsg(userdata []byte, sid int64) *bufpool.Buffer {
 	buf := bufpool.GetBuffer()
-	buf.Grow(4 + 1 + 8 + len(userdata))
+	buf.Grow(uint64(4 + 1 + 8 + len(userdata)))
 	binary.BigEndian.PutUint32(buf.Bytes(), uint32(1+8+len(userdata)))
 	buf.Bytes()[4] = byte(USER << 5)
-	binary.BigEndian.PutUint64(buf.Bytes()[5:13], uint64(starttime))
+	binary.BigEndian.PutUint64(buf.Bytes()[5:13], uint64(sid))
 	if len(userdata) > 0 {
 		copy(buf.Bytes()[13:], userdata)
 	}
@@ -130,29 +134,29 @@ func makeUserMsg(userdata []byte, starttime int64) *bufpool.Buffer {
 
 func getUserMsg(data []byte) ([]byte, int64, error) {
 	if len(data) <= 9 {
-		return nil, 0, errors.New("empty message")
+		return nil, 0, ErrMsgEmpty
 	}
 	return data[9:], int64(binary.BigEndian.Uint64(data[1:9])), nil
 }
 
 func getMsgType(data []byte) (int, error) {
 	if len(data) == 0 {
-		return -1, errors.New("empty message")
+		return -1, ErrMsgEmpty
 	}
 	t := int(data[0] >> 5)
 	if t != PING && t != PONG && t != VERIFY && t != USER {
 		//if t != PING && t != PONG && t != VERIFY && t != USER {
-		return -1, errors.New("unknown message type")
+		return -1, ErrMsgUnknown
 	}
 	if t == VERIFY {
 		senderlen := int(data[0] ^ (VERIFY << 5))
 		if len(data) < (9 + senderlen) {
-			return -1, errors.New("empty message")
+			return -1, ErrMsgEmpty
 		}
 	}
 	if t == USER {
 		if len(data) <= 9 {
-			return -1, errors.New("empty message")
+			return -1, ErrMsgEmpty
 		}
 	}
 	return t, nil
