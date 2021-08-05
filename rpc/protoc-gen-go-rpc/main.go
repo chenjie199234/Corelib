@@ -40,9 +40,6 @@ func main() {
 					if hasoneof(m.Input) || hasoneof(m.Output) {
 						panic("can't support oneof in proto!")
 					}
-					if !notnilcheck(m.Input) {
-						panic("message_not_nil and map_value_message_not_nil can only be set to true")
-					}
 				}
 			}
 			//delete old file
@@ -106,36 +103,4 @@ func hasoneof(message *protogen.Message) bool {
 		}
 	}
 	return false
-}
-
-//message_not_nil and map_value_message_not_nil extension can only be set to true
-func notnilcheck(message *protogen.Message) bool {
-	for _, field := range message.Fields {
-		fop := field.Desc.Options().(*descriptorpb.FieldOptions)
-		if field.Desc.Kind() == protoreflect.MessageKind {
-			if field.Desc.IsMap() {
-				if field.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
-					if proto.HasExtension(fop, pbex.E_MapValueMessageNotNil) {
-						if !proto.GetExtension(fop, pbex.E_MapValueMessageNotNil).(bool) {
-							return false
-						}
-					}
-					if !notnilcheck(field.Message.Fields[1].Message) {
-						return false
-					}
-				}
-			} else {
-				//[]message or message
-				if proto.HasExtension(fop, pbex.E_MessageNotNil) {
-					if !proto.GetExtension(fop, pbex.E_MessageNotNil).(bool) {
-						return false
-					}
-				}
-				if !notnilcheck(field.Message) {
-					return false
-				}
-			}
-		}
-	}
-	return true
 }
