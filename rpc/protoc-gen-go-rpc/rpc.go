@@ -72,12 +72,6 @@ func genService(file *protogen.File, g *protogen.GeneratedFile, service *protoge
 	genServer(file, g, service)
 }
 
-type uniquefield struct {
-	messagename string
-	fieldname   string
-	keyorvalue  string
-}
-
 func geninit(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
 	allreg := make(map[string]struct{}, 10) //key is message name + field name,value is reg rule
 	for _, method := range service.Methods {
