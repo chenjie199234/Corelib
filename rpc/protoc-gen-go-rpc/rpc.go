@@ -73,7 +73,7 @@ func genService(file *protogen.File, g *protogen.GeneratedFile, service *protoge
 }
 
 func geninit(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
-	allreg := make(map[string]struct{}, 10) //key is message name + field name,value is reg rule
+	allreg := make(map[string]struct{}, 10) //key regexp
 	for _, method := range service.Methods {
 		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 			continue
