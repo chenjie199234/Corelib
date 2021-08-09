@@ -15,20 +15,20 @@ import (
 )
 
 const (
-	stringsPackage  = protogen.GoImportPath("strings")
-	regexpPackage   = protogen.GoImportPath("regexp")
-	bytesPackage    = protogen.GoImportPath("bytes")
-	strconvPackage  = protogen.GoImportPath("strconv")
-	httpPackage     = protogen.GoImportPath("net/http")
-	fmtPackage      = protogen.GoImportPath("fmt")
-	jsonPackage     = protogen.GoImportPath("encoding/json")
+	//stringsPackage  = protogen.GoImportPath("strings")
+	regexpPackage = protogen.GoImportPath("regexp")
+	//bytesPackage    = protogen.GoImportPath("bytes")
+	//strconvPackage  = protogen.GoImportPath("strconv")
+	httpPackage = protogen.GoImportPath("net/http")
+	//fmtPackage      = protogen.GoImportPath("fmt")
+	//jsonPackage     = protogen.GoImportPath("encoding/json")
 	protoPackage    = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	contextPackage  = protogen.GoImportPath("context")
 	rpcPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/rpc")
 	commonPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
 	metadataPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/metadata")
 	errorPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/error")
-	bufpoolPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/bufpool")
+	//bufpoolPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/bufpool")
 )
 
 // generateFile generates a _rpc.pb.go file containing rpc service definitions.
@@ -166,6 +166,7 @@ func genPath(file *protogen.File, g *protogen.GeneratedFile, service *protogen.S
 	}
 	g.P()
 }
+
 func genServer(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
 	// Server interface.
 	serverName := service.GoName + "RpcServer"
@@ -186,18 +187,18 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile, service *protogen
 		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 			continue
 		}
-		fname := "func _" + service.GoName + "_" + method.GoName + "_RpcHandler"
+		fname := "func _" + service.GoName + method.GoName + "RpcHandler"
 		p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
 		freturn := g.QualifiedGoIdent(rpcPackage.Ident("OutsideHandler"))
 		g.P(fname, "(", p1, ")", freturn, "{")
 		g.P("return func(ctx *"+g.QualifiedGoIdent(rpcPackage.Ident("Context")), "){")
 		g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
 		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(ctx.GetBody(),req);e!=nil{")
-		g.P("ctx.Abort(", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")), ")")
+		g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		g.P("return")
 		g.P("}")
-		if haschecker(method.Input) {
-			checker("req.", method.Input, g, true)
+		if needcheck(method.Input) {
+			check("req.", method.Input, service, g, true)
 		}
 		g.P("resp,e:=handler(ctx,req)")
 		g.P("if e!=nil{")
@@ -218,37 +219,48 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile, service *protogen
 	g.P("//avoid lint")
 	g.P("_=allmids")
 	for _, method := range service.Methods {
-		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
+		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
+		if mop.GetDeprecated() {
 			continue
 		}
-		r, e := parseMethodComment(string(method.Comments.Trailing))
-		if e != nil {
-			panic(e)
+		var timeout time.Duration
+		if proto.HasExtension(mop, pbex.E_Timeout) {
+			timeoutstr := proto.GetExtension(mop, pbex.E_Timeout).(string)
+			var e error
+			if timeout, e = time.ParseDuration(timeoutstr); e != nil {
+				panic(fmt.Sprintf("method: %s in service: %s with timeout: %s format error:%s", method.Desc.Name(), service.Desc.Name(), timeoutstr, e))
+			}
 		}
-		fname := "_" + service.GoName + "_" + method.GoName + "_RpcHandler(svc." + method.GoName + ")"
+		var mids []string
+		if proto.HasExtension(mop, pbex.E_Midwares) {
+			mids = proto.GetExtension(mop, pbex.E_Midwares).([]string)
+		}
+		fname := "_" + service.GoName + method.GoName + "RpcHandler(svc." + method.GoName + ")"
 		pathname := "RpcPath" + service.GoName + method.GoName
-		if len(r.mids) > 0 {
+		if len(mids) > 0 {
 			g.P("{")
 			str := ""
-			for _, mid := range r.mids {
+			for _, mid := range mids {
 				str += ","
 				str += strconv.Quote(mid)
 			}
 			str = str[1:]
 			g.P("requiredMids:=[]string{", str, "}")
-			g.P("mids:=make([]", g.QualifiedGoIdent(rpcPackage.Ident("OutsideHandler")), ",0)")
+			g.P("mids:=make([]", g.QualifiedGoIdent(rpcPackage.Ident("OutsideHandler")), ",0,", len(mids)+1, ")")
 			g.P("for _,v:=range requiredMids{")
 			g.P("if mid,ok:=allmids[v];ok{")
 			g.P("mids = append(mids,mid)")
+			g.P("}else{")
+			g.P("return ", g.QualifiedGoIdent(errorPackage.Ident("ErrNoMids")))
 			g.P("}")
 			g.P("}")
 			g.P("mids = append(mids,", fname, ")")
-			g.P("if e := engine.RegisterHandler(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...);e!=nil{")
+			g.P("if e := engine.RegisterHandler(", pathname, ",", timeout.Nanoseconds(), ",mids...);e!=nil{")
 			g.P("return e")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if e := engine.RegisterHandler(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ");e!=nil{")
+			g.P("if e := engine.RegisterHandler(", pathname, ",", timeout.Nanoseconds(), ",", fname, ");e!=nil{")
 			g.P("return e")
 			g.P("}")
 		}
@@ -276,7 +288,7 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile, service *protogen
 	g.P("cc *", g.QualifiedGoIdent(rpcPackage.Ident("RpcClient")))
 	g.P("}")
 	g.P("func New", clientName, "(c *", g.QualifiedGoIdent(rpcPackage.Ident("ClientConfig")), ",selfgroup,selfname,peergroup,peername string)(", clientName, ",error){")
-	g.P("cc,e:=", g.QualifiedGoIdent(rpcPackage.Ident("NewRpcClient")), "(c,selfgroup,selfname,peergourp,peername)")
+	g.P("cc,e:=", g.QualifiedGoIdent(rpcPackage.Ident("NewRpcClient")), "(c,selfgroup,selfname,peergroup,peername)")
 	g.P("if e != nil {")
 	g.P("return nil, e")
 	g.P("}")
@@ -295,7 +307,7 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile, service *protogen
 		freturn := "(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
 		g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ")", freturn, "{")
 		g.P("if req == nil {")
-		g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRREQUEST")))
+		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 		g.P("}")
 
 		if needcheck(method.Input) {
@@ -310,19 +322,22 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile, service *protogen
 				var e error
 				timeout, e = time.ParseDuration(timeoutstr)
 				if e != nil {
-					panic(fmt.Sprintf("method: %s in service: %s with timeout: %s format error:%s", method.Desc.Name(), service.Desc.Name(), e))
+					panic(fmt.Sprintf("method: %s in service: %s with timeout: %s format error:%s", method.Desc.Name(), service.Desc.Name(), timeoutstr, e))
 				}
 			}
-			g.P("callback,e:=c.cc.Call(ctx,", strconv.FormatInt(timeout.Nanoseconds(), 10), ",", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
+			g.P("respd,e:=c.cc.Call(ctx,", strconv.FormatInt(timeout.Nanoseconds(), 10), ",", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
 		} else {
-			g.P("callback,e:=c.cc.Call(ctx,0,", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
+			g.P("respd,e:=c.cc.Call(ctx,0,", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
 		}
 		g.P("if e.(*", g.QualifiedGoIdent(errorPackage.Ident("Error")), ") != nil {")
 		g.P("return nil,e")
 		g.P("}")
 		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
-		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(callback,resp);e!=nil{")
-		g.P("return nil,", g.QualifiedGoIdent(rpcPackage.Ident("ERRRESPONSE")))
+		g.P("if len(respd)==0{")
+		g.P("return resp,nil")
+		g.P("}")
+		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(respd,resp);e!=nil{")
+		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrResp")))
 		g.P("}")
 		g.P("return resp, nil")
 		g.P("}")
@@ -556,9 +571,6 @@ func needcheck(message *protogen.Message) bool {
 func check(prefix string, message *protogen.Message, service *protogen.Service, g *protogen.GeneratedFile, server bool) {
 	for _, field := range message.Fields {
 		fop := field.Desc.Options().(*descriptorpb.FieldOptions)
-		if fop == nil {
-			continue
-		}
 		isbyteslice := false
 		switch field.Desc.Kind() {
 		case protoreflect.BoolKind:
@@ -567,6 +579,12 @@ func check(prefix string, message *protogen.Message, service *protogen.Service, 
 				elementnumcheck(prefix, field.GoName, fop, g, server)
 			}
 			boolcheck(prefix, field.GoName, field.Desc.IsList(), fop, g, server)
+		case protoreflect.EnumKind:
+			//enum or []enum
+			if field.Desc.IsList() {
+				elementnumcheck(prefix, field.GoName, fop, g, server)
+			}
+			enumcheck(prefix, field.GoName, field.Enum.GoIdent, field.Desc.IsList(), fop, g, server)
 		case protoreflect.Int32Kind:
 			fallthrough
 		case protoreflect.Sint32Kind:
@@ -606,12 +624,6 @@ func check(prefix string, message *protogen.Message, service *protogen.Service, 
 				elementnumcheck(prefix, field.GoName, fop, g, server)
 			}
 			floatcheck(prefix, field.GoName, field.Desc.IsList(), fop, g, server)
-		case protoreflect.EnumKind:
-			//enum or []enum
-			if field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g, server)
-			}
-			enumcheck(prefix, field.GoName, field.GoIdent, field.Desc.IsList(), fop, g, server)
 		case protoreflect.BytesKind:
 			//[]bytes or [][]bytes
 			isbyteslice = true
@@ -645,9 +657,9 @@ func elementnumcheck(prefix, fieldname string, fop *descriptorpb.FieldOptions, g
 		leneq := proto.GetExtension(fop, pbex.E_MapRepeatedLenEq).(uint64)
 		g.P("if len(", prefix+fieldname, ")!=", leneq, "{")
 		if server {
-
+			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		} else {
-
+			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 		}
 		g.P("}")
 	}
@@ -655,9 +667,9 @@ func elementnumcheck(prefix, fieldname string, fop *descriptorpb.FieldOptions, g
 		lennoteq := proto.GetExtension(fop, pbex.E_MapRepeatedLenNotEq).(uint64)
 		g.P("if len(", prefix+fieldname, ")==", lennoteq, "{")
 		if server {
-
+			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		} else {
-
+			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 		}
 		g.P("}")
 	}
@@ -665,9 +677,9 @@ func elementnumcheck(prefix, fieldname string, fop *descriptorpb.FieldOptions, g
 		lengt := proto.GetExtension(fop, pbex.E_MapRepeatedLenGt).(uint64)
 		g.P("if len(", prefix+fieldname, ")<=", lengt, "{")
 		if server {
-
+			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		} else {
-
+			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 		}
 		g.P("}")
 	}
@@ -675,9 +687,9 @@ func elementnumcheck(prefix, fieldname string, fop *descriptorpb.FieldOptions, g
 		lengte := proto.GetExtension(fop, pbex.E_MapRepeatedLenGte).(uint64)
 		g.P("if len(", prefix+fieldname, ")<", lengte, "{")
 		if server {
-
+			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		} else {
-
+			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 		}
 		g.P("}")
 	}
@@ -685,9 +697,9 @@ func elementnumcheck(prefix, fieldname string, fop *descriptorpb.FieldOptions, g
 		lenlt := proto.GetExtension(fop, pbex.E_MapRepeatedLenLt).(uint64)
 		g.P("if len(", prefix+fieldname, ")>=", lenlt, "{")
 		if server {
-
+			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		} else {
-
+			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 		}
 		g.P("}")
 	}
@@ -695,9 +707,9 @@ func elementnumcheck(prefix, fieldname string, fop *descriptorpb.FieldOptions, g
 		lenlte := proto.GetExtension(fop, pbex.E_MapRepeatedLenLte).(uint64)
 		g.P("if len(", prefix+fieldname, ")>", lenlte, "{")
 		if server {
-
+			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		} else {
-
+			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 		}
 		g.P("}")
 	}
@@ -708,10 +720,20 @@ func boolcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpt
 		if islist {
 			g.P("for _,v:= range ", prefix+fieldname, "{")
 			g.P("if v!=", booleq, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, "!=", booleq, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -723,12 +745,22 @@ func intcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpti
 			g.P("for _,v:= range ", prefix+fieldname, "{")
 			for _, v := range in {
 				g.P("if v!=", v, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range in {
 				g.P("if ", prefix+fieldname, "!=", v, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 		}
@@ -739,12 +771,22 @@ func intcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpti
 			g.P("for _,v:= range ", prefix+fieldname, "{")
 			for _, v := range notin {
 				g.P("if v==", v, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range notin {
 				g.P("if ", prefix+fieldname, "==", v, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 		}
@@ -754,10 +796,20 @@ func intcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpti
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v<=", gt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, "<=", gt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -766,10 +818,20 @@ func intcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpti
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v<", gte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, "<", gte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -778,10 +840,20 @@ func intcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpti
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v>=", lt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, ">=", lt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -790,10 +862,20 @@ func intcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpti
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v>", lte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, ">", lte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -805,12 +887,22 @@ func uintcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpt
 			g.P("for _,v:= range ", prefix+fieldname, "{")
 			for _, v := range in {
 				g.P("if v!=", v, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range in {
 				g.P("if ", prefix+fieldname, "!=", v, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 		}
@@ -821,12 +913,22 @@ func uintcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpt
 			g.P("for _,v:= range ", prefix+fieldname, "{")
 			for _, v := range notin {
 				g.P("if v==", v, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range notin {
 				g.P("if ", prefix+fieldname, "==", v, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 		}
@@ -836,10 +938,20 @@ func uintcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpt
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v<=", gt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, "<=", gt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -848,10 +960,20 @@ func uintcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpt
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v<", gte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, "<", gte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -860,10 +982,20 @@ func uintcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpt
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v>=", lt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, ">=", lt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -872,10 +1004,20 @@ func uintcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpt
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v>", lte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, ">", lte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -887,12 +1029,22 @@ func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOp
 			g.P("for _,v:= range ", prefix+fieldname, "{")
 			for _, v := range in {
 				g.P("if v!=", v, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range in {
 				g.P("if ", prefix+fieldname, "!=", v, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 		}
@@ -903,12 +1055,22 @@ func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOp
 			g.P("for _,v:= range ", prefix+fieldname, "{")
 			for _, v := range notin {
 				g.P("if v==", v, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range notin {
 				g.P("if ", prefix+fieldname, "==", v, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 		}
@@ -918,10 +1080,20 @@ func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOp
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v<=", gt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, "<=", gt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -930,10 +1102,20 @@ func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOp
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v<", gte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, "<", gte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -942,10 +1124,20 @@ func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOp
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v>=", lt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, ">=", lt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -954,10 +1146,20 @@ func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOp
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v>", lte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, ">", lte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -965,11 +1167,21 @@ func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOp
 func enumcheck(prefix, fieldname string, ident protogen.GoIdent, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile, server bool) {
 	if islist {
 		g.P("for _,v:=range ", prefix+fieldname, "{")
-		g.P("if _,ok:=", g.QualifiedGoIdent(ident), "_name[v];!ok{")
+		g.P("if _,ok:=", g.QualifiedGoIdent(ident), "_name[int32(v)];!ok{")
+		if server {
+			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+		} else {
+			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+		}
 		g.P("}")
 		g.P("}")
 	} else {
-		g.P("if _,ok:=", g.QualifiedGoIdent(ident), "_name[", prefix+fieldname, "];!ok{")
+		g.P("if _,ok:=", g.QualifiedGoIdent(ident), "_name[int32(", prefix+fieldname, ")];!ok{")
+		if server {
+			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+		} else {
+			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+		}
 		g.P("}")
 	}
 }
@@ -979,10 +1191,20 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if len(v)!=", leneq, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if len(", prefix+fieldname, ")!=", leneq, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -991,10 +1213,20 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if len(v)==", lennoteq, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if len(", prefix+fieldname, ")==", lennoteq, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -1003,10 +1235,20 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if len(v)<=", lengt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if len(", prefix+fieldname, ")<=", lengt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -1015,10 +1257,20 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if len(v)<", lengte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if len(", prefix+fieldname, ")<", lengte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -1027,10 +1279,20 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if len(v)>=", lenlt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if len(", prefix+fieldname, ")>=", lenlt, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -1039,10 +1301,20 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if len(v)>", lenlte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if len(", prefix+fieldname, ")>", lenlte, "{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
 			g.P("}")
 		}
 	}
@@ -1056,6 +1328,11 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 				} else {
 					g.P("if v!=", strconv.Quote(v), "{")
 				}
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 			g.P("}")
@@ -1065,6 +1342,11 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 					g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(v)!=", strconv.Quote(v), "{")
 				} else {
 					g.P("if v!=", strconv.Quote(v), "{")
+				}
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 				}
 				g.P("}")
 			}
@@ -1080,6 +1362,11 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 				} else {
 					g.P("if v==", strconv.Quote(v), "{")
 				}
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 			g.P("}")
@@ -1089,6 +1376,11 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 					g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(v)==", strconv.Quote(v), "{")
 				} else {
 					g.P("if v==", strconv.Quote(v), "{")
+				}
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 				}
 				g.P("}")
 			}
@@ -1104,6 +1396,11 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 				} else {
 					g.P("if !_", service.GoName, "Regs[", strconv.Quote(m), "].MatchString(v){")
 				}
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 			g.P("}")
@@ -1113,6 +1410,11 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 					g.P("if !_", service.GoName, "Regs[", strconv.Quote(m), "].Match(", prefix+fieldname, "){")
 				} else {
 					g.P("if !_", service.GoName, "Regs[", strconv.Quote(m), "].MatchString(", prefix+fieldname, "){")
+				}
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 				}
 				g.P("}")
 			}
@@ -1128,6 +1430,11 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 				} else {
 					g.P("if _", service.GoName, "Regs[", strconv.Quote(m), "].MatchString(v){")
 				}
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
 				g.P("}")
 			}
 			g.P("}")
@@ -1137,6 +1444,11 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 					g.P("if _", service.GoName, "Regs[", strconv.Quote(m), "].Match(", prefix+fieldname, "){")
 				} else {
 					g.P("if _", service.GoName, "Regs[", strconv.Quote(m), "].MatchString(", prefix+fieldname, "){")
+				}
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 				}
 				g.P("}")
 			}
@@ -1280,376 +1592,642 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 	case protoreflect.MessageKind:
 		valuecheck = needcheck(val.Message)
 	}
-	if keycheck || valuecheck {
-		g.P("for k,v:=range ", prefix+fieldname, "{")
-		if keycheck {
-			switch key.Desc.Kind() {
-			case protoreflect.Int32Kind:
-				fallthrough
-			case protoreflect.Sint32Kind:
-				fallthrough
-			case protoreflect.Sfixed32Kind:
-				fallthrough
-			case protoreflect.Int64Kind:
-				fallthrough
-			case protoreflect.Sint64Kind:
-				fallthrough
-			case protoreflect.Sfixed64Kind:
-				if proto.HasExtension(fop, pbex.E_MapKeyIntIn) {
-					keyin := proto.GetExtension(fop, pbex.E_MapKeyIntIn).([]int64)
-					for _, v := range keyin {
-						g.P("if k!=", v, "{")
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyIntNotIn) {
-					keynotin := proto.GetExtension(fop, pbex.E_MapKeyIntNotIn).([]int64)
-					for _, v := range keynotin {
-						g.P("if k==", v, "{")
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyIntGt) {
-					keygt := proto.GetExtension(fop, pbex.E_MapKeyIntGt).(int64)
-					g.P("if k<=", keygt, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyIntGte) {
-					keygte := proto.GetExtension(fop, pbex.E_MapKeyIntGte).(int64)
-					g.P("if k<", keygte, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyIntLt) {
-					keylt := proto.GetExtension(fop, pbex.E_MapKeyIntLt).(int64)
-					g.P("if k>=", keylt, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyIntLte) {
-					keylte := proto.GetExtension(fop, pbex.E_MapKeyIntLte).(int64)
-					g.P("if k>", keylte, "{")
-					g.P("}")
-
-				}
-			case protoreflect.Uint32Kind:
-				fallthrough
-			case protoreflect.Fixed32Kind:
-				fallthrough
-			case protoreflect.Uint64Kind:
-				fallthrough
-			case protoreflect.Fixed64Kind:
-				if proto.HasExtension(fop, pbex.E_MapKeyUintIn) {
-					keyin := proto.GetExtension(fop, pbex.E_MapKeyUintIn).([]uint64)
-					for _, v := range keyin {
-						g.P("if k!=", v, "{")
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyUintNotIn) {
-					keynotin := proto.GetExtension(fop, pbex.E_MapKeyUintNotIn).([]uint64)
-					for _, v := range keynotin {
-						g.P("if k==", v, "{")
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyUintGt) {
-					keygt := proto.GetExtension(fop, pbex.E_MapKeyUintGt).(uint64)
-					g.P("if k<=", keygt, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyUintGte) {
-					keygte := proto.GetExtension(fop, pbex.E_MapKeyUintGte).(uint64)
-					g.P("if k<", keygte, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyUintLt) {
-					keylt := proto.GetExtension(fop, pbex.E_MapKeyUintLt).(uint64)
-					g.P("if k>=", keylt, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyUintLte) {
-					keylte := proto.GetExtension(fop, pbex.E_MapKeyUintLte).(uint64)
-					g.P("if k>", keylte, "{")
-					g.P("}")
-				}
-			case protoreflect.StringKind:
-				if proto.HasExtension(fop, pbex.E_MapKeyStringIn) {
-					keyin := proto.GetExtension(fop, pbex.E_MapKeyStringIn).([]string)
-					for _, v := range keyin {
-						g.P("if k!=", strconv.Quote(v), "{")
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyStringNotIn) {
-					keynotin := proto.GetExtension(fop, pbex.E_MapKeyStringNotIn).([]string)
-					for _, v := range keynotin {
-						g.P("if k==", strconv.Quote(v), "{")
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyStringRegMatch) {
-					keymatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegMatch).([]string)
-					for _, v := range keymatch {
-						g.P("if !_", service.GoName, "Regs[", strconv.Quote(v), "].MatchString(k){")
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyStringRegNotMatch) {
-					keynotmatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegNotMatch).([]string)
-					for _, v := range keynotmatch {
-						g.P("if _", service.GoName, "Regs[", strconv.Quote(v), "].MatchString(k){")
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyStringLenEq) {
-					keyleneq := proto.GetExtension(fop, pbex.E_MapKeyStringLenEq).(uint64)
-					g.P("if len(k)!=", keyleneq, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyStringLenNotEq) {
-					keylennoteq := proto.GetExtension(fop, pbex.E_MapKeyStringLenNotEq).(uint64)
-					g.P("if len(k)==", keylennoteq, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyStringLenGt) {
-					keylengt := proto.GetExtension(fop, pbex.E_MapKeyStringLenGt).(uint64)
-					g.P("if len(k)<=", keylengt, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyStringLenGte) {
-					keylengte := proto.GetExtension(fop, pbex.E_MapKeyStringLenGte).(uint64)
-					g.P("if len(k)<", keylengte, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyStringLenLt) {
-					keylenlt := proto.GetExtension(fop, pbex.E_MapKeyStringLenLt).(uint64)
-					g.P("if len(k)>=", keylenlt, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapKeyStringLenLte) {
-					keylenlte := proto.GetExtension(fop, pbex.E_MapKeyStringLenLte).(uint64)
-					g.P("if len(k)>", keylenlte, "{")
-					g.P("}")
-				}
-			}
-		}
-		if valuecheck {
-			switch val.Desc.Kind() {
-			case protoreflect.EnumKind:
-				g.P("if _,ok:=", g.QualifiedGoIdent(val.GoIdent), "_name[v];!ok{")
-				g.P("}")
-			case protoreflect.BoolKind:
-				if proto.HasExtension(fop, pbex.E_MapValueBoolEq) {
-					valeq := proto.GetExtension(fop, pbex.E_MapValueBoolEq).(bool)
-					g.P("if v!=", valeq, "{")
-					g.P("}")
-				}
-			case protoreflect.Int32Kind:
-				fallthrough
-			case protoreflect.Sint32Kind:
-				fallthrough
-			case protoreflect.Sfixed32Kind:
-				fallthrough
-			case protoreflect.Int64Kind:
-				fallthrough
-			case protoreflect.Sint64Kind:
-				fallthrough
-			case protoreflect.Sfixed64Kind:
-				if proto.HasExtension(fop, pbex.E_MapValueIntIn) {
-					valin := proto.GetExtension(fop, pbex.E_MapValueIntIn).([]int64)
-					for _, v := range valin {
-						g.P("if v!=", v, "{")
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueIntNotIn) {
-					valnotin := proto.GetExtension(fop, pbex.E_MapValueIntNotIn).([]int64)
-					for _, v := range valnotin {
-						g.P("if v==", v, "{")
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueIntGt) {
-					valgt := proto.GetExtension(fop, pbex.E_MapValueIntGt).(int64)
-					g.P("if v<=", valgt, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueIntGte) {
-					valgte := proto.GetExtension(fop, pbex.E_MapValueIntGte).(int64)
-					g.P("if v<", valgte, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueIntLt) {
-					vallt := proto.GetExtension(fop, pbex.E_MapValueIntLt).(int64)
-					g.P("if v>=", vallt, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueIntLte) {
-					vallte := proto.GetExtension(fop, pbex.E_MapValueIntLte).(int64)
-					g.P("if v>", vallte, "{")
-					g.P("}")
-				}
-			case protoreflect.Uint32Kind:
-				fallthrough
-			case protoreflect.Fixed32Kind:
-				fallthrough
-			case protoreflect.Uint64Kind:
-				fallthrough
-			case protoreflect.Fixed64Kind:
-				if proto.HasExtension(fop, pbex.E_MapValueUintIn) {
-					valin := proto.GetExtension(fop, pbex.E_MapValueUintIn).([]uint64)
-					for _, v := range valin {
-						g.P("if v!=", v, "{")
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueUintNotIn) {
-					valnotin := proto.GetExtension(fop, pbex.E_MapValueUintNotIn).([]uint64)
-					for _, v := range valnotin {
-						g.P("if v==", v, "{")
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueUintGt) {
-					valgt := proto.GetExtension(fop, pbex.E_MapValueUintGt).(uint64)
-					g.P("if v<=", valgt, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueUintGte) {
-					valgte := proto.GetExtension(fop, pbex.E_MapValueUintGte).(uint64)
-					g.P("if v<", valgte, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueUintLt) {
-					vallt := proto.GetExtension(fop, pbex.E_MapValueUintLt).(uint64)
-					g.P("if v>=", vallt, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueUintLte) {
-					vallte := proto.GetExtension(fop, pbex.E_MapValueUintLte).(uint64)
-					g.P("if v>", vallte, "{")
-					g.P("}")
-				}
-			case protoreflect.FloatKind:
-				fallthrough
-			case protoreflect.DoubleKind:
-				if proto.HasExtension(fop, pbex.E_MapValueFloatIn) {
-					valin := proto.GetExtension(fop, pbex.E_MapValueFloatIn).([]float64)
-					for _, v := range valin {
-						g.P("if v!=", v, "{")
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueFloatNotIn) {
-					valnotin := proto.GetExtension(fop, pbex.E_MapValueFloatNotIn).([]float64)
-					for _, v := range valnotin {
-						g.P("if v==", v, "{")
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueFloatGt) {
-					valgt := proto.GetExtension(fop, pbex.E_MapValueFloatGt).(float64)
-					g.P("if v<=", valgt, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueFloatGte) {
-					valgte := proto.GetExtension(fop, pbex.E_MapValueFloatGte).(float64)
-					g.P("if v<", valgte, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueFloatLt) {
-					vallt := proto.GetExtension(fop, pbex.E_MapValueFloatLt).(float64)
-					g.P("if v>=", vallt, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueFloatLte) {
-					vallte := proto.GetExtension(fop, pbex.E_MapValueFloatLte).(float64)
-					g.P("if v>", vallte, "{")
-					g.P("}")
-				}
-			case protoreflect.BytesKind:
-				isbyteslice = true
-				fallthrough
-			case protoreflect.StringKind:
-				if proto.HasExtension(fop, pbex.E_MapValueStringBytesIn) {
-					valin := proto.GetExtension(fop, pbex.E_MapValueStringBytesIn).([]string)
-					for _, v := range valin {
-						if isbyteslice {
-							g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(v)!=", strconv.Quote(v), "{")
-						} else {
-							g.P("if v!=", strconv.Quote(v), "{")
-						}
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueStringBytesNotIn) {
-					valnotin := proto.GetExtension(fop, pbex.E_MapValueStringBytesNotIn).([]string)
-					for _, v := range valnotin {
-						if isbyteslice {
-							g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(v)==", strconv.Quote(v), "{")
-						} else {
-							g.P("if v==", strconv.Quote(v), "{")
-						}
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueStringBytesRegMatch) {
-					valmatch := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegMatch).([]string)
-					for _, v := range valmatch {
-						if isbyteslice {
-							g.P("if !_", service.GoName, "Regs[", strconv.Quote(v), "].Match(v){")
-						} else {
-							g.P("if !_", service.GoName, "Regs[", strconv.Quote(v), "].MatchString(v){")
-						}
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueStringBytesRegNotMatch) {
-					valnotmatch := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegNotMatch).([]string)
-					for _, v := range valnotmatch {
-						if isbyteslice {
-							g.P("if _", service.GoName, "Regs[", strconv.Quote(v), "].Match(v){")
-						} else {
-							g.P("if _", service.GoName, "Regs[", strconv.Quote(v), "].MatchString(v){")
-						}
-						g.P("}")
-					}
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenEq) {
-					valleneq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenEq).(uint64)
-					g.P("if len(v)!=", valleneq, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenNotEq) {
-					vallennoteq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenNotEq).(uint64)
-					g.P("if len(v)==", vallennoteq, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGt) {
-					vallengt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGt).(uint64)
-					g.P("if len(v)<=", vallengt, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGte) {
-					vallengte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGte).(uint64)
-					g.P("if len(v)<", vallengte, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLt) {
-					vallenlt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLt).(uint64)
-					g.P("if len(v)>=", vallenlt, "{")
-					g.P("}")
-				}
-				if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLte) {
-					vallenlte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLte).(uint64)
-					g.P("if len(v)>", vallenlte, "{")
-					g.P("}")
-				}
-			case protoreflect.MessageKind:
-				if needcheck(val.Message) {
-					check("v.", val.Message, service, g, server)
-				}
-			}
-		}
-		g.P("}")
+	if keycheck && valuecheck {
+		g.P("for k,v :=range ", prefix+fieldname, "{")
+	} else if keycheck {
+		g.P("for k :=range ", prefix+fieldname, "{")
+	} else if valuecheck {
+		g.P("for _,v :=range ", prefix+fieldname, "{")
+	} else {
+		return
 	}
+	if keycheck {
+		switch key.Desc.Kind() {
+		case protoreflect.Int32Kind:
+			fallthrough
+		case protoreflect.Sint32Kind:
+			fallthrough
+		case protoreflect.Sfixed32Kind:
+			fallthrough
+		case protoreflect.Int64Kind:
+			fallthrough
+		case protoreflect.Sint64Kind:
+			fallthrough
+		case protoreflect.Sfixed64Kind:
+			if proto.HasExtension(fop, pbex.E_MapKeyIntIn) {
+				keyin := proto.GetExtension(fop, pbex.E_MapKeyIntIn).([]int64)
+				for _, v := range keyin {
+					g.P("if k!=", v, "{")
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyIntNotIn) {
+				keynotin := proto.GetExtension(fop, pbex.E_MapKeyIntNotIn).([]int64)
+				for _, v := range keynotin {
+					g.P("if k==", v, "{")
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyIntGt) {
+				keygt := proto.GetExtension(fop, pbex.E_MapKeyIntGt).(int64)
+				g.P("if k<=", keygt, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyIntGte) {
+				keygte := proto.GetExtension(fop, pbex.E_MapKeyIntGte).(int64)
+				g.P("if k<", keygte, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyIntLt) {
+				keylt := proto.GetExtension(fop, pbex.E_MapKeyIntLt).(int64)
+				g.P("if k>=", keylt, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyIntLte) {
+				keylte := proto.GetExtension(fop, pbex.E_MapKeyIntLte).(int64)
+				g.P("if k>", keylte, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+
+			}
+		case protoreflect.Uint32Kind:
+			fallthrough
+		case protoreflect.Fixed32Kind:
+			fallthrough
+		case protoreflect.Uint64Kind:
+			fallthrough
+		case protoreflect.Fixed64Kind:
+			if proto.HasExtension(fop, pbex.E_MapKeyUintIn) {
+				keyin := proto.GetExtension(fop, pbex.E_MapKeyUintIn).([]uint64)
+				for _, v := range keyin {
+					g.P("if k!=", v, "{")
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyUintNotIn) {
+				keynotin := proto.GetExtension(fop, pbex.E_MapKeyUintNotIn).([]uint64)
+				for _, v := range keynotin {
+					g.P("if k==", v, "{")
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyUintGt) {
+				keygt := proto.GetExtension(fop, pbex.E_MapKeyUintGt).(uint64)
+				g.P("if k<=", keygt, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyUintGte) {
+				keygte := proto.GetExtension(fop, pbex.E_MapKeyUintGte).(uint64)
+				g.P("if k<", keygte, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyUintLt) {
+				keylt := proto.GetExtension(fop, pbex.E_MapKeyUintLt).(uint64)
+				g.P("if k>=", keylt, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyUintLte) {
+				keylte := proto.GetExtension(fop, pbex.E_MapKeyUintLte).(uint64)
+				g.P("if k>", keylte, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+		case protoreflect.StringKind:
+			if proto.HasExtension(fop, pbex.E_MapKeyStringIn) {
+				keyin := proto.GetExtension(fop, pbex.E_MapKeyStringIn).([]string)
+				for _, v := range keyin {
+					g.P("if k!=", strconv.Quote(v), "{")
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyStringNotIn) {
+				keynotin := proto.GetExtension(fop, pbex.E_MapKeyStringNotIn).([]string)
+				for _, v := range keynotin {
+					g.P("if k==", strconv.Quote(v), "{")
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyStringRegMatch) {
+				keymatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegMatch).([]string)
+				for _, v := range keymatch {
+					g.P("if !_", service.GoName, "Regs[", strconv.Quote(v), "].MatchString(k){")
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyStringRegNotMatch) {
+				keynotmatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegNotMatch).([]string)
+				for _, v := range keynotmatch {
+					g.P("if _", service.GoName, "Regs[", strconv.Quote(v), "].MatchString(k){")
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyStringLenEq) {
+				keyleneq := proto.GetExtension(fop, pbex.E_MapKeyStringLenEq).(uint64)
+				g.P("if len(k)!=", keyleneq, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyStringLenNotEq) {
+				keylennoteq := proto.GetExtension(fop, pbex.E_MapKeyStringLenNotEq).(uint64)
+				g.P("if len(k)==", keylennoteq, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyStringLenGt) {
+				keylengt := proto.GetExtension(fop, pbex.E_MapKeyStringLenGt).(uint64)
+				g.P("if len(k)<=", keylengt, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyStringLenGte) {
+				keylengte := proto.GetExtension(fop, pbex.E_MapKeyStringLenGte).(uint64)
+				g.P("if len(k)<", keylengte, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyStringLenLt) {
+				keylenlt := proto.GetExtension(fop, pbex.E_MapKeyStringLenLt).(uint64)
+				g.P("if len(k)>=", keylenlt, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapKeyStringLenLte) {
+				keylenlte := proto.GetExtension(fop, pbex.E_MapKeyStringLenLte).(uint64)
+				g.P("if len(k)>", keylenlte, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+		}
+	}
+	if valuecheck {
+		switch val.Desc.Kind() {
+		case protoreflect.EnumKind:
+			g.P("if _,ok:=", g.QualifiedGoIdent(val.Enum.GoIdent), "_name[int32(v)];!ok{")
+			if server {
+				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			}
+			g.P("}")
+		case protoreflect.BoolKind:
+			if proto.HasExtension(fop, pbex.E_MapValueBoolEq) {
+				valeq := proto.GetExtension(fop, pbex.E_MapValueBoolEq).(bool)
+				g.P("if v!=", valeq, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+		case protoreflect.Int32Kind:
+			fallthrough
+		case protoreflect.Sint32Kind:
+			fallthrough
+		case protoreflect.Sfixed32Kind:
+			fallthrough
+		case protoreflect.Int64Kind:
+			fallthrough
+		case protoreflect.Sint64Kind:
+			fallthrough
+		case protoreflect.Sfixed64Kind:
+			if proto.HasExtension(fop, pbex.E_MapValueIntIn) {
+				valin := proto.GetExtension(fop, pbex.E_MapValueIntIn).([]int64)
+				for _, v := range valin {
+					g.P("if v!=", v, "{")
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueIntNotIn) {
+				valnotin := proto.GetExtension(fop, pbex.E_MapValueIntNotIn).([]int64)
+				for _, v := range valnotin {
+					g.P("if v==", v, "{")
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueIntGt) {
+				valgt := proto.GetExtension(fop, pbex.E_MapValueIntGt).(int64)
+				g.P("if v<=", valgt, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueIntGte) {
+				valgte := proto.GetExtension(fop, pbex.E_MapValueIntGte).(int64)
+				g.P("if v<", valgte, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueIntLt) {
+				vallt := proto.GetExtension(fop, pbex.E_MapValueIntLt).(int64)
+				g.P("if v>=", vallt, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueIntLte) {
+				vallte := proto.GetExtension(fop, pbex.E_MapValueIntLte).(int64)
+				g.P("if v>", vallte, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+		case protoreflect.Uint32Kind:
+			fallthrough
+		case protoreflect.Fixed32Kind:
+			fallthrough
+		case protoreflect.Uint64Kind:
+			fallthrough
+		case protoreflect.Fixed64Kind:
+			if proto.HasExtension(fop, pbex.E_MapValueUintIn) {
+				valin := proto.GetExtension(fop, pbex.E_MapValueUintIn).([]uint64)
+				for _, v := range valin {
+					g.P("if v!=", v, "{")
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueUintNotIn) {
+				valnotin := proto.GetExtension(fop, pbex.E_MapValueUintNotIn).([]uint64)
+				for _, v := range valnotin {
+					g.P("if v==", v, "{")
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueUintGt) {
+				valgt := proto.GetExtension(fop, pbex.E_MapValueUintGt).(uint64)
+				g.P("if v<=", valgt, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueUintGte) {
+				valgte := proto.GetExtension(fop, pbex.E_MapValueUintGte).(uint64)
+				g.P("if v<", valgte, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueUintLt) {
+				vallt := proto.GetExtension(fop, pbex.E_MapValueUintLt).(uint64)
+				g.P("if v>=", vallt, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueUintLte) {
+				vallte := proto.GetExtension(fop, pbex.E_MapValueUintLte).(uint64)
+				g.P("if v>", vallte, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+		case protoreflect.FloatKind:
+			fallthrough
+		case protoreflect.DoubleKind:
+			if proto.HasExtension(fop, pbex.E_MapValueFloatIn) {
+				valin := proto.GetExtension(fop, pbex.E_MapValueFloatIn).([]float64)
+				for _, v := range valin {
+					g.P("if v!=", v, "{")
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueFloatNotIn) {
+				valnotin := proto.GetExtension(fop, pbex.E_MapValueFloatNotIn).([]float64)
+				for _, v := range valnotin {
+					g.P("if v==", v, "{")
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueFloatGt) {
+				valgt := proto.GetExtension(fop, pbex.E_MapValueFloatGt).(float64)
+				g.P("if v<=", valgt, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueFloatGte) {
+				valgte := proto.GetExtension(fop, pbex.E_MapValueFloatGte).(float64)
+				g.P("if v<", valgte, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueFloatLt) {
+				vallt := proto.GetExtension(fop, pbex.E_MapValueFloatLt).(float64)
+				g.P("if v>=", vallt, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueFloatLte) {
+				vallte := proto.GetExtension(fop, pbex.E_MapValueFloatLte).(float64)
+				g.P("if v>", vallte, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+		case protoreflect.BytesKind:
+			isbyteslice = true
+			fallthrough
+		case protoreflect.StringKind:
+			if proto.HasExtension(fop, pbex.E_MapValueStringBytesIn) {
+				valin := proto.GetExtension(fop, pbex.E_MapValueStringBytesIn).([]string)
+				for _, v := range valin {
+					if isbyteslice {
+						g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(v)!=", strconv.Quote(v), "{")
+					} else {
+						g.P("if v!=", strconv.Quote(v), "{")
+					}
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueStringBytesNotIn) {
+				valnotin := proto.GetExtension(fop, pbex.E_MapValueStringBytesNotIn).([]string)
+				for _, v := range valnotin {
+					if isbyteslice {
+						g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(v)==", strconv.Quote(v), "{")
+					} else {
+						g.P("if v==", strconv.Quote(v), "{")
+					}
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueStringBytesRegMatch) {
+				valmatch := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegMatch).([]string)
+				for _, v := range valmatch {
+					if isbyteslice {
+						g.P("if !_", service.GoName, "Regs[", strconv.Quote(v), "].Match(v){")
+					} else {
+						g.P("if !_", service.GoName, "Regs[", strconv.Quote(v), "].MatchString(v){")
+					}
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueStringBytesRegNotMatch) {
+				valnotmatch := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegNotMatch).([]string)
+				for _, v := range valnotmatch {
+					if isbyteslice {
+						g.P("if _", service.GoName, "Regs[", strconv.Quote(v), "].Match(v){")
+					} else {
+						g.P("if _", service.GoName, "Regs[", strconv.Quote(v), "].MatchString(v){")
+					}
+					if server {
+						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+					} else {
+						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+					}
+					g.P("}")
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenEq) {
+				valleneq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenEq).(uint64)
+				g.P("if len(v)!=", valleneq, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenNotEq) {
+				vallennoteq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenNotEq).(uint64)
+				g.P("if len(v)==", vallennoteq, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGt) {
+				vallengt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGt).(uint64)
+				g.P("if len(v)<=", vallengt, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGte) {
+				vallengte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGte).(uint64)
+				g.P("if len(v)<", vallengte, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLt) {
+				vallenlt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLt).(uint64)
+				g.P("if len(v)>=", vallenlt, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLte) {
+				vallenlte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLte).(uint64)
+				g.P("if len(v)>", vallenlte, "{")
+				if server {
+					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+				} else {
+					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+				}
+				g.P("}")
+			}
+		case protoreflect.MessageKind:
+			if needcheck(val.Message) {
+				check("v.", val.Message, service, g, server)
+			}
+		}
+	}
+	g.P("}")
 }
