@@ -73,12 +73,18 @@ func genService(file *protogen.File, g *protogen.GeneratedFile, service *protoge
 }
 
 func geninit(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
-	allreg := make(map[string]struct{}, 10) //key regexp
+	allreg := make(map[string]struct{}, 10)            //key regexp
+	allcheck := make(map[string]*protogen.Message, 10) //key message's full import path
 	for _, method := range service.Methods {
 		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 			continue
 		}
 		getallreg(method.Input, allreg)
+		stack := make(map[string]struct{})
+		getallcheck(method.Input, stack, allcheck)
+	}
+	if len(allcheck) > 0 {
+		g.P("var _", service.GoName, "Checkers map[string]func(req interface{})")
 	}
 	if len(allreg) > 0 {
 		for reg := range allreg {
@@ -87,16 +93,29 @@ func geninit(file *protogen.File, g *protogen.GeneratedFile, service *protogen.S
 			}
 		}
 		g.P("var _", service.GoName, "Regs map[string]*", g.QualifiedGoIdent(regexpPackage.Ident("Regexp")))
+	}
+	if len(allcheck) > 0 || len(allreg) > 0 {
 		g.P("func init(){")
-		g.P("_", service.GoName, "Regs=make(map[string]*", g.QualifiedGoIdent(regexpPackage.Ident("Regexp")), ")")
-		g.P("var e error")
-		for reg := range allreg {
-			g.P("if _", service.GoName, "Regs[", strconv.Quote(reg), "] ,e = ", g.QualifiedGoIdent(regexpPackage.Ident("Compile")), "(", strconv.Quote(reg), ");e!=nil{")
-			g.P("panic(\"protoc-gen-go-rpc will check all regexp before generate this code,this may happen when the golang version build protoc-gen-go-rpc and golang version run this code isn't same and the two version's regexp package is different\")")
+		if len(allreg) > 0 {
+			g.P("_", service.GoName, "Regs=make(map[string]*", g.QualifiedGoIdent(regexpPackage.Ident("Regexp")), ",", len(allreg), ")")
+			g.P("var e error")
+			for reg := range allreg {
+				g.P("if _", service.GoName, "Regs[", strconv.Quote(reg), "] ,e = ", g.QualifiedGoIdent(regexpPackage.Ident("Compile")), "(", strconv.Quote(reg), ");e!=nil{")
+				g.P("panic(\"protoc-gen-go-rpc will check all regexp before generate this code,this may happen when the golang version build protoc-gen-go-rpc and golang version run this code isn't same and the two version's regexp package is different\")")
+				g.P("}")
+			}
 			g.P("}")
+			g.P()
 		}
-		g.P("}")
-		g.P()
+		if len(allcheck) > 0 {
+			g.P("_", service.GoName, "Checkers = make(map[string]func(req interface{})bool,", len(allcheck), ")")
+			for k, m := range allcheck {
+				g.P("_", service.GoName, "Checkers[", strconv.Quote(k), "]=func(r interface{})bool{")
+				g.P("req:=r.(*", g.QualifiedGoIdent(m.GoIdent), ")")
+				check("req.", m, service, g, allcheck)
+				g.P("}")
+			}
+		}
 	}
 }
 func getallreg(m *protogen.Message, allreg map[string]struct{}) {
@@ -155,196 +174,24 @@ func getallreg(m *protogen.Message, allreg map[string]struct{}) {
 		}
 	}
 }
-func genPath(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
-	for _, method := range service.Methods {
-		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
-			continue
-		}
-		pathname := "RpcPath" + service.GoName + method.GoName
-		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
-		g.P("var ", pathname, "=", strconv.Quote(pathurl))
+func getallcheck(m *protogen.Message, stack map[string]struct{}, allcheck map[string]*protogen.Message) (check bool) {
+	if _, ok := stack[m.GoIdent.String()]; ok {
+		return false
 	}
-	g.P()
-}
-
-func genServer(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
-	// Server interface.
-	serverName := service.GoName + "RpcServer"
-
-	g.P("type ", serverName, " interface {")
-	for _, method := range service.Methods {
-		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
-			continue
-		}
-		g.P(method.Comments.Leading,
-			method.GoName, "(", g.QualifiedGoIdent(contextPackage.Ident("Context")), ",*", g.QualifiedGoIdent(method.Input.GoIdent), ")(*", g.QualifiedGoIdent(method.Output.GoIdent), ",error)",
-			method.Comments.Trailing)
+	stack[m.GoIdent.String()] = struct{}{}
+	defer func() {
+		delete(stack, m.GoIdent.String())
+	}()
+	if _, ok := allcheck[m.GoIdent.String()]; ok {
+		return true
 	}
-	g.P("}")
-	g.P()
-	// Server handler
-	for _, method := range service.Methods {
-		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
-			continue
+	allcheck[m.GoIdent.String()] = m
+	defer func() {
+		if !check {
+			delete(allcheck, m.GoIdent.String())
 		}
-		fname := "func _" + service.GoName + method.GoName + "RpcHandler"
-		p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
-		freturn := g.QualifiedGoIdent(rpcPackage.Ident("OutsideHandler"))
-		g.P(fname, "(", p1, ")", freturn, "{")
-		g.P("return func(ctx *"+g.QualifiedGoIdent(rpcPackage.Ident("Context")), "){")
-		g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
-		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(ctx.GetBody(),req);e!=nil{")
-		g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-		g.P("return")
-		g.P("}")
-		if needcheck(method.Input) {
-			check("req.", method.Input, service, g, true)
-		}
-		g.P("resp,e:=handler(ctx,req)")
-		g.P("if e!=nil{")
-		g.P("ctx.Abort(e)")
-		g.P("return")
-		g.P("}")
-		g.P("if resp == nil{")
-		g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
-		g.P("}")
-		g.P("respd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
-		g.P("ctx.Write(respd)")
-		g.P("}")
-		g.P("}")
-	}
-
-	//Server Register
-	g.P("func Register", serverName, "(engine *", g.QualifiedGoIdent(rpcPackage.Ident("RpcServer")), ",svc ", serverName, ",allmids map[string]", g.QualifiedGoIdent(rpcPackage.Ident("OutsideHandler")), ")error{")
-	g.P("//avoid lint")
-	g.P("_=allmids")
-	for _, method := range service.Methods {
-		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
-		if mop.GetDeprecated() {
-			continue
-		}
-		var timeout time.Duration
-		if proto.HasExtension(mop, pbex.E_Timeout) {
-			timeoutstr := proto.GetExtension(mop, pbex.E_Timeout).(string)
-			var e error
-			if timeout, e = time.ParseDuration(timeoutstr); e != nil {
-				panic(fmt.Sprintf("method: %s in service: %s with timeout: %s format error:%s", method.Desc.Name(), service.Desc.Name(), timeoutstr, e))
-			}
-		}
-		var mids []string
-		if proto.HasExtension(mop, pbex.E_Midwares) {
-			mids = proto.GetExtension(mop, pbex.E_Midwares).([]string)
-		}
-		fname := "_" + service.GoName + method.GoName + "RpcHandler(svc." + method.GoName + ")"
-		pathname := "RpcPath" + service.GoName + method.GoName
-		if len(mids) > 0 {
-			g.P("{")
-			str := ""
-			for _, mid := range mids {
-				str += ","
-				str += strconv.Quote(mid)
-			}
-			str = str[1:]
-			g.P("requiredMids:=[]string{", str, "}")
-			g.P("mids:=make([]", g.QualifiedGoIdent(rpcPackage.Ident("OutsideHandler")), ",0,", len(mids)+1, ")")
-			g.P("for _,v:=range requiredMids{")
-			g.P("if mid,ok:=allmids[v];ok{")
-			g.P("mids = append(mids,mid)")
-			g.P("}else{")
-			g.P("return ", g.QualifiedGoIdent(errorPackage.Ident("ErrNoMids")))
-			g.P("}")
-			g.P("}")
-			g.P("mids = append(mids,", fname, ")")
-			g.P("if e := engine.RegisterHandler(", pathname, ",", timeout.Nanoseconds(), ",mids...);e!=nil{")
-			g.P("return e")
-			g.P("}")
-			g.P("}")
-		} else {
-			g.P("if e := engine.RegisterHandler(", pathname, ",", timeout.Nanoseconds(), ",", fname, ");e!=nil{")
-			g.P("return e")
-			g.P("}")
-		}
-	}
-	g.P("return nil")
-	g.P("}")
-}
-func genClient(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
-	// Client interface.
-	clientName := service.GoName + "RpcClient"
-	lowclientName := strings.ToLower(clientName[:1]) + clientName[1:]
-
-	g.P("type ", clientName, " interface {")
-	for _, method := range service.Methods {
-		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
-			continue
-		}
-		g.P(method.Comments.Leading,
-			method.GoName, "(", g.QualifiedGoIdent(contextPackage.Ident("Context")), ",*", g.QualifiedGoIdent(method.Input.GoIdent), ")(*", g.QualifiedGoIdent(method.Output.GoIdent), ",error)",
-			method.Comments.Trailing)
-	}
-	g.P("}")
-	g.P()
-	g.P("type ", lowclientName, " struct{")
-	g.P("cc *", g.QualifiedGoIdent(rpcPackage.Ident("RpcClient")))
-	g.P("}")
-	g.P("func New", clientName, "(c *", g.QualifiedGoIdent(rpcPackage.Ident("ClientConfig")), ",selfgroup,selfname,peergroup,peername string)(", clientName, ",error){")
-	g.P("cc,e:=", g.QualifiedGoIdent(rpcPackage.Ident("NewRpcClient")), "(c,selfgroup,selfname,peergroup,peername)")
-	g.P("if e != nil {")
-	g.P("return nil, e")
-	g.P("}")
-	g.P("return &", lowclientName, "{cc:cc},nil")
-	g.P("}")
-	g.P()
-	// Client handler
-	for _, method := range service.Methods {
-		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
-		if mop.GetDeprecated() {
-			continue
-		}
-		pathname := "RpcPath" + service.GoName + method.GoName
-		p1 := "ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context"))
-		p2 := "req *" + g.QualifiedGoIdent(method.Input.GoIdent)
-		freturn := "(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
-		g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ")", freturn, "{")
-		g.P("if req == nil {")
-		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-		g.P("}")
-
-		if needcheck(method.Input) {
-			check("req.", method.Input, service, g, false)
-		}
-
-		g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
-		if proto.HasExtension(mop, pbex.E_Timeout) {
-			var timeout time.Duration
-			timeoutstr := proto.GetExtension(mop, pbex.E_Timeout).(string)
-			if timeoutstr != "" {
-				var e error
-				timeout, e = time.ParseDuration(timeoutstr)
-				if e != nil {
-					panic(fmt.Sprintf("method: %s in service: %s with timeout: %s format error:%s", method.Desc.Name(), service.Desc.Name(), timeoutstr, e))
-				}
-			}
-			g.P("respd,e:=c.cc.Call(ctx,", strconv.FormatInt(timeout.Nanoseconds(), 10), ",", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
-		} else {
-			g.P("respd,e:=c.cc.Call(ctx,0,", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
-		}
-		g.P("if e.(*", g.QualifiedGoIdent(errorPackage.Ident("Error")), ") != nil {")
-		g.P("return nil,e")
-		g.P("}")
-		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
-		g.P("if len(respd)==0{")
-		g.P("return resp,nil")
-		g.P("}")
-		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(respd,resp);e!=nil{")
-		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrResp")))
-		g.P("}")
-		g.P("return resp, nil")
-		g.P("}")
-	}
-}
-func needcheck(message *protogen.Message) bool {
-	for _, field := range message.Fields {
+	}()
+	for _, field := range m.Fields {
 		fop := field.Desc.Options().(*descriptorpb.FieldOptions)
 		if field.Desc.IsList() || field.Desc.IsMap() {
 			if proto.HasExtension(fop, pbex.E_MapRepeatedLenEq) ||
@@ -554,21 +401,17 @@ func needcheck(message *protogen.Message) bool {
 						return true
 					}
 				case protoreflect.MessageKind:
-					if needcheck(value.Message) {
-						return true
-					}
+					return getallcheck(value.Message, stack, allcheck)
 				}
 			} else {
 				//message or []message
-				if needcheck(field.Message) {
-					return true
-				}
+				return getallcheck(field.Message, stack, allcheck)
 			}
 		}
 	}
 	return false
 }
-func check(prefix string, message *protogen.Message, service *protogen.Service, g *protogen.GeneratedFile, server bool) {
+func check(prefix string, message *protogen.Message, service *protogen.Service, g *protogen.GeneratedFile, allcheck map[string]*protogen.Message) {
 	for _, field := range message.Fields {
 		fop := field.Desc.Options().(*descriptorpb.FieldOptions)
 		isbyteslice := false
@@ -576,15 +419,15 @@ func check(prefix string, message *protogen.Message, service *protogen.Service, 
 		case protoreflect.BoolKind:
 			//bool or []bool
 			if field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g, server)
+				elementnumcheck(prefix, field.GoName, fop, g)
 			}
-			boolcheck(prefix, field.GoName, field.Desc.IsList(), fop, g, server)
+			boolcheck(prefix, field.GoName, field.Desc.IsList(), fop, g)
 		case protoreflect.EnumKind:
 			//enum or []enum
 			if field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g, server)
+				elementnumcheck(prefix, field.GoName, fop, g)
 			}
-			enumcheck(prefix, field.GoName, field.Enum.GoIdent, field.Desc.IsList(), fop, g, server)
+			enumcheck(prefix, field.GoName, field.Enum.GoIdent, field.Desc.IsList(), fop, g)
 		case protoreflect.Int32Kind:
 			fallthrough
 		case protoreflect.Sint32Kind:
@@ -599,9 +442,9 @@ func check(prefix string, message *protogen.Message, service *protogen.Service, 
 		case protoreflect.Sfixed64Kind:
 			//int64 or []int64
 			if field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g, server)
+				elementnumcheck(prefix, field.GoName, fop, g)
 			}
-			intcheck(prefix, field.GoName, field.Desc.IsList(), fop, g, server)
+			intcheck(prefix, field.GoName, field.Desc.IsList(), fop, g)
 		case protoreflect.Uint32Kind:
 			fallthrough
 		case protoreflect.Fixed32Kind:
@@ -612,18 +455,18 @@ func check(prefix string, message *protogen.Message, service *protogen.Service, 
 		case protoreflect.Fixed64Kind:
 			//uint64 or []uint64
 			if field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g, server)
+				elementnumcheck(prefix, field.GoName, fop, g)
 			}
-			uintcheck(prefix, field.GoName, field.Desc.IsList(), fop, g, server)
+			uintcheck(prefix, field.GoName, field.Desc.IsList(), fop, g)
 		case protoreflect.FloatKind:
 			//float32 or []float32
 			fallthrough
 		case protoreflect.DoubleKind:
 			//float64 or []float64
 			if field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g, server)
+				elementnumcheck(prefix, field.GoName, fop, g)
 			}
-			floatcheck(prefix, field.GoName, field.Desc.IsList(), fop, g, server)
+			floatcheck(prefix, field.GoName, field.Desc.IsList(), fop, g)
 		case protoreflect.BytesKind:
 			//[]bytes or [][]bytes
 			isbyteslice = true
@@ -631,136 +474,108 @@ func check(prefix string, message *protogen.Message, service *protogen.Service, 
 		case protoreflect.StringKind:
 			//string or []string
 			if field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g, server)
+				elementnumcheck(prefix, field.GoName, fop, g)
 			}
-			strcheck(prefix, field.GoName, field.Desc.IsList(), isbyteslice, fop, service, g, server)
+			strcheck(prefix, field.GoName, field.Desc.IsList(), isbyteslice, fop, service, g)
 		case protoreflect.MessageKind:
 			//message or []message or map
 			if field.Desc.IsMap() || field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g, server)
+				elementnumcheck(prefix, field.GoName, fop, g)
 			}
 			if field.Desc.IsMap() {
 				//map
-				mapcheck(prefix, field.GoName, field.Message.Fields[0], field.Message.Fields[1], fop, service, g, server)
+				mapcheck(prefix, field.GoName, field.Message.Fields[0], field.Message.Fields[1], fop, service, g)
 			} else {
 				//message or []message
-				if needcheck(field.Message) {
-					messagecheck(prefix, field.GoName, field.Desc.IsList(), field.Message, service, g, server)
+				if _, ok := allcheck[field.Message.GoIdent.String()]; ok {
+					messagecheck(prefix, field.GoName, field.Desc.IsList(), field.Message, service, g)
 				}
 			}
 		}
 	}
 }
-
-func elementnumcheck(prefix, fieldname string, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile, server bool) {
+func elementnumcheck(prefix, fieldname string, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenEq) {
 		leneq := proto.GetExtension(fop, pbex.E_MapRepeatedLenEq).(uint64)
 		g.P("if len(", prefix+fieldname, ")!=", leneq, "{")
-		if server {
-			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-		} else {
-			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-		}
+		g.P("return false")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenNotEq) {
 		lennoteq := proto.GetExtension(fop, pbex.E_MapRepeatedLenNotEq).(uint64)
 		g.P("if len(", prefix+fieldname, ")==", lennoteq, "{")
-		if server {
-			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-		} else {
-			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-		}
+		g.P("return false")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenGt) {
 		lengt := proto.GetExtension(fop, pbex.E_MapRepeatedLenGt).(uint64)
 		g.P("if len(", prefix+fieldname, ")<=", lengt, "{")
-		if server {
-			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-		} else {
-			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-		}
+		g.P("return false")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenGte) {
 		lengte := proto.GetExtension(fop, pbex.E_MapRepeatedLenGte).(uint64)
 		g.P("if len(", prefix+fieldname, ")<", lengte, "{")
-		if server {
-			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-		} else {
-			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-		}
+		g.P("return false")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenLt) {
 		lenlt := proto.GetExtension(fop, pbex.E_MapRepeatedLenLt).(uint64)
 		g.P("if len(", prefix+fieldname, ")>=", lenlt, "{")
-		if server {
-			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-		} else {
-			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-		}
+		g.P("return false")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenLte) {
 		lenlte := proto.GetExtension(fop, pbex.E_MapRepeatedLenLte).(uint64)
 		g.P("if len(", prefix+fieldname, ")>", lenlte, "{")
-		if server {
-			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-		} else {
-			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-		}
+		g.P("return false")
 		g.P("}")
 	}
 }
-func boolcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile, server bool) {
+func boolcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_BoolEq) {
 		booleq := proto.GetExtension(fop, pbex.E_BoolEq).(bool)
 		if islist {
 			g.P("for _,v:= range ", prefix+fieldname, "{")
 			g.P("if v!=", booleq, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, "!=", booleq, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
 }
-func intcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile, server bool) {
+func enumcheck(prefix, fieldname string, ident protogen.GoIdent, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+	if islist {
+		g.P("for _,v:=range ", prefix+fieldname, "{")
+		g.P("if _,ok:=", g.QualifiedGoIdent(ident), "_name[int32(v)];!ok{")
+		g.P("return false")
+		g.P("}")
+		g.P("}")
+	} else {
+		g.P("if _,ok:=", g.QualifiedGoIdent(ident), "_name[int32(", prefix+fieldname, ")];!ok{")
+		g.P("return false")
+		g.P("}")
+	}
+}
+func intcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_IntIn) {
 		in := proto.GetExtension(fop, pbex.E_IntIn).([]int64)
 		if islist {
 			g.P("for _,v:= range ", prefix+fieldname, "{")
 			for _, v := range in {
 				g.P("if v!=", v, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range in {
 				g.P("if ", prefix+fieldname, "!=", v, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		}
@@ -771,22 +586,14 @@ func intcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpti
 			g.P("for _,v:= range ", prefix+fieldname, "{")
 			for _, v := range notin {
 				g.P("if v==", v, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range notin {
 				g.P("if ", prefix+fieldname, "==", v, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		}
@@ -796,20 +603,12 @@ func intcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpti
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v<=", gt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, "<=", gt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -818,20 +617,12 @@ func intcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpti
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v<", gte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, "<", gte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -840,20 +631,12 @@ func intcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpti
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v>=", lt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, ">=", lt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -862,47 +645,31 @@ func intcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpti
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v>", lte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, ">", lte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
 }
-func uintcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile, server bool) {
+func uintcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_UintIn) {
 		in := proto.GetExtension(fop, pbex.E_UintIn).([]uint64)
 		if islist {
 			g.P("for _,v:= range ", prefix+fieldname, "{")
 			for _, v := range in {
 				g.P("if v!=", v, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range in {
 				g.P("if ", prefix+fieldname, "!=", v, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		}
@@ -913,22 +680,14 @@ func uintcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpt
 			g.P("for _,v:= range ", prefix+fieldname, "{")
 			for _, v := range notin {
 				g.P("if v==", v, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range notin {
 				g.P("if ", prefix+fieldname, "==", v, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		}
@@ -938,20 +697,12 @@ func uintcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpt
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v<=", gt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, "<=", gt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -960,20 +711,12 @@ func uintcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpt
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v<", gte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, "<", gte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -982,20 +725,12 @@ func uintcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpt
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v>=", lt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, ">=", lt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -1004,47 +739,31 @@ func uintcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOpt
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v>", lte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, ">", lte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
 }
-func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile, server bool) {
+func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_FloatIn) {
 		in := proto.GetExtension(fop, pbex.E_FloatIn).([]float64)
 		if islist {
 			g.P("for _,v:= range ", prefix+fieldname, "{")
 			for _, v := range in {
 				g.P("if v!=", v, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range in {
 				g.P("if ", prefix+fieldname, "!=", v, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		}
@@ -1055,22 +774,14 @@ func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOp
 			g.P("for _,v:= range ", prefix+fieldname, "{")
 			for _, v := range notin {
 				g.P("if v==", v, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range notin {
 				g.P("if ", prefix+fieldname, "==", v, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		}
@@ -1080,20 +791,12 @@ func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOp
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v<=", gt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, "<=", gt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -1102,20 +805,12 @@ func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOp
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v<", gte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, "<", gte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -1124,20 +819,12 @@ func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOp
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v>=", lt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, ">=", lt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -1146,65 +833,28 @@ func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOp
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if v>", lte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if ", prefix+fieldname, ">", lte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
 }
-func enumcheck(prefix, fieldname string, ident protogen.GoIdent, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile, server bool) {
-	if islist {
-		g.P("for _,v:=range ", prefix+fieldname, "{")
-		g.P("if _,ok:=", g.QualifiedGoIdent(ident), "_name[int32(v)];!ok{")
-		if server {
-			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-		} else {
-			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-		}
-		g.P("}")
-		g.P("}")
-	} else {
-		g.P("if _,ok:=", g.QualifiedGoIdent(ident), "_name[int32(", prefix+fieldname, ")];!ok{")
-		if server {
-			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-		} else {
-			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-		}
-		g.P("}")
-	}
-}
-func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descriptorpb.FieldOptions, service *protogen.Service, g *protogen.GeneratedFile, server bool) {
+func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descriptorpb.FieldOptions, service *protogen.Service, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_StringBytesLenEq) {
 		leneq := proto.GetExtension(fop, pbex.E_StringBytesLenEq).(uint64)
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if len(v)!=", leneq, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if len(", prefix+fieldname, ")!=", leneq, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -1213,20 +863,12 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if len(v)==", lennoteq, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if len(", prefix+fieldname, ")==", lennoteq, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -1235,20 +877,12 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if len(v)<=", lengt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if len(", prefix+fieldname, ")<=", lengt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -1257,20 +891,12 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if len(v)<", lengte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if len(", prefix+fieldname, ")<", lengte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -1279,20 +905,12 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if len(v)>=", lenlt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if len(", prefix+fieldname, ")>=", lenlt, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -1301,20 +919,12 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 		if islist {
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			g.P("if len(v)>", lenlte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
 			g.P("if len(", prefix+fieldname, ")>", lenlte, "{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		}
 	}
@@ -1328,11 +938,7 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 				} else {
 					g.P("if v!=", strconv.Quote(v), "{")
 				}
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
@@ -1343,11 +949,7 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 				} else {
 					g.P("if v!=", strconv.Quote(v), "{")
 				}
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		}
@@ -1362,11 +964,7 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 				} else {
 					g.P("if v==", strconv.Quote(v), "{")
 				}
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
@@ -1377,11 +975,7 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 				} else {
 					g.P("if v==", strconv.Quote(v), "{")
 				}
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		}
@@ -1396,11 +990,7 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 				} else {
 					g.P("if !_", service.GoName, "Regs[", strconv.Quote(m), "].MatchString(v){")
 				}
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
@@ -1411,11 +1001,7 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 				} else {
 					g.P("if !_", service.GoName, "Regs[", strconv.Quote(m), "].MatchString(", prefix+fieldname, "){")
 				}
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		}
@@ -1430,11 +1016,7 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 				} else {
 					g.P("if _", service.GoName, "Regs[", strconv.Quote(m), "].MatchString(v){")
 				}
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
@@ -1445,31 +1027,31 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 				} else {
 					g.P("if _", service.GoName, "Regs[", strconv.Quote(m), "].MatchString(", prefix+fieldname, "){")
 				}
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		}
 	}
 }
-func messagecheck(prefix, fieldname string, islist bool, message *protogen.Message, service *protogen.Service, g *protogen.GeneratedFile, server bool) {
+func messagecheck(prefix, fieldname string, islist bool, message *protogen.Message, service *protogen.Service, g *protogen.GeneratedFile) {
 	if islist {
 		g.P("for _,m:=range ", prefix+fieldname, "{")
 		g.P("if m==nil{")
 		g.P("continue")
 		g.P("}")
-		check("m.", message, service, g, server)
+		g.P("if !_", service.GoName, "Checkers[", strconv.Quote(message.GoIdent.String()), "](m){")
+		g.P("return false")
+		g.P("}")
 		g.P("}")
 	} else {
 		g.P("if ", prefix+fieldname, "!=nil{")
-		check(prefix+fieldname+".", message, service, g, server)
+		g.P("if !_", service.GoName, "Checkers[", strconv.Quote(message.GoIdent.String()), "](", prefix+fieldname, "){")
+		g.P("return false")
+		g.P("}")
 		g.P("}")
 	}
 }
-func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descriptorpb.FieldOptions, service *protogen.Service, g *protogen.GeneratedFile, server bool) {
+func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descriptorpb.FieldOptions, service *protogen.Service, g *protogen.GeneratedFile) {
 	keycheck := false
 	valuecheck := false
 	isbyteslice := false
@@ -2230,4 +1812,194 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 		}
 	}
 	g.P("}")
+}
+func genPath(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
+	for _, method := range service.Methods {
+		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
+			continue
+		}
+		pathname := "RpcPath" + service.GoName + method.GoName
+		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
+		g.P("var ", pathname, "=", strconv.Quote(pathurl))
+	}
+	g.P()
+}
+
+func genServer(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
+	// Server interface.
+	serverName := service.GoName + "RpcServer"
+
+	g.P("type ", serverName, " interface {")
+	for _, method := range service.Methods {
+		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
+			continue
+		}
+		g.P(method.Comments.Leading,
+			method.GoName, "(", g.QualifiedGoIdent(contextPackage.Ident("Context")), ",*", g.QualifiedGoIdent(method.Input.GoIdent), ")(*", g.QualifiedGoIdent(method.Output.GoIdent), ",error)",
+			method.Comments.Trailing)
+	}
+	g.P("}")
+	g.P()
+	// Server handler
+	for _, method := range service.Methods {
+		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
+			continue
+		}
+		fname := "func _" + service.GoName + method.GoName + "RpcHandler"
+		p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
+		freturn := g.QualifiedGoIdent(rpcPackage.Ident("OutsideHandler"))
+		g.P(fname, "(", p1, ")", freturn, "{")
+		g.P("return func(ctx *"+g.QualifiedGoIdent(rpcPackage.Ident("Context")), "){")
+		g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
+		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(ctx.GetBody(),req);e!=nil{")
+		g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+		g.P("return")
+		g.P("}")
+		stack := make(map[string]struct{}, 10)
+		if needcheck(method.Input, stack) {
+			check("req.", method.Input, service, g, true)
+		}
+		g.P("resp,e:=handler(ctx,req)")
+		g.P("if e!=nil{")
+		g.P("ctx.Abort(e)")
+		g.P("return")
+		g.P("}")
+		g.P("if resp == nil{")
+		g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
+		g.P("}")
+		g.P("respd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
+		g.P("ctx.Write(respd)")
+		g.P("}")
+		g.P("}")
+	}
+
+	//Server Register
+	g.P("func Register", serverName, "(engine *", g.QualifiedGoIdent(rpcPackage.Ident("RpcServer")), ",svc ", serverName, ",allmids map[string]", g.QualifiedGoIdent(rpcPackage.Ident("OutsideHandler")), ")error{")
+	g.P("//avoid lint")
+	g.P("_=allmids")
+	for _, method := range service.Methods {
+		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
+		if mop.GetDeprecated() {
+			continue
+		}
+		var timeout time.Duration
+		if proto.HasExtension(mop, pbex.E_Timeout) {
+			timeoutstr := proto.GetExtension(mop, pbex.E_Timeout).(string)
+			var e error
+			if timeout, e = time.ParseDuration(timeoutstr); e != nil {
+				panic(fmt.Sprintf("method: %s in service: %s with timeout: %s format error:%s", method.Desc.Name(), service.Desc.Name(), timeoutstr, e))
+			}
+		}
+		var mids []string
+		if proto.HasExtension(mop, pbex.E_Midwares) {
+			mids = proto.GetExtension(mop, pbex.E_Midwares).([]string)
+		}
+		fname := "_" + service.GoName + method.GoName + "RpcHandler(svc." + method.GoName + ")"
+		pathname := "RpcPath" + service.GoName + method.GoName
+		if len(mids) > 0 {
+			g.P("{")
+			str := ""
+			for _, mid := range mids {
+				str += ","
+				str += strconv.Quote(mid)
+			}
+			str = str[1:]
+			g.P("requiredMids:=[]string{", str, "}")
+			g.P("mids:=make([]", g.QualifiedGoIdent(rpcPackage.Ident("OutsideHandler")), ",0,", len(mids)+1, ")")
+			g.P("for _,v:=range requiredMids{")
+			g.P("if mid,ok:=allmids[v];ok{")
+			g.P("mids = append(mids,mid)")
+			g.P("}else{")
+			g.P("return ", g.QualifiedGoIdent(errorPackage.Ident("ErrNoMids")))
+			g.P("}")
+			g.P("}")
+			g.P("mids = append(mids,", fname, ")")
+			g.P("if e := engine.RegisterHandler(", pathname, ",", timeout.Nanoseconds(), ",mids...);e!=nil{")
+			g.P("return e")
+			g.P("}")
+			g.P("}")
+		} else {
+			g.P("if e := engine.RegisterHandler(", pathname, ",", timeout.Nanoseconds(), ",", fname, ");e!=nil{")
+			g.P("return e")
+			g.P("}")
+		}
+	}
+	g.P("return nil")
+	g.P("}")
+}
+func genClient(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
+	// Client interface.
+	clientName := service.GoName + "RpcClient"
+	lowclientName := strings.ToLower(clientName[:1]) + clientName[1:]
+
+	g.P("type ", clientName, " interface {")
+	for _, method := range service.Methods {
+		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
+			continue
+		}
+		g.P(method.Comments.Leading,
+			method.GoName, "(", g.QualifiedGoIdent(contextPackage.Ident("Context")), ",*", g.QualifiedGoIdent(method.Input.GoIdent), ")(*", g.QualifiedGoIdent(method.Output.GoIdent), ",error)",
+			method.Comments.Trailing)
+	}
+	g.P("}")
+	g.P()
+	g.P("type ", lowclientName, " struct{")
+	g.P("cc *", g.QualifiedGoIdent(rpcPackage.Ident("RpcClient")))
+	g.P("}")
+	g.P("func New", clientName, "(c *", g.QualifiedGoIdent(rpcPackage.Ident("ClientConfig")), ",selfgroup,selfname,peergroup,peername string)(", clientName, ",error){")
+	g.P("cc,e:=", g.QualifiedGoIdent(rpcPackage.Ident("NewRpcClient")), "(c,selfgroup,selfname,peergroup,peername)")
+	g.P("if e != nil {")
+	g.P("return nil, e")
+	g.P("}")
+	g.P("return &", lowclientName, "{cc:cc},nil")
+	g.P("}")
+	g.P()
+	// Client handler
+	for _, method := range service.Methods {
+		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
+		if mop.GetDeprecated() {
+			continue
+		}
+		pathname := "RpcPath" + service.GoName + method.GoName
+		p1 := "ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context"))
+		p2 := "req *" + g.QualifiedGoIdent(method.Input.GoIdent)
+		freturn := "(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
+		g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ")", freturn, "{")
+		g.P("if req == nil {")
+		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+		g.P("}")
+
+		stack := make(map[string]struct{}, 10)
+		if needcheck(method.Input, stack) {
+			check("req.", method.Input, service, g, false)
+		}
+
+		g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
+		if proto.HasExtension(mop, pbex.E_Timeout) {
+			var timeout time.Duration
+			timeoutstr := proto.GetExtension(mop, pbex.E_Timeout).(string)
+			if timeoutstr != "" {
+				var e error
+				timeout, e = time.ParseDuration(timeoutstr)
+				if e != nil {
+					panic(fmt.Sprintf("method: %s in service: %s with timeout: %s format error:%s", method.Desc.Name(), service.Desc.Name(), timeoutstr, e))
+				}
+			}
+			g.P("respd,e:=c.cc.Call(ctx,", strconv.FormatInt(timeout.Nanoseconds(), 10), ",", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
+		} else {
+			g.P("respd,e:=c.cc.Call(ctx,0,", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
+		}
+		g.P("if e.(*", g.QualifiedGoIdent(errorPackage.Ident("Error")), ") != nil {")
+		g.P("return nil,e")
+		g.P("}")
+		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
+		g.P("if len(respd)==0{")
+		g.P("return resp,nil")
+		g.P("}")
+		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(respd,resp);e!=nil{")
+		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrResp")))
+		g.P("}")
+		g.P("return resp, nil")
+		g.P("}")
+	}
 }
