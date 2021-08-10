@@ -15,20 +15,14 @@ import (
 )
 
 const (
-	//stringsPackage  = protogen.GoImportPath("strings")
-	regexpPackage = protogen.GoImportPath("regexp")
-	//bytesPackage    = protogen.GoImportPath("bytes")
-	//strconvPackage  = protogen.GoImportPath("strconv")
-	httpPackage = protogen.GoImportPath("net/http")
-	//fmtPackage      = protogen.GoImportPath("fmt")
-	//jsonPackage     = protogen.GoImportPath("encoding/json")
+	regexpPackage   = protogen.GoImportPath("regexp")
+	httpPackage     = protogen.GoImportPath("net/http")
 	protoPackage    = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	contextPackage  = protogen.GoImportPath("context")
 	rpcPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/rpc")
 	commonPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
 	metadataPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/metadata")
 	errorPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/error")
-	//bufpoolPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/bufpool")
 )
 
 // generateFile generates a _rpc.pb.go file containing rpc service definitions.
@@ -79,12 +73,13 @@ func geninit(file *protogen.File, g *protogen.GeneratedFile, service *protogen.S
 		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 			continue
 		}
-		getallreg(method.Input, allreg)
 		stack := make(map[string]struct{})
+		getallreg(method.Input, stack, allreg)
+		stack = make(map[string]struct{})
 		getallcheck(method.Input, stack, allcheck)
 	}
 	if len(allcheck) > 0 {
-		g.P("var _", service.GoName, "Checkers map[string]func(req interface{})")
+		g.P("var _", service.GoName, "RpcCheckers map[string]func(req interface{})bool")
 	}
 	if len(allreg) > 0 {
 		for reg := range allreg {
@@ -92,33 +87,38 @@ func geninit(file *protogen.File, g *protogen.GeneratedFile, service *protogen.S
 				panic("reg: '" + reg + "' syntax wrong")
 			}
 		}
-		g.P("var _", service.GoName, "Regs map[string]*", g.QualifiedGoIdent(regexpPackage.Ident("Regexp")))
+		g.P("var _", service.GoName, "RpcRegs map[string]*", g.QualifiedGoIdent(regexpPackage.Ident("Regexp")))
 	}
 	if len(allcheck) > 0 || len(allreg) > 0 {
 		g.P("func init(){")
 		if len(allreg) > 0 {
-			g.P("_", service.GoName, "Regs=make(map[string]*", g.QualifiedGoIdent(regexpPackage.Ident("Regexp")), ",", len(allreg), ")")
+			g.P("_", service.GoName, "RpcRegs=make(map[string]*", g.QualifiedGoIdent(regexpPackage.Ident("Regexp")), ",", len(allreg), ")")
 			g.P("var e error")
 			for reg := range allreg {
-				g.P("if _", service.GoName, "Regs[", strconv.Quote(reg), "] ,e = ", g.QualifiedGoIdent(regexpPackage.Ident("Compile")), "(", strconv.Quote(reg), ");e!=nil{")
+				g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(reg), "] ,e = ", g.QualifiedGoIdent(regexpPackage.Ident("Compile")), "(", strconv.Quote(reg), ");e!=nil{")
 				g.P("panic(\"protoc-gen-go-rpc will check all regexp before generate this code,this may happen when the golang version build protoc-gen-go-rpc and golang version run this code isn't same and the two version's regexp package is different\")")
 				g.P("}")
 			}
-			g.P("}")
 			g.P()
 		}
 		if len(allcheck) > 0 {
-			g.P("_", service.GoName, "Checkers = make(map[string]func(req interface{})bool,", len(allcheck), ")")
+			g.P("_", service.GoName, "RpcCheckers = make(map[string]func(req interface{})bool,", len(allcheck), ")")
 			for k, m := range allcheck {
-				g.P("_", service.GoName, "Checkers[", strconv.Quote(k), "]=func(r interface{})bool{")
+				g.P("_", service.GoName, "RpcCheckers[", strconv.Quote(k), "]=func(r interface{})bool{")
 				g.P("req:=r.(*", g.QualifiedGoIdent(m.GoIdent), ")")
 				check("req.", m, service, g, allcheck)
 				g.P("}")
 			}
 		}
+		g.P("}")
 	}
 }
-func getallreg(m *protogen.Message, allreg map[string]struct{}) {
+func getallreg(m *protogen.Message, stack map[string]struct{}, allreg map[string]struct{}) {
+	if _, ok := stack[m.GoIdent.String()]; ok {
+		return
+	}
+	stack[m.GoIdent.String()] = struct{}{}
+	defer delete(stack, m.GoIdent.String())
 	for _, field := range m.Fields {
 		fop := field.Desc.Options().(*descriptorpb.FieldOptions)
 		if field.Desc.Kind() == protoreflect.BytesKind || field.Desc.Kind() == protoreflect.StringKind {
@@ -165,11 +165,11 @@ func getallreg(m *protogen.Message, allreg map[string]struct{}) {
 						}
 					}
 				} else if field.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
-					getallreg(field.Message.Fields[1].Message, allreg)
+					getallreg(field.Message.Fields[1].Message, stack, allreg)
 				}
 			} else {
 				//[]message or message
-				getallreg(field.Message, allreg)
+				getallreg(field.Message, stack, allreg)
 			}
 		}
 	}
@@ -200,14 +200,14 @@ func getallcheck(m *protogen.Message, stack map[string]struct{}, allcheck map[st
 				proto.HasExtension(fop, pbex.E_MapRepeatedLenGte) ||
 				proto.HasExtension(fop, pbex.E_MapRepeatedLenLt) ||
 				proto.HasExtension(fop, pbex.E_MapRepeatedLenLte) {
-				return true
+				check = true
 			}
 		}
 		switch field.Desc.Kind() {
 		case protoreflect.BoolKind:
 			//bool
 			if proto.HasExtension(fop, pbex.E_BoolEq) {
-				return true
+				check = true
 			}
 		case protoreflect.Int32Kind:
 			fallthrough
@@ -228,7 +228,7 @@ func getallcheck(m *protogen.Message, stack map[string]struct{}, allcheck map[st
 				proto.HasExtension(fop, pbex.E_IntGte) ||
 				proto.HasExtension(fop, pbex.E_IntLt) ||
 				proto.HasExtension(fop, pbex.E_IntLte) {
-				return true
+				check = true
 			}
 		case protoreflect.Uint32Kind:
 			fallthrough
@@ -245,7 +245,7 @@ func getallcheck(m *protogen.Message, stack map[string]struct{}, allcheck map[st
 				proto.HasExtension(fop, pbex.E_UintGte) ||
 				proto.HasExtension(fop, pbex.E_UintLt) ||
 				proto.HasExtension(fop, pbex.E_UintLte) {
-				return true
+				check = true
 			}
 		case protoreflect.FloatKind:
 			//float32 or []float32
@@ -258,11 +258,11 @@ func getallcheck(m *protogen.Message, stack map[string]struct{}, allcheck map[st
 				proto.HasExtension(fop, pbex.E_FloatGte) ||
 				proto.HasExtension(fop, pbex.E_FloatLt) ||
 				proto.HasExtension(fop, pbex.E_FloatLte) {
-				return true
+				check = true
 			}
 		case protoreflect.EnumKind:
 			//enum or []enum
-			return true
+			check = true
 		case protoreflect.BytesKind:
 			//[]bytes or [][]bytes
 			fallthrough
@@ -278,7 +278,7 @@ func getallcheck(m *protogen.Message, stack map[string]struct{}, allcheck map[st
 				proto.HasExtension(fop, pbex.E_StringBytesLenGte) ||
 				proto.HasExtension(fop, pbex.E_StringBytesLenLt) ||
 				proto.HasExtension(fop, pbex.E_StringBytesLenLte) {
-				return true
+				check = true
 			}
 		case protoreflect.MessageKind:
 			if field.Desc.IsMap() {
@@ -302,7 +302,7 @@ func getallcheck(m *protogen.Message, stack map[string]struct{}, allcheck map[st
 						proto.HasExtension(fop, pbex.E_MapKeyIntGte) ||
 						proto.HasExtension(fop, pbex.E_MapKeyIntLt) ||
 						proto.HasExtension(fop, pbex.E_MapKeyIntLte) {
-						return true
+						check = true
 					}
 				case protoreflect.Uint32Kind:
 					fallthrough
@@ -317,7 +317,7 @@ func getallcheck(m *protogen.Message, stack map[string]struct{}, allcheck map[st
 						proto.HasExtension(fop, pbex.E_MapKeyUintGte) ||
 						proto.HasExtension(fop, pbex.E_MapKeyUintLt) ||
 						proto.HasExtension(fop, pbex.E_MapKeyUintLte) {
-						return true
+						check = true
 					}
 				case protoreflect.StringKind:
 					if proto.HasExtension(fop, pbex.E_MapKeyStringIn) ||
@@ -330,15 +330,15 @@ func getallcheck(m *protogen.Message, stack map[string]struct{}, allcheck map[st
 						proto.HasExtension(fop, pbex.E_MapKeyStringLenGte) ||
 						proto.HasExtension(fop, pbex.E_MapKeyStringLenLt) ||
 						proto.HasExtension(fop, pbex.E_MapKeyStringLenLte) {
-						return true
+						check = true
 					}
 				}
 				switch value.Desc.Kind() {
 				case protoreflect.EnumKind:
-					return true
+					check = true
 				case protoreflect.BoolKind:
 					if proto.HasExtension(fop, pbex.E_MapValueBoolEq) {
-						return true
+						check = true
 					}
 				case protoreflect.Int32Kind:
 					fallthrough
@@ -357,7 +357,7 @@ func getallcheck(m *protogen.Message, stack map[string]struct{}, allcheck map[st
 						proto.HasExtension(fop, pbex.E_MapValueIntGte) ||
 						proto.HasExtension(fop, pbex.E_MapValueIntLt) ||
 						proto.HasExtension(fop, pbex.E_MapValueIntLte) {
-						return true
+						check = true
 					}
 				case protoreflect.Uint32Kind:
 					fallthrough
@@ -372,7 +372,7 @@ func getallcheck(m *protogen.Message, stack map[string]struct{}, allcheck map[st
 						proto.HasExtension(fop, pbex.E_MapValueUintGte) ||
 						proto.HasExtension(fop, pbex.E_MapValueUintLt) ||
 						proto.HasExtension(fop, pbex.E_MapValueUintLte) {
-						return true
+						check = true
 					}
 				case protoreflect.FloatKind:
 					fallthrough
@@ -383,7 +383,7 @@ func getallcheck(m *protogen.Message, stack map[string]struct{}, allcheck map[st
 						proto.HasExtension(fop, pbex.E_MapValueFloatGte) ||
 						proto.HasExtension(fop, pbex.E_MapValueFloatLt) ||
 						proto.HasExtension(fop, pbex.E_MapValueFloatLte) {
-						return true
+						check = true
 					}
 				case protoreflect.BytesKind:
 					fallthrough
@@ -398,18 +398,22 @@ func getallcheck(m *protogen.Message, stack map[string]struct{}, allcheck map[st
 						proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGte) ||
 						proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLt) ||
 						proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLte) {
-						return true
+						check = true
 					}
 				case protoreflect.MessageKind:
-					return getallcheck(value.Message, stack, allcheck)
+					if getallcheck(value.Message, stack, allcheck) {
+						check = true
+					}
 				}
 			} else {
 				//message or []message
-				return getallcheck(field.Message, stack, allcheck)
+				if getallcheck(field.Message, stack, allcheck) {
+					check = true
+				}
 			}
 		}
 	}
-	return false
+	return
 }
 func check(prefix string, message *protogen.Message, service *protogen.Service, g *protogen.GeneratedFile, allcheck map[string]*protogen.Message) {
 	for _, field := range message.Fields {
@@ -484,7 +488,7 @@ func check(prefix string, message *protogen.Message, service *protogen.Service, 
 			}
 			if field.Desc.IsMap() {
 				//map
-				mapcheck(prefix, field.GoName, field.Message.Fields[0], field.Message.Fields[1], fop, service, g)
+				mapcheck(prefix, field.GoName, field.Message.Fields[0], field.Message.Fields[1], fop, service, g, allcheck)
 			} else {
 				//message or []message
 				if _, ok := allcheck[field.Message.GoIdent.String()]; ok {
@@ -493,6 +497,7 @@ func check(prefix string, message *protogen.Message, service *protogen.Service, 
 			}
 		}
 	}
+	g.P("return true")
 }
 func elementnumcheck(prefix, fieldname string, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenEq) {
@@ -986,9 +991,9 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			for _, m := range match {
 				if isslice {
-					g.P("if !_", service.GoName, "Regs[", strconv.Quote(m), "].Match(v){")
+					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(m), "].Match(v){")
 				} else {
-					g.P("if !_", service.GoName, "Regs[", strconv.Quote(m), "].MatchString(v){")
+					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(m), "].MatchString(v){")
 				}
 				g.P("return false")
 				g.P("}")
@@ -997,9 +1002,9 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 		} else {
 			for _, m := range match {
 				if isslice {
-					g.P("if !_", service.GoName, "Regs[", strconv.Quote(m), "].Match(", prefix+fieldname, "){")
+					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(m), "].Match(", prefix+fieldname, "){")
 				} else {
-					g.P("if !_", service.GoName, "Regs[", strconv.Quote(m), "].MatchString(", prefix+fieldname, "){")
+					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(m), "].MatchString(", prefix+fieldname, "){")
 				}
 				g.P("return false")
 				g.P("}")
@@ -1012,9 +1017,9 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 			g.P("for _,v:=range ", prefix+fieldname, "{")
 			for _, m := range notmatch {
 				if isslice {
-					g.P("if _", service.GoName, "Regs[", strconv.Quote(m), "].Match(v){")
+					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(m), "].Match(v){")
 				} else {
-					g.P("if _", service.GoName, "Regs[", strconv.Quote(m), "].MatchString(v){")
+					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(m), "].MatchString(v){")
 				}
 				g.P("return false")
 				g.P("}")
@@ -1023,9 +1028,9 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 		} else {
 			for _, m := range notmatch {
 				if isslice {
-					g.P("if _", service.GoName, "Regs[", strconv.Quote(m), "].Match(", prefix+fieldname, "){")
+					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(m), "].Match(", prefix+fieldname, "){")
 				} else {
-					g.P("if _", service.GoName, "Regs[", strconv.Quote(m), "].MatchString(", prefix+fieldname, "){")
+					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(m), "].MatchString(", prefix+fieldname, "){")
 				}
 				g.P("return false")
 				g.P("}")
@@ -1039,19 +1044,19 @@ func messagecheck(prefix, fieldname string, islist bool, message *protogen.Messa
 		g.P("if m==nil{")
 		g.P("continue")
 		g.P("}")
-		g.P("if !_", service.GoName, "Checkers[", strconv.Quote(message.GoIdent.String()), "](m){")
+		g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(message.GoIdent.String()), "](m){")
 		g.P("return false")
 		g.P("}")
 		g.P("}")
 	} else {
 		g.P("if ", prefix+fieldname, "!=nil{")
-		g.P("if !_", service.GoName, "Checkers[", strconv.Quote(message.GoIdent.String()), "](", prefix+fieldname, "){")
+		g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(message.GoIdent.String()), "](", prefix+fieldname, "){")
 		g.P("return false")
 		g.P("}")
 		g.P("}")
 	}
 }
-func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descriptorpb.FieldOptions, service *protogen.Service, g *protogen.GeneratedFile) {
+func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descriptorpb.FieldOptions, service *protogen.Service, g *protogen.GeneratedFile, allcheck map[string]*protogen.Message) {
 	keycheck := false
 	valuecheck := false
 	isbyteslice := false
@@ -1172,7 +1177,9 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 			valuecheck = true
 		}
 	case protoreflect.MessageKind:
-		valuecheck = needcheck(val.Message)
+		if _, ok := allcheck[val.Message.GoIdent.String()]; ok {
+			valuecheck = true
+		}
 	}
 	if keycheck && valuecheck {
 		g.P("for k,v :=range ", prefix+fieldname, "{")
@@ -1200,11 +1207,7 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				keyin := proto.GetExtension(fop, pbex.E_MapKeyIntIn).([]int64)
 				for _, v := range keyin {
 					g.P("if k!=", v, "{")
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1212,54 +1215,33 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				keynotin := proto.GetExtension(fop, pbex.E_MapKeyIntNotIn).([]int64)
 				for _, v := range keynotin {
 					g.P("if k==", v, "{")
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyIntGt) {
 				keygt := proto.GetExtension(fop, pbex.E_MapKeyIntGt).(int64)
 				g.P("if k<=", keygt, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyIntGte) {
 				keygte := proto.GetExtension(fop, pbex.E_MapKeyIntGte).(int64)
 				g.P("if k<", keygte, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyIntLt) {
 				keylt := proto.GetExtension(fop, pbex.E_MapKeyIntLt).(int64)
 				g.P("if k>=", keylt, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyIntLte) {
 				keylte := proto.GetExtension(fop, pbex.E_MapKeyIntLte).(int64)
 				g.P("if k>", keylte, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
-
 			}
 		case protoreflect.Uint32Kind:
 			fallthrough
@@ -1272,11 +1254,7 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				keyin := proto.GetExtension(fop, pbex.E_MapKeyUintIn).([]uint64)
 				for _, v := range keyin {
 					g.P("if k!=", v, "{")
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1284,52 +1262,32 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				keynotin := proto.GetExtension(fop, pbex.E_MapKeyUintNotIn).([]uint64)
 				for _, v := range keynotin {
 					g.P("if k==", v, "{")
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyUintGt) {
 				keygt := proto.GetExtension(fop, pbex.E_MapKeyUintGt).(uint64)
 				g.P("if k<=", keygt, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyUintGte) {
 				keygte := proto.GetExtension(fop, pbex.E_MapKeyUintGte).(uint64)
 				g.P("if k<", keygte, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyUintLt) {
 				keylt := proto.GetExtension(fop, pbex.E_MapKeyUintLt).(uint64)
 				g.P("if k>=", keylt, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyUintLte) {
 				keylte := proto.GetExtension(fop, pbex.E_MapKeyUintLte).(uint64)
 				g.P("if k>", keylte, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		case protoreflect.StringKind:
@@ -1337,11 +1295,7 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				keyin := proto.GetExtension(fop, pbex.E_MapKeyStringIn).([]string)
 				for _, v := range keyin {
 					g.P("if k!=", strconv.Quote(v), "{")
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1349,96 +1303,60 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				keynotin := proto.GetExtension(fop, pbex.E_MapKeyStringNotIn).([]string)
 				for _, v := range keynotin {
 					g.P("if k==", strconv.Quote(v), "{")
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringRegMatch) {
 				keymatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegMatch).([]string)
 				for _, v := range keymatch {
-					g.P("if !_", service.GoName, "Regs[", strconv.Quote(v), "].MatchString(k){")
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(v), "].MatchString(k){")
+					g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringRegNotMatch) {
 				keynotmatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegNotMatch).([]string)
 				for _, v := range keynotmatch {
-					g.P("if _", service.GoName, "Regs[", strconv.Quote(v), "].MatchString(k){")
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(v), "].MatchString(k){")
+					g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringLenEq) {
 				keyleneq := proto.GetExtension(fop, pbex.E_MapKeyStringLenEq).(uint64)
 				g.P("if len(k)!=", keyleneq, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringLenNotEq) {
 				keylennoteq := proto.GetExtension(fop, pbex.E_MapKeyStringLenNotEq).(uint64)
 				g.P("if len(k)==", keylennoteq, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringLenGt) {
 				keylengt := proto.GetExtension(fop, pbex.E_MapKeyStringLenGt).(uint64)
 				g.P("if len(k)<=", keylengt, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringLenGte) {
 				keylengte := proto.GetExtension(fop, pbex.E_MapKeyStringLenGte).(uint64)
 				g.P("if len(k)<", keylengte, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringLenLt) {
 				keylenlt := proto.GetExtension(fop, pbex.E_MapKeyStringLenLt).(uint64)
 				g.P("if len(k)>=", keylenlt, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringLenLte) {
 				keylenlte := proto.GetExtension(fop, pbex.E_MapKeyStringLenLte).(uint64)
 				g.P("if len(k)>", keylenlte, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		}
@@ -1447,21 +1365,13 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 		switch val.Desc.Kind() {
 		case protoreflect.EnumKind:
 			g.P("if _,ok:=", g.QualifiedGoIdent(val.Enum.GoIdent), "_name[int32(v)];!ok{")
-			if server {
-				g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-			} else {
-				g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-			}
+			g.P("return false")
 			g.P("}")
 		case protoreflect.BoolKind:
 			if proto.HasExtension(fop, pbex.E_MapValueBoolEq) {
 				valeq := proto.GetExtension(fop, pbex.E_MapValueBoolEq).(bool)
 				g.P("if v!=", valeq, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		case protoreflect.Int32Kind:
@@ -1479,11 +1389,7 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				valin := proto.GetExtension(fop, pbex.E_MapValueIntIn).([]int64)
 				for _, v := range valin {
 					g.P("if v!=", v, "{")
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1491,52 +1397,32 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				valnotin := proto.GetExtension(fop, pbex.E_MapValueIntNotIn).([]int64)
 				for _, v := range valnotin {
 					g.P("if v==", v, "{")
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueIntGt) {
 				valgt := proto.GetExtension(fop, pbex.E_MapValueIntGt).(int64)
 				g.P("if v<=", valgt, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueIntGte) {
 				valgte := proto.GetExtension(fop, pbex.E_MapValueIntGte).(int64)
 				g.P("if v<", valgte, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueIntLt) {
 				vallt := proto.GetExtension(fop, pbex.E_MapValueIntLt).(int64)
 				g.P("if v>=", vallt, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueIntLte) {
 				vallte := proto.GetExtension(fop, pbex.E_MapValueIntLte).(int64)
 				g.P("if v>", vallte, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		case protoreflect.Uint32Kind:
@@ -1550,11 +1436,7 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				valin := proto.GetExtension(fop, pbex.E_MapValueUintIn).([]uint64)
 				for _, v := range valin {
 					g.P("if v!=", v, "{")
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1562,52 +1444,32 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				valnotin := proto.GetExtension(fop, pbex.E_MapValueUintNotIn).([]uint64)
 				for _, v := range valnotin {
 					g.P("if v==", v, "{")
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueUintGt) {
 				valgt := proto.GetExtension(fop, pbex.E_MapValueUintGt).(uint64)
 				g.P("if v<=", valgt, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueUintGte) {
 				valgte := proto.GetExtension(fop, pbex.E_MapValueUintGte).(uint64)
 				g.P("if v<", valgte, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueUintLt) {
 				vallt := proto.GetExtension(fop, pbex.E_MapValueUintLt).(uint64)
 				g.P("if v>=", vallt, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueUintLte) {
 				vallte := proto.GetExtension(fop, pbex.E_MapValueUintLte).(uint64)
 				g.P("if v>", vallte, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		case protoreflect.FloatKind:
@@ -1617,11 +1479,7 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				valin := proto.GetExtension(fop, pbex.E_MapValueFloatIn).([]float64)
 				for _, v := range valin {
 					g.P("if v!=", v, "{")
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1629,52 +1487,32 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				valnotin := proto.GetExtension(fop, pbex.E_MapValueFloatNotIn).([]float64)
 				for _, v := range valnotin {
 					g.P("if v==", v, "{")
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueFloatGt) {
 				valgt := proto.GetExtension(fop, pbex.E_MapValueFloatGt).(float64)
 				g.P("if v<=", valgt, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueFloatGte) {
 				valgte := proto.GetExtension(fop, pbex.E_MapValueFloatGte).(float64)
 				g.P("if v<", valgte, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueFloatLt) {
 				vallt := proto.GetExtension(fop, pbex.E_MapValueFloatLt).(float64)
 				g.P("if v>=", vallt, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueFloatLte) {
 				vallte := proto.GetExtension(fop, pbex.E_MapValueFloatLte).(float64)
 				g.P("if v>", vallte, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		case protoreflect.BytesKind:
@@ -1689,11 +1527,7 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 					} else {
 						g.P("if v!=", strconv.Quote(v), "{")
 					}
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1705,11 +1539,7 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 					} else {
 						g.P("if v==", strconv.Quote(v), "{")
 					}
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1717,15 +1547,11 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				valmatch := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegMatch).([]string)
 				for _, v := range valmatch {
 					if isbyteslice {
-						g.P("if !_", service.GoName, "Regs[", strconv.Quote(v), "].Match(v){")
+						g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(v), "].Match(v){")
 					} else {
-						g.P("if !_", service.GoName, "Regs[", strconv.Quote(v), "].MatchString(v){")
+						g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(v), "].MatchString(v){")
 					}
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1733,81 +1559,58 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				valnotmatch := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegNotMatch).([]string)
 				for _, v := range valnotmatch {
 					if isbyteslice {
-						g.P("if _", service.GoName, "Regs[", strconv.Quote(v), "].Match(v){")
+						g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(v), "].Match(v){")
 					} else {
-						g.P("if _", service.GoName, "Regs[", strconv.Quote(v), "].MatchString(v){")
+						g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(v), "].MatchString(v){")
 					}
-					if server {
-						g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-					} else {
-						g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-					}
+					g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenEq) {
 				valleneq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenEq).(uint64)
 				g.P("if len(v)!=", valleneq, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenNotEq) {
 				vallennoteq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenNotEq).(uint64)
 				g.P("if len(v)==", vallennoteq, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGt) {
 				vallengt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGt).(uint64)
 				g.P("if len(v)<=", vallengt, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGte) {
 				vallengte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGte).(uint64)
 				g.P("if len(v)<", vallengte, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLt) {
 				vallenlt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLt).(uint64)
 				g.P("if len(v)>=", vallenlt, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLte) {
 				vallenlte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLte).(uint64)
 				g.P("if len(v)>", vallenlte, "{")
-				if server {
-					g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
-				} else {
-					g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
-				}
+				g.P("return false")
 				g.P("}")
 			}
 		case protoreflect.MessageKind:
-			if needcheck(val.Message) {
-				check("v.", val.Message, service, g, server)
+			if _, ok := allcheck[val.Message.GoIdent.String()]; ok {
+				g.P("if v==nil{")
+				g.P("continue")
+				g.P("}")
+				g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(val.Message.GoIdent.String()), "](v){")
+				g.P("return false")
+				g.P("}")
 			}
 		}
 	}
@@ -1824,7 +1627,6 @@ func genPath(file *protogen.File, g *protogen.GeneratedFile, service *protogen.S
 	}
 	g.P()
 }
-
 func genServer(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
 	// Server interface.
 	serverName := service.GoName + "RpcServer"
@@ -1845,7 +1647,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile, service *protogen
 		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 			continue
 		}
-		fname := "func _" + service.GoName + method.GoName + "RpcHandler"
+		fname := "func _" + service.GoName + "_" + method.GoName + "_" + "RpcHandler"
 		p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
 		freturn := g.QualifiedGoIdent(rpcPackage.Ident("OutsideHandler"))
 		g.P(fname, "(", p1, ")", freturn, "{")
@@ -1855,10 +1657,10 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile, service *protogen
 		g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		g.P("return")
 		g.P("}")
-		stack := make(map[string]struct{}, 10)
-		if needcheck(method.Input, stack) {
-			check("req.", method.Input, service, g, true)
-		}
+		//stack := make(map[string]struct{}, 10)
+		//if needcheck(method.Input, stack) {
+		//        check("req.", method.Input, service, g, true)
+		//}
 		g.P("resp,e:=handler(ctx,req)")
 		g.P("if e!=nil{")
 		g.P("ctx.Abort(e)")
@@ -1894,7 +1696,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile, service *protogen
 		if proto.HasExtension(mop, pbex.E_Midwares) {
 			mids = proto.GetExtension(mop, pbex.E_Midwares).([]string)
 		}
-		fname := "_" + service.GoName + method.GoName + "RpcHandler(svc." + method.GoName + ")"
+		fname := "_" + service.GoName + "_" + method.GoName + "_" + "RpcHandler(svc." + method.GoName + ")"
 		pathname := "RpcPath" + service.GoName + method.GoName
 		if len(mids) > 0 {
 			g.P("{")
@@ -1969,10 +1771,10 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile, service *protogen
 		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 		g.P("}")
 
-		stack := make(map[string]struct{}, 10)
-		if needcheck(method.Input, stack) {
-			check("req.", method.Input, service, g, false)
-		}
+		//stack := make(map[string]struct{}, 10)
+		//if needcheck(method.Input, stack) {
+		//        check("req.", method.Input, service, g, false)
+		//}
 
 		g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
 		if proto.HasExtension(mop, pbex.E_Timeout) {

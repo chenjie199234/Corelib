@@ -35,7 +35,8 @@ func main() {
 					if m.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 						continue
 					}
-					if hasoneof(m.Input) || hasoneof(m.Output) {
+					stack := make(map[string]struct{})
+					if hasoneof(m.Input, stack) || hasoneof(m.Output, stack) {
 						panic("can't support oneof in proto!")
 					}
 				}
@@ -78,7 +79,12 @@ func main() {
 		return nil
 	})
 }
-func hasoneof(message *protogen.Message) bool {
+func hasoneof(message *protogen.Message, stack map[string]struct{}) bool {
+	if _, ok := stack[message.GoIdent.String()]; ok {
+		return false
+	}
+	stack[message.GoIdent.String()] = struct{}{}
+	defer delete(stack, message.GoIdent.String())
 	if len(message.Oneofs) > 0 {
 		return true
 	}
@@ -88,13 +94,13 @@ func hasoneof(message *protogen.Message) bool {
 				//map
 				if field.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
 					//map's value is message
-					if hasoneof(field.Message.Fields[1].Message) {
+					if hasoneof(field.Message.Fields[1].Message, stack) {
 						return true
 					}
 				}
 			} else {
 				//[]message or message
-				if hasoneof(field.Message) {
+				if hasoneof(field.Message, stack) {
 					return true
 				}
 			}
