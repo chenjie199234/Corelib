@@ -16,9 +16,8 @@ import (
 
 const (
 	regexpPackage   = protogen.GoImportPath("regexp")
-	httpPackage     = protogen.GoImportPath("net/http")
-	protoPackage    = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	contextPackage  = protogen.GoImportPath("context")
+	protoPackage    = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	rpcPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/rpc")
 	commonPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
 	metadataPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/metadata")
@@ -59,16 +58,22 @@ func genFileComment(gen *protogen.Plugin, file *protogen.File, g *protogen.Gener
 	g.P("// source: ", file.Desc.Path())
 	g.P()
 }
-func genService(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
-	geninit(file, g, service)
-	genPath(file, g, service)
-	genClient(file, g, service)
-	genServer(file, g, service)
+
+var service *protogen.Service             //cur dealing service
+var allcheck map[string]*protogen.Message //key message's full import path
+var allreg map[string]struct{}            //key regexp
+
+func genService(file *protogen.File, g *protogen.GeneratedFile, s *protogen.Service) {
+	service = s
+	geninit(file, g)
+	genPath(file, g)
+	genClient(file, g)
+	genServer(file, g)
 }
 
-func geninit(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
-	allreg := make(map[string]struct{}, 10)            //key regexp
-	allcheck := make(map[string]*protogen.Message, 10) //key message's full import path
+func geninit(file *protogen.File, g *protogen.GeneratedFile) {
+	allreg = make(map[string]struct{}, 10)
+	allcheck = make(map[string]*protogen.Message, 10)
 	for _, method := range service.Methods {
 		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 			continue
@@ -106,7 +111,7 @@ func geninit(file *protogen.File, g *protogen.GeneratedFile, service *protogen.S
 			for k, m := range allcheck {
 				g.P("_", service.GoName, "RpcCheckers[", strconv.Quote(k), "]=func(r interface{})bool{")
 				g.P("req:=r.(*", g.QualifiedGoIdent(m.GoIdent), ")")
-				check("req.", m, service, g, allcheck)
+				check("req.", m, g)
 				g.P("}")
 			}
 		}
@@ -415,7 +420,7 @@ func getallcheck(m *protogen.Message, stack map[string]struct{}, allcheck map[st
 	}
 	return
 }
-func check(prefix string, message *protogen.Message, service *protogen.Service, g *protogen.GeneratedFile, allcheck map[string]*protogen.Message) {
+func check(prefix string, message *protogen.Message, g *protogen.GeneratedFile) {
 	for _, field := range message.Fields {
 		fop := field.Desc.Options().(*descriptorpb.FieldOptions)
 		isbyteslice := false
@@ -480,7 +485,7 @@ func check(prefix string, message *protogen.Message, service *protogen.Service, 
 			if field.Desc.IsList() {
 				elementnumcheck(prefix, field.GoName, fop, g)
 			}
-			strcheck(prefix, field.GoName, field.Desc.IsList(), isbyteslice, fop, service, g)
+			strcheck(prefix, field.GoName, field.Desc.IsList(), isbyteslice, fop, g)
 		case protoreflect.MessageKind:
 			//message or []message or map
 			if field.Desc.IsMap() || field.Desc.IsList() {
@@ -488,11 +493,11 @@ func check(prefix string, message *protogen.Message, service *protogen.Service, 
 			}
 			if field.Desc.IsMap() {
 				//map
-				mapcheck(prefix, field.GoName, field.Message.Fields[0], field.Message.Fields[1], fop, service, g, allcheck)
+				mapcheck(prefix, field.GoName, field.Message.Fields[0], field.Message.Fields[1], fop, g)
 			} else {
 				//message or []message
 				if _, ok := allcheck[field.Message.GoIdent.String()]; ok {
-					messagecheck(prefix, field.GoName, field.Desc.IsList(), field.Message, service, g)
+					messagecheck(prefix, field.GoName, field.Desc.IsList(), field.Message, g)
 				}
 			}
 		}
@@ -848,7 +853,7 @@ func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOp
 		}
 	}
 }
-func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descriptorpb.FieldOptions, service *protogen.Service, g *protogen.GeneratedFile) {
+func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_StringBytesLenEq) {
 		leneq := proto.GetExtension(fop, pbex.E_StringBytesLenEq).(uint64)
 		if islist {
@@ -1038,13 +1043,13 @@ func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descript
 		}
 	}
 }
-func messagecheck(prefix, fieldname string, islist bool, message *protogen.Message, service *protogen.Service, g *protogen.GeneratedFile) {
+func messagecheck(prefix, fieldname string, islist bool, message *protogen.Message, g *protogen.GeneratedFile) {
 	if islist {
-		g.P("for _,m:=range ", prefix+fieldname, "{")
-		g.P("if m==nil{")
+		g.P("for _,v:=range ", prefix+fieldname, "{")
+		g.P("if v==nil{")
 		g.P("continue")
 		g.P("}")
-		g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(message.GoIdent.String()), "](m){")
+		g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(message.GoIdent.String()), "](v){")
 		g.P("return false")
 		g.P("}")
 		g.P("}")
@@ -1056,7 +1061,7 @@ func messagecheck(prefix, fieldname string, islist bool, message *protogen.Messa
 		g.P("}")
 	}
 }
-func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descriptorpb.FieldOptions, service *protogen.Service, g *protogen.GeneratedFile, allcheck map[string]*protogen.Message) {
+func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	keycheck := false
 	valuecheck := false
 	isbyteslice := false
@@ -1616,18 +1621,18 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 	}
 	g.P("}")
 }
-func genPath(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
+func genPath(file *protogen.File, g *protogen.GeneratedFile) {
 	for _, method := range service.Methods {
 		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 			continue
 		}
-		pathname := "RpcPath" + service.GoName + method.GoName
+		pathname := "_RpcPath" + service.GoName + method.GoName
 		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		g.P("var ", pathname, "=", strconv.Quote(pathurl))
 	}
 	g.P()
 }
-func genServer(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
+func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 	// Server interface.
 	serverName := service.GoName + "RpcServer"
 
@@ -1657,10 +1662,14 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile, service *protogen
 		g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		g.P("return")
 		g.P("}")
-		//stack := make(map[string]struct{}, 10)
-		//if needcheck(method.Input, stack) {
-		//        check("req.", method.Input, service, g, true)
-		//}
+
+		//check
+		if _, ok := allcheck[method.Input.GoIdent.String()]; ok {
+			g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(method.Input.GoIdent.String()), "](req){")
+			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			g.P("}")
+		}
+
 		g.P("resp,e:=handler(ctx,req)")
 		g.P("if e!=nil{")
 		g.P("ctx.Abort(e)")
@@ -1697,7 +1706,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile, service *protogen
 			mids = proto.GetExtension(mop, pbex.E_Midwares).([]string)
 		}
 		fname := "_" + service.GoName + "_" + method.GoName + "_" + "RpcHandler(svc." + method.GoName + ")"
-		pathname := "RpcPath" + service.GoName + method.GoName
+		pathname := "_RpcPath" + service.GoName + method.GoName
 		if len(mids) > 0 {
 			g.P("{")
 			str := ""
@@ -1729,7 +1738,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile, service *protogen
 	g.P("return nil")
 	g.P("}")
 }
-func genClient(file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
+func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 	// Client interface.
 	clientName := service.GoName + "RpcClient"
 	lowclientName := strings.ToLower(clientName[:1]) + clientName[1:]
@@ -1762,7 +1771,7 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile, service *protogen
 		if mop.GetDeprecated() {
 			continue
 		}
-		pathname := "RpcPath" + service.GoName + method.GoName
+		pathname := "_RpcPath" + service.GoName + method.GoName
 		p1 := "ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context"))
 		p2 := "req *" + g.QualifiedGoIdent(method.Input.GoIdent)
 		freturn := "(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
@@ -1771,10 +1780,12 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile, service *protogen
 		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 		g.P("}")
 
-		//stack := make(map[string]struct{}, 10)
-		//if needcheck(method.Input, stack) {
-		//        check("req.", method.Input, service, g, false)
-		//}
+		//check
+		if _, ok := allcheck[method.Input.GoIdent.String()]; ok {
+			g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(method.Input.GoIdent.String()), "](req){")
+			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+			g.P("}")
+		}
 
 		g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
 		if proto.HasExtension(mop, pbex.E_Timeout) {
