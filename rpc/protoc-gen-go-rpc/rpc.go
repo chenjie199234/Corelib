@@ -15,6 +15,7 @@ import (
 )
 
 const (
+	errorsPackage   = protogen.GoImportPath("errors")
 	regexpPackage   = protogen.GoImportPath("regexp")
 	contextPackage  = protogen.GoImportPath("context")
 	protoPackage    = protogen.GoImportPath("google.golang.org/protobuf/proto")
@@ -1721,7 +1722,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 			g.P("if mid,ok:=allmids[v];ok{")
 			g.P("mids = append(mids,mid)")
 			g.P("}else{")
-			g.P("return ", g.QualifiedGoIdent(errorPackage.Ident("ErrNoMids")))
+			g.P("return ", g.QualifiedGoIdent(errorsPackage.Ident("New")), "(", strconv.Quote("missing midware:"), "+v)")
 			g.P("}")
 			g.P("}")
 			g.P("mids = append(mids,", fname, ")")
@@ -1788,8 +1789,8 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 		}
 
 		g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
+		var timeout time.Duration
 		if proto.HasExtension(mop, pbex.E_Timeout) {
-			var timeout time.Duration
 			timeoutstr := proto.GetExtension(mop, pbex.E_Timeout).(string)
 			if timeoutstr != "" {
 				var e error
@@ -1798,12 +1799,10 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 					panic(fmt.Sprintf("method: %s in service: %s with timeout: %s format error:%s", method.Desc.Name(), service.Desc.Name(), timeoutstr, e))
 				}
 			}
-			g.P("respd,e:=c.cc.Call(ctx,", strconv.FormatInt(timeout.Nanoseconds(), 10), ",", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
-		} else {
-			g.P("respd,e:=c.cc.Call(ctx,0,", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
 		}
-		g.P("if e.(*", g.QualifiedGoIdent(errorPackage.Ident("Error")), ") != nil {")
-		g.P("return nil,e")
+		g.P("respd,e:=c.cc.Call(ctx,", timeout.Nanoseconds(), ",", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
+		g.P("if e != nil {")
+		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("StdErrorToError")), "(e)")
 		g.P("}")
 		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 		g.P("if len(respd)==0{")

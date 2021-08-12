@@ -16,22 +16,20 @@ import (
 )
 
 const (
-	stringsPackage  = protogen.GoImportPath("strings")
-	bytesPackage    = protogen.GoImportPath("bytes")
-	strconvPackage  = protogen.GoImportPath("strconv")
-	httpPackage     = protogen.GoImportPath("net/http")
-	regexpPackage   = protogen.GoImportPath("regexp")
-	fmtPackage      = protogen.GoImportPath("fmt")
-	ioPackage       = protogen.GoImportPath("io")
-	contextPackage  = protogen.GoImportPath("context")
-	protoPackage    = protogen.GoImportPath("google.golang.org/protobuf/proto")
-	jsonPackage     = protogen.GoImportPath("google.golang.org/protobuf/encoding/protojson")
-	webPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/web")
-	logPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/log")
-	commonPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
-	metadataPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/metadata")
-	bufpoolPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/bufpool")
-	errorPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/error")
+	errorsPackage    = protogen.GoImportPath("errors")
+	stringsPackage   = protogen.GoImportPath("strings")
+	httpPackage      = protogen.GoImportPath("net/http")
+	regexpPackage    = protogen.GoImportPath("regexp")
+	ioPackage        = protogen.GoImportPath("io")
+	contextPackage   = protogen.GoImportPath("context")
+	stdjsonPackage   = protogen.GoImportPath("encoding/json")
+	protoPackage     = protogen.GoImportPath("google.golang.org/protobuf/proto")
+	protojsonPackage = protogen.GoImportPath("google.golang.org/protobuf/encoding/protojson")
+	webPackage       = protogen.GoImportPath("github.com/chenjie199234/Corelib/web")
+	commonPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
+	metadataPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/metadata")
+	bufpoolPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/bufpool")
+	errorPackage     = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/error")
 )
 
 // generateFile generates a _web.pb.go file containing web service definitions.
@@ -1706,7 +1704,8 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 		g.P("return")
 		g.P("}")
 		g.P("if len(data)>0{")
-		g.P("if e:=", g.QualifiedGoIdent(jsonPackage.Ident("Unmarshal")), "(data,req);e!=nil{")
+		g.P("e:=", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions{DiscardUnknown: true}")), ".Unmarshal(data,req)")
+		g.P("if e!=nil{")
 		g.P("ctx.AbortString(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ".String())")
 		g.P("return")
 		g.P("}")
@@ -1811,7 +1810,8 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 		}
 		g.P("data.Append(", strconv.Quote("}"), ")")
 		g.P("if data.Len()>2{")
-		g.P("if e:=", g.QualifiedGoIdent(jsonPackage.Ident("Unmarshal")), "(data.Bytes(),req);e!=nil{")
+		g.P("e:=", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions{DiscardUnknown: true}")), ".Unmarshal(data.Bytes(),req)")
+		g.P("if e!=nil{")
 		g.P("ctx.AbortString(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ".String())")
 		g.P("return")
 		g.P("}")
@@ -1838,8 +1838,15 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 		g.P("if resp == nil{")
 		g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 		g.P("}")
+		g.P("if ", stringsPackage.Ident("HasPrefix"), "(ctx.GetAcceptType(),", strconv.Quote("application/x-protobuf"), "){")
 		g.P("respd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
+		g.P("ctx.SetHeader(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")
 		g.P("ctx.Write(", g.QualifiedGoIdent(httpPackage.Ident("StatusOK")), ",respd)")
+		g.P("}else{")
+		g.P("respd,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true}.Marshal(resp)")
+		g.P("ctx.SetHeader(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/json"), ")")
+		g.P("ctx.Write(", g.QualifiedGoIdent(httpPackage.Ident("StatusOK")), ",respd)")
+		g.P("}")
 		g.P("}")
 		g.P("}")
 	}
@@ -1888,7 +1895,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 			g.P("if mid,ok:=allmids[v];ok{")
 			g.P("mids = append(mids,mid)")
 			g.P("}else{")
-			g.P("return ", g.QualifiedGoIdent(errorPackage.Ident("ErrNoMids")))
+			g.P("return ", g.QualifiedGoIdent(errorsPackage.Ident("New")), "(", strconv.Quote("missing midware:"), "+v)")
 			g.P("}")
 			g.P("}")
 			g.P("mids = append(mids,", fname, ")")
@@ -1946,8 +1953,12 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 		if httpmetohd != http.MethodGet && httpmetohd != http.MethodPost && httpmetohd != http.MethodPut && httpmetohd != http.MethodDelete && httpmetohd != http.MethodPatch {
 			panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", method.Desc.Name(), service.Desc.Name(), httpmetohd))
 		}
+		p1 := g.QualifiedGoIdent(contextPackage.Ident("Context"))
+		p2 := g.QualifiedGoIdent(method.Input.GoIdent)
+		p3 := g.QualifiedGoIdent(httpPackage.Ident("Header"))
+		r := g.QualifiedGoIdent(method.Output.GoIdent)
 		g.P(method.Comments.Leading,
-			method.GoName, "(", g.QualifiedGoIdent(contextPackage.Ident("Context")), ",*", g.QualifiedGoIdent(method.Input.GoIdent), ")(*", g.QualifiedGoIdent(method.Output.GoIdent), ",error)",
+			method.GoName, "(", p1, ",*", p2, ",", p3, ")(*", r, ",error)",
 			method.Comments.Trailing)
 	}
 	g.P("}")
@@ -1979,8 +1990,9 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 		pathname := "_WebPath" + service.GoName + method.GoName
 		p1 := "ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context"))
 		p2 := "req *" + g.QualifiedGoIdent(method.Input.GoIdent)
+		p3 := "header " + g.QualifiedGoIdent(httpPackage.Ident("Header"))
 		freturn := "(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
-		g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ")", freturn, "{")
+		g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ",", p3, ")", freturn, "{")
 		g.P("if req == nil {")
 		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 		g.P("}")
@@ -1991,11 +2003,12 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 			g.P("}")
 		}
+		g.P("if header == nil {")
+		g.P("header = make(", g.QualifiedGoIdent(httpPackage.Ident("Header")), ")")
+		g.P("}")
 
-		//TODO
-		g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
+		var timeout time.Duration
 		if proto.HasExtension(mop, pbex.E_Timeout) {
-			var timeout time.Duration
 			timeoutstr := proto.GetExtension(mop, pbex.E_Timeout).(string)
 			if timeoutstr != "" {
 				var e error
@@ -2004,433 +2017,99 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 					panic(fmt.Sprintf("method: %s in service: %s with timeout: %s format error:%s", method.Desc.Name(), service.Desc.Name(), timeoutstr, e))
 				}
 			}
-			g.P("respd,e:=c.cc.Call(ctx,", strconv.FormatInt(timeout.Nanoseconds(), 10), ",", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
-		} else {
-			g.P("respd,e:=c.cc.Call(ctx,0,", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
 		}
-		g.P("if e.(*", g.QualifiedGoIdent(errorPackage.Ident("Error")), ") != nil {")
-		g.P("return nil,e")
+		if httpmetohd == http.MethodGet || httpmetohd == http.MethodDelete {
+			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-www-form-urlencoded"), ")")
+			g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("application/x-protobuf"), ")")
+			g.P("query :=", g.QualifiedGoIdent(bufpoolPackage.Ident("GetBuffer")), "()")
+			g.P("defer ", g.QualifiedGoIdent(bufpoolPackage.Ident("PutBuffer")), "(query)")
+			g.P("var temp []byte")
+			g.P("_=temp//avoid unuse")
+			for i, field := range method.Input.Fields {
+				if i == 0 {
+					g.P("query.Append(", strconv.Quote("?"), ")")
+				}
+				fname := string(field.Desc.Name())
+				g.P("query.Append(", strconv.Quote(fname+"="), ")")
+				switch field.Desc.Kind() {
+				case protoreflect.BoolKind:
+					fallthrough
+				case protoreflect.EnumKind:
+					fallthrough
+				case protoreflect.Int32Kind:
+					fallthrough
+				case protoreflect.Sint32Kind:
+					fallthrough
+				case protoreflect.Uint32Kind:
+					fallthrough
+				case protoreflect.Int64Kind:
+					fallthrough
+				case protoreflect.Sint64Kind:
+					fallthrough
+				case protoreflect.Uint64Kind:
+					fallthrough
+				case protoreflect.Sfixed32Kind:
+					fallthrough
+				case protoreflect.Fixed32Kind:
+					fallthrough
+				case protoreflect.FloatKind:
+					fallthrough
+				case protoreflect.Sfixed64Kind:
+					fallthrough
+				case protoreflect.Fixed64Kind:
+					fallthrough
+				case protoreflect.DoubleKind:
+					g.P("query.Append(req.", field.GoName, ")")
+				case protoreflect.StringKind:
+					fallthrough
+				case protoreflect.BytesKind:
+					fallthrough
+				case protoreflect.MessageKind:
+					g.P("temp,_=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.", field.GoName, ")")
+					g.P("query.Append(", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(temp))")
+				}
+				if i != len(method.Input.Fields)-1 {
+					g.P("query.Append(", strconv.Quote("&"), ")")
+				}
+			}
+			switch httpmetohd {
+			case http.MethodGet:
+				g.P("r,e:=c.cc.Get(ctx,", timeout.Nanoseconds(), ",", pathname, "+query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetAllMetadata")), "(ctx))")
+			case http.MethodDelete:
+				g.P("r,e:=c.cc.Delete(ctx,", timeout.Nanoseconds(), ",", pathname, "+query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetAllMetadata")), "(ctx))")
+			}
+		} else {
+			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")
+			g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("application/x-protobuf"), ")")
+			g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
+			switch httpmetohd {
+			case http.MethodPost:
+				g.P("r,e:=c.cc.Post(ctx,", timeout.Nanoseconds(), ",", pathname, ",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetAllMetadata")), "(ctx),reqd)")
+			case http.MethodPut:
+				g.P("r,e:=c.cc.Put(ctx,", timeout.Nanoseconds(), ",", pathname, ",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetAllMetadata")), "(ctx),reqd)")
+			case http.MethodPatch:
+				g.P("r,e:=c.cc.Patch(ctx,", timeout.Nanoseconds(), ",", pathname, ",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetAllMetadata")), "(ctx),reqd)")
+			}
+		}
+		g.P("if e != nil {")
+		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("StdErrorToError")), "(e)")
+		g.P("}")
+		g.P("defer r.Body.Close()")
+		g.P("data,e:=", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(r.Body)")
+		g.P("if e!=nil {")
+		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("StdErrorToError")), "(e)")
+		g.P("}")
+		g.P("if r.StatusCode/100 == 4 || r.StatusCode/100 == 5{")
+		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrorstrToError")), "(", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(data))")
 		g.P("}")
 		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
-		g.P("if len(respd)==0{")
+		g.P("if len(data)==0{")
 		g.P("return resp,nil")
 		g.P("}")
-		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(respd,resp);e!=nil{")
+		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(data,resp);e!=nil{")
 		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrResp")))
 		g.P("}")
 		g.P("return resp, nil")
 		g.P("}")
 	}
 }
-
-//func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
-//        if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
-//                return
-//        }
-//        countUndeprecatedMethod := 0
-//        for _, method := range service.Methods {
-//                if !method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
-//                        countUndeprecatedMethod++
-//                }
-//        }
-//        if countUndeprecatedMethod == 0 {
-//                return
-//        }
-//        //Router path
-//        for _, method := range service.Methods {
-//                if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
-//                        continue
-//                }
-//                pathname := "WebPath" + service.GoName + method.GoName
-//                pathurl := "/" + *file.Proto.Package + "." + service.GoName + "/" + method.GoName
-//                g.P("var ", pathname, "=", strconv.Quote(pathurl))
-//        }
-
-//        // Client interface.
-//        clientName := service.GoName + "WebClient"
-//        lowclientName := strings.ToLower(clientName[:1]) + clientName[1:]
-
-//        g.P("// ", clientName, " is the client API for ", service.GoName, " service.")
-
-//        g.P("type ", clientName, " interface {")
-//        for _, method := range service.Methods {
-//                if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
-//                        continue
-//                }
-//                g.P(method.Comments.Leading,
-//                        method.GoName, "(", g.QualifiedGoIdent(contextPackage.Ident("Context")),
-//                        ",*", g.QualifiedGoIdent(method.Input.GoIdent), ")(*",
-//                        g.QualifiedGoIdent(method.Output.GoIdent), ",error)")
-//        }
-//        g.P("}")
-//        g.P()
-//        g.P("type ", lowclientName, " struct{")
-//        g.P("cc *", g.QualifiedGoIdent(webPackage.Ident("WebClient")))
-//        g.P("}")
-//        g.P("func New", clientName, "(c *", g.QualifiedGoIdent(webPackage.Ident("ClientConfig")), ",selfgroup,selfname string)(", clientName, ",error){")
-//        g.P("cc,e:=", g.QualifiedGoIdent(webPackage.Ident("NewWebClient")), "(c,selfgroup,selfname,Group,Name)")
-//        g.P("if e != nil{")
-//        g.P("return nil,e")
-//        g.P("}")
-//        g.P("return &", lowclientName, "{cc:cc},nil")
-//        g.P("}")
-//        g.P()
-//        // Client handler
-//        for _, method := range service.Methods {
-//                if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
-//                        continue
-//                }
-//                pathname := "WebPath" + service.GoName + method.GoName
-//                p1 := "ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context"))
-//                p2 := "req *" + g.QualifiedGoIdent(method.Input.GoIdent)
-//                freturn := "(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
-//                g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ")", freturn, "{")
-//                g.P("if req == nil {")
-//                g.P("return nil,", g.QualifiedGoIdent(fmtPackage.Ident("Errorf")), "(\"bad request:nil\")")
-//                g.P("}")
-//                r, e := parseMethodComment(string(method.Comments.Trailing))
-//                if e != nil {
-//                        panic(e)
-//                }
-//                if len(method.Input.Fields) > 0 && haschecker(method.Input) {
-//                        checkerandheader("req.", method.Input, g, 1)
-//                }
-//                g.P("var header ", g.QualifiedGoIdent(httpPackage.Ident("Header")))
-//                g.P("if realcrx,ok:=ctx.(*", g.QualifiedGoIdent(webPackage.Ident("Context")), ");ok{")
-//                g.P("header = realcrx.GetHeaders()")
-//                g.P("}")
-//                g.P("if header == nil {")
-//                g.P("header = make(", g.QualifiedGoIdent(httpPackage.Ident("Header")), ")")
-//                g.P("}")
-//                g.P("md:=", g.QualifiedGoIdent(metadataPackage.Ident("GetAllMetadata")), "(ctx)")
-//                if r.method == http.MethodGet || r.method == http.MethodDelete {
-//                        g.P("header.Set(\"Content-Type\", \"application/x-www-form-urlencoded\")")
-//                        g.P("buf:=", g.QualifiedGoIdent(bufpoolPackage.Ident("GetBuffer")), "()")
-//                        if len(method.Input.Fields) != 0 {
-//                                for _, field := range method.Input.Fields {
-//                                        switch field.Desc.Kind() {
-//                                        case protoreflect.BoolKind:
-//                                                //bool
-//                                                fallthrough
-//                                        case protoreflect.Int32Kind:
-//                                                fallthrough
-//                                        case protoreflect.Sint32Kind:
-//                                                fallthrough
-//                                        case protoreflect.Sfixed32Kind:
-//                                                fallthrough
-//                                        case protoreflect.EnumKind:
-//                                                //int32
-//                                                fallthrough
-//                                        case protoreflect.Uint32Kind:
-//                                                fallthrough
-//                                        case protoreflect.Fixed32Kind:
-//                                                //uint32
-//                                                fallthrough
-//                                        case protoreflect.Int64Kind:
-//                                                fallthrough
-//                                        case protoreflect.Sint64Kind:
-//                                                fallthrough
-//                                        case protoreflect.Sfixed64Kind:
-//                                                //int64
-//                                                fallthrough
-//                                        case protoreflect.Uint64Kind:
-//                                                fallthrough
-//                                        case protoreflect.Fixed64Kind:
-//                                                //uint64
-//                                                fallthrough
-//                                        case protoreflect.FloatKind:
-//                                                fallthrough
-//                                        case protoreflect.DoubleKind:
-//                                                if field.Desc.IsList() {
-//                                                        g.P("if len(req.", field.GoName, ")!=0{")
-//                                                        g.P("buf.Append(\"&\")")
-//                                                        g.P("buf.Append(\"", field.Desc.Name(), "\")")
-//                                                        g.P("buf.Append(\"=\")")
-//                                                        g.P("buf.Append(req.", field.GoName, ")")
-//                                                        g.P("}")
-//                                                } else {
-//                                                        g.P("if req.", field.GoName, "!=0{")
-//                                                        g.P("buf.Append(\"&\")")
-//                                                        g.P("buf.Append(\"", field.Desc.Name(), "\")")
-//                                                        g.P("buf.Append(\"=\")")
-//                                                        g.P("buf.Append(req.", field.GoName, ")")
-//                                                        g.P("}")
-//                                                }
-//                                        case protoreflect.BytesKind:
-//                                                if field.Desc.IsList() {
-//                                                        g.P("if len(req.", field.GoName, ")!=0{")
-//                                                        g.P("buf.Append(\"&\")")
-//                                                        g.P("buf.Append(\"", field.Desc.Name(), "\")")
-//                                                        g.P("buf.Append(\"=[\")")
-//                                                        g.P("for _,v:=range req.", field.GoName, "{")
-//                                                        g.P("buf.Append(\"\\\"\")")
-//                                                        g.P("buf.Append(", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(v))")
-//                                                        g.P("buf.Append(\"\\\",\")")
-//                                                        g.P("}")
-//                                                        g.P("buf.Bytes()[buf.Len()-1]=']'")
-//                                                        g.P("}")
-//                                                } else {
-//                                                        g.P("if len(req.", field.GoName, ")!=0{")
-//                                                        g.P("buf.Append(\"&\")")
-//                                                        g.P("buf.Append(\"", field.Desc.Name(), "\")")
-//                                                        g.P("buf.Append(\"=\\\"\")")
-//                                                        g.P("buf.Append(", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(req.", field.GoName, "))")
-//                                                        g.P("buf.Append(\"\\\"\")")
-//                                                        g.P("}")
-//                                                }
-//                                        case protoreflect.StringKind:
-//                                                if field.Desc.IsList() {
-//                                                        g.P("if len(req.", field.GoName, ")!=0{")
-//                                                        g.P("buf.Append(\"&\")")
-//                                                        g.P("buf.Append(\"", field.Desc.Name(), "\")")
-//                                                        g.P("buf.Append(\"=[\")")
-//                                                        g.P("for _,v:=range req.", field.GoName, "{")
-//                                                        g.P("buf.Append(\"\\\"\")")
-//                                                        g.P("buf.Append(v)")
-//                                                        g.P("buf.Append(\"\\\",\")")
-//                                                        g.P("}")
-//                                                        g.P("buf.Bytes()[buf.Len()-1]=']'")
-//                                                        g.P("}")
-//                                                } else {
-//                                                        g.P("if len(req.", field.GoName, ")!=0{")
-//                                                        g.P("buf.Append(\"&\")")
-//                                                        g.P("buf.Append(\"", field.Desc.Name(), "\")")
-//                                                        g.P("buf.Append(\"=\\\"\")")
-//                                                        g.P("buf.Append(req.", field.GoName, ")")
-//                                                        g.P("buf.Append(\"\\\"\")")
-//                                                        g.P("}")
-//                                                }
-//                                        case protoreflect.MessageKind:
-//                                                if field.Desc.IsList() || field.Desc.IsMap() {
-//                                                        //message list or map
-//                                                        g.P("if len(req.", field.GoName, ")!=0{")
-//                                                        g.P("buf.Append(\"&\")")
-//                                                        g.P("buf.Append(\"", field.Desc.Name(), "\")")
-//                                                        g.P("buf.Append(\"=\")")
-//                                                        g.P("d,_:=", g.QualifiedGoIdent(jsonPackage.Ident("Marshal")), "(req.", field.GoName, ")")
-//                                                        g.P("buf.Append(", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(d))")
-//                                                        g.P("}")
-//                                                } else {
-//                                                        //message
-//                                                        g.P("if req.", field.GoName, "!=nil{")
-//                                                        g.P("buf.Append(\"&\")")
-//                                                        g.P("buf.Append(\"", field.Desc.Name(), "\")")
-//                                                        g.P("buf.Append(\"=\")")
-//                                                        g.P("d,_:=", g.QualifiedGoIdent(jsonPackage.Ident("Marshal")), "(req.", field.GoName, ")")
-//                                                        g.P("buf.Append(", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(d))")
-//                                                        g.P("}")
-//                                                }
-//                                        default:
-//                                                panic("unknown field type")
-//                                        }
-//                                }
-//                        }
-//                        g.P("if buf.Len()>0{")
-//                        g.P("buf.Bytes()[0]='?'")
-//                        g.P("}")
-//                        switch r.method {
-//                        case http.MethodGet:
-//                                g.P("callback,e:=c.cc.Get(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, "+buf.String(),header,md)")
-//                        case http.MethodDelete:
-//                                g.P("callback,e:=c.cc.Delete(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, "+buf.String(),header,md)")
-//                        }
-//                        g.P(g.QualifiedGoIdent(bufpoolPackage.Ident("PutBuffer")), "(buf)")
-//                } else {
-//                        g.P("header.Set(\"Content-Type\", \"application/json\")")
-//                        g.P("reqdata,_:=", g.QualifiedGoIdent(jsonPackage.Ident("Marshal")), "(req)")
-//                        switch r.method {
-//                        case http.MethodPost:
-//                                g.P("callback,e:=c.cc.Post(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, ",header,md,reqdata)")
-//                        case http.MethodPut:
-//                                g.P("callback,e:=c.cc.Put(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, "header,md,reqdata)")
-//                        case http.MethodPatch:
-//                                g.P("callback,e:=c.cc.Patch(ctx,", strconv.FormatInt(int64(r.timeout), 10), ",", pathname, "header,md,reqdata)")
-//                        }
-//                }
-//                g.P("if e != nil {")
-//                g.P("return nil, ", g.QualifiedGoIdent(fmtPackage.Ident("Errorf")), "(\"call error:\"+e.Error())")
-//                g.P("}")
-//                g.P("defer callback.Body.Close()")
-//                g.P("data, e := ", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(callback.Body)")
-//                g.P("if e != nil {")
-//                g.P("return nil, ", g.QualifiedGoIdent(fmtPackage.Ident("Errorf")), "(\"read response error:\"+e.Error())")
-//                g.P("}")
-//                g.P("if callback.StatusCode/100 == 5 || callback.StatusCode/100 == 4{")
-//                g.P("return nil, ", g.QualifiedGoIdent(fmtPackage.Ident("Errorf")), "(", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(data))")
-//                g.P("}")
-//                g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
-//                g.P("if len(data) > 0 {")
-//                g.P("if e = ", g.QualifiedGoIdent(jsonPackage.Ident("Unmarshal")), "(data, resp); e != nil {")
-//                g.P("return nil, ", g.QualifiedGoIdent(fmtPackage.Ident("Errorf")), "(\"response data format errors\"+e.Error())")
-//                g.P("}")
-//                g.P("}")
-//                g.P("return resp, nil")
-//                g.P("}")
-//        }
-
-//        // Server interface.
-//        serverName := service.GoName + "WebServer"
-
-//        g.P("// ", serverName, " is the server API for ", service.GoName, " service.")
-//        g.P("type ", serverName, " interface {")
-//        for _, method := range service.Methods {
-//                if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
-//                        continue
-//                }
-//                g.P(method.Comments.Leading,
-//                        method.GoName, "(", g.QualifiedGoIdent(contextPackage.Ident("Context")),
-//                        ",*", g.QualifiedGoIdent(method.Input.GoIdent), ")(*",
-//                        g.QualifiedGoIdent(method.Output.GoIdent), ",error)")
-//        }
-//        g.P("}")
-//        g.P()
-
-//        // Server handler
-//        for _, method := range service.Methods {
-//                if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
-//                        continue
-//                }
-//                fname := "func _" + service.GoName + "_" + method.GoName + "_WebHandler"
-//                p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
-//                freturn := g.QualifiedGoIdent(webPackage.Ident("OutsideHandler"))
-//                g.P(fname, "(", p1, ")", freturn, "{")
-//                g.P("return func(ctx *" + g.QualifiedGoIdent(webPackage.Ident("Context")) + "){")
-//                g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
-//                g.P("if ctx.GetMethod()!=", g.QualifiedGoIdent(httpPackage.Ident("MethodGet")), " && ctx.GetContentType() == \"application/json\" {")
-//                g.P("data, e := ctx.GetBody()")
-//                g.P("if e != nil {")
-//                g.P("ctx.WriteString(", g.QualifiedGoIdent(httpPackage.Ident("StatusInternalServerError")), ",\"server error:read request body error:\"+e.Error())")
-//                g.P("return")
-//                g.P("}")
-//                g.P("if len(data) != 0 {")
-//                g.P("if e:=", g.QualifiedGoIdent(jsonPackage.Ident("Unmarshal")), "(data,req);e!=nil{")
-//                g.P("ctx.WriteString(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",\"bad request:json format error:\"+e.Error())")
-//                g.P("return")
-//                g.P("}")
-//                g.P("}")
-//                g.P("} else {")
-//                g.P("if e := ctx.ParseForm(); e != nil {")
-//                g.P("ctx.WriteString(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",\"bad request:form format error:\"+e.Error())")
-//                g.P("return")
-//                g.P("}")
-//                g.P("buf:=", g.QualifiedGoIdent(bufpoolPackage.Ident("GetBuffer()")))
-//                g.P("buf.Append(\"{\")")
-//                g.P("hasfields:=false")
-//                for _, field := range method.Input.Fields {
-//                        g.P("if temp:=ctx.GetForm(\"", field.Desc.Name(), "\");len(temp)!=0 {")
-//                        g.P("buf.Append(\"\\\"", field.Desc.Name(), "\\\":\")")
-//                        g.P("buf.Append(temp)")
-//                        g.P("buf.Append(\",\")")
-//                        g.P("hasfields=true")
-//                        g.P("}")
-//                }
-//                g.P("if hasfields{")
-//                g.P("buf.Bytes()[buf.Len()-1]='}'")
-//                g.P("}else{")
-//                g.P("buf.Append(\"}\")")
-//                g.P("}")
-//                g.P("if buf.Len()>2{")
-//                g.P("if e:=", g.QualifiedGoIdent(jsonPackage.Ident("Unmarshal")), "(buf.Bytes(),req);e!=nil{")
-//                g.P("ctx.WriteString(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",\"bad request:form format error:\"+e.Error())")
-//                g.P("return")
-//                g.P("}")
-//                g.P("}")
-//                g.P(g.QualifiedGoIdent(bufpoolPackage.Ident("PutBuffer(buf)")))
-//                g.P("}")
-//                if hasheader(method.Input) || haschecker(method.Input) {
-//                        checkerandheader("req.", method.Input, g, 2)
-//                }
-//                g.P("resp,e:=handler(ctx,req)")
-//                g.P("if e!=nil{")
-//                g.P("ctx.WriteString(", g.QualifiedGoIdent(httpPackage.Ident("StatusInternalServerError")), ",e.Error())")
-//                g.P("}else if resp == nil{")
-//                g.P("ctx.WriteString(", g.QualifiedGoIdent(httpPackage.Ident("StatusOK")), ",\"{}\")")
-//                g.P("}else{")
-//                g.P("respd,_:=", g.QualifiedGoIdent(jsonPackage.Ident("Marshal")), "(resp)")
-//                g.P("ctx.Write(", g.QualifiedGoIdent(httpPackage.Ident("StatusOK")), ",respd)")
-//                g.P("}")
-//                g.P("}")
-//                g.P("}")
-//        }
-
-//        //Server Register
-//        g.P("func Register", serverName, "(engine *", g.QualifiedGoIdent(webPackage.Ident("WebServer")), ",svc ", serverName, ",allmids map[string]", g.QualifiedGoIdent(webPackage.Ident("OutsideHandler")), ")error{")
-//        g.P("//avoid lint")
-//        g.P("_=allmids")
-//        for _, method := range service.Methods {
-//                if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
-//                        continue
-//                }
-//                r, e := parseMethodComment(string(method.Comments.Trailing))
-//                if e != nil {
-//                        panic(e)
-//                }
-//                fname := "_" + service.GoName + "_" + method.GoName + "_WebHandler(svc." + method.GoName + ")"
-//                pathname := "WebPath" + service.GoName + method.GoName
-//                if len(r.mids) > 0 {
-//                        g.P("{")
-//                        str := ""
-//                        for _, mid := range r.mids {
-//                                str += ","
-//                                str += strconv.Quote(mid)
-//                        }
-//                        str = str[1:]
-//                        g.P("requiredMids:=[]string{", str, "}")
-//                        g.P("mids:=make([]", g.QualifiedGoIdent(webPackage.Ident("OutsideHandler")), ",0)")
-//                        g.P("for _,v:=range requiredMids{")
-//                        g.P("if mid,ok:=allmids[v];ok{")
-//                        g.P("mids = append(mids,mid)")
-//                        g.P("}")
-//                        g.P("}")
-//                        g.P("mids = append(mids,", fname, ")")
-//                        switch r.method {
-//                        case http.MethodGet:
-//                                g.P("if e:=engine.Get(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...);e!=nil{")
-//                                g.P("return e")
-//                                g.P("}")
-//                        case http.MethodPost:
-//                                g.P("if e:=engine.Post(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...);e!=nil{")
-//                                g.P("return e")
-//                                g.P("}")
-//                        case http.MethodPut:
-//                                g.P("if e:=engine.Put(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...);e!=nil{")
-//                                g.P("return e")
-//                                g.P("}")
-//                        case http.MethodPatch:
-//                                g.P("if e:=engine.Patch(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...);e!=nil{")
-//                                g.P("return e")
-//                                g.P("}")
-//                        case http.MethodDelete:
-//                                g.P("if e:=engine.Delete(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",mids...);e!=nil{")
-//                                g.P("return e")
-//                                g.P("}")
-//                        }
-//                        g.P("}")
-//                } else {
-//                        switch r.method {
-//                        case http.MethodGet:
-//                                g.P("if e:=engine.Get(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ");e!=nil{")
-//                                g.P("return e")
-//                                g.P("}")
-//                        case http.MethodPost:
-//                                g.P("if e:=engine.Post(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ");e!=nil{")
-//                                g.P("return e")
-//                                g.P("}")
-//                        case http.MethodPut:
-//                                g.P("if e:=engine.Put(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ");e!=nil{")
-//                                g.P("return e")
-//                                g.P("}")
-//                        case http.MethodPatch:
-//                                g.P("if e:=engine.Patch(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ");e!=nil{")
-//                                g.P("return e")
-//                                g.P("}")
-//                        case http.MethodDelete:
-//                                g.P("if e:=engine.Delete(", pathname, ",", strconv.FormatInt(int64(r.timeout), 10), ",", fname, ");e!=nil{")
-//                                g.P("return e")
-//                                g.P("}")
-//                        }
-//                }
-//        }
-//        g.P("return nil")
-//        g.P("}")
-//}

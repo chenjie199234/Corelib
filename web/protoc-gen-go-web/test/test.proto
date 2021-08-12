@@ -5,7 +5,7 @@ option go_package="github.com/chenjie199234/Corelib/web/protoc-gen-go-web/test;t
 import "pbex.proto";
 service test {
 	rpc hello(helloreq)returns(helloresp){
-		option (pbex.method)="post";
+		option (pbex.method)="get";
 		option (pbex.timeout)="200ms";
 		option (pbex.midwares)="user";
 		option (pbex.midwares)="limit";

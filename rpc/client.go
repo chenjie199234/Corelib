@@ -201,7 +201,7 @@ type RegisterData struct {
 }
 
 //all: key server's addr
-func (c *RpcClient) UpdateDiscovery(all map[string]*RegisterData) {
+func (c *RpcClient) updateDiscovery(all map[string]*RegisterData) {
 	//check need update
 	c.lker.Lock()
 	defer c.lker.Unlock()

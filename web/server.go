@@ -193,14 +193,14 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
 		http.Error(w,
-			http.StatusText(http.StatusNotFound),
+			ERRNOAPI.Error(),
 			http.StatusNotFound,
 		)
 	})
 	instance.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown method")
 		http.Error(w,
-			http.StatusText(http.StatusMethodNotAllowed),
+			ERRNOAPI.Error(),
 			http.StatusMethodNotAllowed,
 		)
 	})
@@ -209,7 +209,7 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		n := runtime.Stack(stack, false)
 		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "panic:", msg, "\n"+common.Byte2str(stack[:n]))
 		http.Error(w,
-			http.StatusText(http.StatusInternalServerError),
+			ERRPANIC.Error(),
 			http.StatusInternalServerError,
 		)
 	}
@@ -436,7 +436,7 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	//check required target server
 	if targetserver := r.Header.Get("TargetServer"); targetserver != "" && targetserver != this.selfappname {
 		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: this is not the required targetserver:", targetserver)
-		http.Error(w, "target server unusable", 888)
+		http.Error(w, ERRCLOSING.Error(), 888)
 		return
 	}
 	//check server status
@@ -454,7 +454,7 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				default:
 				}
 			}
-			http.Error(w, "target server unusable", 888)
+			http.Error(w, ERRCLOSING.Error(), 888)
 			return
 		}
 	}

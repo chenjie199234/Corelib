@@ -29,7 +29,7 @@ func defaultDiscover(group, name string, client *WebClient) {
 			continue
 		}
 		check = d
-		client.UpdateDiscovery(all)
+		client.updateDiscovery(all)
 		notice()
 		tker.Reset(client.c.DiscoverInterval)
 		for len(tker.C) > 0 {
