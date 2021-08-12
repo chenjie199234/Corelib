@@ -2023,17 +2023,22 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 			g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("application/x-protobuf"), ")")
 			g.P("query :=", g.QualifiedGoIdent(bufpoolPackage.Ident("GetBuffer")), "()")
 			g.P("defer ", g.QualifiedGoIdent(bufpoolPackage.Ident("PutBuffer")), "(query)")
-			g.P("var temp []byte")
-			g.P("_=temp//avoid unuse")
 			for i, field := range method.Input.Fields {
 				if i == 0 {
 					g.P("query.Append(", strconv.Quote("?"), ")")
 				}
 				fname := string(field.Desc.Name())
-				g.P("query.Append(", strconv.Quote(fname+"="), ")")
 				switch field.Desc.Kind() {
 				case protoreflect.BoolKind:
-					fallthrough
+					if field.Desc.IsList() {
+						g.P("if len(req.", field.GoName, ")!=0{")
+					} else {
+						g.P("if req.", field.GoName, "{")
+					}
+					g.P("query.Append(", strconv.Quote(fname+"="), ")")
+					g.P("query.Append(req.", field.GoName, ")")
+					g.P("query.Append(", strconv.Quote("&"), ")")
+					g.P("}")
 				case protoreflect.EnumKind:
 					fallthrough
 				case protoreflect.Int32Kind:
@@ -2059,17 +2064,35 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 				case protoreflect.Fixed64Kind:
 					fallthrough
 				case protoreflect.DoubleKind:
+					if field.Desc.IsList() {
+						g.P("if len(req.", field.GoName, ")!=0{")
+					} else {
+						g.P("if req.", field.GoName, "!=0{")
+					}
+					g.P("query.Append(", strconv.Quote(fname+"="), ")")
 					g.P("query.Append(req.", field.GoName, ")")
+					g.P("query.Append(", strconv.Quote("&"), ")")
+					g.P("}")
 				case protoreflect.StringKind:
 					fallthrough
 				case protoreflect.BytesKind:
-					fallthrough
-				case protoreflect.MessageKind:
-					g.P("temp,_=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.", field.GoName, ")")
+					g.P("if len(req.", field.GoName, ")!=0{")
+					g.P("query.Append(", strconv.Quote(fname+"="), ")")
+					g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.", field.GoName, ")")
 					g.P("query.Append(", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(temp))")
-				}
-				if i != len(method.Input.Fields)-1 {
 					g.P("query.Append(", strconv.Quote("&"), ")")
+					g.P("}")
+				case protoreflect.MessageKind:
+					if field.Desc.IsMap() || field.Desc.IsList() {
+						g.P("if len(req.", field.GoName, ")!=0{")
+					} else {
+						g.P("if req.", field.GoName, "!=nil{")
+					}
+					g.P("query.Append(", strconv.Quote(fname+"="), ")")
+					g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.", field.GoName, ")")
+					g.P("query.Append(", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(temp))")
+					g.P("query.Append(", strconv.Quote("&"), ")")
+					g.P("}")
 				}
 			}
 			switch httpmetohd {
