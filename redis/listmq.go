@@ -143,6 +143,9 @@ var hpub = ""
 
 //key is used to decide which list will the value send to
 func (p *Pool) ListMQPub(ctx context.Context, name string, num uint64, key string, values ...[]byte) error {
+	if num == 0 {
+		num = 10
+	}
 	c, e := p.GetContext(ctx)
 	if e != nil {
 		return e

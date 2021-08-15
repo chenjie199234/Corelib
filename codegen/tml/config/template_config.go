@@ -10,22 +10,196 @@ import (
 const text = `package config
 
 import (
-	"database/sql"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"strconv"
-	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"{{.}}/api"
 
 	configsdk "github.com/chenjie199234/Config/sdk"
 	"github.com/chenjie199234/Corelib/log"
+)
+
+//EnvConfig can't hot update,all these data is from system env setting
+//nil field means that system env not exist
+type EnvConfig struct {
+	ServerVerifyDatas []string
+	ConfigType        *int
+	RunEnv            *string
+	DeployEnv         *string
+}
+
+//EC -
+var EC *EnvConfig
+
+//notice is a sync function
+//don't write block logic inside it
+func Init(notice func(c *AppConfig)) {
+	initenv()
+	var path string
+	if EC.ConfigType == nil || *EC.ConfigType == 0 {
+		path = "./"
+	} else if *EC.ConfigType == 1 {
+		path = "./kubeconfig/"
+	} else {
+		path = "./remoteconfig/"
+	}
+	initremote(path)
+	initsource(path)
+	initapp(path, notice)
+}
+
+//Close -
+func Close() {
+	log.Close()
+}
+
+func initenv() {
+	EC = &EnvConfig{}
+	if str, ok := os.LookupEnv("SERVER_VERIFY_DATA"); ok && str != "<SERVER_VERIFY_DATA>" {
+		temp := make([]string, 0)
+		if str != "" {
+			EC.ServerVerifyDatas = temp
+		} else if e := json.Unmarshal([]byte(str), &temp); e != nil {
+			log.Error("[config.initenv] SERVER_VERIFY_DATA must be json string array like:[\"abc\",\"123\"]")
+			Close()
+			os.Exit(1)
+		}
+		EC.ServerVerifyDatas = temp
+	} else {
+		log.Warning("[config.initenv] missing SERVER_VERIFY_DATA")
+	}
+	if str, ok := os.LookupEnv("CONFIG_TYPE"); ok && str != "<CONFIG_TYPE>" && str != "" {
+		configtype, e := strconv.Atoi(str)
+		if e != nil || (configtype != 0 && configtype != 1 && configtype != 2) {
+			log.Error("[config.initenv] CONFIG_TYPE must be number in [0,1,2]")
+			Close()
+			os.Exit(1)
+		}
+		EC.ConfigType = &configtype
+	} else {
+		log.Warning("[config.initenv] missing CONFIG_TYPE")
+	}
+	if str, ok := os.LookupEnv("RUN_ENV"); ok && str != "<RUN_ENV>" && str != "" {
+		EC.RunEnv = &str
+	} else {
+		log.Warning("[config.initenv] missing RUN_ENV")
+	}
+	if str, ok := os.LookupEnv("DEPLOY_ENV"); ok && str != "<DEPLOY_ENV>" && str != "" {
+		EC.DeployEnv = &str
+	} else {
+		log.Warning("[config.initenv] missing DEPLOY_ENV")
+	}
+}
+
+func initremote(path string) {
+	if EC.ConfigType != nil && *EC.ConfigType == 2 {
+		if e := configsdk.NewWebSdk(path, api.Group, api.Name, false, time.Second); e != nil {
+			log.Error("[config.initremote] new sdk error:", e)
+			Close()
+			os.Exit(1)
+		}
+	}
+}`
+const apptext = `package config
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+
+	"github.com/chenjie199234/Corelib/log"
+	"github.com/fsnotify/fsnotify"
+)
+
+//AppConfig can hot update
+//this is the config used for this app
+type AppConfig struct {
+	//add your config here
+}
+
+//AC -
+var AC *AppConfig
+
+var watcher *fsnotify.Watcher
+
+func initapp(path string, notice func(*AppConfig)) {
+	data, e := os.ReadFile(path + "AppConfig.json")
+	if e != nil {
+		log.Error("[config.initapp] read config file error:", e)
+		Close()
+		os.Exit(1)
+	}
+	AC = &AppConfig{}
+	if e = json.Unmarshal(data, AC); e != nil {
+		log.Error("[config.initapp] config file format error:", e)
+		Close()
+		os.Exit(1)
+	}
+	if notice != nil {
+		notice(AC)
+	}
+	watcher, e = fsnotify.NewWatcher()
+	if e != nil {
+		log.Error("[config.initapp] create watcher for hot update error:", e)
+		Close()
+		os.Exit(1)
+	}
+	if e = watcher.Add(path); e != nil {
+		log.Error("[config.initapp] create watcher for hot update error:", e)
+		Close()
+		os.Exit(1)
+	}
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if EC.ConfigType == nil || *EC.ConfigType == 0 || *EC.ConfigType == 2 {
+					if filepath.Base(event.Name) != "AppConfig.json" || (event.Op&fsnotify.Create == 0 && event.Op&fsnotify.Write == 0) {
+						continue
+					}
+				} else {
+					//k8s mount volume is different
+					if filepath.Base(event.Name) != "..data" || event.Op&fsnotify.Create == 0 {
+						continue
+					}
+				}
+				data, e := os.ReadFile(path + "AppConfig.json")
+				if e != nil {
+					log.Error("[config.initapp] hot update read config file error:", e)
+					continue
+				}
+				c := &AppConfig{}
+				if e = json.Unmarshal(data, c); e != nil {
+					log.Error("[config.initapp] hot update config file format error:", e)
+					continue
+				}
+				AC = c
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Error("[config.initapp] hot update watcher error:", err)
+			}
+		}
+	}()
+}`
+const sourcetext = `package config
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"os"
+	"time"
+
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
 	ctime "github.com/chenjie199234/Corelib/util/time"
-	"github.com/fsnotify/fsnotify"
 	"github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/scram"
@@ -35,21 +209,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
-
-//AppConfig can hot update
-//this is the config used for this app
-type AppConfig struct {
-	//add your config here
-}
-
-//EnvConfig can't hot update,all these data is from system env setting
-//each field:nil means system env not exist
-type EnvConfig struct {
-	ServerVerifyDatas []string
-	ConfigType        *int
-	RunEnv            *string
-	DeployEnv         *string
-}
 
 //sourceConfig can't hot update
 type sourceConfig struct {
@@ -82,10 +241,10 @@ type RpcClientConfig struct {
 
 //WebServerConfig -
 type WebServerConfig struct {
-	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
-	IdleTimeout   ctime.Duration $json:"idle_timeout"$   //default 5s
-	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
-	StaticFile    string         $json:"static_file"$
+	GlobalTimeout  ctime.Duration $json:"global_timeout"$ //default 500ms
+	IdleTimeout    ctime.Duration $json:"idle_timeout"$   //default 5s
+	HeartProbe     ctime.Duration $json:"heart_probe"$    //default 1.5s
+	StaticFilePath string         $json:"static_file_path"$
 	//cors
 	Cors *WebCorsConfig $json:"cors"$
 }
@@ -165,19 +324,6 @@ type KafkaSubConfig struct {
 	CommitInterval ctime.Duration $json:"commit_interval"$
 }
 
-//AC -
-var ac *AppConfig
-
-func GetAppConfig() *AppConfig {
-	return (*AppConfig)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&ac))))
-}
-
-var watcher *fsnotify.Watcher
-var closech chan struct{}
-
-//EC -
-var EC *EnvConfig
-
 //SC total source config instance
 var sc *sourceConfig
 
@@ -191,67 +337,6 @@ var kafkaSubers map[string]*kafka.Reader
 
 var kafkaPubers map[string]*kafka.Writer
 
-func init() {
-	initenv()
-	var path string
-	if EC.ConfigType == nil || *EC.ConfigType == 0 {
-		path = "./"
-	} else if *EC.ConfigType == 1 {
-		path = "./k8sconfig/"
-	} else {
-		path = "./remoteconfig/"
-		initremote(path)
-	}
-	initsource(path)
-	initapp(path)
-}
-
-func initenv(){
-	EC = &EnvConfig{}
-	if str, ok := os.LookupEnv("SERVER_VERIFY_DATA"); ok && str != "<SERVER_VERIFY_DATA>" {
-		temp := make([]string, 0)
-		if str != "" {
-			EC.ServerVerifyDatas = temp
-		} else if e := json.Unmarshal([]byte(str), &temp); e!= nil {
-			log.Error("[config.initenv] SERVER_VERIFY_DATA must be json string array like:[\"abc\",\"123\"]")
-			Close()
-			os.Exit(1)
-		}
-		EC.ServerVerifyDatas = temp
-	} else {
-		log.Warning("[config.initenv] missing SERVER_VERIFY_DATA")
-	}
-	if str, ok := os.LookupEnv("CONFIG_TYPE"); ok && str != "<CONFIG_TYPE>" && str != "" {
-		configtype, e := strconv.Atoi(str)
-		if e != nil || (configtype != 0 && configtype != 1 && configtype != 2) {
-			log.Error("[config.initenv] CONFIG_TYPE must be number in [0,1,2]")
-			Close()
-			os.Exit(1)
-		}
-		EC.ConfigType = &configtype
-	} else {
-		log.Warning("[config.initenv] missing CONFIG_TYPE")
-	}
-	if str, ok := os.LookupEnv("RUN_ENV"); ok && str != "<RUN_ENV>" && str != "" {
-		EC.RunEnv = &str
-	} else {
-		log.Warning("[config.initenv] missing RUN_ENV")
-	}
-	if str, ok := os.LookupEnv("DEPLOY_ENV"); ok && str != "<DEPLOY_ENV>" && str != "" {
-		EC.DeployEnv = &str
-	} else {
-		log.Warning("[config.initenv] missing DEPLOY_ENV")
-	}
-}
-func initremote(path string) {
-	if EC.ConfigType != nil && *EC.ConfigType == 2 {
-		if e := configsdk.NewWebSdk(path, api.Group, api.Name, false, time.Second); e != nil {
-			log.Error("[config.initremote] new sdk error:", e)
-			Close()
-			os.Exit(1)
-		}
-	}
-}
 func initsource(path string) {
 	data, e := os.ReadFile(path + "SourceConfig.json")
 	if e != nil {
@@ -305,10 +390,10 @@ func initsource(path string) {
 	}
 	if sc.WebServer == nil {
 		sc.WebServer = &WebServerConfig{
-			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
-			IdleTimeout:   ctime.Duration(time.Second * 5),
-			HeartProbe:    ctime.Duration(time.Millisecond * 1500),
-			StaticFile:    "./src",
+			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
+			IdleTimeout:    ctime.Duration(time.Second * 5),
+			HeartProbe:     ctime.Duration(time.Millisecond * 1500),
+			StaticFilePath: "./src",
 			Cors: &WebCorsConfig{
 				CorsOrigin: []string{"*"},
 				CorsHeader: []string{"*"},
@@ -481,6 +566,12 @@ func initsource(path string) {
 			Close()
 			os.Exit(1)
 		}
+		e = tempdb.Ping(context.Background(), readpref.Primary())
+		if e != nil {
+			log.Error("[config.initsource] ping mongodb:", k, "error:", e)
+			Close()
+			os.Exit(1)
+		}
 		mongos[k] = tempdb
 	}
 	sqls = make(map[string]*sql.DB, len(sc.Sql))
@@ -506,6 +597,15 @@ func initsource(path string) {
 		}
 		tempdb.SetMaxOpenConns(sqlc.MaxOpen)
 		tempdb.SetConnMaxIdleTime(time.Duration(sqlc.MaxIdletime))
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		e = tempdb.PingContext(ctx)
+		if e != nil {
+			cancel()
+			log.Error("[config.initsource] ping mysql:", k, "error:", e)
+			Close()
+			os.Exit(1)
+		}
+		cancel()
 		sqls[k] = tempdb
 	}
 	rediss = make(map[string]*redis.Pool, len(sc.Redis))
@@ -513,7 +613,7 @@ func initsource(path string) {
 		if k == "example_redis" {
 			continue
 		}
-		rediss[k] = redis.NewRedis(&redis.Config{
+		tempredis := redis.NewRedis(&redis.Config{
 			Username:    redisc.Username,
 			Password:    redisc.Passwd,
 			Addr:        redisc.Addr,
@@ -522,6 +622,15 @@ func initsource(path string) {
 			IOTimeout:   time.Duration(redisc.IoTimeout),
 			ConnTimeout: time.Duration(redisc.ConnTimeout),
 		})
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		if e := tempredis.Ping(ctx); e != nil {
+			cancel()
+			log.Error("[config.initsource] ping redis:", k, "error:", e)
+			Close()
+			os.Exit(1)
+		}
+		cancel()
+		rediss[k] = tempredis
 	}
 	kafkaSubers = make(map[string]*kafka.Reader, len(sc.KafkaSub))
 	for topic, subc := range sc.KafkaSub {
@@ -590,78 +699,6 @@ func initsource(path string) {
 		kafkaPubers[topic] = writer
 	}
 }
-func initapp(path string) {
-	data, e := os.ReadFile(path + "AppConfig.json")
-	if e != nil {
-		log.Error("[config.initapp] read config file error:", e)
-		Close()
-		os.Exit(1)
-	}
-	ac = &AppConfig{}
-	if e = json.Unmarshal(data, ac); e != nil {
-		log.Error("[config.initapp] config file format error:", e)
-		Close()
-		os.Exit(1)
-	}
-	watcher, e = fsnotify.NewWatcher()
-	if e != nil {
-		log.Error("[config.initapp] create watcher for hot update error:", e)
-		Close()
-		os.Exit(1)
-	}
-	if e = watcher.Add(path); e != nil {
-		log.Error("[config.initapp] create watcher for hot update error:", e)
-		Close()
-		os.Exit(1)
-	}
-	closech = make(chan struct{})
-	go func() {
-		defer close(closech)
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if EC.ConfigType == nil || *EC.ConfigType == 0 || *EC.ConfigType == 2 {
-					if filepath.Base(event.Name) != "AppConfig.json" || (event.Op&fsnotify.Create == 0 && event.Op&fsnotify.Write == 0) {
-						continue
-					}
-				} else {
-					//k8s mount volume is different
-					if filepath.Base(event.Name) != "..data" || event.Op&fsnotify.Create == 0 {
-						continue
-					}
-				}
-				data, e := os.ReadFile(path + "AppConfig.json")
-				if e != nil {
-					log.Error("[config.initapp] hot update read config file error:", e)
-					continue
-				}
-				c := &AppConfig{}
-				if e = json.Unmarshal(data, c); e != nil {
-					log.Error("[config.initapp] hot update config file format error:", e)
-					continue
-				}
-				atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&ac)), unsafe.Pointer(c))
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Error("[config.initapp] hot update watcher error:", err)
-			}
-		}
-	}()
-}
-
-//Close -
-func Close() {
-	if watcher != nil {
-		watcher.Close()
-		<-closech
-	}
-	log.Close()
-}
 
 //GetRpcServerConfig get the rpc net config
 func GetRpcServerConfig() *RpcServerConfig {
@@ -709,17 +746,31 @@ func GetKafkaSuber(topic string, groupid string) *kafka.Reader {
 //GetKafkaPuber get a kafka pub client by topic name
 func GetKafkaPuber(topic string) *kafka.Writer {
 	return kafkaPubers[topic]
-}
-`
+}`
+
 const path = "./config/"
 const name = "config.go"
+const app = "app_config.go"
+const source = "source_config.go"
 
 var tml *template.Template
+var tmlapp *template.Template
+var tmlsource *template.Template
 var file *os.File
+var fileapp *os.File
+var filesource *os.File
 
 func init() {
 	var e error
 	tml, e = template.New("config").Parse(strings.ReplaceAll(text, "$", "`"))
+	if e != nil {
+		panic(fmt.Sprintf("create template error:%s", e))
+	}
+	tmlapp, e = template.New("app_config").Parse(strings.ReplaceAll(apptext, "$", "`"))
+	if e != nil {
+		panic(fmt.Sprintf("create template error:%s", e))
+	}
+	tmlsource, e = template.New("source_config").Parse(strings.ReplaceAll(sourcetext, "$", "`"))
 	if e != nil {
 		panic(fmt.Sprintf("create template error:%s", e))
 	}
@@ -733,9 +784,23 @@ func CreatePathAndFile() {
 	if e != nil {
 		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
 	}
+	fileapp, e = os.OpenFile(path+app, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if e != nil {
+		panic(fmt.Sprintf("make file:%s error:%s", path+app, e))
+	}
+	filesource, e = os.OpenFile(path+source, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if e != nil {
+		panic(fmt.Sprintf("make file:%s error:%s", path+source, e))
+	}
 }
 func Execute(projectname string) {
 	if e := tml.Execute(file, projectname); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
+	}
+	if e := tmlapp.Execute(fileapp, projectname); e != nil {
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+app, e))
+	}
+	if e := tmlsource.Execute(filesource, projectname); e != nil {
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+source, e))
 	}
 }

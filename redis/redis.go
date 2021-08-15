@@ -80,6 +80,13 @@ func (p *Pool) GetContext(ctx context.Context) (*Conn, error) {
 	}
 	return getconn(c), nil
 }
+func (p *Pool) Ping(ctx context.Context) error {
+	c, e := p.GetContext(ctx)
+	if e != nil {
+		return e
+	}
+	return c.Ping(ctx)
+}
 
 func (c *Conn) DoContext(ctx context.Context, cmd string, args ...interface{}) (interface{}, error) {
 	dl, ok := ctx.Deadline()

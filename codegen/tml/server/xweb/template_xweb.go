@@ -30,10 +30,10 @@ func StartWebServer() {
 		GlobalTimeout:      time.Duration(c.GlobalTimeout),
 		IdleTimeout:        time.Duration(c.IdleTimeout),
 		HeartProbe:         time.Duration(c.HeartProbe),
-		StaticFileRootPath: c.StaticFile,
+		StaticFileRootPath: c.StaticFilePath,
 		MaxHeader:          1024,
-		SocketRBuf:         1024,
-		SocketWBuf:         1024,
+		SocketRBuf:         2048,
+		SocketWBuf:         2048,
 	}
 	if c.Cors != nil {
 		webc.Cors = &web.CorsConfig{

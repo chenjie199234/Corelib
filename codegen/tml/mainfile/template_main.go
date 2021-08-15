@@ -23,6 +23,11 @@ import (
 )
 
 func main() {
+	config.Init(func(ac *config.AppConfig) {
+		//this is a notice callback every time appconfig changes
+		//this function works in sync mode
+		//don't write block logic inside this
+	})
 	defer config.Close()
 	//start the whole business service
 	if e := service.StartService(); e != nil {

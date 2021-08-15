@@ -7,7 +7,7 @@ import (
 )
 
 const dockerfiletext = `FROM debian:stable-slim
-RUN apt-get update && apt-get install -y ca-certificates && mkdir /root/app && mkdir /root/app/k8sconfig && mkdir /root/app/remoteconfig
+RUN apt-get update && apt-get install -y ca-certificates && mkdir /root/app && mkdir /root/app/kubeconfig && mkdir /root/app/remoteconfig
 WORKDIR /root/app
 COPY main probe.sh AppConfig.json SourceConfig.json ./
 ENTRYPOINT ["./main"]`
@@ -49,7 +49,7 @@ spec:
               cpu: 250m
           env:
             - name: DEPLOY_ENV
-              value: kubernetes
+              value: kube
             - name: RUN_ENV
               value: <RUN_ENV>
             - name: SERVER_VERIFY_DATA
@@ -76,7 +76,7 @@ spec:
             failureThreshold: 3
           volumeMounts:
             - name: {{.ProjectName}}-config-volume
-              mountPath: /root/app/k8sconfig
+              mountPath: /root/app/kubeconfig
       volumes:
         - name: {{.ProjectName}}-config-volume
           configMap:
