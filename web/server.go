@@ -319,6 +319,9 @@ func (this *WebServer) StartWebServer(listenaddr string, certkeys map[string]str
 	return nil
 }
 func (this *WebServer) StopWebServer() {
+	defer func() {
+		this.closewait.Wait()
+	}()
 	stop := false
 	for {
 		old := this.totalreqnum
@@ -341,7 +344,7 @@ func (this *WebServer) StopWebServer() {
 				} else {
 					this.s.Shutdown(context.Background())
 					this.closewait.Done()
-					break
+					return
 				}
 			case <-this.refreshclosewait:
 				tmer.Reset(this.c.WaitCloseTime)
@@ -351,7 +354,6 @@ func (this *WebServer) StopWebServer() {
 			}
 		}
 	}
-	this.closewait.Wait()
 
 }
 func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, handlers []OutsideHandler) *Context {

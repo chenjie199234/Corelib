@@ -9,9 +9,9 @@ import (
 	"os"
 	"strings"
 
+	clientapi "github.com/chenjie199234/Corelib/codegen/tml/api/client"
 	statusapi "github.com/chenjie199234/Corelib/codegen/tml/api/status"
 	subapi "github.com/chenjie199234/Corelib/codegen/tml/api/sub"
-	"github.com/chenjie199234/Corelib/codegen/tml/client"
 	"github.com/chenjie199234/Corelib/codegen/tml/cmd"
 	"github.com/chenjie199234/Corelib/codegen/tml/config"
 	"github.com/chenjie199234/Corelib/codegen/tml/configfile"
@@ -189,9 +189,6 @@ func createBaseProject() {
 	config.CreatePathAndFile()
 	config.Execute(*name)
 
-	//source.CreatePathAndFile()
-	//source.Execute(*name)
-
 	configfile.CreatePathAndFile()
 	configfile.Execute(*name)
 
@@ -231,8 +228,8 @@ func createBaseProject() {
 	git.CreatePathAndFile()
 	git.Execute(*name)
 
-	client.CreatePathAndFile()
-	client.Execute(*name, *group)
+	clientapi.CreatePathAndFile()
+	clientapi.Execute(*name, *group)
 
 	fmt.Println("base project create success!")
 	createkubernetes()

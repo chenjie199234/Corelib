@@ -16,7 +16,8 @@ const textsource = `{
 		"conn_timeout":"200ms",
 		"global_timeout":"200ms",
 		"heart_timeout":"5s",
-		"heart_probe":"1.5s"
+		"heart_probe":"1.5s",
+		"discover_interval":"5s"
 	},
 	"web_server":{
 		"global_timeout":"200ms",
@@ -33,6 +34,7 @@ const textsource = `{
 		"global_timeout":"200ms",
 		"idle_timeout":"5s",
 		"heart_probe":"1.5s",
+		"discover_interval":"5s",
 		"skip_verify_tls":false,
 		"cas":["path_to_example_ca"]
 	},

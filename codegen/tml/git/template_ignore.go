@@ -12,14 +12,6 @@ const text = `*
 !/api/*
 !/api/**/
 !/api/**/*
-/api/deps/**/status.proto
-/api/deps/**/status.pb.go
-/api/deps/**/status_web.pb.go
-/api/deps/**/status_rpc.pb.go
-/api/deps/status_rpc.pb.go
-/api/deps/status_rpc.pb.go
-/api/deps/status_rpc.pb.go
-/api/deps/status_rpc.pb.go
 !/config/
 !/config/*
 !/config/**/

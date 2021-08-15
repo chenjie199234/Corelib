@@ -133,7 +133,6 @@ var ErrServerClosed = errors.New("[rpc.server] closed")
 var ErrAlreadyStarted = errors.New("[rpc.server] already started")
 
 func (s *RpcServer) StartRpcServer(listenaddr string) error {
-	log.Info("[rpc.server] start with verifydatas:", s.c.VerifyDatas)
 	e := s.instance.StartTcpServer(listenaddr)
 	if e == stream.ErrServerClosed {
 		return ErrServerClosed
@@ -143,6 +142,9 @@ func (s *RpcServer) StartRpcServer(listenaddr string) error {
 	return e
 }
 func (s *RpcServer) StopRpcServer() {
+	defer func() {
+		s.closewait.Wait()
+	}()
 	stop := false
 	for {
 		old := s.totalreqnum
@@ -172,7 +174,7 @@ func (s *RpcServer) StopRpcServer() {
 				} else {
 					s.instance.Stop()
 					s.closewait.Done()
-					break
+					return
 				}
 			case <-s.refreshclosewaitch:
 				tmer.Reset(s.c.WaitCloseTime)
@@ -182,7 +184,6 @@ func (s *RpcServer) StopRpcServer() {
 			}
 		}
 	}
-	s.closewait.Wait()
 }
 func (s *RpcServer) GetClientNum() int32 {
 	return s.instance.GetPeerNum()

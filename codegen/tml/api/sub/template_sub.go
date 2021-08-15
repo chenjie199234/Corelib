@@ -12,29 +12,23 @@ const text = `syntax="proto3";
 package {{.Pname}};
 //this is the golang's package name,all proto in this project must use this name as the golang's package name
 option go_package="{{.Pname}}/api;api";
+import "pbex/pbex.proto";
 
 //this is the proto file for {{.Sname}} service
 service {{.Sname}}{
-	//comment option separate by '|'
-	//method:     http method(only for http,rpc will ignore this),only support:get,post
-	//timeout:    life control
-	//mids:       midwares
-
-	//rpc example(examplereq)returns(exampleresp);//method:get|timeout:200ms|mids:["examplemid1","examplemid2"]
+	//rpc example(examplereq)returns(exampleresp){
+	//	option (pbex.method)="get";//can be set to get,delete,post,put,patch
+	//	option (pbex.timeout)="200ms";//1ns 1us 1ms 1s 1m 1h,without this means no function timeout
+	//	option (pbex.midwares)="auth";
+	//	option (pbex.midwares)="c";
+	//	option (pbex.midwares)="a";//this function has 3 midwares,it's order is auth,c,a
+	//}
 }
+//req can be set with pbex extentions
 //message examplereq{
-	//comment option separate by '|',only request message support
-	//header:     set to true,means this field comes from http's header(only for http,rpc will ignore this)
-	//empty:      set to false,means this field can't be empty,only support bytes,string,repeated,map,message field
-	//gt:         great then this value,only number kind field is useful
-	//gte:        great or equal then this value,only number kind field is useful
-	//lt:         less then this value,only number kind field is useful
-	//lte:        less or equal then this value,only number kind field is useful
-	//in:         value must in this collection(format:json string array),not support for map,message,repeated message field
-	//notin:      value must not in this collection(format:json string array),not support for map,message,repeated message field
-
-	//int64 example_for_comment_option=1;//header:true|gt:6|lt:666.6|gte:6.6|lte:666|in:["1","abc","3.14"]|notin:["1","abc","3.14"]
+	//int64 example_for_extentions=1[(pbex.int_gt)=1,(pbex.int_lt)=100];
 //}
+//resp's pbex extentions will be ignore
 //message exampleresp{
 	//int64 example_resp=1;
 //}`

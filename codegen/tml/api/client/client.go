@@ -1,4 +1,4 @@
-package ecode
+package client
 
 import (
 	"fmt"
@@ -6,31 +6,27 @@ import (
 	"text/template"
 )
 
-const text = `package ecode
+const text = `package api
 
-import (
-	errors
+//      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
 
-	cerror "github.com/chenjie199234/Corelib/util/error"
-)
+const Name = "{{.Pname}}"
+const Group = "{{.Gname}}"`
 
-var (
-	ErrUnknown   = cerror.ErrUnknown //10000
-	ErrReq       = cerror.ErrReq     //10001
-	ErrResp      = cerror.ErrResp    //10002
-	ErrSystem    = cerror.ErrSystem  //10003
-	ErrBusiness1 = cerror.MakeError(10004,"business error 1")
-)`
-
-const path = "./ecode/"
-const filename = "ecode.go"
+const path = "./api/"
+const filename = "client.go"
 
 var tml *template.Template
 var file *os.File
 
+type data struct {
+	Pname string
+	Gname string
+}
+
 func init() {
 	var e error
-	tml, e = template.New("ecode").Parse(text)
+	tml, e = template.New("api").Parse(text)
 	if e != nil {
 		panic(fmt.Sprintf("create template error:%s", e))
 	}
@@ -45,8 +41,8 @@ func CreatePathAndFile() {
 		panic(fmt.Sprintf("make file:%s error:%s", path+filename, e))
 	}
 }
-func Execute() {
-	if e := tml.Execute(file, nil); e != nil {
+func Execute(pname, gname string) {
+	if e := tml.Execute(file, &data{Pname: pname, Gname: gname}); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+filename, e))
 	}
 }

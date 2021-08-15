@@ -9,7 +9,6 @@ import (
 const text = `package xrpc
 
 import (
-	"sync"
 	"time"
 
 	"{{.}}/api"
@@ -19,13 +18,12 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/rpc"
 	"github.com/chenjie199234/Corelib/rpc/mids"
-	discoverysdk "github.com/chenjie199234/Discovery/sdk"
 )
 
 var s *rpc.RpcServer
 
 //StartRpcServer -
-func StartRpcServer(wg *sync.WaitGroup) {
+func StartRpcServer() {
 	c := config.GetRpcServerConfig()
 	rpcc := &rpc.ServerConfig{
 		GlobalTimeout:          time.Duration(c.GlobalTimeout),
@@ -58,15 +56,12 @@ func StartRpcServer(wg *sync.WaitGroup) {
 	//return
 	//}
 
-	if config.EC.ServerVerifyDatas != nil {
-		if e = discoverysdk.RegRpc(9000); e != nil {
-			log.Error("[xrpc] register rpc to discovery server error:", e)
-			return
-		}
-	}
-	wg.Done()
 	if e = s.StartRpcServer(":9000"); e != nil {
-		log.Error("[xrpc] start error:", e)
+		if e != rpc.ErrServerClosed {
+			log.Error("[xrpc] start error:", e)
+		} else {
+			log.Info("[xrpc] server closed")
+		}
 		return
 	}
 }

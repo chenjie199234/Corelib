@@ -9,7 +9,6 @@ import (
 const text = `package xweb
 
 import (
-	"sync"
 	"time"
 
 	"{{.}}/api"
@@ -19,13 +18,12 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/web"
 	"github.com/chenjie199234/Corelib/web/mids"
-	discoverysdk "github.com/chenjie199234/Discovery/sdk"
 )
 
 var s *web.WebServer
 
 //StartWebServer -
-func StartWebServer(wg *sync.WaitGroup) {
+func StartWebServer() {
 	c := config.GetWebServerConfig()
 	webc := &web.ServerConfig{
 		WaitCloseRefresh:   true,
@@ -66,15 +64,12 @@ func StartWebServer(wg *sync.WaitGroup) {
 	//return
 	//}
 
-	if config.EC.ServerVerifyDatas != nil {
-		if e = discoverysdk.RegWeb(8000, "http"); e != nil {
-			log.Error("[xweb] register web to discovery server error:", e)
-			return
-		}
-	}
-	wg.Done()
 	if e = s.StartWebServer(":8000", nil); e != nil {
-		log.Error("[xweb] start error:", e)
+		if e != web.ErrServerClosed {
+			log.Error("[xweb] start error:", e)
+		} else {
+			log.Info("[xweb] server closed")
+		}
 		return
 	}
 }

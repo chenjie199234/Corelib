@@ -25,7 +25,6 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
 	ctime "github.com/chenjie199234/Corelib/util/time"
-	discoverysdk "github.com/chenjie199234/Discovery/sdk"
 	"github.com/fsnotify/fsnotify"
 	"github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
@@ -52,7 +51,6 @@ type EnvConfig struct {
 	DeployEnv         *string
 }
 
-
 //sourceConfig can't hot update
 type sourceConfig struct {
 	RpcServer *RpcServerConfig           $json:"rpc_server"$
@@ -75,10 +73,11 @@ type RpcServerConfig struct {
 
 //RpcClientConfig -
 type RpcClientConfig struct {
-	ConnTimeout   ctime.Duration $json:"conn_timeout"$   //default 500ms
-	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
-	HeartTimeout  ctime.Duration $json:"heart_timeout"$  //default 5s
-	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
+	ConnTimeout      ctime.Duration $json:"conn_timeout"$      //default 500ms
+	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms
+	HeartTimeout     ctime.Duration $json:"heart_timeout"$     //default 5s
+	HeartProbe       ctime.Duration $json:"heart_probe"$       //default 1.5s
+	DiscoverInterval ctime.Duration $json:"discover_interval"$ //default 1s
 }
 
 //WebServerConfig -
@@ -100,11 +99,12 @@ type WebCorsConfig struct {
 
 //WebClientConfig -
 type WebClientConfig struct {
-	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
-	IdleTimeout   ctime.Duration $json:"idle_timeout"$   //default 5s
-	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
-	SkipVerifyTls bool           $json:"skip_verify_tls"$
-	Cas           []string       $json:"cas"$
+	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms
+	IdleTimeout      ctime.Duration $json:"idle_timeout"$      //default 5s
+	HeartProbe       ctime.Duration $json:"heart_probe"$       //default 1.5s
+	DiscoverInterval ctime.Duration $json:"discover_interval"$ //default 1s
+	SkipVerifyTls    bool           $json:"skip_verify_tls"$
+	Cas              []string       $json:"cas"$
 }
 
 //RedisConfig -
@@ -193,7 +193,6 @@ var kafkaPubers map[string]*kafka.Writer
 
 func init() {
 	initenv()
-	initdiscovery()
 	var path string
 	if EC.ConfigType == nil || *EC.ConfigType == 0 {
 		path = "./"
@@ -242,19 +241,6 @@ func initenv(){
 		EC.DeployEnv = &str
 	} else {
 		log.Warning("[config.initenv] missing DEPLOY_ENV")
-	}
-}
-func initdiscovery() {
-	if EC.ServerVerifyDatas != nil {
-		verifydata := ""
-		if len(EC.ServerVerifyDatas) > 0 {
-			verifydata = EC.ServerVerifyDatas[0]
-		}
-		if e := discoverysdk.NewSdk(api.Group, api.Name, verifydata); e != nil {
-			log.Error("[config.initdiscovery] new sdk error:", e)
-			Close()
-			os.Exit(1)
-		}
 	}
 }
 func initremote(path string) {

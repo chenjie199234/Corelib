@@ -186,7 +186,6 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 	instancec.Offlinefunc = client.offlinefunc
 	client.instance, _ = stream.NewInstance(instancec, selfgroup, selfname)
 	//init discover
-	log.Info("[rpc.client] start discovering server:", group+"."+name, "with verifydata:", c.VerifyData)
 	client.manually <- struct{}{}
 	manualNotice := make(chan struct{}, 1)
 	client.manualNotice[manualNotice] = struct{}{}

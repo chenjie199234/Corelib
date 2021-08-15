@@ -16,7 +16,7 @@ $$$
 ./cmd.sh build 编译该程序,会在根目录下生成一个可执行文件
 ./cmd.sh new 在该项目中创建一个新的子服务
 ./cmd.sh help 输出帮助信息
-./cmd.sh kubernetes 增加或者更新kubernetes的配置
+./cmd.sh kube 增加或者更新kubernetes的配置
 $$$
 
 
@@ -28,7 +28,7 @@ CONFIG_TYPE 				配置类型
 					1-使用k8s的configmap,路径:./k8sconfig
 					2-使用远程配置中心配置,路径:./remoteconfig
 RUN_ENV 				当前运行环境,如:test,pre,prod
-DEPLOY_ENV 				部署环境,如:k8s,host
+DEPLOY_ENV 				部署环境,如:kube,host
 $$$
 
 ## 配置文件
