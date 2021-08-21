@@ -17,6 +17,7 @@ import (
 	"github.com/chenjie199234/Corelib/codegen/tml/configfile"
 	"github.com/chenjie199234/Corelib/codegen/tml/dao"
 	subdao "github.com/chenjie199234/Corelib/codegen/tml/dao/sub"
+	"github.com/chenjie199234/Corelib/codegen/tml/ecode"
 	"github.com/chenjie199234/Corelib/codegen/tml/git"
 	"github.com/chenjie199234/Corelib/codegen/tml/gomod"
 	"github.com/chenjie199234/Corelib/codegen/tml/kubernetes"
@@ -185,6 +186,9 @@ func createBaseProject() {
 
 	statusapi.CreatePathAndFile(*name)
 	statusapi.Execute(*name)
+
+	ecode.CreatePathAndFile()
+	ecode.Execute()
 
 	config.CreatePathAndFile()
 	config.Execute(*name)

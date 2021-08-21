@@ -78,19 +78,17 @@ func getWebClientConfig() *web.ClientConfig {
 		SocketRBuf:       2048,
 		SocketWBuf:       2048,
 		SkipVerifyTLS:    wc.SkipVerifyTls,
-		CAs:              wc.Cas,
 		DiscoverFunction: webDNS,
 		DiscoverInterval: time.Duration(wc.DiscoverInterval),
 	}
 }
 
-//return nil means failed
-func webDNS(group, name string) map[string]*web.RegisterData {
+func webDNS(group, name string) (map[string]*web.RegisterData, error) {
 	result := make(map[string]*web.RegisterData)
 	addrs, e := net.LookupHost(name + "-service-headless" + "." + group)
 	if e != nil {
 		log.Error("[web.dns] get:", name+"-service-headless", "addrs error:", e)
-		return nil
+		return nil, e
 	}
 	for i := range addrs {
 		addrs[i] = "http://" + addrs[i] + ":8000"
@@ -100,16 +98,15 @@ func webDNS(group, name string) map[string]*web.RegisterData {
 	for _, addr := range addrs {
 		result[addr] = &web.RegisterData{DServers: dserver}
 	}
-	return result
+	return result, nil
 }
 
-//return nil means failed
-func rpcDNS(group, name string) map[string]*rpc.RegisterData {
+func rpcDNS(group, name string) (map[string]*rpc.RegisterData, error){
 	result := make(map[string]*rpc.RegisterData)
 	addrs, e := net.LookupHost(name + "-service-headless" + "." + group)
 	if e != nil {
 		log.Error("[rpc.dns] get:", name+"-service-headless", "addrs error:", e)
-		return nil
+		return nil, e
 	}
 	for i := range addrs {
 		addrs[i] = addrs[i] + ":9000"
@@ -119,7 +116,7 @@ func rpcDNS(group, name string) map[string]*rpc.RegisterData {
 	for _, addr := range addrs {
 		result[addr] = &rpc.RegisterData{DServers: dserver}
 	}
-	return result
+	return result, nil
 }`
 
 const path = "./dao/"

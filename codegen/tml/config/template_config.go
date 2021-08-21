@@ -263,7 +263,6 @@ type WebClientConfig struct {
 	HeartProbe       ctime.Duration $json:"heart_probe"$       //default 1.5s
 	DiscoverInterval ctime.Duration $json:"discover_interval"$ //default 1s
 	SkipVerifyTls    bool           $json:"skip_verify_tls"$
-	Cas              []string       $json:"cas"$
 }
 
 //RedisConfig -
@@ -433,23 +432,8 @@ func initsource(path string) {
 		if sc.WebClient.IdleTimeout <= 0 {
 			sc.WebClient.IdleTimeout = ctime.Duration(time.Second * 5)
 		}
-		if sc.WebServer.HeartProbe <= 0 {
+		if sc.WebClient.HeartProbe <= 0 {
 			sc.WebClient.HeartProbe = ctime.Duration(time.Millisecond * 1500)
-		}
-		head := 0
-		tail := len(sc.WebClient.Cas) - 1
-		for head <= tail {
-			if sc.WebClient.Cas[head] == "path_to_example_ca" {
-				if head != tail {
-					sc.WebClient.Cas[head], sc.WebClient.Cas[tail] = sc.WebClient.Cas[tail], sc.WebClient.Cas[head]
-				}
-				tail--
-			} else {
-				head++
-			}
-		}
-		if sc.WebClient.Cas != nil && head != len(sc.WebClient.Cas) {
-			sc.WebClient.Cas = sc.WebClient.Cas[:head]
 		}
 	}
 	for _, mongoc := range sc.Mongo {
@@ -566,12 +550,15 @@ func initsource(path string) {
 			Close()
 			os.Exit(1)
 		}
-		e = tempdb.Ping(context.Background(), readpref.Primary())
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		e = tempdb.Ping(ctx, readpref.Primary())
 		if e != nil {
+			cancel()
 			log.Error("[config.initsource] ping mongodb:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
+		cancel()
 		mongos[k] = tempdb
 	}
 	sqls = make(map[string]*sql.DB, len(sc.Sql))

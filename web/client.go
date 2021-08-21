@@ -25,7 +25,7 @@ import (
 type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
 
 //return data's key is server's addr "scheme://host:port"
-type DiscoveryHandler func(group, name string) map[string]*RegisterData
+type DiscoveryHandler func(group, name string) (map[string]*RegisterData, error)
 
 type ClientConfig struct {
 	//request's max handling time

@@ -20,7 +20,7 @@ import (
 type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
 
 //return data's key is server's addr "ip:port"
-type DiscoveryHandler func(group, name string) map[string]*RegisterData
+type DiscoveryHandler func(group, name string) (map[string]*RegisterData, error)
 
 type ClientConfig struct {
 	ConnTimeout            time.Duration

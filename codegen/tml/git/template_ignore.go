@@ -12,6 +12,10 @@ const text = `*
 !/api/*
 !/api/**/
 !/api/**/*
+!/ecode/
+!/ecode/*
+!/ecode/**/
+!/ecode/**/*
 !/config/
 !/config/*
 !/config/**/

@@ -9,8 +9,6 @@ import (
 const text = `package ecode
 
 import (
-	errors
-
 	cerror "github.com/chenjie199234/Corelib/util/error"
 )
 
@@ -19,7 +17,7 @@ var (
 	ErrReq       = cerror.ErrReq     //10001
 	ErrResp      = cerror.ErrResp    //10002
 	ErrSystem    = cerror.ErrSystem  //10003
-	ErrBusiness1 = cerror.MakeError(10004,"business error 1")
+	ErrBusiness1 = cerror.MakeError(10004, "business error 1")
 )`
 
 const path = "./ecode/"

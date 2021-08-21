@@ -35,8 +35,7 @@ const textsource = `{
 		"idle_timeout":"5s",
 		"heart_probe":"1.5s",
 		"discover_interval":"5s",
-		"skip_verify_tls":false,
-		"cas":["path_to_example_ca"]
+		"skip_verify_tls":true
 	},
 	"mongo":{
 		"example_mongo":{

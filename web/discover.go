@@ -22,7 +22,10 @@ func defaultDiscover(group, name string, client *WebClient) {
 		case <-tker.C:
 		case <-client.manually:
 		}
-		all := client.c.DiscoverFunction(group, name)
+		all, e := client.c.DiscoverFunction(group, name)
+		if e != nil {
+			continue
+		}
 		d, _ := json.Marshal(all)
 		if bytes.Equal(check, d) {
 			notice()
