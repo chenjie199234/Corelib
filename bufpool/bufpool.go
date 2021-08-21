@@ -622,7 +622,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 			b.buf = append(b.buf, '[')
 			for _, dd := range d {
 				if dd == nil {
-					b.buf = append(b.buf, "nil"...)
+					b.appendnil()
 				} else {
 					b.buf = strconv.AppendFloat(b.buf, float64(real(*dd)), 'f', -1, 32)
 					if imag(*dd) >= 0 {

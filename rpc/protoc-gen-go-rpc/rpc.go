@@ -20,6 +20,7 @@ const (
 	contextPackage  = protogen.GoImportPath("context")
 	protoPackage    = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	rpcPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/rpc")
+	logPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/log")
 	commonPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
 	metadataPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/metadata")
 	errorPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/error")
@@ -85,7 +86,7 @@ func geninit(file *protogen.File, g *protogen.GeneratedFile) {
 		getallcheck(method.Input, stack, allcheck)
 	}
 	if len(allcheck) > 0 {
-		g.P("var _", service.GoName, "RpcCheckers map[string]func(req interface{})bool")
+		g.P("var _", service.GoName, "RpcCheckers map[string]func(req interface{})string")
 	}
 	if len(allreg) > 0 {
 		for reg := range allreg {
@@ -108,9 +109,9 @@ func geninit(file *protogen.File, g *protogen.GeneratedFile) {
 			g.P()
 		}
 		if len(allcheck) > 0 {
-			g.P("_", service.GoName, "RpcCheckers = make(map[string]func(req interface{})bool,", len(allcheck), ")")
+			g.P("_", service.GoName, "RpcCheckers = make(map[string]func(req interface{})string,", len(allcheck), ")")
 			for k, m := range allcheck {
-				g.P("_", service.GoName, "RpcCheckers[", strconv.Quote(k), "]=func(r interface{})bool{")
+				g.P("_", service.GoName, "RpcCheckers[", strconv.Quote(k), "]=func(r interface{})string{")
 				g.P("req:=r.(*", g.QualifiedGoIdent(m.GoIdent), ")")
 				check("req.", m, g)
 				g.P("}")
@@ -429,15 +430,15 @@ func check(prefix string, message *protogen.Message, g *protogen.GeneratedFile) 
 		case protoreflect.BoolKind:
 			//bool or []bool
 			if field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g)
+				elementnumcheck(prefix, field, fop, g)
 			}
-			boolcheck(prefix, field.GoName, field.Desc.IsList(), fop, g)
+			boolcheck(prefix, field, fop, g)
 		case protoreflect.EnumKind:
 			//enum or []enum
 			if field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g)
+				elementnumcheck(prefix, field, fop, g)
 			}
-			enumcheck(prefix, field.GoName, field.Enum.GoIdent, field.Desc.IsList(), fop, g)
+			enumcheck(prefix, field, fop, g)
 		case protoreflect.Int32Kind:
 			fallthrough
 		case protoreflect.Sint32Kind:
@@ -452,9 +453,9 @@ func check(prefix string, message *protogen.Message, g *protogen.GeneratedFile) 
 		case protoreflect.Sfixed64Kind:
 			//int64 or []int64
 			if field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g)
+				elementnumcheck(prefix, field, fop, g)
 			}
-			intcheck(prefix, field.GoName, field.Desc.IsList(), fop, g)
+			intcheck(prefix, field, fop, g)
 		case protoreflect.Uint32Kind:
 			fallthrough
 		case protoreflect.Fixed32Kind:
@@ -465,18 +466,18 @@ func check(prefix string, message *protogen.Message, g *protogen.GeneratedFile) 
 		case protoreflect.Fixed64Kind:
 			//uint64 or []uint64
 			if field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g)
+				elementnumcheck(prefix, field, fop, g)
 			}
-			uintcheck(prefix, field.GoName, field.Desc.IsList(), fop, g)
+			uintcheck(prefix, field, fop, g)
 		case protoreflect.FloatKind:
 			//float32 or []float32
 			fallthrough
 		case protoreflect.DoubleKind:
 			//float64 or []float64
 			if field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g)
+				elementnumcheck(prefix, field, fop, g)
 			}
-			floatcheck(prefix, field.GoName, field.Desc.IsList(), fop, g)
+			floatcheck(prefix, field, fop, g)
 		case protoreflect.BytesKind:
 			//[]bytes or [][]bytes
 			isbyteslice = true
@@ -484,585 +485,723 @@ func check(prefix string, message *protogen.Message, g *protogen.GeneratedFile) 
 		case protoreflect.StringKind:
 			//string or []string
 			if field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g)
+				elementnumcheck(prefix, field, fop, g)
 			}
-			strcheck(prefix, field.GoName, field.Desc.IsList(), isbyteslice, fop, g)
+			strcheck(prefix, field, isbyteslice, fop, g)
 		case protoreflect.MessageKind:
 			//message or []message or map
 			if field.Desc.IsMap() || field.Desc.IsList() {
-				elementnumcheck(prefix, field.GoName, fop, g)
+				elementnumcheck(prefix, field, fop, g)
 			}
 			if field.Desc.IsMap() {
 				//map
-				mapcheck(prefix, field.GoName, field.Message.Fields[0], field.Message.Fields[1], fop, g)
+				mapcheck(prefix, field, fop, g)
 			} else {
 				//message or []message
 				if _, ok := allcheck[field.Message.GoIdent.String()]; ok {
-					messagecheck(prefix, field.GoName, field.Desc.IsList(), field.Message, g)
+					messagecheck(prefix, field, g)
 				}
 			}
 		}
 	}
-	g.P("return true")
+	g.P("return \"\"")
 }
-func elementnumcheck(prefix, fieldname string, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+func elementnumcheck(prefix string, field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenEq) {
 		leneq := proto.GetExtension(fop, pbex.E_MapRepeatedLenEq).(uint64)
-		g.P("if len(", prefix+fieldname, ")!=", leneq, "{")
-		g.P("return false")
+		g.P("if len(", prefix+field.GoName, ")!=", leneq, "{")
+		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len eq failed\"")
+		//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len eq failed\")")
+		//g.P("return false")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenNotEq) {
 		lennoteq := proto.GetExtension(fop, pbex.E_MapRepeatedLenNotEq).(uint64)
-		g.P("if len(", prefix+fieldname, ")==", lennoteq, "{")
-		g.P("return false")
+		g.P("if len(", prefix+field.GoName, ")==", lennoteq, "{")
+		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len not eq failed\"")
+		//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len not eq failed\")")
+		//g.P("return false")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenGt) {
 		lengt := proto.GetExtension(fop, pbex.E_MapRepeatedLenGt).(uint64)
-		g.P("if len(", prefix+fieldname, ")<=", lengt, "{")
-		g.P("return false")
+		g.P("if len(", prefix+field.GoName, ")<=", lengt, "{")
+		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len gt failed\"")
+		//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len gt failed\")")
+		//g.P("return false")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenGte) {
 		lengte := proto.GetExtension(fop, pbex.E_MapRepeatedLenGte).(uint64)
-		g.P("if len(", prefix+fieldname, ")<", lengte, "{")
-		g.P("return false")
+		g.P("if len(", prefix+field.GoName, ")<", lengte, "{")
+		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len gte failed\"")
+		//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len gte failed\")")
+		//g.P("return false")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenLt) {
 		lenlt := proto.GetExtension(fop, pbex.E_MapRepeatedLenLt).(uint64)
-		g.P("if len(", prefix+fieldname, ")>=", lenlt, "{")
-		g.P("return false")
+		g.P("if len(", prefix+field.GoName, ")>=", lenlt, "{")
+		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len lt failed\"")
+		//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len lt failed\")")
+		//g.P("return false")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenLte) {
 		lenlte := proto.GetExtension(fop, pbex.E_MapRepeatedLenLte).(uint64)
-		g.P("if len(", prefix+fieldname, ")>", lenlte, "{")
-		g.P("return false")
+		g.P("if len(", prefix+field.GoName, ")>", lenlte, "{")
+		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len lte failed\"")
+		//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len lte failed\")")
+		//g.P("return false")
 		g.P("}")
 	}
 }
-func boolcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+func boolcheck(prefix string, field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_BoolEq) {
 		booleq := proto.GetExtension(fop, pbex.E_BoolEq).(bool)
-		if islist {
-			g.P("for _,v:= range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:= range ", prefix+field.GoName, "{")
 			g.P("if v!=", booleq, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value bool eq failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value bool eq failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if ", prefix+fieldname, "!=", booleq, "{")
-			g.P("return false")
+			g.P("if ", prefix+field.GoName, "!=", booleq, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value bool eq failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value bool eq failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 }
-func enumcheck(prefix, fieldname string, ident protogen.GoIdent, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
-	if islist {
-		g.P("for _,v:=range ", prefix+fieldname, "{")
-		g.P("if _,ok:=", g.QualifiedGoIdent(ident), "_name[int32(v)];!ok{")
-		g.P("return false")
+func enumcheck(prefix string, field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+	if field.Desc.IsList() {
+		g.P("for _,v:=range ", prefix+field.GoName, "{")
+		g.P("if _,ok:=", g.QualifiedGoIdent(field.Enum.GoIdent), "_name[int32(v)];!ok{")
+		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum exist failed\"")
+		//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum exist failed\")")
+		//g.P("return false")
 		g.P("}")
 		g.P("}")
 	} else {
-		g.P("if _,ok:=", g.QualifiedGoIdent(ident), "_name[int32(", prefix+fieldname, ")];!ok{")
-		g.P("return false")
+		g.P("if _,ok:=", g.QualifiedGoIdent(field.Enum.GoIdent), "_name[int32(", prefix+field.GoName, ")];!ok{")
+		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum exist failed\"")
+		//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum exist failed\")")
+		//g.P("return false")
 		g.P("}")
 	}
 }
-func intcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+func intcheck(prefix string, field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_IntIn) {
 		in := proto.GetExtension(fop, pbex.E_IntIn).([]int64)
-		if islist {
-			g.P("for _,v:= range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:= range ", prefix+field.GoName, "{")
 			for _, v := range in {
 				g.P("if v!=", v, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range in {
-				g.P("if ", prefix+fieldname, "!=", v, "{")
-				g.P("return false")
+				g.P("if ", prefix+field.GoName, "!=", v, "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_IntNotIn) {
 		notin := proto.GetExtension(fop, pbex.E_IntNotIn).([]int64)
-		if islist {
-			g.P("for _,v:= range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:= range ", prefix+field.GoName, "{")
 			for _, v := range notin {
 				g.P("if v==", v, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int not in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int not in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range notin {
-				g.P("if ", prefix+fieldname, "==", v, "{")
-				g.P("return false")
+				g.P("if ", prefix+field.GoName, "==", v, "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int not in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int not in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_IntGt) {
 		gt := proto.GetExtension(fop, pbex.E_IntGt).(int64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if v<=", gt, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int gt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int gt failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if ", prefix+fieldname, "<=", gt, "{")
-			g.P("return false")
+			g.P("if ", prefix+field.GoName, "<=", gt, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int gt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int gt failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_IntGte) {
 		gte := proto.GetExtension(fop, pbex.E_IntGte).(int64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if v<", gte, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int gte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int gte failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if ", prefix+fieldname, "<", gte, "{")
-			g.P("return false")
+			g.P("if ", prefix+field.GoName, "<", gte, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int gte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int gte failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_IntLt) {
 		lt := proto.GetExtension(fop, pbex.E_IntLt).(int64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if v>=", lt, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int lt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int lt failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if ", prefix+fieldname, ">=", lt, "{")
-			g.P("return false")
+			g.P("if ", prefix+field.GoName, ">=", lt, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int lt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int lt failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_IntLte) {
 		lte := proto.GetExtension(fop, pbex.E_IntLte).(int64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if v>", lte, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int lte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int lte failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if ", prefix+fieldname, ">", lte, "{")
-			g.P("return false")
+			g.P("if ", prefix+field.GoName, ">", lte, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int lte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int lte failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 }
-func uintcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+func uintcheck(prefix string, field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_UintIn) {
 		in := proto.GetExtension(fop, pbex.E_UintIn).([]uint64)
-		if islist {
-			g.P("for _,v:= range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:= range ", prefix+field.GoName, "{")
 			for _, v := range in {
 				g.P("if v!=", v, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range in {
-				g.P("if ", prefix+fieldname, "!=", v, "{")
-				g.P("return false")
+				g.P("if ", prefix+field.GoName, "!=", v, "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_UintNotIn) {
 		notin := proto.GetExtension(fop, pbex.E_UintNotIn).([]uint64)
-		if islist {
-			g.P("for _,v:= range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:= range ", prefix+field.GoName, "{")
 			for _, v := range notin {
 				g.P("if v==", v, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint not in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint not in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range notin {
-				g.P("if ", prefix+fieldname, "==", v, "{")
-				g.P("return false")
+				g.P("if ", prefix+field.GoName, "==", v, "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint not in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint not in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_UintGt) {
 		gt := proto.GetExtension(fop, pbex.E_UintGt).(uint64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if v<=", gt, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint gt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint gt failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if ", prefix+fieldname, "<=", gt, "{")
-			g.P("return false")
+			g.P("if ", prefix+field.GoName, "<=", gt, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint gt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint gt failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_UintGte) {
 		gte := proto.GetExtension(fop, pbex.E_UintGte).(uint64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if v<", gte, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint gte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint gte failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if ", prefix+fieldname, "<", gte, "{")
-			g.P("return false")
+			g.P("if ", prefix+field.GoName, "<", gte, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint gte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint gte failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_UintLt) {
 		lt := proto.GetExtension(fop, pbex.E_UintLt).(uint64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if v>=", lt, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint lt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint lt failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if ", prefix+fieldname, ">=", lt, "{")
-			g.P("return false")
+			g.P("if ", prefix+field.GoName, ">=", lt, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint lt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint lt failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_UintLte) {
 		lte := proto.GetExtension(fop, pbex.E_UintLte).(uint64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if v>", lte, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint lte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint lte failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if ", prefix+fieldname, ">", lte, "{")
-			g.P("return false")
+			g.P("if ", prefix+field.GoName, ">", lte, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint lte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint lte failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 }
-func floatcheck(prefix, fieldname string, islist bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+func floatcheck(prefix string, field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_FloatIn) {
 		in := proto.GetExtension(fop, pbex.E_FloatIn).([]float64)
-		if islist {
-			g.P("for _,v:= range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:= range ", prefix+field.GoName, "{")
 			for _, v := range in {
 				g.P("if v!=", v, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range in {
-				g.P("if ", prefix+fieldname, "!=", v, "{")
-				g.P("return false")
+				g.P("if ", prefix+field.GoName, "!=", v, "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_FloatNotIn) {
 		notin := proto.GetExtension(fop, pbex.E_FloatNotIn).([]float64)
-		if islist {
-			g.P("for _,v:= range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:= range ", prefix+field.GoName, "{")
 			for _, v := range notin {
 				g.P("if v==", v, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float not in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float not in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range notin {
-				g.P("if ", prefix+fieldname, "==", v, "{")
-				g.P("return false")
+				g.P("if ", prefix+field.GoName, "==", v, "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float not in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float not in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_FloatGt) {
 		gt := proto.GetExtension(fop, pbex.E_FloatGt).(float64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if v<=", gt, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float gt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float gt failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if ", prefix+fieldname, "<=", gt, "{")
-			g.P("return false")
+			g.P("if ", prefix+field.GoName, "<=", gt, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float gt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float gt failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_FloatGte) {
 		gte := proto.GetExtension(fop, pbex.E_FloatGte).(float64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if v<", gte, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float gte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float gte failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if ", prefix+fieldname, "<", gte, "{")
-			g.P("return false")
+			g.P("if ", prefix+field.GoName, "<", gte, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float gte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float gte failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_FloatLt) {
 		lt := proto.GetExtension(fop, pbex.E_FloatLt).(float64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if v>=", lt, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float lt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float lt failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if ", prefix+fieldname, ">=", lt, "{")
-			g.P("return false")
+			g.P("if ", prefix+field.GoName, ">=", lt, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float lt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float lt failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_FloatLte) {
 		lte := proto.GetExtension(fop, pbex.E_FloatLte).(float64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if v>", lte, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float lte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float lte failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if ", prefix+fieldname, ">", lte, "{")
-			g.P("return false")
+			g.P("if ", prefix+field.GoName, ">", lte, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float lte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float lte failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 }
-func strcheck(prefix, fieldname string, islist bool, isslice bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+func strcheck(prefix string, field *protogen.Field, isslice bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_StringBytesLenEq) {
 		leneq := proto.GetExtension(fop, pbex.E_StringBytesLenEq).(uint64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if len(v)!=", leneq, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len eq failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len eq failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if len(", prefix+fieldname, ")!=", leneq, "{")
-			g.P("return false")
+			g.P("if len(", prefix+field.GoName, ")!=", leneq, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len eq failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len eq failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_StringBytesLenNotEq) {
 		lennoteq := proto.GetExtension(fop, pbex.E_StringBytesLenNotEq).(uint64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if len(v)==", lennoteq, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len not eq failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len not eq failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if len(", prefix+fieldname, ")==", lennoteq, "{")
-			g.P("return false")
+			g.P("if len(", prefix+field.GoName, ")==", lennoteq, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len not eq failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len not eq failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_StringBytesLenGt) {
 		lengt := proto.GetExtension(fop, pbex.E_StringBytesLenGt).(uint64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if len(v)<=", lengt, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len gt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len gt failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if len(", prefix+fieldname, ")<=", lengt, "{")
-			g.P("return false")
+			g.P("if len(", prefix+field.GoName, ")<=", lengt, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len gt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len gt failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_StringBytesLenGte) {
 		lengte := proto.GetExtension(fop, pbex.E_StringBytesLenGte).(uint64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if len(v)<", lengte, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len gte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len gte failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if len(", prefix+fieldname, ")<", lengte, "{")
-			g.P("return false")
+			g.P("if len(", prefix+field.GoName, ")<", lengte, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len gte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len gte failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_StringBytesLenLt) {
 		lenlt := proto.GetExtension(fop, pbex.E_StringBytesLenLt).(uint64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if len(v)>=", lenlt, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len lt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len lt failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if len(", prefix+fieldname, ")>=", lenlt, "{")
-			g.P("return false")
+			g.P("if len(", prefix+field.GoName, ")>=", lenlt, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len lt failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len lt failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_StringBytesLenLte) {
 		lenlte := proto.GetExtension(fop, pbex.E_StringBytesLenLte).(uint64)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			g.P("if len(v)>", lenlte, "{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len lte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len lte failed\")")
+			//g.P("return false")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if len(", prefix+fieldname, ")>", lenlte, "{")
-			g.P("return false")
+			g.P("if len(", prefix+field.GoName, ")>", lenlte, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len lte failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len lte failed\")")
+			//g.P("return false")
 			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_StringBytesIn) {
 		in := proto.GetExtension(fop, pbex.E_StringBytesIn).([]string)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			for _, v := range in {
 				if isslice {
 					g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(v)!=", strconv.Quote(v), "{")
 				} else {
 					g.P("if v!=", strconv.Quote(v), "{")
 				}
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range in {
 				if isslice {
-					g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(v)!=", strconv.Quote(v), "{")
+					g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(", prefix+field.GoName, ")!=", strconv.Quote(v), "{")
 				} else {
-					g.P("if v!=", strconv.Quote(v), "{")
+					g.P("if ", prefix+field.GoName, "!=", strconv.Quote(v), "{")
 				}
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_StringBytesNotIn) {
 		notin := proto.GetExtension(fop, pbex.E_StringBytesNotIn).([]string)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			for _, v := range notin {
 				if isslice {
 					g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(v)==", strconv.Quote(v), "{")
 				} else {
 					g.P("if v==", strconv.Quote(v), "{")
 				}
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, v := range notin {
 				if isslice {
-					g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(v)==", strconv.Quote(v), "{")
+					g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(", prefix+field.GoName, ")==", strconv.Quote(v), "{")
 				} else {
-					g.P("if v==", strconv.Quote(v), "{")
+					g.P("if ", prefix+field.GoName, "==", strconv.Quote(v), "{")
 				}
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not in failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not in failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_StringBytesRegMatch) {
 		match := proto.GetExtension(fop, pbex.E_StringBytesRegMatch).([]string)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			for _, m := range match {
 				if isslice {
 					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(m), "].Match(v){")
 				} else {
 					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(m), "].MatchString(v){")
 				}
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str match failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str match failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, m := range match {
 				if isslice {
-					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(m), "].Match(", prefix+fieldname, "){")
+					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(m), "].Match(", prefix+field.GoName, "){")
 				} else {
-					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(m), "].MatchString(", prefix+fieldname, "){")
+					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(m), "].MatchString(", prefix+field.GoName, "){")
 				}
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str match failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str match failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_StringBytesRegNotMatch) {
 		notmatch := proto.GetExtension(fop, pbex.E_StringBytesRegNotMatch).([]string)
-		if islist {
-			g.P("for _,v:=range ", prefix+fieldname, "{")
+		if field.Desc.IsList() {
+			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			for _, m := range notmatch {
 				if isslice {
 					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(m), "].Match(v){")
 				} else {
 					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(m), "].MatchString(v){")
 				}
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not match failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not match failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			g.P("}")
 		} else {
 			for _, m := range notmatch {
 				if isslice {
-					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(m), "].Match(", prefix+fieldname, "){")
+					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(m), "].Match(", prefix+field.GoName, "){")
 				} else {
-					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(m), "].MatchString(", prefix+fieldname, "){")
+					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(m), "].MatchString(", prefix+field.GoName, "){")
 				}
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not match failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not match failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		}
 	}
 }
-func messagecheck(prefix, fieldname string, islist bool, message *protogen.Message, g *protogen.GeneratedFile) {
-	if islist {
-		g.P("for _,v:=range ", prefix+fieldname, "{")
+func messagecheck(prefix string, field *protogen.Field, g *protogen.GeneratedFile) {
+	if field.Desc.IsList() {
+		g.P("for _,v:=range ", prefix+field.GoName, "{")
 		g.P("if v==nil{")
 		g.P("continue")
 		g.P("}")
-		g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(message.GoIdent.String()), "](v){")
-		g.P("return false")
+		//g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(message.GoIdent.String()), "](v){")
+		//g.P("return false")
+		g.P("if s:=_", service.GoName, "RpcCheckers[", strconv.Quote(field.Message.GoIdent.String()), "](v);s!=\"\"{")
+		g.P("return s")
 		g.P("}")
 		g.P("}")
 	} else {
-		g.P("if ", prefix+fieldname, "!=nil{")
-		g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(message.GoIdent.String()), "](", prefix+fieldname, "){")
-		g.P("return false")
+		g.P("if ", prefix+field.GoName, "!=nil{")
+		//g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(message.GoIdent.String()), "](", prefix+field.GoName, "){")
+		//g.P("return false")
+		g.P("if s:=_", service.GoName, "RpcCheckers[", strconv.Quote(field.Message.GoIdent.String()), "](", prefix+field.GoName, ");s!=\"\"{")
+		g.P("return s")
 		g.P("}")
 		g.P("}")
 	}
 }
-func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+func mapcheck(prefix string, field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+	key := field.Message.Fields[0]
+	val := field.Message.Fields[1]
 	keycheck := false
 	valuecheck := false
 	isbyteslice := false
@@ -1188,11 +1327,11 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 		}
 	}
 	if keycheck && valuecheck {
-		g.P("for k,v :=range ", prefix+fieldname, "{")
+		g.P("for k,v :=range ", prefix+field.GoName, "{")
 	} else if keycheck {
-		g.P("for k :=range ", prefix+fieldname, "{")
+		g.P("for k :=range ", prefix+field.GoName, "{")
 	} else if valuecheck {
-		g.P("for _,v :=range ", prefix+fieldname, "{")
+		g.P("for _,v :=range ", prefix+field.GoName, "{")
 	} else {
 		return
 	}
@@ -1213,7 +1352,9 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				keyin := proto.GetExtension(fop, pbex.E_MapKeyIntIn).([]int64)
 				for _, v := range keyin {
 					g.P("if k!=", v, "{")
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int in failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int in failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1221,32 +1362,42 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				keynotin := proto.GetExtension(fop, pbex.E_MapKeyIntNotIn).([]int64)
 				for _, v := range keynotin {
 					g.P("if k==", v, "{")
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int not in failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int not in failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyIntGt) {
 				keygt := proto.GetExtension(fop, pbex.E_MapKeyIntGt).(int64)
 				g.P("if k<=", keygt, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int gt failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int gt failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyIntGte) {
 				keygte := proto.GetExtension(fop, pbex.E_MapKeyIntGte).(int64)
 				g.P("if k<", keygte, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int gte failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int gte failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyIntLt) {
 				keylt := proto.GetExtension(fop, pbex.E_MapKeyIntLt).(int64)
 				g.P("if k>=", keylt, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int lt failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int lt failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyIntLte) {
 				keylte := proto.GetExtension(fop, pbex.E_MapKeyIntLte).(int64)
 				g.P("if k>", keylte, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int lte failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int lte failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		case protoreflect.Uint32Kind:
@@ -1260,7 +1411,9 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				keyin := proto.GetExtension(fop, pbex.E_MapKeyUintIn).([]uint64)
 				for _, v := range keyin {
 					g.P("if k!=", v, "{")
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint in failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint in failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1268,32 +1421,42 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				keynotin := proto.GetExtension(fop, pbex.E_MapKeyUintNotIn).([]uint64)
 				for _, v := range keynotin {
 					g.P("if k==", v, "{")
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint not in failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint not in failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyUintGt) {
 				keygt := proto.GetExtension(fop, pbex.E_MapKeyUintGt).(uint64)
 				g.P("if k<=", keygt, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint gt failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint gt failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyUintGte) {
 				keygte := proto.GetExtension(fop, pbex.E_MapKeyUintGte).(uint64)
 				g.P("if k<", keygte, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint gte failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint gte failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyUintLt) {
 				keylt := proto.GetExtension(fop, pbex.E_MapKeyUintLt).(uint64)
 				g.P("if k>=", keylt, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint lt failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint lt failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyUintLte) {
 				keylte := proto.GetExtension(fop, pbex.E_MapKeyUintLte).(uint64)
 				g.P("if k>", keylte, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint lte failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint lte failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		case protoreflect.StringKind:
@@ -1301,7 +1464,9 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				keyin := proto.GetExtension(fop, pbex.E_MapKeyStringIn).([]string)
 				for _, v := range keyin {
 					g.P("if k!=", strconv.Quote(v), "{")
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str in failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str in failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1309,7 +1474,9 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				keynotin := proto.GetExtension(fop, pbex.E_MapKeyStringNotIn).([]string)
 				for _, v := range keynotin {
 					g.P("if k==", strconv.Quote(v), "{")
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str not in failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str not in failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1317,7 +1484,9 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				keymatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegMatch).([]string)
 				for _, v := range keymatch {
 					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(v), "].MatchString(k){")
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str match failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str match failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1325,44 +1494,58 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				keynotmatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegNotMatch).([]string)
 				for _, v := range keynotmatch {
 					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(v), "].MatchString(k){")
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str not match failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str not match failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringLenEq) {
 				keyleneq := proto.GetExtension(fop, pbex.E_MapKeyStringLenEq).(uint64)
 				g.P("if len(k)!=", keyleneq, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str len eq failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str len eq failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringLenNotEq) {
 				keylennoteq := proto.GetExtension(fop, pbex.E_MapKeyStringLenNotEq).(uint64)
 				g.P("if len(k)==", keylennoteq, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str len not eq failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str len not eq failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringLenGt) {
 				keylengt := proto.GetExtension(fop, pbex.E_MapKeyStringLenGt).(uint64)
 				g.P("if len(k)<=", keylengt, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str len gt failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str len gt failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringLenGte) {
 				keylengte := proto.GetExtension(fop, pbex.E_MapKeyStringLenGte).(uint64)
 				g.P("if len(k)<", keylengte, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str len gte failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str len gte failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringLenLt) {
 				keylenlt := proto.GetExtension(fop, pbex.E_MapKeyStringLenLt).(uint64)
 				g.P("if len(k)>=", keylenlt, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str len lt failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str len lt failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringLenLte) {
 				keylenlte := proto.GetExtension(fop, pbex.E_MapKeyStringLenLte).(uint64)
 				g.P("if len(k)>", keylenlte, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str len lte failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str len lte failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		}
@@ -1371,13 +1554,17 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 		switch val.Desc.Kind() {
 		case protoreflect.EnumKind:
 			g.P("if _,ok:=", g.QualifiedGoIdent(val.Enum.GoIdent), "_name[int32(v)];!ok{")
-			g.P("return false")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value enum exist failed\"")
+			//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value enum exist failed\")")
+			//g.P("return false")
 			g.P("}")
 		case protoreflect.BoolKind:
 			if proto.HasExtension(fop, pbex.E_MapValueBoolEq) {
 				valeq := proto.GetExtension(fop, pbex.E_MapValueBoolEq).(bool)
 				g.P("if v!=", valeq, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value bool eq failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value bool eq failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		case protoreflect.Int32Kind:
@@ -1395,7 +1582,9 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				valin := proto.GetExtension(fop, pbex.E_MapValueIntIn).([]int64)
 				for _, v := range valin {
 					g.P("if v!=", v, "{")
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int in failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int in failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1403,32 +1592,42 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				valnotin := proto.GetExtension(fop, pbex.E_MapValueIntNotIn).([]int64)
 				for _, v := range valnotin {
 					g.P("if v==", v, "{")
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int not in failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int not in failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueIntGt) {
 				valgt := proto.GetExtension(fop, pbex.E_MapValueIntGt).(int64)
 				g.P("if v<=", valgt, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int gt failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int gt failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueIntGte) {
 				valgte := proto.GetExtension(fop, pbex.E_MapValueIntGte).(int64)
 				g.P("if v<", valgte, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int gte failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int gte failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueIntLt) {
 				vallt := proto.GetExtension(fop, pbex.E_MapValueIntLt).(int64)
 				g.P("if v>=", vallt, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int lt failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int lt failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueIntLte) {
 				vallte := proto.GetExtension(fop, pbex.E_MapValueIntLte).(int64)
 				g.P("if v>", vallte, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int lte failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int lte failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		case protoreflect.Uint32Kind:
@@ -1442,7 +1641,9 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				valin := proto.GetExtension(fop, pbex.E_MapValueUintIn).([]uint64)
 				for _, v := range valin {
 					g.P("if v!=", v, "{")
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint in failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint in failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1450,32 +1651,42 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				valnotin := proto.GetExtension(fop, pbex.E_MapValueUintNotIn).([]uint64)
 				for _, v := range valnotin {
 					g.P("if v==", v, "{")
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint not in failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint not in failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueUintGt) {
 				valgt := proto.GetExtension(fop, pbex.E_MapValueUintGt).(uint64)
 				g.P("if v<=", valgt, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint gt failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint gt failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueUintGte) {
 				valgte := proto.GetExtension(fop, pbex.E_MapValueUintGte).(uint64)
 				g.P("if v<", valgte, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint gte failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint gte failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueUintLt) {
 				vallt := proto.GetExtension(fop, pbex.E_MapValueUintLt).(uint64)
 				g.P("if v>=", vallt, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint lt failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint lt failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueUintLte) {
 				vallte := proto.GetExtension(fop, pbex.E_MapValueUintLte).(uint64)
 				g.P("if v>", vallte, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint lte failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint lte failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		case protoreflect.FloatKind:
@@ -1485,7 +1696,9 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				valin := proto.GetExtension(fop, pbex.E_MapValueFloatIn).([]float64)
 				for _, v := range valin {
 					g.P("if v!=", v, "{")
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float in failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float in failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1493,32 +1706,42 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				valnotin := proto.GetExtension(fop, pbex.E_MapValueFloatNotIn).([]float64)
 				for _, v := range valnotin {
 					g.P("if v==", v, "{")
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float not in failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float not in failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueFloatGt) {
 				valgt := proto.GetExtension(fop, pbex.E_MapValueFloatGt).(float64)
 				g.P("if v<=", valgt, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float gt failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float gt failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueFloatGte) {
 				valgte := proto.GetExtension(fop, pbex.E_MapValueFloatGte).(float64)
 				g.P("if v<", valgte, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float gte failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float gte failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueFloatLt) {
 				vallt := proto.GetExtension(fop, pbex.E_MapValueFloatLt).(float64)
 				g.P("if v>=", vallt, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float lt failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float lt failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueFloatLte) {
 				vallte := proto.GetExtension(fop, pbex.E_MapValueFloatLte).(float64)
 				g.P("if v>", vallte, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float lte failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float lte failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		case protoreflect.BytesKind:
@@ -1533,7 +1756,9 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 					} else {
 						g.P("if v!=", strconv.Quote(v), "{")
 					}
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str in failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str in failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1545,7 +1770,9 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 					} else {
 						g.P("if v==", strconv.Quote(v), "{")
 					}
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str not in failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str not in failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1557,7 +1784,9 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 					} else {
 						g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(v), "].MatchString(v){")
 					}
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str match failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str match failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
@@ -1569,44 +1798,58 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 					} else {
 						g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(v), "].MatchString(v){")
 					}
-					g.P("return false")
+					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str not match failed\"")
+					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str not match failed\")")
+					//g.P("return false")
 					g.P("}")
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenEq) {
 				valleneq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenEq).(uint64)
 				g.P("if len(v)!=", valleneq, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str len eq failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str len eq failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenNotEq) {
 				vallennoteq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenNotEq).(uint64)
 				g.P("if len(v)==", vallennoteq, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str len not eq failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str len not eq failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGt) {
 				vallengt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGt).(uint64)
 				g.P("if len(v)<=", vallengt, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str len gt failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str len gt failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGte) {
 				vallengte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGte).(uint64)
 				g.P("if len(v)<", vallengte, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str len gte failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str len gte failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLt) {
 				vallenlt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLt).(uint64)
 				g.P("if len(v)>=", vallenlt, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str len lt failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str len lt failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLte) {
 				vallenlte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLte).(uint64)
 				g.P("if len(v)>", vallenlte, "{")
-				g.P("return false")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str len lte failed\"")
+				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str len lte failed\")")
+				//g.P("return false")
 				g.P("}")
 			}
 		case protoreflect.MessageKind:
@@ -1614,8 +1857,10 @@ func mapcheck(prefix, fieldname string, key, val *protogen.Field, fop *descripto
 				g.P("if v==nil{")
 				g.P("continue")
 				g.P("}")
-				g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(val.Message.GoIdent.String()), "](v){")
-				g.P("return false")
+				g.P("if s:=_", service.GoName, "RpcCheckers[", strconv.Quote(val.Message.GoIdent.String()), "](v);s!=\"\"{")
+				g.P("return s")
+				//g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(val.Message.GoIdent.String()), "](v){")
+				//g.P("return false")
 				g.P("}")
 			}
 		}
@@ -1664,9 +1909,12 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 		g.P("return")
 		g.P("}")
 
+		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		//check
 		if _, ok := allcheck[method.Input.GoIdent.String()]; ok {
-			g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(method.Input.GoIdent.String()), "](req){")
+			//g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(method.Input.GoIdent.String()), "](req){")
+			g.P("if s:=_", service.GoName, "RpcCheckers[", strconv.Quote(method.Input.GoIdent.String()), "](req);s!=\"\"{")
+			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"[", pathurl, "]\",s)")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 			g.P("}")
 		}
@@ -1781,9 +2029,12 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 		g.P("}")
 
+		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		//check
 		if _, ok := allcheck[method.Input.GoIdent.String()]; ok {
-			g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(method.Input.GoIdent.String()), "](req){")
+			//g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(method.Input.GoIdent.String()), "](req){")
+			g.P("if s:=_", service.GoName, "RpcCheckers[", strconv.Quote(method.Input.GoIdent.String()), "](req);s!=\"\"{")
+			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"[", pathurl, "]\",s)")
 			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 			g.P("}")
 		}

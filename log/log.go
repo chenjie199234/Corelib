@@ -53,7 +53,7 @@ func getenv() {
 	} else {
 		temp := strings.ToLower(os.Getenv("LOG_TARGET"))
 		if temp != "std" && temp != "file" && temp != "both" {
-			panic("[log] os env LOG_TARGET error,must in [std(default when not set),file,both] or not set")
+			panic("[log] os env LOG_TARGET error,must in [std(default),file,both]")
 		}
 		logtarget = temp
 	}
@@ -62,7 +62,7 @@ func getenv() {
 	} else {
 		temp := strings.ToLower(os.Getenv("LOG_LEVEL"))
 		if temp != "debug" && temp != "info" && temp != "warning" && temp != "error" {
-			panic("[log] os env LOG_LEVEL error,must in [debug,info(default when not set),warning,error] or not set")
+			panic("[log] os env LOG_LEVEL error,must in [debug,info(default),warning,error]")
 		}
 		loglevel = temp
 	}
@@ -71,7 +71,7 @@ func getenv() {
 	} else {
 		temp := strings.ToLower(os.Getenv("LOG_CALLER"))
 		if temp != "true" && temp != "false" {
-			panic("[log] os env LOG_CALLER error,must in [true(default when not set),false] or not set")
+			panic("[log] os env LOG_CALLER error,must in [true(default),false]")
 		}
 		logcaller = temp == "true"
 	}
@@ -171,11 +171,6 @@ func Error(datas ...interface{}) {
 	}
 	buf := bufpool.GetBuffer()
 	buf.Append("[ERR] ")
-	write(buf, datas...)
-}
-func Must(datas ...interface{}) {
-	buf := bufpool.GetBuffer()
-	buf.Append("[MST] ")
 	write(buf, datas...)
 }
 func write(buf *bufpool.Buffer, datas ...interface{}) {
