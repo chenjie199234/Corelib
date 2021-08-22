@@ -542,7 +542,12 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 				}
 			}
 			resp := r.resp
-			err := r.err
+			var err error
+			if r.err == nil {
+				err = nil
+			} else {
+				err = r.err
+			}
 			c.putreq(r)
 			//resp and err maybe both nil
 			return resp, err

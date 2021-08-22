@@ -89,14 +89,18 @@ func StdErrorToError(e error) *Error {
 	return result
 }
 func Equal(a, b error) bool {
-	if a == b {
+	if a == nil && b == nil {
 		return true
-	}
-	if (a == nil && b != nil) || (a != nil && b == nil) {
+	} else if (a == nil && b != nil) || (a != nil && b == nil) {
 		return false
 	}
 	aa := StdErrorToError(a)
 	bb := StdErrorToError(b)
+	if aa == nil && bb == nil {
+		return true
+	} else if (aa == nil && bb != nil) || (aa != nil && bb == nil) {
+		return false
+	}
 	return aa.Code == bb.Code && aa.Msg == bb.Msg
 }
 func (this *Error) Error() string {
