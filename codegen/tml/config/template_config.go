@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"os"
 	"strconv"
-	"time"
 
 	"{{.}}/api"
 
@@ -423,7 +422,6 @@ func initsource(path string) {
 			IdleTimeout:   ctime.Duration(time.Second * 5),
 			HeartProbe:    ctime.Duration(time.Millisecond * 1500),
 			SkipVerifyTls: true,
-			Cas:           nil,
 		}
 	} else {
 		if sc.WebClient.GlobalTimeout <= 0 {
