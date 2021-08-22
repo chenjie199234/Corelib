@@ -23,7 +23,7 @@ func defaultDiscover(group, name string, client *RpcClient) {
 		case <-client.manually:
 		}
 		all, e := client.c.DiscoverFunction(group, name)
-		if e == nil {
+		if e != nil {
 			continue
 		}
 		d, _ := json.Marshal(all)
