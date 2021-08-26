@@ -76,8 +76,6 @@ func (this *Instance) putPeer(p *Peer) {
 	p.recvidlestart = 0
 	p.sendidlestart = 0
 	p.data = nil
-	p.Context = nil
-	p.CancelFunc = nil
 	this.pool.Put(p)
 }
 
