@@ -25,7 +25,7 @@ import (
 type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
 
 //return data's key is server's addr "scheme://host:port"
-type DiscoveryHandler func(group, name string) (map[string]*RegisterData, error)
+type DiscoveryHandler func(group, name string, manually <-chan struct{}) (map[string]*RegisterData, error)
 
 type ClientConfig struct {
 	//request's max handling time
@@ -41,8 +41,7 @@ type ClientConfig struct {
 	SkipVerifyTLS    bool     //don't verify the server's cert
 	CAs              []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
 	Picker           PickHandler
-	DiscoverFunction DiscoveryHandler
-	DiscoverInterval time.Duration //min 1 second
+	DiscoverFunction DiscoveryHandler //this function will be called in for loop
 }
 
 func (c *ClientConfig) validate() {
@@ -71,9 +70,6 @@ func (c *ClientConfig) validate() {
 	}
 	if c.SocketWBuf > 65535 {
 		c.SocketWBuf = 65535
-	}
-	if c.DiscoverInterval < time.Second {
-		c.DiscoverInterval = time.Second
 	}
 }
 

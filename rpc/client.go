@@ -20,7 +20,7 @@ import (
 type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
 
 //return data's key is server's addr "ip:port"
-type DiscoveryHandler func(group, name string) (map[string]*RegisterData, error)
+type DiscoveryHandler func(group, name string, manually <-chan struct{}) (map[string]*RegisterData, error)
 
 type ClientConfig struct {
 	ConnTimeout            time.Duration
@@ -34,8 +34,7 @@ type ClientConfig struct {
 	MaxBufferedWriteMsgNum uint32
 	VerifyData             string
 	Picker                 PickHandler
-	DiscoverFunction       DiscoveryHandler
-	DiscoverInterval       time.Duration //min 1 second
+	DiscoverFunction       DiscoveryHandler //this function will be called in for loop
 }
 
 func (c *ClientConfig) validate() {
@@ -74,9 +73,6 @@ func (c *ClientConfig) validate() {
 	}
 	if c.MaxBufferedWriteMsgNum == 0 {
 		c.MaxBufferedWriteMsgNum = 256
-	}
-	if c.DiscoverInterval < time.Second {
-		c.DiscoverInterval = time.Second
 	}
 }
 

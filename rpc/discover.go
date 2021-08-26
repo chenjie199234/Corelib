@@ -3,7 +3,6 @@ package rpc
 import (
 	"bytes"
 	"encoding/json"
-	"time"
 )
 
 func defaultDiscover(group, name string, client *RpcClient) {
@@ -16,13 +15,8 @@ func defaultDiscover(group, name string, client *RpcClient) {
 		client.mlker.Unlock()
 	}
 	var check []byte
-	tker := time.NewTicker(client.c.DiscoverInterval)
 	for {
-		select {
-		case <-tker.C:
-		case <-client.manually:
-		}
-		all, e := client.c.DiscoverFunction(group, name)
+		all, e := client.c.DiscoverFunction(group, name, client.manually)
 		if e != nil {
 			continue
 		}
@@ -34,9 +28,5 @@ func defaultDiscover(group, name string, client *RpcClient) {
 		check = d
 		client.updateDiscovery(all)
 		notice()
-		tker.Reset(client.c.DiscoverInterval)
-		for len(tker.C) > 0 {
-			<-tker.C
-		}
 	}
 }
