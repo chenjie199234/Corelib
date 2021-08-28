@@ -26,9 +26,6 @@ type ServerConfig struct {
 	//when server close,server will wait at least this time before close,every request will refresh the time
 	//min is 1 second
 	WaitCloseTime time.Duration
-	//when server is waiting close,every new request during this time will refresh the wait time or not
-	//if this is true,during waiting close time,constant new requests will block the close,because the wait time will be refreshed every time new request comes
-	WaitCloseRefresh bool
 	//request's max handling time
 	GlobalTimeout time.Duration
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
@@ -450,11 +447,9 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		} else {
-			if this.c.WaitCloseRefresh {
-				select {
-				case this.refreshclosewait <- struct{}{}:
-				default:
-				}
+			select {
+			case this.refreshclosewait <- struct{}{}:
+			default:
 			}
 			http.Error(w, ERRCLOSING.Error(), 888)
 			return
