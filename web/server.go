@@ -149,6 +149,7 @@ func (c *ServerConfig) getCorsExpose() string {
 }
 
 type WebServer struct {
+	paths            map[string]map[string]struct{} //key method,value path
 	selfappname      string
 	c                *ServerConfig
 	ctxpool          *sync.Pool
@@ -178,6 +179,7 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	c.validate()
 	//new server
 	instance := &WebServer{
+		paths:            make(map[string]map[string]struct{}),
 		selfappname:      selfappname,
 		c:                c,
 		ctxpool:          &sync.Pool{},
@@ -254,6 +256,25 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	return instance, nil
 }
 
+func (this *WebServer) printPaths() {
+	for method, paths := range this.paths {
+		for path := range paths {
+			switch method {
+			case http.MethodGet:
+				log.Info("\t", method, "      ", path)
+			case http.MethodDelete:
+				log.Info("\t", method, "   ", path)
+			case http.MethodPost:
+				log.Info("\t", method, "     ", path)
+			case http.MethodPut:
+				log.Info("\t", method, "      ", path)
+			case http.MethodPatch:
+				log.Info("\t", method, "    ", path)
+			}
+		}
+	}
+}
+
 var ErrServerClosed = errors.New("[web.server] closed")
 var ErrAlreadyStarted = errors.New("[web.server] already started")
 
@@ -302,6 +323,7 @@ func (this *WebServer) StartWebServer(listenaddr string, certkeys map[string]str
 	if e != nil {
 		return errors.New("[web.server] listen addr:" + listenaddr + " error:" + e.Error())
 	}
+	this.printPaths()
 	if len(certkeys) > 0 {
 		e = this.s.ServeTLS(l, "", "")
 	} else {
@@ -314,6 +336,15 @@ func (this *WebServer) StartWebServer(listenaddr string, certkeys map[string]str
 		return errors.New("[web.server] serve error:" + e.Error())
 	}
 	return nil
+}
+func (this *WebServer) ReplaceWebServer(newserver *WebServer) {
+	this.s.Handler = newserver
+	newserver.s = this.s
+	*this = *newserver
+	newserver.printPaths()
+}
+func (this *WebServer) printWebServer() {
+
 }
 func (this *WebServer) StopWebServer() {
 	defer func() {
@@ -388,6 +419,10 @@ func (this *WebServer) Get(path string, functimeout time.Duration, handlers ...O
 		return e
 	}
 	this.router.Handler(http.MethodGet, path, h)
+	if _, ok := this.paths[http.MethodGet]; !ok {
+		this.paths[http.MethodGet] = make(map[string]struct{})
+	}
+	this.paths[http.MethodGet][path] = struct{}{}
 	return nil
 }
 
@@ -398,6 +433,10 @@ func (this *WebServer) Delete(path string, functimeout time.Duration, handlers .
 		return e
 	}
 	this.router.Handler(http.MethodDelete, path, h)
+	if _, ok := this.paths[http.MethodDelete]; !ok {
+		this.paths[http.MethodDelete] = make(map[string]struct{})
+	}
+	this.paths[http.MethodDelete][path] = struct{}{}
 	return nil
 }
 
@@ -408,6 +447,10 @@ func (this *WebServer) Post(path string, functimeout time.Duration, handlers ...
 		return e
 	}
 	this.router.Handler(http.MethodPost, path, h)
+	if _, ok := this.paths[http.MethodPost]; !ok {
+		this.paths[http.MethodPost] = make(map[string]struct{})
+	}
+	this.paths[http.MethodPost][path] = struct{}{}
 	return nil
 }
 
@@ -418,6 +461,10 @@ func (this *WebServer) Put(path string, functimeout time.Duration, handlers ...O
 		return e
 	}
 	this.router.Handler(http.MethodPut, path, h)
+	if _, ok := this.paths[http.MethodPut]; !ok {
+		this.paths[http.MethodPut] = make(map[string]struct{})
+	}
+	this.paths[http.MethodPut][path] = struct{}{}
 	return nil
 }
 
@@ -428,6 +475,10 @@ func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ..
 		return e
 	}
 	this.router.Handler(http.MethodPatch, path, h)
+	if _, ok := this.paths[http.MethodPatch]; !ok {
+		this.paths[http.MethodPatch] = make(map[string]struct{})
+	}
+	this.paths[http.MethodPatch][path] = struct{}{}
 	return nil
 }
 
