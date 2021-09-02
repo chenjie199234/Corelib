@@ -1,22 +1,35 @@
 package rotatefile
 
 import (
+	"bytes"
 	"testing"
 	"time"
 )
 
 func Test_RotateFile(t *testing.T) {
-	c := &Config{
-		Path:        "./log",
-		Name:        "test",
-		RotateCap:   1,
-		RotateCycle: 1,
-		KeepDays:    1,
-	}
-	_, e := NewRotateFile(c)
+	r, e := NewRotateFile("./log", "test")
 	if e != nil {
 		panic(e)
 	}
-	time.Sleep(10 * time.Second)
-	//time.Sleep(time.Second)
+	for i := 0; i < 100; i++ {
+		r.Write(append(bytes.Repeat([]byte("a"), 100), '\n'))
+	}
+	time.Sleep(time.Second * 2)
+	for i := 0; i < 100; i++ {
+		r.Write(append(bytes.Repeat([]byte("b"), 100), '\n'))
+	}
+	if e := r.RotateNow(); e != nil {
+		panic(e)
+	}
+	for i := 0; i < 100; i++ {
+		r.Write(bytes.Repeat([]byte("a"), 100))
+		r.Write([]byte("\n"))
+	}
+	time.Sleep(time.Second * 2)
+	for i := 0; i < 100; i++ {
+		r.Write(append(bytes.Repeat([]byte("b"), 100), '\n'))
+	}
+	time.Sleep(time.Second)
+	r.CleanNow(time.Now().UnixNano())
+	r.Close()
 }
