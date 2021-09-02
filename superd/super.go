@@ -139,10 +139,7 @@ func (s *Super) CreateGroup(groupname, appname, url string, buildcmds []*Cmd, ru
 			plker:     new(sync.RWMutex),
 			notice:    make(chan uint64, 100),
 		}
-		g.logfile, e = rotatefile.NewRotateFile(&rotatefile.Config{
-			Path: "./app_log/" + fullappname,
-			Name: fullappname,
-		})
+		g.logfile, e = rotatefile.NewRotateFile("./app_log/"+fullappname, fullappname)
 		if e != nil {
 			return errors.New("[create] " + e.Error())
 		}

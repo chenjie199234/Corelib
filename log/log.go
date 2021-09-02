@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -34,20 +33,8 @@ var instance *log
 
 var logtarget string //std(default),file,both
 var loglevel string  //debug,info(default),warning,error
-var logcaller bool   //true(default),false
-//this is only working when log will write to file
-var logdir string //default: ./log
-//this is only working when log will write to file
-var logname string //default: log
-//this is only working when log will write to file
-var logrotatecap uint64 //0 don't rotate by file size,unit is M
-//this is only working when log will write to file
-var logrotatecycle uint64 //0 don't rotate by time,1 every hour,2 every day,3 every week,4 every month
-//this is only working when log will write to file
-var logkeepdays uint64 //0 don't delete old log file,unit day
 
 func getenv() {
-	var e error
 	if os.Getenv("LOG_TARGET") == "" {
 		logtarget = "std"
 	} else {
@@ -65,44 +52,6 @@ func getenv() {
 			panic("[log] os env LOG_LEVEL error,must in [debug,info(default),warning,error]")
 		}
 		loglevel = temp
-	}
-	if os.Getenv("LOG_CALLER") == "" {
-		logcaller = true
-	} else {
-		temp := strings.ToLower(os.Getenv("LOG_CALLER"))
-		if temp != "true" && temp != "false" {
-			panic("[log] os env LOG_CALLER error,must in [true(default),false]")
-		}
-		logcaller = temp == "true"
-	}
-	if logtarget == "file" || logtarget == "both" {
-		if os.Getenv("LOG_DIR") == "" {
-			logdir = "./log"
-		} else {
-			logdir = os.Getenv("LOG_DIR")
-		}
-		if os.Getenv("LOG_NAME") == "" {
-			logname = "log"
-		} else {
-			logname = os.Getenv("LOG_NAME")
-		}
-		if os.Getenv("LOG_ROTATE_CAP") == "" {
-			logrotatecap = 0
-		} else if logrotatecap, e = strconv.ParseUint(os.Getenv("LOG_ROTATE_CAP"), 10, 64); e != nil {
-			panic("[log.getenv] LOG_ROTATE_CAP must be integer,unit is M")
-		}
-		if os.Getenv("LOG_ROTATE_CYCLE") == "" {
-			logrotatecycle = 0
-		} else if logrotatecycle, e = strconv.ParseUint(os.Getenv("LOG_ROTATE_CYCLE"), 10, 64); e != nil {
-			panic("[log.getenv] LOG_ROTATE_CYCLE must be integer in [0-don't rotate by time(default when not set),1-every hour,2-every day,3-every week,4-every month] or not set")
-		} else if logrotatecycle != 0 && logrotatecycle != 1 && logrotatecycle != 2 && logrotatecycle != 3 && logrotatecycle != 4 {
-			panic("[log.getenv] LOG_ROTATE_CYCLE must be integer in [0-don't rotate by time(default when not set),1-every hour,2-every day,3-every week,4-every month] or not set")
-		}
-		if os.Getenv("LOG_KEEP_DAYS") == "" {
-			logkeepdays = 0
-		} else if logkeepdays, e = strconv.ParseUint(os.Getenv("LOG_KEEP_DAYS"), 10, 64); e != nil {
-			panic("[log.getenv] LOG_KEEP_DAYS must be integer,unit is day")
-		}
 	}
 }
 
@@ -129,13 +78,7 @@ func init() {
 	}
 	if logtarget == "file" || logtarget == "both" {
 		var e error
-		instance.rf, e = rotatefile.NewRotateFile(&rotatefile.Config{
-			Path:        logdir,
-			Name:        logname,
-			RotateCap:   uint(logrotatecap),
-			RotateCycle: uint(logrotatecycle),
-			KeepDays:    uint(logkeepdays),
-		})
+		instance.rf, e = rotatefile.NewRotateFile("./log", "log")
 		if e != nil {
 			panic("[log]create rotate log file error:" + e.Error())
 		}
@@ -175,13 +118,11 @@ func Error(datas ...interface{}) {
 }
 func write(buf *bufpool.Buffer, datas ...interface{}) {
 	buf.Append(time.Now())
-	if logcaller {
-		_, file, line, _ := runtime.Caller(2)
-		buf.Append(" ")
-		buf.Append(file)
-		buf.Append(":")
-		buf.Append(line)
-	}
+	_, file, line, _ := runtime.Caller(2)
+	buf.Append(" ")
+	buf.Append(file)
+	buf.Append(":")
+	buf.Append(line)
 	for _, data := range datas {
 		buf.Append(" ")
 		buf.Append(data)

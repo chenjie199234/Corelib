@@ -509,10 +509,7 @@ func (g *group) startProcess(pid uint64, autorestart bool) error {
 		autorestart: autorestart,
 	}
 	var e error
-	p.logfile, e = rotatefile.NewRotateFile(&rotatefile.Config{
-		Path: "./app_log/" + g.name + "/" + strconv.FormatUint(pid, 10),
-		Name: g.name,
-	})
+	p.logfile, e = rotatefile.NewRotateFile("./app_log/"+g.name+"/"+strconv.FormatUint(pid, 10), g.name)
 	if e != nil {
 		return e
 	}
