@@ -140,6 +140,20 @@ func write(buf *bufpool.Buffer, datas ...interface{}) {
 		bufpool.PutBuffer(buf)
 	}
 }
+func RotateLogFile() {
+	if instance.target&targetFile > 0 && instance.rf != nil {
+		if e := instance.rf.RotateNow(); e != nil {
+			fmt.Printf("[log] rotate log file error:%s\n", e)
+		}
+	}
+}
+func CleanLogFile(lastModTimeBeforeThisNS int64) {
+	if instance.target&targetFile > 0 && instance.rf != nil {
+		if e := instance.rf.CleanNow(lastModTimeBeforeThisNS); e != nil {
+			fmt.Printf("[log] clean log file before this timestamp:%d error:%s\n", lastModTimeBeforeThisNS, e)
+		}
+	}
+}
 func Close() {
 	if instance.target&targetFile > 0 && instance.rf != nil {
 		instance.rf.Close()
