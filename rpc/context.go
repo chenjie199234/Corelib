@@ -2,6 +2,8 @@ package rpc
 
 import (
 	"context"
+
+	"github.com/chenjie199234/Corelib/util/common"
 )
 
 type Context struct {
@@ -43,6 +45,16 @@ func (c *Context) Write(resp []byte) {
 	c.msg.Metadata = nil
 	c.next = -1
 }
+
+func (c *Context) WriteString(resp string) {
+	c.msg.Path = ""
+	c.msg.Deadline = 0
+	c.msg.Body = common.Str2byte(resp)
+	c.msg.Error = ""
+	c.msg.Metadata = nil
+	c.next = -1
+}
+
 func (c *Context) GetBody() []byte {
 	return c.msg.Body
 }

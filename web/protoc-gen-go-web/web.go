@@ -117,7 +117,7 @@ func geninit(file *protogen.File, g *protogen.GeneratedFile) {
 			g.P("var e error")
 			for reg := range allreg {
 				g.P("if _", service.GoName, "WebRegs[", strconv.Quote(reg), "] ,e = ", g.QualifiedGoIdent(regexpPackage.Ident("Compile")), "(", strconv.Quote(reg), ");e!=nil{")
-				g.P("panic(\"protoc-gen-go-rpc will check all regexp before generate this code,this may happen when the golang version build protoc-gen-go-rpc and golang version run this code isn't same and the two version's regexp package is different\")")
+				g.P("panic(\"protoc-gen-go-web will check all regexp before generate this code,this may happen when the golang version build protoc-gen-go-web and golang version run this code isn't same and the two version's regexp package is different\")")
 				g.P("}")
 			}
 			g.P()
@@ -1136,9 +1136,9 @@ func strcheck(prefix string, field *protogen.Field, isslice bool, fop *descripto
 			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			for _, m := range match {
 				if isslice {
-					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(m), "].Match(v){")
+					g.P("if !_", service.GoName, "WebRegs[", strconv.Quote(m), "].Match(v){")
 				} else {
-					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(m), "].MatchString(v){")
+					g.P("if !_", service.GoName, "WebRegs[", strconv.Quote(m), "].MatchString(v){")
 				}
 				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str match failed\"")
 				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str match failed\")")
@@ -1149,9 +1149,9 @@ func strcheck(prefix string, field *protogen.Field, isslice bool, fop *descripto
 		} else {
 			for _, m := range match {
 				if isslice {
-					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(m), "].Match(", prefix+field.GoName, "){")
+					g.P("if !_", service.GoName, "WebRegs[", strconv.Quote(m), "].Match(", prefix+field.GoName, "){")
 				} else {
-					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(m), "].MatchString(", prefix+field.GoName, "){")
+					g.P("if !_", service.GoName, "WebRegs[", strconv.Quote(m), "].MatchString(", prefix+field.GoName, "){")
 				}
 				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str match failed\"")
 				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str match failed\")")
@@ -1166,9 +1166,9 @@ func strcheck(prefix string, field *protogen.Field, isslice bool, fop *descripto
 			g.P("for _,v:=range ", prefix+field.GoName, "{")
 			for _, m := range notmatch {
 				if isslice {
-					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(m), "].Match(v){")
+					g.P("if _", service.GoName, "WebRegs[", strconv.Quote(m), "].Match(v){")
 				} else {
-					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(m), "].MatchString(v){")
+					g.P("if _", service.GoName, "WebRegs[", strconv.Quote(m), "].MatchString(v){")
 				}
 				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not match failed\"")
 				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not match failed\")")
@@ -1179,9 +1179,9 @@ func strcheck(prefix string, field *protogen.Field, isslice bool, fop *descripto
 		} else {
 			for _, m := range notmatch {
 				if isslice {
-					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(m), "].Match(", prefix+field.GoName, "){")
+					g.P("if _", service.GoName, "WebRegs[", strconv.Quote(m), "].Match(", prefix+field.GoName, "){")
 				} else {
-					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(m), "].MatchString(", prefix+field.GoName, "){")
+					g.P("if _", service.GoName, "WebRegs[", strconv.Quote(m), "].MatchString(", prefix+field.GoName, "){")
 				}
 				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not match failed\"")
 				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not match failed\")")
@@ -1197,17 +1197,17 @@ func messagecheck(prefix string, field *protogen.Field, g *protogen.GeneratedFil
 		g.P("if v==nil{")
 		g.P("continue")
 		g.P("}")
-		//g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(message.GoIdent.String()), "](v){")
+		//g.P("if !_", service.GoName, "WebCheckers[", strconv.Quote(message.GoIdent.String()), "](v){")
 		//g.P("return false")
-		g.P("if s:=_", service.GoName, "RpcCheckers[", strconv.Quote(field.Message.GoIdent.String()), "](v);s!=\"\"{")
+		g.P("if s:=_", service.GoName, "WebCheckers[", strconv.Quote(field.Message.GoIdent.String()), "](v);s!=\"\"{")
 		g.P("return s")
 		g.P("}")
 		g.P("}")
 	} else {
 		g.P("if ", prefix+field.GoName, "!=nil{")
-		//g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(message.GoIdent.String()), "](", prefix+field.GoName, "){")
+		//g.P("if !_", service.GoName, "WebCheckers[", strconv.Quote(message.GoIdent.String()), "](", prefix+field.GoName, "){")
 		//g.P("return false")
-		g.P("if s:=_", service.GoName, "RpcCheckers[", strconv.Quote(field.Message.GoIdent.String()), "](", prefix+field.GoName, ");s!=\"\"{")
+		g.P("if s:=_", service.GoName, "WebCheckers[", strconv.Quote(field.Message.GoIdent.String()), "](", prefix+field.GoName, ");s!=\"\"{")
 		g.P("return s")
 		g.P("}")
 		g.P("}")
@@ -1497,7 +1497,7 @@ func mapcheck(prefix string, field *protogen.Field, fop *descriptorpb.FieldOptio
 			if proto.HasExtension(fop, pbex.E_MapKeyStringRegMatch) {
 				keymatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegMatch).([]string)
 				for _, v := range keymatch {
-					g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(v), "].MatchString(k){")
+					g.P("if !_", service.GoName, "WebRegs[", strconv.Quote(v), "].MatchString(k){")
 					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str match failed\"")
 					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str match failed\")")
 					//g.P("return false")
@@ -1507,7 +1507,7 @@ func mapcheck(prefix string, field *protogen.Field, fop *descriptorpb.FieldOptio
 			if proto.HasExtension(fop, pbex.E_MapKeyStringRegNotMatch) {
 				keynotmatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegNotMatch).([]string)
 				for _, v := range keynotmatch {
-					g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(v), "].MatchString(k){")
+					g.P("if _", service.GoName, "WebRegs[", strconv.Quote(v), "].MatchString(k){")
 					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str not match failed\"")
 					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str not match failed\")")
 					//g.P("return false")
@@ -1794,9 +1794,9 @@ func mapcheck(prefix string, field *protogen.Field, fop *descriptorpb.FieldOptio
 				valmatch := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegMatch).([]string)
 				for _, v := range valmatch {
 					if isbyteslice {
-						g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(v), "].Match(v){")
+						g.P("if !_", service.GoName, "WebRegs[", strconv.Quote(v), "].Match(v){")
 					} else {
-						g.P("if !_", service.GoName, "RpcRegs[", strconv.Quote(v), "].MatchString(v){")
+						g.P("if !_", service.GoName, "WebRegs[", strconv.Quote(v), "].MatchString(v){")
 					}
 					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str match failed\"")
 					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str match failed\")")
@@ -1808,9 +1808,9 @@ func mapcheck(prefix string, field *protogen.Field, fop *descriptorpb.FieldOptio
 				valnotmatch := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegNotMatch).([]string)
 				for _, v := range valnotmatch {
 					if isbyteslice {
-						g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(v), "].Match(v){")
+						g.P("if _", service.GoName, "WebRegs[", strconv.Quote(v), "].Match(v){")
 					} else {
-						g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(v), "].MatchString(v){")
+						g.P("if _", service.GoName, "WebRegs[", strconv.Quote(v), "].MatchString(v){")
 					}
 					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str not match failed\"")
 					//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str not match failed\")")
@@ -1871,9 +1871,9 @@ func mapcheck(prefix string, field *protogen.Field, fop *descriptorpb.FieldOptio
 				g.P("if v==nil{")
 				g.P("continue")
 				g.P("}")
-				g.P("if s:=_", service.GoName, "RpcCheckers[", strconv.Quote(val.Message.GoIdent.String()), "](v);s!=\"\"{")
+				g.P("if s:=_", service.GoName, "WebCheckers[", strconv.Quote(val.Message.GoIdent.String()), "](v);s!=\"\"{")
 				g.P("return s")
-				//g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(val.Message.GoIdent.String()), "](v){")
+				//g.P("if !_", service.GoName, "WebCheckers[", strconv.Quote(val.Message.GoIdent.String()), "](v){")
 				//g.P("return false")
 				g.P("}")
 			}
@@ -1945,31 +1945,31 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 		g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetContentType(),", strconv.Quote("application/json"), "){")
 		g.P("data,e:=ctx.GetBody()")
 		g.P("if e!=nil{")
-		g.P("ctx.AbortString(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",e.Error())")
+		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",e)")
 		g.P("return")
 		g.P("}")
 		g.P("if len(data)>0{")
 		g.P("e:=", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions{DiscardUnknown: true}")), ".Unmarshal(data,req)")
 		g.P("if e!=nil{")
-		g.P("ctx.AbortString(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ".String())")
+		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		g.P("return")
 		g.P("}")
 		g.P("}")
 		g.P("}else if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetContentType(),", strconv.Quote("application/x-protobuf"), "){")
 		g.P("data,e:=ctx.GetBody()")
 		g.P("if e!=nil{")
-		g.P("ctx.AbortString(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",e.Error())")
+		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",e)")
 		g.P("return")
 		g.P("}")
 		g.P("if len(data)>0{")
 		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(data,req);e!=nil{")
-		g.P("ctx.AbortString(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ".String())")
+		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		g.P("return")
 		g.P("}")
 		g.P("}")
 		g.P("}else{")
 		g.P("if e:=ctx.ParseForm();e!=nil{")
-		g.P("ctx.AbortString(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ".String())")
+		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		g.P("return")
 		g.P("}")
 		g.P("data:=", g.QualifiedGoIdent(bufpoolPackage.Ident("GetBuffer()")))
@@ -2057,7 +2057,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 		g.P("if data.Len()>2{")
 		g.P("e:=", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions{DiscardUnknown: true}")), ".Unmarshal(data.Bytes(),req)")
 		g.P("if e!=nil{")
-		g.P("ctx.AbortString(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ".String())")
+		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		g.P("return")
 		g.P("}")
 		g.P("}")
@@ -2069,7 +2069,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 			//g.P("if !_", service.GoName, "WebCheckers[", strconv.Quote(method.Input.GoIdent.String()), "](req){")
 			g.P("if s:=_", service.GoName, "WebCheckers[", strconv.Quote(method.Input.GoIdent.String()), "](req);s!=\"\"{")
 			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"[", pathurl, "]\",s)")
-			g.P("ctx.AbortString(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ".String())")
+			g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 			g.P("return")
 			g.P("}")
 		}
@@ -2077,9 +2077,9 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 		g.P("resp,e:=handler(ctx,req)")
 		g.P("if e!=nil{")
 		g.P("if ", g.QualifiedGoIdent(errorPackage.Ident("Equal")), "(e,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), "){")
-		g.P("ctx.AbortString(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",e.Error())")
+		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",e)")
 		g.P("}else{")
-		g.P("ctx.AbortString(", g.QualifiedGoIdent(httpPackage.Ident("StatusInternalServerError")), ",e.Error())")
+		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusInternalServerError")), ",e)")
 		g.P("}")
 		g.P("return")
 		g.P("}")

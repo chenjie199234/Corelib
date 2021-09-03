@@ -35,30 +35,24 @@ func (this *Context) Next() {
 	}
 }
 
-func (this *Context) Abort(code int, msg []byte) error {
+func (this *Context) Abort(code int, e error) {
+	this.w.WriteHeader(code)
+	if e != nil {
+		this.w.Write(common.Str2byte(e.Error()))
+	}
+	this.next = -1
+}
+
+func (this *Context) Write(code int, msg []byte) {
 	this.w.WriteHeader(code)
 	if len(msg) > 0 {
 		this.w.Write(msg)
 	}
 	this.next = -1
-	return nil
 }
 
-func (this *Context) AbortString(code int, msg string) error {
-	return this.Abort(code, common.Str2byte(msg))
-}
-
-func (this *Context) Write(code int, msg []byte) error {
-	this.w.WriteHeader(code)
-	if len(msg) > 0 {
-		this.w.Write(msg)
-	}
-	this.next = -1
-	return nil
-}
-
-func (this *Context) WriteString(code int, msg string) error {
-	return this.Write(code, common.Str2byte(msg))
+func (this *Context) WriteString(code int, msg string) {
+	this.Write(code, common.Str2byte(msg))
 }
 
 func (this *Context) SetHeader(k, v string) {
