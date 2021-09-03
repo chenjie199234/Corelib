@@ -166,7 +166,7 @@ func (f *RotateFile) RotateNow() error {
 	e := <-notice
 	return e
 }
-func (f *RotateFile) CleanNow(lastModTimeBeforeThisNS int64) error {
+func (f *RotateFile) CleanNow(lastModTimestampBeforeThisNS int64) error {
 	fileinfos, e := os.ReadDir(f.path)
 	if e != nil {
 		return errors.New("[rotatefile.Clean] error: " + e.Error())
@@ -197,7 +197,7 @@ func (f *RotateFile) CleanNow(lastModTimeBeforeThisNS int64) error {
 		if e != nil {
 			return errors.New("[rotatefile.Clean] error: " + e.Error())
 		}
-		if info.ModTime().UnixNano() <= lastModTimeBeforeThisNS {
+		if info.ModTime().UnixNano() <= lastModTimestampBeforeThisNS {
 			if e := os.Remove(f.path + "/" + filename); e != nil {
 				return errors.New("[rotatefile.Clean] error: " + e.Error())
 			}

@@ -11,81 +11,61 @@ import (
 	"github.com/chenjie199234/Corelib/rotatefile"
 )
 
-const (
-	debugLevel = iota
-	infoLevel
-	warningLevel
-	errorLevel
-)
-const (
-	targetStd = iota + 1
-	targetFile
-	targetBoth
-)
-
-type log struct {
-	level  int
-	target int
-	rf     *rotatefile.RotateFile
-}
-
-var instance *log
-
-var logtarget string //std(default),file,both
-var loglevel string  //debug,info(default),warning,error
+var logtarget int //1-std(default),2-file,3-both
+var loglevel int  //0-debug,1-info(default),2-warning,3-error
+var rf *rotatefile.RotateFile
 
 func getenv() {
 	if os.Getenv("LOG_TARGET") == "" {
-		logtarget = "std"
+		//default std
+		logtarget = 1
 	} else {
 		temp := strings.ToLower(os.Getenv("LOG_TARGET"))
 		if temp != "std" && temp != "file" && temp != "both" {
 			panic("[log] os env LOG_TARGET error,must in [std(default),file,both]")
 		}
-		logtarget = temp
+		switch temp {
+		case "std":
+			loglevel = 1
+		case "file":
+			loglevel = 2
+		case "both":
+			loglevel = 3
+		}
 	}
 	if os.Getenv("LOG_LEVEL") == "" {
-		loglevel = "info"
+		//default info
+		loglevel = 1
 	} else {
 		temp := strings.ToLower(os.Getenv("LOG_LEVEL"))
 		if temp != "debug" && temp != "info" && temp != "warning" && temp != "error" {
 			panic("[log] os env LOG_LEVEL error,must in [debug,info(default),warning,error]")
 		}
-		loglevel = temp
+		switch temp {
+		case "debug":
+			loglevel = 0
+		case "info":
+			loglevel = 1
+		case "warning":
+			loglevel = 2
+		case "error":
+			loglevel = 3
+		}
 	}
 }
 
 func init() {
-	instance = &log{}
 	getenv()
-	switch logtarget {
-	case "std":
-		instance.target = targetStd
-	case "file":
-		instance.target = targetFile
-	case "both":
-		instance.target = targetBoth
-	}
-	switch loglevel {
-	case "debug":
-		instance.level = debugLevel
-	case "info":
-		instance.level = infoLevel
-	case "warning":
-		instance.level = warningLevel
-	case "error":
-		instance.level = errorLevel
-	}
-	if logtarget == "file" || logtarget == "both" {
+	if logtarget&2 > 0 {
 		var e error
-		instance.rf, e = rotatefile.NewRotateFile("./log", "log")
+		rf, e = rotatefile.NewRotateFile("./log", "log")
 		if e != nil {
 			panic("[log]create rotate log file error:" + e.Error())
 		}
 	}
 }
 func Debug(datas ...interface{}) {
-	if instance.level > debugLevel {
+	if loglevel > 0 {
 		return
 	}
 	buf := bufpool.GetBuffer()
@@ -93,7 +73,7 @@ func Debug(datas ...interface{}) {
 	write(buf, datas...)
 }
 func Info(datas ...interface{}) {
-	if instance.level > infoLevel {
+	if loglevel > 1 {
 		return
 	}
 	buf := bufpool.GetBuffer()
@@ -101,7 +81,7 @@ func Info(datas ...interface{}) {
 	write(buf, datas...)
 }
 func Warning(datas ...interface{}) {
-	if instance.level > warningLevel {
+	if loglevel > 2 {
 		return
 	}
 	buf := bufpool.GetBuffer()
@@ -109,9 +89,6 @@ func Warning(datas ...interface{}) {
 	write(buf, datas...)
 }
 func Error(datas ...interface{}) {
-	if instance.level > errorLevel {
-		return
-	}
 	buf := bufpool.GetBuffer()
 	buf.Append("[ERR] ")
 	write(buf, datas...)
@@ -128,11 +105,11 @@ func write(buf *bufpool.Buffer, datas ...interface{}) {
 		buf.Append(data)
 	}
 	buf.Append("\n")
-	if instance.target&targetStd > 0 {
+	if logtarget&1 > 0 {
 		os.Stderr.Write(buf.Bytes())
 	}
-	if instance.target&targetFile > 0 {
-		if _, e := instance.rf.WriteBuf(buf); e != nil {
+	if logtarget&2 > 0 {
+		if _, e := rf.WriteBuf(buf); e != nil {
 			fmt.Printf("[log] write rotate file error: %s with data: %s\n", e, buf.String())
 			bufpool.PutBuffer(buf)
 		}
@@ -141,21 +118,21 @@ func write(buf *bufpool.Buffer, datas ...interface{}) {
 	}
 }
 func RotateLogFile() {
-	if instance.target&targetFile > 0 && instance.rf != nil {
-		if e := instance.rf.RotateNow(); e != nil {
+	if logtarget&2 > 0 && rf != nil {
+		if e := rf.RotateNow(); e != nil {
 			fmt.Printf("[log] rotate log file error:%s\n", e)
 		}
 	}
 }
-func CleanLogFile(lastModTimeBeforeThisNS int64) {
-	if instance.target&targetFile > 0 && instance.rf != nil {
-		if e := instance.rf.CleanNow(lastModTimeBeforeThisNS); e != nil {
-			fmt.Printf("[log] clean log file before this timestamp:%d error:%s\n", lastModTimeBeforeThisNS, e)
+func CleanLogFile(lastModTimestampBeforeThisNS int64) {
+	if logtarget&2 > 0 && rf != nil {
+		if e := rf.CleanNow(lastModTimestampBeforeThisNS); e != nil {
+			fmt.Printf("[log] clean log file before:%dns error:%s\n", lastModTimestampBeforeThisNS, e)
 		}
 	}
 }
 func Close() {
-	if instance.target&targetFile > 0 && instance.rf != nil {
-		instance.rf.Close()
+	if logtarget&2 > 0 && rf != nil {
+		rf.Close()
 	}
 }
