@@ -343,9 +343,6 @@ func (this *WebServer) ReplaceWebServer(newserver *WebServer) {
 	*this = *newserver
 	newserver.printPaths()
 }
-func (this *WebServer) printWebServer() {
-
-}
 func (this *WebServer) StopWebServer() {
 	defer func() {
 		this.closewait.Wait()
