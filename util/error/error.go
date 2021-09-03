@@ -9,14 +9,14 @@ import (
 //if error was not in this error's format,code will return -1,msg will use the origin error.Error()
 
 type Error struct {
-	Code int64  `json:"code"`
+	Code int32  `json:"code"`
 	Msg  string `json:"msg"`
 }
 
-func MakeError(code int64, msg string) *Error {
+func MakeError(code int32, msg string) *Error {
 	return &Error{Code: code, Msg: msg}
 }
-func GetCodeFromErrorstr(e string) int64 {
+func GetCodeFromErrorstr(e string) int32 {
 	if e == "" {
 		return 0
 	}
@@ -26,7 +26,7 @@ func GetCodeFromErrorstr(e string) int64 {
 	}
 	return tempe.Code
 }
-func GetCodeFromStdError(e error) int64 {
+func GetCodeFromStdError(e error) int32 {
 	if e == nil {
 		return 0
 	}
