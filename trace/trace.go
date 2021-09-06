@@ -100,9 +100,15 @@ type TraceLog struct {
 type tracekey struct{}
 
 func InitCurTrace(ctx context.Context, traceid, app, ip, method, path, kind string) context.Context {
+	if app == "" || ip == "" || method == "" || path == "" || kind == "" {
+		panic("[trace] init error: missing params")
+	}
 	tmp := ctx.Value(tracekey{})
 	if tmp == nil {
-		return context.WithValue(ctx, tracekey{}, map[string]string{"Traceid": maketraceid(), "App": app, "Ip": ip, "Method": method, "Path": path, "Kind": kind})
+		if traceid == "" {
+			traceid = maketraceid()
+		}
+		return context.WithValue(ctx, tracekey{}, map[string]string{"Traceid": traceid, "App": app, "Ip": ip, "Method": method, "Path": path, "Kind": kind})
 	}
 	return ctx
 }
