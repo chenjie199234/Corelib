@@ -6,7 +6,7 @@ import (
 	"text/template"
 )
 
-const dockerfiletext = `FROM debian:stable-slim
+const dockerfiletext = `FROM debian:stable
 RUN apt-get update && apt-get install -y ca-certificates && mkdir /root/app && mkdir /root/app/kubeconfig && mkdir /root/app/remoteconfig
 WORKDIR /root/app
 COPY main probe.sh AppConfig.json SourceConfig.json ./
@@ -48,6 +48,10 @@ spec:
               memory: 256Mi
               cpu: 250m
           env:
+            - name: HOSTIP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: DEPLOY_ENV
               value: kube
             - name: RUN_ENV
