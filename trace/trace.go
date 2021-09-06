@@ -103,6 +103,9 @@ func InitCurTrace(ctx context.Context, traceid, app, ip, method, path, kind stri
 	if app == "" || ip == "" || method == "" || path == "" || kind == "" {
 		panic("[trace] init error: missing params")
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	tmp := ctx.Value(tracekey{})
 	if tmp == nil {
 		if traceid == "" {
@@ -113,6 +116,9 @@ func InitCurTrace(ctx context.Context, traceid, app, ip, method, path, kind stri
 	return ctx
 }
 func GetCurTrace(ctx context.Context) (app, ip, method, path, kind string) {
+	if ctx == nil {
+		return "", "", "", "", ""
+	}
 	tmp := ctx.Value(tracekey{})
 	if tmp == nil {
 		return "", "", "", "", ""
@@ -126,6 +132,9 @@ func maketraceid() string {
 	return nowstr + "_" + ranstr
 }
 func TraceStart(ctx context.Context, role ROLE, fromapp, fromip, frommethod, frompath string, fromkind KIND, toapp, toip, tomethod, topath string, tokind KIND) (TraceEnd func(e error)) {
+	if ctx == nil {
+		return nil
+	}
 	tmp := ctx.Value(tracekey{})
 	if tmp == nil {
 		return nil
