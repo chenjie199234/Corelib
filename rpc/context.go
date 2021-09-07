@@ -12,6 +12,7 @@ type Context struct {
 	peeruniquename string
 	handlers       []OutsideHandler
 	next           int8
+	e              error
 }
 
 func (c *Context) Next() {
@@ -34,6 +35,8 @@ func (c *Context) Abort(e error) {
 	c.msg.Body = nil
 	c.msg.Error = e.Error()
 	c.msg.Metadata = nil
+	c.msg.Tracedata = nil
+	c.e = e
 	c.next = -1
 }
 
@@ -43,16 +46,12 @@ func (c *Context) Write(resp []byte) {
 	c.msg.Body = resp
 	c.msg.Error = ""
 	c.msg.Metadata = nil
+	c.msg.Tracedata = nil
 	c.next = -1
 }
 
 func (c *Context) WriteString(resp string) {
-	c.msg.Path = ""
-	c.msg.Deadline = 0
-	c.msg.Body = common.Str2byte(resp)
-	c.msg.Error = ""
-	c.msg.Metadata = nil
-	c.next = -1
+	c.Write(common.Str2byte(resp))
 }
 
 func (c *Context) GetBody() []byte {

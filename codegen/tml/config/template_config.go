@@ -94,7 +94,7 @@ func initenv() {
 
 func initremote(path string) {
 	if EC.ConfigType != nil && *EC.ConfigType == 2 {
-		if e := configsdk.NewRpcSdk(path, api.Group, api.Name); e != nil {
+		if e := configsdk.NewWebSdk(path, api.Group, api.Name); e != nil {
 			log.Error("[config.initremote] new sdk error:", e)
 			Close()
 			os.Exit(1)

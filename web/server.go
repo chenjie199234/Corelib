@@ -17,7 +17,9 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/metadata"
 	"github.com/julienschmidt/httprouter"
 )
@@ -203,15 +205,6 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 			http.StatusMethodNotAllowed,
 		)
 	})
-	instance.router.PanicHandler = func(w http.ResponseWriter, r *http.Request, msg interface{}) {
-		stack := make([]byte, 8192)
-		n := runtime.Stack(stack, false)
-		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "panic:", msg, "\n"+common.Byte2str(stack[:n]))
-		http.Error(w,
-			ERRPANIC.Error(),
-			http.StatusInternalServerError,
-		)
-	}
 	instance.router.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//for OPTIONS preflight
 		defer w.WriteHeader(http.StatusNoContent)
@@ -390,6 +383,7 @@ func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, handle
 	ctx.r = r
 	ctx.handlers = handlers
 	ctx.Context = r.Context()
+	ctx.e = nil
 	return ctx
 }
 
@@ -399,6 +393,7 @@ func (this *WebServer) putContext(ctx *Context) {
 	ctx.handlers = nil
 	ctx.Context = nil
 	ctx.next = 0
+	ctx.e = nil
 	this.ctxpool.Put(ctx)
 }
 
@@ -411,7 +406,7 @@ func (this *WebServer) Use(globalMids ...OutsideHandler) {
 
 //thread unsafe
 func (this *WebServer) Get(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
-	h, e := this.insideHandler(functimeout, handlers)
+	h, e := this.insideHandler(http.MethodGet, path, functimeout, handlers)
 	if e != nil {
 		return e
 	}
@@ -425,7 +420,7 @@ func (this *WebServer) Get(path string, functimeout time.Duration, handlers ...O
 
 //thread unsafe
 func (this *WebServer) Delete(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
-	h, e := this.insideHandler(functimeout, handlers)
+	h, e := this.insideHandler(http.MethodDelete, path, functimeout, handlers)
 	if e != nil {
 		return e
 	}
@@ -439,7 +434,7 @@ func (this *WebServer) Delete(path string, functimeout time.Duration, handlers .
 
 //thread unsafe
 func (this *WebServer) Post(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
-	h, e := this.insideHandler(functimeout, handlers)
+	h, e := this.insideHandler(http.MethodPost, path, functimeout, handlers)
 	if e != nil {
 		return e
 	}
@@ -453,7 +448,7 @@ func (this *WebServer) Post(path string, functimeout time.Duration, handlers ...
 
 //thread unsafe
 func (this *WebServer) Put(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
-	h, e := this.insideHandler(functimeout, handlers)
+	h, e := this.insideHandler(http.MethodPut, path, functimeout, handlers)
 	if e != nil {
 		return e
 	}
@@ -467,7 +462,7 @@ func (this *WebServer) Put(path string, functimeout time.Duration, handlers ...O
 
 //thread unsafe
 func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
-	h, e := this.insideHandler(functimeout, handlers)
+	h, e := this.insideHandler(http.MethodPatch, path, functimeout, handlers)
 	if e != nil {
 		return e
 	}
@@ -504,10 +499,16 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	this.router.ServeHTTP(w, r)
+	if this.totalreqnum < 0 {
+		select {
+		case this.refreshclosewait <- struct{}{}:
+		default:
+		}
+	}
 	atomic.AddInt32(&this.totalreqnum, -1)
 }
 
-func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHandler) (http.HandlerFunc, error) {
+func (this *WebServer) insideHandler(method, path string, timeout time.Duration, handlers []OutsideHandler) (http.HandlerFunc, error) {
 	totalhandlers := make([]OutsideHandler, 1)
 	totalhandlers = append(totalhandlers, this.global...)
 	totalhandlers = append(totalhandlers, handlers...)
@@ -545,7 +546,7 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 			}
 		}
 		//set timeout
-		basectx := r.Context()
+		ctx := r.Context()
 		now := time.Now()
 		var globaldl int64
 		var funcdl int64
@@ -584,11 +585,12 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 				return
 			}
 			var cancel context.CancelFunc
-			basectx, cancel = context.WithDeadline(basectx, time.Unix(0, min))
+			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, min))
 			defer cancel()
 		}
-		if sourceserve := r.Header.Get("SourceServer"); sourceserve != "" {
-			r.Header.Set("SourceServer", sourceserve+":"+r.RemoteAddr)
+		sourceserver := r.Header.Get("SourceServer")
+		if sourceserver != "" {
+			r.Header.Set("SourceServer", sourceserver+":"+r.RemoteAddr)
 		}
 		if mdstr := r.Header.Get("Metadata"); mdstr != "" {
 			md := make(map[string]string)
@@ -598,18 +600,52 @@ func (this *WebServer) insideHandler(timeout time.Duration, handlers []OutsideHa
 				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
 				return
 			}
-			basectx = metadata.SetAllMetadata(basectx, md)
+			ctx = metadata.SetAllMetadata(ctx, md)
 		}
-		r = r.WithContext(basectx)
-		//logic
-		ctx := this.getContext(w, r, totalhandlers)
-		ctx.Next()
-		this.putContext(ctx)
-		if this.totalreqnum < 0 {
-			select {
-			case this.refreshclosewait <- struct{}{}:
-			default:
+		var traceid, fromapp, fromip, frommethod, frompath string
+		var fromkind trace.KIND
+		if tdstr := r.Header.Get("Tracedata"); tdstr != "" {
+			td := make(map[string]string)
+			if e := json.Unmarshal(common.Str2byte(tdstr), &td); e != nil {
+				log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Tracedata:", tdstr, "format error")
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
+				return
 			}
+			traceid, _, _, frommethod, frompath, fromkind = trace.MapToTrace(td)
 		}
+		fromapp = sourceserver
+		if fromapp == "" {
+			fromapp = "unknown"
+		}
+		fromip = r.RemoteAddr[:strings.Index(r.RemoteAddr, ":")]
+		if frommethod == "" {
+			frommethod = "unknown"
+		}
+		if frompath == "" {
+			frompath = "unknown"
+		}
+		if fromkind == "" {
+			fromkind = trace.KIND("unknown")
+		}
+		ctx = trace.InitTrace(ctx, traceid, this.selfappname, host.Hostip, method, path, trace.WEB)
+		r = r.WithContext(ctx)
+		//logic
+		workctx := this.getContext(w, r, totalhandlers)
+		traceend := trace.TraceStart(workctx, trace.SERVER, fromapp, fromip, frommethod, frompath, fromkind, this.selfappname, host.Hostip, method, path, trace.WEB)
+		defer func() {
+			if e := recover(); e != nil {
+				stack := make([]byte, 8192)
+				n := runtime.Stack(stack, false)
+				log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "panic:", e, "\n"+common.Byte2str(stack[:n]))
+				http.Error(w, ERRPANIC.Error(), http.StatusInternalServerError)
+				workctx.e = ERRPANIC
+			}
+			if traceend != nil {
+				traceend(workctx.e)
+			}
+			this.putContext(workctx)
+		}()
+		workctx.Next()
 	}, nil
 }

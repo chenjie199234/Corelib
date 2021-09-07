@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	cerror "github.com/chenjie199234/Corelib/util/error"
 )
@@ -273,10 +275,13 @@ func forbiddenHeader(header http.Header) bool {
 	if _, ok := header["Metadata"]; ok {
 		return true
 	}
+	if _, ok := header["Tracedata"]; ok {
+		return true
+	}
 	return false
 }
 
-//"TargetServer" "SourceServer" "Deadline" and "Metadata" are forbidden in header
+//"TargetServer" "SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
 func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, metadata map[string]string) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -284,7 +289,7 @@ func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, pathw
 	return this.call(http.MethodGet, ctx, functimeout, pathwithquery, header, metadata, nil)
 }
 
-//"TargetServer" "SourceServer" "Deadline" and "Metadata" are forbidden in header
+//"TargetServer" "SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
 func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, metadata map[string]string) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -292,7 +297,7 @@ func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, pa
 	return this.call(http.MethodDelete, ctx, functimeout, pathwithquery, header, metadata, nil)
 }
 
-//"TargetServer" "SourceServer" "Deadline" and "Metadata" are forbidden in header
+//"TargetServer" "SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
 func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, metadata map[string]string, body []byte) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -300,7 +305,7 @@ func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, path
 	return this.call(http.MethodPost, ctx, functimeout, pathwithquery, header, metadata, body)
 }
 
-//"TargetServer" "SourceServer" "Deadline" and "Metadata" are forbidden in header
+//"TargetServer" "SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
 func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, metadata map[string]string, body []byte) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -308,7 +313,7 @@ func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, pathw
 	return this.call(http.MethodPut, ctx, functimeout, pathwithquery, header, metadata, body)
 }
 
-//"TargetServer" "SourceServer" "Deadline" and "Metadata" are forbidden in header
+//"TargetServer" "SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
 func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, pathwithquery string, header http.Header, metadata map[string]string, body []byte) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -327,6 +332,13 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	if len(metadata) != 0 {
 		d, _ := json.Marshal(metadata)
 		header.Set("Metadata", common.Byte2str(d))
+	}
+	tracedata := trace.GetTraceMap(ctx)
+	if tracedata != nil {
+		delete(tracedata, "App")
+		delete(tracedata, "Ip")
+		d, _ := json.Marshal(tracedata)
+		header.Set("Tracedata", common.Byte2str(d))
 	}
 	var min time.Duration
 	if this.c.GlobalTimeout != 0 {
@@ -407,6 +419,16 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
 			server.status = 0
 			continue
+		}
+		if resp.StatusCode != 200 {
+			var respbody []byte
+			respbody, e = io.ReadAll(resp.Body)
+			if e != nil {
+				resp.Body.Close()
+				return nil, cerror.StdErrorToError(e)
+			}
+			resp.Body.Close()
+			return nil, cerror.ErrorstrToError(common.Byte2str(respbody))
 		}
 		return resp, nil
 	}

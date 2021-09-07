@@ -19,6 +19,7 @@ type Context struct {
 	r        *http.Request
 	handlers []OutsideHandler
 	next     int8
+	e        error
 }
 
 func (this *Context) Next() {
@@ -39,20 +40,21 @@ func (this *Context) Abort(code int, e error) {
 	this.w.WriteHeader(code)
 	if e != nil {
 		this.w.Write(common.Str2byte(e.Error()))
+		this.e = e
 	}
 	this.next = -1
 }
 
-func (this *Context) Write(code int, msg []byte) {
-	this.w.WriteHeader(code)
+func (this *Context) Write(msg []byte) {
+	this.w.WriteHeader(http.StatusOK)
 	if len(msg) > 0 {
 		this.w.Write(msg)
 	}
 	this.next = -1
 }
 
-func (this *Context) WriteString(code int, msg string) {
-	this.Write(code, common.Str2byte(msg))
+func (this *Context) WriteString(msg string) {
+	this.Write(common.Str2byte(msg))
 }
 
 func (this *Context) SetHeader(k, v string) {

@@ -8,4 +8,5 @@ message msg {
 	bytes body=4;
 	string error=5;
 	map<string,string> metadata=6;
+	map<string,string> tracedata=7;
 }

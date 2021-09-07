@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -115,7 +116,12 @@ func geninit(file *protogen.File, g *protogen.GeneratedFile) {
 		if len(allreg) > 0 {
 			g.P("_", service.GoName, "WebRegs=make(map[string]*", g.QualifiedGoIdent(regexpPackage.Ident("Regexp")), ",", len(allreg), ")")
 			g.P("var e error")
+			tempallreg := make([]string, 0, len(allreg))
 			for reg := range allreg {
+				tempallreg = append(tempallreg, reg)
+			}
+			sort.Strings(tempallreg)
+			for _, reg := range tempallreg {
 				g.P("if _", service.GoName, "WebRegs[", strconv.Quote(reg), "] ,e = ", g.QualifiedGoIdent(regexpPackage.Ident("Compile")), "(", strconv.Quote(reg), ");e!=nil{")
 				g.P("panic(\"protoc-gen-go-web will check all regexp before generate this code,this may happen when the golang version build protoc-gen-go-web and golang version run this code isn't same and the two version's regexp package is different\")")
 				g.P("}")
@@ -124,7 +130,13 @@ func geninit(file *protogen.File, g *protogen.GeneratedFile) {
 		}
 		if len(allcheck) > 0 {
 			g.P("_", service.GoName, "WebCheckers = make(map[string]func(req interface{})string,", len(allcheck), ")")
-			for k, m := range allcheck {
+			tempallcheck := make([]string, 0, len(allcheck))
+			for k := range allcheck {
+				tempallcheck = append(tempallcheck, k)
+			}
+			sort.Strings(tempallcheck)
+			for _, k := range tempallcheck {
+				m := allcheck[k]
 				g.P("_", service.GoName, "WebCheckers[", strconv.Quote(k), "]=func(r interface{})string{")
 				g.P("req:=r.(*", g.QualifiedGoIdent(m.GoIdent), ")")
 				check("req.", m, g)
@@ -2089,11 +2101,11 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 		g.P("if ", stringsPackage.Ident("HasPrefix"), "(ctx.GetAcceptType(),", strconv.Quote("application/x-protobuf"), "){")
 		g.P("respd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
 		g.P("ctx.SetHeader(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")
-		g.P("ctx.Write(", g.QualifiedGoIdent(httpPackage.Ident("StatusOK")), ",respd)")
+		g.P("ctx.Write(respd)")
 		g.P("}else{")
 		g.P("respd,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true}.Marshal(resp)")
 		g.P("ctx.SetHeader(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/json"), ")")
-		g.P("ctx.Write(", g.QualifiedGoIdent(httpPackage.Ident("StatusOK")), ",respd)")
+		g.P("ctx.Write(respd)")
 		g.P("}")
 		g.P("}")
 		g.P("}")
@@ -2372,9 +2384,6 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 		g.P("data,e:=", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(r.Body)")
 		g.P("if e!=nil {")
 		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("StdErrorToError")), "(e)")
-		g.P("}")
-		g.P("if r.StatusCode/100 == 4 || r.StatusCode/100 == 5{")
-		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrorstrToError")), "(", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(data))")
 		g.P("}")
 		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 		g.P("if len(data)==0{")

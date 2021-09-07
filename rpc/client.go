@@ -11,6 +11,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/stream"
+	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	cerror "github.com/chenjie199234/Corelib/util/error"
 	"google.golang.org/protobuf/proto"
@@ -460,6 +461,12 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 		Deadline: dl.UnixNano(),
 		Body:     in,
 		Metadata: metadata,
+	}
+	tracedata := trace.GetTraceMap(ctx)
+	if tracedata != nil {
+		delete(tracedata, "App")
+		delete(tracedata, "Ip")
+		msg.Tracedata = tracedata
 	}
 	d, _ := proto.Marshal(msg)
 	r := c.getreq(msg.Callid)

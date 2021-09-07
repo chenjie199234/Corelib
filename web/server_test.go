@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"fmt"
 	//"net/http"
 	"testing"
@@ -18,5 +19,5 @@ func Test_Server(t *testing.T) {
 }
 func handleroot(ctx *Context) {
 	fmt.Println("123")
-	ctx.WriteString(888, "123")
+	ctx.Abort(888, errors.New("123"))
 }

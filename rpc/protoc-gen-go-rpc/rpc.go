@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -101,7 +102,12 @@ func geninit(file *protogen.File, g *protogen.GeneratedFile) {
 		if len(allreg) > 0 {
 			g.P("_", service.GoName, "RpcRegs=make(map[string]*", g.QualifiedGoIdent(regexpPackage.Ident("Regexp")), ",", len(allreg), ")")
 			g.P("var e error")
+			tempallreg := make([]string, 0, len(allreg))
 			for reg := range allreg {
+				tempallreg = append(tempallreg, reg)
+			}
+			sort.Strings(tempallreg)
+			for _, reg := range tempallreg {
 				g.P("if _", service.GoName, "RpcRegs[", strconv.Quote(reg), "] ,e = ", g.QualifiedGoIdent(regexpPackage.Ident("Compile")), "(", strconv.Quote(reg), ");e!=nil{")
 				g.P("panic(\"protoc-gen-go-rpc will check all regexp before generate this code,this may happen when the golang version build protoc-gen-go-rpc and golang version run this code isn't same and the two version's regexp package is different\")")
 				g.P("}")
@@ -110,7 +116,13 @@ func geninit(file *protogen.File, g *protogen.GeneratedFile) {
 		}
 		if len(allcheck) > 0 {
 			g.P("_", service.GoName, "RpcCheckers = make(map[string]func(req interface{})string,", len(allcheck), ")")
-			for k, m := range allcheck {
+			tempallcheck := make([]string, 0, len(allcheck))
+			for k := range allcheck {
+				tempallcheck = append(tempallcheck, k)
+			}
+			sort.Strings(tempallcheck)
+			for _, k := range tempallcheck {
+				m := allcheck[k]
 				g.P("_", service.GoName, "RpcCheckers[", strconv.Quote(k), "]=func(r interface{})string{")
 				g.P("req:=r.(*", g.QualifiedGoIdent(m.GoIdent), ")")
 				check("req.", m, g)

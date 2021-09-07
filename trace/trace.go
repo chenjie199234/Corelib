@@ -99,7 +99,7 @@ type TraceLog struct {
 
 type tracekey struct{}
 
-func InitCurTrace(ctx context.Context, traceid, app, ip, method, path, kind string) context.Context {
+func InitTrace(ctx context.Context, traceid, app, ip, method, path string, kind KIND) context.Context {
 	if app == "" || ip == "" || method == "" || path == "" || kind == "" {
 		panic("[trace] init error: missing params")
 	}
@@ -111,21 +111,57 @@ func InitCurTrace(ctx context.Context, traceid, app, ip, method, path, kind stri
 		if traceid == "" {
 			traceid = maketraceid()
 		}
-		return context.WithValue(ctx, tracekey{}, map[string]string{"Traceid": traceid, "App": app, "Ip": ip, "Method": method, "Path": path, "Kind": kind})
+		return context.WithValue(ctx, tracekey{}, map[string]string{"Traceid": traceid, "App": app, "Ip": ip, "Method": method, "Path": path, "Kind": string(kind)})
 	}
 	return ctx
 }
-func GetCurTrace(ctx context.Context) (app, ip, method, path, kind string) {
+
+func GetTrace(ctx context.Context) (traceid, app, ip, method, path string, kind KIND) {
 	if ctx == nil {
-		return "", "", "", "", ""
+		return
 	}
 	tmp := ctx.Value(tracekey{})
 	if tmp == nil {
-		return "", "", "", "", ""
+		return
 	}
 	tracedata, _ := tmp.(map[string]string)
-	return tracedata["App"], tracedata["Ip"], tracedata["Method"], tracedata["Path"], tracedata["Kind"]
+	traceid = tracedata["Traceid"]
+	app = tracedata["App"]
+	ip = tracedata["Ip"]
+	method = tracedata["Method"]
+	path = tracedata["Path"]
+	kind = KIND(tracedata["Kind"])
+	return
 }
+
+func GetTraceMap(ctx context.Context) map[string]string {
+	if ctx == nil {
+		return nil
+	}
+	tmp := ctx.Value(tracekey{})
+	if tmp == nil {
+		return nil
+	}
+	tracedata, _ := tmp.(map[string]string)
+	return tracedata
+}
+
+func MapToTrace(tracedata map[string]string) (traceid, app, ip, method, path string, kind KIND) {
+	if tracedata == nil {
+		return
+	}
+	traceid = tracedata["Traceid"]
+	if traceid == "" {
+		return
+	}
+	app = tracedata["App"]
+	ip = tracedata["Ip"]
+	method = tracedata["Method"]
+	path = tracedata["Path"]
+	kind = KIND(tracedata["Kind"])
+	return
+}
+
 func maketraceid() string {
 	nowstr := strconv.FormatInt(time.Now().UnixNano(), 10)
 	ranstr := strconv.FormatInt(rand.Int63(), 10)
@@ -191,6 +227,7 @@ func write(log []byte) {
 	buf := bufpool.GetBuffer()
 	buf.Append("[TRACE] ")
 	buf.Append(common.Byte2str(log))
+	buf.Append("\n")
 	if target&1 > 0 {
 		os.Stderr.Write(buf.Bytes())
 	}

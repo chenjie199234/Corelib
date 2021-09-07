@@ -12,7 +12,9 @@ import (
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/stream"
+	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/metadata"
 
 	"google.golang.org/protobuf/proto"
@@ -210,6 +212,7 @@ func (s *RpcServer) getContext(ctx context.Context, peeruniquename string, msg *
 	result.peeruniquename = peeruniquename
 	result.msg = msg
 	result.handlers = handlers
+	result.e = nil
 	return result
 }
 
@@ -219,6 +222,7 @@ func (s *RpcServer) putContext(ctx *Context) {
 	ctx.msg = nil
 	ctx.handlers = nil
 	ctx.next = 0
+	ctx.e = nil
 }
 
 //thread unsafe
@@ -244,18 +248,6 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 		return nil, errors.New("[rpc.server] too many handlers for one path")
 	}
 	return func(peeruniquename string, msg *Msg) {
-		defer func() {
-			if e := recover(); e != nil {
-				stack := make([]byte, 8192)
-				n := runtime.Stack(stack, false)
-				log.Error("[rpc.server] client:", peeruniquename, "path:", path, "panic:", e, "\n"+common.Byte2str(stack[:n]))
-				msg.Path = ""
-				msg.Deadline = 0
-				msg.Body = nil
-				msg.Error = ERRPANIC.Error()
-				msg.Metadata = nil
-			}
-		}()
 		var globaldl int64
 		var funcdl int64
 		now := time.Now()
@@ -283,19 +275,57 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 				msg.Body = nil
 				msg.Error = context.DeadlineExceeded.Error()
 				msg.Metadata = nil
+				msg.Tracedata = nil
 				return
 			}
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, min))
 			defer cancel()
 		}
-		//delete port info
 		if msg.Metadata != nil {
 			ctx = metadata.SetAllMetadata(ctx, msg.Metadata)
 		}
+		var traceid, fromapp, fromip, frommethod, frompath string
+		var fromkind trace.KIND
+		if msg.Tracedata != nil {
+			traceid, fromapp, fromip, frommethod, frompath, fromkind = trace.MapToTrace(msg.Tracedata)
+		}
+		fromapp = peeruniquename[:strings.Index(peeruniquename, ":")]
+		if fromapp == "" {
+			fromapp = "unkown"
+		}
+		fromip = peeruniquename[strings.Index(peeruniquename, ":")+1 : strings.LastIndex(peeruniquename, ":")]
+		if frommethod == "" {
+			frommethod = "unknown"
+		}
+		if frompath == "" {
+			frompath = "unknown"
+		}
+		if fromkind == "" {
+			fromkind = trace.KIND("unknown")
+		}
+		ctx = trace.InitTrace(ctx, traceid, s.instance.GetSelfName(), host.Hostip, "rpc", path, trace.RPC)
 		workctx := s.getContext(ctx, peeruniquename, msg, totalhandlers)
+		traceend := trace.TraceStart(workctx, trace.SERVER, fromapp, fromip, frommethod, frompath, fromkind, s.instance.GetSelfName(), host.Hostip, "rpc", path, trace.RPC)
+		defer func() {
+			if e := recover(); e != nil {
+				stack := make([]byte, 8192)
+				n := runtime.Stack(stack, false)
+				log.Error("[rpc.server] client:", peeruniquename, "path:", path, "panic:", e, "\n"+common.Byte2str(stack[:n]))
+				msg.Path = ""
+				msg.Deadline = 0
+				msg.Body = nil
+				msg.Error = ERRPANIC.Error()
+				msg.Metadata = nil
+				msg.Tracedata = nil
+				workctx.e = ERRPANIC
+			}
+			if traceend != nil {
+				traceend(workctx.e)
+			}
+			s.putContext(workctx)
+		}()
 		workctx.Next()
-		s.putContext(workctx)
 	}, nil
 }
 func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
@@ -347,6 +377,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		msg.Body = nil
 		msg.Error = ERRNOAPI.Error()
 		msg.Metadata = nil
+		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(d, sid, true); e != nil {
 			log.Error("[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
@@ -372,6 +403,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			msg.Body = nil
 			msg.Error = ERRCLOSING.Error()
 			msg.Metadata = nil
+			msg.Tracedata = nil
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(d, sid, true); e != nil {
 				log.Error("[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
@@ -390,6 +422,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 				msg.Body = nil
 				msg.Error = ERRRESPMSGLARGE.Error()
 				msg.Metadata = nil
+				msg.Tracedata = nil
 				d, _ = proto.Marshal(msg)
 				p.SendMessage(d, sid, true)
 			}
