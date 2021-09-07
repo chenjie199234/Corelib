@@ -288,7 +288,10 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 		var traceid, fromapp, fromip, frommethod, frompath string
 		var fromkind trace.KIND
 		if msg.Tracedata != nil {
-			traceid, fromapp, fromip, frommethod, frompath, fromkind = trace.MapToTrace(msg.Tracedata)
+			traceid = msg.Tracedata["Traceid"]
+			frommethod = msg.Tracedata["Method"]
+			frompath = msg.Tracedata["Path"]
+			fromkind = trace.KIND(msg.Tracedata["Kind"])
 		}
 		fromapp = peeruniquename[:strings.Index(peeruniquename, ":")]
 		if fromapp == "" {

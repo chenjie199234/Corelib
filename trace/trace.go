@@ -134,34 +134,6 @@ func GetTrace(ctx context.Context) (traceid, app, ip, method, path string, kind 
 	return
 }
 
-func GetTraceMap(ctx context.Context) map[string]string {
-	if ctx == nil {
-		return nil
-	}
-	tmp := ctx.Value(tracekey{})
-	if tmp == nil {
-		return nil
-	}
-	tracedata, _ := tmp.(map[string]string)
-	return tracedata
-}
-
-func MapToTrace(tracedata map[string]string) (traceid, app, ip, method, path string, kind KIND) {
-	if tracedata == nil {
-		return
-	}
-	traceid = tracedata["Traceid"]
-	if traceid == "" {
-		return
-	}
-	app = tracedata["App"]
-	ip = tracedata["Ip"]
-	method = tracedata["Method"]
-	path = tracedata["Path"]
-	kind = KIND(tracedata["Kind"])
-	return
-}
-
 func maketraceid() string {
 	nowstr := strconv.FormatInt(time.Now().UnixNano(), 10)
 	ranstr := strconv.FormatInt(rand.Int63(), 10)

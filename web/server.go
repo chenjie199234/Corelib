@@ -612,7 +612,10 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
 				return
 			}
-			traceid, _, _, frommethod, frompath, fromkind = trace.MapToTrace(td)
+			traceid = td["Traceid"]
+			frommethod = td["Method"]
+			frompath = td["Path"]
+			fromkind = trace.KIND(td["Kind"])
 		}
 		fromapp = sourceserver
 		if fromapp == "" {

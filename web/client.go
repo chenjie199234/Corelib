@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	cerror "github.com/chenjie199234/Corelib/util/error"
+	"github.com/chenjie199234/Corelib/util/host"
 )
 
 //param's key is server's addr "scheme://host:port"
@@ -333,11 +335,14 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		d, _ := json.Marshal(metadata)
 		header.Set("Metadata", common.Byte2str(d))
 	}
-	tracedata := trace.GetTraceMap(ctx)
-	if tracedata != nil {
-		delete(tracedata, "App")
-		delete(tracedata, "Ip")
-		d, _ := json.Marshal(tracedata)
+	traceid, _, _, frommethod, frompath, fromkind := trace.GetTrace(ctx)
+	if traceid != "" {
+		d, _ := json.Marshal(map[string]string{
+			"Traceid": traceid,
+			"Method":  frommethod,
+			"Path":    frompath,
+			"Kind":    string(fromkind),
+		})
 		header.Set("Tracedata", common.Byte2str(d))
 	}
 	var min time.Duration
@@ -408,27 +413,46 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			return nil, cerror.StdErrorToError(e)
 		}
 		req.Header = header
+		traceend := trace.TraceStart(ctx, trace.CLIENT, this.selfappname, host.Hostip, frommethod, frompath, fromkind, this.appname, server.host, method, pathwithquery[:strings.Index(pathwithquery, "?")], trace.WEB)
+		//start call
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
-		resp, e := server.client.Do(req)
+		var resp *http.Response
+		resp, e = server.client.Do(req)
 		atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 		if e != nil {
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
+			if traceend != nil {
+				traceend(e)
+			}
 			return nil, cerror.StdErrorToError(e)
 		}
 		if resp.StatusCode == 888 {
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
 			server.status = 0
+			resp.Body.Close()
+			if traceend != nil {
+				traceend(ERRCLOSING)
+			}
 			continue
 		}
 		if resp.StatusCode != 200 {
 			var respbody []byte
 			respbody, e = io.ReadAll(resp.Body)
+			resp.Body.Close()
 			if e != nil {
-				resp.Body.Close()
+				if traceend != nil {
+					traceend(e)
+				}
 				return nil, cerror.StdErrorToError(e)
 			}
-			resp.Body.Close()
-			return nil, cerror.ErrorstrToError(common.Byte2str(respbody))
+			e = cerror.ErrorstrToError(common.Byte2str(respbody))
+			if traceend != nil {
+				traceend(e)
+			}
+			return nil, e
+		}
+		if traceend != nil {
+			traceend(nil)
 		}
 		return resp, nil
 	}

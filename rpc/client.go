@@ -14,6 +14,7 @@ import (
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	cerror "github.com/chenjie199234/Corelib/util/error"
+	"github.com/chenjie199234/Corelib/util/host"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -462,11 +463,14 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 		Body:     in,
 		Metadata: metadata,
 	}
-	tracedata := trace.GetTraceMap(ctx)
-	if tracedata != nil {
-		delete(tracedata, "App")
-		delete(tracedata, "Ip")
-		msg.Tracedata = tracedata
+	traceid, _, _, frommethod, frompath, fromkind := trace.GetTrace(ctx)
+	if traceid != "" {
+		msg.Tracedata = map[string]string{
+			"Traceid": traceid,
+			"Method":  frommethod,
+			"Path":    frompath,
+			"Kind":    string(fromkind),
+		}
 	}
 	d, _ := proto.Marshal(msg)
 	r := c.getreq(msg.Callid)
@@ -523,6 +527,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 			server.lker.Unlock()
 			continue
 		}
+		traceend := trace.TraceStart(ctx, trace.CLIENT, c.selfappname, host.Hostip, frommethod, frompath, fromkind, c.appname, server.addr, "rpc", path, trace.RPC)
 		//send message success,store req,add req num
 		server.reqs[msg.Callid] = r
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
@@ -534,6 +539,9 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 			server.lker.Lock()
 			delete(server.reqs, msg.Callid)
 			server.lker.Unlock()
+			if traceend != nil {
+				traceend(r.err)
+			}
 			if r.err != nil {
 				//req error,update last fail time
 				server.Pickinfo.Lastfail = time.Now().UnixNano()
@@ -563,6 +571,9 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 			//update last fail time
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
 			c.putreq(r)
+			if traceend != nil {
+				traceend(ctx.Err())
+			}
 			return nil, cerror.StdErrorToError(ctx.Err())
 		}
 	}
