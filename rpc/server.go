@@ -308,8 +308,11 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 			fromkind = trace.KIND("unknown")
 		}
 		ctx = trace.InitTrace(ctx, traceid, s.instance.GetSelfName(), host.Hostip, "rpc", path, trace.RPC)
+		traceid, _, _, _, _, _ = trace.GetTrace(ctx)
+		clientTraceCTX := trace.InitTrace(nil, traceid, fromapp, fromip, frommethod, frompath, fromkind)
+		traceend := trace.TraceStart(clientTraceCTX, trace.SERVER, s.instance.GetSelfName(), host.Hostip, "RPC", path, trace.RPC)
+		//logic
 		workctx := s.getContext(ctx, peeruniquename, msg, totalhandlers)
-		traceend := trace.TraceStart(workctx, trace.SERVER, fromapp, fromip, frommethod, frompath, fromkind, s.instance.GetSelfName(), host.Hostip, "rpc", path, trace.RPC)
 		defer func() {
 			if e := recover(); e != nil {
 				stack := make([]byte, 8192)

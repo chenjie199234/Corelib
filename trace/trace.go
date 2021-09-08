@@ -100,14 +100,14 @@ type TraceLog struct {
 type tracekey struct{}
 
 func InitTrace(ctx context.Context, traceid, app, ip, method, path string, kind KIND) context.Context {
-	if app == "" || ip == "" || method == "" || path == "" || kind == "" {
-		panic("[trace] init error: missing params")
-	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	tmp := ctx.Value(tracekey{})
 	if tmp == nil {
+		if app == "" || ip == "" || method == "" || path == "" || kind == "" {
+			panic("[trace] init error: missing params")
+		}
 		if traceid == "" {
 			traceid = maketraceid()
 		}
@@ -116,7 +116,7 @@ func InitTrace(ctx context.Context, traceid, app, ip, method, path string, kind 
 	return ctx
 }
 
-func GetTrace(ctx context.Context) (traceid, app, ip, method, path string, kind KIND) {
+func GetTrace(ctx context.Context) (traceid, curapp, curip, curmethod, curpath string, curkind KIND) {
 	if ctx == nil {
 		return
 	}
@@ -126,12 +126,23 @@ func GetTrace(ctx context.Context) (traceid, app, ip, method, path string, kind 
 	}
 	tracedata, _ := tmp.(map[string]string)
 	traceid = tracedata["Traceid"]
-	app = tracedata["App"]
-	ip = tracedata["Ip"]
-	method = tracedata["Method"]
-	path = tracedata["Path"]
-	kind = KIND(tracedata["Kind"])
+	curapp = tracedata["App"]
+	curip = tracedata["Ip"]
+	curmethod = tracedata["Method"]
+	curpath = tracedata["Path"]
+	curkind = KIND(tracedata["Kind"])
 	return
+}
+
+func CopyTrace(src context.Context) context.Context {
+	if src == nil {
+		return context.Background()
+	}
+	traceid, fromapp, fromip, frommethod, frompath, fromkind := GetTrace(src)
+	if traceid == "" {
+		return context.Background()
+	}
+	return InitTrace(context.Background(), traceid, fromapp, fromip, frommethod, frompath, fromkind)
 }
 
 func maketraceid() string {
@@ -139,15 +150,12 @@ func maketraceid() string {
 	ranstr := strconv.FormatInt(rand.Int63(), 10)
 	return nowstr + "_" + ranstr
 }
-func TraceStart(ctx context.Context, role ROLE, fromapp, fromip, frommethod, frompath string, fromkind KIND, toapp, toip, tomethod, topath string, tokind KIND) (TraceEnd func(e error)) {
-	if ctx == nil {
+
+func TraceStart(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string, tokind KIND) (TraceEnd func(e error)) {
+	traceid, fromapp, fromip, frommethod, frompath, fromkind := GetTrace(ctx)
+	if traceid == "" {
 		return nil
 	}
-	tmp := ctx.Value(tracekey{})
-	if tmp == nil {
-		return nil
-	}
-	traceid := (tmp.(map[string]string))["Traceid"]
 	subtraceid := maketraceid()
 	startlog, _ := json.Marshal(&TraceLog{
 		TraceId:    traceid,

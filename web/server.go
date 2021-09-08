@@ -632,10 +632,12 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			fromkind = trace.KIND("unknown")
 		}
 		ctx = trace.InitTrace(ctx, traceid, this.selfappname, host.Hostip, method, path, trace.WEB)
-		r = r.WithContext(ctx)
+		traceid, _, _, _, _, _ = trace.GetTrace(ctx)
+		clientTraceCTX := trace.InitTrace(nil, traceid, fromapp, fromip, frommethod, frompath, fromkind)
+		traceend := trace.TraceStart(clientTraceCTX, trace.SERVER, this.selfappname, host.Hostip, method, path, trace.WEB)
 		//logic
+		r = r.WithContext(ctx)
 		workctx := this.getContext(w, r, totalhandlers)
-		traceend := trace.TraceStart(workctx, trace.SERVER, fromapp, fromip, frommethod, frompath, fromkind, this.selfappname, host.Hostip, method, path, trace.WEB)
 		defer func() {
 			if e := recover(); e != nil {
 				stack := make([]byte, 8192)
