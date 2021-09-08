@@ -8,6 +8,8 @@ extend google.protobuf.MethodOptions {
 	repeated string midwares=150003;
 }
 extend google.protobuf.FieldOptions {
+	//message
+	bool message_not_nil=160000;
 	//repeated or map's element length
 	uint64 map_repeated_len_eq=160001;
 	uint64 map_repeated_len_not_eq=160002;
@@ -110,4 +112,6 @@ extend google.protobuf.FieldOptions {
 	double map_value_float_gte=160084;
 	double map_value_float_lt=160085;
 	double map_value_float_lte=160086;
+	//map value message
+	bool map_value_message_not_nil=160087;
 }

@@ -79,7 +79,7 @@ message test_data{
 	map<uint64,float> mui64_f=57;
 	map<uint64,double> mui64_d=58;
 	map<uint64,TestEnum> mui64_e=59;
-	map<uint64,test_data> mui64_m=60;
+	map<uint64,test_data> mui64_m=60[(pbex.map_value_message_not_nil)=true];
 
 	map<string,int32> mss_i32=61[(pbex.map_key_string_reg_not_match)="notkey*"];
 	map<string,uint32> mss_ui32=62;
@@ -111,8 +111,8 @@ message helloreq{
 	repeated double rd=16;
 	TestEnum e=17;
 	repeated TestEnum re=18;
-	test_data m=19;
-	repeated test_data rm=20;
+	test_data m=19[(pbex.message_not_nil)=true];
+	repeated test_data rm=20[(pbex.message_not_nil)=true];
 
 	map<int32,int32> mi32_i32=21;
 	map<int32,uint32> mi32_ui32=22;

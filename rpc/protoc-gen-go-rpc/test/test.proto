@@ -35,7 +35,7 @@ message test_data{
 	TestEnum e=17;
 	repeated TestEnum re=18;
 	test_data m=19;
-	repeated test_data rm=20;
+	repeated test_data rm=20[(pbex.message_not_nil)=true];
 
 	map<int32,int32> mi32_i32=21;
 	map<int32,uint32> mi32_ui32=22;
@@ -111,7 +111,7 @@ message helloreq{
 	repeated double rd=16;
 	TestEnum e=17;
 	repeated TestEnum re=18;
-	test_data m=19;
+	test_data m=19[(pbex.message_not_nil)=true];
 	repeated test_data rm=20;
 
 	map<int32,int32> mi32_i32=21;
@@ -167,7 +167,7 @@ message helloreq{
 	map<string,float> mss_f=67;
 	map<string,double> mss_d=68;
 	map<string,TestEnum> mss_e=69;
-	map<string,test_data> mss_m=70;
+	map<string,test_data> mss_m=70[(pbex.map_value_message_not_nil)=true];
 }
 message helloresp{
 

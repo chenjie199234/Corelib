@@ -525,7 +525,7 @@ func check(prefix string, message *protogen.Message, g *protogen.GeneratedFile) 
 			} else {
 				//message or []message
 				if _, ok := allcheck[field.Message.GoIdent.String()]; ok {
-					messagecheck(prefix, field, g)
+					messagecheck(prefix, field, fop, g)
 				}
 			}
 		}
@@ -1203,11 +1203,19 @@ func strcheck(prefix string, field *protogen.Field, isslice bool, fop *descripto
 		}
 	}
 }
-func messagecheck(prefix string, field *protogen.Field, g *protogen.GeneratedFile) {
+func messagecheck(prefix string, field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+	var notnil bool
+	if proto.HasExtension(fop, pbex.E_MessageNotNil) {
+		notnil = proto.GetExtension(fop, pbex.E_MessageNotNil).(bool)
+	}
 	if field.Desc.IsList() {
 		g.P("for _,v:=range ", prefix+field.GoName, "{")
 		g.P("if v==nil{")
-		g.P("continue")
+		if notnil {
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value object not nil failed\"")
+		} else {
+			g.P("continue")
+		}
 		g.P("}")
 		//g.P("if !_", service.GoName, "WebCheckers[", strconv.Quote(message.GoIdent.String()), "](v){")
 		//g.P("return false")
@@ -1222,6 +1230,10 @@ func messagecheck(prefix string, field *protogen.Field, g *protogen.GeneratedFil
 		g.P("if s:=_", service.GoName, "WebCheckers[", strconv.Quote(field.Message.GoIdent.String()), "](", prefix+field.GoName, ");s!=\"\"{")
 		g.P("return s")
 		g.P("}")
+		if notnil {
+			g.P("}else{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value object not nil failed\"")
+		}
 		g.P("}")
 	}
 }
@@ -1879,10 +1891,21 @@ func mapcheck(prefix string, field *protogen.Field, fop *descriptorpb.FieldOptio
 				g.P("}")
 			}
 		case protoreflect.MessageKind:
-			if _, ok := allcheck[val.Message.GoIdent.String()]; ok {
-				g.P("if v==nil{")
-				g.P("continue")
+			var notnil bool
+			if proto.HasExtension(fop, pbex.E_MapValueMessageNotNil) {
+				notnil = proto.GetExtension(fop, pbex.E_MapValueMessageNotNil).(bool)
+			}
+			if notnil {
+				g.P("if v == nil {")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value object not nil failed\"")
 				g.P("}")
+			}
+			if _, ok := allcheck[val.Message.GoIdent.String()]; ok {
+				if !notnil {
+					g.P("if v==nil{")
+					g.P("continue")
+					g.P("}")
+				}
 				g.P("if s:=_", service.GoName, "WebCheckers[", strconv.Quote(val.Message.GoIdent.String()), "](v);s!=\"\"{")
 				g.P("return s")
 				//g.P("if !_", service.GoName, "WebCheckers[", strconv.Quote(val.Message.GoIdent.String()), "](v){")
