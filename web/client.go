@@ -137,7 +137,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 		return nil, errors.New("[web.client] missing discover in config")
 	}
 	if c.Picker == nil {
-		log.Warning("[web.client] missing picker in config,default picker will be used")
+		log.Warning(nil, "[web.client] missing picker in config,default picker will be used")
 		c.Picker = defaultPicker
 	}
 	c.validate()
@@ -167,7 +167,6 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 		mlker:        &sync.Mutex{},
 	}
 	//init discover
-	log.Info("[web.client] start discovering server", group+"."+name)
 	client.manually <- struct{}{}
 	manualNotice := make(chan struct{}, 1)
 	client.manualNotice[manualNotice] = struct{}{}

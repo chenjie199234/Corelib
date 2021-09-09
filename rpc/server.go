@@ -317,7 +317,7 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 			if e := recover(); e != nil {
 				stack := make([]byte, 8192)
 				n := runtime.Stack(stack, false)
-				log.Error("[rpc.server] client:", peeruniquename, "path:", path, "panic:", e, "\n"+common.Byte2str(stack[:n]))
+				log.Error(workctx, "[rpc.server] client:", peeruniquename, "path:", path, "panic:", e, "\n"+common.Byte2str(stack[:n]))
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
@@ -366,13 +366,13 @@ func (s *RpcServer) onlinefunc(p *stream.Peer, peeruniquename string, sid int64)
 		//self closed
 		return false
 	}
-	log.Info("[rpc.server.onlinefunc] client:", peeruniquename, "online")
+	log.Info(nil, "[rpc.server.onlinefunc] client:", peeruniquename, "online")
 	return true
 }
 func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, sid int64) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
-		log.Error("[rpc.server.userfunc] client:", peeruniquename, "data format error:", e)
+		log.Error(nil, "[rpc.server.userfunc] client:", peeruniquename, "data format error:", e)
 		p.Close(sid)
 		return
 	}
@@ -386,7 +386,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(d, sid, true); e != nil {
-			log.Error("[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
+			log.Error(nil, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
 		}
 		return
 	}
@@ -412,7 +412,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			msg.Tracedata = nil
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(d, sid, true); e != nil {
-				log.Error("[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
+				log.Error(nil, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
 			}
 			return
 		}
@@ -421,7 +421,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		handler(peeruniquename, msg)
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(d, sid, true); e != nil {
-			log.Error("[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
+			log.Error(nil, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
 			if e == stream.ErrMsgLarge {
 				msg.Path = ""
 				msg.Deadline = 0
@@ -443,5 +443,5 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 	}()
 }
 func (s *RpcServer) offlinefunc(p *stream.Peer, peeruniquename string) {
-	log.Info("[rpc.server.offlinefunc] client:", peeruniquename, "offline")
+	log.Info(nil, "[rpc.server.offlinefunc] client:", peeruniquename, "offline")
 }

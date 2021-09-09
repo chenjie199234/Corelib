@@ -59,7 +59,7 @@ func (p *Pool) ListMQSub(name string, num uint64, recvbufnum uint64, stop chan s
 					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 					conn, e = p.GetContext(ctx)
 					if e != nil {
-						log.Error("[Redis.ListMQ.Sub.init] index:", index, "connect to redis error:", e)
+						log.Error(nil, "[Redis.ListMQ.Sub.init] index:", index, "connect to redis error:", e)
 						conn = nil
 						cancel()
 						continue
@@ -68,7 +68,7 @@ func (p *Pool) ListMQSub(name string, num uint64, recvbufnum uint64, stop chan s
 						_, e = conn.DoContext(ctx, "EVAL", expire, 2, listname, listnameexist)
 					}
 					if e != nil {
-						log.Error("[Redis.ListMQ.Sub.init] index:", index, "exec error:", e)
+						log.Error(nil, "[Redis.ListMQ.Sub.init] index:", index, "exec error:", e)
 						conn.Close()
 						conn = nil
 					}
@@ -78,7 +78,7 @@ func (p *Pool) ListMQSub(name string, num uint64, recvbufnum uint64, stop chan s
 					//sub
 					var data [][]byte
 					if data, e = redis.ByteSlices(conn.c.(redis.ConnWithTimeout).DoWithTimeout(0, "BLPOP", listname, 0)); e != nil {
-						log.Error("[Redis.ListMQ.Sub.sub] index:", index, "exec error:", e)
+						log.Error(nil, "[Redis.ListMQ.Sub.sub] index:", index, "exec error:", e)
 						conn.Close()
 						conn = nil
 						break
@@ -96,7 +96,7 @@ func (p *Pool) ListMQSub(name string, num uint64, recvbufnum uint64, stop chan s
 					ctx, cancel := context.WithTimeout(context.Background(), time.Second*4)
 					conn, e := p.GetContext(ctx)
 					if e != nil {
-						log.Error("[Redis.ListMQ.Sub.update] index:", index, "connect to redis error:", e)
+						log.Error(nil, "[Redis.ListMQ.Sub.update] index:", index, "connect to redis error:", e)
 						cancel()
 						continue
 					}
@@ -104,16 +104,16 @@ func (p *Pool) ListMQSub(name string, num uint64, recvbufnum uint64, stop chan s
 						_, e = conn.DoContext(ctx, "EVAL", expire, 2, listname, listnameexist)
 					}
 					if e != nil {
-						log.Error("[Redis.ListMQ.Sub.update] index:", index, "exec error:", e)
+						log.Error(nil, "[Redis.ListMQ.Sub.update] index:", index, "exec error:", e)
 					}
 					conn.Close()
 					cancel()
 				case <-stop:
 					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 					if conn, e := p.GetContext(ctx); e != nil {
-						log.Error("[Redis.ListMQ.Sub.stop] index:", index, "connect to redis error:", e)
+						log.Error(nil, "[Redis.ListMQ.Sub.stop] index:", index, "connect to redis error:", e)
 					} else if _, e = conn.DoContext(ctx, "DEL", listnameexist); e != nil && e != redis.ErrNil {
-						log.Error("[Redis.ListMQ.Sub.stop] index:", index, "exec error:", e)
+						log.Error(nil, "[Redis.ListMQ.Sub.stop] index:", index, "exec error:", e)
 						conn.Close()
 						time.Sleep(5 * time.Millisecond)
 					} else {

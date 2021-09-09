@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/rotatefile"
+	"github.com/chenjie199234/Corelib/trace"
 )
 
 var target int //1-std(default),2-file,3-both
@@ -64,42 +66,48 @@ func init() {
 		}
 	}
 }
-func Debug(datas ...interface{}) {
+func Debug(ctx context.Context, datas ...interface{}) {
 	if level > 0 {
 		return
 	}
 	buf := bufpool.GetBuffer()
 	buf.Append("[DBG] ")
-	write(buf, datas...)
+	write(ctx, buf, datas...)
 }
-func Info(datas ...interface{}) {
+func Info(ctx context.Context, datas ...interface{}) {
 	if level > 1 {
 		return
 	}
 	buf := bufpool.GetBuffer()
 	buf.Append("[INF] ")
-	write(buf, datas...)
+	write(ctx, buf, datas...)
 }
-func Warning(datas ...interface{}) {
+func Warning(ctx context.Context, datas ...interface{}) {
 	if level > 2 {
 		return
 	}
 	buf := bufpool.GetBuffer()
 	buf.Append("[WRN] ")
-	write(buf, datas...)
+	write(ctx, buf, datas...)
 }
-func Error(datas ...interface{}) {
+func Error(ctx context.Context, datas ...interface{}) {
 	buf := bufpool.GetBuffer()
 	buf.Append("[ERR] ")
-	write(buf, datas...)
+	write(ctx, buf, datas...)
 }
-func write(buf *bufpool.Buffer, datas ...interface{}) {
+func write(ctx context.Context, buf *bufpool.Buffer, datas ...interface{}) {
 	buf.Append(time.Now())
 	_, file, line, _ := runtime.Caller(2)
 	buf.Append(" ")
 	buf.Append(file)
 	buf.Append(":")
 	buf.Append(line)
+	traceid, _, _, _, _, _ := trace.GetTrace(ctx)
+	if traceid != "" {
+		buf.Append(" ")
+		buf.Append("Traceid: ")
+		buf.Append(traceid)
+	}
 	for _, data := range datas {
 		buf.Append(" ")
 		buf.Append(data)
@@ -117,7 +125,7 @@ func write(buf *bufpool.Buffer, datas ...interface{}) {
 		bufpool.PutBuffer(buf)
 	}
 }
-func RotateLogFileSize() int64 {
+func LogFileSize() int64 {
 	return rf.GetCurFileLen()
 }
 func RotateLogFile() {

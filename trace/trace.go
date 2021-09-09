@@ -221,7 +221,7 @@ func write(log []byte) {
 	}
 }
 
-func RotateLogFileSize() int64 {
+func LogFileSize() int64 {
 	return rf.GetCurFileLen()
 }
 func RotateLogFile() {

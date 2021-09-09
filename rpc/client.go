@@ -148,7 +148,7 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 		return nil, errors.New("[rpc.client] missing discover in config")
 	}
 	if c.Picker == nil {
-		log.Warning("[rpc.client] missing picker in config,default picker will be used")
+		log.Warning(nil, "[rpc.client] missing picker in config,default picker will be used")
 		c.Picker = defaultPicker
 	}
 	c.validate()
@@ -355,7 +355,7 @@ func (c *RpcClient) onlinefunc(p *stream.Peer, appuniquename string, sid int64) 
 	exist.sid = sid
 	exist.status = 3
 	p.SetData(unsafe.Pointer(exist))
-	log.Info("[rpc.client.onlinefunc] server:", appuniquename, "online")
+	log.Info(nil, "[rpc.client.onlinefunc] server:", appuniquename, "online")
 	exist.lker.Unlock()
 	return true
 }
@@ -365,7 +365,7 @@ func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, 
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
-		log.Error("[rpc.client.userfunc] server:", appuniquename, "data format error:", e)
+		log.Error(nil, "[rpc.client.userfunc] server:", appuniquename, "data format error:", e)
 		return
 	}
 	server.lker.Lock()
@@ -391,7 +391,7 @@ func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string) {
 	if server == nil {
 		return
 	}
-	log.Info("[rpc.client.offlinefunc] server:", appuniquename, "offline")
+	log.Info(nil, "[rpc.client.offlinefunc] server:", appuniquename, "offline")
 	server.lker.Lock()
 	server.peer = nil
 	server.sid = 0

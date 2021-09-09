@@ -254,19 +254,19 @@ func (this *Instance) heart(group *peergroup, index int) {
 			tempsendidlestart := atomic.LoadInt64(&p.sendidlestart)
 			if now >= templastactive && now-templastactive > int64(this.c.HeartbeatTimeout) {
 				//heartbeat timeout
-				log.Error("[Stream.heart] heartbeat timeout:", p.getUniqueName())
+				log.Error(nil, "[Stream.heart] heartbeat timeout:", p.getUniqueName())
 				p.closeconn()
 				continue
 			}
 			if now >= tempsendidlestart && now-tempsendidlestart > int64(this.c.SendIdleTimeout) {
 				//send idle timeout
-				log.Error("[Stream.heart] send idle timeout:", p.getUniqueName())
+				log.Error(nil, "[Stream.heart] send idle timeout:", p.getUniqueName())
 				p.closeconn()
 				continue
 			}
 			if this.c.RecvIdleTimeout != 0 && now >= temprecvidlestart && now-temprecvidlestart > int64(this.c.RecvIdleTimeout) {
 				//recv idle timeout
-				log.Error("[Stream.heart] recv idle timeout:", p.getUniqueName())
+				log.Error(nil, "[Stream.heart] recv idle timeout:", p.getUniqueName())
 				p.closeconn()
 				continue
 			}

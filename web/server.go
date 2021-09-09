@@ -192,14 +192,14 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	}
 	instance.closewait.Add(1)
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
+		log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
 		http.Error(w,
 			ERRNOAPI.Error(),
 			http.StatusNotFound,
 		)
 	})
 	instance.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown method")
+		log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown method")
 		http.Error(w,
 			ERRNOAPI.Error(),
 			http.StatusMethodNotAllowed,
@@ -254,15 +254,15 @@ func (this *WebServer) printPaths() {
 		for path := range paths {
 			switch method {
 			case http.MethodGet:
-				log.Info("\t", method, "      ", path)
+				log.Info(nil, "\t", method, "      ", path)
 			case http.MethodDelete:
-				log.Info("\t", method, "   ", path)
+				log.Info(nil, "\t", method, "   ", path)
 			case http.MethodPost:
-				log.Info("\t", method, "     ", path)
+				log.Info(nil, "\t", method, "     ", path)
 			case http.MethodPut:
-				log.Info("\t", method, "      ", path)
+				log.Info(nil, "\t", method, "      ", path)
 			case http.MethodPatch:
-				log.Info("\t", method, "    ", path)
+				log.Info(nil, "\t", method, "    ", path)
 			}
 		}
 	}
@@ -477,7 +477,6 @@ func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ..
 func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	//check required target server
 	if targetserver := r.Header.Get("TargetServer"); targetserver != "" && targetserver != this.selfappname {
-		log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: this is not the required targetserver:", targetserver)
 		http.Error(w, ERRCLOSING.Error(), 888)
 		return
 	}
@@ -532,7 +531,6 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 					}
 				}
 				if !find {
-					log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "origin:", origin, "error: cors")
 					w.WriteHeader(http.StatusForbidden)
 					w.Write(common.Str2byte(http.StatusText(http.StatusForbidden)))
 					return
@@ -561,7 +559,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			var e error
 			clientdl, e = strconv.ParseInt(temp, 10, 64)
 			if e != nil {
-				log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Deadline:", temp, "format error")
+				log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Deadline:", temp, "format error")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
 				return
@@ -595,7 +593,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 		if mdstr := r.Header.Get("Metadata"); mdstr != "" {
 			md := make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(mdstr), &md); e != nil {
-				log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Metadata:", mdstr, "format error")
+				log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Metadata:", mdstr, "format error")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
 				return
@@ -607,7 +605,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 		if tdstr := r.Header.Get("Tracedata"); tdstr != "" {
 			td := make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(tdstr), &td); e != nil {
-				log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Tracedata:", tdstr, "format error")
+				log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Tracedata:", tdstr, "format error")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
 				return
@@ -642,7 +640,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			if e := recover(); e != nil {
 				stack := make([]byte, 8192)
 				n := runtime.Stack(stack, false)
-				log.Error("[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "panic:", e, "\n"+common.Byte2str(stack[:n]))
+				log.Error(workctx, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "panic:", e, "\n"+common.Byte2str(stack[:n]))
 				http.Error(w, ERRPANIC.Error(), http.StatusInternalServerError)
 				workctx.e = ERRPANIC
 			}

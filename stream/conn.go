@@ -76,14 +76,14 @@ func (this *Instance) sworker(p *Peer) {
 		return
 	}
 	if e := this.addPeer(p); e != nil {
-		log.Error("[Stream.sworker] add:", p.getUniqueName(), "to peer manager error:", e)
+		log.Error(nil, "[Stream.sworker] add:", p.getUniqueName(), "to peer manager error:", e)
 		p.closeconn()
 		this.putPeer(p)
 		return
 	}
 	if this.c.Onlinefunc != nil {
 		if !this.c.Onlinefunc(p, p.getUniqueName(), p.sid) {
-			log.Error("[Stream.sworker] online:", p.getUniqueName(), "failed")
+			log.Error(nil, "[Stream.sworker] online:", p.getUniqueName(), "failed")
 			p.closeconn()
 			//after addpeer should use this way to delete this peer
 			this.noticech <- p
@@ -94,7 +94,7 @@ func (this *Instance) sworker(p *Peer) {
 	verifymsg := makeVerifyMsg(this.selfname, verifydata, p.sid, p.selfmaxmsglen)
 	defer bufpool.PutBuffer(verifymsg)
 	if _, e := p.conn.Write(verifymsg.Bytes()); e != nil {
-		log.Error("[Stream.sworker] write verify msg to:", p.getUniqueName(), "error:", e)
+		log.Error(nil, "[Stream.sworker] write verify msg to:", p.getUniqueName(), "error:", e)
 		p.closeconn()
 		//after addpeer should use this way to delete this peer
 		this.noticech <- p
@@ -118,7 +118,7 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) strin
 	dl := time.Now().Add(this.c.TcpC.ConnectTimeout)
 	conn, e := dialer.Dial("tcp", serveraddr)
 	if e != nil {
-		log.Error("[Stream.StartTcpClient] dial error:", e)
+		log.Error(nil, "[Stream.StartTcpClient] dial error:", e)
 		return ""
 	}
 	//disable system's tcp keep alive probe
@@ -139,7 +139,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 	verifymsg := makeVerifyMsg(this.selfname, verifydata, 0, p.selfmaxmsglen)
 	defer bufpool.PutBuffer(verifymsg)
 	if _, e := p.conn.Write(verifymsg.Bytes()); e != nil {
-		log.Error("[Stream.cworker] write verify msg to:", p.getUniqueName(), "error:", e)
+		log.Error(nil, "[Stream.cworker] write verify msg to:", p.getUniqueName(), "error:", e)
 		p.closeconn()
 		this.putPeer(p)
 		return ""
@@ -153,14 +153,14 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 	}
 	//verify server success
 	if e := this.addPeer(p); e != nil {
-		log.Error("[Stream.cworker] add:", p.getUniqueName(), "to peer manager error:", e)
+		log.Error(nil, "[Stream.cworker] add:", p.getUniqueName(), "to peer manager error:", e)
 		p.closeconn()
 		this.putPeer(p)
 		return ""
 	}
 	if this.c.Onlinefunc != nil {
 		if !this.c.Onlinefunc(p, p.getUniqueName(), p.sid) {
-			log.Error("[Stream.cworker] online:", p.getUniqueName(), "failed")
+			log.Error(nil, "[Stream.cworker] online:", p.getUniqueName(), "failed")
 			p.closeconn()
 			this.noticech <- p
 			return ""
@@ -197,9 +197,9 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer, clientorserver bo
 	}
 	if e != nil {
 		if clientorserver {
-			log.Error("[Stream.verifypeer] read msg from server:", p.getUniqueName(), "error:", e)
+			log.Error(nil, "[Stream.verifypeer] read msg from server:", p.getUniqueName(), "error:", e)
 		} else {
-			log.Error("[Stream.verifypeer] read msg from client:", p.getUniqueName(), "error:", e)
+			log.Error(nil, "[Stream.verifypeer] read msg from client:", p.getUniqueName(), "error:", e)
 		}
 		return nil
 	}
@@ -220,9 +220,9 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer, clientorserver bo
 	response, success := this.c.Verifyfunc(ctx, p.getUniqueName(), peerverifydata)
 	if !success {
 		if clientorserver {
-			log.Error("[Stream.verifypeer] verify server:", p.getUniqueName(), "failed")
+			log.Error(nil, "[Stream.verifypeer] verify server:", p.getUniqueName(), "failed")
 		} else {
-			log.Error("[Stream.verifypeer] verify client:", p.getUniqueName(), "failed")
+			log.Error(nil, "[Stream.verifypeer] verify client:", p.getUniqueName(), "failed")
 		}
 		p.peername = ""
 		return nil
@@ -264,7 +264,7 @@ func (this *Instance) read(p *Peer) {
 			}
 		}
 		if e != nil {
-			log.Error("[Stream.read] from:", p.getUniqueName(), "error:", e)
+			log.Error(nil, "[Stream.read] from:", p.getUniqueName(), "error:", e)
 			if data != nil {
 				bufpool.PutBuffer(data)
 			}
@@ -347,7 +347,7 @@ func (this *Instance) write(p *Peer) {
 		}
 		p.sendidlestart = time.Now().UnixNano()
 		if _, e = p.conn.Write(data.Bytes()); e != nil {
-			log.Error("[Stream.write] to:", p.getUniqueName(), "error:", e)
+			log.Error(nil, "[Stream.write] to:", p.getUniqueName(), "error:", e)
 			return
 		}
 		bufpool.PutBuffer(data)
