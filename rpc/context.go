@@ -12,7 +12,6 @@ type Context struct {
 	peeruniquename string
 	handlers       []OutsideHandler
 	next           int8
-	e              error
 }
 
 func (c *Context) Next() {
@@ -36,7 +35,6 @@ func (c *Context) Abort(e error) {
 	c.msg.Error = e.Error()
 	c.msg.Metadata = nil
 	c.msg.Tracedata = nil
-	c.e = e
 	c.next = -1
 }
 

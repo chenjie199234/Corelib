@@ -263,9 +263,6 @@ func (this *WebClient) updateDiscovery(all map[string]*RegisterData) {
 }
 
 func forbiddenHeader(header http.Header) bool {
-	if _, ok := header["TargetServer"]; ok {
-		return true
-	}
 	if _, ok := header["SourceServer"]; ok {
 		return true
 	}
@@ -281,7 +278,7 @@ func forbiddenHeader(header http.Header) bool {
 	return false
 }
 
-//"TargetServer" "SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
+//"SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
 func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -289,7 +286,7 @@ func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, path,
 	return this.call(http.MethodGet, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"TargetServer" "SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
+//"SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
 func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -297,7 +294,7 @@ func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, pa
 	return this.call(http.MethodDelete, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"TargetServer" "SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
+//"SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
 func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -305,7 +302,7 @@ func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, path
 	return this.call(http.MethodPost, ctx, functimeout, path, query, header, metadata, body)
 }
 
-//"TargetServer" "SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
+//"SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
 func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -313,7 +310,7 @@ func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, path,
 	return this.call(http.MethodPut, ctx, functimeout, path, query, header, metadata, body)
 }
 
-//"TargetServer" "SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
+//"SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
 func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -330,7 +327,6 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	if header == nil {
 		header = make(http.Header)
 	}
-	header.Set("TargetServer", this.appname)
 	header.Set("SourceServer", this.selfappname)
 	if len(metadata) != 0 {
 		d, _ := json.Marshal(metadata)

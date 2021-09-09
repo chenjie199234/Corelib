@@ -14,6 +14,7 @@ import (
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
+	cerror "github.com/chenjie199234/Corelib/util/error"
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/metadata"
 
@@ -81,7 +82,7 @@ type RpcServer struct {
 	c                  *ServerConfig
 	global             []OutsideHandler
 	ctxpool            *sync.Pool
-	handler            map[string]func(string, *Msg)
+	handler            map[string]func(context.Context, string, *Msg)
 	instance           *stream.Instance
 	closewait          *sync.WaitGroup
 	totalreqnum        int32
@@ -107,7 +108,7 @@ func NewRpcServer(c *ServerConfig, selfgroup, selfname string) (*RpcServer, erro
 		c:                  c,
 		global:             make([]OutsideHandler, 0, 10),
 		ctxpool:            &sync.Pool{},
-		handler:            make(map[string]func(string, *Msg), 10),
+		handler:            make(map[string]func(context.Context, string, *Msg), 10),
 		closewait:          &sync.WaitGroup{},
 		refreshclosewaitch: make(chan struct{}, 1),
 	}
@@ -212,7 +213,6 @@ func (s *RpcServer) getContext(ctx context.Context, peeruniquename string, msg *
 	result.peeruniquename = peeruniquename
 	result.msg = msg
 	result.handlers = handlers
-	result.e = nil
 	return result
 }
 
@@ -222,7 +222,6 @@ func (s *RpcServer) putContext(ctx *Context) {
 	ctx.msg = nil
 	ctx.handlers = nil
 	ctx.next = 0
-	ctx.e = nil
 }
 
 //thread unsafe
@@ -240,14 +239,14 @@ func (s *RpcServer) RegisterHandler(path string, functimeout time.Duration, hand
 	return nil
 }
 
-func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handlers ...OutsideHandler) (func(string, *Msg), error) {
+func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handlers ...OutsideHandler) (func(context.Context, string, *Msg), error) {
 	totalhandlers := make([]OutsideHandler, 1)
 	totalhandlers = append(totalhandlers, s.global...)
 	totalhandlers = append(totalhandlers, handlers...)
 	if len(totalhandlers) > math.MaxInt8 {
 		return nil, errors.New("[rpc.server] too many handlers for one path")
 	}
-	return func(peeruniquename string, msg *Msg) {
+	return func(ctx context.Context, peeruniquename string, msg *Msg) {
 		var globaldl int64
 		var funcdl int64
 		now := time.Now()
@@ -267,7 +266,6 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 		if globaldl != 0 && globaldl < min {
 			min = globaldl
 		}
-		ctx := context.Background()
 		if min != math.MaxInt64 {
 			if min < now.UnixNano()+int64(time.Millisecond) {
 				msg.Path = ""
@@ -285,32 +283,6 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 		if msg.Metadata != nil {
 			ctx = metadata.SetAllMetadata(ctx, msg.Metadata)
 		}
-		var traceid, fromapp, fromip, frommethod, frompath string
-		var fromkind trace.KIND
-		if msg.Tracedata != nil {
-			traceid = msg.Tracedata["Traceid"]
-			frommethod = msg.Tracedata["Method"]
-			frompath = msg.Tracedata["Path"]
-			fromkind = trace.KIND(msg.Tracedata["Kind"])
-		}
-		fromapp = peeruniquename[:strings.Index(peeruniquename, ":")]
-		if fromapp == "" {
-			fromapp = "unkown"
-		}
-		fromip = peeruniquename[strings.Index(peeruniquename, ":")+1 : strings.LastIndex(peeruniquename, ":")]
-		if frommethod == "" {
-			frommethod = "unknown"
-		}
-		if frompath == "" {
-			frompath = "unknown"
-		}
-		if fromkind == "" {
-			fromkind = trace.KIND("unknown")
-		}
-		ctx = trace.InitTrace(ctx, traceid, s.instance.GetSelfName(), host.Hostip, "rpc", path, trace.RPC)
-		traceid, _, _, _, _, _ = trace.GetTrace(ctx)
-		clientTraceCTX := trace.InitTrace(nil, traceid, fromapp, fromip, frommethod, frompath, fromkind)
-		traceend := trace.TraceStart(clientTraceCTX, trace.SERVER, s.instance.GetSelfName(), host.Hostip, "RPC", path, trace.RPC)
 		//logic
 		workctx := s.getContext(ctx, peeruniquename, msg, totalhandlers)
 		defer func() {
@@ -324,10 +296,6 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 				msg.Error = ERRPANIC.Error()
 				msg.Metadata = nil
 				msg.Tracedata = nil
-				workctx.e = ERRPANIC
-			}
-			if traceend != nil {
-				traceend(workctx.e)
 			}
 			s.putContext(workctx)
 		}()
@@ -376,6 +344,14 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		p.Close(sid)
 		return
 	}
+	var traceid string
+	if msg.Tracedata != nil {
+		traceid = msg.Tracedata["Traceid"]
+	}
+	ctx := trace.InitTrace(nil, traceid, s.instance.GetSelfName(), host.Hostip, "rpc", msg.Path, trace.RPC)
+	//if traceid is not empty,traceid will not change
+	//if traceid is empty,init trace will create a new traceid,use the new traceid
+	traceid, _, _, _, _, _ = trace.GetTrace(ctx)
 	handler, ok := s.handler[msg.Path]
 	if !ok {
 		msg.Path = ""
@@ -386,7 +362,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(d, sid, true); e != nil {
-			log.Error(nil, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
+			log.Error(ctx, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
 		}
 		return
 	}
@@ -403,7 +379,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			case s.refreshclosewaitch <- struct{}{}:
 			default:
 			}
-			//tel peer self closed
+			//tell peer self closed
 			msg.Path = ""
 			msg.Deadline = 0
 			msg.Body = nil
@@ -412,16 +388,40 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			msg.Tracedata = nil
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(d, sid, true); e != nil {
-				log.Error(nil, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
+				log.Error(ctx, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
 			}
 			return
 		}
 	}
 	go func() {
-		handler(peeruniquename, msg)
+		var fromapp, fromip, frommethod, frompath string
+		var fromkind trace.KIND
+		if msg.Tracedata != nil {
+			frommethod = msg.Tracedata["Method"]
+			frompath = msg.Tracedata["Path"]
+			fromkind = trace.KIND(msg.Tracedata["Kind"])
+		}
+		fromapp = peeruniquename[:strings.Index(peeruniquename, ":")]
+		if fromapp == "" {
+			fromapp = "unkown"
+		}
+		fromip = peeruniquename[strings.Index(peeruniquename, ":")+1 : strings.LastIndex(peeruniquename, ":")]
+		if frommethod == "" {
+			frommethod = "unknown"
+		}
+		if frompath == "" {
+			frompath = "unknown"
+		}
+		if fromkind == "" {
+			fromkind = trace.KIND("unknown")
+		}
+		traceend := trace.TraceStart(trace.InitTrace(nil, traceid, fromapp, fromip, frommethod, frompath, fromkind), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "RPC", msg.Path, trace.RPC)
+		//logic
+		handler(ctx, peeruniquename, msg)
+		traceend(cerror.ErrorstrToError(msg.Error))
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(d, sid, true); e != nil {
-			log.Error(nil, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
+			log.Error(ctx, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
 			if e == stream.ErrMsgLarge {
 				msg.Path = ""
 				msg.Deadline = 0

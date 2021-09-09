@@ -192,14 +192,14 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	}
 	instance.closewait.Add(1)
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
+		log.Error(r.Context(), "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
 		http.Error(w,
 			ERRNOAPI.Error(),
 			http.StatusNotFound,
 		)
 	})
 	instance.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown method")
+		log.Error(r.Context(), "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown method")
 		http.Error(w,
 			ERRNOAPI.Error(),
 			http.StatusMethodNotAllowed,
@@ -475,11 +475,6 @@ func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ..
 }
 
 func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	//check required target server
-	if targetserver := r.Header.Get("TargetServer"); targetserver != "" && targetserver != this.selfappname {
-		http.Error(w, ERRCLOSING.Error(), 888)
-		return
-	}
 	//check server status
 	for {
 		old := this.totalreqnum
@@ -489,10 +484,12 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		} else {
+			//refresh close wait
 			select {
 			case this.refreshclosewait <- struct{}{}:
 			default:
 			}
+			//tell peer self closed
 			http.Error(w, ERRCLOSING.Error(), 888)
 			return
 		}
@@ -515,7 +512,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 		return nil, errors.New("[web.server] too many handlers for one single path")
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		//set cors
+		//cors
 		if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
 			headers := w.Header()
 			headers.Add("Vary", "Origin")
@@ -543,27 +540,74 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 				headers.Set("Access-Control-Expose-Headers", this.c.Cors.exposestr)
 			}
 		}
+		//trace
+		var traceid, fromapp, fromip, frommethod, frompath string
+		var fromkind trace.KIND
+		if tdstr := r.Header.Get("Tracedata"); tdstr != "" {
+			td := make(map[string]string)
+			if e := json.Unmarshal(common.Str2byte(tdstr), &td); e != nil {
+				log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Tracedata:", tdstr, "format error")
+			} else {
+				traceid = td["Traceid"]
+				frommethod = td["Method"]
+				frompath = td["Path"]
+				fromkind = trace.KIND(td["Kind"])
+			}
+		}
+		ctx := trace.InitTrace(nil, traceid, this.selfappname, host.Hostip, method, path, trace.WEB)
+		//metadata
+		if mdstr := r.Header.Get("Metadata"); mdstr != "" {
+			md := make(map[string]string)
+			if e := json.Unmarshal(common.Str2byte(mdstr), &md); e != nil {
+				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Metadata:", mdstr, "format error")
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
+				return
+			}
+			ctx = metadata.SetAllMetadata(ctx, md)
+		}
+		var clientdl int64
+		if temp := r.Header.Get("Deadline"); temp != "" {
+			var e error
+			clientdl, e = strconv.ParseInt(temp, 10, 64)
+			if e != nil {
+				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Deadline:", temp, "format error")
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
+				return
+			}
+		}
+		sourceserver := r.Header.Get("SourceServer")
+		if sourceserver != "" {
+			r.Header.Set("SourceServer", sourceserver+":"+r.RemoteAddr)
+		}
+		//if traceid is not empty,traceid will not change
+		//if traceid is empty,init trace will create a new traceid,use the new traceid
+		traceid, _, _, _, _, _ = trace.GetTrace(ctx)
+		fromapp = sourceserver
+		if fromapp == "" {
+			fromapp = "unknown"
+		}
+		fromip = r.RemoteAddr[:strings.Index(r.RemoteAddr, ":")]
+		if frommethod == "" {
+			frommethod = "unknown"
+		}
+		if frompath == "" {
+			frompath = "unknown"
+		}
+		if fromkind == "" {
+			fromkind = trace.KIND("unknown")
+		}
+		traceend := trace.TraceStart(trace.InitTrace(nil, traceid, fromapp, fromip, frommethod, frompath, fromkind), trace.SERVER, this.selfappname, host.Hostip, method, path, trace.WEB)
 		//set timeout
-		ctx := r.Context()
 		now := time.Now()
 		var globaldl int64
 		var funcdl int64
-		var clientdl int64
 		if this.c.GlobalTimeout != 0 {
 			globaldl = now.UnixNano() + int64(this.c.GlobalTimeout)
 		}
 		if timeout != 0 {
 			funcdl = now.UnixNano() + int64(timeout)
-		}
-		if temp := r.Header.Get("Deadline"); temp != "" {
-			var e error
-			clientdl, e = strconv.ParseInt(temp, 10, 64)
-			if e != nil {
-				log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Deadline:", temp, "format error")
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
-				return
-			}
 		}
 		min := int64(math.MaxInt64)
 		if clientdl < min && clientdl != 0 {
@@ -580,62 +624,15 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 				//min logic time,1ms
 				w.WriteHeader(http.StatusGatewayTimeout)
 				w.Write(common.Str2byte(http.StatusText(http.StatusGatewayTimeout)))
+				traceend(context.DeadlineExceeded)
 				return
 			}
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, min))
 			defer cancel()
 		}
-		sourceserver := r.Header.Get("SourceServer")
-		if sourceserver != "" {
-			r.Header.Set("SourceServer", sourceserver+":"+r.RemoteAddr)
-		}
-		if mdstr := r.Header.Get("Metadata"); mdstr != "" {
-			md := make(map[string]string)
-			if e := json.Unmarshal(common.Str2byte(mdstr), &md); e != nil {
-				log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Metadata:", mdstr, "format error")
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
-				return
-			}
-			ctx = metadata.SetAllMetadata(ctx, md)
-		}
-		var traceid, fromapp, fromip, frommethod, frompath string
-		var fromkind trace.KIND
-		if tdstr := r.Header.Get("Tracedata"); tdstr != "" {
-			td := make(map[string]string)
-			if e := json.Unmarshal(common.Str2byte(tdstr), &td); e != nil {
-				log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Tracedata:", tdstr, "format error")
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
-				return
-			}
-			traceid = td["Traceid"]
-			frommethod = td["Method"]
-			frompath = td["Path"]
-			fromkind = trace.KIND(td["Kind"])
-		}
-		fromapp = sourceserver
-		if fromapp == "" {
-			fromapp = "unknown"
-		}
-		fromip = r.RemoteAddr[:strings.Index(r.RemoteAddr, ":")]
-		if frommethod == "" {
-			frommethod = "unknown"
-		}
-		if frompath == "" {
-			frompath = "unknown"
-		}
-		if fromkind == "" {
-			fromkind = trace.KIND("unknown")
-		}
-		ctx = trace.InitTrace(ctx, traceid, this.selfappname, host.Hostip, method, path, trace.WEB)
-		traceid, _, _, _, _, _ = trace.GetTrace(ctx)
-		clientTraceCTX := trace.InitTrace(nil, traceid, fromapp, fromip, frommethod, frompath, fromkind)
-		traceend := trace.TraceStart(clientTraceCTX, trace.SERVER, this.selfappname, host.Hostip, method, path, trace.WEB)
 		//logic
-		r = r.WithContext(ctx)
-		workctx := this.getContext(w, r, totalhandlers)
+		workctx := this.getContext(w, r.Clone(ctx), totalhandlers)
 		defer func() {
 			if e := recover(); e != nil {
 				stack := make([]byte, 8192)
@@ -644,9 +641,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 				http.Error(w, ERRPANIC.Error(), http.StatusInternalServerError)
 				workctx.e = ERRPANIC
 			}
-			if traceend != nil {
-				traceend(workctx.e)
-			}
+			traceend(workctx.e)
 			this.putContext(workctx)
 		}()
 		workctx.Next()
