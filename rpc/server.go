@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	cerror "github.com/chenjie199234/Corelib/util/error"
 	"github.com/chenjie199234/Corelib/util/host"
-	"github.com/chenjie199234/Corelib/util/metadata"
 
 	"google.golang.org/protobuf/proto"
 )

@@ -28,7 +28,7 @@ const (
 	protojsonPackage = protogen.GoImportPath("google.golang.org/protobuf/encoding/protojson")
 	webPackage       = protogen.GoImportPath("github.com/chenjie199234/Corelib/web")
 	commonPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
-	metadataPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/metadata")
+	metadataPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/metadata")
 	bufpoolPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/bufpool")
 	errorPackage     = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/error")
 	logPackage       = protogen.GoImportPath("github.com/chenjie199234/Corelib/log")

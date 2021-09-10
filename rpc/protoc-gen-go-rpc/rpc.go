@@ -23,7 +23,7 @@ const (
 	rpcPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/rpc")
 	logPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/log")
 	commonPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
-	metadataPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/metadata")
+	metadataPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/metadata")
 	errorPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/error")
 )
 
