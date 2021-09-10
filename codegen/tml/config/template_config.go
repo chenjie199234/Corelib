@@ -203,6 +203,7 @@ import (
 	ctime "github.com/chenjie199234/Corelib/util/time"
 	"github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go/sasl/plain"
 	"github.com/segmentio/kafka-go/sasl/scram"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"

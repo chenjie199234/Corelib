@@ -64,7 +64,7 @@ func getRpcClientConfig() *rpc.ClientConfig {
 		MaxMsgLen:              65535,
 		MaxBufferedWriteMsgNum: 1024,
 		VerifyData:             rpcverifydata,
-		DiscoverFunction:       rpcDNS,
+		DiscoverFunction:       rpcDNS(),
 	}
 }
 
