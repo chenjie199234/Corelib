@@ -45,7 +45,7 @@ func StartWebServer() {
 	}
 	var e error
 	if s, e = web.NewWebServer(webc, api.Group, api.Name); e != nil {
-		log.Error("[xweb] new error:", e)
+		log.Error(nil,"[xweb] new error:", e)
 		return
 	}
 
@@ -54,20 +54,20 @@ func StartWebServer() {
 
 	//you just need to register your service here
 	if e = api.RegisterStatusWebServer(s, service.SvcStatus, mids.AllMids()); e != nil {
-		log.Error("[xweb] register handlers error:", e)
+		log.Error(nil,"[xweb] register handlers error:", e)
 		return
 	}
 	//example
 	//if e = api.RegisterExampleWebServer(s, service.SvcExample, mids.AllMids()); e != nil {
-	//log.Error("[xweb] register handlers error:", e)
+	//log.Error(nil,"[xweb] register handlers error:", e)
 	//return
 	//}
 
 	if e = s.StartWebServer(":8000", nil); e != nil {
 		if e != web.ErrServerClosed {
-			log.Error("[xweb] start error:", e)
+			log.Error(nil,"[xweb] start error:", e)
 		} else {
-			log.Info("[xweb] server closed")
+			log.Info(nil,"[xweb] server closed")
 		}
 		return
 	}

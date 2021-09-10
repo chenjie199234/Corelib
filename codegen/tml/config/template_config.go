@@ -18,6 +18,7 @@ import (
 
 	configsdk "github.com/chenjie199234/Config/sdk"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/trace"
 )
 
 //EnvConfig can't hot update,all these data is from system env setting
@@ -52,6 +53,7 @@ func Init(notice func(c *AppConfig)) {
 //Close -
 func Close() {
 	log.Close()
+	trace.Close()
 }
 
 func initenv() {
@@ -61,41 +63,41 @@ func initenv() {
 		if str != "" {
 			EC.ServerVerifyDatas = temp
 		} else if e := json.Unmarshal([]byte(str), &temp); e != nil {
-			log.Error("[config.initenv] SERVER_VERIFY_DATA must be json string array like:[\"abc\",\"123\"]")
+			log.Error(nil,"[config.initenv] SERVER_VERIFY_DATA must be json string array like:[\"abc\",\"123\"]")
 			Close()
 			os.Exit(1)
 		}
 		EC.ServerVerifyDatas = temp
 	} else {
-		log.Warning("[config.initenv] missing SERVER_VERIFY_DATA")
+		log.Warning(nil,"[config.initenv] missing SERVER_VERIFY_DATA")
 	}
 	if str, ok := os.LookupEnv("CONFIG_TYPE"); ok && str != "<CONFIG_TYPE>" && str != "" {
 		configtype, e := strconv.Atoi(str)
 		if e != nil || (configtype != 0 && configtype != 1 && configtype != 2) {
-			log.Error("[config.initenv] CONFIG_TYPE must be number in [0,1,2]")
+			log.Error(nil,"[config.initenv] CONFIG_TYPE must be number in [0,1,2]")
 			Close()
 			os.Exit(1)
 		}
 		EC.ConfigType = &configtype
 	} else {
-		log.Warning("[config.initenv] missing CONFIG_TYPE")
+		log.Warning(nil,"[config.initenv] missing CONFIG_TYPE")
 	}
 	if str, ok := os.LookupEnv("RUN_ENV"); ok && str != "<RUN_ENV>" && str != "" {
 		EC.RunEnv = &str
 	} else {
-		log.Warning("[config.initenv] missing RUN_ENV")
+		log.Warning(nil,"[config.initenv] missing RUN_ENV")
 	}
 	if str, ok := os.LookupEnv("DEPLOY_ENV"); ok && str != "<DEPLOY_ENV>" && str != "" {
 		EC.DeployEnv = &str
 	} else {
-		log.Warning("[config.initenv] missing DEPLOY_ENV")
+		log.Warning(nil,"[config.initenv] missing DEPLOY_ENV")
 	}
 }
 
 func initremote(path string) {
 	if EC.ConfigType != nil && *EC.ConfigType == 2 {
 		if e := configsdk.NewWebSdk(path, api.Group, api.Name); e != nil {
-			log.Error("[config.initremote] new sdk error:", e)
+			log.Error(nil,"[config.initremote] new sdk error:", e)
 			Close()
 			os.Exit(1)
 		}
@@ -126,13 +128,13 @@ var watcher *fsnotify.Watcher
 func initapp(path string, notice func(*AppConfig)) {
 	data, e := os.ReadFile(path + "AppConfig.json")
 	if e != nil {
-		log.Error("[config.initapp] read config file error:", e)
+		log.Error(nil,"[config.initapp] read config file error:", e)
 		Close()
 		os.Exit(1)
 	}
 	AC = &AppConfig{}
 	if e = json.Unmarshal(data, AC); e != nil {
-		log.Error("[config.initapp] config file format error:", e)
+		log.Error(nil,"[config.initapp] config file format error:", e)
 		Close()
 		os.Exit(1)
 	}
@@ -141,12 +143,12 @@ func initapp(path string, notice func(*AppConfig)) {
 	}
 	watcher, e = fsnotify.NewWatcher()
 	if e != nil {
-		log.Error("[config.initapp] create watcher for hot update error:", e)
+		log.Error(nil,"[config.initapp] create watcher for hot update error:", e)
 		Close()
 		os.Exit(1)
 	}
 	if e = watcher.Add(path); e != nil {
-		log.Error("[config.initapp] create watcher for hot update error:", e)
+		log.Error(nil,"[config.initapp] create watcher for hot update error:", e)
 		Close()
 		os.Exit(1)
 	}
@@ -169,12 +171,12 @@ func initapp(path string, notice func(*AppConfig)) {
 				}
 				data, e := os.ReadFile(path + "AppConfig.json")
 				if e != nil {
-					log.Error("[config.initapp] hot update read config file error:", e)
+					log.Error(nil,"[config.initapp] hot update read config file error:", e)
 					continue
 				}
 				c := &AppConfig{}
 				if e = json.Unmarshal(data, c); e != nil {
-					log.Error("[config.initapp] hot update config file format error:", e)
+					log.Error(nil,"[config.initapp] hot update config file format error:", e)
 					continue
 				}
 				AC = c
@@ -182,7 +184,7 @@ func initapp(path string, notice func(*AppConfig)) {
 				if !ok {
 					return
 				}
-				log.Error("[config.initapp] hot update watcher error:", err)
+				log.Error(nil,"[config.initapp] hot update watcher error:", err)
 			}
 		}
 	}()
@@ -211,15 +213,15 @@ import (
 
 //sourceConfig can't hot update
 type sourceConfig struct {
-	RpcServer *RpcServerConfig           $json:"rpc_server"$
-	RpcClient *RpcClientConfig           $json:"rpc_client"$
-	WebServer *WebServerConfig           $json:"web_server"$
-	WebClient *WebClientConfig           $json:"web_client"$
-	Mongo     map[string]*MongoConfig    $json:"mongo"$     //key example:xxx_mongo
-	Sql       map[string]*SqlConfig      $json:"sql"$       //key example:xx_sql
-	Redis     map[string]*RedisConfig    $json:"redis"$     //key example:xx_redis
-	KafkaPub  map[string]*KafkaPubConfig $json:"kafka_pub"$ //key:topic name
-	KafkaSub  map[string]*KafkaSubConfig $json:"kafka_sub"$ //key:topic name
+	RpcServer *RpcServerConfig        $json:"rpc_server"$
+	RpcClient *RpcClientConfig        $json:"rpc_client"$
+	WebServer *WebServerConfig        $json:"web_server"$
+	WebClient *WebClientConfig        $json:"web_client"$
+	Mongo     map[string]*MongoConfig $json:"mongo"$     //key example:xxx_mongo
+	Sql       map[string]*SqlConfig   $json:"sql"$       //key example:xx_sql
+	Redis     map[string]*RedisConfig $json:"redis"$     //key example:xx_redis
+	KafkaPub  []*KafkaPubConfig       $json:"kafka_pub"$
+	KafkaSub  []*KafkaSubConfig       $json:"kafka_sub"$
 }
 
 //RpcServerConfig -
@@ -302,17 +304,21 @@ type MongoConfig struct {
 
 //KafkaPubConfig -
 type KafkaPubConfig struct {
-	Addr     string $json:"addr"$
-	Username string $json:"username"$
-	Passwd   string $json:"password"$
+	Addr       string $json:"addr"$
+	Username   string $json:"username"$
+	Passwd     string $json:"password"$
+	AuthMethod int    $json:"auth_method"$ //1-plain,2-scram sha256,3-scram sha512
+	TopicName  string $json:"topic_name"$
 }
 
 //KafkaSubConfig -
 type KafkaSubConfig struct {
-	Addr      string $json:"addr"$
-	Username  string $json:"username"$
-	Passwd    string $json:"password"$
-	GroupName string $json:"group_name"$
+	Addr       string $json:"addr"$
+	Username   string $json:"username"$
+	Passwd     string $json:"password"$
+	AuthMethod int    $json:"auth_method"$ //1-plain,2-scram sha256,3-scram sha512
+	TopicName  string $json:"topic_name"$
+	GroupName  string $json:"group_name"$
 	//-1 will sub from the newest
 	//-2 will sub from the firt
 	//if this is 0,default -2 will be used
@@ -338,13 +344,13 @@ var kafkaPubers map[string]*kafka.Writer
 func initsource(path string) {
 	data, e := os.ReadFile(path + "SourceConfig.json")
 	if e != nil {
-		log.Error("[config.initsource] read config file error:", e)
+		log.Error(nil,"[config.initsource] read config file error:", e)
 		Close()
 		os.Exit(1)
 	}
 	sc = &sourceConfig{}
 	if e = json.Unmarshal(data, sc); e != nil {
-		log.Error("[config.initsource] config file format error:", e)
+		log.Error(nil,"[config.initsource] config file format error:", e)
 		Close()
 		os.Exit(1)
 	}
@@ -498,21 +504,23 @@ func initsource(path string) {
 		if pubc.Addr == "" {
 			pubc.Addr = "127.0.0.1:9092"
 		}
-		if pubc.Username == "" && pubc.Passwd == "" {
-			pubc.Username = "root"
-			pubc.Passwd = "root"
+		if (pubc.AuthMethod == 1 || pubc.AuthMethod == 2 || pubc.AuthMethod == 3) && (pubc.Username == "" || pubc.Passwd == "") {
+			log.Error(nil, "[config.initsource] pub topic:", pubc.TopicName, "username or password missing")
+			Close()
+			os.Exit(1)
 		}
 	}
-	for topic, subc := range sc.KafkaSub {
+	for _, subc := range sc.KafkaSub {
 		if subc.Addr == "" {
 			subc.Addr = "127.0.0.1:9092"
 		}
-		if subc.Username == "" && subc.Passwd == "" {
-			subc.Username = "root"
-			subc.Passwd = "root"
+		if (subc.AuthMethod == 1 || subc.AuthMethod == 2 || subc.AuthMethod == 3) && (subc.Username == "" || subc.Passwd == "") {
+			log.Error(nil, "[config.initsource] sub topic:", subc.TopicName, "username or password missing")
+			Close()
+			os.Exit(1)
 		}
 		if subc.GroupName == "" {
-			log.Error("[config.initsource] sub topic:", topic, "groupname missing")
+			log.Error(nil, "[config.initsource] sub topic:", subc.TopicName, "groupname missing")
 			Close()
 			os.Exit(1)
 		}
@@ -544,7 +552,7 @@ func initsource(path string) {
 		op = op.SetWriteConcern(writeconcern.New(writeconcern.W(1), writeconcern.J(true)))
 		tempdb, e := mongo.Connect(nil, op)
 		if e != nil {
-			log.Error("[config.initsource] open mongodb:", k, "error:", e)
+			log.Error(nil,"[config.initsource] open mongodb:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
@@ -552,7 +560,7 @@ func initsource(path string) {
 		e = tempdb.Ping(ctx, readpref.Primary())
 		if e != nil {
 			cancel()
-			log.Error("[config.initsource] ping mongodb:", k, "error:", e)
+			log.Error(nil,"[config.initsource] ping mongodb:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
@@ -576,7 +584,7 @@ func initsource(path string) {
 			Collation:            sqlc.Collation,
 		}).FormatDSN())
 		if e != nil {
-			log.Error("[config.initsource] open mysql:", k, "error:", e)
+			log.Error(nil,"[config.initsource] open mysql:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
@@ -586,7 +594,7 @@ func initsource(path string) {
 		e = tempdb.PingContext(ctx)
 		if e != nil {
 			cancel()
-			log.Error("[config.initsource] ping mysql:", k, "error:", e)
+			log.Error(nil,"[config.initsource] ping mysql:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
@@ -610,7 +618,7 @@ func initsource(path string) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		if e := tempredis.Ping(ctx); e != nil {
 			cancel()
-			log.Error("[config.initsource] ping redis:", k, "error:", e)
+			log.Error(nil,"[config.initsource] ping redis:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
@@ -618,27 +626,32 @@ func initsource(path string) {
 		rediss[k] = tempredis
 	}
 	kafkaSubers = make(map[string]*kafka.Reader, len(sc.KafkaSub))
-	for topic, subc := range sc.KafkaSub {
-		if topic == "example_topic" {
+	for _, subc := range sc.KafkaSub {
+		if subc.TopicName == "example_topic" || subc.TopicName == "" {
 			continue
 		}
 		dialer := &kafka.Dialer{
 			Timeout:   time.Second,
 			DualStack: true,
 		}
-		if subc.Username != "" && subc.Passwd != "" {
-			var e error
+		var e error
+		switch subc.AuthMethod {
+		case 1:
+			dialer.SASLMechanism = plain.Mechanism{Username: subc.Username, Password: subc.Passwd}
+		case 2:
+			dialer.SASLMechanism, e = scram.Mechanism(scram.SHA256, subc.Username, subc.Passwd)
+		case 3:
 			dialer.SASLMechanism, e = scram.Mechanism(scram.SHA512, subc.Username, subc.Passwd)
-			if e != nil {
-				log.Error("[config.initsource] kafka topic:", topic, "sub group:", subc.GroupName, "username and password parse error:", e)
-				Close()
-				os.Exit(1)
-			}
+		}
+		if e != nil {
+			log.Error(nil, "[config.initsource] kafka topic:", subc.TopicName, "sub username and password parse error:", e)
+			Close()
+			os.Exit(1)
 		}
 		reader := kafka.NewReader(kafka.ReaderConfig{
 			Brokers:                []string{subc.Addr},
 			Dialer:                 dialer,
-			Topic:                  topic,
+			Topic:                  subc.TopicName,
 			GroupID:                subc.GroupName,
 			StartOffset:            subc.StartOffset,
 			MinBytes:               1,
@@ -649,29 +662,34 @@ func initsource(path string) {
 			PartitionWatchInterval: time.Second,
 			WatchPartitionChanges:  true,
 		})
-		kafkaSubers[topic+subc.GroupName] = reader
+		kafkaSubers[subc.TopicName+subc.GroupName] = reader
 	}
 	kafkaPubers = make(map[string]*kafka.Writer, len(sc.KafkaPub))
-	for topic, pubc := range sc.KafkaPub {
-		if topic == "example_topic" {
+	for _, pubc := range sc.KafkaPub {
+		if pubc.TopicName == "example_topic" || pubc.TopicName == "" {
 			continue
 		}
 		dialer := &kafka.Dialer{
 			Timeout:   time.Second,
 			DualStack: true,
 		}
-		if pubc.Username != "" && pubc.Passwd != "" {
-			var e error
+		var e error
+		switch pubc.AuthMethod {
+		case 1:
+			dialer.SASLMechanism = plain.Mechanism{Username: pubc.Username, Password: pubc.Passwd}
+		case 2:
+			dialer.SASLMechanism, e = scram.Mechanism(scram.SHA256, pubc.Username, pubc.Passwd)
+		case 3:
 			dialer.SASLMechanism, e = scram.Mechanism(scram.SHA512, pubc.Username, pubc.Passwd)
-			if e != nil {
-				log.Error("[config.initsource] kafka topic:", topic, "pub username and password parse error:", e)
-				Close()
-				os.Exit(1)
-			}
+		}
+		if e != nil {
+			log.Error(nil, "[config.initsource] kafka topic:", pubc.TopicName, "pub username and password parse error:", e)
+			Close()
+			os.Exit(1)
 		}
 		writer := kafka.NewWriter(kafka.WriterConfig{
 			Brokers:          []string{pubc.Addr},
-			Topic:            topic,
+			Topic:            pubc.TopicName,
 			Dialer:           dialer,
 			ReadTimeout:      time.Second,
 			WriteTimeout:     time.Second,
@@ -681,7 +699,7 @@ func initsource(path string) {
 			Async:            false,
 			CompressionCodec: kafka.Snappy.Codec(),
 		})
-		kafkaPubers[topic] = writer
+		kafkaPubers[pubc.TopicName] = writer
 	}
 }
 

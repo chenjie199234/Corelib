@@ -74,23 +74,27 @@ const textsource = `{
 			"conn_timeout":"200ms"
 		}
 	},
-	"kafka_pub":{
-		"example_topic":{
-			"addr":"127.0.0.1:12345",
-			"username":"example",
-			"password":"example"
-		}
-	},
-	"kafka_sub":{
-		"example_topic":{
+	"kafka_pub":[
+		{
 			"addr":"127.0.0.1:12345",
 			"username":"example",
 			"password":"example",
+			"auth_method":3,
+			"topic_name":"example_topic"
+		}
+	],
+	"kafka_sub":[
+		{
+			"addr":"127.0.0.1:12345",
+			"username":"example",
+			"password":"example",
+			"auth_method":3,
+			"topic_name":"example_topic",
 			"group_name":"example_group",
 			"start_offset":-1,
 			"commit_interval":"0s"
 		}
-	}
+	]
 }`
 const textapp = `{
 

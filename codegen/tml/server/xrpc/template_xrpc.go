@@ -38,7 +38,7 @@ func StartRpcServer() {
 	}
 	var e error
 	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name); e != nil {
-		log.Error("[xrpc] new error:", e)
+		log.Error(nil,"[xrpc] new error:", e)
 		return
 	}
 
@@ -47,20 +47,20 @@ func StartRpcServer() {
 
 	//you just need to register your service here
 	if e = api.RegisterStatusRpcServer(s, service.SvcStatus, mids.AllMids()); e != nil {
-		log.Error("[xrpc] register handlers error:", e)
+		log.Error(nil,"[xrpc] register handlers error:", e)
 		return
 	}
 	//example
 	//if e = api.RegisterExampleRpcServer(s, service.SvcExample,mids.AllMids()); e != nil {
-	//log.Error("[xrpc] register handlers error:", e)
+	//log.Error(nil,"[xrpc] register handlers error:", e)
 	//return
 	//}
 
 	if e = s.StartRpcServer(":9000"); e != nil {
 		if e != rpc.ErrServerClosed {
-			log.Error("[xrpc] start error:", e)
+			log.Error(nil,"[xrpc] start error:", e)
 		} else {
-			log.Info("[xrpc] server closed")
+			log.Info(nil,"[xrpc] server closed")
 		}
 		return
 	}

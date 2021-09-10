@@ -78,7 +78,7 @@ func rpcDNS() func(string, string, <-chan struct{}) (map[string]*rpc.RegisterDat
 		result := make(map[string]*rpc.RegisterData)
 		addrs, e := net.LookupHost(name + "-service-headless" + "." + group)
 		if e != nil {
-			log.Error("[rpc.dns] get:", name+"-service-headless", "addrs error:", e)
+			log.Error(nil,"[rpc.dns] get:", name+"-service-headless", "addrs error:", e)
 			return nil, e
 		}
 		for i := range addrs {
@@ -120,7 +120,7 @@ func webDNS() func(string, string, <-chan struct{}) (map[string]*web.RegisterDat
 		result := make(map[string]*web.RegisterData)
 		addrs, e := net.LookupHost(name + "-service-headless" + "." + group)
 		if e != nil {
-			log.Error("[web.dns] get:", name+"-service-headless", "addrs error:", e)
+			log.Error(nil,"[web.dns] get:", name+"-service-headless", "addrs error:", e)
 			return nil, e
 		}
 		for i := range addrs {

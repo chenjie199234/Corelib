@@ -31,7 +31,7 @@ func main() {
 	defer config.Close()
 	//start the whole business service
 	if e := service.StartService(); e != nil {
-		log.Error(e)
+		log.Error(nil,e)
 		return
 	}
 	//start low level net service

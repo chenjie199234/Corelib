@@ -1949,7 +1949,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 		if _, ok := allcheck[method.Input.GoIdent.String()]; ok {
 			//g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(method.Input.GoIdent.String()), "](req){")
 			g.P("if s:=_", service.GoName, "RpcCheckers[", strconv.Quote(method.Input.GoIdent.String()), "](req);s!=\"\"{")
-			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"[", pathurl, "]\",s)")
+			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\",s)")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 			g.P("}")
 		}
@@ -2069,7 +2069,7 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 		if _, ok := allcheck[method.Input.GoIdent.String()]; ok {
 			//g.P("if !_", service.GoName, "RpcCheckers[", strconv.Quote(method.Input.GoIdent.String()), "](req){")
 			g.P("if s:=_", service.GoName, "RpcCheckers[", strconv.Quote(method.Input.GoIdent.String()), "](req);s!=\"\"{")
-			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"[", pathurl, "]\",s)")
+			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\",s)")
 			g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
 			g.P("}")
 		}
