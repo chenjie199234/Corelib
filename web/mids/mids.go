@@ -10,9 +10,7 @@ var all map[string]web.OutsideHandler
 func init() {
 	all = make(map[string]web.OutsideHandler)
 	//register here
-	//e.g.
-	//all["auth"] = auth.MidwareHandler
-	//all["limit"] = limit.MidwareHandler
+	all["clean"] = Clean
 }
 
 func AllMids() map[string]web.OutsideHandler {
