@@ -10,7 +10,7 @@ var all map[string]web.OutsideHandler
 func init() {
 	all = make(map[string]web.OutsideHandler)
 	//register here
-	all["clean"] = Clean
+	all["cleantrace"] = CleanTrace
 }
 
 func AllMids() map[string]web.OutsideHandler {
