@@ -30,7 +30,7 @@ const (
 	commonPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
 	metadataPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/metadata")
 	bufpoolPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/bufpool")
-	errorPackage     = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/error")
+	errorPackage     = protogen.GoImportPath("github.com/chenjie199234/Corelib/error")
 	logPackage       = protogen.GoImportPath("github.com/chenjie199234/Corelib/log")
 )
 

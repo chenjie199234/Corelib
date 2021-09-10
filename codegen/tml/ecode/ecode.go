@@ -9,7 +9,7 @@ import (
 const text = `package ecode
 
 import (
-	cerror "github.com/chenjie199234/Corelib/util/error"
+	cerror "github.com/chenjie199234/Corelib/error"
 )
 
 var (

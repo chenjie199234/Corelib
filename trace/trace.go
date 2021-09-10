@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/bufpool"
+	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/rotatefile"
 	"github.com/chenjie199234/Corelib/util/common"
-	cerror "github.com/chenjie199234/Corelib/util/error"
 	"github.com/chenjie199234/Corelib/util/host"
 )
 

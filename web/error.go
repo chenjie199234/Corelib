@@ -1,7 +1,7 @@
 package web
 
 import (
-	"github.com/chenjie199234/Corelib/util/error"
+	"github.com/chenjie199234/Corelib/error"
 )
 
 var (
