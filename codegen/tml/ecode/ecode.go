@@ -13,13 +13,13 @@ import (
 )
 
 var (
-	ErrUnknown   = cerror.ErrUnknown //10000
-	ErrReq       = cerror.ErrReq     //10001
-	ErrResp      = cerror.ErrResp    //10002
-	ErrSystem    = cerror.ErrSystem  //10003
-	ErrAuth      = cerror.ErrAuth    //10004
-	ErrLimit     = cerror.ErrLimit   //10005
-	ErrBan       = cerror.ErrBan     //10006
+	ErrUnknown = cerror.ErrUnknown //10000
+	ErrReq     = cerror.ErrReq     //10001
+	ErrResp    = cerror.ErrResp    //10002
+	ErrSystem  = cerror.ErrSystem  //10003
+	ErrAuth    = cerror.ErrAuth    //10004
+	ErrLimit   = cerror.ErrLimit   //10005
+	ErrBan     = cerror.ErrBan     //10006
 
 	ErrBusiness1 = cerror.MakeError(20001, "business error 1")
 )`
