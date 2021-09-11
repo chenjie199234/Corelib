@@ -42,8 +42,6 @@ type TcpConfig struct {
 	SocketWBufLen uint32 //default 1024 byte,max 65535 byte
 
 	MaxMsgLen uint32 //min 1024,max 65535,default is max
-
-	//write buffer can store the messages in buffer and send async in another goruntine
 }
 
 var defaultTcpConfig = &TcpConfig{
@@ -77,6 +75,23 @@ func (c *TcpConfig) validate() {
 	}
 }
 
+type TcpClientOnlyConfig struct {
+}
+
+var defaultTcpClientOnlyConfig = &TcpClientOnlyConfig{}
+
+func (c *TcpClientOnlyConfig) validate() {
+}
+
+type TcpServerOnlyConfig struct {
+}
+
+var defaultTcpServerOnlyConfig = &TcpServerOnlyConfig{}
+
+func (c *TcpServerOnlyConfig) validate() {
+
+}
+
 type InstanceConfig struct {
 	//heartbeat timeout
 	HeartbeatTimeout time.Duration //default 5s
@@ -97,7 +112,9 @@ type InstanceConfig struct {
 	GroupNum uint32 //default 1 num
 
 	//specify the tcp socket connection's config
-	TcpC *TcpConfig
+	TcpC       *TcpConfig
+	TcpClientC *TcpClientOnlyConfig
+	TcpServerC *TcpServerOnlyConfig
 
 	//before peer and peer confirm connection,they need to verify each other
 	//after tcp connected,this function will be called
@@ -136,5 +153,15 @@ func (c *InstanceConfig) validate() {
 		c.TcpC = defaultTcpConfig
 	} else {
 		c.TcpC.validate()
+	}
+	if c.TcpClientC == nil {
+		c.TcpClientC = defaultTcpClientOnlyConfig
+	} else {
+		c.TcpClientC.validate()
+	}
+	if c.TcpServerC == nil {
+		c.TcpServerC = defaultTcpServerOnlyConfig
+	} else {
+		c.TcpServerC.validate()
 	}
 }

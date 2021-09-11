@@ -26,7 +26,7 @@ func Test_Tcpserver(t *testing.T) {
 		Userdatafunc:       tcpserverhandleuserdata,
 		Offlinefunc:        tcpserverhandleoffline,
 	}, "testgroup", "tcpserver")
-	go tcpserverinstance.StartTcpServer("127.0.0.1:9234")
+	go tcpserverinstance.StartTcpServer("127.0.0.1:9234", nil)
 	go func() {
 		for {
 			time.Sleep(time.Second)

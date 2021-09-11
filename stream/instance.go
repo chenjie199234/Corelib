@@ -18,7 +18,7 @@ type Instance struct {
 	selfname     string
 	c            *InstanceConfig
 	peergroups   []*peergroup
-	tcplistener  *net.TCPListener
+	tcplistener  net.Listener
 	totalpeernum int32 //'<0'---(closing),'>=0'---(working)
 
 	noticech  chan *Peer

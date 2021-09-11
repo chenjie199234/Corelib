@@ -26,7 +26,7 @@ func Test_Tcpclient(t *testing.T) {
 				Userdatafunc:       tcpclienthandleuserdata,
 				Offlinefunc:        tcpclienthandleoffline,
 			}, "testgroup", "tcpclient")
-			tcpclientinstance.StartTcpClient("127.0.0.1:9234", []byte{'t', 'e', 's', 't', 'c'})
+			tcpclientinstance.StartTcpClient("127.0.0.1:9234", []byte{'t', 'e', 's', 't', 'c'}, nil)
 			time.Sleep(time.Millisecond)
 		}
 	}()

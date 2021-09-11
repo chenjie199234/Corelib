@@ -2,8 +2,11 @@ package stream
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"net"
+	"os"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -16,20 +19,31 @@ import (
 var ErrServerClosed = errors.New("[Stream.server] closed")
 var ErrAlreadyStarted = errors.New("[Stream.server] already started")
 
-func (this *Instance) StartTcpServer(listenaddr string) error {
-	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
-	if e != nil {
-		return errors.New("[Stream.StartTcpServer] resolve tcp addr: " + listenaddr + " error: " + e.Error())
-	}
-	//check double status
+//certkeys mapkey: cert path,mapvalue: key path
+func (this *Instance) StartTcpServer(listenaddr string, certkeys map[string]string) error {
+	//check status
 	if this.totalpeernum < 0 {
 		return ErrServerClosed
 	}
-	templistener, e := net.ListenTCP(laddr.Network(), laddr)
+	var templistener net.Listener
+	var e error
+	if len(certkeys) > 0 {
+		certificates := make([]tls.Certificate, 0, len(certkeys))
+		for cert, key := range certkeys {
+			temp, e := tls.LoadX509KeyPair(cert, key)
+			if e != nil {
+				return errors.New("[Stream.StartTcpServer] load cert:" + cert + " key:" + key + " error:" + e.Error())
+			}
+			certificates = append(certificates, temp)
+		}
+		templistener, e = tls.Listen("tcp", listenaddr, &tls.Config{Certificates: certificates})
+	} else {
+		templistener, e = net.Listen("tcp", listenaddr)
+	}
 	if e != nil {
 		return errors.New("[Stream.StartTcpServer] listen tcp addr: " + listenaddr + " error: " + e.Error())
 	}
-	if !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&this.tcplistener)), nil, unsafe.Pointer(templistener)) {
+	if !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&this.tcplistener)), nil, unsafe.Pointer(&templistener)) {
 		return ErrAlreadyStarted
 	}
 	//double check stop status
@@ -39,7 +53,7 @@ func (this *Instance) StartTcpServer(listenaddr string) error {
 	}
 	for {
 		p := this.getPeer(this.c.MaxBufferedWriteMsgNum, this.c.TcpC.MaxMsgLen)
-		conn, e := this.tcplistener.AcceptTCP()
+		conn, e := this.tcplistener.Accept()
 		if e != nil {
 			this.putPeer(p)
 			this.tcplistener.Close()
@@ -56,7 +70,7 @@ func (this *Instance) StartTcpServer(listenaddr string) error {
 		}
 		//disable system's keep alive probe
 		//use self's heartbeat probe
-		conn.SetKeepAlive(false)
+		(conn.(*net.TCPConn)).SetKeepAlive(false)
 		p.conn = conn
 		p.setbuffer(int(this.c.TcpC.SocketRBufLen), int(this.c.TcpC.SocketWBufLen))
 		go this.sworker(p)
@@ -105,18 +119,47 @@ func (this *Instance) sworker(p *Peer) {
 	return
 }
 
+type TLSConfig struct {
+	SkipVerifyTLS bool     //don't verify the server's cert
+	CAs           []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
+}
+
 // success return peeruniquename
 // fail return empty
-func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte) string {
+func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte, tlsc *TLSConfig) string {
 	if this.totalpeernum < 0 {
 		return ""
 	}
-	dialer := net.Dialer{
+	dialer := &net.Dialer{
 		Timeout:   this.c.TcpC.ConnectTimeout,
 		KeepAlive: -time.Second, //disable system's tcp keep alive probe,use self's heartbeat probe
 	}
 	dl := time.Now().Add(this.c.TcpC.ConnectTimeout)
-	conn, e := dialer.Dial("tcp", serveraddr)
+	var conn net.Conn
+	var e error
+	if tlsc != nil {
+		var certpool *x509.CertPool
+		if len(tlsc.CAs) != 0 {
+			certpool = x509.NewCertPool()
+			for _, cert := range tlsc.CAs {
+				certPEM, e := os.ReadFile(cert)
+				if e != nil {
+					log.Error(nil, "[Stream.StartTcpClient] read cert file:", cert, "error:", e)
+					return ""
+				}
+				if !certpool.AppendCertsFromPEM(certPEM) {
+					log.Error(nil, "[Stream.StartTcpClient] load cert file:", cert, "error:", e)
+					return ""
+				}
+			}
+		}
+		conn, e = tls.DialWithDialer(dialer, "tcp", serveraddr, &tls.Config{
+			InsecureSkipVerify: tlsc.SkipVerifyTLS,
+			RootCAs:            certpool,
+		})
+	} else {
+		conn, e = dialer.Dial("tcp", serveraddr)
+	}
 	if e != nil {
 		log.Error(nil, "[Stream.StartTcpClient] dial error:", e)
 		return ""

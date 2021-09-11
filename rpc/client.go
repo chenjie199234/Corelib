@@ -260,7 +260,7 @@ func (c *RpcClient) updateDiscovery(all map[string]*RegisterData) {
 }
 func (c *RpcClient) start(addr string) {
 	tempverifydata := c.c.VerifyData + "|" + c.appname
-	if r := c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata)); r == "" {
+	if r := c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata), nil); r == "" {
 		c.lker.RLock()
 		exist, ok := c.servers[addr]
 		if !ok {

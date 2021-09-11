@@ -34,7 +34,7 @@ type Peer struct {
 	peermaxmsglen  uint32
 	writerbuffer   chan *bufpool.Buffer
 	pingpongbuffer chan *bufpool.Buffer
-	conn           *net.TCPConn
+	conn           net.Conn
 	lastactive     int64          //unixnano timestamp
 	recvidlestart  int64          //unixnano timestamp
 	sendidlestart  int64          //unixnano timestamp
@@ -59,8 +59,8 @@ func (p *Peer) closeconn() {
 }
 
 func (p *Peer) setbuffer(readnum, writenum int) {
-	p.conn.SetReadBuffer(readnum)
-	p.conn.SetWriteBuffer(writenum)
+	(p.conn.(*net.TCPConn)).SetReadBuffer(readnum)
+	(p.conn.(*net.TCPConn)).SetWriteBuffer(writenum)
 }
 
 func (p *Peer) readMessage() (*bufpool.Buffer, error) {

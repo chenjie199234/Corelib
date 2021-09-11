@@ -136,7 +136,7 @@ var ErrServerClosed = errors.New("[rpc.server] closed")
 var ErrAlreadyStarted = errors.New("[rpc.server] already started")
 
 func (s *RpcServer) StartRpcServer(listenaddr string) error {
-	e := s.instance.StartTcpServer(listenaddr)
+	e := s.instance.StartTcpServer(listenaddr, nil)
 	if e == stream.ErrServerClosed {
 		return ErrServerClosed
 	} else if e == stream.ErrAlreadyStarted {
