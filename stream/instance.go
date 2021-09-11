@@ -15,9 +15,10 @@ import (
 )
 
 type Instance struct {
-	selfname     string
-	c            *InstanceConfig
-	peergroups   []*peergroup
+	selfname   string
+	c          *InstanceConfig
+	peergroups []*peergroup
+	sync.Mutex
 	tcplistener  net.Listener
 	totalpeernum int32 //'<0'---(closing),'>=0'---(working)
 

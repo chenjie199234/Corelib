@@ -30,13 +30,13 @@ func Test_Tcpserver(t *testing.T) {
 	go func() {
 		for {
 			time.Sleep(time.Second)
-			fmt.Println("client num:", tcpserverinstance.totalpeernum)
+			fmt.Println("client num:", tcpserverinstance.GetPeerNum())
 		}
 	}()
 	go func() {
 		time.Sleep(time.Minute)
 		tcpserverinstance.Stop()
-		fmt.Println("stop:", tcpserverinstance.totalpeernum)
+		fmt.Println("stop:", tcpserverinstance.GetPeerNum())
 	}()
 	http.ListenAndServe(":8080", nil)
 }

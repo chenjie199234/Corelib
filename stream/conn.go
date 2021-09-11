@@ -9,7 +9,6 @@ import (
 	"os"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/log"
@@ -25,6 +24,11 @@ func (this *Instance) StartTcpServer(listenaddr string, certkeys map[string]stri
 	if this.totalpeernum < 0 {
 		return ErrServerClosed
 	}
+	this.Lock()
+	if this.tcplistener != nil {
+		this.Unlock()
+		return ErrAlreadyStarted
+	}
 	var templistener net.Listener
 	var e error
 	if len(certkeys) > 0 {
@@ -32,6 +36,7 @@ func (this *Instance) StartTcpServer(listenaddr string, certkeys map[string]stri
 		for cert, key := range certkeys {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
+				this.Unlock()
 				return errors.New("[Stream.StartTcpServer] load cert:" + cert + " key:" + key + " error:" + e.Error())
 			}
 			certificates = append(certificates, temp)
@@ -41,11 +46,11 @@ func (this *Instance) StartTcpServer(listenaddr string, certkeys map[string]stri
 		templistener, e = net.Listen("tcp", listenaddr)
 	}
 	if e != nil {
+		this.Unlock()
 		return errors.New("[Stream.StartTcpServer] listen tcp addr: " + listenaddr + " error: " + e.Error())
 	}
-	if !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&this.tcplistener)), nil, unsafe.Pointer(&templistener)) {
-		return ErrAlreadyStarted
-	}
+	this.tcplistener = templistener
+	this.Unlock()
 	//double check stop status
 	if this.totalpeernum < 0 {
 		this.tcplistener.Close()
