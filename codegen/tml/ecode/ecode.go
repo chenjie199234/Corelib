@@ -17,7 +17,11 @@ var (
 	ErrReq       = cerror.ErrReq     //10001
 	ErrResp      = cerror.ErrResp    //10002
 	ErrSystem    = cerror.ErrSystem  //10003
-	ErrBusiness1 = cerror.MakeError(10004, "business error 1")
+	ErrAuth      = cerror.ErrAuth    //10004
+	ErrLimit     = cerror.ErrLimit   //10005
+	ErrBan       = cerror.ErrBan     //10006
+
+	ErrBusiness1 = cerror.MakeError(20001, "business error 1")
 )`
 
 const path = "./ecode/"
