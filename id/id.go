@@ -51,14 +51,14 @@ func New(sid uint64) {
 				//refresh base
 				lasttime = templasttime
 				rollback = 0
-				base = getlasttime() + getrollback() + getserverid()
+				atomic.StoreUint64(&base, getlasttime()+getrollback()+getserverid())
 			} else if templasttime < lasttime {
 				//rollback
 				rollback++
 				if rollback > 63 {
 					panic("[ID.init] server time rollback more then 60s")
 				}
-				base = getlasttime() + getrollback() + getserverid()
+				atomic.StoreUint64(&base, getlasttime()+getrollback()+getserverid())
 			}
 		}
 	}()
@@ -73,7 +73,7 @@ func getserverid() uint64 {
 	return serverid << 23
 }
 
-const mask uint64 = uint64(63) << 23
+const mask uint64 = uint64(7) << 23
 
 func checkserverid(id uint64) bool {
 	if ((id & mask) >> 23) == serverid {
@@ -85,30 +85,23 @@ func checkserverid(id uint64) bool {
 var ERRMAX = errors.New("[ID.GetID]Max id was used up in this second")
 
 func GetID() (uint64, error) {
-	if !checkserverid(base) {
-		return 0, ERRMAX
-	}
-	newid := atomic.AddUint64(&base, 1)
-	if !checkserverid(newid) {
-		return 0, ERRMAX
-	}
-	return newid, nil
+	_, end, e := GetIDs(1)
+	return end, e
 }
 
-var ERRMAXONCE = errors.New("[ID.GetID]Too many ids required once")
-
-func GetIDs(delta uint64) (start uint64, end uint64, e error) {
-	if delta > 5000 {
-		return 0, 0, ERRMAXONCE
+//range is [start,end],including start and end,if delta is 1,start = end
+func GetIDs(delta uint16) (start uint64, end uint64, e error) {
+	if delta == 0 {
+		delta += 1
 	}
-	if !checkserverid(base) {
-		return 0, 0, ERRMAX
+	for {
+		oldbase := atomic.LoadUint64(&base)
+		if !checkserverid(oldbase + uint64(delta)) {
+			return 0, 0, ERRMAX
+		}
+		if !atomic.CompareAndSwapUint64(&base, oldbase, oldbase+uint64(delta)) {
+			continue
+		}
+		return oldbase + 1, oldbase + uint64(delta), nil
 	}
-	newid := atomic.AddUint64(&base, delta)
-	if !checkserverid(newid) {
-		return 0, 0, ERRMAX
-	}
-	start = newid - delta
-	end = newid
-	return
 }
