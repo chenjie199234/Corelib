@@ -56,7 +56,7 @@ func StartRpcServer() {
 	//return
 	//}
 
-	if e = s.StartRpcServer(":9000"); e != nil {
+	if e = s.StartRpcServer(":9000", nil); e != nil {
 		if e != rpc.ErrServerClosed {
 			log.Error(nil,"[xrpc] start error:", e)
 		} else {

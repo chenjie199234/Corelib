@@ -3,10 +3,8 @@ package stream
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"net"
-	"os"
 	"sync/atomic"
 	"time"
 
@@ -18,8 +16,8 @@ import (
 var ErrServerClosed = errors.New("[Stream.server] closed")
 var ErrAlreadyStarted = errors.New("[Stream.server] already started")
 
-//certkeys mapkey: cert path,mapvalue: key path
-func (this *Instance) StartTcpServer(listenaddr string, certkeys map[string]string) error {
+//if tlsc not nil,tcp connection will be used with tls
+func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error {
 	//check status
 	if this.totalpeernum < 0 {
 		return ErrServerClosed
@@ -31,17 +29,8 @@ func (this *Instance) StartTcpServer(listenaddr string, certkeys map[string]stri
 	}
 	var templistener net.Listener
 	var e error
-	if len(certkeys) > 0 {
-		certificates := make([]tls.Certificate, 0, len(certkeys))
-		for cert, key := range certkeys {
-			temp, e := tls.LoadX509KeyPair(cert, key)
-			if e != nil {
-				this.Unlock()
-				return errors.New("[Stream.StartTcpServer] load cert:" + cert + " key:" + key + " error:" + e.Error())
-			}
-			certificates = append(certificates, temp)
-		}
-		templistener, e = tls.Listen("tcp", listenaddr, &tls.Config{Certificates: certificates})
+	if tlsc != nil {
+		templistener, e = tls.Listen("tcp", listenaddr, tlsc)
 	} else {
 		templistener, e = net.Listen("tcp", listenaddr)
 	}
@@ -124,14 +113,10 @@ func (this *Instance) sworker(p *Peer) {
 	return
 }
 
-type TLSConfig struct {
-	SkipVerifyTLS bool     //don't verify the server's cert
-	CAs           []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
-}
-
 // success return peeruniquename
 // fail return empty
-func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte, tlsc *TLSConfig) string {
+//if tlsc not nil,tcp connection will be used with tls
+func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte, tlsc *tls.Config) string {
 	if this.totalpeernum < 0 {
 		return ""
 	}
@@ -143,25 +128,7 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte, tlsc 
 	var conn net.Conn
 	var e error
 	if tlsc != nil {
-		var certpool *x509.CertPool
-		if len(tlsc.CAs) != 0 {
-			certpool = x509.NewCertPool()
-			for _, cert := range tlsc.CAs {
-				certPEM, e := os.ReadFile(cert)
-				if e != nil {
-					log.Error(nil, "[Stream.StartTcpClient] read cert file:", cert, "error:", e)
-					return ""
-				}
-				if !certpool.AppendCertsFromPEM(certPEM) {
-					log.Error(nil, "[Stream.StartTcpClient] load cert file:", cert, "error:", e)
-					return ""
-				}
-			}
-		}
-		conn, e = tls.DialWithDialer(dialer, "tcp", serveraddr, &tls.Config{
-			InsecureSkipVerify: tlsc.SkipVerifyTLS,
-			RootCAs:            certpool,
-		})
+		conn, e = tls.DialWithDialer(dialer, "tcp", serveraddr, tlsc)
 	} else {
 		conn, e = dialer.Dial("tcp", serveraddr)
 	}

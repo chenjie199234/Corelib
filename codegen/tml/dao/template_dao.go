@@ -124,7 +124,7 @@ func webDNS() func(string, string, <-chan struct{}) (map[string]*web.RegisterDat
 			return nil, e
 		}
 		for i := range addrs {
-			addrs[i] = "http://" + addrs[i] + ":8000"
+			addrs[i] = addrs[i] + ":8000"
 		}
 		dserver := make(map[string]struct{})
 		dserver["dns"] = struct{}{}

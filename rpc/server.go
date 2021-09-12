@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"math"
 	"runtime"
@@ -135,8 +136,20 @@ func NewRpcServer(c *ServerConfig, selfgroup, selfname string) (*RpcServer, erro
 var ErrServerClosed = errors.New("[rpc.server] closed")
 var ErrAlreadyStarted = errors.New("[rpc.server] already started")
 
-func (s *RpcServer) StartRpcServer(listenaddr string) error {
-	e := s.instance.StartTcpServer(listenaddr, nil)
+func (s *RpcServer) StartRpcServer(listenaddr string, certkeys map[string]string) error {
+	var tlsc *tls.Config
+	if len(certkeys) != 0 {
+		certificates := make([]tls.Certificate, 0, len(certkeys))
+		for cert, key := range certkeys {
+			temp, e := tls.LoadX509KeyPair(cert, key)
+			if e != nil {
+				return errors.New("[Stream.StartTcpServer] load cert:" + cert + " key:" + key + " error:" + e.Error())
+			}
+			certificates = append(certificates, temp)
+		}
+		tlsc = &tls.Config{Certificates: certificates}
+	}
+	e := s.instance.StartTcpServer(listenaddr, tlsc)
 	if e == stream.ErrServerClosed {
 		return ErrServerClosed
 	} else if e == stream.ErrAlreadyStarted {

@@ -2,7 +2,10 @@ package rpc
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,6 +37,9 @@ type ClientConfig struct {
 	MaxMsgLen              uint32
 	MaxBufferedWriteMsgNum uint32
 	VerifyData             string
+	UseTLS                 bool     //rpc or rpcs
+	SkipVerifyTLS          bool     //don't verify the server's cert
+	CAs                    []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
 	Picker                 PickHandler
 	DiscoverFunction       DiscoveryHandler //this function will be called in for loop
 }
@@ -82,6 +88,7 @@ type RpcClient struct {
 	selfappname string
 	appname     string
 	c           *ClientConfig
+	tlsc        *tls.Config
 	instance    *stream.Instance
 
 	lker    *sync.RWMutex
@@ -152,10 +159,27 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 		c.Picker = defaultPicker
 	}
 	c.validate()
+	var certpool *x509.CertPool
+	if len(c.CAs) != 0 {
+		certpool = x509.NewCertPool()
+		for _, cert := range c.CAs {
+			certPEM, e := os.ReadFile(cert)
+			if e != nil {
+				return nil, errors.New("[web.client] read cert file:" + cert + " error:" + e.Error())
+			}
+			if !certpool.AppendCertsFromPEM(certPEM) {
+				return nil, errors.New("[web.client] load cert file:" + cert + " error:" + e.Error())
+			}
+		}
+	}
 	client := &RpcClient{
-		selfappname:  selfappname,
-		appname:      appname,
-		c:            c,
+		selfappname: selfappname,
+		appname:     appname,
+		c:           c,
+		tlsc: &tls.Config{
+			InsecureSkipVerify: c.SkipVerifyTLS,
+			RootCAs:            certpool,
+		},
 		lker:         &sync.RWMutex{},
 		servers:      make(map[string]*ServerForPick, 10),
 		manually:     make(chan struct{}, 1),
@@ -260,7 +284,11 @@ func (c *RpcClient) updateDiscovery(all map[string]*RegisterData) {
 }
 func (c *RpcClient) start(addr string) {
 	tempverifydata := c.c.VerifyData + "|" + c.appname
-	if r := c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata), nil); r == "" {
+	var tlsc *tls.Config
+	if c.c.UseTLS {
+		tlsc = c.tlsc
+	}
+	if r := c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata), tlsc); r == "" {
 		c.lker.RLock()
 		exist, ok := c.servers[addr]
 		if !ok {

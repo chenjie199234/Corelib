@@ -10,10 +10,8 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,6 +39,7 @@ type ClientConfig struct {
 	MaxHeader        uint
 	SocketRBuf       uint
 	SocketWBuf       uint
+	UseTLS           bool     //http or https
 	SkipVerifyTLS    bool     //don't verify the server's cert
 	CAs              []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
 	Picker           PickHandler
@@ -80,7 +79,8 @@ type WebClient struct {
 	selfappname string
 	appname     string
 	c           *ClientConfig
-	certpool    *x509.CertPool
+	//certpool    *x509.CertPool
+	tlsc *tls.Config
 
 	lker    *sync.RWMutex
 	servers map[string]*ServerForPick
@@ -90,6 +90,7 @@ type WebClient struct {
 	mlker        *sync.Mutex
 }
 type ServerForPick struct {
+	usetls   bool
 	host     string
 	client   *http.Client
 	dservers map[string]struct{} //this server registered on how many discoveryservers
@@ -158,7 +159,10 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 		selfappname: selfappname,
 		appname:     appname,
 		c:           c,
-		certpool:    certpool,
+		tlsc: &tls.Config{
+			InsecureSkipVerify: c.SkipVerifyTLS,
+			RootCAs:            certpool,
+		},
 
 		lker:         &sync.RWMutex{},
 		servers:      make(map[string]*ServerForPick, 10),
@@ -180,7 +184,7 @@ type RegisterData struct {
 	Addition []byte
 }
 
-//all: key server's addr "scheme://host:port"
+//all: key server's addr "host:port"
 func (this *WebClient) updateDiscovery(all map[string]*RegisterData) {
 	//check need update
 	this.lker.Lock()
@@ -198,13 +202,6 @@ func (this *WebClient) updateDiscovery(all map[string]*RegisterData) {
 			delete(this.servers, host)
 			continue
 		}
-		if u, e := url.Parse(host); e != nil {
-			continue
-		} else if u.Host == "" || u.Scheme == "" || (u.Scheme != "http" && u.Scheme != "https") {
-			continue
-		} else {
-			host = u.Scheme + "://" + u.Host
-		}
 		exist, ok := this.servers[host]
 		if !ok {
 			//this is a new register
@@ -216,10 +213,7 @@ func (this *WebClient) updateDiscovery(all map[string]*RegisterData) {
 						DialContext: (&net.Dialer{
 							KeepAlive: this.c.HeartProbe,
 						}).DialContext,
-						TLSClientConfig: &tls.Config{
-							InsecureSkipVerify: this.c.SkipVerifyTLS,
-							RootCAs:            this.certpool,
-						},
+						TLSClientConfig:        this.tlsc,
 						ForceAttemptHTTP2:      true,
 						MaxIdleConnsPerHost:    50,
 						IdleConnTimeout:        this.c.IdleTimeout,
@@ -299,7 +293,10 @@ func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, path
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
 	}
-	return this.call(http.MethodPost, ctx, functimeout, path, query, header, metadata, body)
+	if len(body) != 0 {
+		return this.call(http.MethodPost, ctx, functimeout, path, query, header, metadata, bytes.NewBuffer(body))
+	}
+	return this.call(http.MethodPost, ctx, functimeout, path, query, header, metadata, nil)
 }
 
 //"SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
@@ -307,7 +304,10 @@ func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, path,
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
 	}
-	return this.call(http.MethodPut, ctx, functimeout, path, query, header, metadata, body)
+	if len(body) != 0 {
+		return this.call(http.MethodPut, ctx, functimeout, path, query, header, metadata, bytes.NewBuffer(body))
+	}
+	return this.call(http.MethodPut, ctx, functimeout, path, query, header, metadata, nil)
 }
 
 //"SourceServer" "Deadline" "Metadata" and "Tracedata" are forbidden in header
@@ -315,9 +315,12 @@ func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, pat
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
 	}
-	return this.call(http.MethodPatch, ctx, functimeout, path, query, header, metadata, body)
+	if len(body) != 0 {
+		return this.call(http.MethodPatch, ctx, functimeout, path, query, header, metadata, bytes.NewBuffer(body))
+	}
+	return this.call(http.MethodPatch, ctx, functimeout, path, query, header, metadata, nil)
 }
-func (this *WebClient) call(method string, ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) (*http.Response, error) {
+func (this *WebClient) call(method string, ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body *bytes.Buffer) (*http.Response, error) {
 	if len(path) == 0 || path[0] != '/' {
 		path = "/" + path
 	}
@@ -399,24 +402,18 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			//ttl + server logic time
 			return nil, cerror.StdErrorToError(context.DeadlineExceeded)
 		}
-		var req *http.Request
-		var e error
-		if body != nil {
-			req, e = http.NewRequestWithContext(ctx, method, server.host+path+query, bytes.NewBuffer(body))
+		var scheme string
+		if this.c.UseTLS {
+			scheme = "https"
 		} else {
-			req, e = http.NewRequestWithContext(ctx, method, server.host+path+query, nil)
+			scheme = "http"
 		}
+		req, e := http.NewRequestWithContext(ctx, method, scheme+"://"+server.host+path+query, body)
 		if e != nil {
 			return nil, cerror.StdErrorToError(e)
 		}
 		req.Header = header
-		var tmphost string
-		if strings.HasPrefix(server.host, "http://") {
-			tmphost = server.host[7:]
-		} else if strings.HasPrefix(server.host, "https://") {
-			tmphost = server.host[8:]
-		}
-		traceend := trace.TraceStart(ctx, trace.CLIENT, this.appname, tmphost, method, path, trace.WEB)
+		traceend := trace.TraceStart(ctx, trace.CLIENT, this.appname, server.host, method, path, trace.WEB)
 		//start call
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 		var resp *http.Response
