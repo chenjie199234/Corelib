@@ -408,7 +408,13 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		} else {
 			scheme = "http"
 		}
-		req, e := http.NewRequestWithContext(ctx, method, scheme+"://"+server.host+path+query, body)
+		var req *http.Request
+		var e error
+		if body == nil {
+			req, e = http.NewRequestWithContext(ctx, method, scheme+"://"+server.host+path+query, nil)
+		} else {
+			req, e = http.NewRequestWithContext(ctx, method, scheme+"://"+server.host+path+query, body)
+		}
 		if e != nil {
 			return nil, cerror.StdErrorToError(e)
 		}
