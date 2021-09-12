@@ -122,13 +122,30 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{.ProjectName}}-service{{ if .HeadlessService }}-headless{{ end }}
+  name: {{.ProjectName}}-service-headless
   namespace: {{.NameSpace}}
   labels:
     app: {{.ProjectName}}
 spec:
-  type: ClusterIP{{ if .HeadlessService }}
-  clusterIP: None{{ end }}
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: web
+    protocol: TCP
+    port: 80
+    targetPort: 8000
+  selector:
+    app: {{.ProjectName}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{.ProjectName}}-service
+  namespace: {{.NameSpace}}
+  labels:
+    app: {{.ProjectName}}
+spec:
+  type: ClusterIP
   ports:
   - name: web
     protocol: TCP
@@ -191,25 +208,23 @@ func CreatePathAndFile() {
 }
 
 type data struct {
-	ProjectName     string
-	NameSpace       string
-	NeedService     bool
-	HeadlessService bool
-	NeedIngress     bool
-	HostName        string
+	ProjectName string
+	NameSpace   string
+	NeedService bool
+	NeedIngress bool
+	HostName    string
 }
 
-func Execute(projectname string, namespace string, needservice bool, needheadlessservice bool, needingress bool, hostname string) {
+func Execute(projectname string, namespace string, needservice bool, needingress bool, hostname string) {
 	if e := dockerfiletml.Execute(dockerfilefile, projectname); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+dockerfilename, e))
 	}
 	tempdata := &data{
-		ProjectName:     projectname,
-		NameSpace:       namespace,
-		NeedService:     needservice,
-		HeadlessService: needheadlessservice,
-		NeedIngress:     needingress,
-		HostName:        hostname,
+		ProjectName: projectname,
+		NameSpace:   namespace,
+		NeedService: needservice,
+		NeedIngress: needingress,
+		HostName:    hostname,
 	}
 	if e := deploymenttml.Execute(deploymentfile, tempdata); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+deploymentname, e))

@@ -39,7 +39,6 @@ var sub = flag.String("s", "", "create subservice's name in project\ncharacter:[
 var kub = flag.Bool("k", false, "update exist project's kubernetes config file")
 var needkubernetes bool
 var needkubernetesservice bool
-var needkubernetesheadlessservice bool
 var needkubernetesingress bool
 var kubernetesingresshost string
 
@@ -276,24 +275,6 @@ func createkubernetes() {
 	if needkubernetesservice {
 		input = ""
 		for len(input) == 0 {
-			fmt.Printf("service headless? [y/n]:")
-			_, e := fmt.Scanln(&input)
-			if e != nil {
-				panic(e)
-			}
-			input = strings.TrimSpace(input)
-			if len(input) == 0 || ((input)[0] != 'y' && (input)[0] != 'n') {
-				input = ""
-				continue
-			}
-		}
-		if input[0] == 'y' {
-			needkubernetesheadlessservice = true
-		}
-	}
-	if needkubernetesservice && !needkubernetesheadlessservice {
-		input = ""
-		for len(input) == 0 {
 			fmt.Printf("need kubernetes ingress? [y/n]: ")
 			_, e := fmt.Scanln(&input)
 			if e != nil {
@@ -334,7 +315,7 @@ func createkubernetes() {
 	if needkubernetes {
 		fmt.Println("start create kubernetes config.")
 		kubernetes.CreatePathAndFile()
-		kubernetes.Execute(*name, *group, needkubernetesservice, needkubernetesheadlessservice, needkubernetesingress, kubernetesingresshost)
+		kubernetes.Execute(*name, *group, needkubernetesservice, needkubernetesingress, kubernetesingresshost)
 		fmt.Println("create kubernetes config success!")
 	}
 }
