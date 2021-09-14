@@ -73,10 +73,10 @@ func getserverid() uint64 {
 	return serverid << 23
 }
 
-const mask uint64 = uint64(7) << 23
+const serveridmask uint64 = uint64(7) << 23
 
 func checkserverid(id uint64) bool {
-	if ((id & mask) >> 23) == serverid {
+	if ((id & serveridmask) >> 23) == serverid {
 		return true
 	}
 	return false

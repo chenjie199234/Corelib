@@ -65,7 +65,7 @@ func (p *Peer) setbuffer(readnum, writenum int) {
 
 func (p *Peer) readMessage() (*bufpool.Buffer, error) {
 	buf := bufpool.GetBuffer()
-	buf.Grow(4)
+	buf.Resize(4)
 	if _, e := io.ReadFull(p.conn, buf.Bytes()); e != nil {
 		bufpool.PutBuffer(buf)
 		return nil, e
@@ -78,7 +78,7 @@ func (p *Peer) readMessage() (*bufpool.Buffer, error) {
 		bufpool.PutBuffer(buf)
 		return nil, nil
 	}
-	buf.Grow(uint64(num))
+	buf.Resize(num)
 	if _, e := io.ReadFull(p.conn, buf.Bytes()); e != nil {
 		bufpool.PutBuffer(buf)
 		return nil, e

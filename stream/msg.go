@@ -21,7 +21,7 @@ const (
 //x  |--------------------------specific data|
 func makePingMsg(pingdata []byte) *bufpool.Buffer {
 	buf := bufpool.GetBuffer()
-	buf.Grow(uint64(4 + 1 + len(pingdata)))
+	buf.Resize(uint32(4 + 1 + len(pingdata)))
 	binary.BigEndian.PutUint32(buf.Bytes(), uint32(1+len(pingdata)))
 	buf.Bytes()[4] = byte(PING << 5)
 	if len(pingdata) > 0 {
@@ -47,7 +47,7 @@ func getPingMsg(data []byte) ([]byte, error) {
 //x  |--------------------------specific data|
 func makePongMsg(pongdata []byte) *bufpool.Buffer {
 	buf := bufpool.GetBuffer()
-	buf.Grow(uint64(4 + 1 + len(pongdata)))
+	buf.Resize(uint32(4 + 1 + len(pongdata)))
 	binary.BigEndian.PutUint32(buf.Bytes(), uint32(1+len(pongdata)))
 	buf.Bytes()[4] = byte(PONG << 5)
 	if len(pongdata) > 0 {
@@ -87,7 +87,7 @@ func getPongMsg(data []byte) ([]byte, error) {
 //y  |--------------------------specific data|
 func makeVerifyMsg(sender string, verifydata []byte, sid int64, maxmsglength uint32) *bufpool.Buffer {
 	buf := bufpool.GetBuffer()
-	buf.Grow(uint64(4 + 1 + 8 + 4 + len(sender) + len(verifydata)))
+	buf.Resize(uint32(4 + 1 + 8 + 4 + len(sender) + len(verifydata)))
 	binary.BigEndian.PutUint32(buf.Bytes(), uint32(1+8+4+len(sender)+len(verifydata)))
 	buf.Bytes()[4] = byte((VERIFY << 5) | len(sender))
 	binary.BigEndian.PutUint64(buf.Bytes()[5:13], uint64(sid))
@@ -122,7 +122,7 @@ func getVerifyMsg(data []byte) (string, []byte, int64, uint32, error) {
 //x  |--------------------------specific data|
 func makeUserMsg(userdata []byte, sid int64) *bufpool.Buffer {
 	buf := bufpool.GetBuffer()
-	buf.Grow(uint64(4 + 1 + 8 + len(userdata)))
+	buf.Resize(uint32(4 + 1 + 8 + len(userdata)))
 	binary.BigEndian.PutUint32(buf.Bytes(), uint32(1+8+len(userdata)))
 	buf.Bytes()[4] = byte(USER << 5)
 	binary.BigEndian.PutUint64(buf.Bytes()[5:13], uint64(sid))
