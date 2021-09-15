@@ -7,6 +7,7 @@ import (
 	"time"
 	"unsafe"
 
+	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/util/common"
 	ctime "github.com/chenjie199234/Corelib/util/time"
 )
@@ -42,7 +43,7 @@ func (b *Buffer) Reset() {
 }
 func (b *Buffer) Resize(n uint32) {
 	if uint32(cap(*b)) >= n {
-		*b = (*b)[:n]
+		(*[3]uintptr)(unsafe.Pointer(b))[1] = uintptr(n)
 	} else {
 		*b = make([]byte, n)
 	}
@@ -942,12 +943,31 @@ func (b *Buffer) appendbasic(data interface{}) {
 			b.appendemptyslice()
 		}
 	case error:
-		*b = append(*b, d.Error()...)
+		switch dd := d.(type) {
+		case *cerror.Error:
+			if dd == nil {
+				b.appendnil()
+			} else {
+				b.Append(*dd)
+			}
+		case cerror.Error:
+			*b = append(*b, "{Code:"...)
+			*b = strconv.AppendInt(*b, int64(dd.Code), 10)
+			*b = append(*b, ",Msg:"...)
+			*b = append(*b, dd.Msg...)
+			*b = append(*b, '}')
+		default:
+			if d == nil {
+				b.appendnil()
+			} else {
+				*b = append(*b, d.Error()...)
+			}
+		}
 	case *error:
 		if d == nil {
 			b.appendnil()
 		} else {
-			*b = append(*b, (*d).Error()...)
+			b.Append(*d)
 		}
 	case []error:
 		if d == nil {
@@ -955,7 +975,20 @@ func (b *Buffer) appendbasic(data interface{}) {
 		} else if len(d) > 0 {
 			*b = append(*b, '[')
 			for _, dd := range d {
-				*b = append(*b, dd.Error()...)
+				b.Append(dd)
+				*b = append(*b, ',')
+			}
+			(*b)[len(*b)-1] = ']'
+		} else {
+			b.appendemptyslice()
+		}
+	case []cerror.Error:
+		if d == nil {
+			b.appendnil()
+		} else if len(d) > 0 {
+			*b = append(*b, '[')
+			for _, dd := range d {
+				b.Append(dd)
 				*b = append(*b, ',')
 			}
 			(*b)[len(*b)-1] = ']'
@@ -971,7 +1004,24 @@ func (b *Buffer) appendbasic(data interface{}) {
 				if dd == nil {
 					b.appendnil()
 				} else {
-					*b = append(*b, (*dd).Error()...)
+					b.Append(*dd)
+				}
+				*b = append(*b, ',')
+			}
+			(*b)[len(*b)-1] = ']'
+		} else {
+			b.appendemptyslice()
+		}
+	case []*cerror.Error:
+		if d == nil {
+			b.appendnil()
+		} else if len(d) > 0 {
+			*b = append(*b, '[')
+			for _, dd := range d {
+				if dd == nil {
+					b.appendnil()
+				} else {
+					b.Append(*dd)
 				}
 				*b = append(*b, ',')
 			}
@@ -1020,6 +1070,8 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 	case reflect.Interface:
 		if d.IsNil() {
 			b.appendnil()
+		} else if d.Type().String() == "error" {
+			b.appendbasic(d.Interface())
 		} else {
 			b.appendreflect(d.Elem())
 		}
@@ -1048,6 +1100,7 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 			b.appendemptyslice()
 		}
 	case reflect.Map:
+		d.IsZero()
 		if d.IsNil() {
 			b.appendnil()
 		} else if d.Len() > 0 {
@@ -1064,21 +1117,30 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 			b.appendemptyobj()
 		}
 	case reflect.Struct:
-		if d.Type().Name() == "Time" {
+		if d.Type().String() == "time.Time" {
 			t := (*time.Time)(unsafe.Pointer(d.Addr().Pointer()))
 			b.appendbasic(t)
+		} else if d.Type().String() == "github.com/chenjie199234/Corelib/error.Error" {
+			e := (*cerror.Error)(unsafe.Pointer(d.Addr().Pointer()))
+			b.appendbasic(*e)
 		} else if d.NumField() > 0 {
+			has := false
 			*b = append(*b, '{')
 			t := d.Type()
 			for i := 0; i < d.NumField(); i++ {
 				if t.Field(i).Name[0] >= 65 && t.Field(i).Name[0] <= 90 {
+					has = true
 					*b = append(*b, t.Field(i).Name...)
 					*b = append(*b, ':')
 					b.appendreflect(d.Field(i))
 					*b = append(*b, ',')
 				}
 			}
-			(*b)[len(*b)-1] = '}'
+			if has {
+				(*b)[len(*b)-1] = '}'
+			} else {
+				*b = append(*b, '}')
+			}
 		} else {
 			b.appendemptyobj()
 		}
