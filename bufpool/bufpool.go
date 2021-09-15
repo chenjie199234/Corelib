@@ -943,31 +943,12 @@ func (b *Buffer) appendbasic(data interface{}) {
 			b.appendemptyslice()
 		}
 	case error:
-		switch dd := d.(type) {
-		case *cerror.Error:
-			if dd == nil {
-				b.appendnil()
-			} else {
-				b.Append(*dd)
-			}
-		case cerror.Error:
-			*b = append(*b, "{Code:"...)
-			*b = strconv.AppendInt(*b, int64(dd.Code), 10)
-			*b = append(*b, ",Msg:"...)
-			*b = append(*b, dd.Msg...)
-			*b = append(*b, '}')
-		default:
-			if d == nil {
-				b.appendnil()
-			} else {
-				*b = append(*b, d.Error()...)
-			}
-		}
+		*b = b.appenderror(d)
 	case *error:
 		if d == nil {
 			b.appendnil()
 		} else {
-			b.Append(*d)
+			*b = b.appenderror(*d)
 		}
 	case []error:
 		if d == nil {
@@ -975,7 +956,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 		} else if len(d) > 0 {
 			*b = append(*b, '[')
 			for _, dd := range d {
-				b.Append(dd)
+				*b = b.appenderror(dd)
 				*b = append(*b, ',')
 			}
 			(*b)[len(*b)-1] = ']'
@@ -988,7 +969,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 		} else if len(d) > 0 {
 			*b = append(*b, '[')
 			for _, dd := range d {
-				b.Append(dd)
+				*b = b.appenderror(dd)
 				*b = append(*b, ',')
 			}
 			(*b)[len(*b)-1] = ']'
@@ -1004,7 +985,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 				if dd == nil {
 					b.appendnil()
 				} else {
-					b.Append(*dd)
+					*b = b.appenderror(*dd)
 				}
 				*b = append(*b, ',')
 			}
@@ -1021,7 +1002,7 @@ func (b *Buffer) appendbasic(data interface{}) {
 				if dd == nil {
 					b.appendnil()
 				} else {
-					b.Append(*dd)
+					*b = b.appenderror(*dd)
 				}
 				*b = append(*b, ',')
 			}
@@ -1071,7 +1052,7 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 		if d.IsNil() {
 			b.appendnil()
 		} else if d.Type().String() == "error" {
-			b.appendbasic(d.Interface())
+			*b = b.appenderror(d.Interface().(error))
 		} else {
 			b.appendreflect(d.Elem())
 		}
@@ -1122,7 +1103,7 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 			b.appendbasic(t)
 		} else if d.Type().String() == "github.com/chenjie199234/Corelib/error.Error" {
 			e := (*cerror.Error)(unsafe.Pointer(d.Addr().Pointer()))
-			b.appendbasic(*e)
+			*b = b.appenderror(*e)
 		} else if d.NumField() > 0 {
 			has := false
 			*b = append(*b, '{')
@@ -1173,6 +1154,33 @@ func (b *Buffer) appendreflect(d reflect.Value) {
 	default:
 		*b = append(*b, "unsupported type"...)
 	}
+}
+func (b *Buffer) appenderror(e error) []byte {
+	switch ee := e.(type) {
+	case *cerror.Error:
+		if ee == nil {
+			b.appendnil()
+		} else {
+			*b = append(*b, "{Code:"...)
+			*b = strconv.AppendInt(*b, int64(ee.Code), 10)
+			*b = append(*b, ",Msg:"...)
+			*b = append(*b, ee.Msg...)
+			*b = append(*b, '}')
+		}
+	case cerror.Error:
+		*b = append(*b, "{Code:"...)
+		*b = strconv.AppendInt(*b, int64(ee.Code), 10)
+		*b = append(*b, ",Msg:"...)
+		*b = append(*b, ee.Msg...)
+		*b = append(*b, '}')
+	default:
+		if e == nil {
+			b.appendnil()
+		} else {
+			*b = append(*b, e.Error()...)
+		}
+	}
+	return *b
 }
 func (b *Buffer) appendDuration(d time.Duration) []byte {
 	if d == 0 {
