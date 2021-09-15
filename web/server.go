@@ -374,7 +374,7 @@ func (this *WebServer) StopWebServer() {
 	}
 
 }
-func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, handlers []OutsideHandler) *Context {
+func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context.Context, handlers []OutsideHandler) *Context {
 	ctx, ok := this.ctxpool.Get().(*Context)
 	if !ok {
 		return &Context{Context: r.Context(), s: this, w: w, r: r, handlers: handlers}
@@ -382,7 +382,7 @@ func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, handle
 	ctx.w = w
 	ctx.r = r
 	ctx.handlers = handlers
-	ctx.Context = r.Context()
+	ctx.Context = c
 	ctx.e = nil
 	return ctx
 }
@@ -494,7 +494,8 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	this.router.ServeHTTP(w, r)
+	ctx := trace.InitTrace(r.Context(), r.Header.Get("Traceid"), this.selfappname, host.Hostip, r.Method, r.URL.Path, trace.WEB)
+	this.router.ServeHTTP(w, r.Clone(ctx))
 	if this.totalreqnum < 0 {
 		select {
 		case this.refreshclosewait <- struct{}{}:
@@ -512,6 +513,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 		return nil, errors.New("[web.server] too many handlers for one single path")
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		//cors
 		if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
 			headers := w.Header()
@@ -546,20 +548,18 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 		if tdstr := r.Header.Get("Tracedata"); tdstr != "" {
 			td := make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(tdstr), &td); e != nil {
-				log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Tracedata:", tdstr, "format error")
+				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: Tracedata:", tdstr, "format error")
 			} else {
-				traceid = td["Traceid"]
 				frommethod = td["Method"]
 				frompath = td["Path"]
 				fromkind = trace.KIND(td["Kind"])
 			}
 		}
-		ctx := trace.InitTrace(nil, traceid, this.selfappname, host.Hostip, method, path, trace.WEB)
 		//metadata
 		if mdstr := r.Header.Get("Metadata"); mdstr != "" {
 			md := make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(mdstr), &md); e != nil {
-				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Metadata:", mdstr, "format error")
+				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: Metadata:", mdstr, "format error")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
 				return
@@ -571,7 +571,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			var e error
 			clientdl, e = strconv.ParseInt(temp, 10, 64)
 			if e != nil {
-				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: Deadline:", temp, "format error")
+				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: Deadline:", temp, "format error")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
 				return
@@ -632,12 +632,12 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			defer cancel()
 		}
 		//logic
-		workctx := this.getContext(w, r.Clone(ctx), totalhandlers)
+		workctx := this.getContext(w, r, ctx, totalhandlers)
 		defer func() {
 			if e := recover(); e != nil {
 				stack := make([]byte, 8192)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "panic:", e, "\n"+common.Byte2str(stack[:n]))
+				log.Error(workctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "panic:", e, "\n"+common.Byte2str(stack[:n]))
 				http.Error(w, ERRPANIC.Error(), http.StatusInternalServerError)
 				workctx.e = ERRPANIC
 			}
