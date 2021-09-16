@@ -2159,8 +2159,8 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 			}
 		}
 		var mids []string
-		if proto.HasExtension(mop, pbex.E_Midwares) {
-			mids = proto.GetExtension(mop, pbex.E_Midwares).([]string)
+		if proto.HasExtension(mop, pbex.E_WebMidwares) {
+			mids = proto.GetExtension(mop, pbex.E_WebMidwares).([]string)
 		}
 		fname := "_" + service.GoName + "_" + method.GoName + "_" + "WebHandler(svc." + method.GoName + ")"
 		pathname := "_WebPath" + service.GoName + method.GoName

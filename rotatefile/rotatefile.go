@@ -20,7 +20,7 @@ import (
 //thread unsafe
 type RotateFile struct {
 	path, name string
-	file       *os.File
+	file       atomic.Value
 	buffile    *bufio.Writer
 	curlen     int64
 	notice     chan struct{}
@@ -47,7 +47,7 @@ func NewRotateFile(path, name string) (*RotateFile, error) {
 	rf := &RotateFile{
 		path:      path,
 		name:      name,
-		file:      tempfile,
+		file:      atomic.Value{},
 		buffile:   bufio.NewWriterSize(tempfile, 4096),
 		curlen:    0,
 		notice:    make(chan struct{}, 1),
@@ -58,6 +58,7 @@ func NewRotateFile(path, name string) (*RotateFile, error) {
 		status:    1,
 		closewait: &sync.WaitGroup{},
 	}
+	rf.file.Store(tempfile)
 	rf.closewait.Add(1)
 	go rf.run()
 	return rf, nil
@@ -117,9 +118,10 @@ func (f *RotateFile) run() {
 			f.rlker.Unlock()
 			return
 		}
-		f.file.Close()
-		f.file = tmpfile
-		f.buffile.Reset(f.file)
+		oldfile := f.file.Load().(*os.File)
+		oldfile.Close()
+		f.file.Store(tmpfile)
+		f.buffile.Reset(tmpfile)
 		f.curlen = 0
 		f.rlker.Lock()
 		for retch := range f.rotateret {
@@ -179,7 +181,8 @@ func (f *RotateFile) CleanNow(lastModTimestampBeforeThisNS int64) error {
 		if len(filename) <= 34 {
 			continue
 		}
-		curfilename := f.file.Name()
+		curfile := f.file.Load().(*os.File)
+		curfilename := curfile.Name()
 		if filepath.Base(filename) == filepath.Base(curfilename) {
 			continue
 		}
@@ -246,5 +249,5 @@ func (f *RotateFile) Close() {
 		close(f.notice)
 	}
 	f.closewait.Wait()
-	f.file.Close()
+	f.file.Load().(*os.File).Close()
 }

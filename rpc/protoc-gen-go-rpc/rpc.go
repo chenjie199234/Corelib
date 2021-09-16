@@ -1986,8 +1986,8 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 			}
 		}
 		var mids []string
-		if proto.HasExtension(mop, pbex.E_Midwares) {
-			mids = proto.GetExtension(mop, pbex.E_Midwares).([]string)
+		if proto.HasExtension(mop, pbex.E_RpcMidwares) {
+			mids = proto.GetExtension(mop, pbex.E_RpcMidwares).([]string)
 		}
 		fname := "_" + service.GoName + "_" + method.GoName + "_" + "RpcHandler(svc." + method.GoName + ")"
 		pathname := "_RpcPath" + service.GoName + method.GoName
