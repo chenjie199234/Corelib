@@ -70,7 +70,8 @@ func ErrorstrToError(e string) *Error {
 	}
 	result := &Error{}
 	if ee := json.Unmarshal(common.Str2byte(e), result); ee != nil {
-		return &Error{Code: -1, Msg: e}
+		result.Code = -1
+		result.Msg = e
 	}
 	return result
 }
@@ -84,7 +85,8 @@ func StdErrorToError(e error) *Error {
 	}
 	result = &Error{}
 	if ee := json.Unmarshal(common.Str2byte(e.Error()), result); ee != nil {
-		return &Error{Code: -1, Msg: e.Error()}
+		result.Code = -1
+		result.Msg = e.Error()
 	}
 	return result
 }
