@@ -16,6 +16,7 @@ import (
 	"time"
 	"unsafe"
 
+	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/trace"
@@ -193,17 +194,11 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	instance.closewait.Add(1)
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Error(r.Context(), "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
-		http.Error(w,
-			ERRNOAPI.Error(),
-			http.StatusNotFound,
-		)
+		http.Error(w, ERRNOAPI.Error(), http.StatusNotFound)
 	})
 	instance.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Error(r.Context(), "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown method")
-		http.Error(w,
-			ERRNOAPI.Error(),
-			http.StatusMethodNotAllowed,
-		)
+		http.Error(w, ERRNOAPI.Error(), http.StatusMethodNotAllowed)
 	})
 	instance.router.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//for OPTIONS preflight
@@ -530,8 +525,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 					}
 				}
 				if !find {
-					w.WriteHeader(http.StatusForbidden)
-					w.Write(common.Str2byte(http.StatusText(http.StatusForbidden)))
+					http.Error(w, ERRCORS.Error(), http.StatusForbidden)
 					return
 				}
 			}
@@ -560,8 +554,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			md := make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(mdstr), &md); e != nil {
 				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: Metadata:", mdstr, "format error")
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
+				http.Error(w, cerror.ErrReq.Error(), http.StatusBadRequest)
 				return
 			}
 			ctx = metadata.SetAllMetadata(ctx, md)
@@ -572,8 +565,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			clientdl, e = strconv.ParseInt(temp, 10, 64)
 			if e != nil {
 				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: Deadline:", temp, "format error")
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write(common.Str2byte(http.StatusText(http.StatusBadRequest)))
+				http.Error(w, cerror.ErrReq.Error(), http.StatusBadRequest)
 				return
 			}
 		}
@@ -622,9 +614,9 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 		if min != math.MaxInt64 {
 			if min < now.UnixNano()+int64(time.Millisecond) {
 				//min logic time,1ms
-				w.WriteHeader(http.StatusGatewayTimeout)
-				w.Write(common.Str2byte(http.StatusText(http.StatusGatewayTimeout)))
-				traceend(context.DeadlineExceeded)
+				e := cerror.StdErrorToError(context.DeadlineExceeded)
+				http.Error(w, e.Error(), http.StatusGatewayTimeout)
+				traceend(e)
 				return
 			}
 			var cancel context.CancelFunc

@@ -284,7 +284,7 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
-				msg.Error = context.DeadlineExceeded.Error()
+				msg.Error = cerror.StdErrorToError(context.DeadlineExceeded).Error()
 				msg.Metadata = nil
 				msg.Tracedata = nil
 				return
@@ -367,6 +367,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 	traceid, _, _, _, _, _ = trace.GetTrace(ctx)
 	handler, ok := s.handler[msg.Path]
 	if !ok {
+		log.Error(ctx, "[rpc.server.userfunc] client:", peeruniquename, "call path:", msg.Path, "error: unknown path")
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
