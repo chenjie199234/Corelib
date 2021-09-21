@@ -102,7 +102,7 @@ func write(ctx context.Context, buf *bufpool.Buffer, datas ...interface{}) {
 	buf.Append(file)
 	buf.Append(":")
 	buf.Append(line)
-	traceid, _, _, _, _, _ := trace.GetTrace(ctx)
+	traceid, _, _, _, _ := trace.GetTrace(ctx)
 	if traceid != "" {
 		buf.Append(" ")
 		buf.Append("Traceid: ")

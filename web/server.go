@@ -489,7 +489,7 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	ctx := trace.InitTrace(r.Context(), r.Header.Get("Traceid"), this.selfappname, host.Hostip, r.Method, r.URL.Path, trace.WEB)
+	ctx := trace.InitTrace(r.Context(), r.Header.Get("Traceid"), this.selfappname, host.Hostip, r.Method, r.URL.Path)
 	this.router.ServeHTTP(w, r.Clone(ctx))
 	if this.totalreqnum < 0 {
 		select {
@@ -536,19 +536,6 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 				headers.Set("Access-Control-Expose-Headers", this.c.Cors.exposestr)
 			}
 		}
-		//trace
-		var traceid, fromapp, fromip, frommethod, frompath string
-		var fromkind trace.KIND
-		if tdstr := r.Header.Get("Tracedata"); tdstr != "" {
-			td := make(map[string]string)
-			if e := json.Unmarshal(common.Str2byte(tdstr), &td); e != nil {
-				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: Tracedata:", tdstr, "format error")
-			} else {
-				frommethod = td["Method"]
-				frompath = td["Path"]
-				fromkind = trace.KIND(td["Kind"])
-			}
-		}
 		//metadata
 		if mdstr := r.Header.Get("Metadata"); mdstr != "" {
 			md := make(map[string]string)
@@ -569,28 +556,24 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 				return
 			}
 		}
-		sourceserver := r.Header.Get("SourceServer")
-		if sourceserver != "" {
-			r.Header.Set("SourceServer", sourceserver+":"+r.RemoteAddr)
-		}
 		//if traceid is not empty,traceid will not change
 		//if traceid is empty,init trace will create a new traceid,use the new traceid
-		traceid, _, _, _, _, _ = trace.GetTrace(ctx)
-		fromapp = sourceserver
-		if fromapp == "" {
-			fromapp = "unknown"
+		traceid, _, _, _, _ := trace.GetTrace(ctx)
+		sourceapp := r.Header.Get("SourceApp")
+		if sourceapp == "" {
+			sourceapp = "unknown"
 		}
-		fromip = r.RemoteAddr[:strings.Index(r.RemoteAddr, ":")]
-		if frommethod == "" {
-			frommethod = "unknown"
+		r.Header.Set("SourceApp", sourceapp+":"+r.RemoteAddr)
+		sourceip := r.RemoteAddr
+		sourcepath := r.Header.Get("SourcePath")
+		if sourcepath == "" {
+			sourcepath = "unknown"
 		}
-		if frompath == "" {
-			frompath = "unknown"
+		sourcemethod := r.Header.Get("SourceMethod")
+		if sourcemethod == "" {
+			sourcemethod = "unknown"
 		}
-		if fromkind == "" {
-			fromkind = trace.KIND("unknown")
-		}
-		traceend := trace.TraceStart(trace.InitTrace(nil, traceid, fromapp, fromip, frommethod, frompath, fromkind), trace.SERVER, this.selfappname, host.Hostip, method, path, trace.WEB)
+		traceend := trace.TraceStart(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, this.selfappname, host.Hostip, method, path)
 		//set timeout
 		now := time.Now()
 		var globaldl int64

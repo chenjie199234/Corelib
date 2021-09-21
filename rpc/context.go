@@ -55,7 +55,7 @@ func (c *Context) WriteString(resp string) {
 func (c *Context) GetBody() []byte {
 	return c.msg.Body
 }
-func (c *Context) GetSourceServer() string {
+func (c *Context) GetSourceApp() string {
 	return c.peeruniquename
 }
 func (c *Context) GetPath() string {
