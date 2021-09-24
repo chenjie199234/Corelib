@@ -611,6 +611,7 @@ func initsource(path string) {
 			continue
 		}
 		tempredis := redis.NewRedis(&redis.Config{
+			RedisName:   k,
 			Username:    redisc.Username,
 			Password:    redisc.Passwd,
 			Addr:        redisc.Addr,

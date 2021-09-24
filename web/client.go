@@ -90,7 +90,6 @@ type WebClient struct {
 	mlker        *sync.Mutex
 }
 type ServerForPick struct {
-	usetls   bool
 	host     string
 	client   *http.Client
 	dservers map[string]struct{} //this server registered on how many discoveryservers
@@ -257,7 +256,13 @@ func (this *WebClient) updateDiscovery(all map[string]*RegisterData) {
 }
 
 func forbiddenHeader(header http.Header) bool {
-	if _, ok := header["SourceServer"]; ok {
+	if _, ok := header["SourceApp"]; ok {
+		return true
+	}
+	if _, ok := header["SourcePath"]; ok {
+		return true
+	}
+	if _, ok := header["SourceMethod"]; ok {
 		return true
 	}
 	if _, ok := header["Deadline"]; ok {
@@ -269,13 +274,10 @@ func forbiddenHeader(header http.Header) bool {
 	if _, ok := header["Traceid"]; ok {
 		return true
 	}
-	if _, ok := header["Tracedata"]; ok {
-		return true
-	}
 	return false
 }
 
-//"SourceServer" "Deadline" "Metadata" "Traceid" and "Tracedata" are forbidden in header
+//"SourceApp" "SourcePath" "SourceMethod" "Deadline" "Metadata" "Traceid" are forbidden in header
 func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -283,7 +285,7 @@ func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, path,
 	return this.call(http.MethodGet, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"SourceServer" "Deadline" "Metadata" "Traceid" and "Tracedata" are forbidden in header
+//"SourceApp" "SourcePath" "SourceMethod" "Deadline" "Metadata" "Traceid" are forbidden in header
 func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -291,7 +293,7 @@ func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, pa
 	return this.call(http.MethodDelete, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"SourceServer" "Deadline" "Metadata" "Traceid" and "Tracedata" are forbidden in header
+//"SourceApp" "SourcePath" "SourceMethod" "Deadline" "Metadata" "Traceid" are forbidden in header
 func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -302,7 +304,7 @@ func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, path
 	return this.call(http.MethodPost, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"SourceServer" "Deadline" "Metadata" "Traceid" and "Tracedata" are forbidden in header
+//"SourceApp" "SourcePath" "SourceMethod" "Deadline" "Metadata" "Traceid" are forbidden in header
 func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -313,7 +315,7 @@ func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, path,
 	return this.call(http.MethodPut, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"SourceServer" "Deadline" "Metadata" "Traceid" and "Tracedata" are forbidden in header
+//"SourceApp" "SourcePath" "SourceMethod" "Deadline" "Metadata" "Traceid" are forbidden in header
 func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -333,20 +335,16 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	if header == nil {
 		header = make(http.Header)
 	}
-	header.Set("SourceServer", this.selfappname)
+	header.Set("SourceApp", this.selfappname)
 	if len(metadata) != 0 {
 		d, _ := json.Marshal(metadata)
 		header.Set("Metadata", common.Byte2str(d))
 	}
-	traceid, _, _, frommethod, frompath, fromkind := trace.GetTrace(ctx)
+	traceid, _, _, selfmethod, selfpath := trace.GetTrace(ctx)
 	if traceid != "" {
-		d, _ := json.Marshal(map[string]string{
-			"Method": frommethod,
-			"Path":   frompath,
-			"Kind":   string(fromkind),
-		})
 		header.Set("Traceid", traceid)
-		header.Set("Tracedata", common.Byte2str(d))
+		header.Set("SourcePath", selfpath)
+		header.Set("SourceMethod", selfmethod)
 	}
 	var min time.Duration
 	if this.c.GlobalTimeout != 0 {
@@ -422,7 +420,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			return nil, cerror.StdErrorToError(e)
 		}
 		req.Header = header
-		traceend := trace.TraceStart(ctx, trace.CLIENT, this.appname, server.host, method, path, trace.WEB)
+		traceend := trace.TraceStart(ctx, trace.CLIENT, this.appname, server.host, method, path)
 		//start call
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 		var resp *http.Response

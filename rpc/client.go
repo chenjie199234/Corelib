@@ -490,13 +490,12 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 		Body:     in,
 		Metadata: metadata,
 	}
-	traceid, _, _, frommethod, frompath, fromkind := trace.GetTrace(ctx)
+	traceid, _, _, selfmethod, selfpath := trace.GetTrace(ctx)
 	if traceid != "" {
 		msg.Tracedata = map[string]string{
-			"Traceid": traceid,
-			"Method":  frommethod,
-			"Path":    frompath,
-			"Kind":    string(fromkind),
+			"Traceid":      traceid,
+			"SourceMethod": selfmethod,
+			"SourcePath":   selfpath,
 		}
 	}
 	d, _ := proto.Marshal(msg)
@@ -554,7 +553,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 			server.lker.Unlock()
 			continue
 		}
-		traceend := trace.TraceStart(ctx, trace.CLIENT, c.appname, server.addr, "RPC", path, trace.RPC)
+		traceend := trace.TraceStart(ctx, trace.CLIENT, c.appname, server.addr, "RPC", path)
 		//send message success,store req,add req num
 		server.reqs[msg.Callid] = r
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)

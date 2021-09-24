@@ -100,8 +100,8 @@ func getclientip(r *http.Request) string {
 	}
 	return ip
 }
-func (this *Context) GetSourceServer() string {
-	return this.r.Header.Get("SourceServer")
+func (this *Context) GetSourceApp() string {
+	return this.r.Header.Get("SourceApp")
 }
 func (this *Context) GetClientIp() string {
 	return getclientip(this.r)

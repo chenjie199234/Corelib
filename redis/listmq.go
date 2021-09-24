@@ -129,9 +129,8 @@ func (p *Pool) ListMQSub(name string, num uint64, recvbufnum uint64, stop chan s
 	return recv, nil
 }
 
-const pub = `if(redis.call("EXISTS",KEYS[2])~=0)
+const pub = `if(redis.call("EXISTS",KEYS[2])~=0 and redis.call("EXPIRE",KEYS[1],11)~=0)
 then
-	redis.call("EXPIRE",KEYS[1],11)
 	for i=1,#ARGV,1 do
 		redis.call("rpush",KEYS[1],ARGV[i])
 	end

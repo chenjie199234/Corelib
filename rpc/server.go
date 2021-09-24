@@ -284,7 +284,7 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
-				msg.Error = context.DeadlineExceeded.Error()
+				msg.Error = cerror.StdErrorToError(context.DeadlineExceeded).Error()
 				msg.Metadata = nil
 				msg.Tracedata = nil
 				return
@@ -361,12 +361,13 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 	if msg.Tracedata != nil {
 		traceid = msg.Tracedata["Traceid"]
 	}
-	ctx := trace.InitTrace(nil, traceid, s.instance.GetSelfName(), host.Hostip, "rpc", msg.Path, trace.RPC)
+	ctx := trace.InitTrace(nil, traceid, s.instance.GetSelfName(), host.Hostip, "RPC", msg.Path)
 	//if traceid is not empty,traceid will not change
 	//if traceid is empty,init trace will create a new traceid,use the new traceid
-	traceid, _, _, _, _, _ = trace.GetTrace(ctx)
+	traceid, _, _, _, _ = trace.GetTrace(ctx)
 	handler, ok := s.handler[msg.Path]
 	if !ok {
+		log.Error(ctx, "[rpc.server.userfunc] client:", peeruniquename, "call path:", msg.Path, "error: unknown path")
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
@@ -407,28 +408,23 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		}
 	}
 	go func() {
-		var fromapp, fromip, frommethod, frompath string
-		var fromkind trace.KIND
+		var sourceapp, sourceip, sourcemethod, sourcepath string
 		if msg.Tracedata != nil {
-			frommethod = msg.Tracedata["Method"]
-			frompath = msg.Tracedata["Path"]
-			fromkind = trace.KIND(msg.Tracedata["Kind"])
+			sourcemethod = msg.Tracedata["SourceMethod"]
+			sourcepath = msg.Tracedata["SourcePath"]
 		}
-		fromapp = peeruniquename[:strings.Index(peeruniquename, ":")]
-		if fromapp == "" {
-			fromapp = "unkown"
+		sourceapp = peeruniquename[:strings.Index(peeruniquename, ":")]
+		if sourceapp == "" {
+			sourceapp = "unkown"
 		}
-		fromip = peeruniquename[strings.Index(peeruniquename, ":")+1 : strings.LastIndex(peeruniquename, ":")]
-		if frommethod == "" {
-			frommethod = "unknown"
+		sourceip = peeruniquename[strings.Index(peeruniquename, ":")+1:]
+		if sourcemethod == "" {
+			sourcemethod = "unknown"
 		}
-		if frompath == "" {
-			frompath = "unknown"
+		if sourcepath == "" {
+			sourcepath = "unknown"
 		}
-		if fromkind == "" {
-			fromkind = trace.KIND("unknown")
-		}
-		traceend := trace.TraceStart(trace.InitTrace(nil, traceid, fromapp, fromip, frommethod, frompath, fromkind), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "RPC", msg.Path, trace.RPC)
+		traceend := trace.TraceStart(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "RPC", msg.Path)
 		//logic
 		handler(ctx, peeruniquename, msg)
 		traceend(cerror.ErrorstrToError(msg.Error))

@@ -2,21 +2,25 @@ package redis
 
 import (
 	"context"
-	"sync"
 	"time"
+
+	"github.com/chenjie199234/Corelib/trace"
 
 	"github.com/gomodule/redigo/redis"
 )
 
 type Pool struct {
+	c *Config
 	p *redis.Pool
 }
 
 type Conn struct {
-	c redis.Conn
+	c        redis.Conn
+	traceend func(error)
 }
 
 type Config struct {
+	RedisName   string
 	Username    string
 	Password    string
 	Addr        string
@@ -29,11 +33,6 @@ type Config struct {
 var ErrNil = redis.ErrNil
 var ErrPoolExhausted = redis.ErrPoolExhausted
 
-var p *sync.Pool
-
-func init() {
-	p = &sync.Pool{}
-}
 func NewRedis(c *Config) *Pool {
 	return &Pool{
 		p: &redis.Pool{
@@ -59,18 +58,7 @@ func NewRedis(c *Config) *Pool {
 		},
 	}
 }
-func getconn(conn redis.Conn) *Conn {
-	c, ok := p.Get().(*Conn)
-	if !ok {
-		return &Conn{c: conn}
-	}
-	c.c = conn
-	return c
-}
-func putconn(c *Conn) {
-	c.c.Close()
-	p.Put(c)
-}
+
 func (p *Pool) GetRedis() *redis.Pool {
 	return p.p
 }
@@ -79,7 +67,8 @@ func (p *Pool) GetContext(ctx context.Context) (*Conn, error) {
 	if e != nil {
 		return nil, e
 	}
-	return getconn(c), nil
+	traceend := trace.TraceStart(ctx, trace.CLIENT, p.c.RedisName, p.c.Addr, "REDIS", "unknown")
+	return &Conn{c: c, traceend: traceend}, nil
 }
 func (p *Pool) Ping(ctx context.Context) error {
 	c, e := p.GetContext(ctx)
@@ -123,8 +112,14 @@ func (c *Conn) ReceiveContext(ctx context.Context) (interface{}, error) {
 		return c.c.Receive()
 	}
 }
+func (c *Conn) Err() error {
+	return c.c.Err()
+}
 func (c *Conn) Close() {
-	putconn(c)
+	if c.traceend != nil {
+		c.traceend(c.c.Err())
+	}
+	c.c.Close()
 }
 func Int(reply interface{}, e error) (int, error) {
 	return redis.Int(reply, e)

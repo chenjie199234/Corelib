@@ -7,8 +7,8 @@ service test {
 	rpc hello(helloreq)returns(helloresp){
 		option (pbex.method)="get";
 		option (pbex.timeout)="200ms";
-		option (pbex.midwares)="user";
-		option (pbex.midwares)="limit";
+		option (pbex.web_midwares)="user";
+		option (pbex.web_midwares)="limit";
 	}
 }
 enum TestEnum {
