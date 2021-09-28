@@ -179,6 +179,9 @@ func initapp(path string, notice func(*AppConfig)) {
 					log.Error(nil,"[config.initapp] hot update config file format error:", e)
 					continue
 				}
+				if notice != nil {
+					notice(c)
+				}
 				AC = c
 			case err, ok := <-watcher.Errors:
 				if !ok {
