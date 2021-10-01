@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"net"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -18,6 +19,9 @@ var ErrAlreadyStarted = errors.New("[Stream.server] already started")
 
 //if tlsc not nil,tcp connection will be used with tls
 func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error {
+	if tlsc != nil && len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
+		return errors.New("[Stream.StartTcpServer] tls certificate setting missing")
+	}
 	//check status
 	if this.totalpeernum < 0 {
 		return ErrServerClosed
@@ -27,18 +31,11 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 		this.Unlock()
 		return ErrAlreadyStarted
 	}
-	var templistener net.Listener
 	var e error
-	if tlsc != nil {
-		templistener, e = tls.Listen("tcp", listenaddr, tlsc)
-	} else {
-		templistener, e = net.Listen("tcp", listenaddr)
-	}
-	if e != nil {
+	if this.tcplistener, e = net.Listen("tcp", listenaddr); e != nil {
 		this.Unlock()
 		return errors.New("[Stream.StartTcpServer] listen tcp addr: " + listenaddr + " error: " + e.Error())
 	}
-	this.tcplistener = templistener
 	this.Unlock()
 	//double check stop status
 	if this.totalpeernum < 0 {
@@ -65,8 +62,16 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 		//disable system's keep alive probe
 		//use self's heartbeat probe
 		(conn.(*net.TCPConn)).SetKeepAlive(false)
-		p.conn = conn
-		p.setbuffer(int(this.c.TcpC.SocketRBufLen), int(this.c.TcpC.SocketWBufLen))
+		(conn.(*net.TCPConn)).SetReadBuffer(int(this.c.TcpC.SocketRBufLen))
+		(conn.(*net.TCPConn)).SetWriteBuffer(int(this.c.TcpC.SocketWBufLen))
+		if tlsc != nil {
+			p.conn = tls.Server(conn, tlsc)
+			p.rawconn = conn
+			p.tls = true
+		} else {
+			p.conn = conn
+			p.rawconn = conn
+		}
 		go this.sworker(p)
 	}
 }
@@ -76,23 +81,31 @@ func (this *Instance) sworker(p *Peer) {
 	p.conn.SetWriteDeadline(time.Now().Add(this.c.TcpC.ConnectTimeout))
 	ctx, cancel := context.WithTimeout(p, this.c.TcpC.ConnectTimeout)
 	defer cancel()
+	if p.tls {
+		if e := p.conn.(*tls.Conn).HandshakeContext(ctx); e != nil {
+			log.Error(nil, "[Stream.sworker] tls handshake error:", e)
+			p.conn.Close()
+			this.putPeer(p)
+			return
+		}
+	}
 	//read first verify message from client
 	verifydata := this.verifypeer(ctx, p, false)
 	if p.peername == "" {
-		p.closeconn()
+		p.conn.Close()
 		this.putPeer(p)
 		return
 	}
 	if e := this.addPeer(p); e != nil {
 		log.Error(nil, "[Stream.sworker] add:", p.getUniqueName(), "to peer manager error:", e)
-		p.closeconn()
+		p.conn.Close()
 		this.putPeer(p)
 		return
 	}
 	if this.c.Onlinefunc != nil {
 		if !this.c.Onlinefunc(p, p.getUniqueName(), p.sid) {
 			log.Error(nil, "[Stream.sworker] online:", p.getUniqueName(), "failed")
-			p.closeconn()
+			p.conn.Close()
 			//after addpeer should use this way to delete this peer
 			this.noticech <- p
 			return
@@ -103,7 +116,7 @@ func (this *Instance) sworker(p *Peer) {
 	defer bufpool.PutBuffer(verifymsg)
 	if _, e := p.conn.Write(verifymsg.Bytes()); e != nil {
 		log.Error(nil, "[Stream.sworker] write verify msg to:", p.getUniqueName(), "error:", e)
-		p.closeconn()
+		p.conn.Close()
 		//after addpeer should use this way to delete this peer
 		this.noticech <- p
 		return
@@ -120,28 +133,34 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte, tlsc 
 	if this.totalpeernum < 0 {
 		return ""
 	}
-	dialer := &net.Dialer{
-		Timeout:   this.c.TcpC.ConnectTimeout,
-		KeepAlive: -time.Second, //disable system's tcp keep alive probe,use self's heartbeat probe
+	if tlsc != nil && tlsc.ServerName == "" {
+		tlsc = tlsc.Clone()
+		if index := strings.LastIndex(serveraddr, ":"); index == -1 {
+			tlsc.ServerName = serveraddr
+		} else {
+			tlsc.ServerName = serveraddr[:index]
+		}
 	}
 	dl := time.Now().Add(this.c.TcpC.ConnectTimeout)
-	var conn net.Conn
-	var e error
-	if tlsc != nil {
-		conn, e = tls.DialWithDialer(dialer, "tcp", serveraddr, tlsc)
-	} else {
-		conn, e = dialer.Dial("tcp", serveraddr)
-	}
+	conn, e := (&net.Dialer{Deadline: dl}).Dial("tcp", serveraddr)
 	if e != nil {
 		log.Error(nil, "[Stream.StartTcpClient] dial error:", e)
 		return ""
 	}
-	//disable system's tcp keep alive probe
+	//disable system's keep alive probe
 	//use self's heartbeat probe
 	(conn.(*net.TCPConn)).SetKeepAlive(false)
+	(conn.(*net.TCPConn)).SetReadBuffer(int(this.c.TcpC.SocketRBufLen))
+	(conn.(*net.TCPConn)).SetWriteBuffer(int(this.c.TcpC.SocketWBufLen))
 	p := this.getPeer(this.c.MaxBufferedWriteMsgNum, this.c.TcpC.MaxMsgLen)
-	p.conn = conn.(*net.TCPConn)
-	p.setbuffer(int(this.c.TcpC.SocketRBufLen), int(this.c.TcpC.SocketWBufLen))
+	if tlsc != nil {
+		p.conn = tls.Client(conn, tlsc)
+		p.rawconn = conn
+		p.tls = true
+	} else {
+		p.conn = conn
+		p.rawconn = conn
+	}
 	return this.cworker(p, verifydata, dl)
 }
 
@@ -150,33 +169,40 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 	p.conn.SetWriteDeadline(dl)
 	ctx, cancel := context.WithDeadline(p, dl)
 	defer cancel()
+	if p.tls {
+		if e := p.conn.(*tls.Conn).HandshakeContext(ctx); e != nil {
+			log.Error(nil, "[Stream.cworker] tls handshake error:", e)
+			p.conn.Close()
+			return ""
+		}
+	}
 	//send self's verify message to server
 	verifymsg := makeVerifyMsg(this.selfname, verifydata, 0, p.selfmaxmsglen)
 	defer bufpool.PutBuffer(verifymsg)
 	if _, e := p.conn.Write(verifymsg.Bytes()); e != nil {
 		log.Error(nil, "[Stream.cworker] write verify msg to:", p.getUniqueName(), "error:", e)
-		p.closeconn()
+		p.conn.Close()
 		this.putPeer(p)
 		return ""
 	}
 	//read first verify message from server
 	_ = this.verifypeer(ctx, p, true)
 	if p.peername == "" {
-		p.closeconn()
+		p.conn.Close()
 		this.putPeer(p)
 		return ""
 	}
 	//verify server success
 	if e := this.addPeer(p); e != nil {
 		log.Error(nil, "[Stream.cworker] add:", p.getUniqueName(), "to peer manager error:", e)
-		p.closeconn()
+		p.conn.Close()
 		this.putPeer(p)
 		return ""
 	}
 	if this.c.Onlinefunc != nil {
 		if !this.c.Onlinefunc(p, p.getUniqueName(), p.sid) {
 			log.Error(nil, "[Stream.cworker] online:", p.getUniqueName(), "failed")
-			p.closeconn()
+			p.conn.Close()
 			this.noticech <- p
 			return ""
 		}
@@ -246,10 +272,9 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer, clientorserver bo
 }
 func (this *Instance) read(p *Peer) {
 	defer func() {
+		p.rawconn.(*net.TCPConn).CloseRead()
 		//every connection will have two goroutine to work for it
 		if atomic.SwapInt64(&p.sid, 0) != 0 {
-			//when first goroutine return,close the connection,cause write goroutine return
-			p.closeconn()
 			//wake up write goroutine
 			select {
 			case p.pingpongbuffer <- (*bufpool.Buffer)(nil):
@@ -317,21 +342,10 @@ func (this *Instance) read(p *Peer) {
 
 func (this *Instance) write(p *Peer) {
 	defer func() {
-		//drop all data,prevent close read goruntine block on send empty data to these channel
-		for len(p.writerbuffer) > 0 {
-			if v := <-p.writerbuffer; v != nil {
-				bufpool.PutBuffer(v)
-			}
-		}
-		for len(p.pingpongbuffer) > 0 {
-			if v := <-p.pingpongbuffer; v != nil {
-				bufpool.PutBuffer(v)
-			}
-		}
+		p.rawconn.(*net.TCPConn).CloseWrite()
 		//every connection will have two goroutine to work for it
 		if atomic.SwapInt64(&p.sid, 0) != 0 {
 			//when first goroutine return,close the connection,cause read goroutine return
-			p.closeconn()
 		} else {
 			if this.c.Offlinefunc != nil {
 				this.c.Offlinefunc(p, p.getUniqueName())

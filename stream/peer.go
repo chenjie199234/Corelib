@@ -34,6 +34,8 @@ type Peer struct {
 	peermaxmsglen  uint32
 	writerbuffer   chan *bufpool.Buffer
 	pingpongbuffer chan *bufpool.Buffer
+	tls            bool
+	rawconn        net.Conn
 	conn           net.Conn
 	lastactive     int64          //unixnano timestamp
 	recvidlestart  int64          //unixnano timestamp
@@ -50,17 +52,6 @@ func (p *Peer) getUniqueName() string {
 		return addr
 	}
 	return p.peername + ":" + addr
-}
-
-func (p *Peer) closeconn() {
-	if p.conn != nil {
-		p.conn.Close()
-	}
-}
-
-func (p *Peer) setbuffer(readnum, writenum int) {
-	(p.conn.(*net.TCPConn)).SetReadBuffer(readnum)
-	(p.conn.(*net.TCPConn)).SetWriteBuffer(writenum)
 }
 
 func (p *Peer) readMessage() (*bufpool.Buffer, error) {
@@ -116,6 +107,8 @@ func (p *Peer) SendMessage(userdata []byte, sid int64, block bool) error {
 
 func (p *Peer) Close(sid int64) {
 	if atomic.CompareAndSwapInt64(&p.sid, sid, -1) {
+		//stop read new message
+		p.rawconn.(*net.TCPConn).CloseRead()
 		//wake up write goroutine
 		select {
 		case p.pingpongbuffer <- (*bufpool.Buffer)(nil):
