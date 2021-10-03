@@ -318,18 +318,25 @@ func (this *Instance) read(p *Peer) {
 			case p.pingpongbuffer <- &Msg{mtype: PONG, data: pingdata}:
 			default:
 			}
+			if this.c.PingPongFunc != nil {
+				this.c.PingPongFunc(p, p.getUniqueName(), pingdata, p.sid)
+			}
 		case PONG:
 			//update lastactive time
 			p.lastactive = time.Now().UnixNano()
+			if this.c.PingPongFunc != nil {
+				pongdata, _ := getPongMsg(data.Bytes())
+				this.c.PingPongFunc(p, p.getUniqueName(), pongdata, p.sid)
+			}
 		case USER:
 			userdata, sid, _ := getUserMsg(data.Bytes())
+			//drop race data
 			if sid == p.sid {
 				//update lastactive time
 				p.lastactive = time.Now().UnixNano()
 				p.recvidlestart = p.lastactive
 				this.c.Userdatafunc(p, p.getUniqueName(), userdata, sid)
 			}
-			//drop race data
 		}
 		bufpool.PutBuffer(data)
 	}

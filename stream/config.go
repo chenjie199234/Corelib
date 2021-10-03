@@ -18,18 +18,22 @@ import (
 //Don't reuse peerVerifyData in this function,the under layer data in 'peerVerifyData' will change when this function return
 type HandleVerifyFunc func(ctx context.Context, peeruniquename string, peerVerifyData []byte) (response []byte, success bool)
 
-//This is a notice after verify success
+//This is a notice func after verify success
 //Return true means online success in business logic
 //Return false means online failed in business logic
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
 type HandleOnlineFunc func(p *Peer, peeruniquename string, sid int64) (success bool)
+
+//This is a notice func to tel user which peer is alive
+//Don't reuse 'data' in this function,the under layer data in 'data' will change when this function return
+type HandlePingPongFunc func(p *Peer, peeruniquename string, data []byte, sid int64)
 
 //This is a func to deal the user message
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
 //Don't reuse 'data' in this function,the under layer data in 'data' will change when this function return
 type HandleUserdataFunc func(p *Peer, peeruniquename string, data []byte, sid int64)
 
-//This is a notice before two peers disconnect with each other
+//This is a notice func before two peers disconnect with each other
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
 //After this notice the peer is unknown,dont't use it anymore
 type HandleOfflineFunc func(p *Peer, peeruniquename string, unsendmsgs [][]byte)
@@ -119,6 +123,8 @@ type InstanceConfig struct {
 	Verifyfunc HandleVerifyFunc
 	//this function will be called after peer and peer verified each other
 	Onlinefunc HandleOnlineFunc
+	//this function used to tel user which peer is alive
+	PingPongFunc HandlePingPongFunc
 	//this function used to deal userdata
 	Userdatafunc HandleUserdataFunc
 	//this function will be called when peer and peer closed their connection
