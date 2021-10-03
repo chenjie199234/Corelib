@@ -12,7 +12,6 @@ import (
 )
 
 type connmng struct {
-	hearttimeout    time.Duration
 	sendidletimeout time.Duration
 	recvidletimeout time.Duration
 	heartprobe      time.Duration
@@ -31,9 +30,8 @@ type group struct {
 	peers map[string]*Peer
 }
 
-func newconnmng(groupnum int, hearttimeout, heartprobe, sendidletimeout, recvidletimeout time.Duration) *connmng {
+func newconnmng(groupnum int, heartprobe, sendidletimeout, recvidletimeout time.Duration) *connmng {
 	mng := &connmng{
-		hearttimeout:    hearttimeout,
 		sendidletimeout: sendidletimeout,
 		recvidletimeout: recvidletimeout,
 		heartprobe:      heartprobe,
@@ -111,7 +109,7 @@ func (m *connmng) run() {
 				select {
 				case t := <-tker.C:
 					tw.index++
-					go tw.wheel[tw.index%50].run(m.hearttimeout, m.sendidletimeout, m.recvidletimeout, &t)
+					go tw.wheel[tw.index%50].run(m.heartprobe*3, m.sendidletimeout, m.recvidletimeout, &t)
 				case <-m.stopch:
 					return
 				}

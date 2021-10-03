@@ -29,7 +29,6 @@ type DiscoveryHandler func(group, name string, manually <-chan struct{}) (map[st
 type ClientConfig struct {
 	ConnTimeout            time.Duration
 	GlobalTimeout          time.Duration //global timeout for every rpc call
-	HeartTimeout           time.Duration
 	HeartPorbe             time.Duration
 	GroupNum               uint32
 	SocketRBuf             uint32
@@ -50,9 +49,6 @@ func (c *ClientConfig) validate() {
 	}
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
-	}
-	if c.HeartTimeout <= 0 {
-		c.HeartTimeout = 5 * time.Second
 	}
 	if c.HeartPorbe <= 0 {
 		c.HeartPorbe = 1500 * time.Millisecond
@@ -189,7 +185,6 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 		reqpool:      &sync.Pool{},
 	}
 	instancec := &stream.InstanceConfig{
-		HeartbeatTimeout:       c.HeartTimeout,
 		HeartprobeInterval:     c.HeartPorbe,
 		MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
 		GroupNum:               c.GroupNum,

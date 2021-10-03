@@ -17,8 +17,7 @@ var tcpserverinstance *Instance
 func Test_Tcpserver(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	tcpserverinstance, _ = NewInstance(&InstanceConfig{
-		HeartbeatTimeout:   1500 * time.Millisecond,
-		HeartprobeInterval: 500 * time.Millisecond,
+		HeartprobeInterval: time.Second,
 		RecvIdleTimeout:    30 * time.Second, //30s
 		GroupNum:           10,
 		Verifyfunc:         tcpserverhandleVerify,

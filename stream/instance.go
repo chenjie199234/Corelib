@@ -94,7 +94,7 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 	stream := &Instance{
 		selfname:  group + "." + name,
 		c:         c,
-		mng:       newconnmng(int(c.GroupNum), c.HeartbeatTimeout, c.HeartprobeInterval, c.SendIdleTimeout, c.RecvIdleTimeout),
+		mng:       newconnmng(int(c.GroupNum), c.HeartprobeInterval, c.SendIdleTimeout, c.RecvIdleTimeout),
 		noticech:  make(chan *Peer, 1024),
 		closewait: &sync.WaitGroup{},
 		pool:      &sync.Pool{},

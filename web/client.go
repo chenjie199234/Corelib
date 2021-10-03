@@ -29,13 +29,12 @@ type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
 type DiscoveryHandler func(group, name string, manually <-chan struct{}) (map[string]*RegisterData, error)
 
 type ClientConfig struct {
-	//request's max handling time
-	GlobalTimeout time.Duration
+	ConnTimeout   time.Duration
+	GlobalTimeout time.Duration //request's max handling time
+	HeartProbe    time.Duration //tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
 	//if this is 0,means useless,connection will keep alive until it is closed
-	IdleTimeout time.Duration
-	//system's tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
-	HeartProbe       time.Duration
+	IdleTimeout      time.Duration
 	MaxHeader        uint
 	SocketRBuf       uint
 	SocketWBuf       uint
@@ -210,6 +209,7 @@ func (this *WebClient) updateDiscovery(all map[string]*RegisterData) {
 					Transport: &http.Transport{
 						Proxy: http.ProxyFromEnvironment,
 						DialContext: (&net.Dialer{
+							Timeout:   this.c.ConnTimeout,
 							KeepAlive: this.c.HeartProbe,
 						}).DialContext,
 						TLSClientConfig:        this.tlsc,

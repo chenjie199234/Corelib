@@ -30,7 +30,6 @@ type ServerConfig struct {
 	WaitCloseTime time.Duration
 	//global timeout for every rpc call
 	GlobalTimeout          time.Duration
-	HeartTimeout           time.Duration
 	HeartPorbe             time.Duration
 	GroupNum               uint32
 	SocketRBuf             uint32
@@ -46,9 +45,6 @@ func (c *ServerConfig) validate() {
 	}
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
-	}
-	if c.HeartTimeout <= 0 {
-		c.HeartTimeout = 5 * time.Second
 	}
 	if c.HeartPorbe <= 0 {
 		c.HeartPorbe = 1500 * time.Millisecond
@@ -115,7 +111,6 @@ func NewRpcServer(c *ServerConfig, selfgroup, selfname string) (*RpcServer, erro
 	}
 	serverinstance.closewait.Add(1)
 	instancec := &stream.InstanceConfig{
-		HeartbeatTimeout:       c.HeartTimeout,
 		HeartprobeInterval:     c.HeartPorbe,
 		MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
 		GroupNum:               c.GroupNum,

@@ -18,8 +18,7 @@ func Test_Tcpclient(t *testing.T) {
 	go func() {
 		for count := 0; count < 10000; count++ {
 			tcpclientinstance, _ := NewInstance(&InstanceConfig{
-				HeartbeatTimeout:   1500 * time.Millisecond,
-				HeartprobeInterval: 500 * time.Millisecond,
+				HeartprobeInterval: time.Second,
 				GroupNum:           1,
 				Verifyfunc:         tcpclienthandleVerify,
 				Onlinefunc:         tcpclienthandleonline,

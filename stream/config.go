@@ -93,9 +93,7 @@ func (c *TcpServerOnlyConfig) validate() {
 }
 
 type InstanceConfig struct {
-	//heartbeat timeout
-	HeartbeatTimeout time.Duration //default 5s
-	//must < HeartbeatTimeout
+	//must < HeartbeatTimeout,3 probe missing means disconnect
 	HeartprobeInterval time.Duration //default 1.5s
 	//only reveice heartbeat msg and no more userdata msg is idle
 	//0 means no idle timeout
@@ -128,14 +126,8 @@ type InstanceConfig struct {
 }
 
 func (c *InstanceConfig) validate() {
-	if c.HeartbeatTimeout <= 0 {
-		c.HeartbeatTimeout = 5 * time.Second
-	}
-	if c.HeartprobeInterval <= 0 {
+	if c.HeartprobeInterval < 50 {
 		c.HeartprobeInterval = 1500 * time.Millisecond
-	}
-	if c.HeartprobeInterval >= c.HeartbeatTimeout {
-		c.HeartprobeInterval = c.HeartbeatTimeout / 3
 	}
 	if c.RecvIdleTimeout < 0 {
 		c.RecvIdleTimeout = 0
