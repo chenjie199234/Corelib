@@ -27,7 +27,6 @@ func StartRpcServer() {
 	c := config.GetRpcServerConfig()
 	rpcc := &rpc.ServerConfig{
 		GlobalTimeout:          time.Duration(c.GlobalTimeout),
-		HeartTimeout:           time.Duration(c.HeartTimeout),
 		HeartPorbe:             time.Duration(c.HeartProbe),
 		GroupNum:               1,
 		SocketRBuf:             2048,

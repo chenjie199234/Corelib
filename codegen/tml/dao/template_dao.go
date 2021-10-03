@@ -56,7 +56,6 @@ func getRpcClientConfig() *rpc.ClientConfig {
 	return &rpc.ClientConfig{
 		ConnTimeout:            time.Duration(rc.ConnTimeout),
 		GlobalTimeout:          time.Duration(rc.GlobalTimeout),
-		HeartTimeout:           time.Duration(rc.HeartTimeout),
 		HeartPorbe:             time.Duration(rc.HeartProbe),
 		GroupNum:               1,
 		SocketRBuf:             2048,
@@ -99,13 +98,13 @@ func rpcDNS() func(string, string, <-chan struct{}) (map[string]*rpc.RegisterDat
 func getWebClientConfig() *web.ClientConfig {
 	wc := config.GetWebClientConfig()
 	return &web.ClientConfig{
+		ConnTimeout:      time.Duration(wc.ConnTimeout),
 		GlobalTimeout:    time.Duration(wc.GlobalTimeout),
 		IdleTimeout:      time.Duration(wc.IdleTimeout),
 		HeartProbe:       time.Duration(wc.HeartProbe),
 		MaxHeader:        1024,
 		SocketRBuf:       2048,
 		SocketWBuf:       2048,
-		SkipVerifyTLS:    wc.SkipVerifyTls,
 		DiscoverFunction: webDNS(),
 	}
 }

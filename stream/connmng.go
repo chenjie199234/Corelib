@@ -109,7 +109,8 @@ func (m *connmng) run() {
 				select {
 				case t := <-tker.C:
 					tw.index++
-					go tw.wheel[tw.index%50].run(m.heartprobe*3, m.sendidletimeout, m.recvidletimeout, &t)
+					//give 1/3 heartprobe for net lag
+					go tw.wheel[tw.index%50].run(m.heartprobe*3+m.heartprobe/3, m.sendidletimeout, m.recvidletimeout, &t)
 				case <-m.stopch:
 					return
 				}

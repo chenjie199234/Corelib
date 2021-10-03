@@ -231,7 +231,6 @@ type sourceConfig struct {
 //RpcServerConfig -
 type RpcServerConfig struct {
 	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
-	HeartTimeout  ctime.Duration $json:"heart_timeout"$  //default 5s
 	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
 }
 
@@ -239,9 +238,7 @@ type RpcServerConfig struct {
 type RpcClientConfig struct {
 	ConnTimeout      ctime.Duration $json:"conn_timeout"$      //default 500ms
 	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms
-	HeartTimeout     ctime.Duration $json:"heart_timeout"$     //default 5s
 	HeartProbe       ctime.Duration $json:"heart_probe"$       //default 1.5s
-	DiscoverInterval ctime.Duration $json:"discover_interval"$ //default 1s
 }
 
 //WebServerConfig -
@@ -263,11 +260,10 @@ type WebCorsConfig struct {
 
 //WebClientConfig -
 type WebClientConfig struct {
+	ConnTimeout      ctime.Duration $json:"conn_timeout"$      //default 500ms
 	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms
 	IdleTimeout      ctime.Duration $json:"idle_timeout"$      //default 5s
 	HeartProbe       ctime.Duration $json:"heart_probe"$       //default 1.5s
-	DiscoverInterval ctime.Duration $json:"discover_interval"$ //default 1s
-	SkipVerifyTls    bool           $json:"skip_verify_tls"$
 }
 
 //RedisConfig -
@@ -361,15 +357,11 @@ func initsource(path string) {
 	if sc.RpcServer == nil {
 		sc.RpcServer = &RpcServerConfig{
 			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
-			HeartTimeout:  ctime.Duration(5 * time.Second),
 			HeartProbe:    ctime.Duration(1500 * time.Millisecond),
 		}
 	} else {
 		if sc.RpcServer.GlobalTimeout <= 0 {
 			sc.RpcServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
-		}
-		if sc.RpcServer.HeartTimeout <= 0 {
-			sc.RpcServer.HeartTimeout = ctime.Duration(5 * time.Second)
 		}
 		if sc.RpcServer.HeartProbe <= 0 {
 			sc.RpcServer.HeartProbe = ctime.Duration(1500 * time.Millisecond)
@@ -379,7 +371,6 @@ func initsource(path string) {
 		sc.RpcClient = &RpcClientConfig{
 			ConnTimeout:   ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
-			HeartTimeout:  ctime.Duration(time.Second * 5),
 			HeartProbe:    ctime.Duration(time.Millisecond * 1500),
 		}
 	} else {
@@ -388,9 +379,6 @@ func initsource(path string) {
 		}
 		if sc.RpcClient.GlobalTimeout <= 0 {
 			sc.RpcClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
-		}
-		if sc.RpcClient.HeartTimeout <= 0 {
-			sc.RpcClient.HeartTimeout = ctime.Duration(time.Second * 5)
 		}
 		if sc.RpcClient.HeartProbe <= 0 {
 			sc.RpcClient.HeartProbe = ctime.Duration(time.Millisecond * 1500)
@@ -428,12 +416,15 @@ func initsource(path string) {
 	}
 	if sc.WebClient == nil {
 		sc.WebClient = &WebClientConfig{
-			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
-			IdleTimeout:   ctime.Duration(time.Second * 5),
-			HeartProbe:    ctime.Duration(time.Millisecond * 1500),
-			SkipVerifyTls: true,
+			ConnTimeout:      ctime.Duration(time.Millisecond * 500),
+			GlobalTimeout:    ctime.Duration(time.Millisecond * 500),
+			IdleTimeout:      ctime.Duration(time.Second * 5),
+			HeartProbe:       ctime.Duration(time.Millisecond * 1500),
 		}
 	} else {
+		if sc.WebClient.ConnTimeout <= 0 {
+			sc.WebClient.ConnTimeout = ctime.Duration(time.Millisecond * 500)
+		}
 		if sc.WebClient.GlobalTimeout <= 0 {
 			sc.WebClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
