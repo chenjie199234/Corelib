@@ -3,6 +3,7 @@ package stream
 import (
 	"errors"
 	"math"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -59,7 +60,7 @@ var errServerClosed = errors.New("server closed")
 func (m *connmng) AddPeer(p *Peer) error {
 	uniquename := p.getUniqueName()
 	tw := m.groups[common.BkdrhashString(uniquename, uint64(len(m.groups)))]
-	g := tw.wheel[(tw.index-5)%50] //-5 is used to reduce race
+	g := tw.wheel[(tw.index+uint(rand.Intn(40))+5)%50] //rand is used to reduce race
 	g.Lock()
 	if _, ok := g.peers[uniquename]; ok {
 		g.Unlock()
