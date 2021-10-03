@@ -23,7 +23,7 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 		return errors.New("[Stream.StartTcpServer] tls certificate setting missing")
 	}
 	//check status
-	if this.totalpeernum < 0 {
+	if this.mng.Finishing() {
 		return ErrServerClosed
 	}
 	this.Lock()
@@ -38,7 +38,7 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 	}
 	this.Unlock()
 	//double check stop status
-	if this.totalpeernum < 0 {
+	if this.mng.Finishing() {
 		this.tcplistener.Close()
 		return ErrServerClosed
 	}
@@ -48,12 +48,12 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 		if e != nil {
 			this.putPeer(p)
 			this.tcplistener.Close()
-			if this.totalpeernum < 0 {
+			if this.mng.Finishing() {
 				return ErrServerClosed
 			}
 			return errors.New("[Stream.server] accept error: " + e.Error())
 		}
-		if this.totalpeernum < 0 {
+		if this.mng.Finishing() {
 			conn.Close()
 			this.putPeer(p)
 			this.tcplistener.Close()
@@ -96,7 +96,7 @@ func (this *Instance) sworker(p *Peer) {
 		this.putPeer(p)
 		return
 	}
-	if e := this.addPeer(p); e != nil {
+	if e := this.mng.AddPeer(p); e != nil {
 		log.Error(nil, "[Stream.sworker] add:", p.getUniqueName(), "to peer manager error:", e)
 		p.conn.Close()
 		this.putPeer(p)
@@ -130,7 +130,7 @@ func (this *Instance) sworker(p *Peer) {
 // fail return empty
 //if tlsc not nil,tcp connection will be used with tls
 func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte, tlsc *tls.Config) string {
-	if this.totalpeernum < 0 {
+	if this.mng.Finishing() {
 		return ""
 	}
 	if tlsc != nil && tlsc.ServerName == "" {
@@ -193,7 +193,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 		return ""
 	}
 	//verify server success
-	if e := this.addPeer(p); e != nil {
+	if e := this.mng.AddPeer(p); e != nil {
 		log.Error(nil, "[Stream.cworker] add:", p.getUniqueName(), "to peer manager error:", e)
 		p.conn.Close()
 		this.putPeer(p)

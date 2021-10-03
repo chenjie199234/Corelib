@@ -6,11 +6,12 @@ import (
 	"errors"
 	"io"
 	"net"
-	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/bufpool"
+	"github.com/chenjie199234/Corelib/log"
 )
 
 var (
@@ -21,13 +22,8 @@ var (
 	ErrSendBufFull = errors.New("send buffer full")
 )
 
-type peergroup struct {
-	sync.RWMutex
-	peers map[string]*Peer
-}
-
 type Peer struct {
-	parentgroup    *peergroup
+	peergroup      *group
 	peername       string
 	sid            int64 //'<0'---(closing),'0'---(closed),'>0'---(connected)
 	selfmaxmsglen  uint32
@@ -43,6 +39,38 @@ type Peer struct {
 	data           unsafe.Pointer //user data
 	context.Context
 	context.CancelFunc
+}
+
+func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time.Time) {
+	if p.sid <= 0 {
+		return
+	}
+	now := nowtime.UnixNano()
+	if now-p.lastactive > int64(heart) {
+		//heartbeat timeout
+		log.Error(nil, "[Stream.checkheart] heart timeout:", p.getUniqueName())
+		p.conn.Close()
+		return
+	}
+	if now-p.sendidlestart > int64(sendidle) {
+		//send idle timeout
+		log.Error(nil, "[Stream.checkheart] send idle timeout:", p.getUniqueName())
+		p.conn.Close()
+		return
+	}
+	if recvidle != 0 && now-p.recvidlestart > int64(recvidle) {
+		//recv idle timeout
+		log.Error(nil, "[Stream.checkheart] recv idle timeout:", p.getUniqueName())
+		p.conn.Close()
+		return
+	}
+	//send heart beat data
+	data := makePingMsg(nil)
+	select {
+	case p.pingpongbuffer <- data:
+	default:
+		bufpool.PutBuffer(data)
+	}
 }
 
 func (p *Peer) getUniqueName() string {

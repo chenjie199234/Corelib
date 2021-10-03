@@ -3,24 +3,20 @@ package stream
 import (
 	"context"
 	"errors"
-	"math"
 	"net"
 	"sync"
-	"sync/atomic"
-	"time"
 
 	"github.com/chenjie199234/Corelib/bufpool"
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
 type Instance struct {
-	selfname   string
-	c          *InstanceConfig
-	peergroups []*peergroup
+	selfname string
+	c        *InstanceConfig
+
 	sync.Mutex
-	tcplistener  net.Listener
-	totalpeernum int32 //'<0'---(closing),'>=0'---(working)
+	tcplistener net.Listener
+	mng         *connmng
 
 	noticech  chan *Peer
 	closewait *sync.WaitGroup
@@ -57,7 +53,6 @@ func (this *Instance) getPeer(writebuffernum, maxmsglen uint32) *Peer {
 }
 func (this *Instance) putPeer(p *Peer) {
 	p.CancelFunc()
-	p.parentgroup = nil
 	p.peername = ""
 	p.sid = 0
 	p.selfmaxmsglen = 0
@@ -78,43 +73,6 @@ func (this *Instance) putPeer(p *Peer) {
 	p.sendidlestart = 0
 	p.data = nil
 	this.pool.Put(p)
-}
-
-var errDupConnection = errors.New("dup connection")
-var errServerClosed = errors.New("server closed")
-
-func (this *Instance) addPeer(p *Peer) error {
-	uniquename := p.getUniqueName()
-	group := this.peergroups[common.BkdrhashString(uniquename, uint64(this.c.GroupNum))]
-	group.Lock()
-	if _, ok := group.peers[uniquename]; ok {
-		group.Unlock()
-		return errDupConnection
-	}
-	p.parentgroup = group
-	//peer can be add into the group when this instance was not stopped
-	for {
-		old := this.totalpeernum
-		if old < 0 {
-			group.Unlock()
-			return errServerClosed
-		}
-		if atomic.CompareAndSwapInt32(&this.totalpeernum, old, old+1) {
-			group.peers[uniquename] = p
-			break
-		}
-	}
-	group.Unlock()
-	return nil
-}
-func (this *Instance) delPeer(p *Peer) {
-	uniquename := p.getUniqueName()
-	p.parentgroup.Lock()
-	if _, ok := p.parentgroup.peers[uniquename]; ok {
-		delete(p.parentgroup.peers, uniquename)
-		atomic.AddInt32(&this.totalpeernum, -1)
-	}
-	p.parentgroup.Unlock()
 }
 
 //be careful about the callback func race
@@ -142,28 +100,22 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 	}
 	c.validate()
 	stream := &Instance{
-		selfname:   group + "." + name,
-		c:          c,
-		peergroups: make([]*peergroup, c.GroupNum),
-		noticech:   make(chan *Peer, 1024),
-		closewait:  &sync.WaitGroup{},
-		pool:       &sync.Pool{},
+		selfname:  group + "." + name,
+		c:         c,
+		mng:       newconnmng(int(c.GroupNum), c.HeartbeatTimeout, c.HeartprobeInterval, c.SendIdleTimeout, c.RecvIdleTimeout),
+		noticech:  make(chan *Peer, 1024),
+		closewait: &sync.WaitGroup{},
+		pool:      &sync.Pool{},
 	}
 	stream.closewait.Add(1)
-	for i := range stream.peergroups {
-		stream.peergroups[i] = &peergroup{
-			peers: make(map[string]*Peer, 10),
-		}
-		go stream.heart(stream.peergroups[i], i)
-	}
 	go func() {
 		for {
 			p := <-stream.noticech
 			if p != nil {
-				stream.delPeer(p)
+				stream.mng.DelPeer(p)
 				stream.putPeer(p)
 			}
-			if stream.totalpeernum == -math.MaxInt32 {
+			if stream.mng.Finished() {
 				stream.closewait.Done()
 				return
 			}
@@ -172,28 +124,9 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 	return stream, nil
 }
 func (this *Instance) Stop() {
-	stop := false
-	for {
-		old := this.totalpeernum
-		if old >= 0 {
-			if atomic.CompareAndSwapInt32(&this.totalpeernum, old, old-math.MaxInt32) {
-				stop = true
-				break
-			}
-		} else {
-			break
-		}
-	}
-	if stop {
+	if this.mng.stop() {
 		if this.tcplistener != nil {
 			this.tcplistener.Close()
-		}
-		for _, group := range this.peergroups {
-			group.RLock()
-			for _, peer := range group.peers {
-				peer.Close(peer.sid)
-			}
-			group.RUnlock()
 		}
 		//prevent notice block on empty chan
 		select {
@@ -207,78 +140,8 @@ func (this *Instance) GetSelfName() string {
 	return this.selfname
 }
 func (this *Instance) GetPeerNum() int32 {
-	totalpeernum := atomic.LoadInt32(&this.totalpeernum)
-	if totalpeernum >= 0 {
-		return totalpeernum
-	} else {
-		return totalpeernum + math.MaxInt32
-	}
+	return this.mng.GetPeerNum()
 }
 func (this *Instance) SendMessageAll(data []byte, block bool) {
-	wg := &sync.WaitGroup{}
-	for _, group := range this.peergroups {
-		group.RWMutex.RLock()
-		for _, peer := range group.peers {
-			wg.Add(1)
-			go func(p *Peer) {
-				p.SendMessage(data, p.sid, block)
-				wg.Done()
-			}(peer)
-		}
-		group.RWMutex.RUnlock()
-	}
-	wg.Wait()
-}
-
-func (this *Instance) heart(group *peergroup, index int) {
-	var tker *time.Ticker
-	delay := int64(float64(index) / float64(this.c.GroupNum) * float64(this.c.HeartprobeInterval.Nanoseconds()))
-	if delay != 0 {
-		time.Sleep(time.Duration(delay))
-		tker = time.NewTicker(this.c.HeartprobeInterval)
-	} else {
-		tker = time.NewTicker(this.c.HeartprobeInterval)
-	}
-	for {
-		<-tker.C
-		if this.totalpeernum == -math.MaxInt32 {
-			return
-		}
-		now := time.Now().UnixNano()
-		group.RLock()
-		for _, p := range group.peers {
-			if p.sid <= 0 {
-				continue
-			}
-			templastactive := atomic.LoadInt64(&p.lastactive)
-			temprecvidlestart := atomic.LoadInt64(&p.recvidlestart)
-			tempsendidlestart := atomic.LoadInt64(&p.sendidlestart)
-			if now >= templastactive && now-templastactive > int64(this.c.HeartbeatTimeout) {
-				//heartbeat timeout
-				log.Error(nil, "[Stream.heart] heartbeat timeout:", p.getUniqueName())
-				p.conn.Close()
-				continue
-			}
-			if now >= tempsendidlestart && now-tempsendidlestart > int64(this.c.SendIdleTimeout) {
-				//send idle timeout
-				log.Error(nil, "[Stream.heart] send idle timeout:", p.getUniqueName())
-				p.conn.Close()
-				continue
-			}
-			if this.c.RecvIdleTimeout != 0 && now >= temprecvidlestart && now-temprecvidlestart > int64(this.c.RecvIdleTimeout) {
-				//recv idle timeout
-				log.Error(nil, "[Stream.heart] recv idle timeout:", p.getUniqueName())
-				p.conn.Close()
-				continue
-			}
-			//send heart beat data
-			data := makePingMsg(nil)
-			select {
-			case p.pingpongbuffer <- data:
-			default:
-				bufpool.PutBuffer(data)
-			}
-		}
-		group.RUnlock()
-	}
+	this.mng.SendMessage(data, block)
 }
