@@ -58,5 +58,5 @@ func tcpserverhandleuserdata(p *Peer, peeruniquename string, data []byte, startt
 	fmt.Printf("%s:%s\n", peeruniquename, data)
 	p.SendMessage(data, starttime, true)
 }
-func tcpserverhandleoffline(p *Peer, peeruniquename string) {
+func tcpserverhandleoffline(p *Peer, peeruniquename string, _ [][]byte) {
 }

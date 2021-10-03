@@ -406,18 +406,22 @@ func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, 
 		server.lker.Unlock()
 		return
 	}
-	if req.callid == msg.Callid {
-		req.resp = msg.Body
-		req.err = e
-		req.finish <- struct{}{}
-	}
+	req.resp = msg.Body
+	req.err = e
+	req.finish <- struct{}{}
 	server.lker.Unlock()
 }
 
-func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string) {
+func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string, unsendmsgs [][]byte) {
 	server := (*ServerForPick)(p.GetData())
 	if server == nil {
 		return
+	}
+	unsend := make(map[uint64]struct{})
+	for _, unsendmsg := range unsendmsgs {
+		msg := &Msg{}
+		proto.Unmarshal(unsendmsg, msg)
+		unsend[msg.Callid] = struct{}{}
 	}
 	log.Info(nil, "[rpc.client.offlinefunc] server:", appuniquename, "offline")
 	server.lker.Lock()
@@ -425,11 +429,13 @@ func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string) {
 	server.sid = 0
 	//all req failed
 	for _, req := range server.reqs {
-		if req.callid != 0 {
-			req.resp = nil
+		req.resp = nil
+		if _, ok := unsend[req.callid]; ok {
+			req.err = ERRCLOSING
+		} else {
 			req.err = ERRCLOSED
-			req.finish <- struct{}{}
 		}
+		req.finish <- struct{}{}
 	}
 	server.reqs = make(map[uint64]*req, 10)
 	if len(server.dservers) == 0 {

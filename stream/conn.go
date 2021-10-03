@@ -274,18 +274,15 @@ func (this *Instance) read(p *Peer) {
 	defer func() {
 		p.rawconn.(*net.TCPConn).CloseRead()
 		//every connection will have two goroutine to work for it
-		if atomic.SwapInt64(&p.sid, 0) != 0 {
-			//wake up write goroutine
-			select {
-			case p.pingpongbuffer <- (*bufpool.Buffer)(nil):
-			default:
-			}
-		} else {
-			if this.c.Offlinefunc != nil {
-				this.c.Offlinefunc(p, p.getUniqueName())
-			}
+		if atomic.SwapInt64(&p.sid, -1) == -1 {
 			//when second goroutine return,put connection back to the pool
 			this.noticech <- p
+		} else {
+			//wake up write goroutine
+			select {
+			case p.pingpongbuffer <- (*Msg)(nil):
+			default:
+			}
 		}
 	}()
 	//after verify,the conntimeout is useless,heartbeat will work for this
@@ -317,11 +314,9 @@ func (this *Instance) read(p *Peer) {
 			p.lastactive = time.Now().UnixNano()
 			//write back
 			pingdata, _ := getPingMsg(data.Bytes())
-			pong := makePongMsg(pingdata)
 			select {
-			case p.pingpongbuffer <- pong:
+			case p.pingpongbuffer <- &Msg{mtype: PONG, data: pingdata}:
 			default:
-				bufpool.PutBuffer(pong)
 			}
 		case PONG:
 			//update lastactive time
@@ -344,41 +339,48 @@ func (this *Instance) write(p *Peer) {
 	defer func() {
 		p.rawconn.(*net.TCPConn).CloseWrite()
 		//every connection will have two goroutine to work for it
-		if atomic.SwapInt64(&p.sid, 0) != 0 {
-			//when first goroutine return,close the connection,cause read goroutine return
-		} else {
-			if this.c.Offlinefunc != nil {
-				this.c.Offlinefunc(p, p.getUniqueName())
-			}
+		if atomic.SwapInt64(&p.sid, -1) == -1 {
 			//when second goroutine return,put connection back to the pool
 			this.noticech <- p
 		}
 	}()
 	//after verify,the conntimeout is useless,heartbeat will work for this
 	p.conn.SetWriteDeadline(time.Time{})
-	var data *bufpool.Buffer
+	var msg *Msg
 	var ok bool
-	var e error
+	var data *bufpool.Buffer
 	for {
 		if atomic.LoadInt64(&p.sid) <= 0 && len(p.writerbuffer) == 0 {
 			return
 		}
 		if len(p.pingpongbuffer) > 0 {
-			data, ok = <-p.pingpongbuffer
+			msg, ok = <-p.pingpongbuffer
 		} else {
 			select {
-			case data, ok = <-p.writerbuffer:
-			case data, ok = <-p.pingpongbuffer:
+			case msg, ok = <-p.writerbuffer:
+			case msg, ok = <-p.pingpongbuffer:
 			}
 		}
-		if !ok || data == nil {
+		if !ok || msg == nil {
+			continue
+		}
+		switch msg.mtype {
+		case PING:
+			data = makePingMsg(msg.data)
+		case PONG:
+			data = makePongMsg(msg.data)
+		case USER:
+			data = makeUserMsg(msg.data, msg.sid)
+		default:
 			continue
 		}
 		p.sendidlestart = time.Now().UnixNano()
-		if _, e = p.conn.Write(data.Bytes()); e != nil {
+		if _, e := p.conn.Write(data.Bytes()); e != nil {
+			p.lastunsend = msg
 			log.Error(nil, "[Stream.write] to:", p.getUniqueName(), "error:", e)
 			return
 		}
+		msg.send = true
 		bufpool.PutBuffer(data)
 	}
 }

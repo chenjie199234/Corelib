@@ -28,8 +28,8 @@ type Peer struct {
 	sid            int64 //'<0'---(closing),'0'---(closed),'>0'---(connected)
 	selfmaxmsglen  uint32
 	peermaxmsglen  uint32
-	writerbuffer   chan *bufpool.Buffer
-	pingpongbuffer chan *bufpool.Buffer
+	writerbuffer   chan *Msg
+	pingpongbuffer chan *Msg
 	tls            bool
 	rawconn        net.Conn
 	conn           net.Conn
@@ -37,6 +37,7 @@ type Peer struct {
 	recvidlestart  int64          //unixnano timestamp
 	sendidlestart  int64          //unixnano timestamp
 	data           unsafe.Pointer //user data
+	lastunsend     *Msg           //the last unsend message before the write closed
 	context.Context
 	context.CancelFunc
 }
@@ -65,11 +66,9 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 		return
 	}
 	//send heart beat data
-	data := makePingMsg(nil)
 	select {
-	case p.pingpongbuffer <- data:
+	case p.pingpongbuffer <- &Msg{mtype: PING}:
 	default:
-		bufpool.PutBuffer(data)
 	}
 }
 
@@ -118,8 +117,7 @@ func (p *Peer) SendMessage(userdata []byte, sid int64, block bool) error {
 		//sid for aba check
 		return ErrConnClosed
 	}
-	var data *bufpool.Buffer
-	data = makeUserMsg(userdata, sid)
+	data := &Msg{mtype: USER, sid: sid, data: userdata}
 	//here has a little data race,but never mind,peer will drop the race data
 	if block {
 		p.writerbuffer <- data
@@ -130,16 +128,20 @@ func (p *Peer) SendMessage(userdata []byte, sid int64, block bool) error {
 			return ErrSendBufFull
 		}
 	}
+	//double check
+	if p.sid >= 0 && p.sid != sid && !data.send {
+		return ErrConnClosed
+	}
 	return nil
 }
 
 func (p *Peer) Close(sid int64) {
-	if atomic.CompareAndSwapInt64(&p.sid, sid, -1) {
+	if atomic.CompareAndSwapInt64(&p.sid, sid, -2) {
 		//stop read new message
 		p.rawconn.(*net.TCPConn).CloseRead()
 		//wake up write goroutine
 		select {
-		case p.pingpongbuffer <- (*bufpool.Buffer)(nil):
+		case p.pingpongbuffer <- (*Msg)(nil):
 		default:
 		}
 	}

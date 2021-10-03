@@ -7,6 +7,13 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
+type Msg struct {
+	send  bool
+	mtype int
+	data  []byte
+	sid   int64
+}
+
 const (
 	PING = iota + 1
 	PONG

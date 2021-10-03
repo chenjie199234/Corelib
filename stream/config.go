@@ -32,7 +32,7 @@ type HandleUserdataFunc func(p *Peer, peeruniquename string, data []byte, sid in
 //This is a notice before two peers disconnect with each other
 //Peer is a cancel context,it will be canceled when the connection closed,and you can control the timeout by yourself through context.WithTimeout(p,time.Second)
 //After this notice the peer is unknown,dont't use it anymore
-type HandleOfflineFunc func(p *Peer, peeruniquename string)
+type HandleOfflineFunc func(p *Peer, peeruniquename string, unsendmsgs [][]byte)
 
 type TcpConfig struct {
 	//include connect time and verify time

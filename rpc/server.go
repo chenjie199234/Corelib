@@ -451,6 +451,6 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		atomic.AddInt32(&s.totalreqnum, -1)
 	}()
 }
-func (s *RpcServer) offlinefunc(p *stream.Peer, peeruniquename string) {
+func (s *RpcServer) offlinefunc(p *stream.Peer, peeruniquename string, _ [][]byte) {
 	log.Info(nil, "[rpc.server.offlinefunc] client:", peeruniquename, "offline")
 }

@@ -6,7 +6,6 @@ import (
 	"net"
 	"sync"
 
-	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
@@ -29,14 +28,10 @@ func (this *Instance) getPeer(writebuffernum, maxmsglen uint32) *Peer {
 	if p, ok := this.pool.Get().(*Peer); ok {
 		p.selfmaxmsglen = maxmsglen
 		for len(p.writerbuffer) > 0 {
-			if v := <-p.writerbuffer; v != nil {
-				bufpool.PutBuffer(v)
-			}
+			<-p.writerbuffer
 		}
 		for len(p.pingpongbuffer) > 0 {
-			if v := <-p.pingpongbuffer; v != nil {
-				bufpool.PutBuffer(v)
-			}
+			<-p.pingpongbuffer
 		}
 		p.Context = ctx
 		p.CancelFunc = cancel
@@ -44,8 +39,8 @@ func (this *Instance) getPeer(writebuffernum, maxmsglen uint32) *Peer {
 	}
 	p := &Peer{
 		selfmaxmsglen:  maxmsglen,
-		writerbuffer:   make(chan *bufpool.Buffer, writebuffernum),
-		pingpongbuffer: make(chan *bufpool.Buffer, 2),
+		writerbuffer:   make(chan *Msg, writebuffernum),
+		pingpongbuffer: make(chan *Msg, 2),
 		Context:        ctx,
 		CancelFunc:     cancel,
 	}
@@ -58,20 +53,17 @@ func (this *Instance) putPeer(p *Peer) {
 	p.selfmaxmsglen = 0
 	p.peermaxmsglen = 0
 	for len(p.writerbuffer) > 0 {
-		if v := <-p.writerbuffer; v != nil {
-			bufpool.PutBuffer(v)
-		}
+		<-p.writerbuffer
 	}
 	for len(p.pingpongbuffer) > 0 {
-		if v := <-p.pingpongbuffer; v != nil {
-			bufpool.PutBuffer(v)
-		}
+		<-p.pingpongbuffer
 	}
 	p.conn = nil
 	p.lastactive = 0
 	p.recvidlestart = 0
 	p.sendidlestart = 0
 	p.data = nil
+	p.lastunsend = nil
 	this.pool.Put(p)
 }
 
@@ -112,6 +104,25 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 		for {
 			p := <-stream.noticech
 			if p != nil {
+				if stream.c.Offlinefunc != nil {
+					unsendmsgs := make([][]byte, 0, len(p.writerbuffer))
+					if p.lastunsend != nil {
+						unsendmsgs = append(unsendmsgs, p.lastunsend.data)
+					}
+					for {
+						end := false
+						select {
+						case unsendmsg := <-p.writerbuffer:
+							unsendmsgs = append(unsendmsgs, unsendmsg.data)
+						default:
+							end = true
+						}
+						if end {
+							break
+						}
+					}
+					stream.c.Offlinefunc(p, p.getUniqueName(), unsendmsgs)
+				}
 				stream.mng.DelPeer(p)
 				stream.putPeer(p)
 			}
