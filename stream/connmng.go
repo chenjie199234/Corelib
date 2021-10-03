@@ -26,7 +26,7 @@ type timewheel struct {
 }
 
 type group struct {
-	sync.Mutex
+	sync.RWMutex
 	peers map[string]*Peer
 }
 
@@ -161,7 +161,7 @@ func (g *group) run(hearttimeout, sendidletimeout, recvidletimeout time.Duration
 }
 func (g *group) SendMessage(data []byte, block bool) {
 	wg := sync.WaitGroup{}
-	g.Lock()
+	g.RLock()
 	wg.Add(len(g.peers))
 	for _, p := range g.peers {
 		go func(sender *Peer) {
@@ -169,6 +169,6 @@ func (g *group) SendMessage(data []byte, block bool) {
 			wg.Done()
 		}(p)
 	}
-	g.Unlock()
+	g.RUnlock()
 	wg.Wait()
 }
