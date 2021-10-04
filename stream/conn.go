@@ -382,6 +382,11 @@ func (this *Instance) write(p *Peer) {
 			continue
 		}
 		p.sendidlestart = time.Now().UnixNano()
+		if msg.ctx != nil {
+			if msg.ctx.Err() != nil {
+				continue
+			}
+		}
 		if _, e := p.conn.Write(data.Bytes()); e != nil {
 			p.lastunsend = msg
 			log.Error(nil, "[Stream.write] to:", p.getUniqueName(), "error:", e)

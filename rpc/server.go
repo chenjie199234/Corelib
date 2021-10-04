@@ -174,7 +174,7 @@ func (s *RpcServer) StopRpcServer() {
 			Callid: 0,
 			Error:  ERRCLOSING.Error(),
 		})
-		s.instance.SendMessageAll(d, true)
+		s.instance.SendMessageAll(nil, d, true)
 		//wait at least s.c.WaitCloseTime before stop the under layer socket
 		tmer := time.NewTimer(s.c.WaitCloseTime)
 		for {
@@ -370,7 +370,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		msg.Metadata = nil
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
-		if e := p.SendMessage(d, sid, true); e != nil {
+		if e := p.SendMessage(nil, d, sid, true); e != nil {
 			log.Error(ctx, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
 		}
 		return
@@ -396,7 +396,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			msg.Metadata = nil
 			msg.Tracedata = nil
 			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(d, sid, true); e != nil {
+			if e := p.SendMessage(nil, d, sid, true); e != nil {
 				log.Error(ctx, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
 			}
 			return
@@ -424,7 +424,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		handler(ctx, peeruniquename, msg)
 		traceend(cerror.ErrorstrToError(msg.Error))
 		d, _ := proto.Marshal(msg)
-		if e := p.SendMessage(d, sid, true); e != nil {
+		if e := p.SendMessage(nil, d, sid, true); e != nil {
 			log.Error(ctx, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
 			if e == stream.ErrMsgLarge {
 				msg.Path = ""
@@ -434,7 +434,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 				msg.Metadata = nil
 				msg.Tracedata = nil
 				d, _ = proto.Marshal(msg)
-				p.SendMessage(d, sid, true)
+				p.SendMessage(nil, d, sid, true)
 			}
 		}
 		if s.totalreqnum < 0 {

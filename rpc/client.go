@@ -544,7 +544,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 			return nil, cerror.StdErrorToError(context.DeadlineExceeded)
 		}
 		//send message
-		if e := server.peer.SendMessage(d, server.sid, false); e != nil {
+		if e := server.peer.SendMessage(ctx, d, server.sid, false); e != nil {
 			if e == stream.ErrMsgLarge {
 				server.lker.Unlock()
 				return nil, ERRREQMSGLARGE

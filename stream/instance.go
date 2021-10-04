@@ -153,6 +153,10 @@ func (this *Instance) GetSelfName() string {
 func (this *Instance) GetPeerNum() int32 {
 	return this.mng.GetPeerNum()
 }
-func (this *Instance) SendMessageAll(data []byte, block bool) {
-	this.mng.SendMessage(data, block)
+
+//SendMessage is just write message into the write buffer,the write buffer length is depend on the config field:MaxBufferedWriteMsgNum
+//if block is false,error will return when the send buffer is full,but if block is true,it will block until write the message into the write buffer
+//if the ctx is cancelctx or timectx,it will be checked before actually write the message,but the error will not return.
+func (this *Instance) SendMessageAll(ctx context.Context, data []byte, block bool) {
+	this.mng.SendMessage(ctx, data, block)
 }

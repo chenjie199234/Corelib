@@ -104,9 +104,10 @@ func (p *Peer) readMessage() (*bufpool.Buffer, error) {
 	return buf, nil
 }
 
-//if block is false,when the send buffer is full(depend on the MaxBufferedWriteMsgNum in config),error will return
-//if block is true,when the send buffer is full(depend on the MaxBufferedWriteMsgNum in config),this call will block until send the data
-func (p *Peer) SendMessage(userdata []byte, sid int64, block bool) error {
+//SendMessage is just write message into the write buffer,the write buffer length is depend on the config field:MaxBufferedWriteMsgNum
+//if block is false,error will return when the send buffer is full,but if block is true,it will block until write the message into the write buffer
+//if the ctx is cancelctx or timectx,it will be checked before actually write the message,but the error will not return.
+func (p *Peer) SendMessage(ctx context.Context, userdata []byte, sid int64, block bool) error {
 	if len(userdata) == 0 {
 		return nil
 	}
@@ -117,7 +118,7 @@ func (p *Peer) SendMessage(userdata []byte, sid int64, block bool) error {
 		//sid for aba check
 		return ErrConnClosed
 	}
-	data := &Msg{mtype: USER, sid: sid, data: userdata}
+	data := &Msg{ctx: ctx, mtype: USER, sid: sid, data: userdata}
 	//here has a little data race,but never mind,peer will drop the race data
 	if block {
 		p.writerbuffer <- data

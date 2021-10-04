@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"encoding/binary"
 
 	"github.com/chenjie199234/Corelib/bufpool"
@@ -8,6 +9,7 @@ import (
 )
 
 type Msg struct {
+	ctx   context.Context
 	send  bool
 	mtype int
 	data  []byte

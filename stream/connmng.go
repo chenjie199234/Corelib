@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"errors"
 	"math"
 	"math/rand"
@@ -118,10 +119,10 @@ func (m *connmng) run() {
 		}()
 	}
 }
-func (m *connmng) SendMessage(data []byte, block bool) {
+func (m *connmng) SendMessage(ctx context.Context, data []byte, block bool) {
 	for _, tw := range m.groups {
 		for _, g := range tw.wheel {
-			g.SendMessage(data, block)
+			g.SendMessage(ctx, data, block)
 		}
 	}
 }
@@ -159,13 +160,13 @@ func (g *group) run(hearttimeout, sendidletimeout, recvidletimeout time.Duration
 		p.checkheart(hearttimeout, sendidletimeout, recvidletimeout, now)
 	}
 }
-func (g *group) SendMessage(data []byte, block bool) {
+func (g *group) SendMessage(ctx context.Context, data []byte, block bool) {
 	wg := sync.WaitGroup{}
 	g.RLock()
 	wg.Add(len(g.peers))
 	for _, p := range g.peers {
 		go func(sender *Peer) {
-			sender.SendMessage(data, sender.sid, block)
+			sender.SendMessage(ctx, data, sender.sid, block)
 			wg.Done()
 		}(p)
 	}

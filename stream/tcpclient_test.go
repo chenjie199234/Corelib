@@ -50,7 +50,7 @@ func tcpclienthandleonline(p *Peer, peeruniquename string, starttime int64) bool
 		go func() {
 			for {
 				time.Sleep(time.Second)
-				p.SendMessage(bytes.Repeat([]byte{'a'}, 1100), starttime, true)
+				p.SendMessage(nil, bytes.Repeat([]byte{'a'}, 1100), starttime, true)
 			}
 		}()
 	}
