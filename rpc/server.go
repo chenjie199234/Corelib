@@ -172,7 +172,7 @@ func (s *RpcServer) StopRpcServer() {
 		//tel all peers self closed
 		d, _ := proto.Marshal(&Msg{
 			Callid: 0,
-			Error:  ERRCLOSING.Error(),
+			Error:  ERRCLOSING,
 		})
 		s.instance.SendMessageAll(nil, d, true)
 		//wait at least s.c.WaitCloseTime before stop the under layer socket
@@ -279,7 +279,7 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
-				msg.Error = cerror.StdErrorToError(context.DeadlineExceeded).Error()
+				msg.Error = cerror.ErrDeadlineExceeded
 				msg.Metadata = nil
 				msg.Tracedata = nil
 				return
@@ -301,7 +301,7 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
-				msg.Error = ERRPANIC.Error()
+				msg.Error = ERRPANIC
 				msg.Metadata = nil
 				msg.Tracedata = nil
 			}
@@ -366,7 +366,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
-		msg.Error = ERRNOAPI.Error()
+		msg.Error = ERRNOAPI
 		msg.Metadata = nil
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
@@ -392,7 +392,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			msg.Path = ""
 			msg.Deadline = 0
 			msg.Body = nil
-			msg.Error = ERRCLOSING.Error()
+			msg.Error = ERRCLOSING
 			msg.Metadata = nil
 			msg.Tracedata = nil
 			d, _ := proto.Marshal(msg)
@@ -422,7 +422,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		traceend := trace.TraceStart(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "RPC", msg.Path)
 		//logic
 		handler(ctx, peeruniquename, msg)
-		traceend(cerror.ErrorstrToError(msg.Error))
+		traceend(msg.Error)
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d, sid, true); e != nil {
 			log.Error(ctx, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
@@ -430,7 +430,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
-				msg.Error = ERRRESPMSGLARGE.Error()
+				msg.Error = ERRRESPMSGLARGE
 				msg.Metadata = nil
 				msg.Tracedata = nil
 				d, _ = proto.Marshal(msg)

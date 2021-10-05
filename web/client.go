@@ -393,7 +393,13 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 				this.mlker.Lock()
 				delete(this.manualNotice, manualNotice)
 				this.mlker.Unlock()
-				return nil, cerror.StdErrorToError(ctx.Err())
+				if ctx.Err() == context.DeadlineExceeded {
+					return nil, cerror.ErrDeadlineExceeded
+				} else if ctx.Err() == context.Canceled {
+					return nil, cerror.ErrCanceled
+				} else {
+					return nil, cerror.ConvertStdError(ctx.Err())
+				}
 			}
 		}
 		if !server.Pickable() {
@@ -401,7 +407,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		}
 		if ok && dl.UnixNano() < time.Now().UnixNano()+int64(5*time.Millisecond) {
 			//ttl + server logic time
-			return nil, cerror.StdErrorToError(context.DeadlineExceeded)
+			return nil, cerror.ErrDeadlineExceeded
 		}
 		var scheme string
 		if this.c.UseTLS {
@@ -417,7 +423,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			req, e = http.NewRequestWithContext(ctx, method, scheme+"://"+server.host+path+query, body)
 		}
 		if e != nil {
-			return nil, cerror.StdErrorToError(e)
+			return nil, cerror.ConvertStdError(e)
 		}
 		req.Header = header
 		traceend := trace.TraceStart(ctx, trace.CLIENT, this.appname, server.host, method, path)
@@ -431,7 +437,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			if traceend != nil {
 				traceend(e)
 			}
-			return nil, cerror.StdErrorToError(e)
+			return nil, cerror.ConvertStdError(e)
 		}
 		if resp.StatusCode == 888 {
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
@@ -450,9 +456,17 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 				if traceend != nil {
 					traceend(e)
 				}
-				return nil, cerror.StdErrorToError(e)
+				return nil, cerror.ConvertStdError(e)
 			}
-			e = cerror.ErrorstrToError(common.Byte2str(respbody))
+			if len(respbody) == 0 {
+				if text := http.StatusText(resp.StatusCode); text != "" {
+					e = cerror.MakeError(-1, text)
+				} else {
+					e = cerror.MakeError(-1, "http code:"+strconv.FormatInt(int64(resp.StatusCode), 10)+",response body:empty")
+				}
+			} else {
+				e = cerror.ConvertErrorstr(common.Byte2str(respbody))
+			}
 			if traceend != nil {
 				traceend(e)
 			}

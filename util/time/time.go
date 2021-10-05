@@ -1,19 +1,16 @@
 package time
 
 import (
-	"bytes"
 	"errors"
 	"strconv"
-	"time"
+	stdtime "time"
 
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
 var ErrFormatDuration = errors.New("format wrong for Duration,supported:\"1h2m3s4ms5us6ns\"")
-var ErrFormatTime = errors.New("format wrong for Time,supported:\"2006-01-02 15:04:05\"(time zone is utc)/\"2006-01-02 15:04:05 +08(time zone is +08)\"")
 
-type Duration time.Duration
-type Time time.Time
+type Duration stdtime.Duration
 
 func (d *Duration) UnmarshalJSON(data []byte) error {
 	if data[0] == '"' && data[len(data)-1] == '"' {
@@ -28,7 +25,7 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 			*d = Duration(num)
 			return nil
 		}
-		temp, e := time.ParseDuration(common.Byte2str(data))
+		temp, e := stdtime.ParseDuration(common.Byte2str(data))
 		if e != nil {
 			return ErrFormatDuration
 		}
@@ -37,6 +34,60 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 		return ErrFormatDuration
 	}
 	return nil
+}
+func (d *Duration) MarshalJSON() ([]byte, error) {
+	if d == nil {
+		return common.Str2byte("\"null\""), nil
+	}
+	if *d == 0 {
+		return common.Str2byte("\"0s\""), nil
+	}
+	sd := d.StdDuration()
+	r := make([]byte, 0, 10)
+	r = append(r, '"')
+	if sd >= stdtime.Hour {
+		r = strconv.AppendInt(r, int64(sd/stdtime.Hour), 10)
+		r = append(r, 'h')
+		if sd = sd % stdtime.Hour; sd == 0 {
+			r = append(r, '"')
+			return r, nil
+		}
+	}
+	if sd >= stdtime.Minute {
+		r = strconv.AppendInt(r, int64(sd/stdtime.Minute), 10)
+		r = append(r, 'm')
+		if sd = sd % stdtime.Minute; sd == 0 {
+			r = append(r, '"')
+			return r, nil
+		}
+	}
+	if sd >= stdtime.Second {
+		r = strconv.AppendInt(r, int64(sd/stdtime.Second), 10)
+		r = append(r, 's')
+		if sd = sd % stdtime.Second; sd == 0 {
+			r = append(r, '"')
+			return r, nil
+		}
+	}
+	if sd >= stdtime.Millisecond {
+		r = strconv.AppendInt(r, int64(sd/stdtime.Millisecond), 10)
+		r = append(r, "ms"...)
+		if sd = sd % stdtime.Millisecond; sd == 0 {
+			r = append(r, '"')
+			return r, nil
+		}
+	}
+	if sd >= stdtime.Microsecond {
+		r = strconv.AppendInt(r, int64(sd/stdtime.Microsecond), 10)
+		r = append(r, "us"...)
+		if sd = sd % stdtime.Microsecond; sd == 0 {
+			r = append(r, '"')
+			return r, nil
+		}
+	}
+	r = strconv.AppendInt(r, int64(sd), 10)
+	r = append(r, "ns\""...)
+	return r, nil
 }
 func (d *Duration) UnmarshalText(data []byte) error {
 	if data[0] == '"' && data[len(data)-1] == '"' {
@@ -51,7 +102,7 @@ func (d *Duration) UnmarshalText(data []byte) error {
 			*d = Duration(num)
 			return nil
 		}
-		temp, e := time.ParseDuration(common.Byte2str(data))
+		temp, e := stdtime.ParseDuration(common.Byte2str(data))
 		if e != nil {
 			return ErrFormatDuration
 		}
@@ -61,59 +112,60 @@ func (d *Duration) UnmarshalText(data []byte) error {
 	}
 	return nil
 }
-func (d *Duration) StdDuration() time.Duration {
-	return time.Duration(*d)
+func (d *Duration) MarshalText() ([]byte, error) {
+	if d == nil {
+		return common.Str2byte("null"), nil
+	}
+	if *d == 0 {
+		return common.Str2byte("0s"), nil
+	}
+	sd := d.StdDuration()
+	r := make([]byte, 0, 10)
+	r = append(r, '"')
+	if sd >= stdtime.Hour {
+		r = strconv.AppendInt(r, int64(sd/stdtime.Hour), 10)
+		r = append(r, 'h')
+		if sd = sd % stdtime.Hour; sd == 0 {
+			r = append(r, '"')
+			return r, nil
+		}
+	}
+	if sd >= stdtime.Minute {
+		r = strconv.AppendInt(r, int64(sd/stdtime.Minute), 10)
+		r = append(r, 'm')
+		if sd = sd % stdtime.Minute; sd == 0 {
+			r = append(r, '"')
+			return r, nil
+		}
+	}
+	if sd >= stdtime.Second {
+		r = strconv.AppendInt(r, int64(sd/stdtime.Second), 10)
+		r = append(r, 's')
+		if sd = sd % stdtime.Second; sd == 0 {
+			r = append(r, '"')
+			return r, nil
+		}
+	}
+	if sd >= stdtime.Millisecond {
+		r = strconv.AppendInt(r, int64(sd/stdtime.Millisecond), 10)
+		r = append(r, "ms"...)
+		if sd = sd % stdtime.Millisecond; sd == 0 {
+			r = append(r, '"')
+			return r, nil
+		}
+	}
+	if sd >= stdtime.Microsecond {
+		r = strconv.AppendInt(r, int64(sd/stdtime.Microsecond), 10)
+		r = append(r, "us"...)
+		if sd = sd % stdtime.Microsecond; sd == 0 {
+			r = append(r, '"')
+			return r, nil
+		}
+	}
+	r = strconv.AppendInt(r, int64(sd), 10)
+	r = append(r, "ns\""...)
+	return r, nil
 }
-func (t *Time) UnmarshalJSON(data []byte) error {
-	if data[0] == '"' && data[len(data)-1] == '"' {
-		if len(data) == 2 {
-			*t = Time(time.Unix(0, 0))
-			return nil
-		}
-		data = data[1 : len(data)-1]
-	}
-	if data[0] != '"' && data[len(data)-1] != '"' {
-		var temp time.Time
-		var e error
-		if bytes.Count(data, []byte{' '}) == 1 {
-			temp, e = time.ParseInLocation("2006-01-02 15:04:05", common.Byte2str(data), time.UTC)
-		} else {
-			temp, e = time.Parse("2006-01-02 15:04:05 -07", common.Byte2str(data))
-		}
-		if e != nil {
-			return ErrFormatTime
-		}
-		*t = Time(temp)
-	} else {
-		return ErrFormatTime
-	}
-	return nil
-}
-func (t *Time) UnmarshalText(data []byte) error {
-	if data[0] == '"' && data[len(data)-1] == '"' {
-		if len(data) == 2 {
-			*t = Time(time.Unix(0, 0))
-			return nil
-		}
-		data = data[1 : len(data)-1]
-	}
-	if data[0] != '"' && data[len(data)-1] != '"' {
-		var temp time.Time
-		var e error
-		if bytes.Count(data, []byte{' '}) == 1 {
-			temp, e = time.ParseInLocation("2006-01-02 15:04:05", common.Byte2str(data), time.UTC)
-		} else {
-			temp, e = time.Parse("2006-01-02 15:04:05 -07", common.Byte2str(data))
-		}
-		if e != nil {
-			return ErrFormatTime
-		}
-		*t = Time(temp)
-	} else {
-		return ErrFormatTime
-	}
-	return nil
-}
-func (t *Time) StdTime() time.Time {
-	return time.Time(*t)
+func (d *Duration) StdDuration() stdtime.Duration {
+	return stdtime.Duration(*d)
 }

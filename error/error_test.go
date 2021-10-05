@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func Test_MError(t *testing.T) {
+func Test_Error(t *testing.T) {
 	me := &Error{
 		Code: 100,
 		Msg:  "test",
@@ -23,10 +23,10 @@ func Test_MError(t *testing.T) {
 	if msg := GetMsgFromErrorstr(ee.Error()); msg != "test" {
 		panic("msg error")
 	}
-	if temp := StdErrorToError(ee); temp.Code != me.Code || temp.Msg != me.Msg {
+	if temp := ConvertStdError(ee); temp.Code != me.Code || temp.Msg != me.Msg {
 		panic("translate error")
 	}
-	if temp := ErrorstrToError(ee.Error()); temp.Code != me.Code || temp.Msg != me.Msg {
+	if temp := ConvertErrorstr(ee.Error()); temp.Code != me.Code || temp.Msg != me.Msg {
 		panic("translate error")
 	}
 	eee := fmt.Errorf("test")
@@ -42,10 +42,10 @@ func Test_MError(t *testing.T) {
 	if msg := GetMsgFromErrorstr(eee.Error()); msg != "test" {
 		panic("msg error")
 	}
-	if temp := StdErrorToError(eee); temp.Code != -1 || temp.Msg != "test" {
+	if temp := ConvertStdError(eee); temp.Code != -1 || temp.Msg != "test" {
 		panic("translate error")
 	}
-	if temp := ErrorstrToError(eee.Error()); temp.Code != -1 || temp.Msg != "test" {
+	if temp := ConvertErrorstr(eee.Error()); temp.Code != -1 || temp.Msg != "test" {
 		panic("translate error")
 	}
 	var nilerror *Error = nil

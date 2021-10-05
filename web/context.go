@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/julienschmidt/httprouter"
@@ -39,8 +40,9 @@ func (this *Context) Next() {
 func (this *Context) Abort(code int, e error) {
 	this.w.WriteHeader(code)
 	if e != nil {
-		this.w.Write(common.Str2byte(e.Error()))
-		this.e = e
+		ee := cerror.ConvertStdError(e)
+		this.w.Write(common.Str2byte(ee.Error()))
+		this.e = ee
 	}
 	this.next = -1
 }

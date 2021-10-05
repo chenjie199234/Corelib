@@ -41,12 +41,12 @@ type process struct {
 
 func (p *process) log(datas ...interface{}) {
 	buf := bufpool.GetBuffer()
-	buf.Append(time.Now().Format("2006-01-02_15:04:06.000000000"))
+	buf.AppendStdTime(time.Now())
 	for _, data := range datas {
-		buf.Append(" ")
-		buf.Append(data)
+		buf.AppendByte(' ')
+		writeany(buf, data)
 	}
-	buf.Append("\n")
+	buf.AppendByte('\n')
 	p.logfile.WriteBuf(buf)
 }
 func (p *process) startProcess() {

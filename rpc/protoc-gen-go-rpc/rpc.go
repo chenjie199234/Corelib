@@ -2088,7 +2088,7 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 		}
 		g.P("respd,e:=c.cc.Call(ctx,", timeout.Nanoseconds(), ",", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
 		g.P("if e != nil {")
-		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("StdErrorToError")), "(e)")
+		g.P("return nil,e")
 		g.P("}")
 		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 		g.P("if len(respd)==0{")

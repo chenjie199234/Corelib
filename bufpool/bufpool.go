@@ -1,7 +1,6 @@
 package bufpool
 
 import (
-	"reflect"
 	"strconv"
 	"sync"
 	"time"
@@ -48,1241 +47,499 @@ func (b *Buffer) Resize(n uint32) {
 		*b = make([]byte, n)
 	}
 }
+
+//return data is unsafe
 func (b *Buffer) Bytes() []byte {
 	return *b
 }
+
+//return data is safe
+func (b *Buffer) CopyBytes() []byte {
+	r := make([]byte, len(*b))
+	copy(r, *b)
+	return r
+}
+
+//return data is unsafe
 func (b *Buffer) String() string {
 	return common.Byte2str(*b)
 }
 
-//byte will type assert to uint8,so it will be treated as number
-//rune will type assert to int32,so it will be treated as number
-func (b *Buffer) Append(data interface{}) {
-	switch d := data.(type) {
-	case reflect.Value:
-		b.appendreflect(d)
-	default:
-		b.appendbasic(data)
+//return data is safe
+func (b *Buffer) CopyString() string {
+	r := make([]byte, len(*b))
+	copy(r, *b)
+	return common.Byte2str(r)
+}
+func (b *Buffer) AppendBool(data bool) {
+	*b = strconv.AppendBool(*b, data)
+}
+func (b *Buffer) AppendBools(data []bool) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = strconv.AppendBool(*b, d)
+			*b = append(*b, ',')
+		}
+		(*b)[len(*b)-1] = ']'
 	}
 }
-
-func (b *Buffer) appendbasic(data interface{}) {
-	switch d := data.(type) {
-	case bool:
-		*b = strconv.AppendBool(*b, d)
-	case *bool:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendBool(*b, *d)
-		}
-	case []bool:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendBool(*b, dd)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*bool:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendBool(*b, *dd)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case int:
-		*b = strconv.AppendInt(*b, int64(d), 10)
-	case int8:
-		*b = strconv.AppendInt(*b, int64(d), 10)
-	case int16:
-		*b = strconv.AppendInt(*b, int64(d), 10)
-	case int32:
-		*b = strconv.AppendInt(*b, int64(d), 10)
-	case int64:
-		*b = strconv.AppendInt(*b, d, 10)
-	case *int:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendInt(*b, int64(*d), 10)
-		}
-	case *int8:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendInt(*b, int64(*d), 10)
-		}
-	case *int16:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendInt(*b, int64(*d), 10)
-		}
-	case *int32:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendInt(*b, int64(*d), 10)
-		}
-	case *int64:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendInt(*b, *d, 10)
-		}
-	case []int:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendInt(*b, int64(dd), 10)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []int8:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendInt(*b, int64(dd), 10)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []int16:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendInt(*b, int64(dd), 10)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []int32:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendInt(*b, int64(dd), 10)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []int64:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendInt(*b, dd, 10)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*int:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendInt(*b, int64(*dd), 10)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*int8:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendInt(*b, int64(*dd), 10)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*int16:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendInt(*b, int64(*dd), 10)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*int32:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendInt(*b, int64(*dd), 10)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*int64:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendInt(*b, *dd, 10)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case uint:
-		*b = strconv.AppendUint(*b, uint64(d), 10)
-	case uint8:
-		*b = strconv.AppendUint(*b, uint64(d), 10)
-	case uint16:
-		*b = strconv.AppendUint(*b, uint64(d), 10)
-	case uint32:
-		*b = strconv.AppendUint(*b, uint64(d), 10)
-	case uint64:
-		*b = strconv.AppendUint(*b, d, 10)
-	case *uint:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendUint(*b, uint64(*d), 10)
-		}
-	case *uint8:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendUint(*b, uint64(*d), 10)
-		}
-	case *uint16:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendUint(*b, uint64(*d), 10)
-		}
-	case *uint32:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendUint(*b, uint64(*d), 10)
-		}
-	case *uint64:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendUint(*b, *d, 10)
-		}
-	case []uint:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendUint(*b, uint64(dd), 10)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []uint8:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendUint(*b, uint64(dd), 10)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []uint16:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendUint(*b, uint64(dd), 10)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []uint32:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendUint(*b, uint64(dd), 10)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []uint64:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendUint(*b, dd, 10)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*uint:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendUint(*b, uint64(*dd), 10)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*uint8:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendUint(*b, uint64(*dd), 10)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*uint16:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendUint(*b, uint64(*dd), 10)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*uint32:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendUint(*b, uint64(*dd), 10)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*uint64:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendUint(*b, *dd, 10)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case float32:
-		*b = strconv.AppendFloat(*b, float64(d), 'f', -1, 32)
-	case float64:
-		*b = strconv.AppendFloat(*b, d, 'f', -1, 64)
-	case *float32:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendFloat(*b, float64(*d), 'f', -1, 32)
-		}
-	case *float64:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendFloat(*b, *d, 'f', -1, 64)
-		}
-	case []float32:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendFloat(*b, float64(dd), 'f', -1, 32)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []float64:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendFloat(*b, float64(dd), 'f', -1, 64)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*float32:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendFloat(*b, float64(*dd), 'f', -1, 32)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*float64:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendFloat(*b, float64(*dd), 'f', -1, 64)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case complex64:
-		*b = strconv.AppendFloat(*b, float64(real(d)), 'f', -1, 32)
-		if imag(d) >= 0 {
-			*b = append(*b, '+')
-		}
-		*b = strconv.AppendFloat(*b, float64(imag(d)), 'f', -1, 32)
-		*b = append(*b, 'i')
-	case complex128:
-		*b = strconv.AppendFloat(*b, real(d), 'f', -1, 32)
-		if imag(d) >= 0 {
-			*b = append(*b, '+')
-		}
-		*b = strconv.AppendFloat(*b, imag(d), 'f', -1, 32)
-		*b = append(*b, 'i')
-	case *complex64:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendFloat(*b, float64(real(*d)), 'f', -1, 32)
-			if imag(*d) >= 0 {
-				*b = append(*b, '+')
-			}
-			*b = strconv.AppendFloat(*b, float64(imag(*d)), 'f', -1, 32)
-			*b = append(*b, 'i')
-		}
-	case *complex128:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = strconv.AppendFloat(*b, real(*d), 'f', -1, 32)
-			if imag(*d) >= 0 {
-				*b = append(*b, '+')
-			}
-			*b = strconv.AppendFloat(*b, imag(*d), 'f', -1, 32)
-			*b = append(*b, 'i')
-		}
-	case []complex64:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendFloat(*b, float64(real(dd)), 'f', -1, 32)
-				if imag(dd) >= 0 {
-					*b = append(*b, '+')
-				}
-				*b = strconv.AppendFloat(*b, float64(imag(dd)), 'f', -1, 32)
-				*b = append(*b, 'i', ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []complex128:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = strconv.AppendFloat(*b, real(dd), 'f', -1, 32)
-				if imag(dd) >= 0 {
-					*b = append(*b, '+')
-				}
-				*b = strconv.AppendFloat(*b, imag(dd), 'f', -1, 32)
-				*b = append(*b, 'i', ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*complex64:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendFloat(*b, float64(real(*dd)), 'f', -1, 32)
-					if imag(*dd) >= 0 {
-						*b = append(*b, '+')
-					}
-					*b = strconv.AppendFloat(*b, float64(imag(*dd)), 'f', -1, 32)
-					*b = append(*b, 'i')
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*complex128:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = strconv.AppendFloat(*b, real(*dd), 'f', -1, 32)
-					if imag(*dd) >= 0 {
-						*b = append(*b, '+')
-					}
-					*b = strconv.AppendFloat(*b, imag(*dd), 'f', -1, 32)
-					*b = append(*b, 'i')
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case string:
-		*b = append(*b, d...)
-	case *string:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = append(*b, *d...)
-		}
-	case []string:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = append(*b, dd...)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*string:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = append(*b, *dd...)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case uintptr:
-		*b = b.appendPointer(uint64(d))
-	case unsafe.Pointer:
-		*b = b.appendPointer(uint64(uintptr(d)))
-	case *uintptr:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = b.appendPointer(uint64(*d))
-		}
-	case *unsafe.Pointer:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = b.appendPointer(uint64(uintptr(*d)))
-		}
-	case []uintptr:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = b.appendPointer(uint64(dd))
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []unsafe.Pointer:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = b.appendPointer(uint64(uintptr(dd)))
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*uintptr:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = b.appendPointer(uint64(*dd))
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*unsafe.Pointer:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = b.appendPointer(uint64(uintptr(*dd)))
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case time.Duration:
-		*b = b.appendDuration(d)
-	case ctime.Duration:
-		*b = b.appendDuration(time.Duration(d))
-	case *time.Duration:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = b.appendDuration(*d)
-		}
-	case *ctime.Duration:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = b.appendDuration(time.Duration(*d))
-		}
-	case []time.Duration:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = b.appendDuration(dd)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []ctime.Duration:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = b.appendDuration(time.Duration(dd))
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*time.Duration:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = b.appendDuration(*dd)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*ctime.Duration:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = b.appendDuration(time.Duration(*dd))
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case time.Time:
-		*b = d.AppendFormat(*b, "2006-01-02 15:04:05.000000000 -07")
-	case ctime.Time:
-		*b = time.Time(d).AppendFormat(*b, "2006-01-02 15:04:05.000000000 -07")
-	case *time.Time:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = (*d).AppendFormat(*b, "2006-01-02 15:04:05.000000000 -07")
-		}
-	case *ctime.Time:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = time.Time(*d).AppendFormat(*b, "2006-01-02 15:04:05.000000000 -07")
-		}
-	case []time.Time:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = dd.AppendFormat(*b, "2006-01-02 15:04:05.000000000 -07")
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []ctime.Time:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = time.Time(dd).AppendFormat(*b, "2006-01-02 15:04:05.000000000 -07")
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*time.Time:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = (*dd).AppendFormat(*b, "2006-01-02 15:04:05.000000000 -07")
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*ctime.Time:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = time.Time(*dd).AppendFormat(*b, "2006-01-02 15:04:05.000000000 -07")
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case error:
-		*b = b.appenderror(d)
-	case *error:
-		if d == nil {
-			b.appendnil()
-		} else {
-			*b = b.appenderror(*d)
-		}
-	case []error:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = b.appenderror(dd)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []cerror.Error:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				*b = b.appenderror(dd)
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*error:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = b.appenderror(*dd)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	case []*cerror.Error:
-		if d == nil {
-			b.appendnil()
-		} else if len(d) > 0 {
-			*b = append(*b, '[')
-			for _, dd := range d {
-				if dd == nil {
-					b.appendnil()
-				} else {
-					*b = b.appenderror(*dd)
-				}
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
-		}
-	default:
-		b.appendreflect(reflect.ValueOf(d))
+func (b *Buffer) AppendInt(data int) {
+	*b = strconv.AppendInt(*b, int64(data), 10)
+}
+func (b *Buffer) AppendInts(data []int) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = strconv.AppendInt(*b, int64(d), 10)
+			*b = append(*b, ',')
+		}
+		(*b)[len(*b)-1] = ']'
 	}
 }
-func (b *Buffer) appendreflect(d reflect.Value) {
-	switch d.Kind() {
-	case reflect.Bool:
-		*b = strconv.AppendBool(*b, d.Bool())
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if d.Type().Name() == "Duration" {
-			*b = b.appendDuration(*(*time.Duration)(unsafe.Pointer(d.Addr().Pointer())))
-		} else {
-			*b = strconv.AppendInt(*b, d.Int(), 10)
+func (b *Buffer) AppendUint(data uint) {
+	*b = strconv.AppendUint(*b, uint64(data), 10)
+}
+func (b *Buffer) AppendUints(data []uint) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = strconv.AppendUint(*b, uint64(d), 10)
+			*b = append(*b, ',')
 		}
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		*b = strconv.AppendUint(*b, d.Uint(), 10)
-	case reflect.Float32:
-		*b = strconv.AppendFloat(*b, d.Float(), 'f', -1, 32)
-	case reflect.Float64:
-		*b = strconv.AppendFloat(*b, d.Float(), 'f', -1, 64)
-	case reflect.Complex64:
-		c := d.Complex()
-		*b = strconv.AppendFloat(*b, float64(real(c)), 'f', -1, 32)
-		if imag(c) >= 0 {
-			*b = append(*b, '+')
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendInt8(data int8) {
+	*b = strconv.AppendInt(*b, int64(data), 10)
+}
+func (b *Buffer) AppendInt8s(data []int8) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = strconv.AppendInt(*b, int64(d), 10)
+			*b = append(*b, ',')
 		}
-		*b = strconv.AppendFloat(*b, float64(imag(c)), 'f', -1, 32)
-		*b = append(*b, 'i')
-	case reflect.Complex128:
-		c := d.Complex()
-		*b = strconv.AppendFloat(*b, float64(real(c)), 'f', -1, 64)
-		if imag(c) >= 0 {
-			*b = append(*b, '+')
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendUint8(data uint8) {
+	*b = strconv.AppendUint(*b, uint64(data), 10)
+}
+func (b *Buffer) AppendUint8s(data []uint8) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = strconv.AppendUint(*b, uint64(d), 10)
+			*b = append(*b, ',')
 		}
-		*b = strconv.AppendFloat(*b, float64(imag(c)), 'f', -1, 64)
-		*b = append(*b, 'i')
-	case reflect.String:
-		*b = append(*b, d.String()...)
-	case reflect.Interface:
-		if d.IsNil() {
-			b.appendnil()
-		} else if d.Type().String() == "error" {
-			*b = b.appenderror(d.Interface().(error))
-		} else {
-			b.appendreflect(d.Elem())
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendInt16(data int16) {
+	*b = strconv.AppendInt(*b, int64(data), 10)
+}
+func (b *Buffer) AppendInt16s(data []int16) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = strconv.AppendInt(*b, int64(d), 10)
+			*b = append(*b, ',')
 		}
-	case reflect.Array:
-		if d.Len() > 0 {
-			*b = append(*b, '[')
-			for i := 0; i < d.Len(); i++ {
-				b.appendreflect(d.Index(i))
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendUint16(data uint16) {
+	*b = strconv.AppendUint(*b, uint64(data), 10)
+}
+func (b *Buffer) AppendUint16s(data []uint16) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = strconv.AppendUint(*b, uint64(d), 10)
+			*b = append(*b, ',')
 		}
-	case reflect.Slice:
-		if d.IsNil() {
-			b.appendnil()
-		} else if d.Len() > 0 {
-			*b = append(*b, '[')
-			for i := 0; i < d.Len(); i++ {
-				b.appendreflect(d.Index(i))
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = ']'
-		} else {
-			b.appendemptyslice()
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendInt32(data int32) {
+	*b = strconv.AppendInt(*b, int64(data), 10)
+}
+func (b *Buffer) AppendInt32s(data []int32) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = strconv.AppendInt(*b, int64(d), 10)
+			*b = append(*b, ',')
 		}
-	case reflect.Map:
-		d.IsZero()
-		if d.IsNil() {
-			b.appendnil()
-		} else if d.Len() > 0 {
-			*b = append(*b, '{')
-			iter := d.MapRange()
-			for iter.Next() {
-				b.appendreflect(iter.Key())
-				*b = append(*b, ':')
-				b.appendreflect(iter.Value())
-				*b = append(*b, ',')
-			}
-			(*b)[len(*b)-1] = '}'
-		} else {
-			b.appendemptyobj()
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendUint32(data uint32) {
+	*b = strconv.AppendUint(*b, uint64(data), 10)
+}
+func (b *Buffer) AppendUint32s(data []uint32) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = strconv.AppendUint(*b, uint64(d), 10)
+			*b = append(*b, ',')
 		}
-	case reflect.Struct:
-		if d.Type().String() == "time.Time" {
-			t := (*time.Time)(unsafe.Pointer(d.Addr().Pointer()))
-			b.appendbasic(t)
-		} else if d.Type().String() == "github.com/chenjie199234/Corelib/error.Error" {
-			e := (*cerror.Error)(unsafe.Pointer(d.Addr().Pointer()))
-			*b = b.appenderror(*e)
-		} else if d.NumField() > 0 {
-			has := false
-			*b = append(*b, '{')
-			t := d.Type()
-			for i := 0; i < d.NumField(); i++ {
-				if t.Field(i).Name[0] >= 65 && t.Field(i).Name[0] <= 90 {
-					has = true
-					*b = append(*b, t.Field(i).Name...)
-					*b = append(*b, ':')
-					b.appendreflect(d.Field(i))
-					*b = append(*b, ',')
-				}
-			}
-			if has {
-				(*b)[len(*b)-1] = '}'
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendInt64(data int64) {
+	*b = strconv.AppendInt(*b, data, 10)
+}
+func (b *Buffer) AppendInt64s(data []int64) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = strconv.AppendInt(*b, d, 10)
+			*b = append(*b, ',')
+		}
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendUint64(data uint64) {
+	*b = strconv.AppendUint(*b, data, 10)
+}
+func (b *Buffer) AppendUint64s(data []uint64) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = strconv.AppendUint(*b, d, 10)
+			*b = append(*b, ',')
+		}
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendByte(data byte) {
+	*b = append(*b, data)
+}
+func (b *Buffer) AppendByteSlice(data []byte) {
+	*b = append(*b, data...)
+}
+func (b *Buffer) AppendByteSlices(data [][]byte) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = append(*b, '"')
+			*b = append(*b, d...)
+			*b = append(*b, '"')
+			*b = append(*b, ',')
+		}
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendString(data string) {
+	*b = append(*b, data...)
+}
+func (b *Buffer) AppendStrings(data []string) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = append(*b, '"')
+			*b = append(*b, d...)
+			*b = append(*b, '"')
+			*b = append(*b, ',')
+		}
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendFloat32(data float32) {
+	*b = strconv.AppendFloat(*b, float64(data), 'f', -1, 32)
+}
+func (b *Buffer) AppendFloat32s(data []float32) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = strconv.AppendFloat(*b, float64(d), 'f', -1, 32)
+			*b = append(*b, ',')
+		}
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendFloat64(data float64) {
+	*b = strconv.AppendFloat(*b, float64(data), 'f', -1, 64)
+}
+func (b *Buffer) AppendFloat64s(data []float64) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = strconv.AppendFloat(*b, float64(d), 'f', -1, 64)
+			*b = append(*b, ',')
+		}
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendStdDuration(data time.Duration) {
+	*b = strconv.AppendInt(*b, int64(data), 10)
+}
+func (b *Buffer) AppendStdDurations(data []time.Duration) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = strconv.AppendInt(*b, int64(d), 10)
+			*b = append(*b, ',')
+		}
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendStdDurationPointers(data []*time.Duration) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			if d == nil {
+				b.AppendNil()
 			} else {
-				*b = append(*b, '}')
+				*b = strconv.AppendInt(*b, int64(*d), 10)
 			}
-		} else {
-			b.appendemptyobj()
+			*b = append(*b, ',')
 		}
-	case reflect.Ptr:
-		if d.IsNil() {
-			b.appendnil()
-		} else {
-			b.appendreflect(d.Elem())
-		}
-	case reflect.Uintptr:
-		*b = b.appendPointer(d.Uint())
-	case reflect.UnsafePointer:
-		if d.IsNil() {
-			b.appendnil()
-		} else {
-			*b = b.appendPointer(uint64(d.Pointer()))
-		}
-	case reflect.Func:
-		if d.IsNil() {
-			b.appendnil()
-		} else {
-			*b = b.appendPointer(uint64(d.Pointer()))
-		}
-	case reflect.Chan:
-		if d.IsNil() {
-			b.appendnil()
-		} else {
-			*b = b.appendPointer(uint64(d.Pointer()))
-		}
-	default:
-		*b = append(*b, "unsupported type"...)
+		(*b)[len(*b)-1] = ']'
 	}
 }
-func (b *Buffer) appenderror(e error) []byte {
-	switch ee := e.(type) {
-	case *cerror.Error:
-		if ee == nil {
-			b.appendnil()
-		} else {
-			*b = append(*b, "{Code:"...)
-			*b = strconv.AppendInt(*b, int64(ee.Code), 10)
-			*b = append(*b, ",Msg:"...)
-			*b = append(*b, ee.Msg...)
-			*b = append(*b, '}')
-		}
-	case cerror.Error:
-		*b = append(*b, "{Code:"...)
-		*b = strconv.AppendInt(*b, int64(ee.Code), 10)
-		*b = append(*b, ",Msg:"...)
-		*b = append(*b, ee.Msg...)
-		*b = append(*b, '}')
-	default:
-		if e == nil {
-			b.appendnil()
-		} else {
-			*b = append(*b, e.Error()...)
-		}
-	}
-	return *b
-}
-func (b *Buffer) appendDuration(d time.Duration) []byte {
-	if d == 0 {
+func (b *Buffer) AppendDuration(data ctime.Duration) {
+	if data == 0 {
 		*b = append(*b, "0s"...)
-	} else {
-		if d >= time.Hour {
-			*b = strconv.AppendInt(*b, int64(d)/int64(time.Hour), 10)
-			*b = append(*b, 'h')
-			if d = d % time.Hour; d == 0 {
-				return *b
-			}
-		}
-		if d >= time.Minute {
-			*b = strconv.AppendInt(*b, int64(d)/int64(time.Minute), 10)
-			*b = append(*b, 'm')
-			if d = d % time.Minute; d == 0 {
-				return *b
-			}
-		}
-		if d >= time.Second {
-			*b = strconv.AppendInt(*b, int64(d)/int64(time.Second), 10)
-			*b = append(*b, 's')
-			if d = d % time.Second; d == 0 {
-				return *b
-			}
-		}
-		if d >= time.Millisecond {
-			*b = strconv.AppendInt(*b, int64(d)/int64(time.Millisecond), 10)
-			*b = append(*b, "ms"...)
-			if d = d % time.Millisecond; d == 0 {
-				return *b
-			}
-		}
-		if d >= time.Microsecond {
-			*b = strconv.AppendInt(*b, int64(d)/int64(time.Microsecond), 10)
-			*b = append(*b, "us"...)
-			if d = d % time.Millisecond; d == 0 {
-				return *b
-			}
-		}
-		*b = strconv.AppendInt(*b, int64(d), 10)
-		*b = append(*b, "ns"...)
+		return
 	}
-	return *b
+	d := time.Duration(data)
+	if d >= time.Hour {
+		*b = strconv.AppendInt(*b, int64(d/time.Hour), 10)
+		*b = append(*b, 'h')
+		if d = d % time.Hour; d == 0 {
+			return
+		}
+	}
+	if d >= time.Minute {
+		*b = strconv.AppendInt(*b, int64(d/time.Minute), 10)
+		*b = append(*b, 'm')
+		if d = d % time.Minute; d == 0 {
+			return
+		}
+	}
+	if d >= time.Second {
+		*b = strconv.AppendInt(*b, int64(d/time.Second), 10)
+		*b = append(*b, 's')
+		if d = d % time.Second; d == 0 {
+			return
+		}
+	}
+	if d >= time.Millisecond {
+		*b = strconv.AppendInt(*b, int64(d/time.Millisecond), 10)
+		*b = append(*b, "ms"...)
+		if d = d % time.Millisecond; d == 0 {
+			return
+		}
+	}
+	if d >= time.Microsecond {
+		*b = strconv.AppendInt(*b, int64(d/time.Microsecond), 10)
+		*b = append(*b, "us"...)
+		if d = d % time.Millisecond; d == 0 {
+			return
+		}
+	}
+	*b = strconv.AppendInt(*b, int64(d), 10)
+	*b = append(*b, "ns"...)
 }
-func (b *Buffer) appendPointer(p uint64) []byte {
-	if p == 0 {
-		b.appendnil()
+func (b *Buffer) AppendDurations(data []ctime.Duration) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
 	} else {
-		first := false
-		*b = append(*b, "0x"...)
-		for i := 0; i < 16; i++ {
-			temp := (p << (i * 4)) >> 60
-			if temp > 0 {
-				first = true
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = append(*b, '"')
+			b.AppendDuration(d)
+			*b = append(*b, '"')
+			*b = append(*b, ',')
+		}
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendDurationPointers(data []*ctime.Duration) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			if d == nil {
+				b.AppendNil()
+			} else {
+				*b = append(*b, '"')
+				b.AppendDuration(*d)
+				*b = append(*b, '"')
 			}
-			switch temp {
-			case 0:
-				if first {
-					*b = append(*b, '0')
+			*b = append(*b, ',')
+		}
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendStdTime(data time.Time) {
+	*b = data.AppendFormat(*b, time.RFC3339Nano)
+}
+func (b *Buffer) AppendStdTimes(data []time.Time) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			*b = append(*b, '"')
+			*b = d.AppendFormat(*b, time.RFC3339Nano)
+			*b = append(*b, '"')
+			*b = append(*b, ',')
+		}
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendStdTimePointers(data []*time.Time) {
+	if data == nil {
+		b.AppendNil()
+	} else if len(data) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, d := range data {
+			if d == nil {
+				b.AppendNil()
+			} else {
+				*b = append(*b, '"')
+				*b = d.AppendFormat(*b, time.RFC3339Nano)
+				*b = append(*b, '"')
+			}
+			*b = append(*b, ',')
+		}
+		(*b)[len(*b)-1] = ']'
+	}
+}
+func (b *Buffer) AppendError(e error) {
+	if e == nil {
+		b.AppendNil()
+	} else if ee, ok := e.(*cerror.Error); ok {
+		if ee == nil {
+			b.AppendNil()
+		} else {
+			*b = append(*b, "{\"code\":"...)
+			*b = strconv.AppendInt(*b, int64(ee.Code), 10)
+			*b = append(*b, ",\"msg\":\""...)
+			*b = append(*b, ee.Msg...)
+			*b = append(*b, "\"}"...)
+		}
+	} else {
+		*b = append(*b, e.Error()...)
+	}
+}
+func (b *Buffer) AppendErrors(e []error) {
+	if e == nil {
+		b.AppendNil()
+	} else if len(e) == 0 {
+		b.AppendEmptySlice()
+	} else {
+		*b = append(*b, '[')
+		for _, ee := range e {
+			if ee == nil {
+				b.AppendNil()
+			} else if eee, ok := ee.(*cerror.Error); ok {
+				if eee == nil {
+					b.AppendNil()
+				} else {
+					*b = append(*b, "{\"code\":"...)
+					*b = strconv.AppendInt(*b, int64(eee.Code), 10)
+					*b = append(*b, ",\"msg\":\""...)
+					*b = append(*b, eee.Msg...)
+					*b = append(*b, "\"}"...)
 				}
-			case 1:
-				*b = append(*b, '1')
-			case 2:
-				*b = append(*b, '2')
-			case 3:
-				*b = append(*b, '3')
-			case 4:
-				*b = append(*b, '4')
-				*b = append(*b, 'f')
-				*b = append(*b, '5')
-			case 6:
-				*b = append(*b, '6')
-			case 7:
-				*b = append(*b, '7')
-			case 8:
-				*b = append(*b, '8')
-			case 9:
-				*b = append(*b, '9')
-			case 10:
-				*b = append(*b, 'a')
-			case 11:
-				*b = append(*b, 'b')
-			case 12:
-				*b = append(*b, 'c')
-			case 13:
-				*b = append(*b, 'd')
-			case 14:
-				*b = append(*b, 'e')
-			case 15:
-				*b = append(*b, 'f')
+			} else {
+				*b = append(*b, '"')
+				*b = append(*b, ee.Error()...)
+				*b = append(*b, '"')
 			}
+			*b = append(*b, ',')
 		}
+		(*b)[len(*b)-1] = ']'
 	}
-	return *b
 }
-func (b *Buffer) appendnil() {
-	*b = append(*b, "nil"...)
+func (b *Buffer) AppendNil() {
+	*b = append(*b, "null"...)
 }
-func (b *Buffer) appendemptyslice() {
+func (b *Buffer) AppendEmptySlice() {
 	*b = append(*b, "[]"...)
 }
-func (b *Buffer) appendemptyobj() {
+func (b *Buffer) AppendEmptyObj() {
 	*b = append(*b, "{}"...)
 }

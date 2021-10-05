@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 
+	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
@@ -32,7 +33,13 @@ func (c *Context) Abort(e error) {
 	c.msg.Path = ""
 	c.msg.Deadline = 0
 	c.msg.Body = nil
-	c.msg.Error = e.Error()
+	if e == context.DeadlineExceeded {
+		c.msg.Error = cerror.ErrDeadlineExceeded
+	} else if e == context.Canceled {
+		c.msg.Error = cerror.ErrCanceled
+	} else {
+		c.msg.Error = cerror.ConvertStdError(e)
+	}
 	c.msg.Metadata = nil
 	c.msg.Tracedata = nil
 	c.next = -1
@@ -42,7 +49,7 @@ func (c *Context) Write(resp []byte) {
 	c.msg.Path = ""
 	c.msg.Deadline = 0
 	c.msg.Body = resp
-	c.msg.Error = ""
+	c.msg.Error = nil
 	c.msg.Metadata = nil
 	c.msg.Tracedata = nil
 	c.next = -1

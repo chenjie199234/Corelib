@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"runtime"
@@ -11,6 +12,7 @@ import (
 	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/rotatefile"
 	"github.com/chenjie199234/Corelib/trace"
+	ctime "github.com/chenjie199234/Corelib/util/time"
 )
 
 var target int //1-std(default),2-file,3-both
@@ -71,7 +73,7 @@ func Debug(ctx context.Context, datas ...interface{}) {
 		return
 	}
 	buf := bufpool.GetBuffer()
-	buf.Append("[DBG] ")
+	buf.AppendString("[DBG] ")
 	write(ctx, buf, datas...)
 }
 func Info(ctx context.Context, datas ...interface{}) {
@@ -79,7 +81,7 @@ func Info(ctx context.Context, datas ...interface{}) {
 		return
 	}
 	buf := bufpool.GetBuffer()
-	buf.Append("[INF] ")
+	buf.AppendString("[INF] ")
 	write(ctx, buf, datas...)
 }
 func Warning(ctx context.Context, datas ...interface{}) {
@@ -87,32 +89,32 @@ func Warning(ctx context.Context, datas ...interface{}) {
 		return
 	}
 	buf := bufpool.GetBuffer()
-	buf.Append("[WRN] ")
+	buf.AppendString("[WRN] ")
 	write(ctx, buf, datas...)
 }
 func Error(ctx context.Context, datas ...interface{}) {
 	buf := bufpool.GetBuffer()
-	buf.Append("[ERR] ")
+	buf.AppendString("[ERR] ")
 	write(ctx, buf, datas...)
 }
 func write(ctx context.Context, buf *bufpool.Buffer, datas ...interface{}) {
-	buf.Append(time.Now())
+	buf.AppendStdTime(time.Now())
 	_, file, line, _ := runtime.Caller(2)
-	buf.Append(" ")
-	buf.Append(file)
-	buf.Append(":")
-	buf.Append(line)
+	buf.AppendByte(' ')
+	buf.AppendString(file)
+	buf.AppendByte(':')
+	buf.AppendInt(line)
 	traceid, _, _, _, _ := trace.GetTrace(ctx)
 	if traceid != "" {
-		buf.Append(" ")
-		buf.Append("Traceid: ")
-		buf.Append(traceid)
+		buf.AppendByte(' ')
+		buf.AppendString("Traceid: ")
+		buf.AppendString(traceid)
 	}
 	for _, data := range datas {
-		buf.Append(" ")
-		buf.Append(data)
+		buf.AppendByte(' ')
+		writeany(buf, data)
 	}
-	buf.Append("\n")
+	buf.AppendByte('\n')
 	if target&1 > 0 {
 		os.Stderr.Write(buf.Bytes())
 	}
@@ -123,6 +125,111 @@ func write(ctx context.Context, buf *bufpool.Buffer, datas ...interface{}) {
 		}
 	} else {
 		bufpool.PutBuffer(buf)
+	}
+}
+func writeany(buf *bufpool.Buffer, data interface{}) {
+	switch d := data.(type) {
+	case string:
+		buf.AppendString(d)
+	case []string:
+		buf.AppendStrings(d)
+	//case []uint8:
+	case []byte:
+		buf.AppendByteSlice(d)
+	case [][]byte:
+		buf.AppendByteSlices(d)
+	//case uint8:
+	case byte:
+		buf.AppendByte(d)
+
+	case int64:
+		buf.AppendInt64(d)
+	case []int64:
+		buf.AppendInt64s(d)
+	case uint64:
+		buf.AppendUint64(d)
+	case []uint64:
+		buf.AppendUint64s(d)
+	case float64:
+		buf.AppendFloat64(d)
+	case []float64:
+		buf.AppendFloat64s(d)
+
+	case int32:
+		buf.AppendInt32(d)
+	case []int32:
+		buf.AppendInt32s(d)
+	case uint32:
+		buf.AppendUint32(d)
+	case []uint32:
+		buf.AppendUint32s(d)
+	case float32:
+		buf.AppendFloat32(d)
+	case []float32:
+		buf.AppendFloat32s(d)
+
+	case int:
+		buf.AppendInt(d)
+	case []int:
+		buf.AppendInts(d)
+	case uint:
+		buf.AppendUint(d)
+	case []uint:
+		buf.AppendUints(d)
+
+	case int8:
+		buf.AppendInt8(d)
+	case []int8:
+		buf.AppendInt8s(d)
+
+	case int16:
+		buf.AppendInt16(d)
+	case []int16:
+		buf.AppendInt16s(d)
+	case uint16:
+		buf.AppendUint16(d)
+	case []uint16:
+		buf.AppendUint16s(d)
+
+	case ctime.Duration:
+		buf.AppendDuration(d)
+	case *ctime.Duration:
+		buf.AppendDuration(*d)
+	case []ctime.Duration:
+		buf.AppendDurations(d)
+	case []*ctime.Duration:
+		buf.AppendDurationPointers(d)
+
+	case time.Duration:
+		buf.AppendStdDuration(d)
+	case *time.Duration:
+		buf.AppendStdDuration(*d)
+	case []time.Duration:
+		buf.AppendStdDurations(d)
+	case []*time.Duration:
+		buf.AppendStdDurationPointers(d)
+
+	case time.Time:
+		buf.AppendStdTime(d)
+	case *time.Time:
+		buf.AppendStdTime(*d)
+	case []time.Time:
+		buf.AppendStdTimes(d)
+	case []*time.Time:
+		buf.AppendStdTimePointers(d)
+
+	case error:
+		buf.AppendError(d)
+	case []error:
+		buf.AppendErrors(d)
+
+	default:
+		tmp, e := json.Marshal(data)
+		if e != nil {
+			buf.AppendString("unsupported type")
+		} else {
+			buf.AppendByteSlice(tmp)
+		}
 	}
 }
 func LogFileSize() int64 {

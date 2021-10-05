@@ -392,8 +392,7 @@ func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, 
 		return
 	}
 	server.lker.Lock()
-	e := cerror.ErrorstrToError(msg.Error)
-	if e != nil && e.Code == ERRCLOSING.Code {
+	if msg.Error != nil && msg.Error.Code == ERRCLOSING.Code {
 		server.status = 4
 	}
 	req, ok := server.reqs[msg.Callid]
@@ -402,7 +401,7 @@ func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, 
 		return
 	}
 	req.resp = msg.Body
-	req.err = e
+	req.err = msg.Error
 	req.finish <- struct{}{}
 	server.lker.Unlock()
 }
@@ -482,7 +481,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 	dl, ok := ctx.Deadline()
 	if ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 		//ttl + server logic time
-		return nil, cerror.StdErrorToError(context.DeadlineExceeded)
+		return nil, cerror.ErrDeadlineExceeded
 	}
 	msg := &Msg{
 		Callid:   atomic.AddUint64(&c.callid, 1),
@@ -529,7 +528,13 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 				c.mlker.Lock()
 				delete(c.manualNotice, manualNotice)
 				c.mlker.Unlock()
-				return nil, cerror.StdErrorToError(ctx.Err())
+				if ctx.Err() == context.DeadlineExceeded {
+					return nil, cerror.ErrDeadlineExceeded
+				} else if ctx.Err() == context.Canceled {
+					return nil, cerror.ErrCanceled
+				} else {
+					return nil, cerror.ConvertStdError(ctx.Err())
+				}
 			}
 		}
 		server.lker.Lock()
@@ -541,7 +546,7 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 		//check timeout
 		if msg.Deadline != 0 && msg.Deadline <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 			server.lker.Unlock()
-			return nil, cerror.StdErrorToError(context.DeadlineExceeded)
+			return nil, cerror.ErrDeadlineExceeded
 		}
 		//send message
 		if e := server.peer.SendMessage(ctx, d, server.sid, false); e != nil {
@@ -598,10 +603,22 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 			//update last fail time
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
 			c.putreq(r)
-			if traceend != nil {
-				traceend(ctx.Err())
+			if ctx.Err() == context.DeadlineExceeded {
+				if traceend != nil {
+					traceend(cerror.ErrDeadlineExceeded)
+				}
+				return nil, cerror.ErrDeadlineExceeded
+			} else if ctx.Err() == context.Canceled {
+				if traceend != nil {
+					traceend(cerror.ErrCanceled)
+				}
+				return nil, cerror.ErrCanceled
+			} else {
+				if traceend != nil {
+					traceend(ctx.Err())
+				}
+				return nil, cerror.ConvertStdError(ctx.Err())
 			}
-			return nil, cerror.StdErrorToError(ctx.Err())
 		}
 	}
 }

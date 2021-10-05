@@ -597,7 +597,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 		if min != math.MaxInt64 {
 			if min < now.UnixNano()+int64(time.Millisecond) {
 				//min logic time,1ms
-				e := cerror.StdErrorToError(context.DeadlineExceeded)
+				e := cerror.ErrDeadlineExceeded
 				http.Error(w, e.Error(), http.StatusGatewayTimeout)
 				traceend(e)
 				return

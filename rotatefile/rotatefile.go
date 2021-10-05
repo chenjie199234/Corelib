@@ -14,7 +14,6 @@ import (
 
 	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/container/list"
-	"github.com/chenjie199234/Corelib/util/common"
 )
 
 //thread unsafe
@@ -221,7 +220,7 @@ func (f *RotateFile) Write(data []byte) (int, error) {
 		return 0, fmt.Errorf("[rotatefile.Write] rotate file closed")
 	}
 	buf := bufpool.GetBuffer()
-	buf.Append(common.Byte2str(data))
+	buf.AppendByteSlice(data)
 	f.caslist.Push(unsafe.Pointer(buf))
 	select {
 	case f.notice <- struct{}{}:

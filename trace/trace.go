@@ -13,7 +13,6 @@ import (
 	"github.com/chenjie199234/Corelib/bufpool"
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/rotatefile"
-	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/host"
 )
 
@@ -177,7 +176,7 @@ func TraceStart(ctx context.Context, role ROLE, toapp, toip, tomethod, topath st
 			ToMethod:   tomethod,
 			ToPath:     topath,
 		}
-		if ee := cerror.StdErrorToError(e); ee != nil {
+		if ee := cerror.ConvertStdError(e); ee != nil {
 			tmp.ErrCode = ee.Code
 			tmp.ErrMsg = ee.Msg
 		}
@@ -187,9 +186,9 @@ func TraceStart(ctx context.Context, role ROLE, toapp, toip, tomethod, topath st
 }
 func write(log []byte) {
 	buf := bufpool.GetBuffer()
-	buf.Append("[TRACE] ")
-	buf.Append(common.Byte2str(log))
-	buf.Append("\n")
+	buf.AppendString("[TRACE] ")
+	buf.AppendByteSlice(log)
+	buf.AppendByte('\n')
 	if target&1 > 0 {
 		os.Stderr.Write(buf.Bytes())
 	}

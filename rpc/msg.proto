@@ -1,12 +1,13 @@
 syntax="proto3";
 package rpc;
-option go_package="Corelib/rpc;rpc";
+option go_package="github.com/chenjie199234/Corelib/rpc;rpc";
+import "error/error.proto";
 message msg {
 	uint64 callid=1;
 	string path=2;
 	int64 deadline=3;
 	bytes body=4;
-	string error=5;
+	error.Error error=5;
 	map<string,string> metadata=6;
 	map<string,string> tracedata=7;
 }

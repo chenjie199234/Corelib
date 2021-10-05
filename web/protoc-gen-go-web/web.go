@@ -1980,7 +1980,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 		g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetContentType(),", strconv.Quote("application/json"), "){")
 		g.P("data,e:=ctx.GetBody()")
 		g.P("if e!=nil{")
-		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusInternalServerError")), ",", g.QualifiedGoIdent(errorPackage.Ident("StdErrorToError")), "(e))")
+		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusInternalServerError")), ",", g.QualifiedGoIdent(errorPackage.Ident("ConvertStdError")), "(e))")
 		g.P("return")
 		g.P("}")
 		g.P("if len(data)>0{")
@@ -1993,7 +1993,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 		g.P("}else if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetContentType(),", strconv.Quote("application/x-protobuf"), "){")
 		g.P("data,e:=ctx.GetBody()")
 		g.P("if e!=nil{")
-		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusInternalServerError")), ",", g.QualifiedGoIdent(errorPackage.Ident("StdErrorToError")), "(e))")
+		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusInternalServerError")), ",", g.QualifiedGoIdent(errorPackage.Ident("ConvertStdError")), "(e))")
 		g.P("return")
 		g.P("}")
 		g.P("if len(data)>0{")
@@ -2009,20 +2009,20 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 		g.P("}")
 		g.P("data:=", g.QualifiedGoIdent(bufpoolPackage.Ident("GetBuffer()")))
 		g.P("defer ", g.QualifiedGoIdent(bufpoolPackage.Ident("PutBuffer(data)")))
-		g.P("data.Append(", strconv.Quote("{"), ")")
+		g.P("data.AppendByte('{')")
 		for i, field := range method.Input.Fields {
 			fname := string(field.Desc.Name())
-			g.P("data.Append(", strconv.Quote(strconv.Quote(fname)+":"), ")")
+			g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
 			switch field.Desc.Kind() {
 			case protoreflect.BoolKind:
 				g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
 				if field.Desc.IsList() {
-					g.P("data.Append(", strconv.Quote("null"), ")")
+					g.P("data.AppendString(", strconv.Quote("null"), ")")
 				} else {
-					g.P("data.Append(", strconv.Quote("false"), ")")
+					g.P("data.AppendString(", strconv.Quote("false"), ")")
 				}
 				g.P("}else{")
-				g.P("data.Append(form)")
+				g.P("data.AppendString(form)")
 				g.P("}")
 			case protoreflect.EnumKind:
 				fallthrough
@@ -2051,44 +2051,44 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 			case protoreflect.DoubleKind:
 				g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
 				if field.Desc.IsList() {
-					g.P("data.Append(", strconv.Quote("null"), ")")
+					g.P("data.AppendString(", strconv.Quote("null"), ")")
 				} else {
-					g.P("data.Append(", strconv.Quote("0"), ")")
+					g.P("data.AppendString(", strconv.Quote("0"), ")")
 				}
 				g.P("}else{")
-				g.P("data.Append(form)")
+				g.P("data.AppendString(form)")
 				g.P("}")
 			case protoreflect.StringKind:
 				fallthrough
 			case protoreflect.BytesKind:
 				g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
 				if field.Desc.IsList() {
-					g.P("data.Append(", strconv.Quote("null"), ")")
+					g.P("data.AppendString(", strconv.Quote("null"), ")")
 					g.P("}else{")
-					g.P("data.Append(form)")
+					g.P("data.AppendString(form)")
 					g.P("}")
 				} else {
-					g.P("data.Append(", strconv.Quote("\"\""), ")")
+					g.P("data.AppendString(", strconv.Quote("\"\""), ")")
 					g.P("}else if len(form)<2 || form[0] !='\"' || form[len(form)-1]!='\"'{")
-					g.P("data.Append(", strconv.Quote("\""), ")")
-					g.P("data.Append(form)")
-					g.P("data.Append(", strconv.Quote("\""), ")")
+					g.P("data.AppendByte('\"')")
+					g.P("data.AppendString(form)")
+					g.P("data.AppendByte('\"')")
 					g.P("}else{")
-					g.P("data.Append(form)")
+					g.P("data.AppendString(form)")
 					g.P("}")
 				}
 			case protoreflect.MessageKind:
 				g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
-				g.P("data.Append(", strconv.Quote("null"), ")")
+				g.P("data.AppendString(", strconv.Quote("null"), ")")
 				g.P("}else{")
-				g.P("data.Append(form)")
+				g.P("data.AppendString(form)")
 				g.P("}")
 			}
 			if i != len(method.Input.Fields)-1 {
-				g.P("data.Append(", strconv.Quote(","), ")")
+				g.P("data.AppendByte(',')")
 			}
 		}
-		g.P("data.Append(", strconv.Quote("}"), ")")
+		g.P("data.AppendByte('}')")
 		g.P("if data.Len()>2{")
 		g.P("e:=", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions{DiscardUnknown: true}")), ".Unmarshal(data.Bytes(),req)")
 		g.P("if e!=nil{")
@@ -2110,7 +2110,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 		}
 
 		g.P("resp,e:=handler(ctx,req)")
-		g.P("ee := ", g.QualifiedGoIdent(errorPackage.Ident("StdErrorToError")), "(e)")
+		g.P("ee := ", g.QualifiedGoIdent(errorPackage.Ident("ConvertStdError")), "(e)")
 		g.P("if ee!=nil{")
 		g.P("if ", g.QualifiedGoIdent(errorPackage.Ident("Equal")), "(ee,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), "){")
 		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",ee)")
@@ -2326,55 +2326,137 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 				case protoreflect.BoolKind:
 					if field.Desc.IsList() {
 						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendBools(req.", field.GoName, ")")
 					} else {
 						g.P("if req.", field.GoName, "{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendBool(req.", field.GoName, ")")
 					}
-					g.P("query.Append(", strconv.Quote(fname+"="), ")")
-					g.P("query.Append(req.", field.GoName, ")")
-					g.P("query.Append(", strconv.Quote("&"), ")")
+					g.P("query.AppendByte('&')")
 					g.P("}")
 				case protoreflect.EnumKind:
-					fallthrough
-				case protoreflect.Int32Kind:
+					if field.Desc.IsList() {
+						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendByte('[')")
+						g.P("for i,e:=range req.", field.GoName, "{")
+						g.P("query.AppendInt32(int32(e))")
+						g.P("if i == len(req.", field.GoName, ")-1{")
+						g.P("query.AppendByte(']')")
+						g.P("}else{")
+						g.P("query.AppendByte(',')")
+						g.P("}")
+						g.P("}")
+					} else {
+						g.P("if req.", field.GoName, "!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendInt32(int32(req.", field.GoName, "))")
+					}
+					g.P("query.AppendByte('&')")
+					g.P("}")
+				case protoreflect.Sfixed32Kind:
 					fallthrough
 				case protoreflect.Sint32Kind:
 					fallthrough
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Int64Kind:
+				case protoreflect.Int32Kind:
+					if field.Desc.IsList() {
+						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendInt32s(req.", field.GoName, ")")
+					} else {
+						g.P("if req.", field.GoName, "!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendInt32(req.", field.GoName, ")")
+					}
+					g.P("query.AppendByte('&')")
+					g.P("}")
+				case protoreflect.Sfixed64Kind:
 					fallthrough
 				case protoreflect.Sint64Kind:
 					fallthrough
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					fallthrough
 				case protoreflect.Fixed32Kind:
 					fallthrough
-				case protoreflect.FloatKind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					fallthrough
+				case protoreflect.Int64Kind:
+					if field.Desc.IsList() {
+						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendInt64s(req.", field.GoName, ")")
+					} else {
+						g.P("if req.", field.GoName, "!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendInt64(req.", field.GoName, ")")
+					}
+					g.P("query.AppendByte('&')")
+					g.P("}")
+				case protoreflect.Uint32Kind:
+					if field.Desc.IsList() {
+						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendUint32s(req.", field.GoName, ")")
+					} else {
+						g.P("if req.", field.GoName, "!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendUint32(req.", field.GoName, ")")
+					}
+					g.P("query.AppendByte('&')")
+					g.P("}")
 				case protoreflect.Fixed64Kind:
 					fallthrough
+				case protoreflect.Uint64Kind:
+					if field.Desc.IsList() {
+						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendUint64s(req.", field.GoName, ")")
+					} else {
+						g.P("if req.", field.GoName, "!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendUint64(req.", field.GoName, ")")
+					}
+					g.P("query.AppendByte('&')")
+					g.P("}")
+				case protoreflect.FloatKind:
+					if field.Desc.IsList() {
+						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendFloat32s(req.", field.GoName, ")")
+					} else {
+						g.P("if req.", field.GoName, "!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendFloat32(req.", field.GoName, ")")
+					}
+					g.P("query.AppendByte('&')")
+					g.P("}")
 				case protoreflect.DoubleKind:
 					if field.Desc.IsList() {
 						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendFloat64s(req.", field.GoName, ")")
 					} else {
 						g.P("if req.", field.GoName, "!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendFloat64(req.", field.GoName, ")")
 					}
-					g.P("query.Append(", strconv.Quote(fname+"="), ")")
-					g.P("query.Append(req.", field.GoName, ")")
-					g.P("query.Append(", strconv.Quote("&"), ")")
+					g.P("query.AppendByte('&')")
 					g.P("}")
 				case protoreflect.StringKind:
-					fallthrough
+					if field.Desc.IsList() {
+						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendStrings(req.", field.GoName, ")")
+					} else {
+						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendString(req.", field.GoName, ")")
+					}
+					g.P("query.AppendByte('&')")
+					g.P("}")
 				case protoreflect.BytesKind:
 					g.P("if len(req.", field.GoName, ")!=0{")
-					g.P("query.Append(", strconv.Quote(fname+"="), ")")
+					g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
 					g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.", field.GoName, ")")
-					g.P("query.Append(", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(temp))")
-					g.P("query.Append(", strconv.Quote("&"), ")")
+					g.P("query.AppendByteSlice(temp)")
+					g.P("query.AppendByte('&')")
 					g.P("}")
 				case protoreflect.MessageKind:
 					if field.Desc.IsMap() || field.Desc.IsList() {
@@ -2382,10 +2464,10 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 					} else {
 						g.P("if req.", field.GoName, "!=nil{")
 					}
-					g.P("query.Append(", strconv.Quote(fname+"="), ")")
+					g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
 					g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.", field.GoName, ")")
-					g.P("query.Append(", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(temp))")
-					g.P("query.Append(", strconv.Quote("&"), ")")
+					g.P("query.AppendByteSlice(temp)")
+					g.P("query.AppendByte('&')")
 					g.P("}")
 				}
 			}
@@ -2409,12 +2491,12 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 			}
 		}
 		g.P("if e != nil {")
-		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("StdErrorToError")), "(e)")
+		g.P("return nil,e")
 		g.P("}")
 		g.P("defer r.Body.Close()")
 		g.P("data,e:=", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(r.Body)")
 		g.P("if e!=nil {")
-		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("StdErrorToError")), "(e)")
+		g.P("return nil,e")
 		g.P("}")
 		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 		g.P("if len(data)==0{")
