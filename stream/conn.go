@@ -388,7 +388,9 @@ func (this *Instance) write(p *Peer) {
 			}
 		}
 		if _, e := p.conn.Write(data.Bytes()); e != nil {
-			p.lastunsend = msg
+			if msg.mtype == USER {
+				p.lastunsend = msg.data
+			}
 			log.Error(nil, "[Stream.write] to:", p.getUniqueName(), "error:", e)
 			return
 		}

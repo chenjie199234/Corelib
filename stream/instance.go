@@ -107,7 +107,7 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 				if stream.c.Offlinefunc != nil {
 					unsendmsgs := make([][]byte, 0, len(p.writerbuffer))
 					if p.lastunsend != nil {
-						unsendmsgs = append(unsendmsgs, p.lastunsend.data)
+						unsendmsgs = append(unsendmsgs, p.lastunsend)
 					}
 					for {
 						end := false

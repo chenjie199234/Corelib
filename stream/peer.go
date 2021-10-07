@@ -37,7 +37,7 @@ type Peer struct {
 	recvidlestart  int64          //unixnano timestamp
 	sendidlestart  int64          //unixnano timestamp
 	data           unsafe.Pointer //user data
-	lastunsend     *Msg           //the last unsend message before the write closed
+	lastunsend     []byte         //the last unsend message before the write closed
 	context.Context
 	context.CancelFunc
 }
