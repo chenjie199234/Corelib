@@ -2,7 +2,6 @@ package stream
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 )
 
@@ -14,45 +13,27 @@ func Test_Msg(t *testing.T) {
 
 func testheartmsg() {
 	data := makePingMsg([]byte("ping"))
-	msgtype, e := getMsgType(data.Bytes()[4:])
-	if e != nil {
-		panic("get msg type error:" + e.Error())
+	msgtype, pingdata, _, _, e := decodeMsg(data.Bytes()[4:])
+	if e != nil || msgtype != PING || string(pingdata) != "ping" {
+		panic("ping msg error")
 	}
-	if msgtype != PING {
-		panic(fmt.Sprintf("get msg type error:type:%d wrong", msgtype))
+	data = makePongMsg([]byte("pong"))
+	msgtype, pingdata, _, _, e = decodeMsg(data.Bytes()[4:])
+	if e != nil || msgtype != PONG || string(pingdata) != "pong" {
+		panic("pong msg error")
 	}
 }
 func testverifymsg() {
-	data := makeVerifyMsg("test", []byte{'t', 'e', 's', 't'}, 1654, 10)
-	msgtype, e := getMsgType(data.Bytes()[4:])
-	if e != nil {
-		panic("get msg type error:" + e.Error())
-	}
-	if msgtype != VERIFY {
-		panic(fmt.Sprintf("get msg type error:type:%d wrong", msgtype))
-	}
-	sender, verifydata, starttime, maxmsglength, e := getVerifyMsg(data.Bytes()[4:])
-	if e != nil {
-		panic("get verify msg error:" + e.Error())
-	}
-	if sender != "test" || !bytes.Equal(verifydata, []byte{'t', 'e', 's', 't'}) || starttime != 1654 || maxmsglength != 10 {
-		panic("get verify msg error:data wrong")
+	data := makeVerifyMsg("test", []byte{'t', 'e', 's', 't'}, 1654)
+	msgtype, verifydata, sender, maxmsglength, e := decodeMsg(data.Bytes()[4:])
+	if e != nil || msgtype != VERIFY || sender != "test" || !bytes.Equal(verifydata, []byte{'t', 'e', 's', 't'}) || maxmsglength != 10 {
+		panic("verify msg error")
 	}
 }
 func testusermsg() {
-	data := makeUserMsg([]byte{'a', 'b', 'c', 'd', 'e', 'f', 'g'}, 1654)
-	msgtype, e := getMsgType(data.Bytes()[4:])
-	if e != nil {
-		panic("get msg type error:" + e.Error())
-	}
-	if msgtype != USER {
-		panic(fmt.Sprintf("get msg type error:type:%d wrong", msgtype))
-	}
-	temp, starttime, e := getUserMsg(data.Bytes()[4:])
-	if e != nil {
-		panic("get user msg error:" + e.Error())
-	}
-	if !bytes.Equal(temp, []byte{'a', 'b', 'c', 'd', 'e', 'f', 'g'}) || starttime != 1654 {
-		panic("get user msg error:data wrong")
+	data := makeUserMsg([]byte{'a', 'b', 'c', 'd', 'e', 'f', 'g'})
+	msgtype, userdata, _, _, e := decodeMsg(data.Bytes()[4:])
+	if e != nil || msgtype != USER || !bytes.Equal(userdata, []byte{'a', 'b', 'c', 'd', 'e', 'f', 'g'}) {
+		panic("user msg error")
 	}
 }

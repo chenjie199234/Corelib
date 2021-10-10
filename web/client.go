@@ -405,7 +405,8 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		if !server.Pickable() {
 			continue
 		}
-		if ok && dl.UnixNano() < time.Now().UnixNano()+int64(5*time.Millisecond) {
+		start := time.Now()
+		if ok && dl.UnixNano() < start.UnixNano()+int64(5*time.Millisecond) {
 			//ttl + server logic time
 			return nil, cerror.ErrDeadlineExceeded
 		}
@@ -426,7 +427,6 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			return nil, cerror.ConvertStdError(e)
 		}
 		req.Header = header
-		traceend := trace.TraceStart(ctx, trace.CLIENT, this.appname, server.host, method, path)
 		//start call
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 		var resp *http.Response
@@ -434,18 +434,17 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 		if e != nil {
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
-			if traceend != nil {
-				traceend(e)
-			}
-			return nil, cerror.ConvertStdError(e)
+			e = cerror.ConvertStdError(e)
+			end := time.Now()
+			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, e)
+			return nil, e
 		}
 		if resp.StatusCode == 888 {
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
 			server.status = 0
 			resp.Body.Close()
-			if traceend != nil {
-				traceend(ERRCLOSING)
-			}
+			end := time.Now()
+			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, ERRCLOSING)
 			continue
 		}
 		if resp.StatusCode != 200 {
@@ -453,10 +452,10 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			respbody, e = io.ReadAll(resp.Body)
 			resp.Body.Close()
 			if e != nil {
-				if traceend != nil {
-					traceend(e)
-				}
-				return nil, cerror.ConvertStdError(e)
+				e = cerror.ConvertStdError(e)
+				end := time.Now()
+				trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, e)
+				return nil, e
 			}
 			if len(respbody) == 0 {
 				if text := http.StatusText(resp.StatusCode); text != "" {
@@ -467,14 +466,12 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			} else {
 				e = cerror.ConvertErrorstr(common.Byte2str(respbody))
 			}
-			if traceend != nil {
-				traceend(e)
-			}
+			end := time.Now()
+			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, e)
 			return nil, e
 		}
-		if traceend != nil {
-			traceend(nil)
-		}
+		end := time.Now()
+		trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, nil)
 		return resp, nil
 	}
 }

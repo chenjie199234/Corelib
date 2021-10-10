@@ -54,16 +54,15 @@ func getRpcClientConfig() *rpc.ClientConfig {
 		rpcverifydata = config.EC.ServerVerifyDatas[0]
 	}
 	return &rpc.ClientConfig{
-		ConnTimeout:            time.Duration(rc.ConnTimeout),
-		GlobalTimeout:          time.Duration(rc.GlobalTimeout),
-		HeartPorbe:             time.Duration(rc.HeartProbe),
-		GroupNum:               1,
-		SocketRBuf:             2048,
-		SocketWBuf:             2048,
-		MaxMsgLen:              65535,
-		MaxBufferedWriteMsgNum: 1024,
-		VerifyData:             rpcverifydata,
-		DiscoverFunction:       rpcDNS(),
+		ConnTimeout:      time.Duration(rc.ConnTimeout),
+		GlobalTimeout:    time.Duration(rc.GlobalTimeout),
+		HeartPorbe:       time.Duration(rc.HeartProbe),
+		GroupNum:         1,
+		SocketRBuf:       2048,
+		SocketWBuf:       2048,
+		MaxMsgLen:        65535,
+		VerifyData:       rpcverifydata,
+		DiscoverFunction: rpcDNS(),
 	}
 }
 

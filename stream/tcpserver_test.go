@@ -50,12 +50,12 @@ func tcpserverhandleVerify(ctx context.Context, peeruniquename string, peerVerif
 	}
 	return []byte{'t', 'e', 's', 't'}, true
 }
-func tcpserverhandleonline(p *Peer, peeruniquename string, starttime int64) bool {
+func tcpserverhandleonline(p *Peer) bool {
 	return true
 }
-func tcpserverhandleuserdata(p *Peer, peeruniquename string, data []byte, starttime int64) {
-	fmt.Printf("%s:%s\n", peeruniquename, data)
-	p.SendMessage(nil, data, starttime, true)
+func tcpserverhandleuserdata(p *Peer, data []byte) {
+	fmt.Printf("%s:%s\n", p.GetPeerUniqueName(), data)
+	p.SendMessage(nil, data)
 }
-func tcpserverhandleoffline(p *Peer, peeruniquename string, _ [][]byte) {
+func tcpserverhandleoffline(p *Peer) {
 }

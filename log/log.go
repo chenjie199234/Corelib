@@ -20,41 +20,37 @@ var level int  //0-debug,1-info(default),2-warning,3-error
 var rf *rotatefile.RotateFile
 
 func getenv() {
-	if os.Getenv("LOG_TARGET") == "" {
-		//default std
-		target = 1
-	} else {
-		temp := strings.ToLower(os.Getenv("LOG_TARGET"))
-		if temp != "std" && temp != "file" && temp != "both" {
-			panic("[log] os env LOG_TARGET error,must in [std(default),file,both]")
-		}
-		switch temp {
-		case "std":
-			target = 1
-		case "file":
-			target = 2
-		case "both":
-			target = 3
-		}
+	temp := strings.ToLower(os.Getenv("LOG_TARGET"))
+	if temp != "std" && temp != "file" && temp != "both" && temp != "" {
+		panic("[log] os env LOG_TARGET error,must in [std(default),file,both]")
 	}
-	if os.Getenv("LOG_LEVEL") == "" {
+	switch temp {
+	case "":
+		//default std
+		fallthrough
+	case "std":
+		target = 1
+	case "file":
+		target = 2
+	case "both":
+		target = 3
+	}
+	temp = strings.ToLower(os.Getenv("LOG_LEVEL"))
+	if temp != "debug" && temp != "info" && temp != "warning" && temp != "error" && temp != "" {
+		panic("[log] os env LOG_LEVEL error,must in [debug,info(default),warning,error]")
+	}
+	switch temp {
+	case "debug":
+		level = 0
+	case "":
 		//default info
+		fallthrough
+	case "info":
 		level = 1
-	} else {
-		temp := strings.ToLower(os.Getenv("LOG_LEVEL"))
-		if temp != "debug" && temp != "info" && temp != "warning" && temp != "error" {
-			panic("[log] os env LOG_LEVEL error,must in [debug,info(default),warning,error]")
-		}
-		switch temp {
-		case "debug":
-			level = 0
-		case "info":
-			level = 1
-		case "warning":
-			level = 2
-		case "error":
-			level = 3
-		}
+	case "warning":
+		level = 2
+	case "error":
+		level = 3
 	}
 }
 

@@ -3,10 +3,11 @@ package stream
 import (
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"errors"
+	"math"
 	"net"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/bufpool"
@@ -43,10 +44,9 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 		return ErrServerClosed
 	}
 	for {
-		p := this.getPeer(this.c.MaxBufferedWriteMsgNum, this.c.TcpC.MaxMsgLen)
+		p := newPeer(this.c.TcpC.MaxMsgLen)
 		conn, e := this.tcplistener.Accept()
 		if e != nil {
-			this.putPeer(p)
 			this.tcplistener.Close()
 			if this.mng.Finishing() {
 				return ErrServerClosed
@@ -55,7 +55,6 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 		}
 		if this.mng.Finishing() {
 			conn.Close()
-			this.putPeer(p)
 			this.tcplistener.Close()
 			return ErrServerClosed
 		}
@@ -66,11 +65,9 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 		(conn.(*net.TCPConn)).SetWriteBuffer(int(this.c.TcpC.SocketWBufLen))
 		if tlsc != nil {
 			p.conn = tls.Server(conn, tlsc)
-			p.rawconn = conn
 			p.tls = true
 		} else {
 			p.conn = conn
-			p.rawconn = conn
 		}
 		go this.sworker(p)
 	}
@@ -85,44 +82,48 @@ func (this *Instance) sworker(p *Peer) {
 		if e := p.conn.(*tls.Conn).HandshakeContext(ctx); e != nil {
 			log.Error(nil, "[Stream.sworker] tls handshake error:", e)
 			p.conn.Close()
-			this.putPeer(p)
 			return
 		}
 	}
 	//read first verify message from client
 	verifydata := this.verifypeer(ctx, p, false)
-	if p.peername == "" {
+	if p.peeruniquename == "" {
 		p.conn.Close()
-		this.putPeer(p)
 		return
 	}
 	if e := this.mng.AddPeer(p); e != nil {
-		log.Error(nil, "[Stream.sworker] add:", p.getUniqueName(), "to peer manager error:", e)
+		log.Error(nil, "[Stream.sworker] add:", p.peeruniquename, "to peer manager error:", e)
 		p.conn.Close()
-		this.putPeer(p)
 		return
 	}
+	//verify client success,send self's verify message to client
+	verifymsg := makeVerifyMsg(this.selfname, verifydata, p.selfmaxmsglen)
+	defer bufpool.PutBuffer(verifymsg)
+	if _, e := p.conn.Write(verifymsg.Bytes()); e != nil {
+		log.Error(nil, "[Stream.sworker] write verify msg to:", p.peeruniquename, "error:", e)
+		p.conn.Close()
+		this.mng.DelPeer(p)
+		return
+	}
+	//verify finished,status set to true
+	p.status = true
 	if this.c.Onlinefunc != nil {
-		if !this.c.Onlinefunc(p, p.getUniqueName(), p.sid) {
-			log.Error(nil, "[Stream.sworker] online:", p.getUniqueName(), "failed")
+		if !this.c.Onlinefunc(p) {
+			log.Error(nil, "[Stream.sworker] online:", p.peeruniquename, "failed")
+			p.Lock()
+			p.status = false
+			close(p.dispatcher)
+			p.Unlock()
 			p.conn.Close()
-			//after addpeer should use this way to delete this peer
-			this.noticech <- p
+			this.mng.DelPeer(p)
+			p.CancelFunc()
 			return
 		}
 	}
-	//verify client success,send self's verify message to client
-	verifymsg := makeVerifyMsg(this.selfname, verifydata, p.sid, p.selfmaxmsglen)
-	defer bufpool.PutBuffer(verifymsg)
-	if _, e := p.conn.Write(verifymsg.Bytes()); e != nil {
-		log.Error(nil, "[Stream.sworker] write verify msg to:", p.getUniqueName(), "error:", e)
-		p.conn.Close()
-		//after addpeer should use this way to delete this peer
-		this.noticech <- p
-		return
-	}
-	go this.read(p)
-	go this.write(p)
+	//after verify,the conntimeout is useless,heartbeat will work for this
+	p.conn.SetReadDeadline(time.Time{})
+	p.conn.SetWriteDeadline(time.Time{})
+	go this.handle(p)
 	return
 }
 
@@ -152,14 +153,12 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte, tlsc 
 	(conn.(*net.TCPConn)).SetKeepAlive(false)
 	(conn.(*net.TCPConn)).SetReadBuffer(int(this.c.TcpC.SocketRBufLen))
 	(conn.(*net.TCPConn)).SetWriteBuffer(int(this.c.TcpC.SocketWBufLen))
-	p := this.getPeer(this.c.MaxBufferedWriteMsgNum, this.c.TcpC.MaxMsgLen)
+	p := newPeer(this.c.TcpC.MaxMsgLen)
 	if tlsc != nil {
 		p.conn = tls.Client(conn, tlsc)
-		p.rawconn = conn
 		p.tls = true
 	} else {
 		p.conn = conn
-		p.rawconn = conn
 	}
 	return this.cworker(p, verifydata, dl)
 }
@@ -177,70 +176,70 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 		}
 	}
 	//send self's verify message to server
-	verifymsg := makeVerifyMsg(this.selfname, verifydata, 0, p.selfmaxmsglen)
+	verifymsg := makeVerifyMsg(this.selfname, verifydata, p.selfmaxmsglen)
 	defer bufpool.PutBuffer(verifymsg)
 	if _, e := p.conn.Write(verifymsg.Bytes()); e != nil {
-		log.Error(nil, "[Stream.cworker] write verify msg to:", p.getUniqueName(), "error:", e)
+		log.Error(nil, "[Stream.cworker] write verify msg to:", p.conn.RemoteAddr().String(), "error:", e)
 		p.conn.Close()
-		this.putPeer(p)
 		return ""
 	}
 	//read first verify message from server
 	_ = this.verifypeer(ctx, p, true)
-	if p.peername == "" {
+	if p.peeruniquename == "" {
 		p.conn.Close()
-		this.putPeer(p)
 		return ""
 	}
 	//verify server success
 	if e := this.mng.AddPeer(p); e != nil {
-		log.Error(nil, "[Stream.cworker] add:", p.getUniqueName(), "to peer manager error:", e)
+		log.Error(nil, "[Stream.cworker] add:", p.peeruniquename, "to peer manager error:", e)
 		p.conn.Close()
-		this.putPeer(p)
 		return ""
 	}
+	//verify finished set status to true
+	p.status = true
 	if this.c.Onlinefunc != nil {
-		if !this.c.Onlinefunc(p, p.getUniqueName(), p.sid) {
-			log.Error(nil, "[Stream.cworker] online:", p.getUniqueName(), "failed")
+		if !this.c.Onlinefunc(p) {
+			log.Error(nil, "[Stream.cworker] online:", p.peeruniquename, "failed")
+			p.Lock()
+			p.status = false
+			close(p.dispatcher)
+			p.Unlock()
 			p.conn.Close()
-			this.noticech <- p
+			this.mng.DelPeer(p)
+			p.CancelFunc()
 			return ""
 		}
 	}
-	uniquename := p.getUniqueName()
-	go this.read(p)
-	go this.write(p)
-	return uniquename
+	//after verify,the conntimeout is useless,heartbeat will work for this
+	p.conn.SetReadDeadline(time.Time{})
+	p.conn.SetWriteDeadline(time.Time{})
+	peeruniquename := p.peeruniquename
+	go this.handle(p)
+	return peeruniquename
 }
-
-var errSelfConnect = errors.New("peer name same as self")
 
 func (this *Instance) verifypeer(ctx context.Context, p *Peer, clientorserver bool) []byte {
 	data, e := p.readMessage()
 	var sender string
 	var peerverifydata []byte
 	var peermaxmsglength uint32
-	var sid int64
 	if e == nil {
 		if data == nil {
 			e = ErrMsgEmpty
 		} else {
 			defer bufpool.PutBuffer(data)
 			var msgtype int
-			if msgtype, e = getMsgType(data.Bytes()); e == nil {
-				if msgtype != VERIFY {
-					e = ErrMsgUnknown
-				} else if sender, peerverifydata, sid, peermaxmsglength, e = getVerifyMsg(data.Bytes()); e == nil && sender == this.selfname {
-					e = errSelfConnect
-				}
+			msgtype, peerverifydata, sender, peermaxmsglength, e = decodeMsg(data.Bytes())
+			if e == nil && msgtype != VERIFY {
+				e = ErrMsgUnknown
 			}
 		}
 	}
 	if e != nil {
 		if clientorserver {
-			log.Error(nil, "[Stream.verifypeer] read msg from server:", p.getUniqueName(), "error:", e)
+			log.Error(nil, "[Stream.verifypeer] read msg from server:", p.conn.RemoteAddr(), "error:", e)
 		} else {
-			log.Error(nil, "[Stream.verifypeer] read msg from client:", p.getUniqueName(), "error:", e)
+			log.Error(nil, "[Stream.verifypeer] read msg from client:", p.conn.RemoteAddr(), "error:", e)
 		}
 		return nil
 	}
@@ -249,59 +248,57 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer, clientorserver bo
 	p.sendidlestart = p.lastactive
 	dup := make([]byte, len(sender))
 	copy(dup, sender)
-	p.peername = common.Byte2str(dup)
+	p.peeruniquename = common.Byte2str(dup) + ":" + p.conn.RemoteAddr().String()
 	p.peermaxmsglen = peermaxmsglength
-	if clientorserver {
-		//self is client
-		p.sid = sid
-	} else {
-		//self is server
-		p.sid = p.lastactive
-	}
-	response, success := this.c.Verifyfunc(ctx, p.getUniqueName(), peerverifydata)
+	response, success := this.c.Verifyfunc(ctx, p.peeruniquename, peerverifydata)
 	if !success {
 		if clientorserver {
-			log.Error(nil, "[Stream.verifypeer] verify server:", p.getUniqueName(), "failed")
+			log.Error(nil, "[Stream.verifypeer] verify server:", p.peeruniquename, "failed")
 		} else {
-			log.Error(nil, "[Stream.verifypeer] verify client:", p.getUniqueName(), "failed")
+			log.Error(nil, "[Stream.verifypeer] verify client:", p.peeruniquename, "failed")
 		}
-		p.peername = ""
+		p.peeruniquename = ""
 		return nil
 	}
 	return response
 }
-func (this *Instance) read(p *Peer) {
+func (this *Instance) handle(p *Peer) {
 	defer func() {
-		p.rawconn.(*net.TCPConn).CloseRead()
-		//every connection will have two goroutine to work for it
-		if atomic.SwapInt64(&p.sid, -1) == -1 {
-			//when second goroutine return,put connection back to the pool
-			this.noticech <- p
-		} else {
-			//wake up write goroutine
-			select {
-			case p.pingpongbuffer <- (*Msg)(nil):
-			default:
-			}
+		p.Lock()
+		p.status = false
+		close(p.dispatcher)
+		p.Unlock()
+		p.conn.Close()
+		if this.c.Offlinefunc != nil {
+			this.c.Offlinefunc(p)
 		}
+		this.mng.DelPeer(p)
+		p.CancelFunc()
 	}()
-	//after verify,the conntimeout is useless,heartbeat will work for this
-	p.conn.SetReadDeadline(time.Time{})
+	pingdata := make([]byte, 8)
+	binary.BigEndian.PutUint64(pingdata, uint64(time.Now().UnixNano()))
+	//before all user data,send first ping,to get the net lag
+	select {
+	case p.pingponger <- makePingMsg(pingdata):
+		go p.SendMessage(context.Background(), nil)
+	default:
+	}
 	for {
 		var msgtype int
+		var userdata []byte
 		data, e := p.readMessage()
 		if e == nil {
 			if data == nil {
 				e = ErrMsgEmpty
 			} else {
-				msgtype, e = getMsgType(data.Bytes())
+				msgtype, userdata, _, _, e = decodeMsg(data.Bytes())
 				if e == nil && msgtype != PING && msgtype != PONG && msgtype != USER {
 					e = ErrMsgUnknown
 				}
 			}
 		}
 		if e != nil {
-			log.Error(nil, "[Stream.read] from:", p.getUniqueName(), "error:", e)
+			log.Error(nil, "[Stream.handle] from:", p.peeruniquename, "error:", e)
 			if data != nil {
 				bufpool.PutBuffer(data)
 			}
@@ -313,88 +310,46 @@ func (this *Instance) read(p *Peer) {
 			//update lastactive time
 			p.lastactive = time.Now().UnixNano()
 			//write back
-			pingdata, _ := getPingMsg(data.Bytes())
 			select {
-			case p.pingpongbuffer <- &Msg{mtype: PONG, data: pingdata}:
+			case p.pingponger <- makePongMsg(userdata):
+				//triger send pong
+				go p.SendMessage(context.Background(), nil)
 			default:
 			}
 			if this.c.PingPongFunc != nil {
-				this.c.PingPongFunc(p, p.getUniqueName(), pingdata, p.sid)
+				this.c.PingPongFunc(p)
 			}
 		case PONG:
+			if len(userdata) != 8 {
+				log.Error(nil, "[Stream.handle] from:", p.peeruniquename, "error: pong data format")
+				bufpool.PutBuffer(data)
+				return
+			}
+			sendtime := binary.BigEndian.Uint64(userdata)
+			if sendtime >= uint64(math.MaxInt64) {
+				log.Error(nil, "[Stream.handle] from:", p.peeruniquename, "error: pong data format")
+				bufpool.PutBuffer(data)
+				return
+			}
+			netlag := time.Now().UnixNano() - int64(sendtime)
+			if netlag < 0 {
+				log.Error(nil, "[Stream.handle] from:", p.peeruniquename, "error: pong data format")
+				bufpool.PutBuffer(data)
+				return
+			}
 			//update lastactive time
 			p.lastactive = time.Now().UnixNano()
+			p.netlag = netlag
+			binary.BigEndian.Uint64(userdata)
 			if this.c.PingPongFunc != nil {
-				pongdata, _ := getPongMsg(data.Bytes())
-				this.c.PingPongFunc(p, p.getUniqueName(), pongdata, p.sid)
+				this.c.PingPongFunc(p)
 			}
 		case USER:
-			userdata, sid, _ := getUserMsg(data.Bytes())
-			//drop race data
-			if sid == p.sid {
-				//update lastactive time
-				p.lastactive = time.Now().UnixNano()
-				p.recvidlestart = p.lastactive
-				this.c.Userdatafunc(p, p.getUniqueName(), userdata, sid)
-			}
+			//update lastactive time
+			p.lastactive = time.Now().UnixNano()
+			p.recvidlestart = p.lastactive
+			this.c.Userdatafunc(p, userdata)
 		}
-		bufpool.PutBuffer(data)
-	}
-}
-
-func (this *Instance) write(p *Peer) {
-	defer func() {
-		p.rawconn.(*net.TCPConn).CloseWrite()
-		//every connection will have two goroutine to work for it
-		if atomic.SwapInt64(&p.sid, -1) == -1 {
-			//when second goroutine return,put connection back to the pool
-			this.noticech <- p
-		}
-	}()
-	//after verify,the conntimeout is useless,heartbeat will work for this
-	p.conn.SetWriteDeadline(time.Time{})
-	var msg *Msg
-	var ok bool
-	var data *bufpool.Buffer
-	for {
-		if atomic.LoadInt64(&p.sid) <= 0 && len(p.writerbuffer) == 0 {
-			return
-		}
-		if len(p.pingpongbuffer) > 0 {
-			msg, ok = <-p.pingpongbuffer
-		} else {
-			select {
-			case msg, ok = <-p.writerbuffer:
-			case msg, ok = <-p.pingpongbuffer:
-			}
-		}
-		if !ok || msg == nil {
-			continue
-		}
-		switch msg.mtype {
-		case PING:
-			data = makePingMsg(msg.data)
-		case PONG:
-			data = makePongMsg(msg.data)
-		case USER:
-			data = makeUserMsg(msg.data, msg.sid)
-		default:
-			continue
-		}
-		p.sendidlestart = time.Now().UnixNano()
-		if msg.ctx != nil {
-			if msg.ctx.Err() != nil {
-				continue
-			}
-		}
-		if _, e := p.conn.Write(data.Bytes()); e != nil {
-			if msg.mtype == USER {
-				p.lastunsend = msg.data
-			}
-			log.Error(nil, "[Stream.write] to:", p.getUniqueName(), "error:", e)
-			return
-		}
-		msg.send = true
 		bufpool.PutBuffer(data)
 	}
 }

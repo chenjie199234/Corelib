@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/chenjie199234/Corelib/bufpool"
@@ -20,22 +19,20 @@ var target int //1-std,2-file,3-both
 var rf *rotatefile.RotateFile
 
 func getenv() {
-	if os.Getenv("TRACE_TARGET") == "" {
+	temp := os.Getenv("TRACE_TARGET")
+	if temp != "std" && temp != "file" && temp != "both" && temp != "" {
+		panic("[trace] os env TRACE_TARGET error,must in [std(default),file,both]")
+	}
+	switch temp {
+	case "":
 		//default std
+		fallthrough
+	case "std":
 		target = 1
-	} else {
-		temp := strings.ToLower(os.Getenv("LOG_TARGET"))
-		if temp != "std" && temp != "file" && temp != "both" {
-			panic("[trace] os env TRACE_TARGET error,must in [std(default),file,both]")
-		}
-		switch temp {
-		case "std":
-			target = 1
-		case "file":
-			target = 2
-		case "both":
-			target = 3
-		}
+	case "file":
+		target = 2
+	case "both":
+		target = 3
 	}
 }
 func init() {
@@ -57,18 +54,10 @@ const (
 	SERVER ROLE = "server"
 )
 
-type ACTION string
-
-const (
-	START ACTION = "start"
-	END   ACTION = "end"
-)
-
 type TraceLog struct {
-	TraceId    string `json:"trace_id"`     //the whole trace route
-	SubTraceId string `json:"sub_trace_id"` //each sub trace id will have two log,one's action is start,another is end
-	Action     string `json:"action"`       //start or end
-	Timestamp  int64  `json:"timestamp"`    //nanosecond
+	TraceId    string `json:"trace_id"` //the whole trace route
+	Start      int64  `json:"start"`    //nanosecond
+	End        int64  `json:"end"`      //nanosecond
 	HostName   string `json:"host_name"`
 	Role       string `json:"role"`
 	FromApp    string `json:"from_app"`
@@ -136,17 +125,21 @@ func maketraceid() string {
 	return nowstr + "_" + ranstr
 }
 
-func TraceStart(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string) (TraceEnd func(e error)) {
+func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string, start, end *time.Time, e error) {
 	traceid, fromapp, fromip, frommethod, frompath := GetTrace(ctx)
 	if traceid == "" {
-		return nil
+		return
 	}
-	subtraceid := maketraceid()
-	startlog, _ := json.Marshal(&TraceLog{
+	ecode := int32(0)
+	emsg := ""
+	if ee := cerror.ConvertStdError(e); ee != nil {
+		ecode = int32(ee.Code)
+		emsg = ee.Msg
+	}
+	tracelog, _ := json.Marshal(&TraceLog{
 		TraceId:    traceid,
-		SubTraceId: subtraceid,
-		Action:     string(START),
-		Timestamp:  time.Now().UnixNano(),
+		Start:      start.UnixNano(),
+		End:        end.UnixNano(),
 		HostName:   host.Hostname,
 		Role:       string(role),
 		FromApp:    fromapp,
@@ -157,32 +150,10 @@ func TraceStart(ctx context.Context, role ROLE, toapp, toip, tomethod, topath st
 		ToIP:       toip,
 		ToMethod:   tomethod,
 		ToPath:     topath,
+		ErrCode:    ecode,
+		ErrMsg:     emsg,
 	})
-	write(startlog)
-	return func(e error) {
-		tmp := &TraceLog{
-			TraceId:    traceid,
-			SubTraceId: subtraceid,
-			Action:     string(END),
-			Timestamp:  time.Now().UnixNano(),
-			HostName:   host.Hostname,
-			Role:       string(role),
-			FromApp:    fromapp,
-			FromIP:     fromip,
-			FromMethod: frommethod,
-			FromPath:   frompath,
-			ToApp:      toapp,
-			ToIP:       toip,
-			ToMethod:   tomethod,
-			ToPath:     topath,
-		}
-		if ee := cerror.ConvertStdError(e); ee != nil {
-			tmp.ErrCode = ee.Code
-			tmp.ErrMsg = ee.Msg
-		}
-		endlog, _ := json.Marshal(tmp)
-		write(endlog)
-	}
+	write(tracelog)
 }
 func write(log []byte) {
 	buf := bufpool.GetBuffer()

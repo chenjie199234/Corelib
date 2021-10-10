@@ -29,14 +29,13 @@ type ServerConfig struct {
 	//min is 1 second
 	WaitCloseTime time.Duration
 	//global timeout for every rpc call
-	GlobalTimeout          time.Duration
-	HeartPorbe             time.Duration
-	GroupNum               uint32
-	SocketRBuf             uint32
-	SocketWBuf             uint32
-	MaxMsgLen              uint32
-	MaxBufferedWriteMsgNum uint32
-	VerifyDatas            []string
+	GlobalTimeout time.Duration
+	HeartPorbe    time.Duration
+	GroupNum      uint32
+	SocketRBuf    uint32
+	SocketWBuf    uint32
+	MaxMsgLen     uint32
+	VerifyDatas   []string
 }
 
 func (c *ServerConfig) validate() {
@@ -69,9 +68,6 @@ func (c *ServerConfig) validate() {
 	}
 	if c.MaxMsgLen > 65535 {
 		c.MaxMsgLen = 65535
-	}
-	if c.MaxBufferedWriteMsgNum == 0 {
-		c.MaxBufferedWriteMsgNum = 256
 	}
 }
 
@@ -111,9 +107,8 @@ func NewRpcServer(c *ServerConfig, selfgroup, selfname string) (*RpcServer, erro
 	}
 	serverinstance.closewait.Add(1)
 	instancec := &stream.InstanceConfig{
-		HeartprobeInterval:     c.HeartPorbe,
-		MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
-		GroupNum:               c.GroupNum,
+		HeartprobeInterval: c.HeartPorbe,
+		GroupNum:           c.GroupNum,
 		TcpC: &stream.TcpConfig{
 			SocketRBufLen: c.SocketRBuf,
 			SocketWBufLen: c.SocketWBuf,
@@ -174,7 +169,7 @@ func (s *RpcServer) StopRpcServer() {
 			Callid: 0,
 			Error:  ERRCLOSING,
 		})
-		s.instance.SendMessageAll(nil, d, true)
+		s.instance.SendMessageAll(nil, d)
 		//wait at least s.c.WaitCloseTime before stop the under layer socket
 		tmer := time.NewTimer(s.c.WaitCloseTime)
 		for {
@@ -337,19 +332,19 @@ func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerV
 	}
 	return nil, false
 }
-func (s *RpcServer) onlinefunc(p *stream.Peer, peeruniquename string, sid int64) bool {
+func (s *RpcServer) onlinefunc(p *stream.Peer) bool {
 	if s.totalreqnum < 0 {
 		//self closed
 		return false
 	}
-	log.Info(nil, "[rpc.server.onlinefunc] client:", peeruniquename, "online")
+	log.Info(nil, "[rpc.server.onlinefunc] client:", p.GetPeerUniqueName(), "online")
 	return true
 }
-func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte, sid int64) {
+func (s *RpcServer) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
-		log.Error(nil, "[rpc.server.userfunc] client:", peeruniquename, "data format error:", e)
-		p.Close(sid)
+		log.Error(nil, "[rpc.server.userfunc] client:", p.GetPeerUniqueName(), "data format error:", e)
+		p.Close()
 		return
 	}
 	var traceid string
@@ -362,7 +357,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 	traceid, _, _, _, _ = trace.GetTrace(ctx)
 	handler, ok := s.handler[msg.Path]
 	if !ok {
-		log.Error(ctx, "[rpc.server.userfunc] client:", peeruniquename, "call path:", msg.Path, "error: unknown path")
+		log.Error(ctx, "[rpc.server.userfunc] client:", p.GetPeerUniqueName(), "call path:", msg.Path, "error: unknown path")
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
@@ -370,8 +365,8 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		msg.Metadata = nil
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
-		if e := p.SendMessage(nil, d, sid, true); e != nil {
-			log.Error(ctx, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
+		if e := p.SendMessage(nil, d); e != nil {
+			log.Error(ctx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
 		}
 		return
 	}
@@ -396,8 +391,8 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			msg.Metadata = nil
 			msg.Tracedata = nil
 			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(nil, d, sid, true); e != nil {
-				log.Error(ctx, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
+			if e := p.SendMessage(nil, d); e != nil {
+				log.Error(ctx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
 			}
 			return
 		}
@@ -408,24 +403,25 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 			sourcemethod = msg.Tracedata["SourceMethod"]
 			sourcepath = msg.Tracedata["SourcePath"]
 		}
-		sourceapp = peeruniquename[:strings.Index(peeruniquename, ":")]
+		sourceapp = p.GetPeerName()
 		if sourceapp == "" {
 			sourceapp = "unkown"
 		}
-		sourceip = peeruniquename[strings.Index(peeruniquename, ":")+1:]
+		sourceip = p.GetRemoteAddr()
 		if sourcemethod == "" {
 			sourcemethod = "unknown"
 		}
 		if sourcepath == "" {
 			sourcepath = "unknown"
 		}
-		traceend := trace.TraceStart(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "RPC", msg.Path)
 		//logic
-		handler(ctx, peeruniquename, msg)
-		traceend(msg.Error)
+		start := time.Now()
+		handler(ctx, p.GetPeerUniqueName(), msg)
+		end := time.Now()
+		trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "RPC", msg.Path, &start, &end, msg.Error)
 		d, _ := proto.Marshal(msg)
-		if e := p.SendMessage(nil, d, sid, true); e != nil {
-			log.Error(ctx, "[rpc.server.userfunc] send message to client:", peeruniquename, "error:", e)
+		if e := p.SendMessage(nil, d); e != nil {
+			log.Error(ctx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
 			if e == stream.ErrMsgLarge {
 				msg.Path = ""
 				msg.Deadline = 0
@@ -434,7 +430,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 				msg.Metadata = nil
 				msg.Tracedata = nil
 				d, _ = proto.Marshal(msg)
-				p.SendMessage(nil, d, sid, true)
+				p.SendMessage(nil, d)
 			}
 		}
 		if s.totalreqnum < 0 {
@@ -446,6 +442,6 @@ func (s *RpcServer) userfunc(p *stream.Peer, peeruniquename string, data []byte,
 		atomic.AddInt32(&s.totalreqnum, -1)
 	}()
 }
-func (s *RpcServer) offlinefunc(p *stream.Peer, peeruniquename string, _ [][]byte) {
-	log.Info(nil, "[rpc.server.offlinefunc] client:", peeruniquename, "offline")
+func (s *RpcServer) offlinefunc(p *stream.Peer) {
+	log.Info(nil, "[rpc.server.offlinefunc] client:", p.GetPeerUniqueName(), "offline")
 }

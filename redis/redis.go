@@ -15,8 +15,10 @@ type Pool struct {
 }
 
 type Conn struct {
-	c        redis.Conn
-	traceend func(error)
+	p     *Pool
+	c     redis.Conn
+	start *time.Time
+	ctx   context.Context
 }
 
 type Config struct {
@@ -64,8 +66,9 @@ func (p *Pool) GetContext(ctx context.Context) (*Conn, error) {
 	if e != nil {
 		return nil, e
 	}
-	traceend := trace.TraceStart(ctx, trace.CLIENT, p.c.RedisName, p.c.Addr, "REDIS", "connect")
-	return &Conn{c: c, traceend: traceend}, nil
+	//traceend := trace.TraceStart(ctx, trace.CLIENT, p.c.RedisName, p.c.Addr, "REDIS", "connect")
+	start := time.Now()
+	return &Conn{p: p, c: c, start: &start, ctx: ctx}, nil
 }
 func (p *Pool) Ping(ctx context.Context) error {
 	c, e := p.GetContext(ctx)
@@ -110,9 +113,8 @@ func (c *Conn) Err() error {
 	return c.c.Err()
 }
 func (c *Conn) Close() {
-	if c.traceend != nil {
-		c.traceend(c.c.Err())
-	}
+	end := time.Now()
+	trace.Trace(c.ctx, trace.CLIENT, c.p.c.RedisName, c.p.c.Addr, "REDIS", "connect", c.start, &end, c.c.Err())
 	c.c.Close()
 }
 func Int(reply interface{}, e error) (int, error) {

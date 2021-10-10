@@ -18,12 +18,13 @@ type connmng struct {
 	heartprobe      time.Duration
 	groups          []*timewheel
 	peernum         int32
-	stopch          chan struct{}
+	delpeerch       chan *struct{}
+	closewait       *sync.WaitGroup
 }
 
 type timewheel struct {
 	index uint
-	wheel [50]*group
+	wheel [20]*group
 }
 
 type group struct {
@@ -38,18 +39,43 @@ func newconnmng(groupnum int, heartprobe, sendidletimeout, recvidletimeout time.
 		heartprobe:      heartprobe,
 		groups:          make([]*timewheel, groupnum),
 		peernum:         0,
-		stopch:          make(chan struct{}),
+		delpeerch:       make(chan *struct{}, 1),
+		closewait:       &sync.WaitGroup{},
 	}
 	for i := 0; i < groupnum; i++ {
 		tw := &timewheel{}
-		for j := 0; j < 50; j++ {
+		for j := 0; j < 20; j++ {
 			tw.wheel[j] = &group{
 				peers: make(map[string]*Peer),
 			}
 		}
 		mng.groups[i] = tw
 	}
-	go mng.run()
+	mng.closewait.Add(1)
+	go func() {
+		defer mng.closewait.Done()
+		for {
+			<-mng.delpeerch
+			if mng.Finished() {
+				return
+			}
+		}
+	}()
+	for _, v := range mng.groups {
+		tw := v
+		go func() {
+			tker := time.NewTicker(mng.heartprobe / 20)
+			for {
+				t := <-tker.C
+				if mng.Finishing() {
+					return
+				}
+				tw.index++
+				//give 1/3 heartprobe for net lag
+				go tw.wheel[tw.index%20].run(mng.heartprobe*3+mng.heartprobe/3, mng.sendidletimeout, mng.recvidletimeout, &t)
+			}
+		}()
+	}
 	return mng
 }
 
@@ -57,11 +83,10 @@ var errDupConnection = errors.New("dup connection")
 var errServerClosed = errors.New("server closed")
 
 func (m *connmng) AddPeer(p *Peer) error {
-	uniquename := p.getUniqueName()
-	tw := m.groups[common.BkdrhashString(uniquename, uint64(len(m.groups)))]
-	g := tw.wheel[(tw.index+uint(rand.Intn(40))+5)%50] //rand is used to reduce race
+	tw := m.groups[common.BkdrhashString(p.peeruniquename, uint64(len(m.groups)))]
+	g := tw.wheel[(tw.index+uint(rand.Intn(16))+2)%20] //rand is used to reduce race
 	g.Lock()
-	if _, ok := g.peers[uniquename]; ok {
+	if _, ok := g.peers[p.peeruniquename]; ok {
 		g.Unlock()
 		return errDupConnection
 	}
@@ -73,7 +98,7 @@ func (m *connmng) AddPeer(p *Peer) error {
 			return errServerClosed
 		}
 		if atomic.CompareAndSwapInt32(&m.peernum, old, old+1) {
-			g.peers[uniquename] = p
+			g.peers[p.peeruniquename] = p
 			break
 		}
 	}
@@ -82,10 +107,39 @@ func (m *connmng) AddPeer(p *Peer) error {
 }
 func (m *connmng) DelPeer(p *Peer) {
 	p.peergroup.Lock()
-	delete(p.peergroup.peers, p.getUniqueName())
+	delete(p.peergroup.peers, p.peeruniquename)
 	p.peergroup.Unlock()
 	p.peergroup = nil
 	atomic.AddInt32(&m.peernum, -1)
+	select {
+	case m.delpeerch <- nil:
+	default:
+	}
+}
+func (m *connmng) Stop() {
+	for {
+		if old := m.peernum; old >= 0 {
+			if atomic.CompareAndSwapInt32(&m.peernum, old, old-math.MaxInt32) {
+				for _, tw := range m.groups {
+					for _, g := range tw.wheel {
+						g.Lock()
+						for _, p := range g.peers {
+							p.Close()
+						}
+						g.Unlock()
+					}
+				}
+				break
+			}
+		} else {
+			break
+		}
+	}
+	select {
+	case m.delpeerch <- nil:
+	default:
+	}
+	m.closewait.Wait()
 }
 func (m *connmng) GetPeerNum() int32 {
 	peernum := atomic.LoadInt32(&m.peernum)
@@ -101,72 +155,27 @@ func (m *connmng) Finishing() bool {
 func (m *connmng) Finished() bool {
 	return m.peernum == -math.MaxInt32
 }
-func (m *connmng) run() {
-	for _, v := range m.groups {
-		tw := v
-		go func() {
-			tker := time.NewTicker(m.heartprobe / 50)
-			for {
-				select {
-				case t := <-tker.C:
-					tw.index++
-					//give 1/3 heartprobe for net lag
-					go tw.wheel[tw.index%50].run(m.heartprobe*3+m.heartprobe/3, m.sendidletimeout, m.recvidletimeout, &t)
-				case <-m.stopch:
-					return
-				}
-			}
-		}()
-	}
-}
-func (m *connmng) SendMessage(ctx context.Context, data []byte, block bool) {
+func (m *connmng) SendMessage(ctx context.Context, data []byte) {
 	for _, tw := range m.groups {
 		for _, g := range tw.wheel {
-			g.SendMessage(ctx, data, block)
+			g.SendMessage(ctx, data)
 		}
 	}
-}
-func (m *connmng) stop() bool {
-	stop := false
-	for {
-		old := m.peernum
-		if old >= 0 {
-			if atomic.CompareAndSwapInt32(&m.peernum, old, old-math.MaxInt32) {
-				stop = true
-				break
-			}
-		} else {
-			break
-		}
-	}
-	if stop {
-		close(m.stopch)
-		for _, tw := range m.groups {
-			for _, g := range tw.wheel {
-				g.Lock()
-				for _, p := range g.peers {
-					p.Close(p.sid)
-				}
-				g.Unlock()
-			}
-		}
-	}
-	return stop
 }
 func (g *group) run(hearttimeout, sendidletimeout, recvidletimeout time.Duration, now *time.Time) {
 	g.Lock()
-	defer g.Unlock()
 	for _, p := range g.peers {
 		p.checkheart(hearttimeout, sendidletimeout, recvidletimeout, now)
 	}
+	g.Unlock()
 }
-func (g *group) SendMessage(ctx context.Context, data []byte, block bool) {
+func (g *group) SendMessage(ctx context.Context, data []byte) {
 	wg := sync.WaitGroup{}
 	g.RLock()
 	wg.Add(len(g.peers))
 	for _, p := range g.peers {
 		go func(sender *Peer) {
-			sender.SendMessage(ctx, data, sender.sid, block)
+			sender.SendMessage(ctx, data)
 			wg.Done()
 		}(p)
 	}

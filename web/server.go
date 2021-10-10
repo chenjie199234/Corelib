@@ -573,16 +573,15 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 		if sourcemethod == "" {
 			sourcemethod = "unknown"
 		}
-		traceend := trace.TraceStart(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, this.selfappname, host.Hostip, method, path)
 		//set timeout
-		now := time.Now()
+		start := time.Now()
 		var globaldl int64
 		var funcdl int64
 		if this.c.GlobalTimeout != 0 {
-			globaldl = now.UnixNano() + int64(this.c.GlobalTimeout)
+			globaldl = start.UnixNano() + int64(this.c.GlobalTimeout)
 		}
 		if timeout != 0 {
-			funcdl = now.UnixNano() + int64(timeout)
+			funcdl = start.UnixNano() + int64(timeout)
 		}
 		min := int64(math.MaxInt64)
 		if clientdl < min && clientdl != 0 {
@@ -595,11 +594,11 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			min = globaldl
 		}
 		if min != math.MaxInt64 {
-			if min < now.UnixNano()+int64(time.Millisecond) {
+			if min < start.UnixNano()+int64(time.Millisecond) {
 				//min logic time,1ms
-				e := cerror.ErrDeadlineExceeded
-				http.Error(w, e.Error(), http.StatusGatewayTimeout)
-				traceend(e)
+				http.Error(w, cerror.ErrDeadlineExceeded.Error(), http.StatusGatewayTimeout)
+				end := time.Now()
+				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, cerror.ErrDeadlineExceeded)
 				return
 			}
 			var cancel context.CancelFunc
@@ -616,7 +615,8 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 				http.Error(w, ERRPANIC.Error(), http.StatusInternalServerError)
 				workctx.e = ERRPANIC
 			}
-			traceend(workctx.e)
+			end := time.Now()
+			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, workctx.e)
 			this.putContext(workctx)
 		}()
 		workctx.Next()

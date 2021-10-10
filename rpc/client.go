@@ -27,20 +27,19 @@ type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
 type DiscoveryHandler func(group, name string, manually <-chan struct{}) (map[string]*RegisterData, error)
 
 type ClientConfig struct {
-	ConnTimeout            time.Duration
-	GlobalTimeout          time.Duration //global timeout for every rpc call
-	HeartPorbe             time.Duration
-	GroupNum               uint32
-	SocketRBuf             uint32
-	SocketWBuf             uint32
-	MaxMsgLen              uint32
-	MaxBufferedWriteMsgNum uint32
-	VerifyData             string
-	UseTLS                 bool     //rpc or rpcs
-	SkipVerifyTLS          bool     //don't verify the server's cert
-	CAs                    []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
-	Picker                 PickHandler
-	DiscoverFunction       DiscoveryHandler //this function will be called in for loop
+	ConnTimeout      time.Duration
+	GlobalTimeout    time.Duration //global timeout for every rpc call
+	HeartPorbe       time.Duration
+	GroupNum         uint32
+	SocketRBuf       uint32
+	SocketWBuf       uint32
+	MaxMsgLen        uint32
+	VerifyData       string
+	UseTLS           bool     //rpc or rpcs
+	SkipVerifyTLS    bool     //don't verify the server's cert
+	CAs              []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
+	Picker           PickHandler
+	DiscoverFunction DiscoveryHandler //this function will be called in for loop
 }
 
 func (c *ClientConfig) validate() {
@@ -74,9 +73,6 @@ func (c *ClientConfig) validate() {
 	if c.MaxMsgLen > 65535 {
 		c.MaxMsgLen = 65535
 	}
-	if c.MaxBufferedWriteMsgNum == 0 {
-		c.MaxBufferedWriteMsgNum = 256
-	}
 }
 
 //appuniquename = appname:addr
@@ -103,7 +99,6 @@ type ServerForPick struct {
 	dservers map[string]struct{} //this app registered on which discovery server
 	lker     *sync.Mutex
 	peer     *stream.Peer
-	sid      int64
 	status   int //0-idle,1-start,2-verify,3-connected,4-closing
 
 	//active calls
@@ -185,9 +180,8 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 		reqpool:      &sync.Pool{},
 	}
 	instancec := &stream.InstanceConfig{
-		HeartprobeInterval:     c.HeartPorbe,
-		MaxBufferedWriteMsgNum: c.MaxBufferedWriteMsgNum,
-		GroupNum:               c.GroupNum,
+		HeartprobeInterval: c.HeartPorbe,
+		GroupNum:           c.GroupNum,
 		TcpC: &stream.TcpConfig{
 			ConnectTimeout: c.ConnTimeout,
 			SocketRBufLen:  c.SocketRBuf,
@@ -240,7 +234,6 @@ func (c *RpcClient) updateDiscovery(all map[string]*RegisterData) {
 				addr:     addr,
 				dservers: registerdata.DServers,
 				peer:     nil,
-				sid:      0,
 				status:   1,
 				reqs:     make(map[uint64]*req, 10),
 				lker:     &sync.Mutex{},
@@ -362,10 +355,10 @@ func (c *RpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVe
 	exist.lker.Unlock()
 	return nil, true
 }
-func (c *RpcClient) onlinefunc(p *stream.Peer, appuniquename string, sid int64) bool {
+func (c *RpcClient) onlinefunc(p *stream.Peer) bool {
 	//online success,update success
 	c.lker.RLock()
-	addr := appuniquename[strings.Index(appuniquename, ":")+1:]
+	addr := p.GetRemoteAddr()
 	exist, ok := c.servers[addr]
 	if !ok {
 		//this is impossible
@@ -375,20 +368,19 @@ func (c *RpcClient) onlinefunc(p *stream.Peer, appuniquename string, sid int64) 
 	exist.lker.Lock()
 	c.lker.RUnlock()
 	exist.peer = p
-	exist.sid = sid
 	exist.status = 3
 	p.SetData(unsafe.Pointer(exist))
-	log.Info(nil, "[rpc.client.onlinefunc] server:", appuniquename, "online")
+	log.Info(nil, "[rpc.client.onlinefunc] server:", p.GetPeerUniqueName(), "online")
 	exist.lker.Unlock()
 	return true
 }
 
-func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, sid int64) {
+func (c *RpcClient) userfunc(p *stream.Peer, data []byte) {
 	server := (*ServerForPick)(p.GetData())
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
-		log.Error(nil, "[rpc.client.userfunc] server:", appuniquename, "data format error:", e)
+		log.Error(nil, "[rpc.client.userfunc] server:", p.GetPeerUniqueName(), "data format error:", e)
 		return
 	}
 	server.lker.Lock()
@@ -406,36 +398,25 @@ func (c *RpcClient) userfunc(p *stream.Peer, appuniquename string, data []byte, 
 	server.lker.Unlock()
 }
 
-func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string, unsendmsgs [][]byte) {
+func (c *RpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
 	if server == nil {
 		return
 	}
-	unsend := make(map[uint64]struct{})
-	for _, unsendmsg := range unsendmsgs {
-		msg := &Msg{}
-		proto.Unmarshal(unsendmsg, msg)
-		unsend[msg.Callid] = struct{}{}
-	}
-	log.Info(nil, "[rpc.client.offlinefunc] server:", appuniquename, "offline")
+	log.Info(nil, "[rpc.client.offlinefunc] server:", p.GetPeerUniqueName(), "offline")
 	server.lker.Lock()
 	server.peer = nil
-	server.sid = 0
 	//all req failed
 	for _, req := range server.reqs {
 		req.resp = nil
-		if _, ok := unsend[req.callid]; ok {
-			req.err = ERRCLOSING
-		} else {
-			req.err = ERRCLOSED
-		}
+		req.err = ERRCLOSED
 		req.finish <- struct{}{}
 	}
 	server.reqs = make(map[uint64]*req, 10)
 	if len(server.dservers) == 0 {
 		server.status = 0
 		server.lker.Unlock()
-		c.unregister(appuniquename[strings.Index(appuniquename, ":")+1:])
+		c.unregister(p.GetRemoteAddr())
 	} else {
 		server.status = 1
 		server.lker.Unlock()
@@ -453,9 +434,9 @@ func (c *RpcClient) offlinefunc(p *stream.Peer, appuniquename string, unsendmsgs
 		if len(server.dservers) == 0 {
 			server.status = 0
 			server.lker.Unlock()
-			c.unregister(appuniquename[strings.Index(appuniquename, ":")+1:])
+			c.unregister(p.GetRemoteAddr())
 		} else {
-			go c.start(appuniquename[strings.Index(appuniquename, ":")+1:])
+			go c.start(p.GetRemoteAddr())
 			server.lker.Unlock()
 		}
 	}
@@ -486,9 +467,11 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 	msg := &Msg{
 		Callid:   atomic.AddUint64(&c.callid, 1),
 		Path:     path,
-		Deadline: dl.UnixNano(),
 		Body:     in,
 		Metadata: metadata,
+	}
+	if ok {
+		msg.Deadline = dl.UnixNano()
 	}
 	traceid, _, _, selfmethod, selfpath := trace.GetTrace(ctx)
 	if traceid != "" {
@@ -543,13 +526,14 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 			server.lker.Unlock()
 			continue
 		}
+		start := time.Now()
 		//check timeout
-		if msg.Deadline != 0 && msg.Deadline <= time.Now().UnixNano()+int64(5*time.Millisecond) {
+		if msg.Deadline != 0 && msg.Deadline <= start.UnixNano()+int64(5*time.Millisecond) {
 			server.lker.Unlock()
 			return nil, cerror.ErrDeadlineExceeded
 		}
 		//send message
-		if e := server.peer.SendMessage(ctx, d, server.sid, false); e != nil {
+		if e := server.peer.SendMessage(ctx, d); e != nil {
 			if e == stream.ErrMsgLarge {
 				server.lker.Unlock()
 				return nil, ERRREQMSGLARGE
@@ -559,7 +543,6 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 			server.lker.Unlock()
 			continue
 		}
-		traceend := trace.TraceStart(ctx, trace.CLIENT, c.appname, server.addr, "RPC", path)
 		//send message success,store req,add req num
 		server.reqs[msg.Callid] = r
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
@@ -571,9 +554,8 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 			server.lker.Lock()
 			delete(server.reqs, msg.Callid)
 			server.lker.Unlock()
-			if traceend != nil {
-				traceend(r.err)
-			}
+			end := time.Now()
+			trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "RPC", path, &start, &end, r.err)
 			if r.err != nil {
 				//req error,update last fail time
 				server.Pickinfo.Lastfail = time.Now().UnixNano()
@@ -603,21 +585,17 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 			//update last fail time
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
 			c.putreq(r)
+			end := time.Now()
 			if ctx.Err() == context.DeadlineExceeded {
-				if traceend != nil {
-					traceend(cerror.ErrDeadlineExceeded)
-				}
+				trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "RPC", path, &start, &end, cerror.ErrDeadlineExceeded)
 				return nil, cerror.ErrDeadlineExceeded
 			} else if ctx.Err() == context.Canceled {
-				if traceend != nil {
-					traceend(cerror.ErrCanceled)
-				}
+				trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "RPC", path, &start, &end, cerror.ErrCanceled)
 				return nil, cerror.ErrCanceled
 			} else {
-				if traceend != nil {
-					traceend(ctx.Err())
-				}
-				return nil, cerror.ConvertStdError(ctx.Err())
+				e := cerror.ConvertStdError(ctx.Err())
+				trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "RPC", path, &start, &end, e)
+				return nil, e
 			}
 		}
 	}

@@ -26,14 +26,13 @@ var s *rpc.RpcServer
 func StartRpcServer() {
 	c := config.GetRpcServerConfig()
 	rpcc := &rpc.ServerConfig{
-		GlobalTimeout:          time.Duration(c.GlobalTimeout),
-		HeartPorbe:             time.Duration(c.HeartProbe),
-		GroupNum:               1,
-		SocketRBuf:             2048,
-		SocketWBuf:             2048,
-		MaxMsgLen:              65535,
-		MaxBufferedWriteMsgNum: 1024,
-		VerifyDatas:            config.EC.ServerVerifyDatas,
+		GlobalTimeout: time.Duration(c.GlobalTimeout),
+		HeartPorbe:    time.Duration(c.HeartProbe),
+		GroupNum:      1,
+		SocketRBuf:    2048,
+		SocketWBuf:    2048,
+		MaxMsgLen:     65535,
+		VerifyDatas:   config.EC.ServerVerifyDatas,
 	}
 	var e error
 	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name); e != nil {
