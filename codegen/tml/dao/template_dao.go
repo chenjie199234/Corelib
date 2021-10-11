@@ -34,17 +34,21 @@ func NewApi() error {
 	_ = rpcc //avoid unuse
 
 	//init rpc client below
-	//if ExampleRpcApi, e = example.NewExampleRpcClient(rpcc, api.Group, api.Name); e != nil {
-	//        return e
+	//examplerpc, e = rpc.NewRpcClient(rpcc, api.Group, api.Name, "examplegroup", "examplename")
+	//if e != nil {
+	// 	return e
 	//}
+	//ExampleRpcApi = example.NewExampleRpcClient(examplerpc)
 
 	webc := getWebClientConfig()
 	_ = webc //avoid unuse
 
 	//init web client below
-	//if ExampleWebApi, e = example.NewExampleWebClient(webc, api.Group, api.Name); e != nil {
-	//        return e
+	//exampleweb, e = web.NewWebClient(webc, api.Group, api.Name, "examplegroup", "examplename")
+	//if e != nil {
+	// 	return e
 	//}
+	//ExampleWebApi = example.NewExampleWebClient(exampleweb)
 	return nil
 }
 func getRpcClientConfig() *rpc.ClientConfig {

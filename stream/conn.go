@@ -23,10 +23,6 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 	if tlsc != nil && len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
 		return errors.New("[Stream.StartTcpServer] tls certificate setting missing")
 	}
-	//check status
-	if this.mng.Finishing() {
-		return ErrServerClosed
-	}
 	this.Lock()
 	if this.tcplistener != nil {
 		this.Unlock()
@@ -38,7 +34,7 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 		return errors.New("[Stream.StartTcpServer] listen tcp addr: " + listenaddr + " error: " + e.Error())
 	}
 	this.Unlock()
-	//double check stop status
+	//check stop status
 	if this.mng.Finishing() {
 		this.tcplistener.Close()
 		return ErrServerClosed
@@ -110,10 +106,7 @@ func (this *Instance) sworker(p *Peer) {
 	if this.c.Onlinefunc != nil {
 		if !this.c.Onlinefunc(p) {
 			log.Error(nil, "[Stream.sworker] online:", p.peeruniquename, "failed")
-			p.Lock()
 			p.status = false
-			close(p.dispatcher)
-			p.Unlock()
 			p.conn.Close()
 			this.mng.DelPeer(p)
 			p.CancelFunc()
@@ -200,10 +193,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 	if this.c.Onlinefunc != nil {
 		if !this.c.Onlinefunc(p) {
 			log.Error(nil, "[Stream.cworker] online:", p.peeruniquename, "failed")
-			p.Lock()
 			p.status = false
-			close(p.dispatcher)
-			p.Unlock()
 			p.conn.Close()
 			this.mng.DelPeer(p)
 			p.CancelFunc()
@@ -264,10 +254,7 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer, clientorserver bo
 }
 func (this *Instance) handle(p *Peer) {
 	defer func() {
-		p.Lock()
 		p.status = false
-		close(p.dispatcher)
-		p.Unlock()
 		p.conn.Close()
 		if this.c.Offlinefunc != nil {
 			this.c.Offlinefunc(p)

@@ -99,7 +99,7 @@ type ServerForPick struct {
 	dservers map[string]struct{} //this app registered on which discovery server
 	lker     *sync.Mutex
 	peer     *stream.Peer
-	status   int //0-idle,1-start,2-verify,3-connected,4-closing
+	status   int //0-closed,1-start,2-verify,3-connected,4-closing
 
 	//active calls
 	reqs map[uint64]*req //all reqs to this server
@@ -602,11 +602,10 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 }
 
 type req struct {
-	callid    uint64
-	finish    chan struct{}
-	resp      []byte
-	err       *cerror.Error
-	starttime int64
+	callid uint64
+	finish chan struct{}
+	resp   []byte
+	err    *cerror.Error
 }
 
 func (r *req) reset() {
@@ -616,22 +615,18 @@ func (r *req) reset() {
 	}
 	r.resp = nil
 	r.err = nil
-	r.starttime = 0
 }
 func (c *RpcClient) getreq(callid uint64) *req {
 	r, ok := c.reqpool.Get().(*req)
 	if ok {
-		r.reset()
 		r.callid = callid
-		r.starttime = time.Now().UnixNano()
 		return r
 	}
 	return &req{
-		callid:    callid,
-		finish:    make(chan struct{}),
-		resp:      nil,
-		err:       nil,
-		starttime: time.Now().UnixNano(),
+		callid: callid,
+		finish: make(chan struct{}, 1),
+		resp:   nil,
+		err:    nil,
 	}
 }
 func (c *RpcClient) putreq(r *req) {

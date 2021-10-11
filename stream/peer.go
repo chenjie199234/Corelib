@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"strings"
-	"sync"
 	"time"
 	"unsafe"
 
@@ -20,11 +19,9 @@ var (
 	ErrMsgLarge   = errors.New("message too large")
 	ErrMsgEmpty   = errors.New("message empty")
 	ErrMsgUnknown = errors.New("message type unknown")
-	ErrMsgPong    = errors.New("message pong format error")
 )
 
 type Peer struct {
-	sync.Mutex
 	peergroup      *group
 	peeruniquename string
 	status         bool //true - working,false - closed
@@ -113,9 +110,17 @@ func (p *Peer) readMessage() (*bufpool.Buffer, error) {
 }
 
 func (p *Peer) getDispatcher(ctx context.Context) error {
+	//first check
+	if !p.status {
+		return ErrConnClosed
+	}
 	select {
 	case _, ok := <-p.dispatcher:
 		if !ok {
+			return ErrConnClosed
+		} else if !p.status {
+			//double check
+			close(p.dispatcher)
 			return ErrConnClosed
 		}
 		return nil
@@ -124,11 +129,11 @@ func (p *Peer) getDispatcher(ctx context.Context) error {
 	}
 }
 func (p *Peer) putDispatcher() {
-	p.Lock()
 	if p.status {
 		p.dispatcher <- nil
+	} else {
+		close(p.dispatcher)
 	}
-	p.Unlock()
 }
 func (p *Peer) SendMessage(ctx context.Context, userdata []byte) error {
 	if ctx == nil {
@@ -170,6 +175,7 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte) error {
 }
 
 func (p *Peer) Close() {
+	p.status = false
 	p.conn.Close()
 }
 

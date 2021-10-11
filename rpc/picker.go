@@ -35,7 +35,6 @@ func defaultPicker(servers map[string]*ServerForPick) *ServerForPick {
 					danger2 = server
 				}
 			}
-
 		}
 	}
 	//check normal
