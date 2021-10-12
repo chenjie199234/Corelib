@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -83,7 +82,7 @@ type RpcClient struct {
 	tlsc        *tls.Config
 	instance    *stream.Instance
 
-	lker    *sync.RWMutex
+	slker   *sync.RWMutex
 	servers map[string]*ServerForPick //key server addr
 
 	manually     chan struct{}
@@ -95,13 +94,14 @@ type RpcClient struct {
 }
 
 type ServerForPick struct {
-	addr     string
-	dservers map[string]struct{} //this app registered on which discovery server
-	lker     *sync.Mutex
-	peer     *stream.Peer
-	status   int //0-closed,1-start,2-verify,3-connected,4-closing
+	addr       string
+	dservers   map[string]struct{} //this app registered on which discovery server
+	peer       *stream.Peer
+	status     bool //1 - working,0 - closed
+	dispatcher chan *struct{}
 
 	//active calls
+	lker *sync.Mutex
 	reqs map[uint64]*req //all reqs to this server
 
 	Pickinfo *pickinfo
@@ -115,7 +115,74 @@ type pickinfo struct {
 }
 
 func (s *ServerForPick) Pickable() bool {
-	return s.status == 3
+	return s.status
+}
+func (s *ServerForPick) getDispatcher(ctx context.Context) error {
+	if !s.status {
+		return errPickAgain
+	}
+	if dl, ok := ctx.Deadline(); ok {
+		//default we need 5ms in internet transport and server business logic
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, dl.Add(-time.Millisecond*5))
+		defer cancel()
+	}
+	select {
+	case _, ok := <-s.dispatcher:
+		if !ok {
+			return errPickAgain
+		} else if !s.status {
+			//double check
+			return errPickAgain
+		}
+		return nil
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			return cerror.ErrDeadlineExceeded
+		} else if ctx.Err() == context.Canceled {
+			return cerror.ErrCanceled
+		} else {
+			return cerror.ConvertStdError(ctx.Err())
+		}
+	}
+}
+func (s *ServerForPick) putDispatcher() {
+	s.lker.Lock()
+	if s.status {
+		select {
+		case s.dispatcher <- nil:
+		default:
+		}
+	}
+	s.lker.Unlock()
+}
+func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
+	e = s.getDispatcher(ctx)
+	if e != nil {
+		return
+	}
+	defer s.putDispatcher()
+	s.lker.Lock()
+	//send message
+	if e = s.peer.SendMessage(ctx, r.req); e != nil {
+		s.lker.Unlock()
+		if e == stream.ErrMsgLarge {
+			e = ERRREQMSGLARGE
+		} else if e == stream.ErrConnClosed {
+			e = errPickAgain
+		} else if e == context.DeadlineExceeded {
+			e = cerror.ErrDeadlineExceeded
+		} else if e == context.Canceled {
+			e = cerror.ErrCanceled
+		} else {
+			e = cerror.ConvertStdError(e)
+		}
+		return
+	}
+	//send message success,store req,add req num
+	s.reqs[r.callid] = r
+	s.lker.Unlock()
+	return
 }
 
 func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*RpcClient, error) {
@@ -171,13 +238,16 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 			InsecureSkipVerify: c.SkipVerifyTLS,
 			RootCAs:            certpool,
 		},
-		lker:         &sync.RWMutex{},
-		servers:      make(map[string]*ServerForPick, 10),
+
+		slker:   &sync.RWMutex{},
+		servers: make(map[string]*ServerForPick, 10),
+
 		manually:     make(chan struct{}, 1),
 		manualNotice: make(map[chan struct{}]struct{}, 100),
 		mlker:        &sync.Mutex{},
-		callid:       0,
-		reqpool:      &sync.Pool{},
+
+		callid:  0,
+		reqpool: &sync.Pool{},
 	}
 	instancec := &stream.InstanceConfig{
 		HeartprobeInterval: c.HeartPorbe,
@@ -212,31 +282,30 @@ type RegisterData struct {
 //all: key server's addr
 func (c *RpcClient) updateDiscovery(all map[string]*RegisterData) {
 	//check need update
-	c.lker.Lock()
-	defer c.lker.Unlock()
+	c.slker.Lock()
+	defer c.slker.Unlock()
 	//offline app
-	for _, exist := range c.servers {
-		exist.lker.Lock()
-		if _, ok := all[exist.addr]; !ok {
+	for _, server := range c.servers {
+		if _, ok := all[server.addr]; !ok {
 			//this app unregistered
-			exist.dservers = nil
-			exist.Pickinfo.DServerNum = 0
-			exist.Pickinfo.DServerOffline = time.Now().Unix()
+			server.dservers = nil
+			server.Pickinfo.DServerNum = 0
+			server.Pickinfo.DServerOffline = time.Now().Unix()
 		}
-		exist.lker.Unlock()
 	}
 	//online app or update app's dservers
 	for addr, registerdata := range all {
-		exist, ok := c.servers[addr]
+		server, ok := c.servers[addr]
 		if !ok {
 			//this is a new register
-			c.servers[addr] = &ServerForPick{
-				addr:     addr,
-				dservers: registerdata.DServers,
-				peer:     nil,
-				status:   1,
-				reqs:     make(map[uint64]*req, 10),
-				lker:     &sync.Mutex{},
+			server := &ServerForPick{
+				addr:       addr,
+				dservers:   registerdata.DServers,
+				peer:       nil,
+				status:     true,
+				dispatcher: make(chan *struct{}, 1),
+				lker:       &sync.Mutex{},
+				reqs:       make(map[uint64]*req, 10),
 				Pickinfo: &pickinfo{
 					Lastfail:       0,
 					Activecalls:    0,
@@ -245,56 +314,41 @@ func (c *RpcClient) updateDiscovery(all map[string]*RegisterData) {
 					Addition:       registerdata.Addition,
 				},
 			}
-			go c.start(addr)
+			c.servers[addr] = server
+			go c.start(addr, server)
 		} else {
-			exist.lker.Lock()
 			//this is not a new register
 			//unregister on which discovery server
-			for dserver := range exist.dservers {
+			for dserver := range server.dservers {
 				if _, ok := registerdata.DServers[dserver]; !ok {
-					exist.Pickinfo.DServerOffline = time.Now().UnixNano()
+					server.Pickinfo.DServerOffline = time.Now().UnixNano()
 					break
 				}
 			}
 			//register on which new discovery server
 			for dserver := range registerdata.DServers {
-				if _, ok := exist.dservers[dserver]; !ok {
-					exist.Pickinfo.DServerOffline = 0
+				if _, ok := server.dservers[dserver]; !ok {
+					server.Pickinfo.DServerOffline = 0
 					break
 				}
 			}
-			exist.dservers = registerdata.DServers
-			exist.Pickinfo.Addition = registerdata.Addition
-			exist.Pickinfo.DServerNum = int32(len(registerdata.DServers))
-			exist.lker.Unlock()
+			server.dservers = registerdata.DServers
+			server.Pickinfo.Addition = registerdata.Addition
+			server.Pickinfo.DServerNum = int32(len(registerdata.DServers))
 		}
 	}
 }
-func (c *RpcClient) start(addr string) {
-	tempverifydata := c.c.VerifyData + "|" + c.appname
-	var tlsc *tls.Config
-	if c.c.UseTLS {
-		tlsc = c.tlsc
-	}
-	if r := c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata), tlsc); r == "" {
-		c.lker.RLock()
-		exist, ok := c.servers[addr]
-		if !ok {
-			//app removed
-			c.lker.RUnlock()
-			return
-		}
-		exist.lker.Lock()
-		c.lker.RUnlock()
-		if len(exist.dservers) == 0 {
-			exist.status = 0
-			exist.lker.Unlock()
-			c.unregister(addr)
+func (c *RpcClient) start(addr string, server *ServerForPick) {
+	if !server.status {
+		//reconnect to server
+		c.slker.Lock()
+		if len(server.dservers) == 0 {
+			//server already unregister,remove server
+			delete(c.servers, server.addr)
+			c.slker.Unlock()
 		} else {
-			exist.status = 1
-			exist.lker.Unlock()
-			//can't connect to the server,but the server was registered on some dservers
-			//we need to triger manually update dserver data,to make sure this server is alive
+			c.slker.Unlock()
+			//need to check server register status
 			manualNotice := make(chan struct{}, 1)
 			c.mlker.Lock()
 			c.manualNotice[manualNotice] = struct{}{}
@@ -303,75 +357,55 @@ func (c *RpcClient) start(addr string) {
 			}
 			c.mlker.Unlock()
 			<-manualNotice
-			exist.lker.Lock()
-			if len(exist.dservers) == 0 {
-				exist.status = 0
-				exist.lker.Unlock()
-				c.unregister(addr)
+			c.slker.Lock()
+			if len(server.dservers) == 0 {
+				//server already unregister,remove server
+				delete(c.servers, server.addr)
+				c.slker.Unlock()
 			} else {
-				go c.start(addr)
-				exist.lker.Unlock()
+				c.slker.Unlock()
+				server.dispatcher = make(chan *struct{}, 1)
+				server.status = true
 			}
 		}
 	}
+	tempverifydata := c.c.VerifyData + "|" + c.appname
+	var tlsc *tls.Config
+	if c.c.UseTLS {
+		tlsc = c.tlsc
+	}
+	if !c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata), tlsc) {
+		server.lker.Lock()
+		server.status = false
+		close(server.dispatcher)
+		server.lker.Unlock()
+		time.Sleep(time.Millisecond * 100)
+		go c.start(server.addr, server)
+	}
 }
-func (c *RpcClient) unregister(addr string) {
-	c.lker.Lock()
 
-	defer c.lker.Unlock()
-	exist, ok := c.servers[addr]
-	if !ok {
-		//already removed
-		return
-	}
-	//check again
-	exist.lker.Lock()
-	if len(exist.dservers) == 0 {
-		//remove app
-		delete(c.servers, addr)
-		exist.lker.Unlock()
-	} else {
-		exist.status = 1
-		go c.start(addr)
-		exist.lker.Unlock()
-	}
-}
 func (c *RpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if common.Byte2str(peerVerifyData) != c.c.VerifyData {
 		return nil, false
 	}
-	//verify success,update status
-	c.lker.RLock()
-	addr := appuniquename[strings.Index(appuniquename, ":")+1:]
-	exist, ok := c.servers[addr]
-	if !ok {
-		//this is impossible
-		c.lker.RUnlock()
-		return nil, false
-	}
-	exist.lker.Lock()
-	c.lker.RUnlock()
-	exist.status = 2
-	exist.lker.Unlock()
+	//verify success
 	return nil, true
 }
 func (c *RpcClient) onlinefunc(p *stream.Peer) bool {
 	//online success,update success
-	c.lker.RLock()
+	c.slker.RLock()
 	addr := p.GetRemoteAddr()
-	exist, ok := c.servers[addr]
+	server, ok := c.servers[addr]
 	if !ok {
 		//this is impossible
-		c.lker.RUnlock()
+		c.slker.RUnlock()
 		return false
 	}
-	exist.lker.Lock()
-	c.lker.RUnlock()
-	exist.peer = p
-	exist.status = 3
-	p.SetData(unsafe.Pointer(exist))
+	c.slker.RUnlock()
+	server.peer = p
+	p.SetData(unsafe.Pointer(server))
+	server.dispatcher <- nil
 	log.Info(nil, "[rpc.client.onlinefunc] server:", p.GetPeerUniqueName(), "online")
-	exist.lker.Unlock()
 	return true
 }
 
@@ -385,62 +419,42 @@ func (c *RpcClient) userfunc(p *stream.Peer, data []byte) {
 	}
 	server.lker.Lock()
 	if msg.Error != nil && msg.Error.Code == ERRCLOSING.Code {
-		server.status = 4
+		if server.status {
+			server.status = false
+			close(server.dispatcher)
+		}
 	}
 	req, ok := server.reqs[msg.Callid]
 	if !ok {
 		server.lker.Unlock()
 		return
 	}
+	delete(server.reqs, msg.Callid)
 	req.resp = msg.Body
 	req.err = msg.Error
-	req.finish <- struct{}{}
+	req.finish <- nil
 	server.lker.Unlock()
 }
 
 func (c *RpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
-	if server == nil {
-		return
-	}
 	log.Info(nil, "[rpc.client.offlinefunc] server:", p.GetPeerUniqueName(), "offline")
 	server.lker.Lock()
-	server.peer = nil
-	//all req failed
-	for _, req := range server.reqs {
+	if server.status {
+		server.status = false
+		close(server.dispatcher)
+	}
+	for callid, req := range server.reqs {
 		req.resp = nil
 		req.err = ERRCLOSED
-		req.finish <- struct{}{}
+		req.finish <- nil
+		delete(server.reqs, callid)
 	}
-	server.reqs = make(map[uint64]*req, 10)
-	if len(server.dservers) == 0 {
-		server.status = 0
-		server.lker.Unlock()
-		c.unregister(p.GetRemoteAddr())
-	} else {
-		server.status = 1
-		server.lker.Unlock()
-		//disconnect to server,but the server was registered on some dservers
-		//we need to triger manually update dserver data,to make sure this server is alive
-		manualNotice := make(chan struct{}, 1)
-		c.mlker.Lock()
-		c.manualNotice[manualNotice] = struct{}{}
-		if len(c.manualNotice) == 1 {
-			c.manually <- struct{}{}
-		}
-		c.mlker.Unlock()
-		<-manualNotice
-		server.lker.Lock()
-		if len(server.dservers) == 0 {
-			server.status = 0
-			server.lker.Unlock()
-			c.unregister(p.GetRemoteAddr())
-		} else {
-			go c.start(p.GetRemoteAddr())
-			server.lker.Unlock()
-		}
-	}
+	server.lker.Unlock()
+	go c.start(server.addr, server)
 }
+
+var errPickAgain = errors.New("[rpc.client] picked server closed")
 
 func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path string, in []byte, metadata map[string]string) ([]byte, error) {
 	var min time.Duration
@@ -482,78 +496,24 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 		}
 	}
 	d, _ := proto.Marshal(msg)
-	r := c.getreq(msg.Callid)
-	manual := false
+	r := c.getreq(msg.Callid, d)
 	for {
-		var server *ServerForPick
-		//pick server
-		c.lker.RLock()
-		server = c.c.Picker(c.servers)
-		if server == nil {
-			c.lker.RUnlock()
-			if manual {
-				c.putreq(r)
-				return nil, ERRNOSERVER
-			}
-			manualNotice := make(chan struct{}, 1)
-			c.mlker.Lock()
-			c.manualNotice[manualNotice] = struct{}{}
-			if len(c.manualNotice) == 1 {
-				c.manually <- struct{}{}
-			}
-			c.mlker.Unlock()
-			//wait manual update finish
-			select {
-			case <-manualNotice:
-				manual = true
-				continue
-			case <-ctx.Done():
-				c.mlker.Lock()
-				delete(c.manualNotice, manualNotice)
-				c.mlker.Unlock()
-				if ctx.Err() == context.DeadlineExceeded {
-					return nil, cerror.ErrDeadlineExceeded
-				} else if ctx.Err() == context.Canceled {
-					return nil, cerror.ErrCanceled
-				} else {
-					return nil, cerror.ConvertStdError(ctx.Err())
-				}
-			}
-		}
-		server.lker.Lock()
-		c.lker.RUnlock()
-		if !server.Pickable() {
-			server.lker.Unlock()
-			continue
+		server, e := c.pick(ctx)
+		if e != nil {
+			return nil, e
 		}
 		start := time.Now()
-		//check timeout
-		if msg.Deadline != 0 && msg.Deadline <= start.UnixNano()+int64(5*time.Millisecond) {
-			server.lker.Unlock()
-			return nil, cerror.ErrDeadlineExceeded
-		}
-		//send message
-		if e := server.peer.SendMessage(ctx, d); e != nil {
-			if e == stream.ErrMsgLarge {
-				server.lker.Unlock()
-				return nil, ERRREQMSGLARGE
-			} else if e == stream.ErrConnClosed {
-				server.status = 4
-			}
-			server.lker.Unlock()
-			continue
-		}
-		//send message success,store req,add req num
-		server.reqs[msg.Callid] = r
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
-		server.lker.Unlock()
+		if e = server.sendmessage(ctx, r); e != nil {
+			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
+			if e == errPickAgain {
+				continue
+			}
+			return nil, e
+		}
 		select {
 		case <-r.finish:
-			//req finished,delete req,reduce req num
 			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
-			server.lker.Lock()
-			delete(server.reqs, msg.Callid)
-			server.lker.Unlock()
 			end := time.Now()
 			trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "RPC", path, &start, &end, r.err)
 			if r.err != nil {
@@ -567,17 +527,15 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 				}
 			}
 			resp := r.resp
-			var err error
 			if r.err == nil {
-				err = nil
+				e = nil
 			} else {
-				err = r.err
+				e = r.err
 			}
 			c.putreq(r)
 			//resp and err maybe both nil
-			return resp, err
+			return resp, e
 		case <-ctx.Done():
-			//req canceled or timeout,delete req,reduce req num
 			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 			server.lker.Lock()
 			delete(server.reqs, msg.Callid)
@@ -585,17 +543,55 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 			//update last fail time
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
 			c.putreq(r)
-			end := time.Now()
 			if ctx.Err() == context.DeadlineExceeded {
-				trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "RPC", path, &start, &end, cerror.ErrDeadlineExceeded)
+				e = cerror.ErrDeadlineExceeded
+			} else if ctx.Err() == context.Canceled {
+				e = cerror.ErrCanceled
+			} else {
+				e = cerror.ConvertStdError(ctx.Err())
+			}
+			end := time.Now()
+			trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "RPC", path, &start, &end, e)
+			return nil, e
+		}
+	}
+}
+func (c *RpcClient) pick(ctx context.Context) (*ServerForPick, error) {
+	refresh := false
+	for {
+		c.slker.RLock()
+		server := c.c.Picker(c.servers)
+		if server != nil {
+			c.slker.RUnlock()
+			return server, nil
+		}
+		if refresh {
+			c.slker.RUnlock()
+			return nil, ERRNOSERVER
+		}
+		c.slker.RUnlock()
+		manualNotice := make(chan struct{}, 1)
+		c.mlker.Lock()
+		c.manualNotice[manualNotice] = struct{}{}
+		if len(c.manualNotice) == 1 {
+			c.manually <- struct{}{}
+		}
+		c.mlker.Unlock()
+		//wait manually update success
+		select {
+		case <-manualNotice:
+			refresh = true
+			continue
+		case <-ctx.Done():
+			c.mlker.Lock()
+			delete(c.manualNotice, manualNotice)
+			c.mlker.Unlock()
+			if ctx.Err() == context.DeadlineExceeded {
 				return nil, cerror.ErrDeadlineExceeded
 			} else if ctx.Err() == context.Canceled {
-				trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "RPC", path, &start, &end, cerror.ErrCanceled)
 				return nil, cerror.ErrCanceled
 			} else {
-				e := cerror.ConvertStdError(ctx.Err())
-				trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "RPC", path, &start, &end, e)
-				return nil, e
+				return nil, cerror.ConvertStdError(ctx.Err())
 			}
 		}
 	}
@@ -603,7 +599,8 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 
 type req struct {
 	callid uint64
-	finish chan struct{}
+	finish chan *struct{}
+	req    []byte
 	resp   []byte
 	err    *cerror.Error
 }
@@ -616,15 +613,17 @@ func (r *req) reset() {
 	r.resp = nil
 	r.err = nil
 }
-func (c *RpcClient) getreq(callid uint64) *req {
+func (c *RpcClient) getreq(callid uint64, reqdata []byte) *req {
 	r, ok := c.reqpool.Get().(*req)
 	if ok {
 		r.callid = callid
+		r.req = reqdata
 		return r
 	}
 	return &req{
 		callid: callid,
-		finish: make(chan struct{}, 1),
+		finish: make(chan *struct{}, 1),
+		req:    reqdata,
 		resp:   nil,
 		err:    nil,
 	}

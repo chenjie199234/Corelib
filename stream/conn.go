@@ -120,12 +120,10 @@ func (this *Instance) sworker(p *Peer) {
 	return
 }
 
-// success return peeruniquename
-// fail return empty
 //if tlsc not nil,tcp connection will be used with tls
-func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte, tlsc *tls.Config) string {
+func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte, tlsc *tls.Config) bool {
 	if this.mng.Finishing() {
-		return ""
+		return false
 	}
 	if tlsc != nil && tlsc.ServerName == "" {
 		tlsc = tlsc.Clone()
@@ -139,7 +137,7 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte, tlsc 
 	conn, e := (&net.Dialer{Deadline: dl}).Dial("tcp", serveraddr)
 	if e != nil {
 		log.Error(nil, "[Stream.StartTcpClient] dial error:", e)
-		return ""
+		return false
 	}
 	//disable system's keep alive probe
 	//use self's heartbeat probe
@@ -156,7 +154,7 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte, tlsc 
 	return this.cworker(p, verifydata, dl)
 }
 
-func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
+func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) bool {
 	p.conn.SetReadDeadline(dl)
 	p.conn.SetWriteDeadline(dl)
 	ctx, cancel := context.WithDeadline(p, dl)
@@ -165,7 +163,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 		if e := p.conn.(*tls.Conn).HandshakeContext(ctx); e != nil {
 			log.Error(nil, "[Stream.cworker] tls handshake error:", e)
 			p.conn.Close()
-			return ""
+			return false
 		}
 	}
 	//send self's verify message to server
@@ -174,19 +172,19 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 	if _, e := p.conn.Write(verifymsg.Bytes()); e != nil {
 		log.Error(nil, "[Stream.cworker] write verify msg to:", p.conn.RemoteAddr().String(), "error:", e)
 		p.conn.Close()
-		return ""
+		return false
 	}
 	//read first verify message from server
 	_ = this.verifypeer(ctx, p, true)
 	if p.peeruniquename == "" {
 		p.conn.Close()
-		return ""
+		return false
 	}
 	//verify server success
 	if e := this.mng.AddPeer(p); e != nil {
 		log.Error(nil, "[Stream.cworker] add:", p.peeruniquename, "to peer manager error:", e)
 		p.conn.Close()
-		return ""
+		return false
 	}
 	//verify finished set status to true
 	p.status = true
@@ -197,15 +195,14 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) string {
 			p.conn.Close()
 			this.mng.DelPeer(p)
 			p.CancelFunc()
-			return ""
+			return false
 		}
 	}
 	//after verify,the conntimeout is useless,heartbeat will work for this
 	p.conn.SetReadDeadline(time.Time{})
 	p.conn.SetWriteDeadline(time.Time{})
-	peeruniquename := p.peeruniquename
 	go this.handle(p)
-	return peeruniquename
+	return true
 }
 
 func (this *Instance) verifypeer(ctx context.Context, p *Peer, clientorserver bool) []byte {

@@ -130,7 +130,10 @@ func (p *Peer) getDispatcher(ctx context.Context) error {
 }
 func (p *Peer) putDispatcher() {
 	if p.status {
-		p.dispatcher <- nil
+		select {
+		case p.dispatcher <- nil:
+		default:
+		}
 	} else {
 		close(p.dispatcher)
 	}

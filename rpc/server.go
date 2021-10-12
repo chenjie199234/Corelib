@@ -355,6 +355,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, data []byte) {
 	//if traceid is not empty,traceid will not change
 	//if traceid is empty,init trace will create a new traceid,use the new traceid
 	traceid, _, _, _, _ = trace.GetTrace(ctx)
+	path := msg.Path
 	handler, ok := s.handler[msg.Path]
 	if !ok {
 		log.Error(ctx, "[rpc.server.userfunc] client:", p.GetPeerUniqueName(), "call path:", msg.Path, "error: unknown path")
@@ -418,7 +419,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, data []byte) {
 		start := time.Now()
 		handler(ctx, p.GetPeerUniqueName(), msg)
 		end := time.Now()
-		trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "RPC", msg.Path, &start, &end, msg.Error)
+		trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "RPC", path, &start, &end, msg.Error)
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d); e != nil {
 			log.Error(ctx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)

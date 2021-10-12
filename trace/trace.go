@@ -2,7 +2,6 @@ package trace
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -136,30 +135,39 @@ func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string,
 		ecode = int32(ee.Code)
 		emsg = ee.Msg
 	}
-	tracelog, _ := json.Marshal(&TraceLog{
-		TraceId:    traceid,
-		Start:      start.UnixNano(),
-		End:        end.UnixNano(),
-		HostName:   host.Hostname,
-		Role:       string(role),
-		FromApp:    fromapp,
-		FromIP:     fromip,
-		FromMethod: frommethod,
-		FromPath:   frompath,
-		ToApp:      toapp,
-		ToIP:       toip,
-		ToMethod:   tomethod,
-		ToPath:     topath,
-		ErrCode:    ecode,
-		ErrMsg:     emsg,
-	})
-	write(tracelog)
-}
-func write(log []byte) {
 	buf := bufpool.GetBuffer()
-	buf.AppendString("[TRACE] ")
-	buf.AppendByteSlice(log)
-	buf.AppendByte('\n')
+	buf.AppendString("[TRACE] {")
+	buf.AppendString("\"trace_id\":\"")
+	buf.AppendString(traceid)
+	buf.AppendString("\",\"start\":")
+	buf.AppendInt64(start.UnixNano())
+	buf.AppendString(",\"end\":")
+	buf.AppendInt64(end.UnixNano())
+	buf.AppendString(",\"host_name\":\"")
+	buf.AppendString(host.Hostname)
+	buf.AppendString("\",\"role\":\"")
+	buf.AppendString(string(role))
+	buf.AppendString("\",\"from_app\":\"")
+	buf.AppendString(fromapp)
+	buf.AppendString("\",\"from_ip\":\"")
+	buf.AppendString(fromip)
+	buf.AppendString("\",\"from_method\":\"")
+	buf.AppendString(frommethod)
+	buf.AppendString("\",\"from_path\":\"")
+	buf.AppendString(frompath)
+	buf.AppendString("\",\"to_app\":\"")
+	buf.AppendString(toapp)
+	buf.AppendString("\",\"to_ip\":\"")
+	buf.AppendString(toip)
+	buf.AppendString("\",\"to_method\":\"")
+	buf.AppendString(tomethod)
+	buf.AppendString("\",\"to_path\":\"")
+	buf.AppendString(topath)
+	buf.AppendString("\",\"err_msg\":\"")
+	buf.AppendString(emsg)
+	buf.AppendString("\",\"err_code\":")
+	buf.AppendInt32(ecode)
+	buf.AppendString("}\n")
 	if target&1 > 0 {
 		os.Stderr.Write(buf.Bytes())
 	}
