@@ -1,9 +1,11 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"os"
 	"sync"
@@ -23,7 +25,7 @@ import (
 type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
 
 //return data's key is server's addr "ip:port"
-type DiscoveryHandler func(group, name string, manually <-chan struct{}) (map[string]*RegisterData, error)
+type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *RpcClient)
 
 type ClientConfig struct {
 	ConnTimeout      time.Duration
@@ -82,11 +84,12 @@ type RpcClient struct {
 	tlsc        *tls.Config
 	instance    *stream.Instance
 
-	slker   *sync.RWMutex
-	servers map[string]*ServerForPick //key server addr
+	slker      *sync.RWMutex
+	serversRaw []byte
+	servers    map[string]*ServerForPick //key server addr
 
-	manually     chan struct{}
-	manualNotice map[chan struct{}]struct{}
+	manually     chan *struct{}
+	manualNotice map[chan *struct{}]*struct{}
 	mlker        *sync.Mutex
 
 	callid  uint64
@@ -242,8 +245,8 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 		slker:   &sync.RWMutex{},
 		servers: make(map[string]*ServerForPick, 10),
 
-		manually:     make(chan struct{}, 1),
-		manualNotice: make(map[chan struct{}]struct{}, 100),
+		manually:     make(chan *struct{}, 1),
+		manualNotice: make(map[chan *struct{}]*struct{}, 100),
 		mlker:        &sync.Mutex{},
 
 		callid:  0,
@@ -266,11 +269,8 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 	instancec.Offlinefunc = client.offlinefunc
 	client.instance, _ = stream.NewInstance(instancec, selfgroup, selfname)
 	//init discover
-	client.manually <- struct{}{}
-	manualNotice := make(chan struct{}, 1)
-	client.manualNotice[manualNotice] = struct{}{}
-	go defaultDiscover(group, name, client)
-	<-manualNotice
+	go c.DiscoverFunction(group, name, client.manually, client)
+	client.waitmanual(context.Background())
 	return client, nil
 }
 
@@ -279,11 +279,43 @@ type RegisterData struct {
 	Addition []byte
 }
 
+func (c *RpcClient) waitmanual(ctx context.Context) error {
+	notice := make(chan *struct{}, 1)
+	c.mlker.Lock()
+	c.manualNotice[notice] = nil
+	if len(c.manualNotice) == 1 {
+		c.manually <- nil
+	}
+	c.mlker.Unlock()
+	select {
+	case <-notice:
+		return nil
+	case <-ctx.Done():
+		c.mlker.Lock()
+		delete(c.manualNotice, notice)
+		c.mlker.Unlock()
+		return ctx.Err()
+	}
+}
+func (c *RpcClient) wakemanual() {
+	c.mlker.Lock()
+	for notice := range c.manualNotice {
+		notice <- nil
+		delete(c.manualNotice, notice)
+	}
+	c.mlker.Unlock()
+}
+
 //all: key server's addr
-func (c *RpcClient) updateDiscovery(all map[string]*RegisterData) {
+func (c *RpcClient) UpdateDiscovery(all map[string]*RegisterData) {
+	d, _ := json.Marshal(all)
+	if bytes.Equal(c.serversRaw, d) {
+		c.wakemanual()
+		return
+	}
+	c.serversRaw = d
 	//check need update
 	c.slker.Lock()
-	defer c.slker.Unlock()
 	//offline app
 	for _, server := range c.servers {
 		if _, ok := all[server.addr]; !ok {
@@ -337,6 +369,8 @@ func (c *RpcClient) updateDiscovery(all map[string]*RegisterData) {
 			server.Pickinfo.DServerNum = int32(len(registerdata.DServers))
 		}
 	}
+	c.slker.Unlock()
+	c.wakemanual()
 }
 func (c *RpcClient) start(addr string, server *ServerForPick) {
 	if !server.status {
@@ -349,14 +383,7 @@ func (c *RpcClient) start(addr string, server *ServerForPick) {
 		} else {
 			c.slker.Unlock()
 			//need to check server register status
-			manualNotice := make(chan struct{}, 1)
-			c.mlker.Lock()
-			c.manualNotice[manualNotice] = struct{}{}
-			if len(c.manualNotice) == 1 {
-				c.manually <- struct{}{}
-			}
-			c.mlker.Unlock()
-			<-manualNotice
+			c.waitmanual(context.Background())
 			c.slker.Lock()
 			if len(server.dservers) == 0 {
 				//server already unregister,remove server
@@ -570,30 +597,16 @@ func (c *RpcClient) pick(ctx context.Context) (*ServerForPick, error) {
 			return nil, ERRNOSERVER
 		}
 		c.slker.RUnlock()
-		manualNotice := make(chan struct{}, 1)
-		c.mlker.Lock()
-		c.manualNotice[manualNotice] = struct{}{}
-		if len(c.manualNotice) == 1 {
-			c.manually <- struct{}{}
-		}
-		c.mlker.Unlock()
-		//wait manually update success
-		select {
-		case <-manualNotice:
-			refresh = true
-			continue
-		case <-ctx.Done():
-			c.mlker.Lock()
-			delete(c.manualNotice, manualNotice)
-			c.mlker.Unlock()
-			if ctx.Err() == context.DeadlineExceeded {
+		if e := c.waitmanual(ctx); e != nil {
+			if e == context.DeadlineExceeded {
 				return nil, cerror.ErrDeadlineExceeded
-			} else if ctx.Err() == context.Canceled {
+			} else if e == context.Canceled {
 				return nil, cerror.ErrCanceled
 			} else {
-				return nil, cerror.ConvertStdError(ctx.Err())
+				return nil, cerror.ConvertStdError(e)
 			}
 		}
+		refresh = true
 	}
 }
 

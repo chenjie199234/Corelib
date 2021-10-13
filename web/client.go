@@ -26,7 +26,7 @@ import (
 type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
 
 //return data's key is server's addr "scheme://host:port"
-type DiscoveryHandler func(group, name string, manually <-chan struct{}) (map[string]*RegisterData, error)
+type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *WebClient)
 
 type ClientConfig struct {
 	ConnTimeout   time.Duration
@@ -81,11 +81,12 @@ type WebClient struct {
 	//certpool    *x509.CertPool
 	tlsc *tls.Config
 
-	lker    *sync.RWMutex
-	servers map[string]*ServerForPick
+	lker       *sync.RWMutex
+	serversRaw []byte
+	servers    map[string]*ServerForPick
 
-	manually     chan struct{}
-	manualNotice map[chan struct{}]struct{}
+	manually     chan *struct{}
+	manualNotice map[chan *struct{}]*struct{}
 	mlker        *sync.Mutex
 }
 type ServerForPick struct {
@@ -164,16 +165,13 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 
 		lker:         &sync.RWMutex{},
 		servers:      make(map[string]*ServerForPick, 10),
-		manually:     make(chan struct{}, 1),
-		manualNotice: make(map[chan struct{}]struct{}, 100),
+		manually:     make(chan *struct{}, 1),
+		manualNotice: make(map[chan *struct{}]*struct{}, 100),
 		mlker:        &sync.Mutex{},
 	}
 	//init discover
-	client.manually <- struct{}{}
-	manualNotice := make(chan struct{}, 1)
-	client.manualNotice[manualNotice] = struct{}{}
-	go defaultDiscover(group, name, client)
-	<-manualNotice
+	go c.DiscoverFunction(group, name, client.manually, client)
+	client.waitmanual(context.Background())
 	return client, nil
 }
 
@@ -182,11 +180,43 @@ type RegisterData struct {
 	Addition []byte
 }
 
+func (c *WebClient) waitmanual(ctx context.Context) error {
+	notice := make(chan *struct{}, 1)
+	c.mlker.Lock()
+	c.manualNotice[notice] = nil
+	if len(c.manualNotice) == 1 {
+		c.manually <- nil
+	}
+	c.mlker.Unlock()
+	select {
+	case <-notice:
+		return nil
+	case <-ctx.Done():
+		c.mlker.Lock()
+		delete(c.manualNotice, notice)
+		c.mlker.Unlock()
+		return ctx.Err()
+	}
+}
+func (c *WebClient) wakemanual() {
+	c.mlker.Lock()
+	for notice := range c.manualNotice {
+		notice <- nil
+		delete(c.manualNotice, notice)
+	}
+	c.mlker.Unlock()
+}
+
 //all: key server's addr "host:port"
-func (this *WebClient) updateDiscovery(all map[string]*RegisterData) {
+func (this *WebClient) UpdateDiscovery(all map[string]*RegisterData) {
+	d, _ := json.Marshal(all)
+	if bytes.Equal(this.serversRaw, d) {
+		this.wakemanual()
+		return
+	}
+	this.serversRaw = d
 	//check need update
 	this.lker.Lock()
-	defer this.lker.Unlock()
 	//offline app
 	for _, exist := range this.servers {
 		if _, ok := all[exist.host]; !ok {
@@ -253,6 +283,8 @@ func (this *WebClient) updateDiscovery(all map[string]*RegisterData) {
 			exist.Pickinfo.DServerNum = int32(len(registerdata.DServers))
 		}
 	}
+	this.lker.Unlock()
+	this.wakemanual()
 }
 
 func forbiddenHeader(header http.Header) bool {
@@ -367,47 +399,16 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		header.Set("Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
 	header.Del("Origin")
-	manual := false
 	for {
-		var server *ServerForPick
-		this.lker.RLock()
-		server = this.c.Picker(this.servers)
-		this.lker.RUnlock()
-		if server == nil {
-			if manual {
-				return nil, ERRNOSERVER
-			}
-			this.mlker.Lock()
-			manualNotice := make(chan struct{}, 1)
-			this.manualNotice[manualNotice] = struct{}{}
-			if len(this.manualNotice) == 1 {
-				this.manually <- struct{}{}
-			}
-			this.mlker.Unlock()
-			//wait manual update finish
-			select {
-			case <-manualNotice:
-				manual = true
-				continue
-			case <-ctx.Done():
-				this.mlker.Lock()
-				delete(this.manualNotice, manualNotice)
-				this.mlker.Unlock()
-				if ctx.Err() == context.DeadlineExceeded {
-					return nil, cerror.ErrDeadlineExceeded
-				} else if ctx.Err() == context.Canceled {
-					return nil, cerror.ErrCanceled
-				} else {
-					return nil, cerror.ConvertStdError(ctx.Err())
-				}
-			}
-		}
-		if !server.Pickable() {
-			continue
+		server, e := this.pick(ctx)
+		if e != nil {
+			return nil, e
 		}
 		start := time.Now()
+		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 		if ok && dl.UnixNano() < start.UnixNano()+int64(5*time.Millisecond) {
 			//ttl + server logic time
+			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 			return nil, cerror.ErrDeadlineExceeded
 		}
 		var scheme string
@@ -417,25 +418,24 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			scheme = "http"
 		}
 		var req *http.Request
-		var e error
 		if body == nil {
 			req, e = http.NewRequestWithContext(ctx, method, scheme+"://"+server.host+path+query, nil)
 		} else {
 			req, e = http.NewRequestWithContext(ctx, method, scheme+"://"+server.host+path+query, body)
 		}
 		if e != nil {
+			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 			return nil, cerror.ConvertStdError(e)
 		}
 		req.Header = header
 		//start call
-		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 		var resp *http.Response
 		resp, e = server.client.Do(req)
 		atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
+		end := time.Now()
 		if e != nil {
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
 			e = cerror.ConvertStdError(e)
-			end := time.Now()
 			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, e)
 			return nil, e
 		}
@@ -443,7 +443,6 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
 			server.status = false
 			resp.Body.Close()
-			end := time.Now()
 			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, ERRCLOSING)
 			continue
 		}
@@ -453,7 +452,6 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			resp.Body.Close()
 			if e != nil {
 				e = cerror.ConvertStdError(e)
-				end := time.Now()
 				trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, e)
 				return nil, e
 			}
@@ -466,12 +464,34 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			} else {
 				e = cerror.ConvertErrorstr(common.Byte2str(respbody))
 			}
-			end := time.Now()
 			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, e)
 			return nil, e
 		}
-		end := time.Now()
 		trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, nil)
 		return resp, nil
+	}
+}
+func (this *WebClient) pick(ctx context.Context) (*ServerForPick, error) {
+	refresh := false
+	for {
+		this.lker.RLock()
+		server := this.c.Picker(this.servers)
+		this.lker.RUnlock()
+		if server != nil {
+			return server, nil
+		}
+		if refresh {
+			return nil, ERRNOSERVER
+		}
+		if e := this.waitmanual(ctx); e != nil {
+			if e == context.DeadlineExceeded {
+				return nil, cerror.ErrDeadlineExceeded
+			} else if e == context.Canceled {
+				return nil, cerror.ErrCanceled
+			} else {
+				return nil, cerror.ConvertStdError(e)
+			}
+		}
+		refresh = true
 	}
 }
