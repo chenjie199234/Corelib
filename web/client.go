@@ -42,7 +42,7 @@ type ClientConfig struct {
 	SkipVerifyTLS    bool     //don't verify the server's cert
 	CAs              []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
 	Picker           PickHandler
-	DiscoverFunction DiscoveryHandler //this function will be called in for loop
+	DiscoverFunction DiscoveryHandler //this function will be called in goroutine in NewWebClient
 }
 
 func (c *ClientConfig) validate() {
