@@ -66,13 +66,13 @@ func getRpcClientConfig() *rpc.ClientConfig {
 		SocketWBuf:       2048,
 		MaxMsgLen:        65535,
 		VerifyData:       rpcverifydata,
-		DiscoverFunction: rpcDNS(),
+		DiscoverFunction: rpcDNS,
 	}
 }
 
-func rpcDNS() func(string, string, <-chan struct{}) (map[string]*rpc.RegisterData, error) {
+func rpcDNS(group, name string, manually <-chan *struct{}, client *rpc.RpcClient) {
 	tker := time.NewTicker(time.Second * 10)
-	return func(group, name string, manually <-chan struct{}) (map[string]*rpc.RegisterData, error) {
+	for{
 		select {
 		case <-tker.C:
 		case <-manually:
@@ -81,7 +81,7 @@ func rpcDNS() func(string, string, <-chan struct{}) (map[string]*rpc.RegisterDat
 		addrs, e := net.LookupHost(name + "-service-headless" + "." + group)
 		if e != nil {
 			log.Error(nil,"[rpc.dns] get:", name+"-service-headless", "addrs error:", e)
-			return nil, e
+			continue
 		}
 		for i := range addrs {
 			addrs[i] = addrs[i] + ":9000"
@@ -94,7 +94,7 @@ func rpcDNS() func(string, string, <-chan struct{}) (map[string]*rpc.RegisterDat
 		for len(tker.C) > 0 {
 			<-tker.C
 		}
-		return result, nil
+		client.UpdateDiscovery(result)
 	}
 }
 
@@ -108,13 +108,13 @@ func getWebClientConfig() *web.ClientConfig {
 		MaxHeader:        1024,
 		SocketRBuf:       2048,
 		SocketWBuf:       2048,
-		DiscoverFunction: webDNS(),
+		DiscoverFunction: webDNS,
 	}
 }
 
-func webDNS() func(string, string, <-chan struct{}) (map[string]*web.RegisterData, error) {
+func webDNS(group, name string, manually <-chan *struct{}, client *web.WebClient) {
 	tker := time.NewTicker(time.Second * 10)
-	return func(group, name string, manually <-chan struct{}) (map[string]*web.RegisterData, error){
+	for{
 		select {
 		case <-tker.C:
 		case <-manually:
@@ -123,7 +123,7 @@ func webDNS() func(string, string, <-chan struct{}) (map[string]*web.RegisterDat
 		addrs, e := net.LookupHost(name + "-service-headless" + "." + group)
 		if e != nil {
 			log.Error(nil,"[web.dns] get:", name+"-service-headless", "addrs error:", e)
-			return nil, e
+			continue
 		}
 		for i := range addrs {
 			addrs[i] = addrs[i] + ":8000"
@@ -136,7 +136,7 @@ func webDNS() func(string, string, <-chan struct{}) (map[string]*web.RegisterDat
 		for len(tker.C) > 0 {
 			<-tker.C
 		}
-		return result, nil
+		client.UpdateDiscovery(result)
 	}
 }`
 
