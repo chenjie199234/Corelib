@@ -14,7 +14,7 @@ help() {
 	echo "         please install golang"
 	echo "         please install protoc"
 	echo "         please install protoc-gen-go"
-	echo "         please install protoc-gen-go-rpc"
+	echo "         please install protoc-gen-go-crpc"
 	echo "         please install protoc-gen-go-web"
 	echo ""
 	echo "Usage:"
@@ -33,7 +33,7 @@ pb() {
 	go mod tidy
 	corelib=$(go list -m -f {{.GoListFormat}} github.com/chenjie199234/Corelib)
 	protoc -I ./ -I $corelib --go_out=paths=source_relative:. ./api/*.proto
-	protoc -I ./ -I $corelib --go-rpc_out=paths=source_relative:. ./api/*.proto
+	protoc -I ./ -I $corelib --go-crpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --go-web_out=paths=source_relative:. ./api/*.proto
 	go mod tidy
 }
@@ -86,8 +86,8 @@ if !(type protoc-gen-go-web >/dev/null 2>&1);then
 	exit 0
 fi
 
-if !(type protoc-gen-go-rpc >/dev/null 2>&1);then
-	echo "missing dependence: protoc-gen-go-rpc"
+if !(type protoc-gen-go-crpc >/dev/null 2>&1);then
+	echo "missing dependence: protoc-gen-go-crpc"
 	exit 0
 fi
 
@@ -161,9 +161,9 @@ if %errorlevel% == 1 (
 	goto :end
 )
 
-where /q protoc-gen-go-rpc.exe
+where /q protoc-gen-go-crpc.exe
 if %errorlevel% == 1 (
-	echo "missing dependence: protoc-gen-go-rpc"
+	echo "missing dependence: protoc-gen-go-crpc"
 	goto :end
 )
 
@@ -250,7 +250,7 @@ if "%1" == "new" (
 	go mod tidy
 	for /F %%i in ('go list -m -f {{.GoListFormat}} github.com/chenjie199234/Corelib') do ( set corelib=%%i)
 	protoc -I ./ -I %corelib% --go_out=paths=source_relative:. ./api/*.proto
-	protoc -I ./ -I %corelib% --go-rpc_out=paths=source_relative:. ./api/*.proto
+	protoc -I ./ -I %corelib% --go-crpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-web_out=paths=source_relative:. ./api/*.proto
 	go mod tidy
 goto :end
@@ -284,7 +284,7 @@ goto :end
 	echo           please install golang
 	echo           please install protoc
 	echo           please install protoc-gen-go
-	echo           please install protoc-gen-go-rpc
+	echo           please install protoc-gen-go-crpc
 	echo           please install protoc-gen-go-web
 	echo
 	echo Usage:

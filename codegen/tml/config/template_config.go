@@ -217,25 +217,25 @@ import (
 
 //sourceConfig can't hot update
 type sourceConfig struct {
-	RpcServer *RpcServerConfig        $json:"rpc_server"$
-	RpcClient *RpcClientConfig        $json:"rpc_client"$
-	WebServer *WebServerConfig        $json:"web_server"$
-	WebClient *WebClientConfig        $json:"web_client"$
-	Mongo     map[string]*MongoConfig $json:"mongo"$     //key example:xxx_mongo
-	Sql       map[string]*SqlConfig   $json:"sql"$       //key example:xx_sql
-	Redis     map[string]*RedisConfig $json:"redis"$     //key example:xx_redis
-	KafkaPub  []*KafkaPubConfig       $json:"kafka_pub"$
-	KafkaSub  []*KafkaSubConfig       $json:"kafka_sub"$
+	CrpcServer *CrpcServerConfig       $json:"crpc_server"$
+	CrpcClient *CrpcClientConfig       $json:"crpc_client"$
+	WebServer  *WebServerConfig        $json:"web_server"$
+	WebClient  *WebClientConfig        $json:"web_client"$
+	Mongo      map[string]*MongoConfig $json:"mongo"$     //key example:xxx_mongo
+	Sql        map[string]*SqlConfig   $json:"sql"$       //key example:xx_sql
+	Redis      map[string]*RedisConfig $json:"redis"$     //key example:xx_redis
+	KafkaPub   []*KafkaPubConfig       $json:"kafka_pub"$
+	KafkaSub   []*KafkaSubConfig       $json:"kafka_sub"$
 }
 
-//RpcServerConfig -
-type RpcServerConfig struct {
+//CrpcServerConfig -
+type CrpcServerConfig struct {
 	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
 	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
 }
 
-//RpcClientConfig -
-type RpcClientConfig struct {
+//CrpcClientConfig -
+type CrpcClientConfig struct {
 	ConnTimeout      ctime.Duration $json:"conn_timeout"$      //default 500ms
 	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms
 	HeartProbe       ctime.Duration $json:"heart_probe"$       //default 1.5s
@@ -354,34 +354,34 @@ func initsource(path string) {
 		Close()
 		os.Exit(1)
 	}
-	if sc.RpcServer == nil {
-		sc.RpcServer = &RpcServerConfig{
+	if sc.CrpcServer == nil {
+		sc.CrpcServer = &CrpcServerConfig{
 			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
 			HeartProbe:    ctime.Duration(1500 * time.Millisecond),
 		}
 	} else {
-		if sc.RpcServer.GlobalTimeout <= 0 {
-			sc.RpcServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
+		if sc.CrpcServer.GlobalTimeout <= 0 {
+			sc.CrpcServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
-		if sc.RpcServer.HeartProbe <= 0 {
-			sc.RpcServer.HeartProbe = ctime.Duration(1500 * time.Millisecond)
+		if sc.CrpcServer.HeartProbe <= 0 {
+			sc.CrpcServer.HeartProbe = ctime.Duration(1500 * time.Millisecond)
 		}
 	}
-	if sc.RpcClient == nil {
-		sc.RpcClient = &RpcClientConfig{
+	if sc.CrpcClient == nil {
+		sc.CrpcClient = &CrpcClientConfig{
 			ConnTimeout:   ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
 			HeartProbe:    ctime.Duration(time.Millisecond * 1500),
 		}
 	} else {
-		if sc.RpcClient.ConnTimeout <= 0 {
-			sc.RpcClient.ConnTimeout = ctime.Duration(time.Millisecond * 500)
+		if sc.CrpcClient.ConnTimeout <= 0 {
+			sc.CrpcClient.ConnTimeout = ctime.Duration(time.Millisecond * 500)
 		}
-		if sc.RpcClient.GlobalTimeout <= 0 {
-			sc.RpcClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
+		if sc.CrpcClient.GlobalTimeout <= 0 {
+			sc.CrpcClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
-		if sc.RpcClient.HeartProbe <= 0 {
-			sc.RpcClient.HeartProbe = ctime.Duration(time.Millisecond * 1500)
+		if sc.CrpcClient.HeartProbe <= 0 {
+			sc.CrpcClient.HeartProbe = ctime.Duration(time.Millisecond * 1500)
 		}
 	}
 	if sc.WebServer == nil {
@@ -699,14 +699,14 @@ func initsource(path string) {
 	}
 }
 
-//GetRpcServerConfig get the rpc net config
-func GetRpcServerConfig() *RpcServerConfig {
-	return sc.RpcServer
+//GetCrpcServerConfig get the rpc net config
+func GetCrpcServerConfig() *CrpcServerConfig {
+	return sc.CrpcServer
 }
 
-//GetRpcClientConfig get the rpc net config
-func GetRpcClientConfig() *RpcClientConfig {
-	return sc.RpcClient
+//GetCrpcClientConfig get the rpc net config
+func GetCrpcClientConfig() *CrpcClientConfig {
+	return sc.CrpcClient
 }
 
 //GetWebServerConfig get the web net config

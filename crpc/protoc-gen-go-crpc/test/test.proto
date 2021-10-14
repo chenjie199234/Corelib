@@ -1,14 +1,14 @@
 //protoc -I ../../../pbex -I . --go_out=paths=source_relative:. *.proto
 syntax="proto3";
 package test;
-option go_package="github.com/chenjie199234/Corelib/rpc/protoc-gen-go-rpc/test;test";
+option go_package="github.com/chenjie199234/Corelib/crpc/protoc-gen-go-crpc/test;test";
 import "pbex.proto";
 service test {
 	rpc hello(helloreq)returns(helloresp){
-		option (pbex.method)="post";
+		option (pbex.method)="get";
 		option (pbex.timeout)="200ms";
-		option (pbex.rpc_midwares)="user";
-		option (pbex.rpc_midwares)="limit";
+		option (pbex.web_midwares)="user";
+		option (pbex.web_midwares)="limit";
 	}
 }
 enum TestEnum {
@@ -35,7 +35,7 @@ message test_data{
 	TestEnum e=17;
 	repeated TestEnum re=18;
 	test_data m=19;
-	repeated test_data rm=20[(pbex.message_not_nil)=true];
+	repeated test_data rm=20;
 
 	map<int32,int32> mi32_i32=21;
 	map<int32,uint32> mi32_ui32=22;
@@ -79,7 +79,7 @@ message test_data{
 	map<uint64,float> mui64_f=57;
 	map<uint64,double> mui64_d=58;
 	map<uint64,TestEnum> mui64_e=59;
-	map<uint64,test_data> mui64_m=60;
+	map<uint64,test_data> mui64_m=60[(pbex.map_value_message_not_nil)=true];
 
 	map<string,int32> mss_i32=61[(pbex.map_key_string_reg_not_match)="notkey*"];
 	map<string,uint32> mss_ui32=62;
@@ -112,7 +112,7 @@ message helloreq{
 	TestEnum e=17;
 	repeated TestEnum re=18;
 	test_data m=19[(pbex.message_not_nil)=true];
-	repeated test_data rm=20;
+	repeated test_data rm=20[(pbex.message_not_nil)=true];
 
 	map<int32,int32> mi32_i32=21;
 	map<int32,uint32> mi32_ui32=22;
@@ -167,7 +167,7 @@ message helloreq{
 	map<string,float> mss_f=67;
 	map<string,double> mss_d=68;
 	map<string,TestEnum> mss_e=69;
-	map<string,test_data> mss_m=70[(pbex.map_value_message_not_nil)=true];
+	map<string,test_data> mss_m=70;
 }
 message helloresp{
 

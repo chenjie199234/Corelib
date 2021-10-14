@@ -15,7 +15,7 @@ import (
 	"syscall"
 
 	"{{.}}/config"
-	"{{.}}/server/xrpc"
+	"{{.}}/server/xcrpc"
 	"{{.}}/server/xweb"
 	"{{.}}/service"
 
@@ -27,6 +27,7 @@ func main() {
 		//this is a notice callback every time appconfig changes
 		//this function works in sync mode
 		//don't write block logic inside this
+		log.Info(nil, "[main] new app config:", ac)
 	})
 	defer config.Close()
 	//start the whole business service
@@ -39,7 +40,7 @@ func main() {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		xrpc.StartRpcServer()
+		xcrpc.StartCrpcServer()
 		select {
 		case ch <- syscall.SIGTERM:
 		default:
@@ -62,7 +63,7 @@ func main() {
 	//stop low level net service
 	wg.Add(1)
 	go func() {
-		xrpc.StopRpcServer()
+		xcrpc.StopCrpcServer()
 		wg.Done()
 	}()
 	wg.Add(1)

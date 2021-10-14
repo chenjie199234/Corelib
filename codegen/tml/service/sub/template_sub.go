@@ -17,7 +17,7 @@ import (
 	"{{.Pname}}/ecode"
 
 	//"github.com/chenjie199234/Corelib/log"
-	//"github.com/chenjie199234/Corelib/rpc"
+	//"github.com/chenjie199234/Corelib/crpc"
 	//"github.com/chenjie199234/Corelib/web"
 )
 

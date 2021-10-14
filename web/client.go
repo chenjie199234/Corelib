@@ -180,13 +180,17 @@ type RegisterData struct {
 	Addition []byte
 }
 
+func (c *WebClient) manual() {
+	select {
+	case c.manually <- nil:
+	default:
+	}
+}
 func (c *WebClient) waitmanual(ctx context.Context) error {
 	notice := make(chan *struct{}, 1)
 	c.mlker.Lock()
 	c.manualNotice[notice] = nil
-	if len(c.manualNotice) == 1 {
-		c.manually <- nil
-	}
+	c.manual()
 	c.mlker.Unlock()
 	select {
 	case <-notice:
@@ -210,13 +214,13 @@ func (c *WebClient) wakemanual() {
 //all: key server's addr "host:port"
 func (this *WebClient) UpdateDiscovery(all map[string]*RegisterData) {
 	d, _ := json.Marshal(all)
+	this.lker.Lock()
 	if bytes.Equal(this.serversRaw, d) {
+		this.lker.Unlock()
 		this.wakemanual()
 		return
 	}
 	this.serversRaw = d
-	//check need update
-	this.lker.Lock()
 	//offline app
 	for _, exist := range this.servers {
 		if _, ok := all[exist.host]; !ok {
@@ -441,6 +445,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		}
 		if resp.StatusCode == 888 {
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
+			this.manual()
 			server.status = false
 			resp.Body.Close()
 			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, ERRCLOSING)

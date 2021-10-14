@@ -1,4 +1,4 @@
-package rpc
+package crpc
 
 import (
 	"github.com/chenjie199234/Corelib/error"

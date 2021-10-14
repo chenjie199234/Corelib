@@ -16,13 +16,13 @@ import (
 	//example "{{.}}/api/deps/example"
 	"{{.}}/config"
 
+	"github.com/chenjie199234/Corelib/crpc"
 	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/rpc"
 	"github.com/chenjie199234/Corelib/web"
 )
 
-//var ExampleRpcApi example.ExampleRpcClient
-//var ExampleWebApi example.ExampleWebClient
+//var ExampleCrpcApi example.ExampleCrpcClient
+//var ExampleWebApi  example.ExampleWebClient
 
 //NewApi create all dependent service's api we need in this program
 //example grpc client,http client
@@ -30,15 +30,15 @@ func NewApi() error {
 	var e error
 	_ = e //avoid unuse
 
-	rpcc := getRpcClientConfig()
-	_ = rpcc //avoid unuse
+	crpcc := getCrpcClientConfig()
+	_ = crpcc //avoid unuse
 
-	//init rpc client below
-	//examplerpc, e = rpc.NewRpcClient(rpcc, api.Group, api.Name, "examplegroup", "examplename")
+	//init crpc client below
+	//examplecrpc, e = rpc.NewRpcClient(crpcc, api.Group, api.Name, "examplegroup", "examplename")
 	//if e != nil {
 	// 	return e
 	//}
-	//ExampleRpcApi = example.NewExampleRpcClient(examplerpc)
+	//ExampleCrpcApi = example.NewExampleCrpcClient(examplecrpc)
 
 	webc := getWebClientConfig()
 	_ = webc //avoid unuse
@@ -51,13 +51,13 @@ func NewApi() error {
 	//ExampleWebApi = example.NewExampleWebClient(exampleweb)
 	return nil
 }
-func getRpcClientConfig() *rpc.ClientConfig {
-	rc := config.GetRpcClientConfig()
-	rpcverifydata := ""
+func getCrpcClientConfig() *crpc.ClientConfig {
+	rc := config.GetCrpcClientConfig()
+	verifydata := ""
 	if len(config.EC.ServerVerifyDatas) != 0 {
-		rpcverifydata = config.EC.ServerVerifyDatas[0]
+		verifydata = config.EC.ServerVerifyDatas[0]
 	}
-	return &rpc.ClientConfig{
+	return &crpc.ClientConfig{
 		ConnTimeout:      time.Duration(rc.ConnTimeout),
 		GlobalTimeout:    time.Duration(rc.GlobalTimeout),
 		HeartPorbe:       time.Duration(rc.HeartProbe),
@@ -65,19 +65,19 @@ func getRpcClientConfig() *rpc.ClientConfig {
 		SocketRBuf:       2048,
 		SocketWBuf:       2048,
 		MaxMsgLen:        65535,
-		VerifyData:       rpcverifydata,
-		DiscoverFunction: rpcDNS,
+		VerifyData:       verifydata,
+		DiscoverFunction: crpcDNS,
 	}
 }
 
-func rpcDNS(group, name string, manually <-chan *struct{}, client *rpc.RpcClient) {
+func crpcDNS(group, name string, manually <-chan *struct{}, client *crpc.CrpcClient) {
 	tker := time.NewTicker(time.Second * 10)
 	for{
 		select {
 		case <-tker.C:
 		case <-manually:
 		}
-		result := make(map[string]*rpc.RegisterData)
+		result := make(map[string]*crpc.RegisterData)
 		addrs, e := net.LookupHost(name + "-service-headless" + "." + group)
 		if e != nil {
 			log.Error(nil,"[rpc.dns] get:", name+"-service-headless", "addrs error:", e)
@@ -89,7 +89,7 @@ func rpcDNS(group, name string, manually <-chan *struct{}, client *rpc.RpcClient
 		dserver := make(map[string]struct{})
 		dserver["dns"] = struct{}{}
 		for _, addr := range addrs {
-			result[addr] = &rpc.RegisterData{DServers: dserver}
+			result[addr] = &crpc.RegisterData{DServers: dserver}
 		}
 		for len(tker.C) > 0 {
 			<-tker.C

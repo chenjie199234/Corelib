@@ -1,4 +1,4 @@
-package rpc
+package crpc
 
 import (
 	"context"
@@ -71,7 +71,7 @@ func (c *ServerConfig) validate() {
 	}
 }
 
-type RpcServer struct {
+type CrpcServer struct {
 	c                  *ServerConfig
 	global             []OutsideHandler
 	ctxpool            *sync.Pool
@@ -82,7 +82,7 @@ type RpcServer struct {
 	refreshclosewaitch chan struct{}
 }
 
-func NewRpcServer(c *ServerConfig, selfgroup, selfname string) (*RpcServer, error) {
+func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -97,7 +97,7 @@ func NewRpcServer(c *ServerConfig, selfgroup, selfname string) (*RpcServer, erro
 		c = &ServerConfig{}
 	}
 	c.validate()
-	serverinstance := &RpcServer{
+	serverinstance := &CrpcServer{
 		c:                  c,
 		global:             make([]OutsideHandler, 0, 10),
 		ctxpool:            &sync.Pool{},
@@ -126,7 +126,7 @@ func NewRpcServer(c *ServerConfig, selfgroup, selfname string) (*RpcServer, erro
 var ErrServerClosed = errors.New("[rpc.server] closed")
 var ErrAlreadyStarted = errors.New("[rpc.server] already started")
 
-func (s *RpcServer) StartRpcServer(listenaddr string, certkeys map[string]string) error {
+func (s *CrpcServer) StartCrpcServer(listenaddr string, certkeys map[string]string) error {
 	var tlsc *tls.Config
 	if len(certkeys) != 0 {
 		certificates := make([]tls.Certificate, 0, len(certkeys))
@@ -147,7 +147,7 @@ func (s *RpcServer) StartRpcServer(listenaddr string, certkeys map[string]string
 	}
 	return e
 }
-func (s *RpcServer) StopRpcServer() {
+func (s *CrpcServer) StopCrpcServer() {
 	defer func() {
 		s.closewait.Wait()
 	}()
@@ -191,10 +191,10 @@ func (s *RpcServer) StopRpcServer() {
 		}
 	}
 }
-func (s *RpcServer) GetClientNum() int32 {
+func (s *CrpcServer) GetClientNum() int32 {
 	return s.instance.GetPeerNum()
 }
-func (s *RpcServer) GetReqNum() int32 {
+func (s *CrpcServer) GetReqNum() int32 {
 	totalreqnum := atomic.LoadInt32(&s.totalreqnum)
 	if totalreqnum < 0 {
 		return totalreqnum + math.MaxInt32
@@ -202,7 +202,7 @@ func (s *RpcServer) GetReqNum() int32 {
 		return totalreqnum
 	}
 }
-func (s *RpcServer) getContext(ctx context.Context, peeruniquename string, msg *Msg, handlers []OutsideHandler) *Context {
+func (s *CrpcServer) getContext(ctx context.Context, peeruniquename string, msg *Msg, handlers []OutsideHandler) *Context {
 	result, ok := s.ctxpool.Get().(*Context)
 	if !ok {
 		return &Context{
@@ -219,7 +219,7 @@ func (s *RpcServer) getContext(ctx context.Context, peeruniquename string, msg *
 	return result
 }
 
-func (s *RpcServer) putContext(ctx *Context) {
+func (s *CrpcServer) putContext(ctx *Context) {
 	ctx.Context = nil
 	ctx.peeruniquename = ""
 	ctx.msg = nil
@@ -228,12 +228,12 @@ func (s *RpcServer) putContext(ctx *Context) {
 }
 
 //thread unsafe
-func (s *RpcServer) Use(globalMids ...OutsideHandler) {
+func (s *CrpcServer) Use(globalMids ...OutsideHandler) {
 	s.global = append(s.global, globalMids...)
 }
 
 //thread unsafe
-func (s *RpcServer) RegisterHandler(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
+func (s *CrpcServer) RegisterHandler(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
 	h, e := s.insidehandler(path, functimeout, handlers...)
 	if e != nil {
 		return e
@@ -242,7 +242,7 @@ func (s *RpcServer) RegisterHandler(path string, functimeout time.Duration, hand
 	return nil
 }
 
-func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handlers ...OutsideHandler) (func(context.Context, string, *Msg), error) {
+func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handlers ...OutsideHandler) (func(context.Context, string, *Msg), error) {
 	totalhandlers := make([]OutsideHandler, 1)
 	totalhandlers = append(totalhandlers, s.global...)
 	totalhandlers = append(totalhandlers, handlers...)
@@ -305,7 +305,7 @@ func (s *RpcServer) insidehandler(path string, functimeout time.Duration, handle
 		workctx.Next()
 	}, nil
 }
-func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
+func (s *CrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if s.totalreqnum < 0 {
 		//self closed
 		return nil, false
@@ -332,7 +332,7 @@ func (s *RpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerV
 	}
 	return nil, false
 }
-func (s *RpcServer) onlinefunc(p *stream.Peer) bool {
+func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 	if s.totalreqnum < 0 {
 		//self closed
 		return false
@@ -340,7 +340,7 @@ func (s *RpcServer) onlinefunc(p *stream.Peer) bool {
 	log.Info(nil, "[rpc.server.onlinefunc] client:", p.GetPeerUniqueName(), "online")
 	return true
 }
-func (s *RpcServer) userfunc(p *stream.Peer, data []byte) {
+func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		log.Error(nil, "[rpc.server.userfunc] client:", p.GetPeerUniqueName(), "data format error:", e)
@@ -351,7 +351,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, data []byte) {
 	if msg.Tracedata != nil {
 		traceid = msg.Tracedata["Traceid"]
 	}
-	ctx := trace.InitTrace(nil, traceid, s.instance.GetSelfName(), host.Hostip, "RPC", msg.Path)
+	ctx := trace.InitTrace(nil, traceid, s.instance.GetSelfName(), host.Hostip, "CRPC", msg.Path)
 	//if traceid is not empty,traceid will not change
 	//if traceid is empty,init trace will create a new traceid,use the new traceid
 	traceid, _, _, _, _ = trace.GetTrace(ctx)
@@ -419,7 +419,7 @@ func (s *RpcServer) userfunc(p *stream.Peer, data []byte) {
 		start := time.Now()
 		handler(ctx, p.GetPeerUniqueName(), msg)
 		end := time.Now()
-		trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "RPC", path, &start, &end, msg.Error)
+		trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "CRPC", path, &start, &end, msg.Error)
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d); e != nil {
 			log.Error(ctx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
@@ -443,6 +443,6 @@ func (s *RpcServer) userfunc(p *stream.Peer, data []byte) {
 		atomic.AddInt32(&s.totalreqnum, -1)
 	}()
 }
-func (s *RpcServer) offlinefunc(p *stream.Peer) {
+func (s *CrpcServer) offlinefunc(p *stream.Peer) {
 	log.Info(nil, "[rpc.server.offlinefunc] client:", p.GetPeerUniqueName(), "offline")
 }

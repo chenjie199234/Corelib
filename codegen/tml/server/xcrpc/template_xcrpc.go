@@ -1,4 +1,4 @@
-package xrpc
+package xcrpc
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"text/template"
 )
 
-const text = `package xrpc
+const text = `package xcrpc
 
 import (
 	"time"
@@ -15,17 +15,17 @@ import (
 	"{{.}}/config"
 	"{{.}}/service"
 
+	"github.com/chenjie199234/Corelib/crpc"
+	"github.com/chenjie199234/Corelib/crpc/mids"
 	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/rpc"
-	"github.com/chenjie199234/Corelib/rpc/mids"
 )
 
-var s *rpc.RpcServer
+var s *crpc.CrpcServer
 
-//StartRpcServer -
-func StartRpcServer() {
-	c := config.GetRpcServerConfig()
-	rpcc := &rpc.ServerConfig{
+//StartCrpcServer -
+func StartCrpcServer() {
+	c := config.GetCrpcServerConfig()
+	crpcc := &crpc.ServerConfig{
 		GlobalTimeout: time.Duration(c.GlobalTimeout),
 		HeartPorbe:    time.Duration(c.HeartProbe),
 		GroupNum:      1,
@@ -35,8 +35,8 @@ func StartRpcServer() {
 		VerifyDatas:   config.EC.ServerVerifyDatas,
 	}
 	var e error
-	if s, e = rpc.NewRpcServer(rpcc, api.Group, api.Name); e != nil {
-		log.Error(nil,"[xrpc] new error:", e)
+	if s, e = crpc.NewCrpcServer(crpcc, api.Group, api.Name); e != nil {
+		log.Error(nil,"[xcrpc] new error:", e)
 		return
 	}
 
@@ -44,42 +44,42 @@ func StartRpcServer() {
 	//s.Use(globalmidwares)
 
 	//you just need to register your service here
-	if e = api.RegisterStatusRpcServer(s, service.SvcStatus, mids.AllMids()); e != nil {
-		log.Error(nil,"[xrpc] register handlers error:", e)
+	if e = api.RegisterStatusCrpcServer(s, service.SvcStatus, mids.AllMids()); e != nil {
+		log.Error(nil,"[xcrpc] register handlers error:", e)
 		return
 	}
 	//example
-	//if e = api.RegisterExampleRpcServer(s, service.SvcExample,mids.AllMids()); e != nil {
-	//log.Error(nil,"[xrpc] register handlers error:", e)
+	//if e = api.RegisterExampleCrpcServer(s, service.SvcExample,mids.AllMids()); e != nil {
+	//log.Error(nil,"[xcrpc] register handlers error:", e)
 	//return
 	//}
 
-	if e = s.StartRpcServer(":9000", nil); e != nil {
-		if e != rpc.ErrServerClosed {
-			log.Error(nil,"[xrpc] start error:", e)
+	if e = s.StartCrpcServer(":9000", nil); e != nil {
+		if e != crpc.ErrServerClosed {
+			log.Error(nil,"[xcrpc] start error:", e)
 		} else {
-			log.Info(nil,"[xrpc] server closed")
+			log.Info(nil,"[xcrpc] server closed")
 		}
 		return
 	}
 }
 
-//StopRpcServer -
-func StopRpcServer() {
+//StopCrpcServer -
+func StopCrpcServer() {
 	if s != nil {
-		s.StopRpcServer()
+		s.StopCrpcServer()
 	}
 }`
 
-const path = "./server/xrpc/"
-const name = "xrpc.go"
+const path = "./server/xcrpc/"
+const name = "xcrpc.go"
 
 var tml *template.Template
 var file *os.File
 
 func init() {
 	var e error
-	tml, e = template.New("xrpc").Parse(text)
+	tml, e = template.New("xcrpc").Parse(text)
 	if e != nil {
 		panic(fmt.Sprintf("create template error:%s", e))
 	}

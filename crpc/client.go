@@ -1,4 +1,4 @@
-package rpc
+package crpc
 
 import (
 	"bytes"
@@ -25,7 +25,7 @@ import (
 type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
 
 //return data's key is server's addr "ip:port"
-type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *RpcClient)
+type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *CrpcClient)
 
 type ClientConfig struct {
 	ConnTimeout      time.Duration
@@ -36,7 +36,7 @@ type ClientConfig struct {
 	SocketWBuf       uint32
 	MaxMsgLen        uint32
 	VerifyData       string
-	UseTLS           bool     //rpc or rpcs
+	UseTLS           bool     //crpc or crpcs
 	SkipVerifyTLS    bool     //don't verify the server's cert
 	CAs              []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
 	Picker           PickHandler
@@ -77,7 +77,7 @@ func (c *ClientConfig) validate() {
 }
 
 //appuniquename = appname:addr
-type RpcClient struct {
+type CrpcClient struct {
 	selfappname string
 	appname     string
 	c           *ClientConfig
@@ -188,7 +188,7 @@ func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 	return
 }
 
-func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*RpcClient, error) {
+func NewCrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*CrpcClient, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -233,7 +233,7 @@ func NewRpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*Rp
 			}
 		}
 	}
-	client := &RpcClient{
+	client := &CrpcClient{
 		selfappname: selfappname,
 		appname:     appname,
 		c:           c,
@@ -279,13 +279,17 @@ type RegisterData struct {
 	Addition []byte
 }
 
-func (c *RpcClient) waitmanual(ctx context.Context) error {
+func (c *CrpcClient) manual() {
+	select {
+	case c.manually <- nil:
+	default:
+	}
+}
+func (c *CrpcClient) waitmanual(ctx context.Context) error {
 	notice := make(chan *struct{}, 1)
 	c.mlker.Lock()
 	c.manualNotice[notice] = nil
-	if len(c.manualNotice) == 1 {
-		c.manually <- nil
-	}
+	c.manual()
 	c.mlker.Unlock()
 	select {
 	case <-notice:
@@ -297,7 +301,7 @@ func (c *RpcClient) waitmanual(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
-func (c *RpcClient) wakemanual() {
+func (c *CrpcClient) wakemanual() {
 	c.mlker.Lock()
 	for notice := range c.manualNotice {
 		notice <- nil
@@ -307,15 +311,15 @@ func (c *RpcClient) wakemanual() {
 }
 
 //all: key server's addr
-func (c *RpcClient) UpdateDiscovery(all map[string]*RegisterData) {
+func (c *CrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 	d, _ := json.Marshal(all)
+	c.slker.Lock()
 	if bytes.Equal(c.serversRaw, d) {
+		c.slker.Unlock()
 		c.wakemanual()
 		return
 	}
 	c.serversRaw = d
-	//check need update
-	c.slker.Lock()
 	//offline app
 	for _, server := range c.servers {
 		if _, ok := all[server.addr]; !ok {
@@ -347,7 +351,7 @@ func (c *RpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 				},
 			}
 			c.servers[addr] = server
-			go c.start(addr, server)
+			go c.start(server)
 		} else {
 			//this is not a new register
 			//unregister on which discovery server
@@ -372,7 +376,7 @@ func (c *RpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 	c.slker.Unlock()
 	c.wakemanual()
 }
-func (c *RpcClient) start(addr string, server *ServerForPick) {
+func (c *CrpcClient) start(server *ServerForPick) {
 	if !server.status {
 		//reconnect to server
 		c.slker.Lock()
@@ -380,51 +384,56 @@ func (c *RpcClient) start(addr string, server *ServerForPick) {
 			//server already unregister,remove server
 			delete(c.servers, server.addr)
 			c.slker.Unlock()
-		} else {
-			c.slker.Unlock()
-			//need to check server register status
-			c.waitmanual(context.Background())
-			c.slker.Lock()
-			if len(server.dservers) == 0 {
-				//server already unregister,remove server
-				delete(c.servers, server.addr)
-				c.slker.Unlock()
-			} else {
-				c.slker.Unlock()
-				server.dispatcher = make(chan *struct{}, 1)
-				server.status = true
-			}
+			return
 		}
+		c.slker.Unlock()
+		//need to check server register status
+		c.waitmanual(context.Background())
+		c.slker.Lock()
+		if len(server.dservers) == 0 {
+			//server already unregister,remove server
+			delete(c.servers, server.addr)
+			c.slker.Unlock()
+			return
+		}
+		c.slker.Unlock()
+		server.dispatcher = make(chan *struct{}, 1)
+		server.status = true
 	}
 	tempverifydata := c.c.VerifyData + "|" + c.appname
 	var tlsc *tls.Config
 	if c.c.UseTLS {
 		tlsc = c.tlsc
 	}
-	if !c.instance.StartTcpClient(addr, common.Str2byte(tempverifydata), tlsc) {
+	if !c.instance.StartTcpClient(server.addr, common.Str2byte(tempverifydata), tlsc) {
 		server.lker.Lock()
 		server.status = false
 		close(server.dispatcher)
 		server.lker.Unlock()
 		time.Sleep(time.Millisecond * 100)
-		go c.start(server.addr, server)
+		go c.start(server)
 	}
 }
 
-func (c *RpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
+func (c *CrpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if common.Byte2str(peerVerifyData) != c.c.VerifyData {
 		return nil, false
 	}
 	//verify success
 	return nil, true
 }
-func (c *RpcClient) onlinefunc(p *stream.Peer) bool {
+func (c *CrpcClient) onlinefunc(p *stream.Peer) bool {
 	//online success,update success
 	c.slker.RLock()
 	addr := p.GetRemoteAddr()
 	server, ok := c.servers[addr]
 	if !ok {
 		//this is impossible
+		c.slker.RUnlock()
+		return false
+	}
+	if len(server.dservers) == 0 {
+		//server already unregister
 		c.slker.RUnlock()
 		return false
 	}
@@ -436,7 +445,7 @@ func (c *RpcClient) onlinefunc(p *stream.Peer) bool {
 	return true
 }
 
-func (c *RpcClient) userfunc(p *stream.Peer, data []byte) {
+func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	server := (*ServerForPick)(p.GetData())
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
@@ -463,7 +472,7 @@ func (c *RpcClient) userfunc(p *stream.Peer, data []byte) {
 	server.lker.Unlock()
 }
 
-func (c *RpcClient) offlinefunc(p *stream.Peer) {
+func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
 	log.Info(nil, "[rpc.client.offlinefunc] server:", p.GetPeerUniqueName(), "offline")
 	server.lker.Lock()
@@ -478,12 +487,12 @@ func (c *RpcClient) offlinefunc(p *stream.Peer) {
 		delete(server.reqs, callid)
 	}
 	server.lker.Unlock()
-	go c.start(server.addr, server)
+	go c.start(server)
 }
 
 var errPickAgain = errors.New("[rpc.client] picked server closed")
 
-func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path string, in []byte, metadata map[string]string) ([]byte, error) {
+func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path string, in []byte, metadata map[string]string) ([]byte, error) {
 	var min time.Duration
 	if c.c.GlobalTimeout != 0 {
 		min = c.c.GlobalTimeout
@@ -542,11 +551,13 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 		case <-r.finish:
 			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "RPC", path, &start, &end, r.err)
+			trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "CRPC", path, &start, &end, r.err)
 			if r.err != nil {
 				//req error,update last fail time
 				server.Pickinfo.Lastfail = time.Now().UnixNano()
 				if r.err.Code == ERRCLOSING.Code {
+					//triger manually discovery
+					c.manual()
 					//server is closing,this req can be retry
 					r.resp = nil
 					r.err = nil
@@ -578,12 +589,12 @@ func (c *RpcClient) Call(ctx context.Context, functimeout time.Duration, path st
 				e = cerror.ConvertStdError(ctx.Err())
 			}
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "RPC", path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "CRPC", path, &start, &end, e)
 			return nil, e
 		}
 	}
 }
-func (c *RpcClient) pick(ctx context.Context) (*ServerForPick, error) {
+func (c *CrpcClient) pick(ctx context.Context) (*ServerForPick, error) {
 	refresh := false
 	for {
 		c.slker.RLock()
@@ -626,7 +637,7 @@ func (r *req) reset() {
 	r.resp = nil
 	r.err = nil
 }
-func (c *RpcClient) getreq(callid uint64, reqdata []byte) *req {
+func (c *CrpcClient) getreq(callid uint64, reqdata []byte) *req {
 	r, ok := c.reqpool.Get().(*req)
 	if ok {
 		r.callid = callid
@@ -641,7 +652,7 @@ func (c *RpcClient) getreq(callid uint64, reqdata []byte) *req {
 		err:    nil,
 	}
 }
-func (c *RpcClient) putreq(r *req) {
+func (c *CrpcClient) putreq(r *req) {
 	r.reset()
 	c.reqpool.Put(r)
 }

@@ -1,6 +1,6 @@
 syntax="proto3";
-package rpc;
-option go_package="github.com/chenjie199234/Corelib/rpc;rpc";
+package crpc;
+option go_package="github.com/chenjie199234/Corelib/crpc;crpc";
 import "error/error.proto";
 message msg {
 	uint64 callid=1;
