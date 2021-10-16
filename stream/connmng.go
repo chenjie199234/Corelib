@@ -70,9 +70,10 @@ func newconnmng(groupnum int, heartprobe, sendidletimeout, recvidletimeout time.
 				if mng.Finishing() {
 					return
 				}
-				atomic.AddUint64(&tw.index, 1)
+				newindex := atomic.AddUint64(&tw.index, 1)
 				//give 1/3 heartprobe for net lag
-				go tw.wheel[tw.index%20].run(mng.heartprobe*3+mng.heartprobe/3, mng.sendidletimeout, mng.recvidletimeout, &t)
+				g := tw.wheel[newindex%20]
+				go g.run(mng.heartprobe*3+mng.heartprobe/3, mng.sendidletimeout, mng.recvidletimeout, &t)
 			}
 		}()
 	}
@@ -163,11 +164,11 @@ func (m *connmng) SendMessage(ctx context.Context, data []byte) {
 	}
 }
 func (g *group) run(hearttimeout, sendidletimeout, recvidletimeout time.Duration, now *time.Time) {
-	g.Lock()
+	g.RLock()
 	for _, p := range g.peers {
 		p.checkheart(hearttimeout, sendidletimeout, recvidletimeout, now)
 	}
-	g.Unlock()
+	g.RUnlock()
 }
 func (g *group) SendMessage(ctx context.Context, data []byte) {
 	wg := sync.WaitGroup{}

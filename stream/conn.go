@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/log"
@@ -24,25 +25,28 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 	if tlsc != nil && len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
 		return errors.New("[Stream.StartTcpServer] tls certificate setting missing")
 	}
-	this.Lock()
-	if this.tcplistener != nil {
-		this.Unlock()
-		return ErrAlreadyStarted
+	if this.mng.Finishing() {
+		return ErrServerClosed
 	}
-	var e error
-	if this.tcplistener, e = net.Listen("tcp", listenaddr); e != nil {
-		this.Unlock()
+	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
+	if e != nil {
+		return errors.New("[Stream.StartTcpServer] resolve tcp addr: " + listenaddr + " error: " + e.Error())
+	}
+	var tmplistener *net.TCPListener
+	if tmplistener, e = net.ListenTCP("tcp", laddr); e != nil {
 		return errors.New("[Stream.StartTcpServer] listen tcp addr: " + listenaddr + " error: " + e.Error())
 	}
-	this.Unlock()
+	if !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&this.tcplistener)), nil, unsafe.Pointer(tmplistener)) {
+		return ErrAlreadyStarted
+	}
 	//check stop status
 	if this.mng.Finishing() {
-		this.tcplistener.Close()
+		tmplistener.Close()
 		return ErrServerClosed
 	}
 	for {
 		p := newPeer(this.c.TcpC.MaxMsgLen)
-		conn, e := this.tcplistener.Accept()
+		conn, e := this.tcplistener.AcceptTCP()
 		if e != nil {
 			this.tcplistener.Close()
 			if this.mng.Finishing() {
@@ -57,9 +61,9 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 		}
 		//disable system's keep alive probe
 		//use self's heartbeat probe
-		(conn.(*net.TCPConn)).SetKeepAlive(false)
-		(conn.(*net.TCPConn)).SetReadBuffer(int(this.c.TcpC.SocketRBufLen))
-		(conn.(*net.TCPConn)).SetWriteBuffer(int(this.c.TcpC.SocketWBufLen))
+		conn.SetKeepAlive(false)
+		conn.SetReadBuffer(int(this.c.TcpC.SocketRBufLen))
+		conn.SetWriteBuffer(int(this.c.TcpC.SocketWBufLen))
 		if tlsc != nil {
 			p.conn = tls.Server(conn, tlsc)
 			p.tls = true

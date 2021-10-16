@@ -153,7 +153,7 @@ func (s *CrpcServer) StopCrpcServer() {
 	}()
 	stop := false
 	for {
-		old := s.totalreqnum
+		old := atomic.LoadInt32(&s.totalreqnum)
 		if old >= 0 {
 			if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old-math.MaxInt32) {
 				stop = true
@@ -175,7 +175,7 @@ func (s *CrpcServer) StopCrpcServer() {
 		for {
 			select {
 			case <-tmer.C:
-				if s.totalreqnum != -math.MaxInt32 {
+				if atomic.LoadInt32(&s.totalreqnum) != -math.MaxInt32 {
 					tmer.Reset(s.c.WaitCloseTime)
 				} else {
 					s.instance.Stop()
@@ -306,7 +306,7 @@ func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handl
 	}, nil
 }
 func (s *CrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
-	if s.totalreqnum < 0 {
+	if atomic.LoadInt32(&s.totalreqnum) < 0 {
 		//self closed
 		return nil, false
 	}
@@ -333,7 +333,7 @@ func (s *CrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peer
 	return nil, false
 }
 func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
-	if s.totalreqnum < 0 {
+	if atomic.LoadInt32(&s.totalreqnum) < 0 {
 		//self closed
 		return false
 	}
@@ -372,7 +372,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		return
 	}
 	for {
-		old := s.totalreqnum
+		old := atomic.LoadInt32(&s.totalreqnum)
 		if old >= 0 {
 			//add req num
 			if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old+1) {
@@ -434,7 +434,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				p.SendMessage(nil, d)
 			}
 		}
-		if s.totalreqnum < 0 {
+		if atomic.LoadInt32(&s.totalreqnum) < 0 {
 			select {
 			case s.refreshclosewaitch <- struct{}{}:
 			default:

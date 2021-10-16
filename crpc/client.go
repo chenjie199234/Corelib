@@ -100,7 +100,7 @@ type ServerForPick struct {
 	addr       string
 	dservers   map[string]struct{} //this app registered on which discovery server
 	peer       *stream.Peer
-	status     bool //1 - working,0 - closed
+	status     int32 //1 - working,0 - closed
 	dispatcher chan *struct{}
 
 	//active calls
@@ -118,10 +118,10 @@ type pickinfo struct {
 }
 
 func (s *ServerForPick) Pickable() bool {
-	return s.status
+	return atomic.LoadInt32(&s.status) == 1
 }
 func (s *ServerForPick) getDispatcher(ctx context.Context) error {
-	if !s.status {
+	if atomic.LoadInt32(&s.status) == 0 {
 		return errPickAgain
 	}
 	if dl, ok := ctx.Deadline(); ok {
@@ -134,7 +134,7 @@ func (s *ServerForPick) getDispatcher(ctx context.Context) error {
 	case _, ok := <-s.dispatcher:
 		if !ok {
 			return errPickAgain
-		} else if !s.status {
+		} else if atomic.LoadInt32(&s.status) == 0 {
 			//double check
 			return errPickAgain
 		}
@@ -151,7 +151,7 @@ func (s *ServerForPick) getDispatcher(ctx context.Context) error {
 }
 func (s *ServerForPick) putDispatcher() {
 	s.lker.Lock()
-	if s.status {
+	if atomic.LoadInt32(&s.status) == 1 {
 		select {
 		case s.dispatcher <- nil:
 		default:
@@ -326,7 +326,7 @@ func (c *CrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 			//this app unregistered
 			server.dservers = nil
 			server.Pickinfo.DServerNum = 0
-			server.Pickinfo.DServerOffline = time.Now().Unix()
+			server.Pickinfo.DServerOffline = time.Now().UnixNano()
 		}
 	}
 	//online app or update app's dservers
@@ -338,7 +338,7 @@ func (c *CrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 				addr:       addr,
 				dservers:   registerdata.DServers,
 				peer:       nil,
-				status:     true,
+				status:     1,
 				dispatcher: make(chan *struct{}, 1),
 				lker:       &sync.Mutex{},
 				reqs:       make(map[uint64]*req, 10),
@@ -377,7 +377,7 @@ func (c *CrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 	c.wakemanual()
 }
 func (c *CrpcClient) start(server *ServerForPick) {
-	if !server.status {
+	if atomic.LoadInt32(&server.status) == 0 {
 		//reconnect to server
 		c.slker.Lock()
 		if len(server.dservers) == 0 {
@@ -398,7 +398,7 @@ func (c *CrpcClient) start(server *ServerForPick) {
 		}
 		c.slker.Unlock()
 		server.dispatcher = make(chan *struct{}, 1)
-		server.status = true
+		atomic.StoreInt32(&server.status, 1)
 	}
 	tempverifydata := c.c.VerifyData + "|" + c.appname
 	var tlsc *tls.Config
@@ -407,7 +407,7 @@ func (c *CrpcClient) start(server *ServerForPick) {
 	}
 	if !c.instance.StartTcpClient(server.addr, common.Str2byte(tempverifydata), tlsc) {
 		server.lker.Lock()
-		server.status = false
+		atomic.StoreInt32(&server.status, 0)
 		close(server.dispatcher)
 		server.lker.Unlock()
 		time.Sleep(time.Millisecond * 100)
@@ -455,8 +455,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	}
 	server.lker.Lock()
 	if msg.Error != nil && msg.Error.Code == ERRCLOSING.Code {
-		if server.status {
-			server.status = false
+		if atomic.CompareAndSwapInt32(&server.status, 1, 0) {
 			close(server.dispatcher)
 		}
 	}
@@ -476,8 +475,7 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
 	log.Info(nil, "[rpc.client.offlinefunc] server:", p.GetPeerUniqueName(), "offline")
 	server.lker.Lock()
-	if server.status {
-		server.status = false
+	if atomic.CompareAndSwapInt32(&server.status, 1, 0) {
 		close(server.dispatcher)
 	}
 	for callid, req := range server.reqs {

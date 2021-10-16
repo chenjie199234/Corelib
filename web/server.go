@@ -14,7 +14,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
@@ -182,14 +181,35 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	c.validate()
 	//new server
 	instance := &WebServer{
-		paths:            make(map[string]map[string]struct{}),
-		selfappname:      selfappname,
-		c:                c,
-		ctxpool:          &sync.Pool{},
-		global:           make([]OutsideHandler, 0, 10),
-		router:           httprouter.New(),
+		paths:       make(map[string]map[string]struct{}),
+		selfappname: selfappname,
+		c:           c,
+		ctxpool:     &sync.Pool{},
+		global:      make([]OutsideHandler, 0, 10),
+		router:      httprouter.New(),
+		s: &http.Server{
+			ReadTimeout:    c.GlobalTimeout,
+			WriteTimeout:   c.GlobalTimeout,
+			IdleTimeout:    c.IdleTimeout,
+			MaxHeaderBytes: int(c.MaxHeader),
+			ConnContext: func(ctx context.Context, conn net.Conn) context.Context {
+				if c.HeartProbe > 0 {
+					(conn.(*net.TCPConn)).SetKeepAlive(true)
+					(conn.(*net.TCPConn)).SetKeepAlivePeriod(c.HeartProbe)
+				}
+				(conn.(*net.TCPConn)).SetReadBuffer(int(c.SocketRBuf))
+				(conn.(*net.TCPConn)).SetWriteBuffer(int(c.SocketWBuf))
+				return ctx
+			},
+		},
 		closewait:        &sync.WaitGroup{},
 		refreshclosewait: make(chan struct{}, 1),
+	}
+	instance.s.Handler = instance
+	if c.HeartProbe < 0 {
+		instance.s.SetKeepAlivesEnabled(false)
+	} else {
+		instance.s.SetKeepAlivesEnabled(true)
 	}
 	instance.closewait.Add(1)
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -268,27 +288,6 @@ var ErrAlreadyStarted = errors.New("[web.server] already started")
 
 //certkeys mapkey: cert path,mapvalue: key path
 func (this *WebServer) StartWebServer(listenaddr string, certkeys map[string]string) error {
-	s := &http.Server{
-		ReadTimeout:    this.c.GlobalTimeout,
-		WriteTimeout:   this.c.GlobalTimeout,
-		IdleTimeout:    this.c.IdleTimeout,
-		MaxHeaderBytes: int(this.c.MaxHeader),
-		ConnContext: func(ctx context.Context, conn net.Conn) context.Context {
-			if this.c.HeartProbe > 0 {
-				(conn.(*net.TCPConn)).SetKeepAlive(true)
-				(conn.(*net.TCPConn)).SetKeepAlivePeriod(this.c.HeartProbe)
-			}
-			(conn.(*net.TCPConn)).SetReadBuffer(int(this.c.SocketRBuf))
-			(conn.(*net.TCPConn)).SetWriteBuffer(int(this.c.SocketWBuf))
-			return ctx
-		},
-	}
-	if this.c.HeartProbe < 0 {
-		s.SetKeepAlivesEnabled(false)
-	} else {
-		s.SetKeepAlivesEnabled(true)
-	}
-	s.Handler = this
 	if len(certkeys) > 0 {
 		certificates := make([]tls.Certificate, 0, len(certkeys))
 		for cert, key := range certkeys {
@@ -298,10 +297,7 @@ func (this *WebServer) StartWebServer(listenaddr string, certkeys map[string]str
 			}
 			certificates = append(certificates, temp)
 		}
-		s.TLSConfig = &tls.Config{Certificates: certificates}
-	}
-	if !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&this.s)), nil, unsafe.Pointer(s)) {
-		return ErrAlreadyStarted
+		this.s.TLSConfig = &tls.Config{Certificates: certificates}
 	}
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
@@ -337,7 +333,7 @@ func (this *WebServer) StopWebServer() {
 	}()
 	stop := false
 	for {
-		old := this.totalreqnum
+		old := atomic.LoadInt32(&this.totalreqnum)
 		if old >= 0 {
 			if atomic.CompareAndSwapInt32(&this.totalreqnum, old, old-math.MaxInt32) {
 				stop = true
@@ -352,7 +348,7 @@ func (this *WebServer) StopWebServer() {
 		for {
 			select {
 			case <-tmer.C:
-				if this.totalreqnum != -math.MaxInt32 {
+				if atomic.LoadInt32(&this.totalreqnum) != -math.MaxInt32 {
 					tmer.Reset(this.c.WaitCloseTime)
 				} else {
 					this.s.Shutdown(context.Background())
@@ -472,7 +468,7 @@ func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ..
 func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	//check server status
 	for {
-		old := this.totalreqnum
+		old := atomic.LoadInt32(&this.totalreqnum)
 		if old >= 0 {
 			//add req num
 			if atomic.CompareAndSwapInt32(&this.totalreqnum, old, old+1) {
@@ -491,7 +487,7 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := trace.InitTrace(r.Context(), r.Header.Get("Traceid"), this.selfappname, host.Hostip, r.Method, r.URL.Path)
 	this.router.ServeHTTP(w, r.Clone(ctx))
-	if this.totalreqnum < 0 {
+	if atomic.LoadInt32(&this.totalreqnum) < 0 {
 		select {
 		case this.refreshclosewait <- struct{}{}:
 		default:

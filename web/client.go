@@ -93,7 +93,7 @@ type ServerForPick struct {
 	host     string
 	client   *http.Client
 	dservers map[string]struct{} //this server registered on how many discoveryservers
-	status   bool                //true - working,false - closed
+	status   int32               //1 - working,0 - closed
 
 	Pickinfo *pickinfo
 }
@@ -106,7 +106,7 @@ type pickinfo struct {
 }
 
 func (s *ServerForPick) Pickable() bool {
-	return s.status
+	return atomic.LoadInt32(&s.status) == 1
 }
 
 func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*WebClient, error) {
@@ -264,7 +264,7 @@ func (this *WebClient) UpdateDiscovery(all map[string]*RegisterData) {
 					DServerOffline: 0,
 					Addition:       registerdata.Addition,
 				},
-				status: true,
+				status: 1,
 			}
 		} else {
 			//this is not a new register
@@ -446,7 +446,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		if resp.StatusCode == 888 {
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
 			this.manual()
-			server.status = false
+			atomic.StoreInt32(&server.status, 0)
 			resp.Body.Close()
 			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, ERRCLOSING)
 			continue
