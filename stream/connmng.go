@@ -23,7 +23,7 @@ type connmng struct {
 }
 
 type timewheel struct {
-	index uint
+	index uint64
 	wheel [20]*group
 }
 
@@ -70,7 +70,7 @@ func newconnmng(groupnum int, heartprobe, sendidletimeout, recvidletimeout time.
 				if mng.Finishing() {
 					return
 				}
-				tw.index++
+				atomic.AddUint64(&tw.index, 1)
 				//give 1/3 heartprobe for net lag
 				go tw.wheel[tw.index%20].run(mng.heartprobe*3+mng.heartprobe/3, mng.sendidletimeout, mng.recvidletimeout, &t)
 			}
@@ -84,7 +84,7 @@ var errServerClosed = errors.New("server closed")
 
 func (m *connmng) AddPeer(p *Peer) error {
 	tw := m.groups[common.BkdrhashString(p.peeruniquename, uint64(len(m.groups)))]
-	g := tw.wheel[(tw.index+uint(rand.Intn(16))+2)%20] //rand is used to reduce race
+	g := tw.wheel[(atomic.LoadUint64(&tw.index)+rand.Uint64()%16+2)%20] //rand is used to reduce race
 	g.Lock()
 	if _, ok := g.peers[p.peeruniquename]; ok {
 		g.Unlock()
@@ -92,7 +92,7 @@ func (m *connmng) AddPeer(p *Peer) error {
 	}
 	p.peergroup = g
 	for {
-		old := m.peernum
+		old := atomic.LoadInt32(&m.peernum)
 		if old < 0 {
 			g.Unlock()
 			return errServerClosed
@@ -150,10 +150,10 @@ func (m *connmng) GetPeerNum() int32 {
 	}
 }
 func (m *connmng) Finishing() bool {
-	return m.peernum < 0
+	return atomic.LoadInt32(&m.peernum) < 0
 }
 func (m *connmng) Finished() bool {
-	return m.peernum == -math.MaxInt32
+	return atomic.LoadInt32(&m.peernum) == -math.MaxInt32
 }
 func (m *connmng) SendMessage(ctx context.Context, data []byte) {
 	for _, tw := range m.groups {

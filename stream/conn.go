@@ -8,6 +8,7 @@ import (
 	"math"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/bufpool"
@@ -102,11 +103,11 @@ func (this *Instance) sworker(p *Peer) {
 		return
 	}
 	//verify finished,status set to true
-	p.status = true
+	atomic.StoreInt32(&p.status, 1)
 	if this.c.Onlinefunc != nil {
 		if !this.c.Onlinefunc(p) {
 			log.Error(nil, "[Stream.sworker] online:", p.peeruniquename, "failed")
-			p.status = false
+			atomic.StoreInt32(&p.status, 0)
 			p.conn.Close()
 			this.mng.DelPeer(p)
 			p.CancelFunc()
@@ -187,11 +188,11 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) bool {
 		return false
 	}
 	//verify finished set status to true
-	p.status = true
+	atomic.StoreInt32(&p.status, 1)
 	if this.c.Onlinefunc != nil {
 		if !this.c.Onlinefunc(p) {
 			log.Error(nil, "[Stream.cworker] online:", p.peeruniquename, "failed")
-			p.status = false
+			atomic.StoreInt32(&p.status, 0)
 			p.conn.Close()
 			this.mng.DelPeer(p)
 			p.CancelFunc()
@@ -251,7 +252,7 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer, clientorserver bo
 }
 func (this *Instance) handle(p *Peer) {
 	defer func() {
-		p.status = false
+		atomic.StoreInt32(&p.status, 0)
 		p.conn.Close()
 		if this.c.Offlinefunc != nil {
 			this.c.Offlinefunc(p)
@@ -292,7 +293,7 @@ func (this *Instance) handle(p *Peer) {
 		switch msgtype {
 		case PING:
 			//update lastactive time
-			p.lastactive = time.Now().UnixNano()
+			atomic.StoreInt64(&p.lastactive, time.Now().UnixNano())
 			//write back
 			select {
 			case p.pingponger <- makePongMsg(userdata):
@@ -322,16 +323,17 @@ func (this *Instance) handle(p *Peer) {
 				return
 			}
 			//update lastactive time
-			p.lastactive = time.Now().UnixNano()
-			p.netlag = netlag
+			atomic.StoreInt64(&p.lastactive, time.Now().UnixNano())
+			atomic.StoreInt64(&p.netlag, netlag)
 			binary.BigEndian.Uint64(userdata)
 			if this.c.PingPongFunc != nil {
 				this.c.PingPongFunc(p)
 			}
 		case USER:
 			//update lastactive time
-			p.lastactive = time.Now().UnixNano()
-			p.recvidlestart = p.lastactive
+			now := time.Now().UnixNano()
+			atomic.StoreInt64(&p.lastactive, now)
+			atomic.StoreInt64(&p.recvidlestart, now)
 			this.c.Userdatafunc(p, userdata)
 		}
 		bufpool.PutBuffer(data)

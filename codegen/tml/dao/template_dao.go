@@ -76,6 +76,7 @@ func crpcDNS(group, name string, manually <-chan *struct{}, client *crpc.CrpcCli
 		select {
 		case <-tker.C:
 		case <-manually:
+			tker.Reset(time.Second * 10)
 		}
 		result := make(map[string]*crpc.RegisterData)
 		addrs, e := net.LookupHost(name + "-service-headless" + "." + group)
@@ -118,6 +119,7 @@ func webDNS(group, name string, manually <-chan *struct{}, client *web.WebClient
 		select {
 		case <-tker.C:
 		case <-manually:
+			tker.Reset(time.Second * 10)
 		}
 		result := make(map[string]*web.RegisterData)
 		addrs, e := net.LookupHost(name + "-service-headless" + "." + group)

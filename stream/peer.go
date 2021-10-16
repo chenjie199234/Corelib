@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -24,7 +25,7 @@ var (
 type Peer struct {
 	peergroup      *group
 	peeruniquename string
-	status         bool //true - working,false - closed
+	status         int32 //1 - working,0 - closed
 	selfmaxmsglen  uint32
 	peermaxmsglen  uint32
 	pingponger     chan *bufpool.Buffer
@@ -54,23 +55,23 @@ func newPeer(selfmaxmsglen uint32) *Peer {
 }
 
 func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time.Time) {
-	if !p.status {
+	if atomic.LoadInt32(&p.status) != 1 {
 		return
 	}
 	now := nowtime.UnixNano()
-	if now-p.lastactive > int64(heart) {
+	if now-atomic.LoadInt64(&p.lastactive) > int64(heart) {
 		//heartbeat timeout
 		log.Error(nil, "[Stream.checkheart] heart timeout:", p.peeruniquename)
 		p.conn.Close()
 		return
 	}
-	if now-p.sendidlestart > int64(sendidle) {
+	if now-atomic.LoadInt64(&p.sendidlestart) > int64(sendidle) {
 		//send idle timeout
 		log.Error(nil, "[Stream.checkheart] send idle timeout:", p.peeruniquename)
 		p.conn.Close()
 		return
 	}
-	if recvidle != 0 && now-p.recvidlestart > int64(recvidle) {
+	if recvidle != 0 && now-atomic.LoadInt64(&p.recvidlestart) > int64(recvidle) {
 		//recv idle timeout
 		log.Error(nil, "[Stream.checkheart] recv idle timeout:", p.peeruniquename)
 		p.conn.Close()
@@ -111,14 +112,14 @@ func (p *Peer) readMessage() (*bufpool.Buffer, error) {
 
 func (p *Peer) getDispatcher(ctx context.Context) error {
 	//first check
-	if !p.status {
+	if atomic.LoadInt32(&p.status) != 1 {
 		return ErrConnClosed
 	}
 	select {
 	case _, ok := <-p.dispatcher:
 		if !ok {
 			return ErrConnClosed
-		} else if !p.status {
+		} else if atomic.LoadInt32(&p.status) != 1 {
 			//double check
 			close(p.dispatcher)
 			return ErrConnClosed
@@ -129,7 +130,7 @@ func (p *Peer) getDispatcher(ctx context.Context) error {
 	}
 }
 func (p *Peer) putDispatcher() {
-	if p.status {
+	if atomic.LoadInt32(&p.status) == 1 {
 		select {
 		case p.dispatcher <- nil:
 		default:
@@ -169,7 +170,7 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte) error {
 			bufpool.PutBuffer(data)
 			return ErrConnClosed
 		}
-		p.sendidlestart = time.Now().UnixNano()
+		atomic.StoreInt64(&p.sendidlestart, time.Now().UnixNano())
 		bufpool.PutBuffer(data)
 		if finish {
 			return nil
@@ -178,7 +179,7 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte) error {
 }
 
 func (p *Peer) Close() {
-	p.status = false
+	atomic.StoreInt32(&p.status, 0)
 	p.conn.Close()
 }
 
@@ -192,7 +193,7 @@ func (p *Peer) GetPeerUniqueName() string {
 	return p.peeruniquename
 }
 func (p *Peer) GetPeerNetlag() int64 {
-	return p.netlag
+	return atomic.LoadInt64(&p.netlag)
 }
 func (p *Peer) GetRemoteAddr() string {
 	return p.conn.RemoteAddr().String()
