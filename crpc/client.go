@@ -136,6 +136,7 @@ func (s *ServerForPick) getDispatcher(ctx context.Context) error {
 			return errPickAgain
 		} else if atomic.LoadInt32(&s.status) == 0 {
 			//double check
+			close(s.dispatcher)
 			return errPickAgain
 		}
 		return nil
@@ -150,14 +151,11 @@ func (s *ServerForPick) getDispatcher(ctx context.Context) error {
 	}
 }
 func (s *ServerForPick) putDispatcher() {
-	s.lker.Lock()
 	if atomic.LoadInt32(&s.status) == 1 {
-		select {
-		case s.dispatcher <- nil:
-		default:
-		}
+		s.dispatcher <- nil
+	} else {
+		close(s.dispatcher)
 	}
-	s.lker.Unlock()
 }
 func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 	e = s.getDispatcher(ctx)
@@ -453,12 +451,10 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 		log.Error(nil, "[rpc.client.userfunc] server:", p.GetPeerUniqueName(), "data format error:", e)
 		return
 	}
-	server.lker.Lock()
 	if msg.Error != nil && msg.Error.Code == ERRCLOSING.Code {
-		if atomic.CompareAndSwapInt32(&server.status, 1, 0) {
-			close(server.dispatcher)
-		}
+		atomic.StoreInt32(&server.status, 0)
 	}
+	server.lker.Lock()
 	req, ok := server.reqs[msg.Callid]
 	if !ok {
 		server.lker.Unlock()
@@ -474,10 +470,8 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
 	log.Info(nil, "[rpc.client.offlinefunc] server:", p.GetPeerUniqueName(), "offline")
+	atomic.StoreInt32(&server.status, 0)
 	server.lker.Lock()
-	if atomic.CompareAndSwapInt32(&server.status, 1, 0) {
-		close(server.dispatcher)
-	}
 	for callid, req := range server.reqs {
 		req.resp = nil
 		req.err = ERRCLOSED

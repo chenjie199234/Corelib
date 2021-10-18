@@ -131,10 +131,7 @@ func (p *Peer) getDispatcher(ctx context.Context) error {
 }
 func (p *Peer) putDispatcher() {
 	if atomic.LoadInt32(&p.status) == 1 {
-		select {
-		case p.dispatcher <- nil:
-		default:
-		}
+		p.dispatcher <- nil
 	} else {
 		close(p.dispatcher)
 	}
