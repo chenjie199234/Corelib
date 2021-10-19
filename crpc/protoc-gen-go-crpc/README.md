@@ -1,13 +1,13 @@
-# protoc-gen-go-rpc
+# protoc-gen-go-crpc
 
 ## Description
-	protoc-gen-go-rpc是一个基于proto文件生成rpc框架的打桩代码的工具
+	protoc-gen-go-crpc是一个基于proto文件生成crpc框架的打桩代码的工具
 	所有的接口定义都使用一套proto文件,清晰明了,规范化接口管理
 
 ## Installation
 	请确认已经设置了Go环境变量GOBIN,并将此环境变量加入到了PATH中
 	go get -u github.com/chenjie199234/Corelib
-	cd rpc/protoc-gen-go-rpc
+	cd rpc/protoc-gen-go-crpc
 	go install
 
 ## 使用

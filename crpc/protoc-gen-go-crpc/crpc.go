@@ -1985,8 +1985,8 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 			}
 		}
 		var mids []string
-		if proto.HasExtension(mop, pbex.E_RpcMidwares) {
-			mids = proto.GetExtension(mop, pbex.E_RpcMidwares).([]string)
+		if proto.HasExtension(mop, pbex.E_CrpcMidwares) {
+			mids = proto.GetExtension(mop, pbex.E_CrpcMidwares).([]string)
 		}
 		fname := "_" + service.GoName + "_" + method.GoName + "_" + "CrpcHandler(svc." + method.GoName + ")"
 		pathname := "_CrpcPath" + service.GoName + method.GoName
