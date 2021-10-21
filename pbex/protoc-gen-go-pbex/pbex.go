@@ -32,7 +32,6 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 			continue
 		}
 		if pbex.NeedCheck(m) {
-			geninit(g, m)
 			genMessage(g, m)
 		}
 	}
@@ -118,6 +117,7 @@ func getallregs(m *protogen.Message) map[string]string {
 	return allregexps
 }
 func genMessage(g *protogen.GeneratedFile, m *protogen.Message) {
+	geninit(g, m)
 	g.P("//return empty means pass")
 	g.P("func (m*", m.GoIdent.GoName, ")Validate() (errstr string){")
 	for _, field := range m.Fields {
@@ -189,6 +189,11 @@ func genMessage(g *protogen.GeneratedFile, m *protogen.Message) {
 	}
 	g.P("return \"\"")
 	g.P("}")
+	for _, mm := range m.Messages {
+		if pbex.NeedCheck(mm) {
+			genMessage(g, mm)
+		}
+	}
 }
 func elementnumcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenEq) {
