@@ -31,9 +31,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 		if m.Desc.Options().(*descriptorpb.MessageOptions).GetDeprecated() {
 			continue
 		}
-		if pbex.NeedCheck(m) {
-			genMessage(g, m)
-		}
+		genMessage(g, m)
 	}
 	return g
 }
@@ -117,82 +115,82 @@ func getallregs(m *protogen.Message) map[string]string {
 	return allregexps
 }
 func genMessage(g *protogen.GeneratedFile, m *protogen.Message) {
-	geninit(g, m)
-	g.P("//return empty means pass")
-	g.P("func (m*", m.GoIdent.GoName, ")Validate() (errstr string){")
-	for _, field := range m.Fields {
-		fop := field.Desc.Options().(*descriptorpb.FieldOptions)
-		if field.Desc.IsMap() || field.Desc.IsList() {
-			elementnumcheck(field, fop, g)
-		}
-		isbyteslice := false
-		switch field.Desc.Kind() {
-		case protoreflect.BoolKind:
-			//bool or []bool
-			boolcheck(field, fop, g)
-		case protoreflect.EnumKind:
-			//enum or []enum
-			enumcheck(field, fop, g)
-		case protoreflect.Int32Kind:
-			fallthrough
-		case protoreflect.Sint32Kind:
-			fallthrough
-		case protoreflect.Sfixed32Kind:
-			fallthrough
-			//int32 or []int32
-		case protoreflect.Int64Kind:
-			fallthrough
-		case protoreflect.Sint64Kind:
-			fallthrough
-		case protoreflect.Sfixed64Kind:
-			//int64 or []int64
-			intcheck(field, fop, g)
-		case protoreflect.Uint32Kind:
-			fallthrough
-		case protoreflect.Fixed32Kind:
-			fallthrough
-			//uint32 or []uint32
-		case protoreflect.Uint64Kind:
-			fallthrough
-		case protoreflect.Fixed64Kind:
-			//uint64 or []uint64
-			uintcheck(field, fop, g)
-		case protoreflect.FloatKind:
-			//float32 or []float32
-			fallthrough
-		case protoreflect.DoubleKind:
-			//float64 or []float64
-			if field.Desc.IsList() {
+	if pbex.NeedCheck(m) {
+		geninit(g, m)
+		g.P("//return empty means pass")
+		g.P("func (m*", m.GoIdent.GoName, ")Validate() (errstr string){")
+		for _, field := range m.Fields {
+			fop := field.Desc.Options().(*descriptorpb.FieldOptions)
+			if field.Desc.IsMap() || field.Desc.IsList() {
 				elementnumcheck(field, fop, g)
 			}
-			floatcheck(field, fop, g)
-		case protoreflect.BytesKind:
-			//[]bytes or [][]bytes
-			isbyteslice = true
-			fallthrough
-		case protoreflect.StringKind:
-			//string or []string
-			if field.Desc.IsList() {
-				elementnumcheck(field, fop, g)
-			}
-			strcheck(field, isbyteslice, fop, g)
-		case protoreflect.MessageKind:
-			//message or []message or map
-			if field.Desc.IsMap() {
-				//map
-				mapcheck(field, fop, g)
-			} else {
-				//message or []message
-				messagecheck(field, fop, g)
+			isbyteslice := false
+			switch field.Desc.Kind() {
+			case protoreflect.BoolKind:
+				//bool or []bool
+				boolcheck(field, fop, g)
+			case protoreflect.EnumKind:
+				//enum or []enum
+				enumcheck(field, fop, g)
+			case protoreflect.Int32Kind:
+				fallthrough
+			case protoreflect.Sint32Kind:
+				fallthrough
+			case protoreflect.Sfixed32Kind:
+				fallthrough
+				//int32 or []int32
+			case protoreflect.Int64Kind:
+				fallthrough
+			case protoreflect.Sint64Kind:
+				fallthrough
+			case protoreflect.Sfixed64Kind:
+				//int64 or []int64
+				intcheck(field, fop, g)
+			case protoreflect.Uint32Kind:
+				fallthrough
+			case protoreflect.Fixed32Kind:
+				fallthrough
+				//uint32 or []uint32
+			case protoreflect.Uint64Kind:
+				fallthrough
+			case protoreflect.Fixed64Kind:
+				//uint64 or []uint64
+				uintcheck(field, fop, g)
+			case protoreflect.FloatKind:
+				//float32 or []float32
+				fallthrough
+			case protoreflect.DoubleKind:
+				//float64 or []float64
+				if field.Desc.IsList() {
+					elementnumcheck(field, fop, g)
+				}
+				floatcheck(field, fop, g)
+			case protoreflect.BytesKind:
+				//[]bytes or [][]bytes
+				isbyteslice = true
+				fallthrough
+			case protoreflect.StringKind:
+				//string or []string
+				if field.Desc.IsList() {
+					elementnumcheck(field, fop, g)
+				}
+				strcheck(field, isbyteslice, fop, g)
+			case protoreflect.MessageKind:
+				//message or []message or map
+				if field.Desc.IsMap() {
+					//map
+					mapcheck(field, fop, g)
+				} else {
+					//message or []message
+					messagecheck(field, fop, g)
+				}
 			}
 		}
+		g.P("return \"\"")
+		g.P("}")
 	}
-	g.P("return \"\"")
-	g.P("}")
 	for _, mm := range m.Messages {
-		if pbex.NeedCheck(mm) {
-			genMessage(g, mm)
-		}
+		genMessage(g, mm)
 	}
 }
 func elementnumcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
