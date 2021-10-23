@@ -190,7 +190,9 @@ func genMessage(g *protogen.GeneratedFile, m *protogen.Message) {
 		g.P("}")
 	}
 	for _, mm := range m.Messages {
-		genMessage(g, mm)
+		if !mm.Desc.IsMapEntry() {
+			genMessage(g, mm)
+		}
 	}
 }
 func elementnumcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {

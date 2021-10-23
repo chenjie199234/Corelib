@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/chenjie199234/Corelib/pbex"
 	"google.golang.org/protobuf/compiler/protogen"
-	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
 )
@@ -35,8 +35,7 @@ func main() {
 					if m.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 						continue
 					}
-					stack := make(map[string]struct{})
-					if hasoneof(m.Input, stack) || hasoneof(m.Output, stack) {
+					if pbex.HasOneOf(m.Input) || pbex.HasOneOf(m.Output) {
 						panic("can't support oneof in proto!")
 					}
 				}
@@ -55,56 +54,9 @@ func main() {
 			if f.Desc.Options().(*descriptorpb.FileOptions).GetDeprecated() {
 				continue
 			}
-			need := false
-			for _, s := range f.Services {
-				if s.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
-					continue
-				}
-				for _, m := range s.Methods {
-					if m.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
-						continue
-					}
-					need = true
-					break
-				}
-				if need {
-					break
-				}
-			}
-			if need {
-				generateFile(gen, f)
-			}
+			generateFile(gen, f)
 		}
 		gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 		return nil
 	})
-}
-func hasoneof(message *protogen.Message, stack map[string]struct{}) bool {
-	if _, ok := stack[message.GoIdent.String()]; ok {
-		return false
-	}
-	stack[message.GoIdent.String()] = struct{}{}
-	defer delete(stack, message.GoIdent.String())
-	if len(message.Oneofs) > 0 {
-		return true
-	}
-	for _, field := range message.Fields {
-		if field.Desc.Kind() == protoreflect.MessageKind {
-			if field.Desc.IsMap() {
-				//map
-				if field.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
-					//map's value is message
-					if hasoneof(field.Message.Fields[1].Message, stack) {
-						return true
-					}
-				}
-			} else {
-				//[]message or message
-				if hasoneof(field.Message, stack) {
-					return true
-				}
-			}
-		}
-	}
-	return false
 }
