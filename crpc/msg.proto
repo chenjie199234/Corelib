@@ -2,12 +2,18 @@ syntax="proto3";
 package crpc;
 option go_package="github.com/chenjie199234/Corelib/crpc;crpc";
 import "error/error.proto";
+
+enum MsgType{
+	CALL=0;
+	CANCEL=1;
+}
 message msg {
 	uint64 callid=1;
-	string path=2;
-	int64 deadline=3;
-	bytes body=4;
-	error.Error error=5;
-	map<string,string> metadata=6;
-	map<string,string> tracedata=7;
+	MsgType type=2;
+	string path=3;
+	int64 deadline=4;
+	bytes body=5;
+	error.Error error=6;
+	map<string,string> metadata=7;
+	map<string,string> tracedata=8;
 }

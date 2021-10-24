@@ -119,7 +119,7 @@ func (m *connmng) DelPeer(p *Peer) {
 }
 func (m *connmng) Stop() {
 	for {
-		if old := m.peernum; old >= 0 {
+		if old := atomic.LoadInt32(&m.peernum); old >= 0 {
 			if atomic.CompareAndSwapInt32(&m.peernum, old, old-math.MaxInt32) {
 				for _, tw := range m.groups {
 					for _, g := range tw.wheel {

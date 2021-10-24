@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
@@ -80,6 +81,10 @@ type CrpcServer struct {
 	closewait          *sync.WaitGroup
 	totalreqnum        int32
 	refreshclosewaitch chan struct{}
+}
+type client struct {
+	sync.RWMutex
+	calls map[uint64]context.CancelFunc
 }
 
 func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, error) {
@@ -337,6 +342,10 @@ func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 		//self closed
 		return false
 	}
+	c := &client{
+		calls: make(map[uint64]context.CancelFunc),
+	}
+	p.SetData(unsafe.Pointer(c))
 	log.Info(nil, "[rpc.server.onlinefunc] client:", p.GetPeerUniqueName(), "online")
 	return true
 }
@@ -347,18 +356,27 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		p.Close()
 		return
 	}
+	c := (*client)(p.GetData())
+	if msg.Type == MsgType_CANCEL {
+		c.RLock()
+		if cancel, ok := c.calls[msg.Callid]; ok {
+			cancel()
+		}
+		c.RUnlock()
+		return
+	}
 	var traceid string
 	if msg.Tracedata != nil {
 		traceid = msg.Tracedata["Traceid"]
 	}
-	ctx := trace.InitTrace(nil, traceid, s.instance.GetSelfName(), host.Hostip, "CRPC", msg.Path)
+	tracectx := trace.InitTrace(p, traceid, s.instance.GetSelfName(), host.Hostip, "CRPC", msg.Path)
 	//if traceid is not empty,traceid will not change
 	//if traceid is empty,init trace will create a new traceid,use the new traceid
-	traceid, _, _, _, _ = trace.GetTrace(ctx)
+	traceid, _, _, _, _ = trace.GetTrace(tracectx)
 	path := msg.Path
 	handler, ok := s.handler[msg.Path]
 	if !ok {
-		log.Error(ctx, "[rpc.server.userfunc] client:", p.GetPeerUniqueName(), "call path:", msg.Path, "error: unknown path")
+		log.Error(tracectx, "[rpc.server.userfunc] client:", p.GetPeerUniqueName(), "call path:", msg.Path, "error: unknown path")
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
@@ -367,7 +385,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d); e != nil {
-			log.Error(ctx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
+			log.Error(tracectx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
 		}
 		return
 	}
@@ -393,11 +411,15 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			msg.Tracedata = nil
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(nil, d); e != nil {
-				log.Error(ctx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
+				log.Error(tracectx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
 			}
 			return
 		}
 	}
+	ctx, cancel := context.WithCancel(tracectx)
+	c.Lock()
+	c.calls[msg.Callid] = cancel
+	c.Unlock()
 	go func() {
 		var sourceapp, sourceip, sourcemethod, sourcepath string
 		if msg.Tracedata != nil {
@@ -441,6 +463,12 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			}
 		}
 		atomic.AddInt32(&s.totalreqnum, -1)
+		c.Lock()
+		if cancel, ok := c.calls[msg.Callid]; ok {
+			cancel()
+			delete(c.calls, msg.Callid)
+		}
+		c.Unlock()
 	}()
 }
 func (s *CrpcServer) offlinefunc(p *stream.Peer) {

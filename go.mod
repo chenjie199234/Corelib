@@ -1,6 +1,6 @@
 module github.com/chenjie199234/Corelib
 
-go 1.16
+go 1.17
 
 require (
 	github.com/gomodule/redigo v1.8.5

@@ -185,6 +185,9 @@ func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 	s.lker.Unlock()
 	return
 }
+func (s *ServerForPick) sendcancel(ctx context.Context, canceldata []byte) {
+	s.peer.SendMessage(ctx, canceldata)
+}
 
 func NewCrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*CrpcClient, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
@@ -508,6 +511,7 @@ func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 	}
 	msg := &Msg{
 		Callid:   atomic.AddUint64(&c.callid, 1),
+		Type:     MsgType_CALL,
 		Path:     path,
 		Body:     in,
 		Metadata: metadata,
@@ -577,6 +581,11 @@ func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 				e = cerror.ErrDeadlineExceeded
 			} else if ctx.Err() == context.Canceled {
 				e = cerror.ErrCanceled
+				canceldata, _ := proto.Marshal(&Msg{
+					Callid: msg.Callid,
+					Type:   MsgType_CANCEL,
+				})
+				go server.sendcancel(context.Background(), canceldata)
 			} else {
 				e = cerror.ConvertStdError(ctx.Err())
 			}
