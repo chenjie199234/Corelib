@@ -266,11 +266,10 @@ func (this *Instance) handle(p *Peer) {
 	}()
 	pingdata := make([]byte, 8)
 	binary.BigEndian.PutUint64(pingdata, uint64(time.Now().UnixNano()))
-	//before all user data,send first ping,to get the net lag
-	select {
-	case p.pingponger <- makePingMsg(pingdata):
-		go p.SendMessage(context.Background(), nil)
-	default:
+	//before handle user data,send first ping,to get the net lag
+	if e := p.sendPing(pingdata); e != nil {
+		log.Error(nil, "[Stream.handle] send first ping to:", p.peeruniquename, "error:", e)
+		return
 	}
 	for {
 		var msgtype int
@@ -299,11 +298,12 @@ func (this *Instance) handle(p *Peer) {
 			//update lastactive time
 			atomic.StoreInt64(&p.lastactive, time.Now().UnixNano())
 			//write back
-			select {
-			case p.pingponger <- makePongMsg(userdata):
-				//triger send pong
-				go p.SendMessage(context.Background(), nil)
-			default:
+			if len(userdata) > 0 {
+				pongdata := make([]byte, len(userdata))
+				copy(pongdata, userdata)
+				go p.sendPong(pongdata)
+			} else {
+				go p.sendPong(nil)
 			}
 			if this.c.PingPongFunc != nil {
 				this.c.PingPongFunc(p)

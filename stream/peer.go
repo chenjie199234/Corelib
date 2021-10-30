@@ -28,7 +28,6 @@ type Peer struct {
 	status         int32 //1 - working,0 - closed
 	selfmaxmsglen  uint32
 	peermaxmsglen  uint32
-	pingponger     chan *bufpool.Buffer
 	dispatcher     chan *struct{}
 	tls            bool
 	conn           net.Conn
@@ -45,7 +44,6 @@ func newPeer(selfmaxmsglen uint32) *Peer {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &Peer{
 		selfmaxmsglen: selfmaxmsglen,
-		pingponger:    make(chan *bufpool.Buffer, 3),
 		dispatcher:    make(chan *struct{}, 1),
 		Context:       ctx,
 		CancelFunc:    cancel,
@@ -80,11 +78,7 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	pingdata := make([]byte, 8)
 	binary.BigEndian.PutUint64(pingdata, uint64(now))
 	//send heart beat data
-	select {
-	case p.pingponger <- makePingMsg(pingdata):
-		go p.SendMessage(context.Background(), nil)
-	default:
-	}
+	go p.sendPing(pingdata)
 }
 
 func (p *Peer) readMessage() (*bufpool.Buffer, error) {
@@ -137,6 +131,12 @@ func (p *Peer) putDispatcher() {
 	}
 }
 func (p *Peer) SendMessage(ctx context.Context, userdata []byte) error {
+	if len(userdata) == 0 {
+		return nil
+	}
+	if len(userdata) > int(p.peermaxmsglen) {
+		return ErrMsgLarge
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -144,35 +144,48 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte) error {
 		return e
 	}
 	defer p.putDispatcher()
-	var data *bufpool.Buffer
-	var finish bool
-	for {
-		select {
-		case data = <-p.pingponger:
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			if len(userdata) == 0 {
-				return nil
-			}
-			if len(userdata) > int(p.peermaxmsglen) {
-				return ErrMsgLarge
-			}
-			data = makeUserMsg(userdata)
-			finish = true
-		}
-		if _, e := p.conn.Write(data.Bytes()); e != nil {
-			log.Error(nil, "[Stream.SendMessage] to:", p.peeruniquename, "error:", e)
-			p.conn.Close()
-			bufpool.PutBuffer(data)
-			return ErrConnClosed
-		}
-		atomic.StoreInt64(&p.sendidlestart, time.Now().UnixNano())
+	data := makeUserMsg(userdata)
+	if _, e := p.conn.Write(data.Bytes()); e != nil {
+		log.Error(nil, "[Stream.SendMessage] to:", p.peeruniquename, "error:", e)
+		p.conn.Close()
 		bufpool.PutBuffer(data)
-		if finish {
-			return nil
-		}
+		return ErrConnClosed
 	}
+	atomic.StoreInt64(&p.sendidlestart, time.Now().UnixNano())
+	bufpool.PutBuffer(data)
+	return nil
+}
+func (p *Peer) sendPing(pingdata []byte) error {
+	if e := p.getDispatcher(context.Background()); e != nil {
+		return e
+	}
+	defer p.putDispatcher()
+	data := makePingMsg(pingdata)
+	if _, e := p.conn.Write(data.Bytes()); e != nil {
+		log.Error(nil, "[Stream.sendPing] to:", p.peeruniquename, "error:", e)
+		p.conn.Close()
+		bufpool.PutBuffer(data)
+		return ErrConnClosed
+	}
+	atomic.StoreInt64(&p.sendidlestart, time.Now().UnixNano())
+	bufpool.PutBuffer(data)
+	return nil
+}
+func (p *Peer) sendPong(pongdata []byte) error {
+	if e := p.getDispatcher(context.Background()); e != nil {
+		return e
+	}
+	defer p.putDispatcher()
+	data := makePongMsg(pongdata)
+	if _, e := p.conn.Write(data.Bytes()); e != nil {
+		log.Error(nil, "[Stream.sendPong] to:", p.peeruniquename, "error:", e)
+		p.conn.Close()
+		bufpool.PutBuffer(data)
+		return ErrConnClosed
+	}
+	atomic.StoreInt64(&p.sendidlestart, time.Now().UnixNano())
+	bufpool.PutBuffer(data)
+	return nil
 }
 
 func (p *Peer) Close() {
