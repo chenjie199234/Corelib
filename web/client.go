@@ -215,9 +215,11 @@ func (c *WebClient) wakemanual() {
 func (this *WebClient) UpdateDiscovery(all map[string]*RegisterData) {
 	d, _ := json.Marshal(all)
 	this.lker.Lock()
-	if bytes.Equal(this.serversRaw, d) {
+	defer func() {
 		this.lker.Unlock()
 		this.wakemanual()
+	}()
+	if bytes.Equal(this.serversRaw, d) {
 		return
 	}
 	this.serversRaw = d
@@ -287,8 +289,6 @@ func (this *WebClient) UpdateDiscovery(all map[string]*RegisterData) {
 			exist.Pickinfo.DServerNum = int32(len(registerdata.DServers))
 		}
 	}
-	this.lker.Unlock()
-	this.wakemanual()
 }
 
 func forbiddenHeader(header http.Header) bool {

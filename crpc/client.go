@@ -24,7 +24,6 @@ import (
 //param's key is server's addr "ip:port"
 type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
 
-//return data's key is server's addr "ip:port"
 type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *CrpcClient)
 
 type ClientConfig struct {
@@ -76,7 +75,6 @@ func (c *ClientConfig) validate() {
 	}
 }
 
-//appuniquename = appname:addr
 type CrpcClient struct {
 	selfappname string
 	appname     string
@@ -121,8 +119,10 @@ func (s *ServerForPick) Pickable() bool {
 }
 
 func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
-	//send message
 	p := (*stream.Peer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.peer))))
+	if p == nil {
+		return errPickAgain
+	}
 	if e = p.SendMessage(ctx, r.req, func(_ *stream.Peer) { s.lker.Lock() }); e != nil {
 		s.lker.Unlock()
 		if e == stream.ErrMsgLarge {
@@ -144,7 +144,9 @@ func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 	return
 }
 func (s *ServerForPick) sendcancel(ctx context.Context, canceldata []byte) {
-	s.peer.SendMessage(ctx, canceldata, nil)
+	if p := (*stream.Peer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.peer)))); p != nil {
+		p.SendMessage(ctx, canceldata, nil)
+	}
 }
 
 func NewCrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*CrpcClient, error) {
