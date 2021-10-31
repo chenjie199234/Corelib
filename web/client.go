@@ -169,9 +169,9 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 		manualNotice: make(map[chan *struct{}]*struct{}, 100),
 		mlker:        &sync.Mutex{},
 	}
+	client.manually <- nil
 	//init discover
 	go c.DiscoverFunction(group, name, client.manually, client)
-	client.waitmanual(context.Background())
 	return client, nil
 }
 

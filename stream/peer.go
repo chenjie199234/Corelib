@@ -130,7 +130,7 @@ func (p *Peer) putDispatcher() {
 		close(p.dispatcher)
 	}
 }
-func (p *Peer) SendMessage(ctx context.Context, userdata []byte) error {
+func (p *Peer) SendMessage(ctx context.Context, userdata []byte, beforeSend func(*Peer)) error {
 	if len(userdata) == 0 {
 		return nil
 	}
@@ -144,9 +144,12 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte) error {
 		return e
 	}
 	defer p.putDispatcher()
+	if beforeSend != nil {
+		beforeSend(p)
+	}
 	data := makeUserMsg(userdata)
 	if _, e := p.conn.Write(data.Bytes()); e != nil {
-		log.Error(nil, "[Stream.SendMessage] to:", p.peeruniquename, "error:", e)
+		log.Error(ctx, "[Stream.SendMessage] to:", p.peeruniquename, "error:", e)
 		p.conn.Close()
 		bufpool.PutBuffer(data)
 		return ErrConnClosed

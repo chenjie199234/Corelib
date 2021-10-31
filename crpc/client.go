@@ -97,11 +97,10 @@ type CrpcClient struct {
 }
 
 type ServerForPick struct {
-	addr       string
-	dservers   map[string]struct{} //this app registered on which discovery server
-	peer       *stream.Peer
-	status     int32 //1 - working,0 - closed
-	dispatcher chan *struct{}
+	addr     string
+	dservers map[string]struct{} //this app registered on which discovery server
+	peer     *stream.Peer
+	status   int32 //2 - working,1 - connecting,0 - closed
 
 	//active calls
 	lker *sync.Mutex
@@ -118,54 +117,13 @@ type pickinfo struct {
 }
 
 func (s *ServerForPick) Pickable() bool {
-	return atomic.LoadInt32(&s.status) == 1
+	return atomic.LoadInt32(&s.status) == 2
 }
-func (s *ServerForPick) getDispatcher(ctx context.Context) error {
-	if atomic.LoadInt32(&s.status) == 0 {
-		return errPickAgain
-	}
-	if dl, ok := ctx.Deadline(); ok {
-		//default we need 5ms in internet transport and server business logic
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithDeadline(ctx, dl.Add(-time.Millisecond*5))
-		defer cancel()
-	}
-	select {
-	case _, ok := <-s.dispatcher:
-		if !ok {
-			return errPickAgain
-		} else if atomic.LoadInt32(&s.status) == 0 {
-			//double check
-			close(s.dispatcher)
-			return errPickAgain
-		}
-		return nil
-	case <-ctx.Done():
-		if ctx.Err() == context.DeadlineExceeded {
-			return cerror.ErrDeadlineExceeded
-		} else if ctx.Err() == context.Canceled {
-			return cerror.ErrCanceled
-		} else {
-			return cerror.ConvertStdError(ctx.Err())
-		}
-	}
-}
-func (s *ServerForPick) putDispatcher() {
-	if atomic.LoadInt32(&s.status) == 1 {
-		s.dispatcher <- nil
-	} else {
-		close(s.dispatcher)
-	}
-}
+
 func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
-	e = s.getDispatcher(ctx)
-	if e != nil {
-		return
-	}
-	defer s.putDispatcher()
-	s.lker.Lock()
 	//send message
-	if e = s.peer.SendMessage(ctx, r.req); e != nil {
+	p := (*stream.Peer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.peer))))
+	if e = p.SendMessage(ctx, r.req, func(_ *stream.Peer) { s.lker.Lock() }); e != nil {
 		s.lker.Unlock()
 		if e == stream.ErrMsgLarge {
 			e = ERRREQMSGLARGE
@@ -186,7 +144,7 @@ func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 	return
 }
 func (s *ServerForPick) sendcancel(ctx context.Context, canceldata []byte) {
-	s.peer.SendMessage(ctx, canceldata)
+	s.peer.SendMessage(ctx, canceldata, nil)
 }
 
 func NewCrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*CrpcClient, error) {
@@ -253,6 +211,7 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*C
 		callid:  0,
 		reqpool: &sync.Pool{},
 	}
+	client.manually <- nil
 	instancec := &stream.InstanceConfig{
 		HeartprobeInterval: c.HeartPorbe,
 		GroupNum:           c.GroupNum,
@@ -271,7 +230,6 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*C
 	client.instance, _ = stream.NewInstance(instancec, selfgroup, selfname)
 	//init discover
 	go c.DiscoverFunction(group, name, client.manually, client)
-	client.waitmanual(context.Background())
 	return client, nil
 }
 
@@ -315,9 +273,20 @@ func (c *CrpcClient) wakemanual() {
 func (c *CrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 	d, _ := json.Marshal(all)
 	c.slker.Lock()
-	if bytes.Equal(c.serversRaw, d) {
+	defer func() {
+		if len(c.servers) == 0 {
+			c.wakemanual()
+		} else {
+			for _, server := range c.servers {
+				if server.Pickable() {
+					c.wakemanual()
+					break
+				}
+			}
+		}
 		c.slker.Unlock()
-		c.wakemanual()
+	}()
+	if bytes.Equal(c.serversRaw, d) {
 		return
 	}
 	c.serversRaw = d
@@ -336,13 +305,12 @@ func (c *CrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 		if !ok {
 			//this is a new register
 			server := &ServerForPick{
-				addr:       addr,
-				dservers:   registerdata.DServers,
-				peer:       nil,
-				status:     1,
-				dispatcher: make(chan *struct{}, 1),
-				lker:       &sync.Mutex{},
-				reqs:       make(map[uint64]*req, 10),
+				addr:     addr,
+				dservers: registerdata.DServers,
+				peer:     nil,
+				status:   1,
+				lker:     &sync.Mutex{},
+				reqs:     make(map[uint64]*req, 10),
 				Pickinfo: &pickinfo{
 					Lastfail:       0,
 					Activecalls:    0,
@@ -374,8 +342,6 @@ func (c *CrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 			server.Pickinfo.DServerNum = int32(len(registerdata.DServers))
 		}
 	}
-	c.slker.Unlock()
-	c.wakemanual()
 }
 func (c *CrpcClient) start(server *ServerForPick) {
 	if atomic.LoadInt32(&server.status) == 0 {
@@ -398,7 +364,6 @@ func (c *CrpcClient) start(server *ServerForPick) {
 			return
 		}
 		c.slker.Unlock()
-		server.dispatcher = make(chan *struct{}, 1)
 		atomic.StoreInt32(&server.status, 1)
 	}
 	tempverifydata := c.c.VerifyData + "|" + c.appname
@@ -407,10 +372,7 @@ func (c *CrpcClient) start(server *ServerForPick) {
 		tlsc = c.tlsc
 	}
 	if !c.instance.StartTcpClient(server.addr, common.Str2byte(tempverifydata), tlsc) {
-		server.lker.Lock()
 		atomic.StoreInt32(&server.status, 0)
-		close(server.dispatcher)
-		server.lker.Unlock()
 		time.Sleep(time.Millisecond * 100)
 		go c.start(server)
 	}
@@ -439,9 +401,10 @@ func (c *CrpcClient) onlinefunc(p *stream.Peer) bool {
 		return false
 	}
 	c.slker.RUnlock()
-	server.peer = p
 	p.SetData(unsafe.Pointer(server))
-	server.dispatcher <- nil
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&server.peer)), unsafe.Pointer(p))
+	atomic.StoreInt32(&server.status, 2)
+	c.wakemanual()
 	log.Info(nil, "[rpc.client.onlinefunc] server:", p.GetPeerUniqueName(), "online")
 	return true
 }
@@ -630,19 +593,16 @@ type req struct {
 	err    *cerror.Error
 }
 
-func (r *req) reset() {
-	r.callid = 0
-	for len(r.finish) > 0 {
-		<-r.finish
-	}
-	r.resp = nil
-	r.err = nil
-}
 func (c *CrpcClient) getreq(callid uint64, reqdata []byte) *req {
 	r, ok := c.reqpool.Get().(*req)
 	if ok {
 		r.callid = callid
+		for len(r.finish) > 0 {
+			<-r.finish
+		}
 		r.req = reqdata
+		r.resp = nil
+		r.err = nil
 		return r
 	}
 	return &req{
@@ -654,6 +614,5 @@ func (c *CrpcClient) getreq(callid uint64, reqdata []byte) *req {
 	}
 }
 func (c *CrpcClient) putreq(r *req) {
-	r.reset()
 	c.reqpool.Put(r)
 }

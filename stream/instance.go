@@ -62,6 +62,6 @@ func (this *Instance) GetSelfName() string {
 func (this *Instance) GetPeerNum() int32 {
 	return this.mng.GetPeerNum()
 }
-func (this *Instance) SendMessageAll(ctx context.Context, data []byte) {
-	this.mng.SendMessage(ctx, data)
+func (this *Instance) SendMessageAll(ctx context.Context, data []byte, beforeSend func(*Peer)) {
+	this.mng.SendMessage(ctx, data, beforeSend)
 }

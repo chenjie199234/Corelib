@@ -156,10 +156,10 @@ func (m *connmng) Finishing() bool {
 func (m *connmng) Finished() bool {
 	return atomic.LoadInt32(&m.peernum) == -math.MaxInt32
 }
-func (m *connmng) SendMessage(ctx context.Context, data []byte) {
+func (m *connmng) SendMessage(ctx context.Context, data []byte, beforeSend func(*Peer)) {
 	for _, tw := range m.groups {
 		for _, g := range tw.wheel {
-			g.SendMessage(ctx, data)
+			g.SendMessage(ctx, data, beforeSend)
 		}
 	}
 }
@@ -170,13 +170,13 @@ func (g *group) run(hearttimeout, sendidletimeout, recvidletimeout time.Duration
 	}
 	g.RUnlock()
 }
-func (g *group) SendMessage(ctx context.Context, data []byte) {
+func (g *group) SendMessage(ctx context.Context, data []byte, beforeSend func(*Peer)) {
 	wg := sync.WaitGroup{}
 	g.RLock()
 	wg.Add(len(g.peers))
 	for _, p := range g.peers {
 		go func(sender *Peer) {
-			sender.SendMessage(ctx, data)
+			sender.SendMessage(ctx, data, beforeSend)
 			wg.Done()
 		}(p)
 	}
