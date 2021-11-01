@@ -174,7 +174,7 @@ func (s *CrpcServer) StopCrpcServer() {
 			Callid: 0,
 			Error:  ERRCLOSING,
 		})
-		s.instance.SendMessageAll(nil, d, nil)
+		s.instance.SendMessageAll(nil, d, nil, nil)
 		//wait at least s.c.WaitCloseTime before stop the under layer socket
 		tmer := time.NewTimer(s.c.WaitCloseTime)
 		for {
@@ -384,7 +384,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Metadata = nil
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
-		if e := p.SendMessage(tracectx, d, nil); e != nil {
+		if e := p.SendMessage(tracectx, d, nil, nil); e != nil {
 			log.Error(tracectx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
 		}
 		return
@@ -410,7 +410,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			msg.Metadata = nil
 			msg.Tracedata = nil
 			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(tracectx, d, nil); e != nil {
+			if e := p.SendMessage(tracectx, d, nil, nil); e != nil {
 				log.Error(tracectx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
 			}
 			return
@@ -443,7 +443,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		end := time.Now()
 		trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "CRPC", path, &start, &end, msg.Error)
 		d, _ := proto.Marshal(msg)
-		if e := p.SendMessage(ctx, d, nil); e != nil {
+		if e := p.SendMessage(ctx, d, nil, nil); e != nil {
 			log.Error(ctx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
 			if e == stream.ErrMsgLarge {
 				msg.Path = ""
@@ -453,7 +453,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				msg.Metadata = nil
 				msg.Tracedata = nil
 				d, _ = proto.Marshal(msg)
-				p.SendMessage(ctx, d, nil)
+				p.SendMessage(ctx, d, nil, nil)
 			}
 		}
 		if atomic.LoadInt32(&s.totalreqnum) < 0 {

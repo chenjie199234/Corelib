@@ -130,7 +130,7 @@ func (p *Peer) putDispatcher() {
 		close(p.dispatcher)
 	}
 }
-func (p *Peer) SendMessage(ctx context.Context, userdata []byte, beforeSend func(*Peer)) error {
+func (p *Peer) SendMessage(ctx context.Context, userdata []byte, beforeSend func(*Peer), afterSend func(*Peer, error)) error {
 	if len(userdata) == 0 {
 		return nil
 	}
@@ -152,10 +152,16 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, beforeSend func
 		log.Error(ctx, "[Stream.SendMessage] to:", p.peeruniquename, "error:", e)
 		p.conn.Close()
 		bufpool.PutBuffer(data)
+		if afterSend != nil {
+			afterSend(p, e)
+		}
 		return ErrConnClosed
 	}
 	atomic.StoreInt64(&p.sendidlestart, time.Now().UnixNano())
 	bufpool.PutBuffer(data)
+	if afterSend != nil {
+		afterSend(p, nil)
+	}
 	return nil
 }
 func (p *Peer) sendPing(pingdata []byte) error {

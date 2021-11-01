@@ -123,8 +123,18 @@ func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 	if p == nil {
 		return errPickAgain
 	}
-	if e = p.SendMessage(ctx, r.req, func(_ *stream.Peer) { s.lker.Lock() }); e != nil {
+	beforeSend := func(_ *stream.Peer) {
+		s.lker.Lock()
+	}
+	afterSend := func(_ *stream.Peer, e error) {
+		if e != nil {
+			s.lker.Unlock()
+			return
+		}
+		s.reqs[r.callid] = r
 		s.lker.Unlock()
+	}
+	if e = p.SendMessage(ctx, r.req, beforeSend, afterSend); e != nil {
 		if e == stream.ErrMsgLarge {
 			e = ERRREQMSGLARGE
 		} else if e == stream.ErrConnClosed {
@@ -138,14 +148,11 @@ func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 		}
 		return
 	}
-	//send message success,store req,add req num
-	s.reqs[r.callid] = r
-	s.lker.Unlock()
 	return
 }
 func (s *ServerForPick) sendcancel(ctx context.Context, canceldata []byte) {
 	if p := (*stream.Peer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.peer)))); p != nil {
-		p.SendMessage(ctx, canceldata, nil)
+		p.SendMessage(ctx, canceldata, nil, nil)
 	}
 }
 

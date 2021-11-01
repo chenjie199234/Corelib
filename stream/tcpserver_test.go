@@ -55,7 +55,7 @@ func tcpserverhandleonline(p *Peer) bool {
 }
 func tcpserverhandleuserdata(p *Peer, data []byte) {
 	fmt.Printf("%s:%s\n", p.GetPeerUniqueName(), data)
-	p.SendMessage(nil, data, nil)
+	p.SendMessage(nil, data, nil, nil)
 }
 func tcpserverhandleoffline(p *Peer) {
 }
