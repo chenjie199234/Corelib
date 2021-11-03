@@ -54,7 +54,7 @@ func StartCrpcServer() {
 	//return
 	//}
 
-	if e = s.StartCrpcServer(":9000", nil); e != nil {
+	if e = s.StartCrpcServer(":9000"); e != nil {
 		if e != crpc.ErrServerClosed {
 			log.Error(nil,"[xcrpc] start error:", e)
 		} else {

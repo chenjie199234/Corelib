@@ -178,13 +178,13 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*C
 		return nil, e
 	}
 	if c == nil {
-		return nil, errors.New("[rpc.client] missing config")
+		return nil, errors.New("[crpc.client] missing config")
 	}
 	if c.DiscoverFunction == nil {
-		return nil, errors.New("[rpc.client] missing discover in config")
+		return nil, errors.New("[crpc.client] missing discover in config")
 	}
 	if c.Picker == nil {
-		log.Warning(nil, "[rpc.client] missing picker in config,default picker will be used")
+		log.Warning(nil, "[crpc.client] missing picker in config,default picker will be used")
 		c.Picker = defaultPicker
 	}
 	c.validate()
@@ -414,7 +414,7 @@ func (c *CrpcClient) onlinefunc(p *stream.Peer) bool {
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&server.peer)), unsafe.Pointer(p))
 	atomic.StoreInt32(&server.status, 2)
 	c.wakemanual()
-	log.Info(nil, "[rpc.client.onlinefunc] server:", p.GetPeerUniqueName(), "online")
+	log.Info(nil, "[crpc.client.onlinefunc] server:", p.GetPeerUniqueName(), "online")
 	return true
 }
 
@@ -423,7 +423,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
-		log.Error(nil, "[rpc.client.userfunc] server:", p.GetPeerUniqueName(), "data format error:", e)
+		log.Error(nil, "[crpc.client.userfunc] server:", p.GetPeerUniqueName(), "data format error:", e)
 		return
 	}
 	if msg.Error != nil && msg.Error.Code == ERRCLOSING.Code {
@@ -444,7 +444,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 
 func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
-	log.Info(nil, "[rpc.client.offlinefunc] server:", p.GetPeerUniqueName(), "offline")
+	log.Info(nil, "[crpc.client.offlinefunc] server:", p.GetPeerUniqueName(), "offline")
 	atomic.StoreInt32(&server.status, 0)
 	server.lker.Lock()
 	for callid, req := range server.reqs {
@@ -457,7 +457,7 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	go c.start(server)
 }
 
-var errPickAgain = errors.New("[rpc.client] picked server closed")
+var errPickAgain = errors.New("[crpc.client] picked server closed")
 
 func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path string, in []byte, metadata map[string]string) ([]byte, error) {
 	var min time.Duration

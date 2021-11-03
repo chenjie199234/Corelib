@@ -36,6 +36,7 @@ type ServerConfig struct {
 	SocketRBuf    uint32
 	SocketWBuf    uint32
 	MaxMsgLen     uint32
+	CertKeys      map[string]string //mapkey: cert path,mapvalue: key path
 	VerifyDatas   []string
 }
 
@@ -74,6 +75,7 @@ func (c *ServerConfig) validate() {
 
 type CrpcServer struct {
 	c                  *ServerConfig
+	tlsc               *tls.Config
 	global             []OutsideHandler
 	ctxpool            *sync.Pool
 	handler            map[string]func(context.Context, string, *Msg)
@@ -110,6 +112,17 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 		closewait:          &sync.WaitGroup{},
 		refreshclosewaitch: make(chan struct{}, 1),
 	}
+	if len(c.CertKeys) != 0 {
+		certificates := make([]tls.Certificate, 0, len(c.CertKeys))
+		for cert, key := range c.CertKeys {
+			temp, e := tls.LoadX509KeyPair(cert, key)
+			if e != nil {
+				return nil, errors.New("[crpc.server] load cert:" + cert + " key:" + key + " error:" + e.Error())
+			}
+			certificates = append(certificates, temp)
+		}
+		serverinstance.tlsc = &tls.Config{Certificates: certificates}
+	}
 	serverinstance.closewait.Add(1)
 	instancec := &stream.InstanceConfig{
 		HeartprobeInterval: c.HeartPorbe,
@@ -128,23 +141,11 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 	return serverinstance, nil
 }
 
-var ErrServerClosed = errors.New("[rpc.server] closed")
-var ErrAlreadyStarted = errors.New("[rpc.server] already started")
+var ErrServerClosed = errors.New("[crpc.server] closed")
+var ErrAlreadyStarted = errors.New("[crpc.server] already started")
 
-func (s *CrpcServer) StartCrpcServer(listenaddr string, certkeys map[string]string) error {
-	var tlsc *tls.Config
-	if len(certkeys) != 0 {
-		certificates := make([]tls.Certificate, 0, len(certkeys))
-		for cert, key := range certkeys {
-			temp, e := tls.LoadX509KeyPair(cert, key)
-			if e != nil {
-				return errors.New("[Stream.StartTcpServer] load cert:" + cert + " key:" + key + " error:" + e.Error())
-			}
-			certificates = append(certificates, temp)
-		}
-		tlsc = &tls.Config{Certificates: certificates}
-	}
-	e := s.instance.StartTcpServer(listenaddr, tlsc)
+func (s *CrpcServer) StartCrpcServer(listenaddr string) error {
+	e := s.instance.StartTcpServer(listenaddr, s.tlsc)
 	if e == stream.ErrServerClosed {
 		return ErrServerClosed
 	} else if e == stream.ErrAlreadyStarted {
@@ -252,7 +253,7 @@ func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handl
 	totalhandlers = append(totalhandlers, s.global...)
 	totalhandlers = append(totalhandlers, handlers...)
 	if len(totalhandlers) > math.MaxInt8 {
-		return nil, errors.New("[rpc.server] too many handlers for one path")
+		return nil, errors.New("[crpc.server] too many handlers for one path")
 	}
 	return func(ctx context.Context, peeruniquename string, msg *Msg) {
 		var globaldl int64
@@ -297,7 +298,7 @@ func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handl
 			if e := recover(); e != nil {
 				stack := make([]byte, 8192)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[rpc.server] client:", peeruniquename, "path:", path, "panic:", e, "\n"+common.Byte2str(stack[:n]))
+				log.Error(workctx, "[crpc.server] client:", peeruniquename, "path:", path, "panic:", e, "\n"+common.Byte2str(stack[:n]))
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
@@ -346,13 +347,13 @@ func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 		calls: make(map[uint64]context.CancelFunc),
 	}
 	p.SetData(unsafe.Pointer(c))
-	log.Info(nil, "[rpc.server.onlinefunc] client:", p.GetPeerUniqueName(), "online")
+	log.Info(nil, "[crpc.server.onlinefunc] client:", p.GetPeerUniqueName(), "online")
 	return true
 }
 func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
-		log.Error(nil, "[rpc.server.userfunc] client:", p.GetPeerUniqueName(), "data format error:", e)
+		log.Error(nil, "[crpc.server.userfunc] client:", p.GetPeerUniqueName(), "data format error:", e)
 		p.Close()
 		return
 	}
@@ -376,7 +377,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	path := msg.Path
 	handler, ok := s.handler[msg.Path]
 	if !ok {
-		log.Error(tracectx, "[rpc.server.userfunc] client:", p.GetPeerUniqueName(), "call path:", msg.Path, "error: unknown path")
+		log.Error(tracectx, "[crpc.server.userfunc] client:", p.GetPeerUniqueName(), "call path:", msg.Path, "error: unknown path")
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
@@ -385,7 +386,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(tracectx, d, nil, nil); e != nil {
-			log.Error(tracectx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
+			log.Error(tracectx, "[crpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
 		}
 		return
 	}
@@ -411,7 +412,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			msg.Tracedata = nil
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(tracectx, d, nil, nil); e != nil {
-				log.Error(tracectx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
+				log.Error(tracectx, "[crpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
 			}
 			return
 		}
@@ -444,7 +445,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "CRPC", path, &start, &end, msg.Error)
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(ctx, d, nil, nil); e != nil {
-			log.Error(ctx, "[rpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
+			log.Error(ctx, "[crpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
 			if e == stream.ErrMsgLarge {
 				msg.Path = ""
 				msg.Deadline = 0
@@ -472,5 +473,5 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	}()
 }
 func (s *CrpcServer) offlinefunc(p *stream.Peer) {
-	log.Info(nil, "[rpc.server.offlinefunc] client:", p.GetPeerUniqueName(), "offline")
+	log.Info(nil, "[crpc.server.offlinefunc] client:", p.GetPeerUniqueName(), "offline")
 }

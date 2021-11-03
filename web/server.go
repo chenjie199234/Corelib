@@ -39,6 +39,7 @@ type ServerConfig struct {
 	MaxHeader          uint
 	SocketRBuf         uint
 	SocketWBuf         uint
+	CertKeys           map[string]string //mapkey: cert path,mapvalue: key path
 	Cors               *CorsConfig
 }
 
@@ -205,6 +206,17 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		closewait:        &sync.WaitGroup{},
 		refreshclosewait: make(chan struct{}, 1),
 	}
+	if len(c.CertKeys) > 0 {
+		certificates := make([]tls.Certificate, 0, len(c.CertKeys))
+		for cert, key := range c.CertKeys {
+			temp, e := tls.LoadX509KeyPair(cert, key)
+			if e != nil {
+				return nil, errors.New("[web.server] load cert:" + cert + " key:" + key + " error:" + e.Error())
+			}
+			certificates = append(certificates, temp)
+		}
+		instance.s.TLSConfig = &tls.Config{Certificates: certificates}
+	}
 	instance.s.Handler = instance
 	if c.HeartProbe < 0 {
 		instance.s.SetKeepAlivesEnabled(false)
@@ -286,19 +298,7 @@ func (this *WebServer) printPaths() {
 var ErrServerClosed = errors.New("[web.server] closed")
 var ErrAlreadyStarted = errors.New("[web.server] already started")
 
-//certkeys mapkey: cert path,mapvalue: key path
-func (this *WebServer) StartWebServer(listenaddr string, certkeys map[string]string) error {
-	if len(certkeys) > 0 {
-		certificates := make([]tls.Certificate, 0, len(certkeys))
-		for cert, key := range certkeys {
-			temp, e := tls.LoadX509KeyPair(cert, key)
-			if e != nil {
-				return errors.New("[web.server] load cert:" + cert + " key:" + key + " error:" + e.Error())
-			}
-			certificates = append(certificates, temp)
-		}
-		this.s.TLSConfig = &tls.Config{Certificates: certificates}
-	}
+func (this *WebServer) StartWebServer(listenaddr string) error {
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
 		return errors.New("[web.server] resolve addr:" + listenaddr + " error:" + e.Error())
@@ -308,7 +308,7 @@ func (this *WebServer) StartWebServer(listenaddr string, certkeys map[string]str
 		return errors.New("[web.server] listen addr:" + listenaddr + " error:" + e.Error())
 	}
 	this.printPaths()
-	if len(certkeys) > 0 {
+	if len(this.c.CertKeys) > 0 {
 		e = this.s.ServeTLS(l, "", "")
 	} else {
 		e = this.s.Serve(l)

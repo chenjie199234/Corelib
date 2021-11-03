@@ -63,7 +63,7 @@ func StartWebServer() {
 	//return
 	//}
 
-	if e = s.StartWebServer(":8000", nil); e != nil {
+	if e = s.StartWebServer(":8000"); e != nil {
 		if e != web.ErrServerClosed {
 			log.Error(nil,"[xweb] start error:", e)
 		} else {
