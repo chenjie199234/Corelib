@@ -61,7 +61,6 @@ func getCrpcClientConfig() *crpc.ClientConfig {
 		ConnTimeout:      time.Duration(rc.ConnTimeout),
 		GlobalTimeout:    time.Duration(rc.GlobalTimeout),
 		HeartPorbe:       time.Duration(rc.HeartProbe),
-		GroupNum:         1,
 		SocketRBuf:       2048,
 		SocketWBuf:       2048,
 		MaxMsgLen:        65535,

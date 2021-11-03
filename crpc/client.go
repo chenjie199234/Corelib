@@ -30,7 +30,6 @@ type ClientConfig struct {
 	ConnTimeout      time.Duration
 	GlobalTimeout    time.Duration //global timeout for every rpc call
 	HeartPorbe       time.Duration
-	GroupNum         uint32
 	SocketRBuf       uint32
 	SocketWBuf       uint32
 	MaxMsgLen        uint32
@@ -51,9 +50,6 @@ func (c *ClientConfig) validate() {
 	}
 	if c.HeartPorbe <= 0 {
 		c.HeartPorbe = 1500 * time.Millisecond
-	}
-	if c.GroupNum == 0 {
-		c.GroupNum = 1
 	}
 	if c.SocketRBuf == 0 {
 		c.SocketRBuf = 1024
@@ -223,7 +219,6 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*C
 	client.manually <- nil
 	instancec := &stream.InstanceConfig{
 		HeartprobeInterval: c.HeartPorbe,
-		GroupNum:           c.GroupNum,
 		TcpC: &stream.TcpConfig{
 			ConnectTimeout: c.ConnTimeout,
 			SocketRBufLen:  c.SocketRBuf,

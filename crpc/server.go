@@ -32,7 +32,6 @@ type ServerConfig struct {
 	//global timeout for every rpc call
 	GlobalTimeout time.Duration
 	HeartPorbe    time.Duration
-	GroupNum      uint32
 	SocketRBuf    uint32
 	SocketWBuf    uint32
 	MaxMsgLen     uint32
@@ -49,9 +48,6 @@ func (c *ServerConfig) validate() {
 	}
 	if c.HeartPorbe <= 0 {
 		c.HeartPorbe = 1500 * time.Millisecond
-	}
-	if c.GroupNum == 0 {
-		c.GroupNum = 1
 	}
 	if c.SocketRBuf == 0 {
 		c.SocketRBuf = 1024
@@ -126,7 +122,6 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 	serverinstance.closewait.Add(1)
 	instancec := &stream.InstanceConfig{
 		HeartprobeInterval: c.HeartPorbe,
-		GroupNum:           c.GroupNum,
 		TcpC: &stream.TcpConfig{
 			SocketRBufLen: c.SocketRBuf,
 			SocketWBufLen: c.SocketWBuf,

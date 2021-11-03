@@ -28,7 +28,6 @@ func StartCrpcServer() {
 	crpcc := &crpc.ServerConfig{
 		GlobalTimeout: time.Duration(c.GlobalTimeout),
 		HeartPorbe:    time.Duration(c.HeartProbe),
-		GroupNum:      1,
 		SocketRBuf:    2048,
 		SocketWBuf:    2048,
 		MaxMsgLen:     65535,
