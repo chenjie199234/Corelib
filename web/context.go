@@ -14,13 +14,14 @@ import (
 
 type Context struct {
 	context.Context
-	s        *WebServer
-	w        http.ResponseWriter
-	r        *http.Request
-	metadata map[string]string
-	handlers []OutsideHandler
-	next     int8
-	e        error
+	s              *WebServer
+	w              http.ResponseWriter
+	r              *http.Request
+	peeruniquename string
+	metadata       map[string]string
+	handlers       []OutsideHandler
+	next           int8
+	e              error
 }
 
 func (this *Context) Next() {
@@ -103,7 +104,7 @@ func getclientip(r *http.Request) string {
 	return ip
 }
 func (this *Context) GetSourceApp() string {
-	return this.r.Header.Get("SourceApp")
+	return this.peeruniquename
 }
 func (this *Context) GetClientIp() string {
 	return getclientip(this.r)
