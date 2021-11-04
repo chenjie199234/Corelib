@@ -2,69 +2,30 @@ package metadata
 
 import (
 	"context"
+
+	"github.com/chenjie199234/Corelib/crpc"
+	"github.com/chenjie199234/Corelib/web"
 )
 
 type metadatakey struct{}
 
-func GetAllMetadata(ctx context.Context) map[string]string {
-	value := ctx.Value(metadatakey{})
-	if value == nil {
-		return nil
+func GetMetadata(ctx context.Context) map[string]string {
+	if c, ok := ctx.(*crpc.Context); ok {
+		return c.GetMetadata()
+	} else if cc, ok := ctx.(*web.Context); ok {
+		return cc.GetMetadata()
+	} else if md, ok := ctx.Value(metadatakey{}).(map[string]string); ok {
+		return md
 	}
-	result, ok := value.(map[string]string)
-	if !ok {
-		return nil
-	}
-	return result
+	return nil
 }
-func GetMetadata(ctx context.Context, key string) string {
-	value := ctx.Value(metadatakey{})
-	if value == nil {
-		return ""
+func CopyMetadata(src context.Context) context.Context {
+	if src == nil {
+		return context.Background()
 	}
-	result, ok := value.(map[string]string)
-	if !ok {
-		return ""
+	md := GetMetadata(src)
+	if md == nil {
+		return context.Background()
 	}
-	return result[key]
-}
-func SetMetadata(ctx context.Context, key, value string) context.Context {
-	tempresult := ctx.Value(metadatakey{})
-	if tempresult == nil {
-		return context.WithValue(ctx, metadatakey{}, map[string]string{key: value})
-	}
-	result := tempresult.(map[string]string)
-	result[key] = value
-	return ctx
-}
-func SetAllMetadata(ctx context.Context, data map[string]string) context.Context {
-	tempresult := ctx.Value(metadatakey{})
-	if tempresult == nil {
-		return context.WithValue(ctx, metadatakey{}, data)
-	}
-	result := tempresult.(map[string]string)
-	for k, v := range data {
-		result[k] = v
-	}
-	return ctx
-}
-func CleanMetadata(ctx context.Context, key string) {
-	tempresult := ctx.Value(metadatakey{})
-	if tempresult == nil {
-		return
-	}
-	result := tempresult.(map[string]string)
-	delete(result, key)
-	return
-}
-func CleanAllMetadata(ctx context.Context) {
-	tempresult := ctx.Value(metadatakey{})
-	if tempresult == nil {
-		return
-	}
-	result := tempresult.(map[string]string)
-	for k := range result {
-		delete(result, k)
-	}
-	return
+	return context.WithValue(context.Background(), metadatakey{}, md)
 }

@@ -30,7 +30,7 @@ type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client
 
 type ClientConfig struct {
 	ConnTimeout   time.Duration
-	GlobalTimeout time.Duration //request's max handling time
+	GlobalTimeout time.Duration //request's max handling time(including connection establish time)
 	HeartProbe    time.Duration //tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
 	//if this is 0,means useless,connection will keep alive until it is closed

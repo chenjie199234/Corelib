@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	cerror "github.com/chenjie199234/Corelib/error"
-	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/julienschmidt/httprouter"
 )
@@ -18,6 +17,7 @@ type Context struct {
 	s        *WebServer
 	w        http.ResponseWriter
 	r        *http.Request
+	metadata map[string]string
 	handlers []OutsideHandler
 	next     int8
 	e        error
@@ -81,7 +81,7 @@ func (this *Context) GetMethod() string {
 	return this.r.Method
 }
 func (this *Context) GetMetadata() map[string]string {
-	return metadata.GetAllMetadata(this.r.Context())
+	return this.metadata
 }
 func (this *Context) GetHeaders() http.Header {
 	return this.r.Header

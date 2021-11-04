@@ -14,7 +14,6 @@ import (
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -29,7 +28,7 @@ type ServerConfig struct {
 	//when server close,server will wait this time before close,every request will refresh the time
 	//min is 1 second
 	WaitCloseTime time.Duration
-	//global timeout for every rpc call
+	//global timeout for every rpc call(including connection establish time)
 	GlobalTimeout time.Duration
 	HeartPorbe    time.Duration
 	SocketRBuf    uint32
@@ -283,9 +282,6 @@ func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handl
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, min))
 			defer cancel()
-		}
-		if msg.Metadata != nil {
-			ctx = metadata.SetAllMetadata(ctx, msg.Metadata)
 		}
 		//logic
 		workctx := s.getContext(ctx, peeruniquename, msg, totalhandlers)

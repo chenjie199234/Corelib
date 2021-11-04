@@ -235,7 +235,7 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 				}
 			}
 		}
-		g.P("respd,e:=c.cc.Call(ctx,", timeout.Nanoseconds(), ",", pathname, ",reqd,", metadataPackage.Ident("GetAllMetadata"), "(ctx))")
+		g.P("respd,e:=c.cc.Call(ctx,", timeout.Nanoseconds(), ",", pathname, ",reqd,", metadataPackage.Ident("GetMetadata"), "(ctx))")
 		g.P("if e != nil {")
 		g.P("return nil,e")
 		g.P("}")

@@ -17,7 +17,6 @@ import (
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/host"
@@ -28,7 +27,7 @@ type ServerConfig struct {
 	//when server close,server will wait at least this time before close,every request will refresh the time
 	//min is 1 second
 	WaitCloseTime time.Duration
-	//request's max handling time
+	//request's max handling time(including connection establish time)
 	GlobalTimeout time.Duration
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
 	//if this is 0,GlobalTimeout will be used as IdleTimeout
@@ -365,13 +364,14 @@ func (this *WebServer) StopWebServer() {
 	}
 
 }
-func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context.Context, handlers []OutsideHandler) *Context {
+func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context.Context, metadata map[string]string, handlers []OutsideHandler) *Context {
 	ctx, ok := this.ctxpool.Get().(*Context)
 	if !ok {
-		return &Context{Context: r.Context(), s: this, w: w, r: r, handlers: handlers}
+		return &Context{Context: c, s: this, w: w, r: r, metadata: metadata, handlers: handlers}
 	}
 	ctx.w = w
 	ctx.r = r
+	ctx.metadata = metadata
 	ctx.handlers = handlers
 	ctx.Context = c
 	ctx.e = nil
@@ -379,12 +379,6 @@ func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c cont
 }
 
 func (this *WebServer) putContext(ctx *Context) {
-	ctx.w = nil
-	ctx.r = nil
-	ctx.handlers = nil
-	ctx.Context = nil
-	ctx.next = 0
-	ctx.e = nil
 	this.ctxpool.Put(ctx)
 }
 
@@ -533,14 +527,14 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			}
 		}
 		//metadata
+		var md map[string]string
 		if mdstr := r.Header.Get("Metadata"); mdstr != "" {
-			md := make(map[string]string)
+			md = make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(mdstr), &md); e != nil {
 				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: Metadata:", mdstr, "format error")
 				http.Error(w, cerror.ErrReq.Error(), http.StatusBadRequest)
 				return
 			}
-			ctx = metadata.SetAllMetadata(ctx, md)
 		}
 		var clientdl int64
 		if temp := r.Header.Get("Deadline"); temp != "" {
@@ -602,7 +596,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			defer cancel()
 		}
 		//logic
-		workctx := this.getContext(w, r, ctx, totalhandlers)
+		workctx := this.getContext(w, r, ctx, md, totalhandlers)
 		defer func() {
 			if e := recover(); e != nil {
 				stack := make([]byte, 8192)

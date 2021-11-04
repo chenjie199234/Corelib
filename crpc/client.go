@@ -28,7 +28,7 @@ type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client
 
 type ClientConfig struct {
 	ConnTimeout      time.Duration
-	GlobalTimeout    time.Duration //global timeout for every rpc call
+	GlobalTimeout    time.Duration //global timeout for every rpc call(including connection establish time)
 	HeartPorbe       time.Duration
 	SocketRBuf       uint32
 	SocketWBuf       uint32

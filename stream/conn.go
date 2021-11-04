@@ -37,6 +37,7 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 		return errors.New("[Stream.StartTcpServer] listen tcp addr: " + listenaddr + " error: " + e.Error())
 	}
 	if !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&this.tcplistener)), nil, unsafe.Pointer(tmplistener)) {
+		tmplistener.Close()
 		return ErrAlreadyStarted
 	}
 	//check stop status

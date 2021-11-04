@@ -618,9 +618,9 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 			}
 			switch httpmetohd {
 			case http.MethodGet:
-				g.P("r,e:=c.cc.Get(ctx,", timeout.Nanoseconds(), ",", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetAllMetadata")), "(ctx))")
+				g.P("r,e:=c.cc.Get(ctx,", timeout.Nanoseconds(), ",", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			case http.MethodDelete:
-				g.P("r,e:=c.cc.Delete(ctx,", timeout.Nanoseconds(), ",", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetAllMetadata")), "(ctx))")
+				g.P("r,e:=c.cc.Delete(ctx,", timeout.Nanoseconds(), ",", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			}
 		} else {
 			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")
@@ -628,11 +628,11 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 			g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
 			switch httpmetohd {
 			case http.MethodPost:
-				g.P("r,e:=c.cc.Post(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetAllMetadata")), "(ctx),reqd)")
+				g.P("r,e:=c.cc.Post(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			case http.MethodPut:
-				g.P("r,e:=c.cc.Put(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetAllMetadata")), "(ctx),reqd)")
+				g.P("r,e:=c.cc.Put(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			case http.MethodPatch:
-				g.P("r,e:=c.cc.Patch(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetAllMetadata")), "(ctx),reqd)")
+				g.P("r,e:=c.cc.Patch(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			}
 		}
 		g.P("if e != nil {")
