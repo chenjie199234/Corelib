@@ -220,11 +220,7 @@ func (s *CrpcServer) getContext(ctx context.Context, peeruniquename string, msg 
 }
 
 func (s *CrpcServer) putContext(ctx *Context) {
-	ctx.Context = nil
-	ctx.peeruniquename = ""
-	ctx.msg = nil
-	ctx.handlers = nil
-	ctx.next = 0
+	s.ctxpool.Put(ctx)
 }
 
 //thread unsafe
