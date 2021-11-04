@@ -14,7 +14,6 @@ import (
 
 type Context struct {
 	context.Context
-	s              *WebServer
 	w              http.ResponseWriter
 	r              *http.Request
 	peeruniquename string

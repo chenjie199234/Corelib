@@ -367,7 +367,7 @@ func (this *WebServer) StopWebServer() {
 func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context.Context, peeruniquename string, metadata map[string]string, handlers []OutsideHandler) *Context {
 	ctx, ok := this.ctxpool.Get().(*Context)
 	if !ok {
-		return &Context{Context: c, s: this, w: w, r: r, metadata: metadata, handlers: handlers}
+		return &Context{Context: c, w: w, r: r, metadata: metadata, handlers: handlers}
 	}
 	ctx.w = w
 	ctx.r = r
