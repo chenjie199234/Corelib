@@ -364,23 +364,6 @@ func (this *WebServer) StopWebServer() {
 	}
 
 }
-func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context.Context, peeruniquename string, metadata map[string]string, handlers []OutsideHandler) *Context {
-	ctx, ok := this.ctxpool.Get().(*Context)
-	if !ok {
-		return &Context{Context: c, w: w, r: r, metadata: metadata, handlers: handlers}
-	}
-	ctx.w = w
-	ctx.r = r
-	ctx.metadata = metadata
-	ctx.handlers = handlers
-	ctx.Context = c
-	ctx.e = nil
-	return ctx
-}
-
-func (this *WebServer) putContext(ctx *Context) {
-	this.ctxpool.Put(ctx)
-}
 
 type OutsideHandler func(*Context)
 
@@ -595,7 +578,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			defer cancel()
 		}
 		//logic
-		workctx := this.getContext(w, r, ctx, sourceapp+":"+sourceip, md, totalhandlers)
+		workctx := this.getContext(w, r, ctx, md, totalhandlers)
 		defer func() {
 			if e := recover(); e != nil {
 				stack := make([]byte, 8192)

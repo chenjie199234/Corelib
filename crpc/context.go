@@ -4,15 +4,37 @@ import (
 	"context"
 
 	cerror "github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
+func (s *CrpcServer) getContext(ctx context.Context, p *stream.Peer, msg *Msg, handlers []OutsideHandler) *Context {
+	result, ok := s.ctxpool.Get().(*Context)
+	if !ok {
+		return &Context{
+			Context:  ctx,
+			peer:     p,
+			msg:      msg,
+			handlers: handlers,
+		}
+	}
+	result.Context = ctx
+	result.peer = p
+	result.msg = msg
+	result.handlers = handlers
+	return result
+}
+
+func (s *CrpcServer) putContext(ctx *Context) {
+	s.ctxpool.Put(ctx)
+}
+
 type Context struct {
 	context.Context
-	msg            *Msg
-	peeruniquename string
-	handlers       []OutsideHandler
-	next           int8
+	msg      *Msg
+	peer     *stream.Peer
+	handlers []OutsideHandler
+	next     int8
 }
 
 func (c *Context) Next() {
@@ -62,11 +84,11 @@ func (c *Context) WriteString(resp string) {
 func (c *Context) GetBody() []byte {
 	return c.msg.Body
 }
-func (c *Context) GetSourceApp() string {
-	return c.peeruniquename
+func (c *Context) GetPeerName() string {
+	return c.peer.GetPeerName()
 }
-func (c *Context) GetPath() string {
-	return c.msg.Path
+func (c *Context) GetPeerAddr() string {
+	return c.peer.GetRemoteAddr()
 }
 func (c *Context) GetMetadata() map[string]string {
 	return c.msg.Metadata

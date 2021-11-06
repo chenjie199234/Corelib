@@ -12,15 +12,32 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
+func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context.Context, metadata map[string]string, handlers []OutsideHandler) *Context {
+	ctx, ok := this.ctxpool.Get().(*Context)
+	if !ok {
+		return &Context{Context: c, w: w, r: r, metadata: metadata, handlers: handlers}
+	}
+	ctx.w = w
+	ctx.r = r
+	ctx.metadata = metadata
+	ctx.handlers = handlers
+	ctx.Context = c
+	ctx.e = nil
+	return ctx
+}
+
+func (this *WebServer) putContext(ctx *Context) {
+	this.ctxpool.Put(ctx)
+}
+
 type Context struct {
 	context.Context
-	w              http.ResponseWriter
-	r              *http.Request
-	peeruniquename string
-	metadata       map[string]string
-	handlers       []OutsideHandler
-	next           int8
-	e              error
+	w        http.ResponseWriter
+	r        *http.Request
+	metadata map[string]string
+	handlers []OutsideHandler
+	next     int8
+	e        error
 }
 
 func (this *Context) Next() {
@@ -89,6 +106,19 @@ func (this *Context) GetHeaders() http.Header {
 func (this *Context) GetHeader(key string) string {
 	return this.r.Header.Get(key)
 }
+func (this *Context) GetPeerName() string {
+	peername := this.r.Header.Get("SourceApp")
+	if peername == "" {
+		return "unknown"
+	}
+	return peername
+}
+func (this *Context) GetPeerAddr() string {
+	return this.r.RemoteAddr
+}
+func (this *Context) GetClientIp() string {
+	return getclientip(this.r)
+}
 func getclientip(r *http.Request) string {
 	ip := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
 	if ip != "" {
@@ -101,15 +131,6 @@ func getclientip(r *http.Request) string {
 		ip, _, _ = net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
 	}
 	return ip
-}
-func (this *Context) GetSourceApp() string {
-	return this.peeruniquename
-}
-func (this *Context) GetClientIp() string {
-	return getclientip(this.r)
-}
-func (this *Context) GetRemoteAddr() string {
-	return this.r.RemoteAddr
 }
 func (this *Context) GetUserAgent() string {
 	return this.r.Header.Get("User-Agent")

@@ -73,7 +73,7 @@ type CrpcServer struct {
 	tlsc               *tls.Config
 	global             []OutsideHandler
 	ctxpool            *sync.Pool
-	handler            map[string]func(context.Context, string, *Msg)
+	handler            map[string]func(context.Context, *stream.Peer, *Msg)
 	instance           *stream.Instance
 	closewait          *sync.WaitGroup
 	totalreqnum        int32
@@ -103,7 +103,7 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 		c:                  c,
 		global:             make([]OutsideHandler, 0, 10),
 		ctxpool:            &sync.Pool{},
-		handler:            make(map[string]func(context.Context, string, *Msg), 10),
+		handler:            make(map[string]func(context.Context, *stream.Peer, *Msg), 10),
 		closewait:          &sync.WaitGroup{},
 		refreshclosewaitch: make(chan struct{}, 1),
 	}
@@ -202,26 +202,6 @@ func (s *CrpcServer) GetReqNum() int32 {
 		return totalreqnum
 	}
 }
-func (s *CrpcServer) getContext(ctx context.Context, peeruniquename string, msg *Msg, handlers []OutsideHandler) *Context {
-	result, ok := s.ctxpool.Get().(*Context)
-	if !ok {
-		return &Context{
-			Context:        ctx,
-			peeruniquename: peeruniquename,
-			msg:            msg,
-			handlers:       handlers,
-		}
-	}
-	result.Context = ctx
-	result.peeruniquename = peeruniquename
-	result.msg = msg
-	result.handlers = handlers
-	return result
-}
-
-func (s *CrpcServer) putContext(ctx *Context) {
-	s.ctxpool.Put(ctx)
-}
 
 //thread unsafe
 func (s *CrpcServer) Use(globalMids ...OutsideHandler) {
@@ -238,22 +218,39 @@ func (s *CrpcServer) RegisterHandler(path string, functimeout time.Duration, han
 	return nil
 }
 
-func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handlers ...OutsideHandler) (func(context.Context, string, *Msg), error) {
+func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handlers ...OutsideHandler) (func(context.Context, *stream.Peer, *Msg), error) {
 	totalhandlers := make([]OutsideHandler, 1)
 	totalhandlers = append(totalhandlers, s.global...)
 	totalhandlers = append(totalhandlers, handlers...)
 	if len(totalhandlers) > math.MaxInt8 {
 		return nil, errors.New("[crpc.server] too many handlers for one path")
 	}
-	return func(ctx context.Context, peeruniquename string, msg *Msg) {
+	return func(ctx context.Context, p *stream.Peer, msg *Msg) {
+		traceid, _, _, _, _ := trace.GetTrace(ctx)
+		var sourceapp, sourceip, sourcemethod, sourcepath string
+		if msg.Tracedata != nil {
+			sourcemethod = msg.Tracedata["SourceMethod"]
+			sourcepath = msg.Tracedata["SourcePath"]
+		}
+		sourceapp = p.GetPeerName()
+		if sourceapp == "" {
+			sourceapp = "unkown"
+		}
+		sourceip = p.GetRemoteAddr()
+		if sourcemethod == "" {
+			sourcemethod = "unknown"
+		}
+		if sourcepath == "" {
+			sourcepath = "unknown"
+		}
 		var globaldl int64
 		var funcdl int64
-		now := time.Now()
+		start := time.Now()
 		if s.c.GlobalTimeout != 0 {
-			globaldl = now.UnixNano() + int64(s.c.GlobalTimeout)
+			globaldl = start.UnixNano() + int64(s.c.GlobalTimeout)
 		}
 		if functimeout != 0 {
-			funcdl = now.UnixNano() + int64(functimeout)
+			funcdl = start.UnixNano() + int64(functimeout)
 		}
 		min := int64(math.MaxInt64)
 		if msg.Deadline != 0 && msg.Deadline < min {
@@ -266,7 +263,7 @@ func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handl
 			min = globaldl
 		}
 		if min != math.MaxInt64 {
-			if min < now.UnixNano()+int64(time.Millisecond) {
+			if min < start.UnixNano()+int64(time.Millisecond) {
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
@@ -280,12 +277,12 @@ func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handl
 			defer cancel()
 		}
 		//logic
-		workctx := s.getContext(ctx, peeruniquename, msg, totalhandlers)
+		workctx := s.getContext(ctx, p, msg, totalhandlers)
 		defer func() {
 			if e := recover(); e != nil {
 				stack := make([]byte, 8192)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[crpc.server] client:", peeruniquename, "path:", path, "panic:", e, "\n"+common.Byte2str(stack[:n]))
+				log.Error(workctx, "[crpc.server] client:", p.GetPeerUniqueName(), "path:", path, "panic:", e, "\n"+common.Byte2str(stack[:n]))
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
@@ -293,6 +290,8 @@ func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handl
 				msg.Metadata = nil
 				msg.Tracedata = nil
 			}
+			end := time.Now()
+			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "CRPC", path, &start, &end, msg.Error)
 			s.putContext(workctx)
 		}()
 		workctx.Next()
@@ -358,10 +357,6 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		traceid = msg.Tracedata["Traceid"]
 	}
 	tracectx := trace.InitTrace(p, traceid, s.instance.GetSelfName(), host.Hostip, "CRPC", msg.Path)
-	//if traceid is not empty,traceid will not change
-	//if traceid is empty,init trace will create a new traceid,use the new traceid
-	traceid, _, _, _, _ = trace.GetTrace(tracectx)
-	path := msg.Path
 	handler, ok := s.handler[msg.Path]
 	if !ok {
 		log.Error(tracectx, "[crpc.server.userfunc] client:", p.GetPeerUniqueName(), "call path:", msg.Path, "error: unknown path")
@@ -409,27 +404,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	c.calls[msg.Callid] = cancel
 	c.Unlock()
 	go func() {
-		var sourceapp, sourceip, sourcemethod, sourcepath string
-		if msg.Tracedata != nil {
-			sourcemethod = msg.Tracedata["SourceMethod"]
-			sourcepath = msg.Tracedata["SourcePath"]
-		}
-		sourceapp = p.GetPeerName()
-		if sourceapp == "" {
-			sourceapp = "unkown"
-		}
-		sourceip = p.GetRemoteAddr()
-		if sourcemethod == "" {
-			sourcemethod = "unknown"
-		}
-		if sourcepath == "" {
-			sourcepath = "unknown"
-		}
-		//logic
-		start := time.Now()
-		handler(ctx, p.GetPeerUniqueName(), msg)
-		end := time.Now()
-		trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "CRPC", path, &start, &end, msg.Error)
+		handler(ctx, p, msg)
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(ctx, d, nil, nil); e != nil {
 			log.Error(ctx, "[crpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
