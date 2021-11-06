@@ -81,6 +81,9 @@ func (c *Context) WriteString(resp string) {
 	c.Write(common.Str2byte(resp))
 }
 
+func (c *Context) GetPath() string {
+	return c.msg.Path
+}
 func (c *Context) GetBody() []byte {
 	return c.msg.Body
 }
