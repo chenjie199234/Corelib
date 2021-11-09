@@ -5,11 +5,9 @@ import (
 )
 
 var (
-	ERRUNKNOWN  = &error.Error{Code: 1, Msg: "[web] unknown error"}
-	ERRNOAPI    = &error.Error{Code: 2, Msg: "[web] api not implement"}
-	ERRCLOSING  = &error.Error{Code: 3, Msg: "[web] connection is closing"}
-	ERRPANIC    = &error.Error{Code: 4, Msg: "[web] server panic"}
-	ERRNOSERVER = &error.Error{Code: 5, Msg: "[web] no servers"}
-	ERRCLOSED   = &error.Error{Code: 6, Msg: "[web] connection closed"}
-	ERRCORS     = &error.Error{Code: 7, Msg: "[web] cors"}
+	ERRUNKNOWN  = &error.Error{Code: 1001, Msg: "[web] unknown error"}
+	ERRNOAPI    = &error.Error{Code: 1002, Msg: "[web] api not implement"}
+	ERRCLOSING  = &error.Error{Code: 1003, Msg: "[web] server is closing"}
+	ERRPANIC    = &error.Error{Code: 1004, Msg: "[web] server panic"}
+	ERRNOSERVER = &error.Error{Code: 1005, Msg: "[web] no servers"}
 )

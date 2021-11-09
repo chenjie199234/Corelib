@@ -472,7 +472,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 					}
 				}
 				if !find {
-					http.Error(w, ERRCORS.Error(), http.StatusForbidden)
+					http.Error(w, "", http.StatusMethodNotAllowed)
 					return
 				}
 			}
