@@ -4,8 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
-	"sync/atomic"
-	"unsafe"
+	"sync"
 
 	"github.com/chenjie199234/Corelib/util/common"
 )
@@ -14,8 +13,9 @@ type Instance struct {
 	selfname string
 	c        *InstanceConfig
 
-	tcplistener *net.TCPListener
-	mng         *connmng
+	sync.Mutex
+	listeners []*net.TCPListener
+	mng       *connmng
 }
 
 //be careful about the callback func race
@@ -43,18 +43,20 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 	}
 	c.validate()
 	stream := &Instance{
-		selfname: group + "." + name,
-		c:        c,
-		mng:      newconnmng(int(c.GroupNum), c.HeartprobeInterval, c.SendIdleTimeout, c.RecvIdleTimeout),
+		selfname:  group + "." + name,
+		c:         c,
+		listeners: make([]*net.TCPListener, 0),
+		mng:       newconnmng(int(c.GroupNum), c.HeartprobeInterval, c.SendIdleTimeout, c.RecvIdleTimeout),
 	}
 	return stream, nil
 }
 func (this *Instance) Stop() {
 	this.mng.Stop()
-	tmplistener := (*net.TCPListener)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.tcplistener))))
-	if tmplistener != nil {
-		this.tcplistener.Close()
+	this.Lock()
+	for _, listener := range this.listeners {
+		listener.Close()
 	}
+	this.Unlock()
 }
 func (this *Instance) GetSelfName() string {
 	return this.selfname

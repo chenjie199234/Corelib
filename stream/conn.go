@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/log"
@@ -18,38 +17,33 @@ import (
 )
 
 var ErrServerClosed = errors.New("[Stream.server] closed")
-var ErrAlreadyStarted = errors.New("[Stream.server] already started")
 
 //if tlsc not nil,tcp connection will be used with tls
 func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error {
 	if tlsc != nil && len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
 		return errors.New("[Stream.StartTcpServer] tls certificate setting missing")
 	}
-	if this.mng.Finishing() {
-		return ErrServerClosed
-	}
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
 		return errors.New("[Stream.StartTcpServer] resolve tcp addr: " + listenaddr + " error: " + e.Error())
 	}
-	var tmplistener *net.TCPListener
-	if tmplistener, e = net.ListenTCP("tcp", laddr); e != nil {
-		return errors.New("[Stream.StartTcpServer] listen tcp addr: " + listenaddr + " error: " + e.Error())
-	}
-	if !atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&this.tcplistener)), nil, unsafe.Pointer(tmplistener)) {
-		tmplistener.Close()
-		return ErrAlreadyStarted
-	}
-	//check stop status
+	this.Lock()
 	if this.mng.Finishing() {
-		tmplistener.Close()
+		this.Unlock()
 		return ErrServerClosed
 	}
+	var tmplistener *net.TCPListener
+	if tmplistener, e = net.ListenTCP("tcp", laddr); e != nil {
+		this.Unlock()
+		return errors.New("[Stream.StartTcpServer] listen tcp addr: " + listenaddr + " error: " + e.Error())
+	}
+	this.listeners = append(this.listeners, tmplistener)
+	this.Unlock()
 	for {
 		p := newPeer(this.c.TcpC.MaxMsgLen)
-		conn, e := this.tcplistener.AcceptTCP()
+		conn, e := tmplistener.AcceptTCP()
 		if e != nil {
-			this.tcplistener.Close()
+			tmplistener.Close()
 			if this.mng.Finishing() {
 				return ErrServerClosed
 			}
@@ -57,7 +51,7 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 		}
 		if this.mng.Finishing() {
 			conn.Close()
-			this.tcplistener.Close()
+			tmplistener.Close()
 			return ErrServerClosed
 		}
 		//disable system's keep alive probe

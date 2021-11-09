@@ -137,14 +137,11 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 }
 
 var ErrServerClosed = errors.New("[crpc.server] closed")
-var ErrAlreadyStarted = errors.New("[crpc.server] already started")
 
 func (s *CrpcServer) StartCrpcServer(listenaddr string) error {
 	e := s.instance.StartTcpServer(listenaddr, s.tlsc)
 	if e == stream.ErrServerClosed {
 		return ErrServerClosed
-	} else if e == stream.ErrAlreadyStarted {
-		return ErrAlreadyStarted
 	}
 	return e
 }

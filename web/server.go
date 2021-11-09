@@ -296,7 +296,6 @@ func (this *WebServer) printPaths() {
 }
 
 var ErrServerClosed = errors.New("[web.server] closed")
-var ErrAlreadyStarted = errors.New("[web.server] already started")
 
 func (this *WebServer) StartWebServer(listenaddr string) error {
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
