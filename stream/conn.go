@@ -88,7 +88,7 @@ func (this *Instance) sworker(p *Peer) {
 		return
 	}
 	if e := this.mng.AddPeer(p); e != nil {
-		log.Error(nil, "[Stream.sworker] add:", p.peeruniquename, "to peer manager error:", e)
+		log.Error(nil, "[Stream.sworker] add:", p.peeruniquename, "to connection manager error:", e)
 		p.conn.Close()
 		return
 	}
@@ -182,7 +182,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) bool {
 	}
 	//verify server success
 	if e := this.mng.AddPeer(p); e != nil {
-		log.Error(nil, "[Stream.cworker] add:", p.peeruniquename, "to peer manager error:", e)
+		log.Error(nil, "[Stream.cworker] add:", p.peeruniquename, "to connection manager error:", e)
 		p.conn.Close()
 		return false
 	}
