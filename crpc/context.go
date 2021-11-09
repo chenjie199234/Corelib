@@ -16,12 +16,14 @@ func (s *CrpcServer) getContext(ctx context.Context, p *stream.Peer, msg *Msg, h
 			peer:     p,
 			msg:      msg,
 			handlers: handlers,
+			next:     0,
 		}
 	}
 	result.Context = ctx
 	result.peer = p
 	result.msg = msg
 	result.handlers = handlers
+	result.next = 0
 	return result
 }
 
@@ -55,13 +57,7 @@ func (c *Context) Abort(e error) {
 	c.msg.Path = ""
 	c.msg.Deadline = 0
 	c.msg.Body = nil
-	if e == context.DeadlineExceeded {
-		c.msg.Error = cerror.ErrDeadlineExceeded
-	} else if e == context.Canceled {
-		c.msg.Error = cerror.ErrCanceled
-	} else {
-		c.msg.Error = cerror.ConvertStdError(e)
-	}
+	c.msg.Error = cerror.ConvertStdError(e)
 	c.msg.Metadata = nil
 	c.msg.Tracedata = nil
 	c.next = -1

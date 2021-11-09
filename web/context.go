@@ -15,13 +15,22 @@ import (
 func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context.Context, metadata map[string]string, handlers []OutsideHandler) *Context {
 	ctx, ok := this.ctxpool.Get().(*Context)
 	if !ok {
-		return &Context{Context: c, w: w, r: r, metadata: metadata, handlers: handlers}
+		return &Context{
+			Context:  c,
+			w:        w,
+			r:        r,
+			metadata: metadata,
+			handlers: handlers,
+			next:     0,
+			e:        nil,
+		}
 	}
+	ctx.Context = c
 	ctx.w = w
 	ctx.r = r
 	ctx.metadata = metadata
 	ctx.handlers = handlers
-	ctx.Context = c
+	ctx.next = 0
 	ctx.e = nil
 	return ctx
 }
@@ -37,7 +46,7 @@ type Context struct {
 	metadata map[string]string
 	handlers []OutsideHandler
 	next     int8
-	e        error
+	e        *cerror.Error
 }
 
 func (this *Context) Next() {

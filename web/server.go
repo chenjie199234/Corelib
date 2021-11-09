@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"math"
@@ -583,7 +584,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			if e := recover(); e != nil {
 				stack := make([]byte, 8192)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "panic:", e, "\n"+common.Byte2str(stack[:n]))
+				log.Error(workctx, "[web.server] client:", sourceapp+":"+sourceip, "path:", path, "method:", method, "panic:", e, "stack:", base64.StdEncoding.EncodeToString(stack[:n]))
 				http.Error(w, ERRPANIC.Error(), http.StatusInternalServerError)
 				workctx.e = ERRPANIC
 			}

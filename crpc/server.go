@@ -3,6 +3,7 @@ package crpc
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"math"
 	"runtime"
@@ -280,9 +281,9 @@ func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handl
 		workctx := s.getContext(ctx, p, msg, totalhandlers)
 		defer func() {
 			if e := recover(); e != nil {
-				stack := make([]byte, 8192)
+				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[crpc.server] client:", p.GetPeerUniqueName(), "path:", path, "panic:", e, "\n"+common.Byte2str(stack[:n]))
+				log.Error(workctx, "[crpc.server] client:", p.GetPeerUniqueName(), "path:", path, "method: CRPC panic:", e, "stack:", base64.StdEncoding.EncodeToString(stack[:n]))
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
