@@ -53,15 +53,9 @@ func StartWebServer() {
 	//s.Use(globalmidwares)
 
 	//you just need to register your service here
-	if e = api.RegisterStatusWebServer(s, service.SvcStatus, mids.AllMids()); e != nil {
-		log.Error(nil,"[xweb] register handlers error:", e)
-		return
-	}
+	api.RegisterStatusWebServer(s, service.SvcStatus, mids.AllMids())
 	//example
-	//if e = api.RegisterExampleWebServer(s, service.SvcExample, mids.AllMids()); e != nil {
-	//log.Error(nil,"[xweb] register handlers error:", e)
-	//return
-	//}
+	//api.RegisterExampleWebServer(s, service.SvcExample, mids.AllMids())
 
 	if e = s.StartWebServer(":8000"); e != nil {
 		if e != web.ErrServerClosed {

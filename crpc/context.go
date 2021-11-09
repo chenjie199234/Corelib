@@ -16,14 +16,14 @@ func (s *CrpcServer) getContext(ctx context.Context, p *stream.Peer, msg *Msg, h
 			peer:     p,
 			msg:      msg,
 			handlers: handlers,
-			next:     0,
+			status:   0,
 		}
 	}
 	result.Context = ctx
 	result.peer = p
 	result.msg = msg
 	result.handlers = handlers
-	result.next = 0
+	result.status = 0
 	return result
 }
 
@@ -36,20 +36,15 @@ type Context struct {
 	msg      *Msg
 	peer     *stream.Peer
 	handlers []OutsideHandler
-	next     int8
+	status   int8
 }
 
-func (c *Context) Next() {
-	if c.next < 0 {
-		return
-	}
-	c.next++
-	for c.next < int8(len(c.handlers)) {
-		c.handlers[c.next](c)
-		if c.next < 0 {
+func (c *Context) run() {
+	for _, handler := range c.handlers {
+		handler(c)
+		if c.status == -1 {
 			break
 		}
-		c.next++
 	}
 }
 
@@ -60,7 +55,7 @@ func (c *Context) Abort(e error) {
 	c.msg.Error = cerror.ConvertStdError(e)
 	c.msg.Metadata = nil
 	c.msg.Tracedata = nil
-	c.next = -1
+	c.status = -1
 }
 
 func (c *Context) Write(resp []byte) {
@@ -70,7 +65,7 @@ func (c *Context) Write(resp []byte) {
 	c.msg.Error = nil
 	c.msg.Metadata = nil
 	c.msg.Tracedata = nil
-	c.next = -1
+	c.status = -1
 }
 
 func (c *Context) WriteString(resp string) {

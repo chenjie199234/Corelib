@@ -132,7 +132,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 	}
 
 	//Server Register
-	g.P("func Register", serverName, "(engine *", g.QualifiedGoIdent(crpcPackage.Ident("CrpcServer")), ",svc ", serverName, ",allmids map[string]", g.QualifiedGoIdent(crpcPackage.Ident("OutsideHandler")), ")error{")
+	g.P("func Register", serverName, "(engine *", g.QualifiedGoIdent(crpcPackage.Ident("CrpcServer")), ",svc ", serverName, ",allmids map[string]", g.QualifiedGoIdent(crpcPackage.Ident("OutsideHandler")), "){")
 	g.P("//avoid lint")
 	g.P("_=allmids")
 	for _, method := range service.Methods {
@@ -168,21 +168,16 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 			g.P("if mid,ok:=allmids[v];ok{")
 			g.P("mids = append(mids,mid)")
 			g.P("}else{")
-			g.P("return ", g.QualifiedGoIdent(errorsPackage.Ident("New")), "(", strconv.Quote("missing midware:"), "+v)")
+			g.P("panic(\"missing midware:\"+v)")
 			g.P("}")
 			g.P("}")
 			g.P("mids = append(mids,", fname, ")")
-			g.P("if e := engine.RegisterHandler(", pathname, ",", timeout.Nanoseconds(), ",mids...);e!=nil{")
-			g.P("return e")
-			g.P("}")
+			g.P("engine.RegisterHandler(", pathname, ",", timeout.Nanoseconds(), ",mids...)")
 			g.P("}")
 		} else {
-			g.P("if e := engine.RegisterHandler(", pathname, ",", timeout.Nanoseconds(), ",", fname, ");e!=nil{")
-			g.P("return e")
-			g.P("}")
+			g.P("engine.RegisterHandler(", pathname, ",", timeout.Nanoseconds(), ",", fname, ")")
 		}
 	}
-	g.P("return nil")
 	g.P("}")
 }
 func genClient(file *protogen.File, g *protogen.GeneratedFile) {

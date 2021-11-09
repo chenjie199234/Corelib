@@ -21,7 +21,7 @@ func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c cont
 			r:        r,
 			metadata: metadata,
 			handlers: handlers,
-			next:     0,
+			status:   0,
 			e:        nil,
 		}
 	}
@@ -30,7 +30,7 @@ func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c cont
 	ctx.r = r
 	ctx.metadata = metadata
 	ctx.handlers = handlers
-	ctx.next = 0
+	ctx.status = 0
 	ctx.e = nil
 	return ctx
 }
@@ -45,21 +45,16 @@ type Context struct {
 	r        *http.Request
 	metadata map[string]string
 	handlers []OutsideHandler
-	next     int8
+	status   int8
 	e        *cerror.Error
 }
 
-func (this *Context) Next() {
-	if this.next < 0 {
-		return
-	}
-	this.next++
-	for this.next < int8(len(this.handlers)) {
-		this.handlers[this.next](this)
-		if this.next < 0 {
+func (this *Context) run() {
+	for _, handler := range this.handlers {
+		handler(this)
+		if this.status == -1 {
 			break
 		}
-		this.next++
 	}
 }
 
@@ -70,7 +65,7 @@ func (this *Context) Abort(code int, e error) {
 		this.w.Write(common.Str2byte(ee.Error()))
 		this.e = ee
 	}
-	this.next = -1
+	this.status = -1
 }
 
 func (this *Context) Write(msg []byte) {
@@ -78,7 +73,7 @@ func (this *Context) Write(msg []byte) {
 	if len(msg) > 0 {
 		this.w.Write(msg)
 	}
-	this.next = -1
+	this.status = -1
 }
 
 func (this *Context) WriteString(msg string) {

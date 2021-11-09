@@ -374,73 +374,52 @@ func (this *WebServer) Use(globalMids ...OutsideHandler) {
 }
 
 //thread unsafe
-func (this *WebServer) Get(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
-	h, e := this.insideHandler(http.MethodGet, path, functimeout, handlers)
-	if e != nil {
-		return e
-	}
-	this.router.Handler(http.MethodGet, path, h)
+func (this *WebServer) Get(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+	this.router.Handler(http.MethodGet, path, this.insideHandler(http.MethodGet, path, functimeout, handlers))
 	if _, ok := this.paths[http.MethodGet]; !ok {
 		this.paths[http.MethodGet] = make(map[string]struct{})
 	}
 	this.paths[http.MethodGet][path] = struct{}{}
-	return nil
 }
 
 //thread unsafe
-func (this *WebServer) Delete(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
-	h, e := this.insideHandler(http.MethodDelete, path, functimeout, handlers)
-	if e != nil {
-		return e
-	}
-	this.router.Handler(http.MethodDelete, path, h)
+func (this *WebServer) Delete(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+	this.router.Handler(http.MethodDelete, path, this.insideHandler(http.MethodDelete, path, functimeout, handlers))
 	if _, ok := this.paths[http.MethodDelete]; !ok {
 		this.paths[http.MethodDelete] = make(map[string]struct{})
 	}
 	this.paths[http.MethodDelete][path] = struct{}{}
-	return nil
+	return
 }
 
 //thread unsafe
-func (this *WebServer) Post(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
-	h, e := this.insideHandler(http.MethodPost, path, functimeout, handlers)
-	if e != nil {
-		return e
-	}
-	this.router.Handler(http.MethodPost, path, h)
+func (this *WebServer) Post(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+	this.router.Handler(http.MethodPost, path, this.insideHandler(http.MethodPost, path, functimeout, handlers))
 	if _, ok := this.paths[http.MethodPost]; !ok {
 		this.paths[http.MethodPost] = make(map[string]struct{})
 	}
 	this.paths[http.MethodPost][path] = struct{}{}
-	return nil
+	return
 }
 
 //thread unsafe
-func (this *WebServer) Put(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
-	h, e := this.insideHandler(http.MethodPut, path, functimeout, handlers)
-	if e != nil {
-		return e
-	}
-	this.router.Handler(http.MethodPut, path, h)
+func (this *WebServer) Put(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+	this.router.Handler(http.MethodPut, path, this.insideHandler(http.MethodPut, path, functimeout, handlers))
 	if _, ok := this.paths[http.MethodPut]; !ok {
 		this.paths[http.MethodPut] = make(map[string]struct{})
 	}
 	this.paths[http.MethodPut][path] = struct{}{}
-	return nil
+	return
 }
 
 //thread unsafe
-func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
-	h, e := this.insideHandler(http.MethodPatch, path, functimeout, handlers)
-	if e != nil {
-		return e
-	}
-	this.router.Handler(http.MethodPatch, path, h)
+func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+	this.router.Handler(http.MethodPatch, path, this.insideHandler(http.MethodPatch, path, functimeout, handlers))
 	if _, ok := this.paths[http.MethodPatch]; !ok {
 		this.paths[http.MethodPatch] = make(map[string]struct{})
 	}
 	this.paths[http.MethodPatch][path] = struct{}{}
-	return nil
+	return
 }
 
 func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -474,13 +453,8 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt32(&this.totalreqnum, -1)
 }
 
-func (this *WebServer) insideHandler(method, path string, timeout time.Duration, handlers []OutsideHandler) (http.HandlerFunc, error) {
-	totalhandlers := make([]OutsideHandler, 1)
-	totalhandlers = append(totalhandlers, this.global...)
-	totalhandlers = append(totalhandlers, handlers...)
-	if len(totalhandlers) > math.MaxInt8 {
-		return nil, errors.New("[web.server] too many handlers for one single path")
-	}
+func (this *WebServer) insideHandler(method, path string, timeout time.Duration, handlers []OutsideHandler) http.HandlerFunc {
+	totalhandlers := append(this.global, handlers...)
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		//cors
@@ -592,6 +566,6 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, workctx.e)
 			this.putContext(workctx)
 		}()
-		workctx.Next()
-	}, nil
+		workctx.run()
+	}
 }

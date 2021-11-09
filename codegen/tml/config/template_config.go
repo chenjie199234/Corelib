@@ -534,7 +534,6 @@ func initsource(path string) {
 		}
 		op = op.SetHosts(mongoc.Addrs)
 		op = op.SetConnectTimeout(time.Duration(mongoc.ConnTimeout))
-		op = op.SetCompressors([]string{"zstd"}).SetZstdLevel(3)
 		op = op.SetMaxConnIdleTime(time.Duration(mongoc.MaxIdletime))
 		op = op.SetMaxPoolSize(mongoc.MaxOpen)
 		op = op.SetSocketTimeout(time.Duration(mongoc.IoTimeout))

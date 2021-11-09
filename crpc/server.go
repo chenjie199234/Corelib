@@ -210,22 +210,12 @@ func (s *CrpcServer) Use(globalMids ...OutsideHandler) {
 }
 
 //thread unsafe
-func (s *CrpcServer) RegisterHandler(path string, functimeout time.Duration, handlers ...OutsideHandler) error {
-	h, e := s.insidehandler(path, functimeout, handlers...)
-	if e != nil {
-		return e
-	}
-	s.handler[path] = h
-	return nil
+func (s *CrpcServer) RegisterHandler(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+	s.handler[path] = s.insidehandler(path, functimeout, handlers...)
 }
 
-func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handlers ...OutsideHandler) (func(context.Context, *stream.Peer, *Msg), error) {
-	totalhandlers := make([]OutsideHandler, 1)
-	totalhandlers = append(totalhandlers, s.global...)
-	totalhandlers = append(totalhandlers, handlers...)
-	if len(totalhandlers) > math.MaxInt8 {
-		return nil, errors.New("[crpc.server] too many handlers for one path")
-	}
+func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handlers ...OutsideHandler) func(context.Context, *stream.Peer, *Msg) {
+	totalhandlers := append(s.global, handlers...)
 	return func(ctx context.Context, p *stream.Peer, msg *Msg) {
 		traceid, _, _, _, _ := trace.GetTrace(ctx)
 		var sourceapp, sourceip, sourcemethod, sourcepath string
@@ -295,8 +285,8 @@ func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handl
 			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "CRPC", path, &start, &end, msg.Error)
 			s.putContext(workctx)
 		}()
-		workctx.Next()
-	}, nil
+		workctx.run()
+	}
 }
 func (s *CrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if atomic.LoadInt32(&s.totalreqnum) < 0 {

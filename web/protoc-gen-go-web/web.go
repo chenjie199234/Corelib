@@ -304,7 +304,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 	}
 
 	//Server Register
-	g.P("func Register", serverName, "(engine *", g.QualifiedGoIdent(webPackage.Ident("WebServer")), ",svc ", serverName, ",allmids map[string]", g.QualifiedGoIdent(webPackage.Ident("OutsideHandler")), ")error{")
+	g.P("func Register", serverName, "(engine *", g.QualifiedGoIdent(webPackage.Ident("WebServer")), ",svc ", serverName, ",allmids map[string]", g.QualifiedGoIdent(webPackage.Ident("OutsideHandler")), "){")
 	g.P("//avoid lint")
 	g.P("_=allmids")
 	for _, method := range service.Methods {
@@ -347,43 +347,38 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 			g.P("if mid,ok:=allmids[v];ok{")
 			g.P("mids = append(mids,mid)")
 			g.P("}else{")
-			g.P("return ", g.QualifiedGoIdent(errorsPackage.Ident("New")), "(", strconv.Quote("missing midware:"), "+v)")
+			g.P("panic(\"missing midware:\"+v)")
 			g.P("}")
 			g.P("}")
 			g.P("mids = append(mids,", fname, ")")
 			switch httpmetohd {
 			case http.MethodGet:
-				g.P("if e := engine.Get(", pathname, ",", timeout.Nanoseconds(), ",mids...);e!=nil{")
+				g.P("engine.Get(", pathname, ",", timeout.Nanoseconds(), ",mids...)")
 			case http.MethodDelete:
-				g.P("if e := engine.Delete(", pathname, ",", timeout.Nanoseconds(), ",mids...);e!=nil{")
+				g.P("engine.Delete(", pathname, ",", timeout.Nanoseconds(), ",mids...)")
 			case http.MethodPost:
-				g.P("if e := engine.Post(", pathname, ",", timeout.Nanoseconds(), ",mids...);e!=nil{")
+				g.P("engine.Post(", pathname, ",", timeout.Nanoseconds(), ",mids...)")
 			case http.MethodPut:
-				g.P("if e := engine.Put(", pathname, ",", timeout.Nanoseconds(), ",mids...);e!=nil{")
+				g.P("engine.Put(", pathname, ",", timeout.Nanoseconds(), ",mids...)")
 			case http.MethodPatch:
-				g.P("if e := engine.Patch(", pathname, ",", timeout.Nanoseconds(), ",mids...);e!=nil{")
+				g.P("engine.Patch(", pathname, ",", timeout.Nanoseconds(), ",mids...)")
 			}
-			g.P("return e")
-			g.P("}")
 			g.P("}")
 		} else {
 			switch httpmetohd {
 			case http.MethodGet:
-				g.P("if e := engine.Get(", pathname, ",", timeout.Nanoseconds(), ",", fname, ");e!=nil{")
+				g.P("engine.Get(", pathname, ",", timeout.Nanoseconds(), ",", fname, ")")
 			case http.MethodDelete:
-				g.P("if e := engine.Delete(", pathname, ",", timeout.Nanoseconds(), ",", fname, ");e!=nil{")
+				g.P("engine.Delete(", pathname, ",", timeout.Nanoseconds(), ",", fname, ")")
 			case http.MethodPost:
-				g.P("if e := engine.Post(", pathname, ",", timeout.Nanoseconds(), ",", fname, ");e!=nil{")
+				g.P("engine.Post(", pathname, ",", timeout.Nanoseconds(), ",", fname, ")")
 			case http.MethodPut:
-				g.P("if e := engine.Put(", pathname, ",", timeout.Nanoseconds(), ",", fname, ");e!=nil{")
+				g.P("engine.Put(", pathname, ",", timeout.Nanoseconds(), ",", fname, ")")
 			case http.MethodPatch:
-				g.P("if e := engine.Patch(", pathname, ",", timeout.Nanoseconds(), ",", fname, ");e!=nil{")
+				g.P("engine.Patch(", pathname, ",", timeout.Nanoseconds(), ",", fname, ")")
 			}
-			g.P("return e")
-			g.P("}")
 		}
 	}
-	g.P("return nil")
 	g.P("}")
 }
 
