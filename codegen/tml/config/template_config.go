@@ -10,7 +10,6 @@ import (
 const text = `package config
 
 import (
-	"encoding/json"
 	"os"
 	"strconv"
 
@@ -24,10 +23,9 @@ import (
 //EnvConfig can't hot update,all these data is from system env setting
 //nil field means that system env not exist
 type EnvConfig struct {
-	ServerVerifyDatas []string
-	ConfigType        *int
-	RunEnv            *string
-	DeployEnv         *string
+	ConfigType *int
+	RunEnv     *string
+	DeployEnv  *string
 }
 
 //EC -
@@ -58,46 +56,33 @@ func Close() {
 
 func initenv() {
 	EC = &EnvConfig{}
-	if str, ok := os.LookupEnv("SERVER_VERIFY_DATA"); ok && str != "<SERVER_VERIFY_DATA>" {
-		temp := make([]string, 0)
-		if str != "" {
-			EC.ServerVerifyDatas = temp
-		} else if e := json.Unmarshal([]byte(str), &temp); e != nil {
-			log.Error(nil,"[config.initenv] SERVER_VERIFY_DATA must be json string array like:[\"abc\",\"123\"]")
-			Close()
-			os.Exit(1)
-		}
-		EC.ServerVerifyDatas = temp
-	} else {
-		log.Warning(nil,"[config.initenv] missing SERVER_VERIFY_DATA")
-	}
 	if str, ok := os.LookupEnv("CONFIG_TYPE"); ok && str != "<CONFIG_TYPE>" && str != "" {
 		configtype, e := strconv.Atoi(str)
 		if e != nil || (configtype != 0 && configtype != 1 && configtype != 2) {
-			log.Error(nil,"[config.initenv] CONFIG_TYPE must be number in [0,1,2]")
+			log.Error(nil, "[config.initenv] CONFIG_TYPE must be number in [0,1,2]")
 			Close()
 			os.Exit(1)
 		}
 		EC.ConfigType = &configtype
 	} else {
-		log.Warning(nil,"[config.initenv] missing CONFIG_TYPE")
+		log.Warning(nil, "[config.initenv] missing CONFIG_TYPE")
 	}
 	if str, ok := os.LookupEnv("RUN_ENV"); ok && str != "<RUN_ENV>" && str != "" {
 		EC.RunEnv = &str
 	} else {
-		log.Warning(nil,"[config.initenv] missing RUN_ENV")
+		log.Warning(nil, "[config.initenv] missing RUN_ENV")
 	}
 	if str, ok := os.LookupEnv("DEPLOY_ENV"); ok && str != "<DEPLOY_ENV>" && str != "" {
 		EC.DeployEnv = &str
 	} else {
-		log.Warning(nil,"[config.initenv] missing DEPLOY_ENV")
+		log.Warning(nil, "[config.initenv] missing DEPLOY_ENV")
 	}
 }
 
 func initremote(path string) {
 	if EC.ConfigType != nil && *EC.ConfigType == 2 {
 		if e := configsdk.NewWebSdk(path, api.Group, api.Name); e != nil {
-			log.Error(nil,"[config.initremote] new sdk error:", e)
+			log.Error(nil, "[config.initremote] new sdk error:", e)
 			Close()
 			os.Exit(1)
 		}
@@ -128,13 +113,13 @@ var watcher *fsnotify.Watcher
 func initapp(path string, notice func(*AppConfig)) {
 	data, e := os.ReadFile(path + "AppConfig.json")
 	if e != nil {
-		log.Error(nil,"[config.initapp] read config file error:", e)
+		log.Error(nil, "[config.initapp] read config file error:", e)
 		Close()
 		os.Exit(1)
 	}
 	AC = &AppConfig{}
 	if e = json.Unmarshal(data, AC); e != nil {
-		log.Error(nil,"[config.initapp] config file format error:", e)
+		log.Error(nil, "[config.initapp] config file format error:", e)
 		Close()
 		os.Exit(1)
 	}
@@ -143,12 +128,12 @@ func initapp(path string, notice func(*AppConfig)) {
 	}
 	watcher, e = fsnotify.NewWatcher()
 	if e != nil {
-		log.Error(nil,"[config.initapp] create watcher for hot update error:", e)
+		log.Error(nil, "[config.initapp] create watcher for hot update error:", e)
 		Close()
 		os.Exit(1)
 	}
 	if e = watcher.Add(path); e != nil {
-		log.Error(nil,"[config.initapp] create watcher for hot update error:", e)
+		log.Error(nil, "[config.initapp] create watcher for hot update error:", e)
 		Close()
 		os.Exit(1)
 	}
@@ -171,12 +156,12 @@ func initapp(path string, notice func(*AppConfig)) {
 				}
 				data, e := os.ReadFile(path + "AppConfig.json")
 				if e != nil {
-					log.Error(nil,"[config.initapp] hot update read config file error:", e)
+					log.Error(nil, "[config.initapp] hot update read config file error:", e)
 					continue
 				}
 				c := &AppConfig{}
 				if e = json.Unmarshal(data, c); e != nil {
-					log.Error(nil,"[config.initapp] hot update config file format error:", e)
+					log.Error(nil, "[config.initapp] hot update config file format error:", e)
 					continue
 				}
 				if notice != nil {
@@ -187,7 +172,7 @@ func initapp(path string, notice func(*AppConfig)) {
 				if !ok {
 					return
 				}
-				log.Error(nil,"[config.initapp] hot update watcher error:", err)
+				log.Error(nil, "[config.initapp] hot update watcher error:", err)
 			}
 		}
 	}()
@@ -344,13 +329,13 @@ var kafkaPubers map[string]*kafka.Writer
 func initsource(path string) {
 	data, e := os.ReadFile(path + "SourceConfig.json")
 	if e != nil {
-		log.Error(nil,"[config.initsource] read config file error:", e)
+		log.Error(nil, "[config.initsource] read config file error:", e)
 		Close()
 		os.Exit(1)
 	}
 	sc = &sourceConfig{}
 	if e = json.Unmarshal(data, sc); e != nil {
-		log.Error(nil,"[config.initsource] config file format error:", e)
+		log.Error(nil, "[config.initsource] config file format error:", e)
 		Close()
 		os.Exit(1)
 	}
@@ -546,7 +531,7 @@ func initsource(path string) {
 		op = op.SetWriteConcern(writeconcern.New(writeconcern.W(1), writeconcern.J(true)))
 		tempdb, e := mongo.Connect(nil, op)
 		if e != nil {
-			log.Error(nil,"[config.initsource] open mongodb:", k, "error:", e)
+			log.Error(nil, "[config.initsource] open mongodb:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
@@ -554,7 +539,7 @@ func initsource(path string) {
 		e = tempdb.Ping(ctx, readpref.Primary())
 		if e != nil {
 			cancel()
-			log.Error(nil,"[config.initsource] ping mongodb:", k, "error:", e)
+			log.Error(nil, "[config.initsource] ping mongodb:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
@@ -578,7 +563,7 @@ func initsource(path string) {
 			Collation:            sqlc.Collation,
 		}).FormatDSN())
 		if e != nil {
-			log.Error(nil,"[config.initsource] open mysql:", k, "error:", e)
+			log.Error(nil, "[config.initsource] open mysql:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
@@ -588,7 +573,7 @@ func initsource(path string) {
 		e = tempdb.PingContext(ctx)
 		if e != nil {
 			cancel()
-			log.Error(nil,"[config.initsource] ping mysql:", k, "error:", e)
+			log.Error(nil, "[config.initsource] ping mysql:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
@@ -613,7 +598,7 @@ func initsource(path string) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		if e := tempredis.Ping(ctx); e != nil {
 			cancel()
-			log.Error(nil,"[config.initsource] ping redis:", k, "error:", e)
+			log.Error(nil, "[config.initsource] ping redis:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}

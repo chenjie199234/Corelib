@@ -42,7 +42,7 @@ type Context struct {
 func (c *Context) run() {
 	for _, handler := range c.handlers {
 		handler(c)
-		if c.status == -1 {
+		if c.status != 0 {
 			break
 		}
 	}
@@ -65,7 +65,7 @@ func (c *Context) Write(resp []byte) {
 	c.msg.Error = nil
 	c.msg.Metadata = nil
 	c.msg.Tracedata = nil
-	c.status = -1
+	c.status = 1
 }
 
 func (c *Context) WriteString(resp string) {

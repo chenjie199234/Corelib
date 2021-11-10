@@ -33,7 +33,6 @@ type ClientConfig struct {
 	SocketRBuf       uint32
 	SocketWBuf       uint32
 	MaxMsgLen        uint32
-	VerifyData       string
 	UseTLS           bool     //crpc or crpcs
 	SkipVerifyTLS    bool     //don't verify the server's cert
 	CAs              []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
@@ -370,7 +369,7 @@ func (c *CrpcClient) start(server *ServerForPick) {
 		c.slker.Unlock()
 		atomic.StoreInt32(&server.status, 1)
 	}
-	tempverifydata := c.c.VerifyData + "|" + c.appname
+	tempverifydata := c.appname
 	var tlsc *tls.Config
 	if c.c.UseTLS {
 		tlsc = c.tlsc
@@ -383,9 +382,6 @@ func (c *CrpcClient) start(server *ServerForPick) {
 }
 
 func (c *CrpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
-	if common.Byte2str(peerVerifyData) != c.c.VerifyData {
-		return nil, false
-	}
 	//verify success
 	return nil, true
 }

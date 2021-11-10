@@ -7,7 +7,6 @@ import (
 	"errors"
 	"math"
 	"runtime"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,7 +35,6 @@ type ServerConfig struct {
 	SocketWBuf    uint32
 	MaxMsgLen     uint32
 	CertKeys      map[string]string //mapkey: cert path,mapvalue: key path
-	VerifyDatas   []string
 }
 
 func (c *ServerConfig) validate() {
@@ -290,27 +288,10 @@ func (s *CrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peer
 		//self closed
 		return nil, false
 	}
-	temp := common.Byte2str(peerVerifyData)
-	index := strings.LastIndex(temp, "|")
-	if index == -1 {
+	if common.Byte2str(peerVerifyData) != s.instance.GetSelfName() {
 		return nil, false
 	}
-	targetname := temp[index+1:]
-	vdata := temp[:index]
-	if targetname != s.instance.GetSelfName() {
-		return nil, false
-	}
-	if len(s.c.VerifyDatas) == 0 {
-		dup := make([]byte, len(vdata))
-		copy(dup, vdata)
-		return dup, true
-	}
-	for _, verifydata := range s.c.VerifyDatas {
-		if vdata == verifydata {
-			return common.Str2byte(verifydata), true
-		}
-	}
-	return nil, false
+	return nil, true
 }
 func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 	if atomic.LoadInt32(&s.totalreqnum) < 0 {

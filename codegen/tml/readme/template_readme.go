@@ -22,7 +22,6 @@ $$$
 
 ## 环境变量
 $$$
-SERVER_VERIFY_DATA                      内部服务连接使用的校验数据,数据格式为json字符串数据["xxx1","xxx2"]
 CONFIG_TYPE 				配置类型
 					0-使用本地配置,路径:./
 					1-使用kuberneters的configmap,路径:./kubeconfig

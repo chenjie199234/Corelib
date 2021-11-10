@@ -31,7 +31,6 @@ func StartCrpcServer() {
 		SocketRBuf:    2048,
 		SocketWBuf:    2048,
 		MaxMsgLen:     65535,
-		VerifyDatas:   config.EC.ServerVerifyDatas,
 	}
 	var e error
 	if s, e = crpc.NewCrpcServer(crpcc, api.Group, api.Name); e != nil {

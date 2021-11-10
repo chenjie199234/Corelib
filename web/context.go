@@ -52,7 +52,7 @@ type Context struct {
 func (this *Context) run() {
 	for _, handler := range this.handlers {
 		handler(this)
-		if this.status == -1 {
+		if this.status != 0 {
 			break
 		}
 	}
@@ -73,7 +73,7 @@ func (this *Context) Write(msg []byte) {
 	if len(msg) > 0 {
 		this.w.Write(msg)
 	}
-	this.status = -1
+	this.status = 1
 }
 
 func (this *Context) WriteString(msg string) {

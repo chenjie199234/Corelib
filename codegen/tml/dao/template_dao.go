@@ -53,10 +53,6 @@ func NewApi() error {
 }
 func getCrpcClientConfig() *crpc.ClientConfig {
 	rc := config.GetCrpcClientConfig()
-	verifydata := ""
-	if len(config.EC.ServerVerifyDatas) != 0 {
-		verifydata = config.EC.ServerVerifyDatas[0]
-	}
 	return &crpc.ClientConfig{
 		ConnTimeout:      time.Duration(rc.ConnTimeout),
 		GlobalTimeout:    time.Duration(rc.GlobalTimeout),
@@ -64,7 +60,6 @@ func getCrpcClientConfig() *crpc.ClientConfig {
 		SocketRBuf:       2048,
 		SocketWBuf:       2048,
 		MaxMsgLen:        65535,
-		VerifyData:       verifydata,
 		DiscoverFunction: crpcDNS,
 	}
 }
