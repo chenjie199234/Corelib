@@ -451,6 +451,7 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 var errPickAgain = errors.New("[crpc.client] picked server closed")
 
 func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path string, in []byte, metadata map[string]string) ([]byte, error) {
+	start := time.Now()
 	var min time.Duration
 	if c.c.GlobalTimeout != 0 {
 		min = c.c.GlobalTimeout
@@ -468,8 +469,7 @@ func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 		defer cancel()
 	}
 	dl, ok := ctx.Deadline()
-	if ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
-		//ttl + server logic time
+	if ok && dl.UnixNano() <= start.UnixNano()+int64(5*time.Millisecond) {
 		return nil, cerror.ErrDeadlineExceeded
 	}
 	msg := &Msg{
@@ -497,7 +497,6 @@ func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 		if e != nil {
 			return nil, e
 		}
-		start := time.Now()
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 		if e = server.sendmessage(ctx, r); e != nil {
 			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)

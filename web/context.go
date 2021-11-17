@@ -58,26 +58,29 @@ func (this *Context) run() {
 	}
 }
 
+//has race
 func (this *Context) Abort(code int, e error) {
+	this.status = -1
 	this.w.WriteHeader(code)
+	this.w.Header().Set("Content-Type", "application/json")
 	if e != nil {
 		ee := cerror.ConvertStdError(e)
-		this.w.Write(common.Str2byte(ee.Error()))
-		this.e = ee
+		if ee != nil {
+			this.w.Write(common.Str2byte(ee.Error()))
+		}
 	}
-	this.status = -1
 }
 
-func (this *Context) Write(msg []byte) {
-	this.w.WriteHeader(http.StatusOK)
-	if len(msg) > 0 {
-		this.w.Write(msg)
-	}
+//has race
+func (this *Context) Write(contenttype string, msg []byte) {
 	this.status = 1
+	this.w.WriteHeader(http.StatusOK)
+	this.w.Header().Set("Content-Type", contenttype)
+	this.w.Write(msg)
 }
 
-func (this *Context) WriteString(msg string) {
-	this.Write(common.Str2byte(msg))
+func (this *Context) WriteString(contenttype, msg string) {
+	this.Write(contenttype, common.Str2byte(msg))
 }
 
 func (this *Context) SetHeader(k, v string) {

@@ -48,6 +48,7 @@ func (c *Context) run() {
 	}
 }
 
+//has race
 func (c *Context) Abort(e error) {
 	c.msg.Path = ""
 	c.msg.Deadline = 0
@@ -58,6 +59,7 @@ func (c *Context) Abort(e error) {
 	c.status = -1
 }
 
+//has race
 func (c *Context) Write(resp []byte) {
 	c.msg.Path = ""
 	c.msg.Deadline = 0

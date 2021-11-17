@@ -78,8 +78,7 @@ type WebClient struct {
 	selfappname string
 	appname     string
 	c           *ClientConfig
-	//certpool    *x509.CertPool
-	tlsc *tls.Config
+	tlsc        *tls.Config
 
 	lker       *sync.RWMutex
 	serversRaw []byte
@@ -362,6 +361,7 @@ func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, pat
 	return this.call(http.MethodPatch, ctx, functimeout, path, query, header, metadata, nil)
 }
 func (this *WebClient) call(method string, ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body *bytes.Buffer) (*http.Response, error) {
+	start := time.Now()
 	if len(path) == 0 || path[0] != '/' {
 		path = "/" + path
 	}
@@ -400,6 +400,9 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	}
 	dl, ok := ctx.Deadline()
 	if ok {
+		if dl.UnixNano() < start.UnixNano()+int64(time.Millisecond*5) {
+			return nil, cerror.ErrDeadlineExceeded
+		}
 		header.Set("Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
 	header.Del("Origin")
@@ -408,10 +411,8 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		if e != nil {
 			return nil, e
 		}
-		start := time.Now()
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 		if ok && dl.UnixNano() < start.UnixNano()+int64(5*time.Millisecond) {
-			//ttl + server logic time
 			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 			return nil, cerror.ErrDeadlineExceeded
 		}
@@ -451,15 +452,14 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, ERRCLOSING)
 			continue
 		}
+		respbody, e := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if e != nil {
+			e = cerror.ConvertStdError(e)
+			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, e)
+			return nil, e
+		}
 		if resp.StatusCode != 200 {
-			var respbody []byte
-			respbody, e = io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if e != nil {
-				e = cerror.ConvertStdError(e)
-				trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, e)
-				return nil, e
-			}
 			if len(respbody) == 0 {
 				if text := http.StatusText(resp.StatusCode); text != "" {
 					e = cerror.MakeError(-1, text)

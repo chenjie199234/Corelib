@@ -10,4 +10,5 @@ var (
 	ERRCLOSING  = &error.Error{Code: 1003, Msg: "[web] server is closing"}
 	ERRPANIC    = &error.Error{Code: 1004, Msg: "[web] server panic"}
 	ERRNOSERVER = &error.Error{Code: 1005, Msg: "[web] no servers"}
+	ERRCORS     = &error.Error{Code: 1006, Msg: "[web] cors"}
 )

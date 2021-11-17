@@ -226,11 +226,15 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	instance.closewait.Add(1)
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Error(r.Context(), "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
-		http.Error(w, ERRNOAPI.Error(), http.StatusNotFound)
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(common.Str2byte(ERRNOAPI.Error()))
 	})
 	instance.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Error(r.Context(), "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown method")
-		http.Error(w, ERRNOAPI.Error(), http.StatusMethodNotAllowed)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(common.Str2byte(ERRNOAPI.Error()))
 	})
 	instance.router.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//for OPTIONS preflight
@@ -472,7 +476,9 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 					}
 				}
 				if !find {
-					http.Error(w, "", http.StatusMethodNotAllowed)
+					w.WriteHeader(http.StatusMethodNotAllowed)
+					w.Header().Set("Content-Type", "application/json")
+					w.Write(common.Str2byte(ERRCORS.Error()))
 					return
 				}
 			}
@@ -489,7 +495,9 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			md = make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(mdstr), &md); e != nil {
 				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: Metadata:", mdstr, "format error")
-				http.Error(w, cerror.ErrReq.Error(), http.StatusBadRequest)
+				w.WriteHeader(http.StatusBadRequest)
+				w.Header().Set("Content-Type", "application/json")
+				w.Write(common.Str2byte(ERRCORS.Error()))
 				return
 			}
 		}
@@ -499,7 +507,9 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			clientdl, e = strconv.ParseInt(temp, 10, 64)
 			if e != nil {
 				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: Deadline:", temp, "format error")
-				http.Error(w, cerror.ErrReq.Error(), http.StatusBadRequest)
+				w.WriteHeader(http.StatusBadRequest)
+				w.Header().Set("Content-Type", "application/json")
+				w.Write(common.Str2byte(cerror.ErrReq.Error()))
 				return
 			}
 		}
@@ -541,8 +551,9 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 		}
 		if min != math.MaxInt64 {
 			if min < start.UnixNano()+int64(time.Millisecond) {
-				//min logic time,1ms
-				http.Error(w, cerror.ErrDeadlineExceeded.Error(), http.StatusGatewayTimeout)
+				w.WriteHeader(http.StatusGatewayTimeout)
+				w.Header().Set("Content-Type", "application/json")
+				w.Write(common.Str2byte(cerror.ErrDeadlineExceeded.String()))
 				end := time.Now()
 				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, cerror.ErrDeadlineExceeded)
 				return
@@ -555,11 +566,10 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 		workctx := this.getContext(w, r, ctx, md, totalhandlers)
 		defer func() {
 			if e := recover(); e != nil {
-				stack := make([]byte, 8192)
+				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
 				log.Error(workctx, "[web.server] client:", sourceapp+":"+sourceip, "path:", path, "method:", method, "panic:", e, "stack:", base64.StdEncoding.EncodeToString(stack[:n]))
-				http.Error(w, ERRPANIC.Error(), http.StatusInternalServerError)
-				workctx.e = ERRPANIC
+				workctx.Abort(http.StatusInternalServerError, ERRPANIC)
 			}
 			end := time.Now()
 			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, workctx.e)
