@@ -272,7 +272,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 		g.P("if ee!=nil{")
 		g.P("if ", g.QualifiedGoIdent(errorPackage.Ident("Equal")), "(ee,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), "){")
 		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusBadRequest")), ",ee)")
-		g.P("}else if ", g.QualifiedGoIdent(errorPackage.Ident("Equal")), "(ee,", g.QualifiedGoIdent(contextPackage.Ident("DeadlineExceeded")), "){")
+		g.P("}else if ", g.QualifiedGoIdent(errorPackage.Ident("Equal")), "(ee,", g.QualifiedGoIdent(errorPackage.Ident("ErrDeadlineExceeded")), "){")
 		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusGatewayTimeout")), ",ee)")
 		g.P("}else if ", g.QualifiedGoIdent(errorPackage.Ident("Equal")), "(ee,", g.QualifiedGoIdent(errorPackage.Ident("ErrAuth")), "){")
 		g.P("ctx.Abort(", g.QualifiedGoIdent(httpPackage.Ident("StatusUnauthorized")), ",ee)")
@@ -611,9 +611,9 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 			}
 			switch httpmetohd {
 			case http.MethodGet:
-				g.P("r,e:=c.cc.Get(ctx,", timeout.Nanoseconds(), ",", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
+				g.P("data,e:=c.cc.Get(ctx,", timeout.Nanoseconds(), ",", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			case http.MethodDelete:
-				g.P("r,e:=c.cc.Delete(ctx,", timeout.Nanoseconds(), ",", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
+				g.P("data,e:=c.cc.Delete(ctx,", timeout.Nanoseconds(), ",", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			}
 		} else {
 			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")
@@ -621,19 +621,14 @@ func genClient(file *protogen.File, g *protogen.GeneratedFile) {
 			g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
 			switch httpmetohd {
 			case http.MethodPost:
-				g.P("r,e:=c.cc.Post(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("data,e:=c.cc.Post(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			case http.MethodPut:
-				g.P("r,e:=c.cc.Put(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("data,e:=c.cc.Put(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			case http.MethodPatch:
-				g.P("r,e:=c.cc.Patch(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("data,e:=c.cc.Patch(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			}
 		}
 		g.P("if e != nil {")
-		g.P("return nil,e")
-		g.P("}")
-		g.P("defer r.Body.Close()")
-		g.P("data,e:=", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(r.Body)")
-		g.P("if e!=nil {")
 		g.P("return nil,e")
 		g.P("}")
 		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
