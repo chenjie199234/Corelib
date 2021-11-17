@@ -27,9 +27,9 @@ type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
 type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *CrpcClient)
 
 type ClientConfig struct {
-	ConnTimeout      time.Duration
+	ConnTimeout      time.Duration //default 500ms
 	GlobalTimeout    time.Duration //global timeout for every rpc call(including connection establish time)
-	HeartPorbe       time.Duration
+	HeartPorbe       time.Duration //default 1s,3 probe missing means disconnect
 	SocketRBuf       uint32
 	SocketWBuf       uint32
 	MaxMsgLen        uint32
@@ -48,7 +48,7 @@ func (c *ClientConfig) validate() {
 		c.GlobalTimeout = 0
 	}
 	if c.HeartPorbe <= 0 {
-		c.HeartPorbe = 1500 * time.Millisecond
+		c.HeartPorbe = time.Second
 	}
 	if c.SocketRBuf == 0 {
 		c.SocketRBuf = 1024

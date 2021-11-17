@@ -28,9 +28,8 @@ type ServerConfig struct {
 	//when server close,server will wait this time before close,every request will refresh the time
 	//min is 1 second
 	WaitCloseTime time.Duration
-	//global timeout for every rpc call(including connection establish time)
-	GlobalTimeout time.Duration
-	HeartPorbe    time.Duration
+	GlobalTimeout time.Duration //global timeout for every rpc call(including connection establish time)
+	HeartPorbe    time.Duration //default 1s,3 probe missing means disconnect
 	SocketRBuf    uint32
 	SocketWBuf    uint32
 	MaxMsgLen     uint32
@@ -44,8 +43,8 @@ func (c *ServerConfig) validate() {
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
 	}
-	if c.HeartPorbe <= 0 {
-		c.HeartPorbe = 1500 * time.Millisecond
+	if c.HeartPorbe < time.Second {
+		c.HeartPorbe = time.Second
 	}
 	if c.SocketRBuf == 0 {
 		c.SocketRBuf = 1024
