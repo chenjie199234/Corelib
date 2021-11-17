@@ -227,13 +227,13 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		log.Error(r.Context(), "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
 		w.WriteHeader(http.StatusNotFound)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(common.Str2byte(ERRNOAPI.Error()))
+		w.Write(common.Str2byte(_ErrNoapiStr))
 	})
 	instance.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Error(r.Context(), "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown method")
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(common.Str2byte(ERRNOAPI.Error()))
+		w.Write(common.Str2byte(_ErrNoapiStr))
 	})
 	instance.router.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//for OPTIONS preflight
@@ -440,7 +440,9 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			default:
 			}
 			//tell peer self closed
-			http.Error(w, ERRCLOSING.Error(), 888)
+			w.WriteHeader(888)
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(common.Str2byte(_ErrClosingStr))
 			return
 		}
 	}
@@ -477,7 +479,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 				if !find {
 					w.WriteHeader(http.StatusMethodNotAllowed)
 					w.Header().Set("Content-Type", "application/json")
-					w.Write(common.Str2byte(ERRCORS.Error()))
+					w.Write(common.Str2byte(_ErrCorsStr))
 					return
 				}
 			}
@@ -496,7 +498,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: Metadata:", mdstr, "format error")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Header().Set("Content-Type", "application/json")
-				w.Write(common.Str2byte(ERRCORS.Error()))
+				w.Write(common.Str2byte(_ErrReqStr))
 				return
 			}
 		}
@@ -508,7 +510,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: Deadline:", temp, "format error")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Header().Set("Content-Type", "application/json")
-				w.Write(common.Str2byte(cerror.ErrReq.Error()))
+				w.Write(common.Str2byte(_ErrReqStr))
 				return
 			}
 		}
@@ -568,10 +570,15 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
 				log.Error(workctx, "[web.server] client:", sourceapp+":"+sourceip, "path:", path, "method:", method, "panic:", e, "stack:", base64.StdEncoding.EncodeToString(stack[:n]))
-				workctx.Abort(http.StatusInternalServerError, ERRPANIC)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write(common.Str2byte(_ErrPanicStr))
+				end := time.Now()
+				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, ErrPanic)
+			} else {
+				end := time.Now()
+				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, workctx.e)
 			}
-			end := time.Now()
-			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, workctx.e)
 			this.putContext(workctx)
 		}()
 		workctx.run()

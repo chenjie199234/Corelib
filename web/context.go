@@ -67,6 +67,7 @@ func (this *Context) Abort(code int, e error) {
 		ee := cerror.ConvertStdError(e)
 		if ee != nil {
 			this.w.Write(common.Str2byte(ee.Error()))
+			this.e = ee
 		}
 	}
 }
