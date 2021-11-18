@@ -59,16 +59,16 @@ func (this *Context) run() {
 }
 
 //has race
-func (this *Context) Abort(code int, e error) {
+func (this *Context) Abort(e error) {
 	this.status = -1
-	this.w.WriteHeader(code)
-	this.w.Header().Set("Content-Type", "application/json")
-	if e != nil {
-		ee := cerror.ConvertStdError(e)
-		if ee != nil {
-			this.w.Write(common.Str2byte(ee.Error()))
-			this.e = ee
+	this.e = cerror.ConvertStdError(e)
+	if this.e != nil {
+		this.w.Header().Set("Content-Type", "application/json")
+		if this.e.Httpcode < 400 || this.e.Httpcode > 999 {
+			panic("[context.Abort] httpcode must in [400,999]")
 		}
+		this.w.WriteHeader(int(this.e.Httpcode))
+		this.w.Write(common.Str2byte(this.e.Error()))
 	}
 }
 

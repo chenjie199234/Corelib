@@ -50,10 +50,13 @@ func (c *Context) run() {
 
 //has race
 func (c *Context) Abort(e error) {
+	c.msg.Error = cerror.ConvertStdError(e)
+	if c.msg.Error != nil && (c.msg.Error.Httpcode < 400 || c.msg.Error.Httpcode > 999) {
+		panic("[context.Abort] httpcode must in [400,999]")
+	}
 	c.msg.Path = ""
 	c.msg.Deadline = 0
 	c.msg.Body = nil
-	c.msg.Error = cerror.ConvertStdError(e)
 	c.msg.Metadata = nil
 	c.msg.Tracedata = nil
 	c.status = -1
