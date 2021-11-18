@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -213,6 +212,8 @@ func transGrpcError(e error) *cerror.Error {
 	case codes.Unauthenticated:
 		return cerror.ErrAuth
 	default:
-		return cerror.MakeError(int32(s.Code()), http.StatusInternalServerError, s.Message())
+		ee := cerror.ConvertErrorstr(s.Message())
+		ee.Httpcode = int32(s.Code())
+		return ee
 	}
 }

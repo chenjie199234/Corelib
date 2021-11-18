@@ -65,7 +65,7 @@ func (this *Context) Abort(e error) {
 	if this.e != nil {
 		this.w.Header().Set("Content-Type", "application/json")
 		if this.e.Httpcode < 400 || this.e.Httpcode > 999 {
-			panic("[context.Abort] httpcode must in [400,999]")
+			panic("[web.Context.Abort] httpcode must in [400,999]")
 		}
 		this.w.WriteHeader(int(this.e.Httpcode))
 		this.w.Write(common.Str2byte(this.e.Error()))
