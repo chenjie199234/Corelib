@@ -34,15 +34,15 @@ type ClientConfig struct {
 	HeartProbe    time.Duration //tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
 	//if this is 0,means useless,connection will keep alive until it is closed
-	IdleTimeout      time.Duration
-	MaxHeader        uint
-	SocketRBuf       uint
-	SocketWBuf       uint
-	UseTLS           bool     //http or https
-	SkipVerifyTLS    bool     //don't verify the server's cert
-	CAs              []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
-	Picker           PickHandler
-	DiscoverFunction DiscoveryHandler //this function will be called in goroutine in NewWebClient
+	IdleTimeout   time.Duration
+	MaxHeader     uint
+	SocketRBuf    uint
+	SocketWBuf    uint
+	UseTLS        bool     //http or https
+	SkipVerifyTLS bool     //don't verify the server's cert
+	CAs           []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
+	Picker        PickHandler
+	Discover      DiscoveryHandler //this function will be called in goroutine in NewWebClient
 }
 
 func (c *ClientConfig) validate() {
@@ -132,7 +132,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 	if c == nil {
 		return nil, errors.New("[web.client] missing config")
 	}
-	if c.DiscoverFunction == nil {
+	if c.Discover == nil {
 		return nil, errors.New("[web.client] missing discover in config")
 	}
 	if c.Picker == nil {
@@ -170,7 +170,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 	}
 	client.manually <- nil
 	//init discover
-	go c.DiscoverFunction(group, name, client.manually, client)
+	go c.Discover(group, name, client.manually, client)
 	return client, nil
 }
 

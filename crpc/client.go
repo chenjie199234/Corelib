@@ -27,17 +27,17 @@ type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
 type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *CrpcClient)
 
 type ClientConfig struct {
-	ConnTimeout      time.Duration //default 500ms
-	GlobalTimeout    time.Duration //global timeout for every rpc call(including connection establish time)
-	HeartPorbe       time.Duration //default 1s,3 probe missing means disconnect
-	SocketRBuf       uint32
-	SocketWBuf       uint32
-	MaxMsgLen        uint32
-	UseTLS           bool     //crpc or crpcs
-	SkipVerifyTLS    bool     //don't verify the server's cert
-	CAs              []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
-	Picker           PickHandler
-	DiscoverFunction DiscoveryHandler //this function will be called in goroutine in NewRpcClient
+	ConnTimeout   time.Duration //default 500ms
+	GlobalTimeout time.Duration //global timeout for every rpc call(including connection establish time)
+	HeartPorbe    time.Duration //default 1s,3 probe missing means disconnect
+	SocketRBuf    uint32
+	SocketWBuf    uint32
+	MaxMsgLen     uint32
+	UseTLS        bool     //crpc or crpcs
+	SkipVerifyTLS bool     //don't verify the server's cert
+	CAs           []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
+	Picker        PickHandler
+	Discover      DiscoveryHandler //this function will be called in goroutine in NewCrpcClient
 }
 
 func (c *ClientConfig) validate() {
@@ -175,7 +175,7 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*C
 	if c == nil {
 		return nil, errors.New("[crpc.client] missing config")
 	}
-	if c.DiscoverFunction == nil {
+	if c.Discover == nil {
 		return nil, errors.New("[crpc.client] missing discover in config")
 	}
 	if c.Picker == nil {
@@ -232,7 +232,7 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*C
 	instancec.Offlinefunc = client.offlinefunc
 	client.instance, _ = stream.NewInstance(instancec, selfgroup, selfname)
 	//init discover
-	go c.DiscoverFunction(group, name, client.manually, client)
+	go c.Discover(group, name, client.manually, client)
 	return client, nil
 }
 

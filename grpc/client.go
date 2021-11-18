@@ -20,8 +20,14 @@ import (
 	"google.golang.org/grpc/keepalive"
 	gmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 )
+
+//param's key is server's addr "ip:port"
+//type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
+
+type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *GrpcClient)
 
 type ClientConfig struct {
 	ConnTimeout   time.Duration
@@ -30,10 +36,10 @@ type ClientConfig struct {
 	SocketRBuf    uint32
 	SocketWBuf    uint32
 	MaxMsgLen     uint32
-	UseTLS        bool     //grpc or grpcs
-	SkipVerifyTLS bool     //don't verify the server's cert
-	CAs           []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
-	ResolverName  string
+	UseTLS        bool             //grpc or grpcs
+	SkipVerifyTLS bool             //don't verify the server's cert
+	CAs           []string         //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
+	Discover      DiscoveryHandler //this function will be called in goroutine in NewGrpcClient
 	BalancerName  string
 }
 
@@ -68,10 +74,11 @@ func (c *ClientConfig) validate() {
 }
 
 type GrpcClient struct {
-	c           *ClientConfig
-	selfappname string
-	appname     string
-	conn        *grpc.ClientConn
+	c               *ClientConfig
+	selfappname     string
+	appname         string
+	conn            *grpc.ClientConn
+	discoverbuilder *builder
 }
 
 func NewGrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*GrpcClient, error) {
@@ -104,6 +111,7 @@ func NewGrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*G
 		selfappname: selfappname,
 		appname:     appname,
 	}
+	clientinstance.discoverbuilder = &builder{c: clientinstance}
 	opts := make([]grpc.DialOption, 0)
 	if !c.UseTLS {
 		opts = append(opts, grpc.WithInsecure())
@@ -137,12 +145,32 @@ func NewGrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*G
 	opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{Time: c.HeartPorbe, Timeout: c.HeartPorbe*3 + c.HeartPorbe/3}))
 	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(int(c.MaxMsgLen))))
 	opts = append(opts, grpc.WithBalancerName(c.BalancerName))
-	conn, e := grpc.Dial(c.ResolverName+":///"+selfname+"."+selfgroup, opts...)
+	opts = append(opts, grpc.WithResolvers(clientinstance.discoverbuilder))
+	conn, e := grpc.Dial("corelib:///"+appname, opts...)
 	if e != nil {
 		return nil, e
 	}
 	clientinstance.conn = conn
 	return clientinstance, nil
+}
+
+type RegisterData struct {
+	DServers map[string]struct{} //server register on which discovery server
+	Addition []byte
+}
+
+//all: key server's addr
+func (c *GrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
+	s := resolver.State{
+		Addresses: make([]resolver.Address, 0, len(all)),
+	}
+	for addr, info := range all {
+		tmp := resolver.Address{
+			Addr: addr,
+		}
+		s.Addresses = append(s.Addresses, tmp)
+	}
+	c.discoverbuilder.cc.UpdateState(s)
 }
 func (c *GrpcClient) Call(ctx context.Context, functimeout time.Duration, path string, req interface{}, resp interface{}, metadata map[string]string) error {
 	start := time.Now()
