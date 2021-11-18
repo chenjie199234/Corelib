@@ -3,5 +3,6 @@ package error;
 option go_package="github.com/chenjie199234/Corelib/error;error";
 message Error{
 	int32 code=1;
-	string msg=2;
+	int32 httpcode=2;
+	string msg=3;
 }

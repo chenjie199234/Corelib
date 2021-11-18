@@ -44,7 +44,7 @@ func Test_Bufpool(t *testing.T) {
 	}
 	b.Reset()
 	stde := errors.New("stde")
-	ce := cerror.MakeError(1, "ce")
+	ce := cerror.MakeError(1, 500, "ce")
 	b.AppendError(stde)
 	if b.String() != "stde" {
 		panic("std error error")

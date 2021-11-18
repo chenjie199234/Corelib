@@ -3,6 +3,7 @@ package error
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"strconv"
 
 	"github.com/chenjie199234/Corelib/util/common"
@@ -10,8 +11,8 @@ import (
 
 //if error was not in this error's format,code will return -1,msg will use the origin error.Error()
 
-func MakeError(code int32, msg string) *Error {
-	return &Error{Code: code, Msg: msg}
+func MakeError(code, httpcode int32, msg string) *Error {
+	return &Error{Code: code, Httpcode: httpcode, Msg: msg}
 }
 func GetCodeFromErrorstr(e string) int32 {
 	ee := ConvertErrorstr(e)
@@ -26,6 +27,20 @@ func GetCodeFromStdError(e error) int32 {
 		return 0
 	}
 	return ee.Code
+}
+func GetHttpcodeFromErrorstr(e string) int32 {
+	ee := ConvertErrorstr(e)
+	if ee == nil {
+		return http.StatusOK
+	}
+	return ee.Httpcode
+}
+func GetHttpcodeFromStdError(e error) int32 {
+	ee := ConvertStdError(e)
+	if ee == nil {
+		return http.StatusOK
+	}
+	return ee.Httpcode
 }
 func GetMsgFromErrorstr(e string) string {
 	ee := ConvertErrorstr(e)
@@ -45,19 +60,12 @@ func ConvertErrorstr(e string) *Error {
 	if e == "" {
 		return nil
 	}
-	result := &Error{}
-	if e[0] == '{' {
-		//json format
-		if ee := json.Unmarshal(common.Str2byte(e), result); ee != nil {
-			result.Code = -1
-			result.Msg = e
-		}
-	} else {
-		//text format
-		result.Code = -1
-		result.Msg = e
+	if e == ErrDeadlineExceeded.Error() {
+		return ErrDeadlineExceeded
+	} else if e == ErrCanceled.Error() {
+		return ErrCanceled
 	}
-	return result
+	return transStdErrorStr(e)
 }
 func ConvertStdError(e error) *Error {
 	if e == nil {
@@ -72,7 +80,24 @@ func ConvertStdError(e error) *Error {
 	if ok {
 		return result
 	}
-	return ConvertErrorstr(e.Error())
+	return transStdErrorStr(e.Error())
+}
+func transStdErrorStr(e string) *Error {
+	result := &Error{}
+	if e[0] == '{' {
+		//json format
+		if ee := json.Unmarshal(common.Str2byte(e), result); ee != nil {
+			result.Code = -1
+			result.Httpcode = http.StatusInternalServerError
+			result.Msg = e
+		}
+	} else {
+		//text format
+		result.Code = -1
+		result.Httpcode = http.StatusInternalServerError
+		result.Msg = e
+	}
+	return result
 }
 func Equal(a, b error) bool {
 	aa := ConvertStdError(a)

@@ -461,13 +461,11 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		}
 		if resp.StatusCode != 200 {
 			if len(respbody) == 0 {
-				if text := http.StatusText(resp.StatusCode); text != "" {
-					e = cerror.MakeError(-1, text)
-				} else {
-					e = cerror.MakeError(-1, "http code:"+strconv.FormatInt(int64(resp.StatusCode), 10)+",response body:empty")
-				}
+				e = cerror.MakeError(-1, int32(resp.StatusCode), http.StatusText(resp.StatusCode))
 			} else {
-				e = cerror.ConvertErrorstr(common.Byte2str(respbody))
+				tempe := cerror.ConvertErrorstr(common.Byte2str(respbody))
+				tempe.Httpcode = int32(resp.StatusCode)
+				e = tempe
 			}
 			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, e)
 			return nil, e
