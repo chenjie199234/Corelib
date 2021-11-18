@@ -131,7 +131,7 @@ func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 	}
 	if e = p.SendMessage(ctx, r.req, beforeSend, afterSend); e != nil {
 		if e == stream.ErrMsgLarge {
-			e = ERRREQMSGLARGE
+			e = ErrReqmsgLen
 		} else if e == stream.ErrConnClosed {
 			e = errPickAgain
 		} else if e == context.DeadlineExceeded {
@@ -417,7 +417,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 		log.Error(nil, "[crpc.client.userfunc] server:", p.GetPeerUniqueName(), "data format error:", e)
 		return
 	}
-	if msg.Error != nil && msg.Error.Code == ERRCLOSING.Code {
+	if msg.Error != nil && cerror.Equal(msg.Error, errClosing) {
 		atomic.StoreInt32(&server.status, 0)
 	}
 	server.lker.Lock()
@@ -440,7 +440,7 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server.lker.Lock()
 	for callid, req := range server.reqs {
 		req.resp = nil
-		req.err = ERRCLOSED
+		req.err = ErrClosed
 		req.finish <- nil
 		delete(server.reqs, callid)
 	}
@@ -513,7 +513,7 @@ func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 			if r.err != nil {
 				//req error,update last fail time
 				server.Pickinfo.Lastfail = time.Now().UnixNano()
-				if r.err.Code == ERRCLOSING.Code {
+				if r.err.Code == errClosing.Code {
 					//triger manually discovery
 					c.manual()
 					//server is closing,this req can be retry
@@ -568,7 +568,7 @@ func (c *CrpcClient) pick(ctx context.Context) (*ServerForPick, error) {
 		}
 		if refresh {
 			c.slker.RUnlock()
-			return nil, ERRNOSERVER
+			return nil, ErrNoserver
 		}
 		c.slker.RUnlock()
 		if e := c.waitmanual(ctx); e != nil {

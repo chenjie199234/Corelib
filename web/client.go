@@ -449,7 +449,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			this.manual()
 			atomic.StoreInt32(&server.status, 0)
 			resp.Body.Close()
-			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, ErrClosing)
+			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, errClosing)
 			continue
 		}
 		respbody, e := io.ReadAll(resp.Body)

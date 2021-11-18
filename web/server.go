@@ -554,7 +554,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			if min < start.UnixNano()+int64(time.Millisecond) {
 				w.WriteHeader(http.StatusGatewayTimeout)
 				w.Header().Set("Content-Type", "application/json")
-				w.Write(common.Str2byte(cerror.ErrDeadlineExceeded.String()))
+				w.Write(common.Str2byte(_ErrDeadlineExceededStr))
 				end := time.Now()
 				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, cerror.ErrDeadlineExceeded)
 				return

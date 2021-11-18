@@ -162,7 +162,7 @@ func (s *CrpcServer) StopCrpcServer() {
 		//tel all peers self closed
 		d, _ := proto.Marshal(&Msg{
 			Callid: 0,
-			Error:  ERRCLOSING,
+			Error:  errClosing,
 		})
 		s.instance.SendMessageAll(nil, d, nil, nil)
 		//wait at least s.c.WaitCloseTime before stop the under layer socket
@@ -271,7 +271,7 @@ func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handl
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
-				msg.Error = ERRPANIC
+				msg.Error = ErrPanic
 				msg.Metadata = nil
 				msg.Tracedata = nil
 			}
@@ -331,7 +331,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
-		msg.Error = ERRNOAPI
+		msg.Error = ErrNoapi
 		msg.Metadata = nil
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
@@ -357,7 +357,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			msg.Path = ""
 			msg.Deadline = 0
 			msg.Body = nil
-			msg.Error = ERRCLOSING
+			msg.Error = errClosing
 			msg.Metadata = nil
 			msg.Tracedata = nil
 			d, _ := proto.Marshal(msg)
@@ -380,7 +380,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
-				msg.Error = ERRRESPMSGLARGE
+				msg.Error = ErrRespmsgLen
 				msg.Metadata = nil
 				msg.Tracedata = nil
 				d, _ = proto.Marshal(msg)
