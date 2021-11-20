@@ -147,30 +147,38 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 		return
 	}
 	if s.ConnectivityState == connectivity.Shutdown {
+		if exist.status == connectivity.Shutdown {
+			return
+		}
+		olds := exist.status
 		exist.status = connectivity.Shutdown
 		delete(b.servers, sc)
-		b.rebuildpicker()
+		if olds == connectivity.Ready {
+			b.rebuildpicker()
+		}
 		return
 	}
-	if len(exist.dservers) == 0 {
-		exist.status = connectivity.Shutdown
-		delete(b.servers, sc)
-		b.cc.RemoveSubConn(sc)
-		b.rebuildpicker()
-		return
-	}
-	if s.ConnectivityState == connectivity.Idle {
+	if s.ConnectivityState == connectivity.Idle && exist.status == connectivity.Ready {
 		log.Info(nil, "[grpc.client] server:", b.c.appname+":"+exist.addr, "offline")
 	} else if s.ConnectivityState == connectivity.Ready {
 		b.c.resolver.wakemanual()
 		log.Info(nil, "[grpc.client] server:", b.c.appname+":"+exist.addr, "online")
+	} else if s.ConnectivityState == connectivity.TransientFailure {
+		log.Error(nil, "[grpc.client] connect to server:", b.c.appname+":"+exist.addr, "error:", s.ConnectionError)
 	}
+	olds := exist.status
 	exist.status = s.ConnectivityState
-	if exist.status == connectivity.Idle || exist.status == connectivity.Ready {
+	if (olds == connectivity.Ready && exist.status == connectivity.Idle) || exist.status == connectivity.Ready {
 		b.rebuildpicker()
 	}
-	if s.ConnectivityState == connectivity.Idle {
-		go sc.Connect()
+	if exist.status == connectivity.Idle {
+		if len(exist.dservers) == 0 {
+			exist.status = connectivity.Shutdown
+			delete(b.servers, sc)
+			b.cc.RemoveSubConn(sc)
+		} else {
+			go sc.Connect()
+		}
 	}
 }
 func (b *corelibBalancer) rebuildpicker() {
