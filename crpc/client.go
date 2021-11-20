@@ -81,6 +81,7 @@ type CrpcClient struct {
 	serversRaw []byte
 	servers    map[string]*ServerForPick //key server addr
 
+	mstatus      bool
 	manually     chan *struct{}
 	manualNotice map[chan *struct{}]*struct{}
 	mlker        *sync.Mutex
@@ -216,6 +217,7 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*C
 		reqpool: &sync.Pool{},
 	}
 	client.manually <- nil
+	client.mstatus = true
 	instancec := &stream.InstanceConfig{
 		HeartprobeInterval: c.HeartPorbe,
 		TcpC: &stream.TcpConfig{
@@ -241,18 +243,20 @@ type RegisterData struct {
 	Addition []byte
 }
 
-func (c *CrpcClient) manual() {
-	select {
-	case c.manually <- nil:
-	default:
+func (c *CrpcClient) manual(notice chan *struct{}) {
+	c.mlker.Lock()
+	if notice != nil {
+		c.manualNotice[notice] = nil
 	}
+	if !c.mstatus {
+		c.mstatus = true
+		c.manually <- nil
+	}
+	c.mlker.Unlock()
 }
 func (c *CrpcClient) waitmanual(ctx context.Context) error {
 	notice := make(chan *struct{}, 1)
-	c.mlker.Lock()
-	c.manualNotice[notice] = nil
-	c.manual()
-	c.mlker.Unlock()
+	c.manual(notice)
 	select {
 	case <-notice:
 		return nil
@@ -266,9 +270,12 @@ func (c *CrpcClient) waitmanual(ctx context.Context) error {
 func (c *CrpcClient) wakemanual() {
 	c.mlker.Lock()
 	for notice := range c.manualNotice {
-		notice <- nil
+		if notice != nil {
+			notice <- nil
+		}
 		delete(c.manualNotice, notice)
 	}
+	c.mstatus = false
 	c.mlker.Unlock()
 }
 
@@ -515,7 +522,7 @@ func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 				server.Pickinfo.Lastfail = time.Now().UnixNano()
 				if cerror.Equal(r.err, errClosing) {
 					//triger manually discovery
-					c.manual()
+					c.manual(nil)
 					//server is closing,this req can be retry
 					r.resp = nil
 					r.err = nil

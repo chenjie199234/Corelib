@@ -84,6 +84,7 @@ type WebClient struct {
 	serversRaw []byte
 	servers    map[string]*ServerForPick
 
+	mstatus      bool
 	manually     chan *struct{}
 	manualNotice map[chan *struct{}]*struct{}
 	mlker        *sync.Mutex
@@ -168,6 +169,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 		manualNotice: make(map[chan *struct{}]*struct{}, 100),
 		mlker:        &sync.Mutex{},
 	}
+	client.mstatus = true
 	client.manually <- nil
 	//init discover
 	go c.Discover(group, name, client.manually, client)
@@ -179,18 +181,20 @@ type RegisterData struct {
 	Addition []byte
 }
 
-func (c *WebClient) manual() {
-	select {
-	case c.manually <- nil:
-	default:
+func (c *WebClient) manual(notice chan *struct{}) {
+	c.mlker.Lock()
+	if notice != nil {
+		c.manualNotice[notice] = nil
 	}
+	if !c.mstatus {
+		c.mstatus = true
+		c.manually <- nil
+	}
+	c.mlker.Unlock()
 }
 func (c *WebClient) waitmanual(ctx context.Context) error {
 	notice := make(chan *struct{}, 1)
-	c.mlker.Lock()
-	c.manualNotice[notice] = nil
-	c.manual()
-	c.mlker.Unlock()
+	c.manual(notice)
 	select {
 	case <-notice:
 		return nil
@@ -204,9 +208,12 @@ func (c *WebClient) waitmanual(ctx context.Context) error {
 func (c *WebClient) wakemanual() {
 	c.mlker.Lock()
 	for notice := range c.manualNotice {
-		notice <- nil
+		if notice != nil {
+			notice <- nil
+		}
 		delete(c.manualNotice, notice)
 	}
+	c.mstatus = false
 	c.mlker.Unlock()
 }
 
@@ -446,7 +453,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		}
 		if resp.StatusCode == 888 {
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
-			this.manual()
+			this.manual(nil)
 			atomic.StoreInt32(&server.status, 0)
 			resp.Body.Close()
 			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, errClosing)
