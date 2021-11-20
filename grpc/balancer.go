@@ -66,7 +66,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 		}
 	}()
 	//offline
-	for sc, exist := range b.servers {
+	for _, exist := range b.servers {
 		find := false
 		for _, addr := range ss.ResolverState.Addresses {
 			if addr.Addr == exist.addr {
@@ -75,7 +75,6 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 			}
 		}
 		if !find {
-			b.cc.RemoveSubConn(sc)
 			exist.dservers = nil
 			exist.Pickinfo.DServerNum = 0
 			exist.Pickinfo.DServerOffline = time.Now().UnixNano()
