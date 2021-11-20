@@ -22,7 +22,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/status"
 )
 
 type OutsideHandler func(ctx *Context)
@@ -234,7 +233,7 @@ func (s *GrpcServer) insidehandler(sname, mname string, functimeout time.Duratio
 			end := time.Now()
 			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.selfappname, host.Hostip, "GRPC", path, &start, &end, e)
 			if workctx.e != nil {
-				e = status.New(codes.Code(workctx.e.Httpcode), workctx.e.Error()).Err()
+				e = workctx.e
 			} else {
 				resp = workctx.resp
 			}

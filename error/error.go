@@ -7,6 +7,8 @@ import (
 	"strconv"
 
 	"github.com/chenjie199234/Corelib/util/common"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 //if error was not in this error's format,code will return -1,msg will use the origin error.Error()
@@ -114,4 +116,7 @@ func (this *Error) Error() string {
 		return ""
 	}
 	return "{\"code\":" + strconv.FormatInt(int64(this.Code), 10) + ",\"msg\":\"" + this.Msg + "\"}"
+}
+func (this *Error) GRPCStatus() *status.Status {
+	return status.New(codes.Code(this.Httpcode), this.Error())
 }

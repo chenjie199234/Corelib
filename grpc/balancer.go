@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 )
@@ -14,13 +13,13 @@ type balancerBuilder struct {
 	c *GrpcClient
 }
 
-// Build creates a new balancer with the ClientConn.
 func (b *balancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b.c.balancer = &corelibBalancer{
 		c:       b.c,
 		cc:      cc,
 		servers: make(map[balancer.SubConn]*ServerForPick),
 	}
+	cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: &corelibPicker{servers: make(map[string]*ServerForPick)}})
 	return b.c.balancer
 }
 
@@ -139,6 +138,40 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 	if !ok {
 		return
 	}
+	defer func() {
+		readycount := 0
+		connectcount := 0
+		failcount := 0
+		idlecount := 0
+		for _, server := range b.servers {
+			switch server.status {
+			case connectivity.Idle:
+				idlecount++
+			case connectivity.Connecting:
+				connectcount++
+			case connectivity.TransientFailure:
+				failcount++
+			case connectivity.Ready:
+				readycount++
+			}
+			if readycount > 0 {
+				break
+			}
+		}
+		var balancerstate connectivity.State
+		if readycount > 0 {
+			balancerstate = connectivity.Ready
+		} else if connectcount > 0 {
+			balancerstate = connectivity.Connecting
+		} else if failcount > 0 {
+			balancerstate = connectivity.TransientFailure
+		} else if idlecount > 0 {
+			balancerstate = connectivity.Idle
+		} else {
+			balancerstate = connectivity.TransientFailure
+		}
+		b.cc.UpdateState(balancer.State{ConnectivityState: balancerstate, Picker: b.picker})
+	}()
 	if s.ConnectivityState == connectivity.Shutdown {
 		exist.status = connectivity.Shutdown
 		delete(b.servers, sc)
@@ -160,14 +193,15 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 		go sc.Connect()
 	}
 }
-func (b *corelibBalancer) rebuildpicker() balancer.Picker {
+func (b *corelibBalancer) rebuildpicker() {
 	servers := make(map[string]*ServerForPick, len(b.servers))
 	for _, server := range b.servers {
 		if server.status == connectivity.Ready {
 			servers[server.addr] = server
 		}
 	}
-	return &corelibPicker{c: b.c, servers: servers}
+	b.picker = &corelibPicker{c: b.c, servers: servers}
+	return
 }
 
 func (b *corelibBalancer) Close() {
@@ -194,37 +228,3 @@ func (p *corelibPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error
 		},
 	}, nil
 }
-
-//type pickerbuilder struct {
-//        c *GrpcClient
-//}
-
-//func (b *pickerbuilder) Build(info base.PickerBuildInfo) balancer.Picker {
-//        servers := make(map[string]*ServerForPick)
-//        for subconn, subconninfo := range info.ReadySCs {
-//                dservers, _ := subconninfo.Address.BalancerAttributes.Value("dservers").(map[string]struct{})
-//                addition, _ := subconninfo.Address.BalancerAttributes.Value("addition").([]byte)
-//                servers[subconninfo.Address.Addr] = &ServerForPick{
-//                        subconn:  subconn,
-//                        addr:     subconninfo.Address.Addr,
-//                        dservers: dservers,
-//                        Pickinfo: &pickinfo{
-//                                Lastfail:    0,
-//                                Activecalls: 0,
-//                                DServerNum:  int32(len(dservers)),
-//                                Addition:    addition,
-//                        },
-//                }
-//        }
-//        return &corelibpicker{c: b.c}
-//}
-
-//type corelibpicker struct {
-//        c *GrpcClient
-//}
-
-//func (p *corelibpicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-//        p.c.lker.RLock()
-//        defer p.c.lker.RUnlock()
-//        p.c.c.Picker(p.c.servers)
-//}
