@@ -12,9 +12,13 @@ import (
 	"time"
 
 	cerror "github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/attributes"
+	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -25,7 +29,7 @@ import (
 )
 
 //param's key is server's addr "ip:port"
-//type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
+type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
 
 type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *GrpcClient)
 
@@ -40,7 +44,7 @@ type ClientConfig struct {
 	SkipVerifyTLS bool             //don't verify the server's cert
 	CAs           []string         //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
 	Discover      DiscoveryHandler //this function will be called in goroutine in NewGrpcClient
-	BalancerName  string
+	Picker        PickHandler
 }
 
 func (c *ClientConfig) validate() {
@@ -74,11 +78,12 @@ func (c *ClientConfig) validate() {
 }
 
 type GrpcClient struct {
-	c               *ClientConfig
-	selfappname     string
-	appname         string
-	conn            *grpc.ClientConn
-	discoverbuilder *builder
+	c           *ClientConfig
+	selfappname string
+	appname     string
+	conn        *grpc.ClientConn
+	resolver    *corelibResolver
+	balancer    *corelibBalancer
 }
 
 func NewGrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*GrpcClient, error) {
@@ -103,7 +108,14 @@ func NewGrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*G
 		return nil, e
 	}
 	if c == nil {
-		c = &ClientConfig{}
+		return nil, errors.New("[grpc.client] missing config")
+	}
+	if c.Discover == nil {
+		return nil, errors.New("[grpc.client] missing discover in config")
+	}
+	if c.Picker == nil {
+		log.Warning(nil, "[grpc.client] missing picker in config,default picker will be used")
+		c.Picker = defaultPicker
 	}
 	c.validate()
 	clientinstance := &GrpcClient{
@@ -111,7 +123,6 @@ func NewGrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*G
 		selfappname: selfappname,
 		appname:     appname,
 	}
-	clientinstance.discoverbuilder = &builder{c: clientinstance}
 	opts := make([]grpc.DialOption, 0)
 	if !c.UseTLS {
 		opts = append(opts, grpc.WithInsecure())
@@ -142,10 +153,18 @@ func NewGrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*G
 			return dialer.DialContext(ctx, "tcp", addr)
 		}))
 	}
+	grpc.WithConnectParams(grpc.ConnectParams{
+		MinConnectTimeout: c.ConnTimeout,
+		Backoff:           backoff.Config{},
+	})
 	opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{Time: c.HeartPorbe, Timeout: c.HeartPorbe*3 + c.HeartPorbe/3}))
 	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(int(c.MaxMsgLen))))
-	opts = append(opts, grpc.WithBalancerName(c.BalancerName))
-	opts = append(opts, grpc.WithResolvers(clientinstance.discoverbuilder))
+	//balancer
+	balancer.Register(&balancerBuilder{c: clientinstance})
+	opts = append(opts, grpc.WithDisableServiceConfig())
+	opts = append(opts, grpc.WithDefaultServiceConfig("{\"loadBalancingConfig\":[{\"corelib\":{}}]}"))
+	//resolver
+	opts = append(opts, grpc.WithResolvers(&resolverBuilder{c: clientinstance}))
 	conn, e := grpc.Dial("corelib:///"+appname, opts...)
 	if e != nil {
 		return nil, e
@@ -159,18 +178,24 @@ type RegisterData struct {
 	Addition []byte
 }
 
-//all: key server's addr
+//all: key server's addr "ip:port"
 func (c *GrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 	s := resolver.State{
 		Addresses: make([]resolver.Address, 0, len(all)),
 	}
 	for addr, info := range all {
-		tmp := resolver.Address{
-			Addr: addr,
+		if len(info.DServers) == 0 {
+			continue
 		}
-		s.Addresses = append(s.Addresses, tmp)
+		attr := &attributes.Attributes{}
+		attr = attr.WithValue("addition", info.Addition)
+		attr = attr.WithValue("dservers", info.DServers)
+		s.Addresses = append(s.Addresses, resolver.Address{
+			Addr:               addr,
+			BalancerAttributes: attr,
+		})
 	}
-	c.discoverbuilder.cc.UpdateState(s)
+	c.resolver.cc.UpdateState(s)
 }
 func (c *GrpcClient) Call(ctx context.Context, functimeout time.Duration, path string, req interface{}, resp interface{}, metadata map[string]string) error {
 	start := time.Now()

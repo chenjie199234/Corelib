@@ -521,13 +521,9 @@ func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 					r.err = nil
 					continue
 				}
-			}
-			resp := r.resp
-			if r.err == nil {
-				e = nil
-			} else {
 				e = r.err
 			}
+			resp := r.resp
 			c.putreq(r)
 			//resp and err maybe both nil
 			return resp, e

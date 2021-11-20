@@ -6,34 +6,36 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-type builder struct {
-	c  *GrpcClient
-	cc resolver.ClientConn
+type resolverBuilder struct {
+	c *GrpcClient
 }
 
-func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
-	b.cc = cc
+func (b *resolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+	b.c.resolver = &corelibResolver{
+		manually: make(chan *struct{}, 1),
+		cc:       cc,
+	}
+	b.c.resolver.manually <- nil
 	strs := strings.Split(target.URL.Path, ".")
-	manually := make(chan *struct{}, 1)
-	manually <- nil
-	go b.c.c.Discover(strs[0], strs[1], manually, b.c)
-	return &discover{manually: manually}, nil
+	go b.c.c.Discover(strs[0], strs[1], b.c.resolver.manually, b.c)
+	return b.c.resolver, nil
 }
 
-func (b *builder) Scheme() string {
+func (b *resolverBuilder) Scheme() string {
 	return "corelib"
 }
 
-type discover struct {
+type corelibResolver struct {
 	manually chan *struct{}
+	cc       resolver.ClientConn
 }
 
-func (d *discover) ResolveNow(op resolver.ResolveNowOptions) {
+func (r *corelibResolver) ResolveNow(op resolver.ResolveNowOptions) {
 	select {
-	case d.manually <- nil:
+	case r.manually <- nil:
 	default:
 	}
 }
 
-func (d *discover) Close() {
+func (r *corelibResolver) Close() {
 }
