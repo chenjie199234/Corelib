@@ -1,9 +1,12 @@
 package grpc
 
 import (
+	"context"
 	"sync/atomic"
 	"time"
 
+	cerror "github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/log"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
@@ -15,11 +18,12 @@ type balancerBuilder struct {
 
 func (b *balancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b.c.balancer = &corelibBalancer{
-		c:       b.c,
-		cc:      cc,
-		servers: make(map[balancer.SubConn]*ServerForPick),
+		c:        b.c,
+		cc:       cc,
+		servers:  make(map[balancer.SubConn]*ServerForPick),
+		pservers: make(map[string]*ServerForPick),
 	}
-	cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: &corelibPicker{servers: make(map[string]*ServerForPick)}})
+	cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: b.c.balancer})
 	return b.c.balancer
 }
 
@@ -28,10 +32,10 @@ func (b *balancerBuilder) Name() string {
 }
 
 type corelibBalancer struct {
-	c       *GrpcClient
-	cc      balancer.ClientConn
-	servers map[balancer.SubConn]*ServerForPick
-	picker  *corelibPicker
+	c        *GrpcClient
+	cc       balancer.ClientConn
+	servers  map[balancer.SubConn]*ServerForPick
+	pservers map[string]*ServerForPick
 }
 
 type ServerForPick struct {
@@ -56,6 +60,11 @@ func (s *ServerForPick) Pickable() bool {
 }
 
 func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) error {
+	defer func() {
+		if len(b.pservers) > 0 || len(b.servers) == 0 {
+			b.c.resolver.wakemanual()
+		}
+	}()
 	//offline
 	for sc, exist := range b.servers {
 		find := false
@@ -138,40 +147,6 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 	if !ok {
 		return
 	}
-	defer func() {
-		readycount := 0
-		connectcount := 0
-		failcount := 0
-		idlecount := 0
-		for _, server := range b.servers {
-			switch server.status {
-			case connectivity.Idle:
-				idlecount++
-			case connectivity.Connecting:
-				connectcount++
-			case connectivity.TransientFailure:
-				failcount++
-			case connectivity.Ready:
-				readycount++
-			}
-			if readycount > 0 {
-				break
-			}
-		}
-		var balancerstate connectivity.State
-		if readycount > 0 {
-			balancerstate = connectivity.Ready
-		} else if connectcount > 0 {
-			balancerstate = connectivity.Connecting
-		} else if failcount > 0 {
-			balancerstate = connectivity.TransientFailure
-		} else if idlecount > 0 {
-			balancerstate = connectivity.Idle
-		} else {
-			balancerstate = connectivity.TransientFailure
-		}
-		b.cc.UpdateState(balancer.State{ConnectivityState: balancerstate, Picker: b.picker})
-	}()
 	if s.ConnectivityState == connectivity.Shutdown {
 		exist.status = connectivity.Shutdown
 		delete(b.servers, sc)
@@ -184,6 +159,12 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 		b.cc.RemoveSubConn(sc)
 		b.rebuildpicker()
 		return
+	}
+	if s.ConnectivityState == connectivity.Idle {
+		log.Info(nil, "[grpc.client] server:", b.c.appname+":"+exist.addr, "offline")
+	} else if s.ConnectivityState == connectivity.Ready {
+		b.c.resolver.wakemanual()
+		log.Info(nil, "[grpc.client] server:", b.c.appname+":"+exist.addr, "online")
 	}
 	exist.status = s.ConnectivityState
 	if exist.status == connectivity.Idle || exist.status == connectivity.Ready {
@@ -200,31 +181,41 @@ func (b *corelibBalancer) rebuildpicker() {
 			servers[server.addr] = server
 		}
 	}
-	b.picker = &corelibPicker{c: b.c, servers: servers}
+	b.pservers = servers
 	return
 }
 
 func (b *corelibBalancer) Close() {
 }
 
-type corelibPicker struct {
-	c       *GrpcClient
-	servers map[string]*ServerForPick
-}
-
-func (p *corelibPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	server := p.c.c.Picker(p.servers)
-	if server == nil {
-		return balancer.PickResult{}, ErrNoserver
-	}
-	atomic.AddInt32(&(server.Pickinfo.Activecalls), 1)
-	return balancer.PickResult{
-		SubConn: server.subconn,
-		Done: func(doneinfo balancer.DoneInfo) {
-			atomic.AddInt32(&(server.Pickinfo.Activecalls), -1)
-			if doneinfo.Err != nil {
-				server.Pickinfo.Lastfail = time.Now().UnixNano()
+func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	refresh := false
+	for {
+		server := b.c.c.Picker(b.pservers)
+		if server != nil {
+			atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
+			return balancer.PickResult{
+				SubConn: server.subconn,
+				Done: func(doneinfo balancer.DoneInfo) {
+					atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
+					if doneinfo.Err != nil {
+						server.Pickinfo.Lastfail = time.Now().UnixNano()
+					}
+				},
+			}, nil
+		}
+		if refresh {
+			return balancer.PickResult{}, ErrNoserver
+		}
+		if e := b.c.resolver.waitmanual(info.Ctx); e != nil {
+			if e == context.DeadlineExceeded {
+				return balancer.PickResult{}, cerror.ErrDeadlineExceeded
+			} else if e == context.Canceled {
+				return balancer.PickResult{}, cerror.ErrCanceled
+			} else {
+				return balancer.PickResult{}, cerror.ConvertStdError(e)
 			}
-		},
-	}, nil
+		}
+		refresh = true
+	}
 }

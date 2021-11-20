@@ -17,7 +17,6 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/host"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
@@ -231,11 +230,10 @@ func (s *GrpcServer) insidehandler(sname, mname string, functimeout time.Duratio
 				workctx.resp = nil
 			}
 			end := time.Now()
-			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.selfappname, host.Hostip, "GRPC", path, &start, &end, e)
+			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.selfappname, host.Hostip, "GRPC", path, &start, &end, workctx.e)
+			resp = workctx.resp
 			if workctx.e != nil {
 				e = workctx.e
-			} else {
-				resp = workctx.resp
 			}
 		}()
 		workctx.run()

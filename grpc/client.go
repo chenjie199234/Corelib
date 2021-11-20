@@ -6,9 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
-	"net"
 	"os"
-	"strings"
 	"time"
 
 	cerror "github.com/chenjie199234/Corelib/error"
@@ -147,16 +145,13 @@ func NewGrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*G
 	}
 	opts = append(opts, grpc.WithReadBufferSize(int(c.SocketRBuf)))
 	opts = append(opts, grpc.WithWriteBufferSize(int(c.SocketWBuf)))
-	if c.ConnTimeout != 0 {
-		dialer := &net.Dialer{Timeout: c.ConnTimeout}
-		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
-			return dialer.DialContext(ctx, "tcp", addr)
-		}))
-	}
-	grpc.WithConnectParams(grpc.ConnectParams{
+	opts = append(opts, grpc.WithConnectParams(grpc.ConnectParams{
 		MinConnectTimeout: c.ConnTimeout,
-		Backoff:           backoff.Config{},
-	})
+		Backoff: backoff.Config{
+			BaseDelay: time.Millisecond * 100,
+			MaxDelay:  time.Millisecond * 100,
+		}, //reconnect immediately when disconnect,reconnect delay 100ms when connect failed
+	}))
 	opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{Time: c.HeartPorbe, Timeout: c.HeartPorbe*3 + c.HeartPorbe/3}))
 	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(int(c.MaxMsgLen))))
 	//balancer
@@ -257,11 +252,7 @@ func transGrpcError(e error) *cerror.Error {
 	case codes.Unimplemented:
 		return ErrNoapi
 	case codes.Unavailable:
-		if strings.Contains(s.Message(), "zero addresses") {
-			return ErrNoserver
-		} else {
-			return ErrClosed
-		}
+		return ErrClosed
 	case codes.Unauthenticated:
 		return cerror.ErrAuth
 	default:
