@@ -513,7 +513,7 @@ func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 			if r.err != nil {
 				//req error,update last fail time
 				server.Pickinfo.Lastfail = time.Now().UnixNano()
-				if r.err.Code == errClosing.Code {
+				if cerror.Equal(r.err, errClosing) {
 					//triger manually discovery
 					c.manual()
 					//server is closing,this req can be retry
