@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strings"
 	"time"
 
 	cerror "github.com/chenjie199234/Corelib/error"
@@ -122,6 +123,7 @@ func NewGrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*G
 		appname:     appname,
 	}
 	opts := make([]grpc.DialOption, 0)
+	opts = append(opts, grpc.WithDisableRetry())
 	if !c.UseTLS {
 		opts = append(opts, grpc.WithInsecure())
 	} else {
@@ -226,11 +228,32 @@ func (c *GrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 	if md.Len() > 0 {
 		ctx = gmetadata.NewOutgoingContext(ctx, md)
 	}
-	p := &peer.Peer{}
-	e := transGrpcError(c.conn.Invoke(ctx, path, req, resp, grpc.Peer(p)))
-	end := time.Now()
-	trace.Trace(ctx, trace.CLIENT, c.appname, p.Addr.String(), "GRPC", path, &start, &end, e)
-	return e
+	for {
+		p := &peer.Peer{}
+		stream, e := c.conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: false, ClientStreams: false}, path, grpc.Peer(p))
+		if e != nil {
+			if cerror.Equal(transGrpcError(e), ErrNoserver) {
+				//this error is in balancer,before return this error,balencer already refresh the resolver,but still no servers
+				//don't need to retry
+				return e
+			}
+			//need retry
+			continue
+		}
+		if e = stream.SendMsg(req); e != nil {
+			//read grpc's SendMsg code
+			//only req marshal problem and req size problem will cause this error
+			//so don't need to retry
+			return transGrpcError(e)
+		}
+		if e = stream.RecvMsg(resp); e == nil {
+			end := time.Now()
+			trace.Trace(ctx, trace.CLIENT, c.appname, p.Addr.String(), "GRPC", path, &start, &end, nil)
+			return nil
+		}
+		//deal recv error
+		ee := transGrpcError(e)
+	}
 }
 func transGrpcError(e error) *cerror.Error {
 	if e == nil {
@@ -249,6 +272,14 @@ func transGrpcError(e error) *cerror.Error {
 		return cerror.ErrDeadlineExceeded
 	case codes.Unknown:
 		return cerror.ConvertErrorstr(s.Message())
+	case codes.ResourceExhausted:
+		if strings.Contains(s.Message(), "send message larger") || strings.Contains(s.Message(), "message too large") {
+			return ErrReqmsgLen
+		} else if strings.Contains(s.Message(), "received message larger") {
+			return ErrRespmsgLen
+		} else {
+			return cerror.ConvertErrorstr(s.Message())
+		}
 	case codes.Unimplemented:
 		return ErrNoapi
 	case codes.Unavailable:
