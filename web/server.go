@@ -446,7 +446,7 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	ctx := trace.InitTrace(r.Context(), r.Header.Get("Traceid"), this.selfappname, host.Hostip, r.Method, r.URL.Path)
+	ctx := trace.InitTrace(r.Context(), r.Header.Get("Core_tracedata"), this.selfappname, host.Hostip, r.Method, r.URL.Path)
 	this.router.ServeHTTP(w, r.Clone(ctx))
 	if atomic.LoadInt32(&this.totalreqnum) < 0 {
 		select {
@@ -490,12 +490,27 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 				headers.Set("Access-Control-Expose-Headers", this.c.Cors.exposestr)
 			}
 		}
-		//metadata
-		var md map[string]string
-		if mdstr := r.Header.Get("Metadata"); mdstr != "" {
-			md = make(map[string]string)
-			if e := json.Unmarshal(common.Str2byte(mdstr), &md); e != nil {
-				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: Metadata:", mdstr, "format error")
+		traceid, _, _, _, _ := trace.GetTrace(ctx)
+		sourceip := r.RemoteAddr
+		sourceapp := "unknown"
+		sourcemethod := "unknown"
+		sourcepath := "unknown"
+		if values := r.Header.Values("Core_tracedata"); len(values) != 4 && len(values) != 0 {
+			log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: tracedata:", values, "format error")
+			w.WriteHeader(http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(common.Str2byte(_ErrReqStr))
+			return
+		} else if len(values) > 0 {
+			sourceapp = values[1]
+			sourcemethod = values[2]
+			sourcepath = values[3]
+		}
+		var mdata map[string]string
+		if mdstr := r.Header.Get("Core_metadata"); mdstr != "" {
+			mdata = make(map[string]string)
+			if e := json.Unmarshal(common.Str2byte(mdstr), &mdata); e != nil {
+				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: metadata:", mdstr, "format error")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Header().Set("Content-Type", "application/json")
 				w.Write(common.Str2byte(_ErrReqStr))
@@ -513,22 +528,6 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 				w.Write(common.Str2byte(_ErrReqStr))
 				return
 			}
-		}
-		//if traceid is not empty,traceid will not change
-		//if traceid is empty,init trace will create a new traceid,use the new traceid
-		traceid, _, _, _, _ := trace.GetTrace(ctx)
-		sourceapp := r.Header.Get("SourceApp")
-		if sourceapp == "" {
-			sourceapp = "unknown"
-		}
-		sourceip := r.RemoteAddr
-		sourcepath := r.Header.Get("SourcePath")
-		if sourcepath == "" {
-			sourcepath = "unknown"
-		}
-		sourcemethod := r.Header.Get("SourceMethod")
-		if sourcemethod == "" {
-			sourcemethod = "unknown"
 		}
 		//set timeout
 		start := time.Now()
@@ -564,7 +563,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			defer cancel()
 		}
 		//logic
-		workctx := this.getContext(w, r, ctx, md, totalhandlers)
+		workctx := this.getContext(w, r, ctx, mdata, totalhandlers)
 		defer func() {
 			if e := recover(); e != nil {
 				stack := make([]byte, 1024)

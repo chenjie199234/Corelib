@@ -8,11 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
+	"net/textproto"
 	"os"
 	"strconv"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -80,33 +79,8 @@ type WebClient struct {
 	c           *ClientConfig
 	tlsc        *tls.Config
 
-	lker       *sync.RWMutex
-	serversRaw []byte
-	servers    map[string]*ServerForPick
-
-	mstatus      bool
-	manually     chan *struct{}
-	manualNotice map[chan *struct{}]*struct{}
-	mlker        *sync.Mutex
-}
-type ServerForPick struct {
-	host     string
-	client   *http.Client
-	dservers map[string]struct{} //this server registered on how many discoveryservers
-	status   int32               //1 - working,0 - closed
-
-	Pickinfo *pickinfo
-}
-type pickinfo struct {
-	Lastfail       int64  //last fail timestamp nano second
-	Activecalls    int32  //current active calls
-	DServerNum     int32  //this server registered on how many discoveryservers
-	DServerOffline int64  //
-	Addition       []byte //addition info register on register center
-}
-
-func (s *ServerForPick) Pickable() bool {
-	return atomic.LoadInt32(&s.status) == 1
+	resolver *corelibResolver
+	balancer *corelibBalancer
 }
 
 func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*WebClient, error) {
@@ -162,17 +136,10 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 			InsecureSkipVerify: c.SkipVerifyTLS,
 			RootCAs:            certpool,
 		},
-
-		lker:         &sync.RWMutex{},
-		servers:      make(map[string]*ServerForPick, 10),
-		manually:     make(chan *struct{}, 1),
-		manualNotice: make(map[chan *struct{}]*struct{}, 100),
-		mlker:        &sync.Mutex{},
 	}
-	client.mstatus = true
-	client.manually <- nil
+	client.balancer = newCorelibBalancer(client)
 	//init discover
-	go c.Discover(group, name, client.manually, client)
+	client.resolver = newCorelibResolver(group, name, client)
 	return client, nil
 }
 
@@ -181,145 +148,25 @@ type RegisterData struct {
 	Addition []byte
 }
 
-func (c *WebClient) manual(notice chan *struct{}) {
-	c.mlker.Lock()
-	if notice != nil {
-		c.manualNotice[notice] = nil
-	}
-	if !c.mstatus {
-		c.mstatus = true
-		c.manually <- nil
-	}
-	c.mlker.Unlock()
-}
-func (c *WebClient) waitmanual(ctx context.Context) error {
-	notice := make(chan *struct{}, 1)
-	c.manual(notice)
-	select {
-	case <-notice:
-		return nil
-	case <-ctx.Done():
-		c.mlker.Lock()
-		delete(c.manualNotice, notice)
-		c.mlker.Unlock()
-		return ctx.Err()
-	}
-}
-func (c *WebClient) wakemanual() {
-	c.mlker.Lock()
-	for notice := range c.manualNotice {
-		if notice != nil {
-			notice <- nil
-		}
-		delete(c.manualNotice, notice)
-	}
-	c.mstatus = false
-	c.mlker.Unlock()
-}
-
 //all: key server's addr "host:port"
 func (this *WebClient) UpdateDiscovery(all map[string]*RegisterData) {
-	d, _ := json.Marshal(all)
-	this.lker.Lock()
-	defer func() {
-		this.lker.Unlock()
-		this.wakemanual()
-	}()
-	if bytes.Equal(this.serversRaw, d) {
-		return
-	}
-	this.serversRaw = d
-	//offline app
-	for _, exist := range this.servers {
-		if _, ok := all[exist.host]; !ok {
-			//this app unregistered
-			delete(this.servers, exist.host)
-		}
-	}
-	//online app or update app's dservers
-	for host, registerdata := range all {
-		if len(registerdata.DServers) == 0 {
-			delete(this.servers, host)
-			continue
-		}
-		exist, ok := this.servers[host]
-		if !ok {
-			//this is a new register
-			this.servers[host] = &ServerForPick{
-				host: host,
-				client: &http.Client{
-					Transport: &http.Transport{
-						Proxy: http.ProxyFromEnvironment,
-						DialContext: (&net.Dialer{
-							Timeout:   this.c.ConnTimeout,
-							KeepAlive: this.c.HeartProbe,
-						}).DialContext,
-						TLSClientConfig:        this.tlsc,
-						ForceAttemptHTTP2:      true,
-						MaxIdleConnsPerHost:    50,
-						IdleConnTimeout:        this.c.IdleTimeout,
-						MaxResponseHeaderBytes: int64(this.c.MaxHeader),
-						ReadBufferSize:         int(this.c.SocketRBuf),
-						WriteBufferSize:        int(this.c.SocketWBuf),
-					},
-					Timeout: this.c.GlobalTimeout,
-				},
-				dservers: registerdata.DServers,
-				Pickinfo: &pickinfo{
-					Lastfail:       0,
-					Activecalls:    0,
-					DServerNum:     int32(len(registerdata.DServers)),
-					DServerOffline: 0,
-					Addition:       registerdata.Addition,
-				},
-				status: 1,
-			}
-		} else {
-			//this is not a new register
-			//unregister on which discovery server
-			for dserver := range exist.dservers {
-				if _, ok := registerdata.DServers[dserver]; !ok {
-					exist.Pickinfo.DServerOffline = time.Now().UnixNano()
-					break
-				}
-			}
-			//register on which new discovery server
-			for dserver := range registerdata.DServers {
-				if _, ok := exist.dservers[dserver]; !ok {
-					exist.Pickinfo.DServerOffline = 0
-					break
-				}
-			}
-			exist.dservers = registerdata.DServers
-			exist.Pickinfo.Addition = registerdata.Addition
-			exist.Pickinfo.DServerNum = int32(len(registerdata.DServers))
-		}
-	}
+	this.balancer.UpdateDiscovery(all)
 }
 
 func forbiddenHeader(header http.Header) bool {
-	if _, ok := header["SourceApp"]; ok {
+	if _, ok := header[textproto.CanonicalMIMEHeaderKey("deadline")]; ok {
 		return true
 	}
-	if _, ok := header["SourcePath"]; ok {
+	if _, ok := header[textproto.CanonicalMIMEHeaderKey("core_metadata")]; ok {
 		return true
 	}
-	if _, ok := header["SourceMethod"]; ok {
-		return true
-	}
-	if _, ok := header["Deadline"]; ok {
-		return true
-	}
-	if _, ok := header["Metadata"]; ok {
-		return true
-	}
-	if _, ok := header["Traceid"]; ok {
+	if _, ok := header[textproto.CanonicalMIMEHeaderKey("core_tracedata")]; ok {
 		return true
 	}
 	return false
 }
 
-//"SourceApp" "SourcePath" "SourceMethod" "Deadline" "Metadata" "Traceid" are forbidden in header
+//"Deadline" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -327,7 +174,7 @@ func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, path,
 	return this.call(http.MethodGet, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"SourceApp" "SourcePath" "SourceMethod" "Deadline" "Metadata" "Traceid" are forbidden in header
+//"Deadline" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -335,7 +182,7 @@ func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, pa
 	return this.call(http.MethodDelete, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"SourceApp" "SourcePath" "SourceMethod" "Deadline" "Metadata" "Traceid" are forbidden in header
+//"Deadline" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -346,7 +193,7 @@ func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, path
 	return this.call(http.MethodPost, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"SourceApp" "SourcePath" "SourceMethod" "Deadline" "Metadata" "Traceid" are forbidden in header
+//"Deadline" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -357,7 +204,7 @@ func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, path,
 	return this.call(http.MethodPut, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"SourceApp" "SourcePath" "SourceMethod" "Deadline" "Metadata" "Traceid" are forbidden in header
+//"Deadline" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -378,16 +225,16 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	if header == nil {
 		header = make(http.Header)
 	}
-	header.Set("SourceApp", this.selfappname)
 	if len(metadata) != 0 {
 		d, _ := json.Marshal(metadata)
-		header.Set("Metadata", common.Byte2str(d))
+		header.Set("Core_metadata", common.Byte2str(d))
 	}
 	traceid, _, _, selfmethod, selfpath := trace.GetTrace(ctx)
 	if traceid != "" {
-		header.Set("Traceid", traceid)
-		header.Set("SourcePath", selfpath)
-		header.Set("SourceMethod", selfmethod)
+		header.Set("Core_tracedata", traceid)
+		header.Add("Core_tracedata", this.selfappname)
+		header.Add("Core_tracedata", selfmethod)
+		header.Add("Core_tracedata", selfpath)
 	}
 	var min time.Duration
 	if this.c.GlobalTimeout != 0 {
@@ -414,7 +261,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	}
 	header.Del("Origin")
 	for {
-		server, e := this.pick(ctx)
+		server, e := this.balancer.Pick(ctx)
 		if e != nil {
 			return nil, e
 		}
@@ -431,9 +278,9 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		}
 		var req *http.Request
 		if body == nil {
-			req, e = http.NewRequestWithContext(ctx, method, scheme+"://"+server.host+path+query, nil)
+			req, e = http.NewRequestWithContext(ctx, method, scheme+"://"+server.addr+path+query, nil)
 		} else {
-			req, e = http.NewRequestWithContext(ctx, method, scheme+"://"+server.host+path+query, body)
+			req, e = http.NewRequestWithContext(ctx, method, scheme+"://"+server.addr+path+query, body)
 		}
 		if e != nil {
 			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
@@ -448,22 +295,22 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		if e != nil {
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, e)
 			return nil, e
 		}
 		if resp.StatusCode == 888 {
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
-			this.manual(nil)
+			this.resolver.manual(nil)
 			atomic.StoreInt32(&server.status, 0)
 			resp.Body.Close()
-			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, errClosing)
+			trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, errClosing)
 			continue
 		}
 		respbody, e := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, e)
 			return nil, e
 		}
 		if resp.StatusCode != 200 {
@@ -474,34 +321,10 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 				tempe.Httpcode = int32(resp.StatusCode)
 				e = tempe
 			}
-			trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, e)
 			return nil, e
 		}
-		trace.Trace(ctx, trace.CLIENT, this.appname, server.host, method, path, &start, &end, nil)
+		trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, nil)
 		return respbody, nil
-	}
-}
-func (this *WebClient) pick(ctx context.Context) (*ServerForPick, error) {
-	refresh := false
-	for {
-		this.lker.RLock()
-		server := this.c.Picker(this.servers)
-		this.lker.RUnlock()
-		if server != nil {
-			return server, nil
-		}
-		if refresh {
-			return nil, ErrNoserver
-		}
-		if e := this.waitmanual(ctx); e != nil {
-			if e == context.DeadlineExceeded {
-				return nil, cerror.ErrDeadlineExceeded
-			} else if e == context.Canceled {
-				return nil, cerror.ErrCanceled
-			} else {
-				return nil, cerror.ConvertStdError(e)
-			}
-		}
-		refresh = true
 	}
 }

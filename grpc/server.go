@@ -179,10 +179,12 @@ func (s *GrpcServer) insidehandler(sname, mname string, functimeout time.Duratio
 				log.Error(nil, "[grpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC error: tracedata format error")
 				return nil, cerror.ErrReq
 			}
-			traceid = data[0]
-			sourceapp = data[1]
-			sourcemethod = data[2]
-			sourcepath = data[3]
+			if len(data) > 0 {
+				traceid = data[0]
+				sourceapp = data[1]
+				sourcemethod = data[2]
+				sourcepath = data[3]
+			}
 		}
 		ctx = trace.InitTrace(ctx, traceid, s.selfappname, host.Hostip, "GRPC", path)
 		traceid, _, _, _, _ = trace.GetTrace(ctx)
