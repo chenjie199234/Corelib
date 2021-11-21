@@ -69,6 +69,7 @@ func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 		} else if e == context.Canceled {
 			e = cerror.ErrCanceled
 		} else {
+			//this is impossible
 			e = cerror.ConvertStdError(e)
 		}
 		return
@@ -217,6 +218,7 @@ func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 			} else if e == context.Canceled {
 				return nil, cerror.ErrCanceled
 			} else {
+				//this is impossible
 				return nil, cerror.ConvertStdError(e)
 			}
 		}

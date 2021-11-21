@@ -220,6 +220,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 			} else if e == context.Canceled {
 				return balancer.PickResult{}, cerror.ErrCanceled
 			} else {
+				//this is impossible
 				return balancer.PickResult{}, cerror.ConvertStdError(e)
 			}
 		}

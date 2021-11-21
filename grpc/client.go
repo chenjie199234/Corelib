@@ -230,29 +230,10 @@ func (c *GrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 	}
 	for {
 		p := &peer.Peer{}
-		stream, e := c.conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: false, ClientStreams: false}, path, grpc.Peer(p))
-		if e != nil {
-			if cerror.Equal(transGrpcError(e), ErrNoserver) {
-				//this error is in balancer,before return this error,balencer already refresh the resolver,but still no servers
-				//don't need to retry
-				return e
-			}
-			//need retry
-			continue
-		}
-		if e = stream.SendMsg(req); e != nil {
-			//read grpc's SendMsg code
-			//only req marshal problem and req size problem will cause this error
-			//so don't need to retry
-			return transGrpcError(e)
-		}
-		if e = stream.RecvMsg(resp); e == nil {
-			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.appname, p.Addr.String(), "GRPC", path, &start, &end, nil)
-			return nil
-		}
-		//deal recv error
-		ee := transGrpcError(e)
+		e := transGrpcError(c.conn.Invoke(ctx, path, req, resp, grpc.Peer(p)))
+		end := time.Now()
+		trace.Trace(ctx, trace.CLIENT, c.appname, p.Addr.String(), "GRPC", path, &start, &end, e)
+		//TODO check retry error
 	}
 }
 func transGrpcError(e error) *cerror.Error {

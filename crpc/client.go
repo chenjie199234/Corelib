@@ -345,6 +345,7 @@ func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 				})
 				go server.sendcancel(context.Background(), canceldata)
 			} else {
+				//this is impossible
 				e = cerror.ConvertStdError(ctx.Err())
 			}
 			end := time.Now()

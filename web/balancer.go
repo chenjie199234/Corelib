@@ -142,6 +142,7 @@ func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 			} else if e == context.Canceled {
 				return nil, cerror.ErrCanceled
 			} else {
+				//this is impossible
 				return nil, cerror.ConvertStdError(e)
 			}
 		}
