@@ -3,7 +3,6 @@ package web
 import (
 	"math"
 	"math/rand"
-	"sync/atomic"
 	"time"
 )
 
@@ -50,13 +49,13 @@ func defaultPicker(servers map[string]*ServerForPick) *ServerForPick {
 		}
 	}
 	//more discoveryservers more safety,so 1 * 2's discoveryserver num
-	load1 := float64(atomic.LoadInt32(&normal1.Pickinfo.Activecalls)) + math.Log(float64(normal2.Pickinfo.DServerNum+2))
-	if atomic.LoadInt64(&normal1.Pickinfo.Lastfail) >= before.UnixNano() {
+	load1 := float64(normal1.Pickinfo.Activecalls) + math.Log(float64(normal2.Pickinfo.DServerNum+2))
+	if normal1.Pickinfo.Lastfail >= before.UnixNano() {
 		load1 *= 1.1
 	}
 	//more discoveryservers more safety,so 2 * 1's discoveryserver num
-	load2 := float64(atomic.LoadInt32(&normal2.Pickinfo.Activecalls)) + math.Log(float64(normal1.Pickinfo.DServerNum+2))
-	if atomic.LoadInt64(&normal2.Pickinfo.Lastfail) >= before.UnixNano() {
+	load2 := float64(normal2.Pickinfo.Activecalls) + math.Log(float64(normal1.Pickinfo.DServerNum+2))
+	if normal2.Pickinfo.Lastfail >= before.UnixNano() {
 		load2 *= 1.1
 	}
 	if load1 > load2 {

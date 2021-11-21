@@ -42,7 +42,7 @@ type ServerForPick struct {
 	addr     string
 	subconn  balancer.SubConn
 	dservers map[string]struct{} //this app registered on which discovery server
-	status   connectivity.State
+	status   int32
 
 	Pickinfo *pickinfo
 }
@@ -56,7 +56,7 @@ type pickinfo struct {
 }
 
 func (s *ServerForPick) Pickable() bool {
-	return s.status == connectivity.Ready
+	return atomic.LoadInt32(&s.status) == int32(connectivity.Ready)
 }
 
 func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) error {
@@ -103,7 +103,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 				addr:     addr.Addr,
 				subconn:  sc,
 				dservers: dservers,
-				status:   connectivity.Idle,
+				status:   int32(connectivity.Idle),
 				Pickinfo: &pickinfo{
 					Lastfail:       0,
 					Activecalls:    0,
@@ -147,18 +147,18 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 		return
 	}
 	if s.ConnectivityState == connectivity.Shutdown {
-		if exist.status == connectivity.Shutdown {
+		if atomic.LoadInt32(&exist.status) == int32(connectivity.Shutdown) {
 			return
 		}
-		olds := exist.status
-		exist.status = connectivity.Shutdown
+		olds := atomic.LoadInt32(&exist.status)
+		atomic.StoreInt32(&exist.status, int32(connectivity.Shutdown))
 		delete(b.servers, sc)
-		if olds == connectivity.Ready {
+		if olds == int32(connectivity.Ready) {
 			b.rebuildpicker()
 		}
 		return
 	}
-	if s.ConnectivityState == connectivity.Idle && exist.status == connectivity.Ready {
+	if s.ConnectivityState == connectivity.Idle && atomic.LoadInt32(&exist.status) == int32(connectivity.Ready) {
 		log.Info(nil, "[grpc.client] server:", b.c.appname+":"+exist.addr, "offline")
 	} else if s.ConnectivityState == connectivity.Ready {
 		b.c.resolver.wakemanual()
@@ -166,14 +166,14 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 	} else if s.ConnectivityState == connectivity.TransientFailure {
 		log.Error(nil, "[grpc.client] connect to server:", b.c.appname+":"+exist.addr, "error:", s.ConnectionError)
 	}
-	olds := exist.status
-	exist.status = s.ConnectivityState
-	if (olds == connectivity.Ready && exist.status == connectivity.Idle) || exist.status == connectivity.Ready {
+	olds := atomic.LoadInt32(&exist.status)
+	atomic.StoreInt32(&exist.status, int32(s.ConnectivityState))
+	if (olds == int32(connectivity.Ready) && s.ConnectivityState == connectivity.Idle) || s.ConnectivityState == connectivity.Ready {
 		b.rebuildpicker()
 	}
-	if exist.status == connectivity.Idle {
+	if s.ConnectivityState == connectivity.Idle {
 		if len(exist.dservers) == 0 {
-			exist.status = connectivity.Shutdown
+			atomic.StoreInt32(&exist.status, int32(connectivity.Shutdown))
 			delete(b.servers, sc)
 			b.cc.RemoveSubConn(sc)
 		} else {
@@ -184,7 +184,7 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 func (b *corelibBalancer) rebuildpicker() {
 	servers := make(map[string]*ServerForPick, len(b.servers))
 	for _, server := range b.servers {
-		if server.status == connectivity.Ready {
+		if atomic.LoadInt32(&server.status) == int32(connectivity.Ready) {
 			servers[server.addr] = server
 		}
 	}
