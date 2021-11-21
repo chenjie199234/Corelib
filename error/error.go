@@ -86,13 +86,13 @@ func ConvertStdError(e error) *Error {
 }
 func transStdErrorStr(e string) *Error {
 	result := &Error{}
-	if e[0] == '{' {
+	if e[0] == '{' && e[len(e)-1] == '}' {
 		//json format
-		if ee := json.Unmarshal(common.Str2byte(e), result); ee != nil {
+		if ee := json.Unmarshal(common.Str2byte(e), result); ee != nil || result.Code == 0 {
 			result.Code = -1
 			result.Httpcode = http.StatusInternalServerError
 			result.Msg = e
-		} else if result.Code != 0 && result.Httpcode == 0 {
+		} else if result.Httpcode == 0 {
 			result.Httpcode = http.StatusInternalServerError
 		}
 	} else {
