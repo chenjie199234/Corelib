@@ -77,8 +77,8 @@ func InitTrace(ctx context.Context, traceid, app, ip, method, path string) conte
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	tmp := ctx.Value(tracekey{})
-	if tmp == nil {
+	tmp, ok := ctx.Value(tracekey{}).(map[string]string)
+	if !ok || tmp["Traceid"] == "" {
 		if app == "" || ip == "" || method == "" || path == "" {
 			panic("[trace] init error: missing params")
 		}
@@ -94,11 +94,10 @@ func GetTrace(ctx context.Context) (traceid, curapp, curip, curmethod, curpath s
 	if ctx == nil {
 		return
 	}
-	tmp := ctx.Value(tracekey{})
-	if tmp == nil {
+	tracedata, ok := ctx.Value(tracekey{}).(map[string]string)
+	if !ok || tracedata["Traceid"] == "" {
 		return
 	}
-	tracedata, _ := tmp.(map[string]string)
 	traceid = tracedata["Traceid"]
 	curapp = tracedata["App"]
 	curip = tracedata["Ip"]
@@ -107,15 +106,19 @@ func GetTrace(ctx context.Context) (traceid, curapp, curip, curmethod, curpath s
 	return
 }
 
-func CopyTrace(src context.Context) context.Context {
+//this will overwrite dst's tracedata
+func CopyTrace(src, dst context.Context) (context.Context, bool) {
+	if dst == nil {
+		dst = context.Background()
+	}
 	if src == nil {
-		return context.Background()
+		return dst, false
 	}
-	traceid, fromapp, fromip, frommethod, frompath := GetTrace(src)
-	if traceid == "" {
-		return context.Background()
+	tracedata, ok := src.Value(tracekey{}).(map[string]string)
+	if ok && tracedata["Traceid"] != "" {
+		return context.WithValue(dst, tracekey{}, tracedata), true
 	}
-	return InitTrace(context.Background(), traceid, fromapp, fromip, frommethod, frompath)
+	return dst, false
 }
 
 func maketraceid() string {

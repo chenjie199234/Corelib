@@ -11,6 +11,9 @@ import (
 type metadatakey struct{}
 
 func GetMetadata(ctx context.Context) map[string]string {
+	if ctx == nil {
+		return nil
+	}
 	if wc, ok := ctx.(*web.Context); ok {
 		return wc.GetMetadata()
 	} else if cc, ok := ctx.(*crpc.Context); ok {
@@ -25,13 +28,35 @@ func GetMetadata(ctx context.Context) map[string]string {
 func SetMetadata(ctx context.Context, metadata map[string]string) context.Context {
 	return context.WithValue(ctx, metadatakey{}, metadata)
 }
-func CopyMetadata(src context.Context) context.Context {
+
+//this will overwrite dst's metadata
+func CopyMetadata(src, dst context.Context) (context.Context, bool) {
+	if dst == nil {
+		dst = context.Background()
+	}
 	if src == nil {
-		return context.Background()
+		return dst, false
 	}
 	md := GetMetadata(src)
 	if md == nil {
-		return context.Background()
+		return dst, false
 	}
-	return context.WithValue(context.Background(), metadatakey{}, md)
+	return context.WithValue(dst, metadatakey{}, md), true
+}
+func AddMetadata(ctx context.Context, key, value string) context.Context {
+	md := GetMetadata(ctx)
+	if md == nil {
+		if ctx == nil {
+			return context.WithValue(context.Background(), metadatakey{}, map[string]string{key: value})
+		}
+		return context.WithValue(ctx, metadatakey{}, map[string]string{key: value})
+	}
+	md[key] = value
+	return ctx
+}
+func DelMetadata(ctx context.Context, key string) {
+	md := GetMetadata(ctx)
+	if md != nil {
+		delete(md, key)
+	}
 }

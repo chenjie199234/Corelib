@@ -563,7 +563,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			defer cancel()
 		}
 		//logic
-		workctx := this.getContext(w, r, ctx, mdata, totalhandlers)
+		workctx := this.getContext(w, r, ctx, sourceapp, mdata, totalhandlers)
 		defer func() {
 			if e := recover(); e != nil {
 				stack := make([]byte, 1024)

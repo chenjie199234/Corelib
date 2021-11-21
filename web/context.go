@@ -12,13 +12,14 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context.Context, metadata map[string]string, handlers []OutsideHandler) *Context {
+func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context.Context, peername string, metadata map[string]string, handlers []OutsideHandler) *Context {
 	ctx, ok := this.ctxpool.Get().(*Context)
 	if !ok {
 		return &Context{
 			Context:  c,
 			w:        w,
 			r:        r,
+			peername: peername,
 			metadata: metadata,
 			handlers: handlers,
 			status:   0,
@@ -28,6 +29,7 @@ func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c cont
 	ctx.Context = c
 	ctx.w = w
 	ctx.r = r
+	ctx.peername = peername
 	ctx.metadata = metadata
 	ctx.handlers = handlers
 	ctx.status = 0
@@ -43,6 +45,7 @@ type Context struct {
 	context.Context
 	w        http.ResponseWriter
 	r        *http.Request
+	peername string
 	metadata map[string]string
 	handlers []OutsideHandler
 	status   int8
@@ -115,11 +118,7 @@ func (this *Context) GetHeader(key string) string {
 	return this.r.Header.Get(key)
 }
 func (this *Context) GetPeerName() string {
-	peername := this.r.Header.Get("SourceApp")
-	if peername == "" {
-		return "unknown"
-	}
-	return peername
+	return this.peername
 }
 func (this *Context) GetPeerAddr() string {
 	return this.r.RemoteAddr
