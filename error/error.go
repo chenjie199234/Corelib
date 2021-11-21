@@ -92,6 +92,8 @@ func transStdErrorStr(e string) *Error {
 			result.Code = -1
 			result.Httpcode = http.StatusInternalServerError
 			result.Msg = e
+		} else if result.Code != 0 && result.Httpcode == 0 {
+			result.Httpcode = http.StatusInternalServerError
 		}
 	} else {
 		//text format

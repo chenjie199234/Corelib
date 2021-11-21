@@ -253,8 +253,6 @@ func transGrpcError(e error) *cerror.Error {
 		return ErrNoapi
 	case codes.Unavailable:
 		return ErrClosed
-	case codes.Unauthenticated:
-		return cerror.ErrAuth
 	default:
 		ee := cerror.ConvertErrorstr(s.Message())
 		ee.Httpcode = int32(s.Code())
