@@ -67,15 +67,15 @@ func (c *ServerConfig) validate() {
 }
 
 type CrpcServer struct {
-	c                  *ServerConfig
-	tlsc               *tls.Config
-	global             []OutsideHandler
-	ctxpool            *sync.Pool
-	handler            map[string]func(context.Context, *stream.Peer, *Msg)
-	instance           *stream.Instance
-	closewait          *sync.WaitGroup
-	totalreqnum        int32
-	refreshclosewaitch chan struct{}
+	c                *ServerConfig
+	tlsc             *tls.Config
+	global           []OutsideHandler
+	ctxpool          *sync.Pool
+	handler          map[string]func(context.Context, *stream.Peer, *Msg)
+	instance         *stream.Instance
+	closewait        *sync.WaitGroup
+	totalreqnum      int32
+	refreshclosewait chan *struct{}
 }
 type client struct {
 	sync.RWMutex
@@ -98,12 +98,12 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 	}
 	c.validate()
 	serverinstance := &CrpcServer{
-		c:                  c,
-		global:             make([]OutsideHandler, 0, 10),
-		ctxpool:            &sync.Pool{},
-		handler:            make(map[string]func(context.Context, *stream.Peer, *Msg), 10),
-		closewait:          &sync.WaitGroup{},
-		refreshclosewaitch: make(chan struct{}, 1),
+		c:                c,
+		global:           make([]OutsideHandler, 0, 10),
+		ctxpool:          &sync.Pool{},
+		handler:          make(map[string]func(context.Context, *stream.Peer, *Msg), 10),
+		closewait:        &sync.WaitGroup{},
+		refreshclosewait: make(chan *struct{}, 1),
 	}
 	if len(c.CertKeys) != 0 {
 		certificates := make([]tls.Certificate, 0, len(c.CertKeys))
@@ -143,9 +143,7 @@ func (s *CrpcServer) StartCrpcServer(listenaddr string) error {
 	return e
 }
 func (s *CrpcServer) StopCrpcServer() {
-	defer func() {
-		s.closewait.Wait()
-	}()
+	defer s.closewait.Wait()
 	stop := false
 	for {
 		old := atomic.LoadInt32(&s.totalreqnum)
@@ -177,7 +175,7 @@ func (s *CrpcServer) StopCrpcServer() {
 					s.closewait.Done()
 					return
 				}
-			case <-s.refreshclosewaitch:
+			case <-s.refreshclosewait:
 				tmer.Reset(s.c.WaitCloseTime)
 				for len(tmer.C) > 0 {
 					<-tmer.C
@@ -350,7 +348,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		} else {
 			//refresh close wait
 			select {
-			case s.refreshclosewaitch <- struct{}{}:
+			case s.refreshclosewait <- nil:
 			default:
 			}
 			//tell peer self closed
@@ -389,7 +387,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		}
 		if atomic.LoadInt32(&s.totalreqnum) < 0 {
 			select {
-			case s.refreshclosewaitch <- struct{}{}:
+			case s.refreshclosewait <- nil:
 			default:
 			}
 		}

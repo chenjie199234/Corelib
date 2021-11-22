@@ -147,9 +147,6 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 		return
 	}
 	if s.ConnectivityState == connectivity.Shutdown {
-		if atomic.LoadInt32(&exist.status) == int32(connectivity.Shutdown) {
-			return
-		}
 		olds := atomic.LoadInt32(&exist.status)
 		atomic.StoreInt32(&exist.status, int32(connectivity.Shutdown))
 		delete(b.servers, sc)
@@ -207,6 +204,10 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 					atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 					if doneinfo.Err != nil {
 						server.Pickinfo.Lastfail = time.Now().UnixNano()
+						if cerror.Equal(transGrpcError(doneinfo.Err), errClosing) {
+							b.c.resolver.manual(nil)
+							atomic.StoreInt32(&server.status, int32(connectivity.Shutdown))
+						}
 					}
 				},
 			}, nil

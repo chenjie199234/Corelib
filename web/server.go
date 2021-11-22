@@ -160,7 +160,7 @@ type WebServer struct {
 	s                *http.Server
 	closewait        *sync.WaitGroup
 	totalreqnum      int32
-	refreshclosewait chan struct{}
+	refreshclosewait chan *struct{}
 }
 
 func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, error) {
@@ -203,7 +203,7 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 			},
 		},
 		closewait:        &sync.WaitGroup{},
-		refreshclosewait: make(chan struct{}, 1),
+		refreshclosewait: make(chan *struct{}, 1),
 	}
 	if len(c.CertKeys) > 0 {
 		certificates := make([]tls.Certificate, 0, len(c.CertKeys))
@@ -225,13 +225,13 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	instance.closewait.Add(1)
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Error(r.Context(), "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
-		w.WriteHeader(http.StatusNotFound)
+		w.WriteHeader(http.StatusNotImplemented)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(common.Str2byte(_ErrNoapiStr))
 	})
 	instance.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Error(r.Context(), "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown method")
-		w.WriteHeader(http.StatusNotFound)
+		w.WriteHeader(http.StatusNotImplemented)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(common.Str2byte(_ErrNoapiStr))
 	})
@@ -330,9 +330,7 @@ func (this *WebServer) ReplaceWebServer(newserver *WebServer) {
 	newserver.printPaths()
 }
 func (this *WebServer) StopWebServer() {
-	defer func() {
-		this.closewait.Wait()
-	}()
+	defer this.closewait.Wait()
 	stop := false
 	for {
 		old := atomic.LoadInt32(&this.totalreqnum)
@@ -436,7 +434,7 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			//refresh close wait
 			select {
-			case this.refreshclosewait <- struct{}{}:
+			case this.refreshclosewait <- nil:
 			default:
 			}
 			//tell peer self closed
@@ -450,7 +448,7 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	this.router.ServeHTTP(w, r.Clone(ctx))
 	if atomic.LoadInt32(&this.totalreqnum) < 0 {
 		select {
-		case this.refreshclosewait <- struct{}{}:
+		case this.refreshclosewait <- nil:
 		default:
 		}
 	}
@@ -478,6 +476,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 				}
 				if !find {
 					w.WriteHeader(http.StatusMethodNotAllowed)
+					w.Header().Set("Allow", strings.Join(this.c.Cors.AllowedOrigin, ","))
 					w.Header().Set("Content-Type", "application/json")
 					w.Write(common.Str2byte(_ErrCorsStr))
 					return

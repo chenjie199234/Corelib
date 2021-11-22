@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	ErrNoapi      = &error.Error{Code: 2001, Httpcode: http.StatusNotFound, Msg: "[crpc] api not implement"}
+	ErrNoapi      = &error.Error{Code: 2001, Httpcode: http.StatusNotImplemented, Msg: "[crpc] api not implement"}
 	errClosing    = &error.Error{Code: 2002, Httpcode: http.StatusInternalServerError, Msg: "[crpc] server is closing"}
 	ErrPanic      = &error.Error{Code: 2003, Httpcode: http.StatusServiceUnavailable, Msg: "[crpc] server panic"}
 	ErrNoserver   = &error.Error{Code: 2004, Httpcode: http.StatusServiceUnavailable, Msg: "[crpc] no servers"}

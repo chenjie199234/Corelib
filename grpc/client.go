@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -263,8 +264,13 @@ func transGrpcError(e error) *cerror.Error {
 		}
 	case codes.Unimplemented:
 		return ErrNoapi
+	case codes.Internal:
+		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
 	case codes.Unavailable:
-		return ErrClosed
+		return cerror.MakeError(-1, http.StatusServiceUnavailable, s.Message())
+	case codes.Unauthenticated:
+		//this is impossible
+		return cerror.MakeError(-1, http.StatusServiceUnavailable, s.Message())
 	default:
 		ee := cerror.ConvertErrorstr(s.Message())
 		ee.Httpcode = int32(s.Code())

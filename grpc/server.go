@@ -6,9 +6,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"math"
 	"net"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	cerror "github.com/chenjie199234/Corelib/error"
@@ -26,6 +28,9 @@ import (
 type OutsideHandler func(ctx *Context)
 
 type ServerConfig struct {
+	//when server close,server will wait this time before close,every request will refresh the time
+	//min is 1 second
+	WaitCloseTime time.Duration
 	//global timeout for every rpc call(including connection establish time)
 	GlobalTimeout time.Duration
 	HeartPorbe    time.Duration
@@ -36,6 +41,9 @@ type ServerConfig struct {
 }
 
 func (c *ServerConfig) validate() {
+	if c.WaitCloseTime < time.Second {
+		c.WaitCloseTime = time.Second
+	}
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
 	}
@@ -69,6 +77,10 @@ type GrpcServer struct {
 	ctxpool     *sync.Pool
 	server      *grpc.Server
 	services    map[string]*grpc.ServiceDesc
+
+	closewait        *sync.WaitGroup
+	totalreqnum      int32
+	refreshclosewait chan *struct{}
 }
 
 func NewGrpcServer(c *ServerConfig, selfgroup, selfname string) (*GrpcServer, error) {
@@ -85,14 +97,17 @@ func NewGrpcServer(c *ServerConfig, selfgroup, selfname string) (*GrpcServer, er
 	if c == nil {
 		c = &ServerConfig{}
 	}
-	serverinstance := &GrpcServer{
-		c:           c,
-		selfappname: selfgroup + "." + selfname,
-		global:      make([]OutsideHandler, 0),
-		ctxpool:     &sync.Pool{},
-		services:    make(map[string]*grpc.ServiceDesc),
-	}
 	c.validate()
+	serverinstance := &GrpcServer{
+		c:                c,
+		selfappname:      selfgroup + "." + selfname,
+		global:           make([]OutsideHandler, 0),
+		ctxpool:          &sync.Pool{},
+		services:         make(map[string]*grpc.ServiceDesc),
+		closewait:        &sync.WaitGroup{},
+		refreshclosewait: make(chan *struct{}, 1),
+	}
+	serverinstance.closewait.Add(1)
 	opts := make([]grpc.ServerOption, 0, 6)
 	opts = append(opts, grpc.ReadBufferSize(int(c.SocketRBuf)))
 	opts = append(opts, grpc.WriteBufferSize(int(c.SocketWBuf)))
@@ -134,8 +149,38 @@ func (s *GrpcServer) StartGrpcServer(listenaddr string) error {
 	return nil
 }
 func (s *GrpcServer) StopGrpcServer() {
-	if s.server != nil {
-		s.server.GracefulStop()
+	defer s.closewait.Wait()
+	stop := false
+	for {
+		old := atomic.LoadInt32(&s.totalreqnum)
+		if old >= 0 {
+			if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old-math.MaxInt32) {
+				stop = true
+				break
+			}
+		} else {
+			break
+		}
+	}
+	if stop {
+		tmer := time.NewTimer(s.c.WaitCloseTime)
+		for {
+			select {
+			case <-tmer.C:
+				if atomic.LoadInt32(&s.totalreqnum) != -math.MaxInt32 {
+					tmer.Reset(s.c.WaitCloseTime)
+				} else {
+					s.server.GracefulStop()
+					s.closewait.Done()
+					return
+				}
+			case <-s.refreshclosewait:
+				tmer.Reset(s.c.WaitCloseTime)
+				for len(tmer.C) > 0 {
+					<-tmer.C
+				}
+			}
+		}
 	}
 }
 
@@ -166,6 +211,33 @@ func (s *GrpcServer) insidehandler(sname, mname string, functimeout time.Duratio
 	path := "/" + sname + "/" + mname
 	totalhandlers := append(s.global, handlers...)
 	return func(_ interface{}, ctx context.Context, decode func(interface{}) error, _ grpc.UnaryServerInterceptor) (resp interface{}, e error) {
+		//check for server status
+		for {
+			old := atomic.LoadInt32(&s.totalreqnum)
+			if old >= 0 {
+				//add req num
+				if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old+1) {
+					break
+				}
+			} else {
+				//refresh close wait
+				select {
+				case s.refreshclosewait <- nil:
+				default:
+				}
+				//tell peer self closed
+				return nil, errClosing
+			}
+		}
+		defer func() {
+			if atomic.LoadInt32(&s.totalreqnum) < 0 {
+				select {
+				case s.refreshclosewait <- nil:
+				default:
+				}
+			}
+			atomic.AddInt32(&s.totalreqnum, -1)
+		}()
 		p, _ := peer.FromContext(ctx)
 		traceid := ""
 		sourceip := p.Addr.String()
