@@ -234,7 +234,13 @@ func (c *GrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 		e := transGrpcError(c.conn.Invoke(ctx, path, req, resp, grpc.Peer(p)))
 		end := time.Now()
 		trace.Trace(ctx, trace.CLIENT, c.appname, p.Addr.String(), "GRPC", path, &start, &end, e)
-		//TODO check retry error
+		if cerror.Equal(e, errClosing) {
+			continue
+		}
+		if e == nil {
+			return nil
+		}
+		return e
 	}
 }
 func transGrpcError(e error) *cerror.Error {
