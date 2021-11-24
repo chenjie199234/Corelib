@@ -233,7 +233,12 @@ func (c *GrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 		p := &peer.Peer{}
 		e := transGrpcError(c.conn.Invoke(ctx, path, req, resp, grpc.Peer(p)))
 		end := time.Now()
-		trace.Trace(ctx, trace.CLIENT, c.appname, p.Addr.String(), "GRPC", path, &start, &end, e)
+		if p.Addr == nil {
+			//pick error or create stream unretryable error,req doesn't send
+		} else {
+			//req send,recv error
+			trace.Trace(ctx, trace.CLIENT, c.appname, p.Addr.String(), "GRPC", path, &start, &end, e)
+		}
 		if cerror.Equal(e, errClosing) {
 			continue
 		}
