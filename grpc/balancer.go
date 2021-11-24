@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
@@ -18,10 +19,9 @@ type balancerBuilder struct {
 
 func (b *balancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b.c.balancer = &corelibBalancer{
-		c:        b.c,
-		cc:       cc,
-		servers:  make(map[balancer.SubConn]*ServerForPick),
-		pservers: make(map[string]*ServerForPick),
+		c:       b.c,
+		cc:      cc,
+		servers: make(map[balancer.SubConn]*ServerForPick),
 	}
 	cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: b.c.balancer})
 	return b.c.balancer
@@ -35,7 +35,7 @@ type corelibBalancer struct {
 	c        *GrpcClient
 	cc       balancer.ClientConn
 	servers  map[balancer.SubConn]*ServerForPick
-	pservers map[string]*ServerForPick
+	pservers []*ServerForPick
 }
 
 type ServerForPick struct {
@@ -57,6 +57,13 @@ type pickinfo struct {
 
 func (s *ServerForPick) Pickable() bool {
 	return atomic.LoadInt32(&s.status) == int32(connectivity.Ready)
+}
+
+func (b *corelibBalancer) setPickerServers(servers []*ServerForPick) {
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&b.pservers)), unsafe.Pointer(&servers))
+}
+func (b *corelibBalancer) getPickServers() []*ServerForPick {
+	return *(*[]*ServerForPick)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&b.pservers))))
 }
 
 func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) error {
@@ -179,13 +186,13 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 	}
 }
 func (b *corelibBalancer) rebuildpicker() {
-	servers := make(map[string]*ServerForPick, len(b.servers))
+	tmp := make([]*ServerForPick, 0, len(b.servers))
 	for _, server := range b.servers {
 		if atomic.LoadInt32(&server.status) == int32(connectivity.Ready) {
-			servers[server.addr] = server
+			tmp = append(tmp, server)
 		}
 	}
-	b.pservers = servers
+	b.setPickerServers(tmp)
 	return
 }
 
@@ -195,7 +202,7 @@ func (b *corelibBalancer) Close() {
 func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	refresh := false
 	for {
-		server := b.c.c.Picker(b.pservers)
+		server := b.c.c.Picker(b.getPickServers())
 		if server != nil {
 			atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 			return balancer.PickResult{

@@ -301,8 +301,8 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			return nil, e
 		}
 		if resp.StatusCode == 888 {
-			server.setclient(nil)
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
+			server.setclient(nil)
 			this.balancer.RebuildPicker()
 			this.resolver.manual(nil)
 			resp.Body.Close()

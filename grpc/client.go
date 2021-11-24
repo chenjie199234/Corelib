@@ -29,7 +29,7 @@ import (
 )
 
 //param's key is server's addr "ip:port"
-type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
+type PickHandler func(servers []*ServerForPick) *ServerForPick
 
 type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *GrpcClient)
 
