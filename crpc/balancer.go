@@ -18,12 +18,12 @@ type corelibBalancer struct {
 	lker       *sync.RWMutex
 	serversRaw []byte
 	servers    map[string]*ServerForPick //key server addr
+	pservers   []*ServerForPick
 }
 type ServerForPick struct {
 	addr     string
 	dservers map[string]struct{} //this app registered on which discovery server
 	peer     *stream.Peer
-	status   int32 //2 - working,1 - connecting,0 - closed
 
 	//active calls
 	lker *sync.Mutex
@@ -39,12 +39,21 @@ type pickinfo struct {
 	Addition       []byte //addition info register on register center
 }
 
+func (s *ServerForPick) getpeer() *stream.Peer {
+	return (*stream.Peer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.peer))))
+}
+func (s *ServerForPick) setpeer(p *stream.Peer) {
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s.peer)), unsafe.Pointer(p))
+}
+func (s *ServerForPick) caspeer(oldpeer, newpeer *stream.Peer) bool {
+	return atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&s.peer)), unsafe.Pointer(&oldpeer), unsafe.Pointer(newpeer))
+}
 func (s *ServerForPick) Pickable() bool {
-	return atomic.LoadInt32(&s.status) == 2
+	return s.getpeer() != nil
 }
 
 func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
-	p := (*stream.Peer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.peer))))
+	p := s.getpeer()
 	if p == nil {
 		return errPickAgain
 	}
@@ -64,6 +73,7 @@ func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 			e = ErrReqmsgLen
 		} else if e == stream.ErrConnClosed {
 			e = errPickAgain
+			s.caspeer(p, nil)
 		} else if e == context.DeadlineExceeded {
 			e = cerror.ErrDeadlineExceeded
 		} else if e == context.Canceled {
@@ -77,7 +87,7 @@ func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 	return
 }
 func (s *ServerForPick) sendcancel(ctx context.Context, canceldata []byte) {
-	if p := (*stream.Peer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.peer)))); p != nil {
+	if p := s.getpeer(); p != nil {
 		p.SendMessage(ctx, canceldata, nil, nil)
 	}
 }
@@ -89,19 +99,18 @@ func newCorelibBalancer(c *CrpcClient) *corelibBalancer {
 		servers:    make(map[string]*ServerForPick),
 	}
 }
+func (b *corelibBalancer) setPickerServers(servers []*ServerForPick) {
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&b.pservers)), unsafe.Pointer(&servers))
+}
+func (b *corelibBalancer) getPickServers() []*ServerForPick {
+	return *(*[]*ServerForPick)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&b.pservers))))
+}
 func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 	d, _ := json.Marshal(all)
 	b.lker.Lock()
 	defer func() {
-		if len(b.servers) == 0 {
+		if len(b.servers) == 0 || len(b.pservers) > 0 {
 			b.c.resolver.wakemanual()
-		} else {
-			for _, server := range b.servers {
-				if server.Pickable() {
-					b.c.resolver.wakemanual()
-					break
-				}
-			}
 		}
 		b.lker.Unlock()
 	}()
@@ -127,7 +136,6 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 				addr:     addr,
 				dservers: registerdata.DServers,
 				peer:     nil,
-				status:   1,
 				lker:     &sync.Mutex{},
 				reqs:     make(map[uint64]*req, 10),
 				Pickinfo: &pickinfo{
@@ -139,7 +147,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 				},
 			}
 			b.servers[addr] = server
-			go b.c.start(server)
+			go b.c.start(server, false)
 		} else {
 			//this is not a new register
 			//unregister on which discovery server
@@ -162,7 +170,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 		}
 	}
 }
-func (b *corelibBalancer) GetRegisterServer(addr string) *ServerForPick {
+func (b *corelibBalancer) getRegisterServer(addr string) *ServerForPick {
 	b.lker.RLock()
 	server, ok := b.servers[addr]
 	if !ok {
@@ -198,20 +206,27 @@ func (b *corelibBalancer) ReconnectCheck(server *ServerForPick) bool {
 	b.lker.Unlock()
 	return true
 }
+func (b *corelibBalancer) RebuildPicker() {
+	b.lker.Lock()
+	tmp := make([]*ServerForPick, 0, len(b.servers))
+	for _, server := range b.servers {
+		if server.Pickable() {
+			tmp = append(tmp, server)
+		}
+	}
+	b.setPickerServers(tmp)
+	b.lker.Unlock()
+}
 func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 	refresh := false
 	for {
-		b.lker.RLock()
-		server := b.c.c.Picker(b.servers)
+		server := b.c.c.Picker(b.getPickServers())
 		if server != nil {
-			b.lker.RUnlock()
 			return server, nil
 		}
 		if refresh {
-			b.lker.RUnlock()
 			return nil, ErrNoserver
 		}
-		b.lker.RUnlock()
 		if e := b.c.resolver.waitmanual(ctx); e != nil {
 			if e == context.DeadlineExceeded {
 				return nil, cerror.ErrDeadlineExceeded

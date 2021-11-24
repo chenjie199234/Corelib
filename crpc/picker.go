@@ -6,14 +6,16 @@ import (
 	"time"
 )
 
-func defaultPicker(servers map[string]*ServerForPick) *ServerForPick {
+func defaultPicker(servers []*ServerForPick) *ServerForPick {
 	if len(servers) == 0 {
 		return nil
 	}
 	var normal1, normal2, danger1, danger2, nightmare1, nightmare2 *ServerForPick
 	before := time.Now().Add(-time.Millisecond * 100)
-	for _, server := range servers {
-		if server.Pickable() {
+	startindex := rand.Intn(len(servers))
+	endindex := startindex
+	for {
+		if server := servers[startindex]; server.Pickable() {
 			if server.Pickinfo.DServerNum != 0 &&
 				server.Pickinfo.DServerOffline < before.UnixNano() {
 				if normal1 == nil {
@@ -35,6 +37,13 @@ func defaultPicker(servers map[string]*ServerForPick) *ServerForPick {
 					danger2 = server
 				}
 			}
+		}
+		startindex++
+		if startindex >= len(servers) {
+			startindex = 0
+		}
+		if endindex == startindex {
+			break
 		}
 	}
 	//check normal

@@ -423,6 +423,13 @@ func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ..
 }
 
 func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if target := r.Header.Get("Target"); target != "" && target != this.selfappname {
+		//this is not the required server.tell peer self closed
+		w.WriteHeader(888)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(common.Str2byte(_ErrClosingStr))
+		return
+	}
 	//check server status
 	for {
 		old := atomic.LoadInt32(&this.totalreqnum)

@@ -21,10 +21,8 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-//param's key is server's addr "scheme://host:port"
-type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
+type PickHandler func(servers []*ServerForPick) *ServerForPick
 
-//return data's key is server's addr "scheme://host:port"
 type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *WebClient)
 
 type ClientConfig struct {
@@ -154,6 +152,9 @@ func (this *WebClient) UpdateDiscovery(all map[string]*RegisterData) {
 }
 
 func forbiddenHeader(header http.Header) bool {
+	if _, ok := header[textproto.CanonicalMIMEHeaderKey("target")]; ok {
+		return true
+	}
 	if _, ok := header[textproto.CanonicalMIMEHeaderKey("deadline")]; ok {
 		return true
 	}
@@ -166,7 +167,7 @@ func forbiddenHeader(header http.Header) bool {
 	return false
 }
 
-//"Deadline" "Core_metadata" "Core_tracedata" are forbidden in header
+//"Deadline" "Target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -174,7 +175,7 @@ func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, path,
 	return this.call(http.MethodGet, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"Deadline" "Core_metadata" "Core_tracedata" are forbidden in header
+//"Deadline" "Target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -182,7 +183,7 @@ func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, pa
 	return this.call(http.MethodDelete, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"Deadline" "Core_metadata" "Core_tracedata" are forbidden in header
+//"Deadline" "Target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -193,7 +194,7 @@ func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, path
 	return this.call(http.MethodPost, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"Deadline" "Core_metadata" "Core_tracedata" are forbidden in header
+//"Deadline" "Target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -204,7 +205,7 @@ func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, path,
 	return this.call(http.MethodPut, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"Deadline" "Core_metadata" "Core_tracedata" are forbidden in header
+//"Deadline" "Target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -225,6 +226,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	if header == nil {
 		header = make(http.Header)
 	}
+	header.Set("Target", this.appname)
 	if len(metadata) != 0 {
 		d, _ := json.Marshal(metadata)
 		header.Set("Core_metadata", common.Byte2str(d))
@@ -299,9 +301,10 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 			return nil, e
 		}
 		if resp.StatusCode == 888 {
+			server.setclient(nil)
 			server.Pickinfo.Lastfail = time.Now().UnixNano()
+			this.balancer.RebuildPicker()
 			this.resolver.manual(nil)
-			atomic.StoreInt32(&server.status, 0)
 			resp.Body.Close()
 			trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, errClosing)
 			continue

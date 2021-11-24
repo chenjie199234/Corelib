@@ -19,8 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-//param's key is server's addr "ip:port"
-type PickHandler func(servers map[string]*ServerForPick) *ServerForPick
+type PickHandler func(servers []*ServerForPick) *ServerForPick
 
 type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *CrpcClient)
 
@@ -170,13 +169,10 @@ func (c *CrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 	c.balancer.UpdateDiscovery(all)
 }
 
-func (c *CrpcClient) start(server *ServerForPick) {
-	if atomic.LoadInt32(&server.status) == 0 {
-		//reconnect to server
-		if !c.balancer.ReconnectCheck(server) {
-			return
-		}
-		atomic.StoreInt32(&server.status, 1)
+func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
+	if reconnect && !c.balancer.ReconnectCheck(server) {
+		//can't reconnect to server
+		return
 	}
 	tempverifydata := c.appname
 	var tlsc *tls.Config
@@ -184,9 +180,8 @@ func (c *CrpcClient) start(server *ServerForPick) {
 		tlsc = c.tlsc
 	}
 	if !c.instance.StartTcpClient(server.addr, common.Str2byte(tempverifydata), tlsc) {
-		atomic.StoreInt32(&server.status, 0)
 		time.Sleep(time.Millisecond * 100)
-		go c.start(server)
+		go c.start(server, true)
 	}
 }
 
@@ -197,13 +192,13 @@ func (c *CrpcClient) verifyfunc(ctx context.Context, appuniquename string, peerV
 
 func (c *CrpcClient) onlinefunc(p *stream.Peer) bool {
 	//online success,update success
-	server := c.balancer.GetRegisterServer(p.GetRemoteAddr())
+	server := c.balancer.getRegisterServer(p.GetRemoteAddr())
 	if server == nil {
 		return false
 	}
 	p.SetData(unsafe.Pointer(server))
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&server.peer)), unsafe.Pointer(p))
-	atomic.StoreInt32(&server.status, 2)
+	server.setpeer(p)
+	c.balancer.RebuildPicker()
 	c.resolver.wakemanual()
 	log.Info(nil, "[crpc.client.onlinefunc] server:", p.GetPeerUniqueName(), "online")
 	return true
@@ -218,7 +213,8 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 		return
 	}
 	if msg.Error != nil && cerror.Equal(msg.Error, errClosing) {
-		atomic.StoreInt32(&server.status, 0)
+		server.setpeer(nil)
+		c.balancer.RebuildPicker()
 	}
 	server.lker.Lock()
 	req, ok := server.reqs[msg.Callid]
@@ -236,7 +232,8 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
 	log.Info(nil, "[crpc.client.offlinefunc] server:", p.GetPeerUniqueName(), "offline")
-	atomic.StoreInt32(&server.status, 0)
+	server.setpeer(nil)
+	c.balancer.RebuildPicker()
 	server.lker.Lock()
 	for callid, req := range server.reqs {
 		req.resp = nil
@@ -245,7 +242,7 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 		delete(server.reqs, callid)
 	}
 	server.lker.Unlock()
-	go c.start(server)
+	go c.start(server, true)
 }
 
 var errPickAgain = errors.New("[crpc.client] picked server closed")

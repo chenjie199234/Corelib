@@ -9,21 +9,23 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	cerror "github.com/chenjie199234/Corelib/error"
 )
 
 type corelibBalancer struct {
 	c          *WebClient
-	lker       *sync.RWMutex
+	lker       *sync.Mutex
 	serversRaw []byte
 	servers    map[string]*ServerForPick //key server addr
+	pservers   []*ServerForPick
 }
 type ServerForPick struct {
 	addr     string
 	client   *http.Client
 	dservers map[string]struct{} //this server registered on how many discoveryservers
-	status   int32               //1 - working,0 - closed
+	//status   int32               //1 - working,0 - closed
 
 	Pickinfo *pickinfo
 }
@@ -35,23 +37,45 @@ type pickinfo struct {
 	Addition       []byte //addition info register on register center
 }
 
+func (s *ServerForPick) getclient() *http.Client {
+	return (*http.Client)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.client))))
+}
+func (s *ServerForPick) setclient(c *http.Client) {
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s.client)), unsafe.Pointer(c))
+}
+func (s *ServerForPick) casclient(oldclient, newclient *http.Client) bool {
+	return atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&s.client)), unsafe.Pointer(&oldclient), unsafe.Pointer(newclient))
+}
 func (s *ServerForPick) Pickable() bool {
-	return atomic.LoadInt32(&s.status) == 1
+	return s.getclient() != nil
 }
 func newCorelibBalancer(c *WebClient) *corelibBalancer {
 	return &corelibBalancer{
 		c:          c,
-		lker:       &sync.RWMutex{},
+		lker:       &sync.Mutex{},
 		serversRaw: nil,
 		servers:    make(map[string]*ServerForPick),
 	}
+}
+func (b *corelibBalancer) setPickerServers(servers []*ServerForPick) {
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&b.pservers)), unsafe.Pointer(&servers))
+}
+func (b *corelibBalancer) getPickServers() []*ServerForPick {
+	return *(*[]*ServerForPick)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&b.pservers))))
 }
 func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 	d, _ := json.Marshal(all)
 	b.lker.Lock()
 	defer func() {
-		b.lker.Unlock()
+		tmp := make([]*ServerForPick, 0, len(b.servers))
+		for _, server := range b.servers {
+			if server.Pickable() {
+				tmp = append(tmp, server)
+			}
+		}
+		b.setPickerServers(tmp)
 		b.c.resolver.wakemanual()
+		b.lker.Unlock()
 	}()
 	if bytes.Equal(b.serversRaw, d) {
 		return
@@ -100,7 +124,6 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 					DServerOffline: 0,
 					Addition:       registerdata.Addition,
 				},
-				status: 1,
 			}
 		} else {
 			//this is not a new register
@@ -124,12 +147,21 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 		}
 	}
 }
+func (b *corelibBalancer) RebuildPicker() {
+	b.lker.Lock()
+	tmp := make([]*ServerForPick, 0, len(b.servers))
+	for _, server := range b.servers {
+		if server.Pickable() {
+			tmp = append(tmp, server)
+		}
+	}
+	b.setPickerServers(tmp)
+	b.lker.Unlock()
+}
 func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 	refresh := false
 	for {
-		b.lker.RLock()
-		server := b.c.c.Picker(b.servers)
-		b.lker.RUnlock()
+		server := b.c.c.Picker(b.getPickServers())
 		if server != nil {
 			return server, nil
 		}
