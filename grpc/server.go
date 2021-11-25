@@ -211,6 +211,12 @@ func (s *GrpcServer) insidehandler(sname, mname string, functimeout time.Duratio
 	path := "/" + sname + "/" + mname
 	totalhandlers := append(s.global, handlers...)
 	return func(_ interface{}, ctx context.Context, decode func(interface{}) error, _ grpc.UnaryServerInterceptor) (resp interface{}, e error) {
+		grpcmetadata, ok := metadata.FromIncomingContext(ctx)
+		if ok {
+			if data := grpcmetadata.Get("core_target"); len(data) != 0 && data[0] != s.selfappname {
+				return nil, errClosing
+			}
+		}
 		//check for server status
 		for {
 			old := atomic.LoadInt32(&s.totalreqnum)
@@ -244,7 +250,6 @@ func (s *GrpcServer) insidehandler(sname, mname string, functimeout time.Duratio
 		sourceapp := "unknown"
 		sourcemethod := "unknown"
 		sourcepath := "unknown"
-		grpcmetadata, ok := metadata.FromIncomingContext(ctx)
 		if ok {
 			data := grpcmetadata.Get("core_tracedata")
 			if len(data) != 4 && len(data) != 0 {

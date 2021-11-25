@@ -226,9 +226,8 @@ func (c *GrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 	if traceid != "" {
 		md.Set("core_tracedata", traceid, c.selfappname, selfmethod, selfpath)
 	}
-	if md.Len() > 0 {
-		ctx = gmetadata.NewOutgoingContext(ctx, md)
-	}
+	md.Set("core_target", c.appname)
+	ctx = gmetadata.NewOutgoingContext(ctx, md)
 	for {
 		p := &peer.Peer{}
 		e := transGrpcError(c.conn.Invoke(ctx, path, req, resp, grpc.Peer(p)))

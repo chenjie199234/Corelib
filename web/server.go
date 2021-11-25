@@ -423,7 +423,7 @@ func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ..
 }
 
 func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if target := r.Header.Get("Target"); target != "" && target != this.selfappname {
+	if target := r.Header.Get("Core_target"); target != "" && target != this.selfappname {
 		//this is not the required server.tell peer self closed
 		w.WriteHeader(888)
 		w.Header().Set("Content-Type", "application/json")
@@ -524,7 +524,7 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 			}
 		}
 		var clientdl int64
-		if temp := r.Header.Get("Deadline"); temp != "" {
+		if temp := r.Header.Get("Core_deadline"); temp != "" {
 			var e error
 			clientdl, e = strconv.ParseInt(temp, 10, 64)
 			if e != nil {

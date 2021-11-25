@@ -152,10 +152,10 @@ func (this *WebClient) UpdateDiscovery(all map[string]*RegisterData) {
 }
 
 func forbiddenHeader(header http.Header) bool {
-	if _, ok := header[textproto.CanonicalMIMEHeaderKey("target")]; ok {
+	if _, ok := header[textproto.CanonicalMIMEHeaderKey("core_target")]; ok {
 		return true
 	}
-	if _, ok := header[textproto.CanonicalMIMEHeaderKey("deadline")]; ok {
+	if _, ok := header[textproto.CanonicalMIMEHeaderKey("core_deadline")]; ok {
 		return true
 	}
 	if _, ok := header[textproto.CanonicalMIMEHeaderKey("core_metadata")]; ok {
@@ -167,7 +167,7 @@ func forbiddenHeader(header http.Header) bool {
 	return false
 }
 
-//"Deadline" "Target" "Core_metadata" "Core_tracedata" are forbidden in header
+//"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -175,7 +175,7 @@ func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, path,
 	return this.call(http.MethodGet, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"Deadline" "Target" "Core_metadata" "Core_tracedata" are forbidden in header
+//"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -183,7 +183,7 @@ func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, pa
 	return this.call(http.MethodDelete, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"Deadline" "Target" "Core_metadata" "Core_tracedata" are forbidden in header
+//"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -194,7 +194,7 @@ func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, path
 	return this.call(http.MethodPost, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"Deadline" "Target" "Core_metadata" "Core_tracedata" are forbidden in header
+//"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -205,7 +205,7 @@ func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, path,
 	return this.call(http.MethodPut, ctx, functimeout, path, query, header, metadata, nil)
 }
 
-//"Deadline" "Target" "Core_metadata" "Core_tracedata" are forbidden in header
+//"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
@@ -226,7 +226,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 	if header == nil {
 		header = make(http.Header)
 	}
-	header.Set("Target", this.appname)
+	header.Set("Core_target", this.appname)
 	if len(metadata) != 0 {
 		d, _ := json.Marshal(metadata)
 		header.Set("Core_metadata", common.Byte2str(d))
@@ -259,7 +259,7 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		if dl.UnixNano() < start.UnixNano()+int64(time.Millisecond*5) {
 			return nil, cerror.ErrDeadlineExceeded
 		}
-		header.Set("Deadline", strconv.FormatInt(dl.UnixNano(), 10))
+		header.Set("Core_deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
 	header.Del("Origin")
 	for {
