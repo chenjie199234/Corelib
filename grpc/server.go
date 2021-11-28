@@ -9,9 +9,11 @@ import (
 	"math"
 	"net"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
@@ -71,12 +73,13 @@ func (c *ServerConfig) validate() {
 }
 
 type GrpcServer struct {
-	c           *ServerConfig
-	selfappname string
-	global      []OutsideHandler
-	ctxpool     *sync.Pool
-	server      *grpc.Server
-	services    map[string]*grpc.ServiceDesc
+	c              *ServerConfig
+	selfappname    string
+	global         []OutsideHandler
+	ctxpool        *sync.Pool
+	server         *grpc.Server
+	services       map[string]*grpc.ServiceDesc
+	handlerTimeout map[string]time.Duration
 
 	closewait        *sync.WaitGroup
 	totalreqnum      int32
@@ -104,6 +107,7 @@ func NewGrpcServer(c *ServerConfig, selfgroup, selfname string) (*GrpcServer, er
 		global:           make([]OutsideHandler, 0),
 		ctxpool:          &sync.Pool{},
 		services:         make(map[string]*grpc.ServiceDesc),
+		handlerTimeout:   make(map[string]time.Duration),
 		closewait:        &sync.WaitGroup{},
 		refreshclosewait: make(chan *struct{}, 1),
 	}
@@ -182,6 +186,44 @@ func (s *GrpcServer) StopGrpcServer() {
 			}
 		}
 	}
+}
+
+type HandlerTimeoutConfig struct {
+	Method  string //GRPC
+	Path    string
+	Timeout time.Duration //0 means no handler specific timeout,but still has global timeout
+}
+
+func (this *GrpcServer) UpdateHandlerTimeout(htcs []*HandlerTimeoutConfig) error {
+	tmp := make(map[string]time.Duration)
+	for _, htc := range htcs {
+		if htc.Timeout == 0 {
+			//jump,0 means no handler specific timeout
+			continue
+		}
+		method := strings.ToUpper(htc.Method)
+		if method != "GRPC" {
+			return errors.New("[grpc.server.UpdateHandlerTimeout] unknown method")
+		}
+		var path string
+		if len(htc.Path) == 0 || htc.Path[0] != '/' {
+			path = "/" + htc.Path
+		}
+		tmp[path] = htc.Timeout
+	}
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout)), unsafe.Pointer(&tmp))
+	return nil
+}
+
+func (this *GrpcServer) getHandlerTimeout(path string) time.Duration {
+	handlerTimeout := *(*map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout))))
+	if t, ok := handlerTimeout[path]; ok {
+		if this.c.GlobalTimeout <= t {
+			return this.c.GlobalTimeout
+		}
+		return t
+	}
+	return this.c.GlobalTimeout
 }
 
 //thread unsafe
@@ -277,9 +319,10 @@ func (s *GrpcServer) insidehandler(sname, mname string, handlers ...OutsideHandl
 			}
 		}
 		start := time.Now()
-		if s.c.GlobalTimeout != 0 {
+		servertimeout := s.getHandlerTimeout(path)
+		if servertimeout != 0 {
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithDeadline(ctx, start.Add(s.c.GlobalTimeout))
+			ctx, cancel = context.WithDeadline(ctx, start.Add(servertimeout))
 			defer cancel()
 		}
 		if dl, ok := ctx.Deadline(); ok && dl.UnixNano() < start.UnixNano()+int64(time.Millisecond) {

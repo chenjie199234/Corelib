@@ -15,6 +15,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
@@ -23,6 +24,8 @@ import (
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/julienschmidt/httprouter"
 )
+
+type OutsideHandler func(*Context)
 
 type ServerConfig struct {
 	//when server close,server will wait at least this time before close,every request will refresh the time
@@ -151,7 +154,8 @@ func (c *ServerConfig) getCorsExpose() string {
 }
 
 type WebServer struct {
-	allpaths         map[string]map[string]struct{} //key method,second key path
+	allpaths         map[string]map[string]struct{}      //key method,second key path
+	handlerTimeout   map[string]map[string]time.Duration //first key method,second key path,value timeout
 	selfappname      string
 	c                *ServerConfig
 	ctxpool          *sync.Pool
@@ -181,12 +185,13 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	c.validate()
 	//new server
 	instance := &WebServer{
-		allpaths:    make(map[string]map[string]struct{}),
-		selfappname: selfappname,
-		c:           c,
-		ctxpool:     &sync.Pool{},
-		global:      make([]OutsideHandler, 0, 10),
-		router:      httprouter.New(),
+		allpaths:       make(map[string]map[string]struct{}),
+		handlerTimeout: make(map[string]map[string]time.Duration),
+		selfappname:    selfappname,
+		c:              c,
+		ctxpool:        &sync.Pool{},
+		global:         make([]OutsideHandler, 0, 10),
+		router:         httprouter.New(),
 		s: &http.Server{
 			ReadTimeout:    c.GlobalTimeout,
 			WriteTimeout:   c.GlobalTimeout,
@@ -366,46 +371,48 @@ func (this *WebServer) StopWebServer() {
 
 }
 
-//type HandlerTimeoutConfig struct {
-//        Method  string //GET,POST,PUT,PATCH,DELETE,GRPC,CRPC
-//        Path    string
-//        Timeout time.Duration //0 means no handler specific timeout,but still has global timeout
-//}
+type HandlerTimeoutConfig struct {
+	Method  string //GET,POST,PUT,PATCH,DELETE
+	Path    string
+	Timeout time.Duration //0 means no handler specific timeout,but still has global timeout
+}
 
-//func (this *WebServer) UpdateHandlerTimeout(htcs []*HandlerTimeoutConfig) error {
-//        tmp := make(map[string]map[string]time.Duration)
-//        for _, htc := range htcs {
-//                if htc.Timeout == 0 {
-//                        //jump,0 means no handler specific timeout
-//                        continue
-//                }
-//                method := strings.ToUpper(htc.Method)
-//                if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
-//                        return errors.New("[web.server.UpdateHandlerTimeout] unknown method")
-//                }
-//                if _, ok := tmp[method]; !ok {
-//                        tmp[method] = make(map[string]time.Duration)
-//                }
-//                var path string
-//                if len(htc.Path) == 0 || htc.Path[0] != '/' {
-//                        path = "/" + htc.Path
-//                }
-//                tmp[method][path] = htc.Timeout
-//        }
-//        atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout)), unsafe.Pointer(&tmp))
-//        return nil
-//}
-//func (this *WebServer) getHandlerTimeout(method, path string) time.Duration {
-//        handlerTimeout := *(*map[string]map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout))))
-//        if m, ok := handlerTimeout[method]; ok {
-//                if t, ok := m[path]; ok {
-//                        return t
-//                }
-//        }
-//        return 0
-//}
+func (this *WebServer) UpdateHandlerTimeout(htcs []*HandlerTimeoutConfig) error {
+	tmp := make(map[string]map[string]time.Duration)
+	for _, htc := range htcs {
+		if htc.Timeout == 0 {
+			//jump,0 means no handler specific timeout
+			continue
+		}
+		method := strings.ToUpper(htc.Method)
+		if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
+			return errors.New("[web.server.UpdateHandlerTimeout] unknown method")
+		}
+		if _, ok := tmp[method]; !ok {
+			tmp[method] = make(map[string]time.Duration)
+		}
+		var path string
+		if len(htc.Path) == 0 || htc.Path[0] != '/' {
+			path = "/" + htc.Path
+		}
+		tmp[method][path] = htc.Timeout
+	}
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout)), unsafe.Pointer(&tmp))
+	return nil
+}
 
-type OutsideHandler func(*Context)
+func (this *WebServer) getHandlerTimeout(method, path string) time.Duration {
+	handlerTimeout := *(*map[string]map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout))))
+	if m, ok := handlerTimeout[method]; ok {
+		if t, ok := m[path]; ok {
+			if this.c.GlobalTimeout <= t {
+				return this.c.GlobalTimeout
+			}
+			return t
+		}
+	}
+	return this.c.GlobalTimeout
+}
 
 //thread unsafe
 func (this *WebServer) Use(globalMids ...OutsideHandler) {
@@ -592,16 +599,18 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 		//set timeout
 		start := time.Now()
 		var min int64
-		if clientdl != 0 && this.c.GlobalTimeout != 0 {
-			if clientdl <= start.UnixNano()+int64(this.c.GlobalTimeout) {
+		servertimeout := int64(this.getHandlerTimeout(method, path))
+		if clientdl != 0 && servertimeout != 0 {
+			serverdl := start.UnixNano() + servertimeout
+			if clientdl <= serverdl {
 				min = clientdl
 			} else {
-				min = start.UnixNano() + int64(this.c.GlobalTimeout)
+				min = serverdl
 			}
 		} else if clientdl != 0 {
 			min = clientdl
-		} else if this.c.GlobalTimeout != 0 {
-			min = start.UnixNano() + int64(this.c.GlobalTimeout)
+		} else if servertimeout != 0 {
+			min = start.UnixNano() + servertimeout
 		}
 		if min != 0 {
 			if min < start.UnixNano()+int64(time.Millisecond) {

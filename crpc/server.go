@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -72,6 +73,7 @@ type CrpcServer struct {
 	global           []OutsideHandler
 	ctxpool          *sync.Pool
 	handler          map[string]func(context.Context, *stream.Peer, *Msg)
+	handlerTimeout   map[string]time.Duration
 	instance         *stream.Instance
 	closewait        *sync.WaitGroup
 	totalreqnum      int32
@@ -102,6 +104,7 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 		global:           make([]OutsideHandler, 0, 10),
 		ctxpool:          &sync.Pool{},
 		handler:          make(map[string]func(context.Context, *stream.Peer, *Msg), 10),
+		handlerTimeout:   make(map[string]time.Duration),
 		closewait:        &sync.WaitGroup{},
 		refreshclosewait: make(chan *struct{}, 1),
 	}
@@ -196,6 +199,44 @@ func (s *CrpcServer) GetReqNum() int32 {
 	}
 }
 
+type HandlerTimeoutConfig struct {
+	Method  string //CRPC
+	Path    string
+	Timeout time.Duration //0 means no handler specific timeout,but still has global timeout
+}
+
+func (this *CrpcServer) UpdateHandlerTimeout(htcs []*HandlerTimeoutConfig) error {
+	tmp := make(map[string]time.Duration)
+	for _, htc := range htcs {
+		if htc.Timeout == 0 {
+			//jump,0 means no handler specific timeout
+			continue
+		}
+		method := strings.ToUpper(htc.Method)
+		if method != "CRPC" {
+			return errors.New("[crpc.server.UpdateHandlerTimeout] unknown method")
+		}
+		var path string
+		if len(htc.Path) == 0 || htc.Path[0] != '/' {
+			path = "/" + htc.Path
+		}
+		tmp[path] = htc.Timeout
+	}
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout)), unsafe.Pointer(&tmp))
+	return nil
+}
+
+func (this *CrpcServer) getHandlerTimeout(path string) time.Duration {
+	handlerTimeout := *(*map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout))))
+	if t, ok := handlerTimeout[path]; ok {
+		if this.c.GlobalTimeout <= t {
+			return this.c.GlobalTimeout
+		}
+		return t
+	}
+	return this.c.GlobalTimeout
+}
+
 //thread unsafe
 func (s *CrpcServer) Use(globalMids ...OutsideHandler) {
 	s.global = append(s.global, globalMids...)
@@ -228,17 +269,19 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 		}
 		//var globaldl int64
 		start := time.Now()
+		servertimeout := int64(s.getHandlerTimeout(path))
 		var min int64
-		if msg.Deadline != 0 && s.c.GlobalTimeout != 0 {
-			if msg.Deadline <= start.UnixNano()+int64(s.c.GlobalTimeout) {
+		if msg.Deadline != 0 && servertimeout != 0 {
+			serverdl := start.UnixNano() + servertimeout
+			if msg.Deadline <= serverdl {
 				min = msg.Deadline
 			} else {
-				min = start.UnixNano() + int64(s.c.GlobalTimeout)
+				min = serverdl
 			}
 		} else if msg.Deadline != 0 {
 			min = msg.Deadline
 		} else if s.c.GlobalTimeout != 0 {
-			min = start.UnixNano() + int64(s.c.GlobalTimeout)
+			min = start.UnixNano() + servertimeout
 		}
 		if min != 0 {
 			if min < start.UnixNano()+int64(time.Millisecond) {
