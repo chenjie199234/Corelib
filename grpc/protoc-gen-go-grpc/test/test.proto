@@ -6,7 +6,6 @@ import "pbex.proto";
 service test {
 	rpc hello(helloreq)returns(helloresp){
 		option (pbex.method)="get";
-		option (pbex.timeout)="200ms";
 		option (pbex.grpc_midwares)="user";
 		option (pbex.grpc_midwares)="limit";
 	}
