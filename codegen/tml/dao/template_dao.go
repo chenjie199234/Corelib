@@ -54,13 +54,13 @@ func NewApi() error {
 func getCrpcClientConfig() *crpc.ClientConfig {
 	rc := config.GetCrpcClientConfig()
 	return &crpc.ClientConfig{
-		ConnTimeout:      time.Duration(rc.ConnTimeout),
-		GlobalTimeout:    time.Duration(rc.GlobalTimeout),
-		HeartPorbe:       time.Duration(rc.HeartProbe),
-		SocketRBuf:       2048,
-		SocketWBuf:       2048,
-		MaxMsgLen:        65535,
-		DiscoverFunction: crpcDNS,
+		ConnTimeout:   time.Duration(rc.ConnTimeout),
+		GlobalTimeout: time.Duration(rc.GlobalTimeout),
+		HeartPorbe:    time.Duration(rc.HeartProbe),
+		SocketRBuf:    2048,
+		SocketWBuf:    2048,
+		MaxMsgLen:     65535,
+		Discover:      crpcDNS,
 	}
 }
 
@@ -96,14 +96,14 @@ func crpcDNS(group, name string, manually <-chan *struct{}, client *crpc.CrpcCli
 func getWebClientConfig() *web.ClientConfig {
 	wc := config.GetWebClientConfig()
 	return &web.ClientConfig{
-		ConnTimeout:      time.Duration(wc.ConnTimeout),
-		GlobalTimeout:    time.Duration(wc.GlobalTimeout),
-		IdleTimeout:      time.Duration(wc.IdleTimeout),
-		HeartProbe:       time.Duration(wc.HeartProbe),
-		MaxHeader:        1024,
-		SocketRBuf:       2048,
-		SocketWBuf:       2048,
-		DiscoverFunction: webDNS,
+		ConnTimeout:   time.Duration(wc.ConnTimeout),
+		GlobalTimeout: time.Duration(wc.GlobalTimeout),
+		IdleTimeout:   time.Duration(wc.IdleTimeout),
+		HeartProbe:    time.Duration(wc.HeartProbe),
+		MaxHeader:     1024,
+		SocketRBuf:    2048,
+		SocketWBuf:    2048,
+		Discover:      webDNS,
 	}
 }
 
