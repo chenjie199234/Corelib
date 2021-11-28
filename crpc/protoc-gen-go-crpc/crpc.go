@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/chenjie199234/Corelib/pbex"
 	"google.golang.org/protobuf/compiler/protogen"
@@ -138,14 +137,6 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if mop.GetDeprecated() {
 			continue
 		}
-		var timeout time.Duration
-		if proto.HasExtension(mop, pbex.E_Timeout) {
-			timeoutstr := proto.GetExtension(mop, pbex.E_Timeout).(string)
-			var e error
-			if timeout, e = time.ParseDuration(timeoutstr); e != nil {
-				panic(fmt.Sprintf("method: %s in service: %s with timeout: %s format error:%s", method.Desc.Name(), service.Desc.Name(), timeoutstr, e))
-			}
-		}
 		var mids []string
 		if proto.HasExtension(mop, pbex.E_CrpcMidwares) {
 			mids = proto.GetExtension(mop, pbex.E_CrpcMidwares).([]string)
@@ -170,10 +161,10 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("}")
 			g.P("}")
 			g.P("mids = append(mids,", fname, ")")
-			g.P("engine.RegisterHandler(", pathname, ",", timeout.Nanoseconds(), ",mids...)")
+			g.P("engine.RegisterHandler(", pathname, ",mids...)")
 			g.P("}")
 		} else {
-			g.P("engine.RegisterHandler(", pathname, ",", timeout.Nanoseconds(), ",", fname, ")")
+			g.P("engine.RegisterHandler(", pathname, ",", fname, ")")
 		}
 	}
 	g.P("}")
@@ -217,18 +208,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("}")
 
 		g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
-		var timeout time.Duration
-		if proto.HasExtension(mop, pbex.E_Timeout) {
-			timeoutstr := proto.GetExtension(mop, pbex.E_Timeout).(string)
-			if timeoutstr != "" {
-				var e error
-				timeout, e = time.ParseDuration(timeoutstr)
-				if e != nil {
-					panic(fmt.Sprintf("method: %s in service: %s with timeout: %s format error:%s", method.Desc.Name(), service.Desc.Name(), timeoutstr, e))
-				}
-			}
-		}
-		g.P("respd,e:=c.cc.Call(ctx,", timeout.Nanoseconds(), ",", pathname, ",reqd,", metadataPackage.Ident("GetMetadata"), "(ctx))")
+		g.P("respd,e:=c.cc.Call(ctx,", pathname, ",reqd,", metadataPackage.Ident("GetMetadata"), "(ctx))")
 		g.P("if e != nil {")
 		g.P("return nil,e")
 		g.P("}")

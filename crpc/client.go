@@ -247,22 +247,11 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 
 var errPickAgain = errors.New("[crpc.client] picked server closed")
 
-func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path string, in []byte, metadata map[string]string) ([]byte, error) {
+func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata map[string]string) ([]byte, error) {
 	start := time.Now()
-	var min time.Duration
 	if c.c.GlobalTimeout != 0 {
-		min = c.c.GlobalTimeout
-	}
-	if functimeout != 0 {
-		if min == 0 {
-			min = functimeout
-		} else if functimeout < min {
-			min = functimeout
-		}
-	}
-	if min != 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, min)
+		ctx, cancel = context.WithDeadline(ctx, start.Add(c.c.GlobalTimeout))
 		defer cancel()
 	}
 	dl, ok := ctx.Deadline()

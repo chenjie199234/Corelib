@@ -413,11 +413,11 @@ func (this *WebServer) Use(globalMids ...OutsideHandler) {
 }
 
 //thread unsafe
-func (this *WebServer) Get(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+func (this *WebServer) Get(path string, handlers ...OutsideHandler) {
 	if len(path) == 0 || path[0] != '/' {
 		panic("[web.server] path must start with /")
 	}
-	this.router.Handler(http.MethodGet, path, this.insideHandler(http.MethodGet, path, functimeout, handlers))
+	this.router.Handler(http.MethodGet, path, this.insideHandler(http.MethodGet, path, handlers))
 	if _, ok := this.allpaths[http.MethodGet]; !ok {
 		this.allpaths[http.MethodGet] = make(map[string]struct{})
 	}
@@ -425,11 +425,11 @@ func (this *WebServer) Get(path string, functimeout time.Duration, handlers ...O
 }
 
 //thread unsafe
-func (this *WebServer) Delete(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+func (this *WebServer) Delete(path string, handlers ...OutsideHandler) {
 	if len(path) == 0 || path[0] != '/' {
 		panic("[web.server] path must start with /")
 	}
-	this.router.Handler(http.MethodDelete, path, this.insideHandler(http.MethodDelete, path, functimeout, handlers))
+	this.router.Handler(http.MethodDelete, path, this.insideHandler(http.MethodDelete, path, handlers))
 	if _, ok := this.allpaths[http.MethodDelete]; !ok {
 		this.allpaths[http.MethodDelete] = make(map[string]struct{})
 	}
@@ -438,11 +438,11 @@ func (this *WebServer) Delete(path string, functimeout time.Duration, handlers .
 }
 
 //thread unsafe
-func (this *WebServer) Post(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+func (this *WebServer) Post(path string, handlers ...OutsideHandler) {
 	if len(path) == 0 || path[0] != '/' {
 		panic("[web.server] path must start with /")
 	}
-	this.router.Handler(http.MethodPost, path, this.insideHandler(http.MethodPost, path, functimeout, handlers))
+	this.router.Handler(http.MethodPost, path, this.insideHandler(http.MethodPost, path, handlers))
 	if _, ok := this.allpaths[http.MethodPost]; !ok {
 		this.allpaths[http.MethodPost] = make(map[string]struct{})
 	}
@@ -451,11 +451,11 @@ func (this *WebServer) Post(path string, functimeout time.Duration, handlers ...
 }
 
 //thread unsafe
-func (this *WebServer) Put(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+func (this *WebServer) Put(path string, handlers ...OutsideHandler) {
 	if len(path) == 0 || path[0] != '/' {
 		panic("[web.server] path must start with /")
 	}
-	this.router.Handler(http.MethodPut, path, this.insideHandler(http.MethodPut, path, functimeout, handlers))
+	this.router.Handler(http.MethodPut, path, this.insideHandler(http.MethodPut, path, handlers))
 	if _, ok := this.allpaths[http.MethodPut]; !ok {
 		this.allpaths[http.MethodPut] = make(map[string]struct{})
 	}
@@ -464,11 +464,11 @@ func (this *WebServer) Put(path string, functimeout time.Duration, handlers ...O
 }
 
 //thread unsafe
-func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ...OutsideHandler) {
+func (this *WebServer) Patch(path string, handlers ...OutsideHandler) {
 	if len(path) == 0 || path[0] != '/' {
 		panic("[web.server] path must start with /")
 	}
-	this.router.Handler(http.MethodPatch, path, this.insideHandler(http.MethodPatch, path, functimeout, handlers))
+	this.router.Handler(http.MethodPatch, path, this.insideHandler(http.MethodPatch, path, handlers))
 	if _, ok := this.allpaths[http.MethodPatch]; !ok {
 		this.allpaths[http.MethodPatch] = make(map[string]struct{})
 	}
@@ -516,7 +516,7 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt32(&this.totalreqnum, -1)
 }
 
-func (this *WebServer) insideHandler(method, path string, timeout time.Duration, handlers []OutsideHandler) http.HandlerFunc {
+func (this *WebServer) insideHandler(method, path string, handlers []OutsideHandler) http.HandlerFunc {
 	totalhandlers := append(this.global, handlers...)
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -591,25 +591,19 @@ func (this *WebServer) insideHandler(method, path string, timeout time.Duration,
 		}
 		//set timeout
 		start := time.Now()
-		var globaldl int64
-		var funcdl int64
-		if this.c.GlobalTimeout != 0 {
-			globaldl = start.UnixNano() + int64(this.c.GlobalTimeout)
-		}
-		if timeout != 0 {
-			funcdl = start.UnixNano() + int64(timeout)
-		}
-		min := int64(math.MaxInt64)
-		if clientdl < min && clientdl != 0 {
+		var min int64
+		if clientdl != 0 && this.c.GlobalTimeout != 0 {
+			if clientdl <= start.UnixNano()+int64(this.c.GlobalTimeout) {
+				min = clientdl
+			} else {
+				min = start.UnixNano() + int64(this.c.GlobalTimeout)
+			}
+		} else if clientdl != 0 {
 			min = clientdl
+		} else if this.c.GlobalTimeout != 0 {
+			min = start.UnixNano() + int64(this.c.GlobalTimeout)
 		}
-		if funcdl < min && funcdl != 0 {
-			min = funcdl
-		}
-		if globaldl < min && globaldl != 0 {
-			min = globaldl
-		}
-		if min != math.MaxInt64 {
+		if min != 0 {
 			if min < start.UnixNano()+int64(time.Millisecond) {
 				w.WriteHeader(http.StatusGatewayTimeout)
 				w.Header().Set("Content-Type", "application/json")

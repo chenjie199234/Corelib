@@ -202,11 +202,11 @@ func (s *CrpcServer) Use(globalMids ...OutsideHandler) {
 }
 
 //thread unsafe
-func (s *CrpcServer) RegisterHandler(path string, functimeout time.Duration, handlers ...OutsideHandler) {
-	s.handler[path] = s.insidehandler(path, functimeout, handlers...)
+func (s *CrpcServer) RegisterHandler(path string, handlers ...OutsideHandler) {
+	s.handler[path] = s.insidehandler(path, handlers...)
 }
 
-func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handlers ...OutsideHandler) func(context.Context, *stream.Peer, *Msg) {
+func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func(context.Context, *stream.Peer, *Msg) {
 	totalhandlers := append(s.global, handlers...)
 	return func(ctx context.Context, p *stream.Peer, msg *Msg) {
 		traceid, _, _, _, _ := trace.GetTrace(ctx)
@@ -226,26 +226,21 @@ func (s *CrpcServer) insidehandler(path string, functimeout time.Duration, handl
 		if sourcepath == "" {
 			sourcepath = "unknown"
 		}
-		var globaldl int64
-		var funcdl int64
+		//var globaldl int64
 		start := time.Now()
-		if s.c.GlobalTimeout != 0 {
-			globaldl = start.UnixNano() + int64(s.c.GlobalTimeout)
-		}
-		if functimeout != 0 {
-			funcdl = start.UnixNano() + int64(functimeout)
-		}
-		min := int64(math.MaxInt64)
-		if msg.Deadline != 0 && msg.Deadline < min {
+		var min int64
+		if msg.Deadline != 0 && s.c.GlobalTimeout != 0 {
+			if msg.Deadline <= start.UnixNano()+int64(s.c.GlobalTimeout) {
+				min = msg.Deadline
+			} else {
+				min = start.UnixNano() + int64(s.c.GlobalTimeout)
+			}
+		} else if msg.Deadline != 0 {
 			min = msg.Deadline
+		} else if s.c.GlobalTimeout != 0 {
+			min = start.UnixNano() + int64(s.c.GlobalTimeout)
 		}
-		if funcdl != 0 && funcdl < min {
-			min = funcdl
-		}
-		if globaldl != 0 && globaldl < min {
-			min = globaldl
-		}
-		if min != math.MaxInt64 {
+		if min != 0 {
 			if min < start.UnixNano()+int64(time.Millisecond) {
 				msg.Path = ""
 				msg.Deadline = 0

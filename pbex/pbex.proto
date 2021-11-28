@@ -4,10 +4,9 @@ option go_package="github.com/chenjie199234/Corelib/pbex;pbex";
 import "google/protobuf/descriptor.proto";
 extend google.protobuf.MethodOptions {
 	string method=150001;// this is only useful for webserver
-	string timeout=150002;// 1ns,1us,1ms,1s,1m,1h
-	repeated string web_midwares=150003;
-	repeated string crpc_midwares=150004;
-	repeated string grpc_midwares=150005;
+	repeated string web_midwares=150002;
+	repeated string crpc_midwares=150003;
+	repeated string grpc_midwares=150004;
 }
 extend google.protobuf.FieldOptions {
 	//message

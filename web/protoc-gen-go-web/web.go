@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/chenjie199234/Corelib/pbex"
 	"google.golang.org/protobuf/compiler/protogen"
@@ -302,14 +301,6 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if httpmetohd != http.MethodGet && httpmetohd != http.MethodPost && httpmetohd != http.MethodPut && httpmetohd != http.MethodDelete && httpmetohd != http.MethodPatch {
 			panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", method.Desc.Name(), service.Desc.Name(), httpmetohd))
 		}
-		var timeout time.Duration
-		if proto.HasExtension(mop, pbex.E_Timeout) {
-			timeoutstr := proto.GetExtension(mop, pbex.E_Timeout).(string)
-			var e error
-			if timeout, e = time.ParseDuration(timeoutstr); e != nil {
-				panic(fmt.Sprintf("method: %s in service: %s with timeout: %s format error:%s", method.Desc.Name(), service.Desc.Name(), timeoutstr, e))
-			}
-		}
 		var mids []string
 		if proto.HasExtension(mop, pbex.E_WebMidwares) {
 			mids = proto.GetExtension(mop, pbex.E_WebMidwares).([]string)
@@ -336,29 +327,29 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("mids = append(mids,", fname, ")")
 			switch httpmetohd {
 			case http.MethodGet:
-				g.P("engine.Get(", pathname, ",", timeout.Nanoseconds(), ",mids...)")
+				g.P("engine.Get(", pathname, ",mids...)")
 			case http.MethodDelete:
-				g.P("engine.Delete(", pathname, ",", timeout.Nanoseconds(), ",mids...)")
+				g.P("engine.Delete(", pathname, ",mids...)")
 			case http.MethodPost:
-				g.P("engine.Post(", pathname, ",", timeout.Nanoseconds(), ",mids...)")
+				g.P("engine.Post(", pathname, ",mids...)")
 			case http.MethodPut:
-				g.P("engine.Put(", pathname, ",", timeout.Nanoseconds(), ",mids...)")
+				g.P("engine.Put(", pathname, ",mids...)")
 			case http.MethodPatch:
-				g.P("engine.Patch(", pathname, ",", timeout.Nanoseconds(), ",mids...)")
+				g.P("engine.Patch(", pathname, ",mids...)")
 			}
 			g.P("}")
 		} else {
 			switch httpmetohd {
 			case http.MethodGet:
-				g.P("engine.Get(", pathname, ",", timeout.Nanoseconds(), ",", fname, ")")
+				g.P("engine.Get(", pathname, ",", fname, ")")
 			case http.MethodDelete:
-				g.P("engine.Delete(", pathname, ",", timeout.Nanoseconds(), ",", fname, ")")
+				g.P("engine.Delete(", pathname, ",", fname, ")")
 			case http.MethodPost:
-				g.P("engine.Post(", pathname, ",", timeout.Nanoseconds(), ",", fname, ")")
+				g.P("engine.Post(", pathname, ",", fname, ")")
 			case http.MethodPut:
-				g.P("engine.Put(", pathname, ",", timeout.Nanoseconds(), ",", fname, ")")
+				g.P("engine.Put(", pathname, ",", fname, ")")
 			case http.MethodPatch:
-				g.P("engine.Patch(", pathname, ",", timeout.Nanoseconds(), ",", fname, ")")
+				g.P("engine.Patch(", pathname, ",", fname, ")")
 			}
 		}
 	}
@@ -427,17 +418,6 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("header = make(", g.QualifiedGoIdent(httpPackage.Ident("Header")), ")")
 		g.P("}")
 
-		var timeout time.Duration
-		if proto.HasExtension(mop, pbex.E_Timeout) {
-			timeoutstr := proto.GetExtension(mop, pbex.E_Timeout).(string)
-			if timeoutstr != "" {
-				var e error
-				timeout, e = time.ParseDuration(timeoutstr)
-				if e != nil {
-					panic(fmt.Sprintf("method: %s in service: %s with timeout: %s format error:%s", method.Desc.Name(), service.Desc.Name(), timeoutstr, e))
-				}
-			}
-		}
 		if httpmetohd == http.MethodGet || httpmetohd == http.MethodDelete {
 			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-www-form-urlencoded"), ")")
 			g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("application/x-protobuf"), ")")
@@ -596,9 +576,9 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			}
 			switch httpmetohd {
 			case http.MethodGet:
-				g.P("data,e:=c.cc.Get(ctx,", timeout.Nanoseconds(), ",", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
+				g.P("data,e:=c.cc.Get(ctx,", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			case http.MethodDelete:
-				g.P("data,e:=c.cc.Delete(ctx,", timeout.Nanoseconds(), ",", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
+				g.P("data,e:=c.cc.Delete(ctx,", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			}
 		} else {
 			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")
@@ -606,11 +586,11 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
 			switch httpmetohd {
 			case http.MethodPost:
-				g.P("data,e:=c.cc.Post(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("data,e:=c.cc.Post(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			case http.MethodPut:
-				g.P("data,e:=c.cc.Put(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("data,e:=c.cc.Put(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			case http.MethodPatch:
-				g.P("data,e:=c.cc.Patch(ctx,", timeout.Nanoseconds(), ",", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("data,e:=c.cc.Patch(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			}
 		}
 		g.P("if e != nil {")

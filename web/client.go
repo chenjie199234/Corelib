@@ -168,54 +168,54 @@ func forbiddenHeader(header http.Header) bool {
 }
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (this *WebClient) Get(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
+func (this *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
 	}
-	return this.call(http.MethodGet, ctx, functimeout, path, query, header, metadata, nil)
+	return this.call(http.MethodGet, ctx, path, query, header, metadata, nil)
 }
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (this *WebClient) Delete(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
+func (this *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
 	}
-	return this.call(http.MethodDelete, ctx, functimeout, path, query, header, metadata, nil)
+	return this.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
 }
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (this *WebClient) Post(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
+func (this *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
 	}
 	if len(body) != 0 {
-		return this.call(http.MethodPost, ctx, functimeout, path, query, header, metadata, bytes.NewBuffer(body))
+		return this.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
-	return this.call(http.MethodPost, ctx, functimeout, path, query, header, metadata, nil)
+	return this.call(http.MethodPost, ctx, path, query, header, metadata, nil)
 }
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (this *WebClient) Put(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
+func (this *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
 	}
 	if len(body) != 0 {
-		return this.call(http.MethodPut, ctx, functimeout, path, query, header, metadata, bytes.NewBuffer(body))
+		return this.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
-	return this.call(http.MethodPut, ctx, functimeout, path, query, header, metadata, nil)
+	return this.call(http.MethodPut, ctx, path, query, header, metadata, nil)
 }
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (this *WebClient) Patch(ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
+func (this *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
 	}
 	if len(body) != 0 {
-		return this.call(http.MethodPatch, ctx, functimeout, path, query, header, metadata, bytes.NewBuffer(body))
+		return this.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
-	return this.call(http.MethodPatch, ctx, functimeout, path, query, header, metadata, nil)
+	return this.call(http.MethodPatch, ctx, path, query, header, metadata, nil)
 }
-func (this *WebClient) call(method string, ctx context.Context, functimeout time.Duration, path, query string, header http.Header, metadata map[string]string, body *bytes.Buffer) ([]byte, error) {
+func (this *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body *bytes.Buffer) ([]byte, error) {
 	start := time.Now()
 	if len(path) == 0 || path[0] != '/' {
 		path = "/" + path
@@ -238,20 +238,9 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		header.Add("Core_tracedata", selfmethod)
 		header.Add("Core_tracedata", selfpath)
 	}
-	var min time.Duration
 	if this.c.GlobalTimeout != 0 {
-		min = this.c.GlobalTimeout
-	}
-	if functimeout != 0 {
-		if min == 0 {
-			min = functimeout
-		} else if functimeout < min {
-			min = functimeout
-		}
-	}
-	if min != 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, min)
+		ctx, cancel = context.WithDeadline(ctx, start.Add(this.c.GlobalTimeout))
 		defer cancel()
 	}
 	dl, ok := ctx.Deadline()

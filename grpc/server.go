@@ -190,7 +190,7 @@ func (s *GrpcServer) Use(globalMids ...OutsideHandler) {
 }
 
 //thread unsafe
-func (s *GrpcServer) RegisterHandler(sname, mname string, functimeout time.Duration, handlers ...OutsideHandler) {
+func (s *GrpcServer) RegisterHandler(sname, mname string, handlers ...OutsideHandler) {
 	service, ok := s.services[sname]
 	if !ok {
 		service = &grpc.ServiceDesc{
@@ -204,10 +204,10 @@ func (s *GrpcServer) RegisterHandler(sname, mname string, functimeout time.Durat
 	}
 	service.Methods = append(service.Methods, grpc.MethodDesc{
 		MethodName: mname,
-		Handler:    s.insidehandler(sname, mname, functimeout, handlers...),
+		Handler:    s.insidehandler(sname, mname, handlers...),
 	})
 }
-func (s *GrpcServer) insidehandler(sname, mname string, functimeout time.Duration, handlers ...OutsideHandler) func(interface{}, context.Context, func(interface{}) error, grpc.UnaryServerInterceptor) (interface{}, error) {
+func (s *GrpcServer) insidehandler(sname, mname string, handlers ...OutsideHandler) func(interface{}, context.Context, func(interface{}) error, grpc.UnaryServerInterceptor) (interface{}, error) {
 	path := "/" + sname + "/" + mname
 	totalhandlers := append(s.global, handlers...)
 	return func(_ interface{}, ctx context.Context, decode func(interface{}) error, _ grpc.UnaryServerInterceptor) (resp interface{}, e error) {
@@ -276,24 +276,12 @@ func (s *GrpcServer) insidehandler(sname, mname string, functimeout time.Duratio
 				}
 			}
 		}
-		var min time.Duration
-		if s.c.GlobalTimeout != 0 && functimeout != 0 {
-			if s.c.GlobalTimeout < functimeout {
-				min = s.c.GlobalTimeout
-			} else {
-				min = functimeout
-			}
-		} else if s.c.GlobalTimeout != 0 {
-			min = s.c.GlobalTimeout
-		} else {
-			min = functimeout
-		}
-		if min != 0 {
+		start := time.Now()
+		if s.c.GlobalTimeout != 0 {
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, min)
+			ctx, cancel = context.WithDeadline(ctx, start.Add(s.c.GlobalTimeout))
 			defer cancel()
 		}
-		start := time.Now()
 		if dl, ok := ctx.Deadline(); ok && dl.UnixNano() < start.UnixNano()+int64(time.Millisecond) {
 			resp = nil
 			e = cerror.ErrDeadlineExceeded
