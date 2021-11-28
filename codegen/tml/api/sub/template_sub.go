@@ -18,10 +18,15 @@ import "pbex/pbex.proto";
 service {{.Sname}}{
 	//rpc example(examplereq)returns(exampleresp){
 	//	option (pbex.method)="get";//can be set to get,delete,post,put,patch
-	//	option (pbex.timeout)="200ms";//1ns 1us 1ms 1s 1m 1h,without this means no function timeout
-	//	option (pbex.midwares)="auth";
-	//	option (pbex.midwares)="c";
-	//	option (pbex.midwares)="a";//this function has 3 midwares,it's order is auth,c,a
+	//	option (pbex.web_midwares)="b";
+	//	option (pbex.web_midwares)="c";
+	//	option (pbex.web_midwares)="a";//this function on web protocol has 3 midwares,it's order is b,c,a
+	//	option (pbex.crpc_midwares)="b";
+	//	option (pbex.crpc_midwares)="c";
+	//	option (pbex.crpc_midwares)="a";//this function on crpc protocol has 3 midwares,it's order is b,c,a
+	//	option (pbex.grpc_midwares)="b";
+	//	option (pbex.grpc_midwares)="c";
+	//	option (pbex.grpc_midwares)="a";//this function on grpc protocol has 3 midwares,it's order is b,c,a
 	//}
 }
 //req can be set with pbex extentions

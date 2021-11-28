@@ -19,7 +19,6 @@ service status{
 	//ping check server's health
 	rpc ping(pingreq)returns(pingresp){
 		option (pbex.method)="get";
-		option (pbex.timeout)="200ms";
 	}
 }
 //req can be set with pbex extentions
