@@ -8,7 +8,6 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	cerror "github.com/chenjie199234/Corelib/error"
@@ -265,13 +264,7 @@ func transGrpcError(e error) *cerror.Error {
 	case codes.Unknown:
 		return cerror.ConvertErrorstr(s.Message())
 	case codes.ResourceExhausted:
-		if strings.Contains(s.Message(), "send message larger") || strings.Contains(s.Message(), "message too large") {
-			return ErrReqmsgLen
-		} else if strings.Contains(s.Message(), "received message larger") {
-			return ErrRespmsgLen
-		} else {
-			return cerror.ConvertErrorstr(s.Message())
-		}
+		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
 	case codes.Unimplemented:
 		return ErrNoapi
 	case codes.Internal:
@@ -279,7 +272,6 @@ func transGrpcError(e error) *cerror.Error {
 	case codes.Unavailable:
 		return cerror.MakeError(-1, http.StatusServiceUnavailable, s.Message())
 	case codes.Unauthenticated:
-		//this is impossible
 		return cerror.MakeError(-1, http.StatusServiceUnavailable, s.Message())
 	default:
 		ee := cerror.ConvertErrorstr(s.Message())
