@@ -30,7 +30,7 @@ type ServerForPick struct {
 	Pickinfo *pickinfo
 }
 type pickinfo struct {
-	Lastfail       int64  //last fail timestamp nano second
+	LastFailTime   int64  //last fail timestamp nano second
 	Activecalls    int32  //current active calls
 	DServerNum     int32  //this server registered on how many discoveryservers
 	DServerOffline int64  //
@@ -118,7 +118,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 				},
 				dservers: registerdata.DServers,
 				Pickinfo: &pickinfo{
-					Lastfail:       0,
+					LastFailTime:   0,
 					Activecalls:    0,
 					DServerNum:     int32(len(registerdata.DServers)),
 					DServerOffline: 0,

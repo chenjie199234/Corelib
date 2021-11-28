@@ -309,7 +309,7 @@ func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 			trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "CRPC", path, &start, &end, r.err)
 			if r.err != nil {
 				//req error,update last fail time
-				server.Pickinfo.Lastfail = time.Now().UnixNano()
+				server.Pickinfo.LastFailTime = time.Now().UnixNano()
 				if cerror.Equal(r.err, errClosing) {
 					//triger manually discovery
 					c.resolver.manual(nil)
@@ -330,7 +330,7 @@ func (c *CrpcClient) Call(ctx context.Context, functimeout time.Duration, path s
 			delete(server.reqs, msg.Callid)
 			server.lker.Unlock()
 			//update last fail time
-			server.Pickinfo.Lastfail = time.Now().UnixNano()
+			server.Pickinfo.LastFailTime = time.Now().UnixNano()
 			c.putreq(r)
 			if ctx.Err() == context.DeadlineExceeded {
 				e = cerror.ErrDeadlineExceeded

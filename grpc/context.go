@@ -78,6 +78,9 @@ func (c *Context) Write(resp interface{}) {
 func (c *Context) DecodeReq(req protoreflect.ProtoMessage) error {
 	return c.decodefunc(req)
 }
+func (c *Context) GetMethod() string {
+	return "GRPC"
+}
 func (c *Context) GetPath() string {
 	return c.path
 }

@@ -48,7 +48,7 @@ type ServerForPick struct {
 }
 
 type pickinfo struct {
-	Lastfail       int64  //last fail timestamp nano second
+	LastFailTime   int64  //last fail timestamp nano second
 	Activecalls    int32  //current active calls
 	DServerNum     int32  //this server registered on how many discoveryservers
 	DServerOffline int64  //
@@ -112,7 +112,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 				dservers: dservers,
 				status:   int32(connectivity.Idle),
 				Pickinfo: &pickinfo{
-					Lastfail:       0,
+					LastFailTime:   0,
 					Activecalls:    0,
 					DServerNum:     int32(len(dservers)),
 					DServerOffline: 0,
@@ -210,7 +210,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 				Done: func(doneinfo balancer.DoneInfo) {
 					atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 					if doneinfo.Err != nil {
-						server.Pickinfo.Lastfail = time.Now().UnixNano()
+						server.Pickinfo.LastFailTime = time.Now().UnixNano()
 						if cerror.Equal(transGrpcError(doneinfo.Err), errClosing) {
 							atomic.StoreInt32(&server.status, int32(connectivity.Shutdown))
 						}

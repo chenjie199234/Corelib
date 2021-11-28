@@ -44,7 +44,7 @@ func main() {
 					}
 					httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
 					if httpmetohd != http.MethodGet && httpmetohd != http.MethodPost && httpmetohd != http.MethodPut && httpmetohd != http.MethodDelete && httpmetohd != http.MethodPatch {
-						panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", m.Desc.Name(), service.Desc.Name(), httpmetohd))
+						panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", m.Desc.Name(), s.Desc.Name(), httpmetohd))
 					}
 					if pbex.HasOneOf(m.Input) || pbex.HasOneOf(m.Output) {
 						panic("can't support oneof in proto!")

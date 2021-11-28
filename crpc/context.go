@@ -77,6 +77,9 @@ func (c *Context) WriteString(resp string) {
 	c.Write(common.Str2byte(resp))
 }
 
+func (c *Context) GetMethod() string {
+	return "CRPC"
+}
 func (c *Context) GetPath() string {
 	return c.msg.Path
 }

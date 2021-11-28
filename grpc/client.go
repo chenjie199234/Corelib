@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-//param's key is server's addr "ip:port"
 type PickHandler func(servers []*ServerForPick) *ServerForPick
 
 type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *GrpcClient)

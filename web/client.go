@@ -295,13 +295,13 @@ func (this *WebClient) call(method string, ctx context.Context, functimeout time
 		atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 		end := time.Now()
 		if e != nil {
-			server.Pickinfo.Lastfail = time.Now().UnixNano()
+			server.Pickinfo.LastFailTime = time.Now().UnixNano()
 			e = cerror.ConvertStdError(e)
 			trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, e)
 			return nil, e
 		}
 		if resp.StatusCode == 888 {
-			server.Pickinfo.Lastfail = time.Now().UnixNano()
+			server.Pickinfo.LastFailTime = time.Now().UnixNano()
 			server.setclient(nil)
 			this.balancer.RebuildPicker()
 			this.resolver.manual(nil)

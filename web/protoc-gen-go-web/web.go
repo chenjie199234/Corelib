@@ -46,7 +46,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 		if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 			continue
 		}
-		genService(file, g, service)
+		genService(file, service, g)
 	}
 	return g
 }
@@ -61,21 +61,19 @@ func genFileComment(gen *protogen.Plugin, file *protogen.File, g *protogen.Gener
 			protocVersion += "-" + s
 		}
 	}
-	g.P("// \tprotoc-gen-web ", version)
+	g.P("// \tprotoc-gen-go-web ", version)
 	g.P("// \tprotoc         ", protocVersion)
 	g.P("// source: ", file.Desc.Path())
 	g.P()
 }
 
-var service *protogen.Service //cur dealing service
-
-func genService(file *protogen.File, g *protogen.GeneratedFile, s *protogen.Service) {
-	service = s
-	genPath(file, g)
-	genClient(file, g)
-	genServer(file, g)
+func genService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) {
+	genPath(file, s, g)
+	genClient(file, s, g)
+	genServer(file, s, g)
 }
-func genPath(file *protogen.File, g *protogen.GeneratedFile) {
+
+func genPath(file *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
 	for _, method := range service.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
 		if mop.GetDeprecated() {
@@ -94,7 +92,8 @@ func genPath(file *protogen.File, g *protogen.GeneratedFile) {
 	}
 	g.P()
 }
-func genServer(file *protogen.File, g *protogen.GeneratedFile) {
+
+func genServer(file *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
 	// Server interface.
 	serverName := service.GoName + "WebServer"
 
@@ -366,7 +365,7 @@ func genServer(file *protogen.File, g *protogen.GeneratedFile) {
 	g.P("}")
 }
 
-func genClient(file *protogen.File, g *protogen.GeneratedFile) {
+func genClient(file *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
 	// Client interface.
 	clientName := service.GoName + "WebClient"
 	lowclientName := strings.ToLower(clientName[:1]) + clientName[1:]

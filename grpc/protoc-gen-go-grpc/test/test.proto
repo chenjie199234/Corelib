@@ -1,14 +1,14 @@
 //protoc -I ../../../pbex -I . --go_out=paths=source_relative:. *.proto
 syntax="proto3";
 package test;
-option go_package="github.com/chenjie199234/Corelib/crpc/protoc-gen-go-crpc/test;test";
+option go_package="github.com/chenjie199234/Corelib/grpc/protoc-gen-go-grpc/test;test";
 import "pbex.proto";
 service test {
 	rpc hello(helloreq)returns(helloresp){
 		option (pbex.method)="get";
 		option (pbex.timeout)="200ms";
-		option (pbex.crpc_midwares)="user";
-		option (pbex.crpc_midwares)="limit";
+		option (pbex.grpc_midwares)="user";
+		option (pbex.grpc_midwares)="limit";
 	}
 }
 enum TestEnum {

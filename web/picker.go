@@ -59,12 +59,12 @@ func defaultPicker(servers []*ServerForPick) *ServerForPick {
 	}
 	//more discoveryservers more safety,so 1 * 2's discoveryserver num
 	load1 := float64(normal1.Pickinfo.Activecalls) + math.Log(float64(normal2.Pickinfo.DServerNum+2))
-	if normal1.Pickinfo.Lastfail >= before.UnixNano() {
+	if normal1.Pickinfo.LastFailTime >= before.UnixNano() {
 		load1 *= 1.1
 	}
 	//more discoveryservers more safety,so 2 * 1's discoveryserver num
 	load2 := float64(normal2.Pickinfo.Activecalls) + math.Log(float64(normal1.Pickinfo.DServerNum+2))
-	if normal2.Pickinfo.Lastfail >= before.UnixNano() {
+	if normal2.Pickinfo.LastFailTime >= before.UnixNano() {
 		load2 *= 1.1
 	}
 	if load1 > load2 {

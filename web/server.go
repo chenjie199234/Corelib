@@ -151,7 +151,7 @@ func (c *ServerConfig) getCorsExpose() string {
 }
 
 type WebServer struct {
-	paths            map[string]map[string]struct{} //key method,value path
+	allpaths         map[string]map[string]struct{} //key method,second key path
 	selfappname      string
 	c                *ServerConfig
 	ctxpool          *sync.Pool
@@ -181,7 +181,7 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	c.validate()
 	//new server
 	instance := &WebServer{
-		paths:       make(map[string]map[string]struct{}),
+		allpaths:    make(map[string]map[string]struct{}),
 		selfappname: selfappname,
 		c:           c,
 		ctxpool:     &sync.Pool{},
@@ -280,7 +280,7 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 }
 
 func (this *WebServer) printPaths() {
-	for method, paths := range this.paths {
+	for method, paths := range this.allpaths {
 		for path := range paths {
 			switch method {
 			case http.MethodGet:
@@ -366,6 +366,45 @@ func (this *WebServer) StopWebServer() {
 
 }
 
+//type HandlerTimeoutConfig struct {
+//        Method  string //GET,POST,PUT,PATCH,DELETE,GRPC,CRPC
+//        Path    string
+//        Timeout time.Duration //0 means no handler specific timeout,but still has global timeout
+//}
+
+//func (this *WebServer) UpdateHandlerTimeout(htcs []*HandlerTimeoutConfig) error {
+//        tmp := make(map[string]map[string]time.Duration)
+//        for _, htc := range htcs {
+//                if htc.Timeout == 0 {
+//                        //jump,0 means no handler specific timeout
+//                        continue
+//                }
+//                method := strings.ToUpper(htc.Method)
+//                if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
+//                        return errors.New("[web.server.UpdateHandlerTimeout] unknown method")
+//                }
+//                if _, ok := tmp[method]; !ok {
+//                        tmp[method] = make(map[string]time.Duration)
+//                }
+//                var path string
+//                if len(htc.Path) == 0 || htc.Path[0] != '/' {
+//                        path = "/" + htc.Path
+//                }
+//                tmp[method][path] = htc.Timeout
+//        }
+//        atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout)), unsafe.Pointer(&tmp))
+//        return nil
+//}
+//func (this *WebServer) getHandlerTimeout(method, path string) time.Duration {
+//        handlerTimeout := *(*map[string]map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout))))
+//        if m, ok := handlerTimeout[method]; ok {
+//                if t, ok := m[path]; ok {
+//                        return t
+//                }
+//        }
+//        return 0
+//}
+
 type OutsideHandler func(*Context)
 
 //thread unsafe
@@ -375,50 +414,65 @@ func (this *WebServer) Use(globalMids ...OutsideHandler) {
 
 //thread unsafe
 func (this *WebServer) Get(path string, functimeout time.Duration, handlers ...OutsideHandler) {
-	this.router.Handler(http.MethodGet, path, this.insideHandler(http.MethodGet, path, functimeout, handlers))
-	if _, ok := this.paths[http.MethodGet]; !ok {
-		this.paths[http.MethodGet] = make(map[string]struct{})
+	if len(path) == 0 || path[0] != '/' {
+		panic("[web.server] path must start with /")
 	}
-	this.paths[http.MethodGet][path] = struct{}{}
+	this.router.Handler(http.MethodGet, path, this.insideHandler(http.MethodGet, path, functimeout, handlers))
+	if _, ok := this.allpaths[http.MethodGet]; !ok {
+		this.allpaths[http.MethodGet] = make(map[string]struct{})
+	}
+	this.allpaths[http.MethodGet][path] = struct{}{}
 }
 
 //thread unsafe
 func (this *WebServer) Delete(path string, functimeout time.Duration, handlers ...OutsideHandler) {
-	this.router.Handler(http.MethodDelete, path, this.insideHandler(http.MethodDelete, path, functimeout, handlers))
-	if _, ok := this.paths[http.MethodDelete]; !ok {
-		this.paths[http.MethodDelete] = make(map[string]struct{})
+	if len(path) == 0 || path[0] != '/' {
+		panic("[web.server] path must start with /")
 	}
-	this.paths[http.MethodDelete][path] = struct{}{}
+	this.router.Handler(http.MethodDelete, path, this.insideHandler(http.MethodDelete, path, functimeout, handlers))
+	if _, ok := this.allpaths[http.MethodDelete]; !ok {
+		this.allpaths[http.MethodDelete] = make(map[string]struct{})
+	}
+	this.allpaths[http.MethodDelete][path] = struct{}{}
 	return
 }
 
 //thread unsafe
 func (this *WebServer) Post(path string, functimeout time.Duration, handlers ...OutsideHandler) {
-	this.router.Handler(http.MethodPost, path, this.insideHandler(http.MethodPost, path, functimeout, handlers))
-	if _, ok := this.paths[http.MethodPost]; !ok {
-		this.paths[http.MethodPost] = make(map[string]struct{})
+	if len(path) == 0 || path[0] != '/' {
+		panic("[web.server] path must start with /")
 	}
-	this.paths[http.MethodPost][path] = struct{}{}
+	this.router.Handler(http.MethodPost, path, this.insideHandler(http.MethodPost, path, functimeout, handlers))
+	if _, ok := this.allpaths[http.MethodPost]; !ok {
+		this.allpaths[http.MethodPost] = make(map[string]struct{})
+	}
+	this.allpaths[http.MethodPost][path] = struct{}{}
 	return
 }
 
 //thread unsafe
 func (this *WebServer) Put(path string, functimeout time.Duration, handlers ...OutsideHandler) {
-	this.router.Handler(http.MethodPut, path, this.insideHandler(http.MethodPut, path, functimeout, handlers))
-	if _, ok := this.paths[http.MethodPut]; !ok {
-		this.paths[http.MethodPut] = make(map[string]struct{})
+	if len(path) == 0 || path[0] != '/' {
+		panic("[web.server] path must start with /")
 	}
-	this.paths[http.MethodPut][path] = struct{}{}
+	this.router.Handler(http.MethodPut, path, this.insideHandler(http.MethodPut, path, functimeout, handlers))
+	if _, ok := this.allpaths[http.MethodPut]; !ok {
+		this.allpaths[http.MethodPut] = make(map[string]struct{})
+	}
+	this.allpaths[http.MethodPut][path] = struct{}{}
 	return
 }
 
 //thread unsafe
 func (this *WebServer) Patch(path string, functimeout time.Duration, handlers ...OutsideHandler) {
-	this.router.Handler(http.MethodPatch, path, this.insideHandler(http.MethodPatch, path, functimeout, handlers))
-	if _, ok := this.paths[http.MethodPatch]; !ok {
-		this.paths[http.MethodPatch] = make(map[string]struct{})
+	if len(path) == 0 || path[0] != '/' {
+		panic("[web.server] path must start with /")
 	}
-	this.paths[http.MethodPatch][path] = struct{}{}
+	this.router.Handler(http.MethodPatch, path, this.insideHandler(http.MethodPatch, path, functimeout, handlers))
+	if _, ok := this.allpaths[http.MethodPatch]; !ok {
+		this.allpaths[http.MethodPatch] = make(map[string]struct{})
+	}
+	this.allpaths[http.MethodPatch][path] = struct{}{}
 	return
 }
 

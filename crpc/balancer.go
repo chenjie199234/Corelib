@@ -32,7 +32,7 @@ type ServerForPick struct {
 	Pickinfo *pickinfo
 }
 type pickinfo struct {
-	Lastfail       int64  //last fail timestamp nanosecond
+	LastFailTime   int64  //last fail timestamp nanosecond
 	Activecalls    int32  //current active calls
 	DServerNum     int32  //this app registered on how many discoveryservers
 	DServerOffline int64  //
@@ -139,7 +139,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 				lker:     &sync.Mutex{},
 				reqs:     make(map[uint64]*req, 10),
 				Pickinfo: &pickinfo{
-					Lastfail:       0,
+					LastFailTime:   0,
 					Activecalls:    0,
 					DServerNum:     int32(len(registerdata.DServers)),
 					DServerOffline: 0,
