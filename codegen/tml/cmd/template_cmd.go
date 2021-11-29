@@ -32,8 +32,13 @@ help() {
 pb() {
 	go mod tidy
 	corelib=$(go list -m -f {{.GoListFormat}} github.com/chenjie199234/Corelib)
+	workdir=$(pwd)
+	cd $corelib
+	go install ./...
+	cd $workdir
 	protoc -I ./ -I $corelib --go_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --go-pbex_out=paths=source_relative:. ./api/*.proto
+	protoc -I ./ -I $corelib --go-grpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --go-crpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --go-web_out=paths=source_relative:. ./api/*.proto
 	go mod tidy
@@ -79,21 +84,6 @@ fi
 
 if !(type protoc-gen-go >/dev/null 2>&1);then
 	echo "missing dependence: protoc-gen-go"
-	exit 0
-fi
-
-if !(type protoc-gen-go-pbex >/dev/null 2>&1);then
-	echo "missing dependence: protoc-gen-go-pbex"
-	exit 0
-fi
-
-if !(type protoc-gen-go-web >/dev/null 2>&1);then
-	echo "missing dependence: protoc-gen-go-web"
-	exit 0
-fi
-
-if !(type protoc-gen-go-crpc >/dev/null 2>&1);then
-	echo "missing dependence: protoc-gen-go-crpc"
 	exit 0
 fi
 
@@ -158,24 +148,6 @@ if %errorlevel% == 1 (
 where /q protoc-gen-go.exe
 if %errorlevel% == 1 (
 	echo "missing dependence: protoc-gen-go"
-	goto :end
-)
-
-where /q protoc-gen-go-pbex.exe
-if %errorlevel% == 1 (
-	echo "missing dependence: protoc-gen-go-pbex"
-	goto :end
-)
-
-where /q protoc-gen-go-web.exe
-if %errorlevel% == 1 (
-	echo "missing dependence: protoc-gen-go-web"
-	goto :end
-)
-
-where /q protoc-gen-go-crpc.exe
-if %errorlevel% == 1 (
-	echo "missing dependence: protoc-gen-go-crpc"
 	goto :end
 )
 
@@ -260,9 +232,14 @@ if "%1" == "new" (
 
 :pb
 	go mod tidy
-	for /F %%i in ('go list -m -f {{.GoListFormat}} github.com/chenjie199234/Corelib') do ( set corelib=%%i)
+	for /F %%i in ('go list -m -f {{.GoListFormat}} github.com/chenjie199234/Corelib') do ( set corelib=%%i )
+	for /F %%i in ('pwd') do ( set workdir=%%i )
+	cd %corelib%
+	go install ./...
+	cd %workdir%
 	protoc -I ./ -I %corelib% --go_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-pbex_out=paths=source_relative:. ./api/*.proto
+	protoc -I ./ -I %corelib% --go-grpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-crpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-web_out=paths=source_relative:. ./api/*.proto
 	go mod tidy
