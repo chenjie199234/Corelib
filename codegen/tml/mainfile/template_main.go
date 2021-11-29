@@ -16,6 +16,7 @@ import (
 
 	"{{.}}/config"
 	"{{.}}/server/xcrpc"
+	"{{.}}/server/xgrpc"
 	"{{.}}/server/xweb"
 	"{{.}}/service"
 
@@ -56,6 +57,15 @@ func main() {
 		}
 		wg.Done()
 	}()
+	wg.Add(1)
+	go func() {
+		xgrpc.StartGrpcServer()
+		select {
+		case ch <- syscall.SIGTERM:
+		default:
+		}
+		wg.Done()
+	}()
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-ch
 	//stop the whole business service
@@ -69,6 +79,11 @@ func main() {
 	wg.Add(1)
 	go func() {
 		xweb.StopWebServer()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		xgrpc.StopGrpcServer()
 		wg.Done()
 	}()
 	wg.Wait()

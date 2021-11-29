@@ -233,7 +233,7 @@ if "%1" == "new" (
 :pb
 	go mod tidy
 	for /F %%i in ('go list -m -f {{.GoListFormat}} github.com/chenjie199234/Corelib') do ( set corelib=%%i )
-	for /F %%i in ('pwd') do ( set workdir=%%i )
+	set workdir=%cd%
 	cd %corelib%
 	go install ./...
 	cd %workdir%

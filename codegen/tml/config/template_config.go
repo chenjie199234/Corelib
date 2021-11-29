@@ -202,6 +202,8 @@ import (
 
 //sourceConfig can't hot update
 type sourceConfig struct {
+	GrpcServer *GrpcServerConfig       $json:"grpc_server"$
+	GrpcClient *GrpcClientConfig       $json:"grpc_client"$
 	CrpcServer *CrpcServerConfig       $json:"crpc_server"$
 	CrpcClient *CrpcClientConfig       $json:"crpc_client"$
 	WebServer  *WebServerConfig        $json:"web_server"$
@@ -211,6 +213,19 @@ type sourceConfig struct {
 	Redis      map[string]*RedisConfig $json:"redis"$     //key example:xx_redis
 	KafkaPub   []*KafkaPubConfig       $json:"kafka_pub"$
 	KafkaSub   []*KafkaSubConfig       $json:"kafka_sub"$
+}
+
+//GrpcServerConfig
+type GrpcServerConfig struct {
+	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
+	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
+}
+
+//GrpcClientConfig
+type GrpcClientConfig struct {
+	ConnTimeout   ctime.Duration $json:"conn_timeout"$   //default 500ms
+	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
+	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
 }
 
 //CrpcServerConfig -
@@ -683,12 +698,22 @@ func initsource(path string) {
 	}
 }
 
-//GetCrpcServerConfig get the rpc net config
+//GetGrpcServerConfig get the grpc net config
+func GetGrpcServerConfig() *GrpcServerConfig {
+	return sc.GrpcServer
+}
+
+//GetGrpcClientConfig get the grpc net config
+func GetGrpcClientConfig() *GrpcClientConfig {
+	return sc.GrpcClient
+}
+
+//GetCrpcServerConfig get the crpc net config
 func GetCrpcServerConfig() *CrpcServerConfig {
 	return sc.CrpcServer
 }
 
-//GetCrpcClientConfig get the rpc net config
+//GetCrpcClientConfig get the crpc net config
 func GetCrpcClientConfig() *CrpcClientConfig {
 	return sc.CrpcClient
 }

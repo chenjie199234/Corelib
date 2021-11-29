@@ -25,6 +25,7 @@ import (
 	"github.com/chenjie199234/Corelib/codegen/tml/model"
 	"github.com/chenjie199234/Corelib/codegen/tml/readme"
 	"github.com/chenjie199234/Corelib/codegen/tml/server/xcrpc"
+	"github.com/chenjie199234/Corelib/codegen/tml/server/xgrpc"
 	"github.com/chenjie199234/Corelib/codegen/tml/server/xweb"
 	"github.com/chenjie199234/Corelib/codegen/tml/service"
 	servicestatus "github.com/chenjie199234/Corelib/codegen/tml/service/status"
@@ -212,6 +213,9 @@ func createBaseProject() {
 
 	xcrpc.CreatePathAndFile()
 	xcrpc.Execute(*name)
+
+	xgrpc.CreatePathAndFile()
+	xgrpc.Execute(*name)
 
 	xweb.CreatePathAndFile()
 	xweb.Execute(*name)
