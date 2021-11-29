@@ -117,7 +117,9 @@ func NewGrpcServer(c *ServerConfig, selfgroup, selfname string) (*GrpcServer, er
 	opts = append(opts, grpc.WriteBufferSize(int(c.SocketWBuf)))
 	opts = append(opts, grpc.MaxRecvMsgSize(int(c.MaxMsgLen)))
 	opts = append(opts, grpc.MaxSendMsgSize(int(c.MaxMsgLen)))
-	opts = append(opts, grpc.ConnectionTimeout(c.GlobalTimeout))
+	if c.GlobalTimeout != 0 {
+		opts = append(opts, grpc.ConnectionTimeout(c.GlobalTimeout))
+	}
 	opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{Time: c.HeartPorbe, Timeout: c.HeartPorbe*3 + c.HeartPorbe/3}))
 	if len(c.CertKeys) > 0 {
 		certificates := make([]tls.Certificate, 0, len(c.CertKeys))

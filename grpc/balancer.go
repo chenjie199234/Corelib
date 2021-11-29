@@ -63,7 +63,11 @@ func (b *corelibBalancer) setPickerServers(servers []*ServerForPick) {
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&b.pservers)), unsafe.Pointer(&servers))
 }
 func (b *corelibBalancer) getPickServers() []*ServerForPick {
-	return *(*[]*ServerForPick)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&b.pservers))))
+	tmp := atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&b.pservers)))
+	if tmp == nil {
+		return nil
+	}
+	return *(*[]*ServerForPick)(tmp)
 }
 
 func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) error {
