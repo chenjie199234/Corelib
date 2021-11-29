@@ -27,7 +27,7 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
-type OutsideHandler func(ctx *Context)
+type OutsideHandler func(context.Context)
 
 type ServerConfig struct {
 	//when server close,server will wait this time before close,every request will refresh the time

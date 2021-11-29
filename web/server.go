@@ -25,7 +25,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-type OutsideHandler func(*Context)
+type OutsideHandler func(context.Context)
 
 type ServerConfig struct {
 	//when server close,server will wait at least this time before close,every request will refresh the time

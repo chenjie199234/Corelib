@@ -98,7 +98,8 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
 		freturn := g.QualifiedGoIdent(crpcPackage.Ident("OutsideHandler"))
 		g.P(fname, "(", p1, ")", freturn, "{")
-		g.P("return func(ctx *"+g.QualifiedGoIdent(crpcPackage.Ident("Context")), "){")
+		g.P("return func(stdctx ", g.QualifiedGoIdent(contextPackage.Ident("Context")), "){")
+		g.P("ctx:=stdctx.(*", g.QualifiedGoIdent(crpcPackage.Ident("Context")), ")")
 		g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
 		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(ctx.GetBody(),req);e!=nil{")
 		g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
