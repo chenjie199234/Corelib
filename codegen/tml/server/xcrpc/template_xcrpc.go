@@ -9,6 +9,7 @@ import (
 const text = `package xcrpc
 
 import (
+	"strings"
 	"time"
 
 	"{{.}}/api"
@@ -37,6 +38,7 @@ func StartCrpcServer() {
 		log.Error(nil,"[xcrpc] new error:", e)
 		return
 	}
+	UpdateHandlerTimeout(config.AC)
 
 	//this place can register global midwares
 	//s.Use(globalmidwares)
@@ -53,6 +55,26 @@ func StartCrpcServer() {
 			log.Info(nil,"[xcrpc] server closed")
 		}
 		return
+	}
+}
+
+//UpdateHandlerTimeout -
+func UpdateHandlerTimeout(c *config.AppConfig) {
+	if s != nil {
+		cc := make([]*crpc.HandlerTimeoutConfig, 0, 10)
+		for path, methods := range c.HandlerTimeout {
+			for method, timeout := range methods {
+				method = strings.ToUpper(method)
+				if method == "CRPC" {
+					cc = append(cc, &crpc.HandlerTimeoutConfig{
+						Method:  method,
+						Path:    path,
+						Timeout: time.Duration(timeout),
+					})
+				}
+			}
+		}
+		s.UpdateHandlerTimeout(cc)
 	}
 }
 

@@ -29,6 +29,9 @@ func main() {
 		//this function works in sync mode
 		//don't write block logic inside this
 		log.Info(nil, "[main] new app config:", ac)
+		xcrpc.UpdateHandlerTimeout(ac)
+		xgrpc.UpdateHandlerTimeout(ac)
+		xweb.UpdateHandlerTimeout(ac)
 	})
 	defer config.Close()
 	//start the whole business service

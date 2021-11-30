@@ -9,6 +9,7 @@ import (
 const text = `package xgrpc
 
 import (
+	"strings"
 	"time"
 
 	"{{.}}/api"
@@ -37,6 +38,7 @@ func StartGrpcServer() {
 		log.Error(nil,"[xgrpc] new error:", e)
 		return
 	}
+	UpdateHandlerTimeout(config.AC)
 
 	//this place can register global midwares
 	//s.Use(globalmidwares)
@@ -53,6 +55,26 @@ func StartGrpcServer() {
 			log.Info(nil,"[xgrpc] server closed")
 		}
 		return
+	}
+}
+
+//UpdateHandlerTimeout -
+func UpdateHandlerTimeout(c *config.AppConfig) {
+	if s != nil {
+		cc := make([]*grpc.HandlerTimeoutConfig, 0, 10)
+		for path, methods := range c.HandlerTimeout {
+			for method, timeout := range methods {
+				method = strings.ToUpper(method)
+				if method == "GRPC" {
+					cc = append(cc, &grpc.HandlerTimeoutConfig{
+						Method:  method,
+						Path:    path,
+						Timeout: time.Duration(timeout),
+					})
+				}
+			}
+		}
+		s.UpdateHandlerTimeout(cc)
 	}
 }
 

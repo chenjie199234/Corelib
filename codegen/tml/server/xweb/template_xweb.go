@@ -9,6 +9,8 @@ import (
 const text = `package xweb
 
 import (
+	"net/http"
+	"strings"
 	"time"
 
 	"{{.}}/api"
@@ -48,6 +50,7 @@ func StartWebServer() {
 		log.Error(nil,"[xweb] new error:", e)
 		return
 	}
+	UpdateHandlerTimeout(config.AC)
 
 	//this place can register global midwares
 	//s.Use(globalmidwares)
@@ -64,6 +67,26 @@ func StartWebServer() {
 			log.Info(nil,"[xweb] server closed")
 		}
 		return
+	}
+}
+
+//UpdateHandlerTimeout -
+func UpdateHandlerTimeout(c *config.AppConfig) {
+	if s != nil {
+		cc := make([]*web.HandlerTimeoutConfig, 0, 10)
+		for path, methods := range c.HandlerTimeout {
+			for method, timeout := range methods {
+				method = strings.ToUpper(method)
+				if method == http.MethodGet || method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch || method == http.MethodDelete {
+					cc = append(cc, &web.HandlerTimeoutConfig{
+						Method:  method,
+						Path:    path,
+						Timeout: time.Duration(timeout),
+					})
+				}
+			}
+		}
+		s.UpdateHandlerTimeout(cc)
 	}
 }
 
