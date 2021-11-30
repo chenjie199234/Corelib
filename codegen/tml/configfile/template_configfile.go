@@ -102,7 +102,13 @@ const textsource = `{
 	]
 }`
 const textapp = `{
-
+	"handler_timeout":{
+		"/{{.}}.status/ping":{
+			"GET":"200ms",
+			"CRPC":"200ms",
+			"GRPC":"200ms"
+		}
+	}
 }`
 
 const path = "./"

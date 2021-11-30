@@ -103,6 +103,7 @@ import (
 //this is the config used for this app
 type AppConfig struct {
 	//add your config here
+	HandlerTimeout map[string]map[string]ctime.Duration $json:"handler_timeout"$ //first key handler path,second key method(GET,POST,PUT,PATCH,DELETE,CRPC,GRPC),value timeout
 }
 
 //AC -
