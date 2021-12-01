@@ -81,7 +81,31 @@ func initenv() {
 
 func initremote(path string) {
 	if EC.ConfigType != nil && *EC.ConfigType == 2 {
-		if e := configsdk.NewWebSdk(path, api.Group, api.Name); e != nil {
+		var addrs []string
+		if str, ok := os.LookupEnv("REMOTE_CONFIG_ADDRS"); ok && str != "<REMOTE_CONFIG_ADDRS>" && str != "" {
+			addrs = strings.Split(str, ",")
+		} else {
+			panic("[config.initremote] missing REMOTE_CONFIG_ADDRS")
+		}
+		var username string
+		if str, ok := os.LookupEnv("REMOTE_CONFIG_USERNAME"); ok && str != "<REMOTE_CONFIG_USERNAME>" && str != "" {
+			username = str
+		} else {
+			log.Warning(nil, "[config.initremote] missing REMOTE_CONFIG_USERNAME")
+		}
+		var password string
+		if str, ok := os.LookupEnv("REMOTE_CONFIG_PASSWORD"); ok && str != "<REMOTE_CONFIG_PASSWORD>" && str != "" {
+			password = str
+		} else {
+			log.Warning(nil, "[config.initremote] missing REMOTE_CONFIG_USERNAME")
+		}
+		var replicaset string
+		if str, ok := os.LookupEnv("REMOTE_CONFIG_REPLICASET"); ok && str != "<REMOTE_CONFIG_REPLICASET>" && str != "" {
+			replicaset = str
+		} else {
+			log.Warning(nil, "[config.initremote] missing REMOTE_CONFIG_REPLICASET")
+		}
+		if e := configsdk.NewDirectSdk(path, api.Group, api.Name, username, password, replicaset, addrs); e != nil {
 			log.Error(nil, "[config.initremote] new sdk error:", e)
 			Close()
 			os.Exit(1)
