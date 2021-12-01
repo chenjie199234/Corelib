@@ -11,6 +11,7 @@ const text = `package config
 
 import (
 	"os"
+	"strings"
 	"strconv"
 
 	"{{.}}/api"
