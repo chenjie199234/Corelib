@@ -7,7 +7,6 @@ import (
 	"errors"
 	"math"
 	"runtime"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,7 +22,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type OutsideHandler func(context.Context)
+type OutsideHandler func(*Context)
 
 type ServerConfig struct {
 	//when server close,server will wait this time before close,every request will refresh the time
@@ -199,31 +198,19 @@ func (s *CrpcServer) GetReqNum() int32 {
 	}
 }
 
-type HandlerTimeoutConfig struct {
-	Method  string //CRPC
-	Path    string
-	Timeout time.Duration //0 means no handler specific timeout,but still has global timeout
-}
-
-func (this *CrpcServer) UpdateHandlerTimeout(htcs []*HandlerTimeoutConfig) error {
+func (this *CrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
 	tmp := make(map[string]time.Duration)
-	for _, htc := range htcs {
-		if htc.Timeout == 0 {
+	for path, timeout := range htcs {
+		if timeout == 0 {
 			//jump,0 means no handler specific timeout
 			continue
 		}
-		method := strings.ToUpper(htc.Method)
-		if method != "CRPC" {
-			return errors.New("[crpc.server.UpdateHandlerTimeout] unknown method")
+		if len(path) == 0 || path[0] != '/' {
+			path = "/" + path
 		}
-		var path string
-		if len(htc.Path) == 0 || htc.Path[0] != '/' {
-			path = "/" + htc.Path
-		}
-		tmp[path] = htc.Timeout
+		tmp[path] = timeout
 	}
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout)), unsafe.Pointer(&tmp))
-	return nil
 }
 
 func (this *CrpcServer) getHandlerTimeout(path string) time.Duration {
