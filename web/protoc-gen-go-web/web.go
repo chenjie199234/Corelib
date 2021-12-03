@@ -132,7 +132,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
 		freturn := g.QualifiedGoIdent(webPackage.Ident("OutsideHandler"))
 		g.P(fname, "(", p1, ")", freturn, "{")
-		g.P("return func(ctx ", g.QualifiedGoIdent(webPackage.Ident("Context")), "){")
+		g.P("return func(ctx *", g.QualifiedGoIdent(webPackage.Ident("Context")), "){")
 		g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
 		g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetContentType(),", strconv.Quote("application/json"), "){")
 		g.P("data,e:=ctx.GetBody()")
