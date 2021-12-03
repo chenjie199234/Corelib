@@ -19,6 +19,9 @@ service status{
 	//ping check server's health
 	rpc ping(pingreq)returns(pingresp){
 		option (pbex.method)="get";
+		option (pbex.web_midwares)="rate";
+		option (pbex.crpc_midwares)="rate";
+		option (pbex.grpc_midwares)="rate";
 	}
 }
 //req can be set with pbex extentions

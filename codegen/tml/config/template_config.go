@@ -121,6 +121,7 @@ import (
 	"path/filepath"
 
 	"github.com/chenjie199234/Corelib/log"
+	publicmids "github.com/chenjie199234/Corelib/mids"
 	ctime "github.com/chenjie199234/Corelib/util/time"
 	"github.com/fsnotify/fsnotify"
 )
@@ -130,6 +131,7 @@ import (
 type AppConfig struct {
 	//add your config here
 	HandlerTimeout map[string]map[string]ctime.Duration $json:"handler_timeout"$ //first key handler path,second key method(GET,POST,PUT,PATCH,DELETE,CRPC,GRPC),value timeout
+	HandlerRate    []*publicmids.RateConfig             $json:"handler_rate"$
 }
 
 //AC -

@@ -21,6 +21,7 @@ import (
 	"{{.}}/service"
 
 	"github.com/chenjie199234/Corelib/log"
+	publicmids "github.com/chenjie199234/Corelib/mids"
 )
 
 func main() {
@@ -32,6 +33,7 @@ func main() {
 		xcrpc.UpdateHandlerTimeout(ac)
 		xgrpc.UpdateHandlerTimeout(ac)
 		xweb.UpdateHandlerTimeout(ac)
+		publicmids.UpdateRateConfig(ac.HandlerRate)
 	})
 	defer config.Close()
 	//start the whole business service

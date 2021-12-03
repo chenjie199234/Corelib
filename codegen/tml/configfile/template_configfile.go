@@ -108,7 +108,12 @@ const textapp = `{
 			"CRPC":"200ms",
 			"GRPC":"200ms"
 		}
-	}
+	},
+	"handler_rate":[{
+		"Path":"/{{.}}.status/ping",
+		"Method":["GET","GRPC","CRPC"],
+		"MaxPerSec":100
+	}]
 }`
 
 const path = "./"

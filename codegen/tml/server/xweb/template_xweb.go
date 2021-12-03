@@ -73,17 +73,20 @@ func StartWebServer() {
 //UpdateHandlerTimeout -
 func UpdateHandlerTimeout(c *config.AppConfig) {
 	if s != nil {
-		cc := make([]*web.HandlerTimeoutConfig, 0, 10)
+		cc := make(map[string]map[string]time.Duration)
 		for path, methods := range c.HandlerTimeout {
 			for method, timeout := range methods {
-				method = strings.ToUpper(method)
-				if method == http.MethodGet || method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch || method == http.MethodDelete {
-					cc = append(cc, &web.HandlerTimeoutConfig{
-						Method:  method,
-						Path:    path,
-						Timeout: time.Duration(timeout),
-					})
+				if timeout == 0 {
+					continue
 				}
+				method = strings.ToUpper(method)
+				if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
+					continue
+				}
+				if _, ok := cc[method]; !ok {
+					cc[method] = make(map[string]time.Duration)
+				}
+				cc[method][path] = timeout.StdDuration()
 			}
 		}
 		s.UpdateHandlerTimeout(cc)

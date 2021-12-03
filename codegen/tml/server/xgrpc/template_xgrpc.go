@@ -61,16 +61,15 @@ func StartGrpcServer() {
 //UpdateHandlerTimeout -
 func UpdateHandlerTimeout(c *config.AppConfig) {
 	if s != nil {
-		cc := make([]*grpc.HandlerTimeoutConfig, 0, 10)
+		cc := make(map[string]time.Duration)
 		for path, methods := range c.HandlerTimeout {
 			for method, timeout := range methods {
+				if timeout == 0 {
+					continue
+				}
 				method = strings.ToUpper(method)
 				if method == "GRPC" {
-					cc = append(cc, &grpc.HandlerTimeoutConfig{
-						Method:  method,
-						Path:    path,
-						Timeout: time.Duration(timeout),
-					})
+					cc[path] = timeout.StdDuration()
 				}
 			}
 		}
