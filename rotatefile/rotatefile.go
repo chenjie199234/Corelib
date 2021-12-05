@@ -142,7 +142,7 @@ func (f *RotateFile) run() {
 			if write() {
 				continue
 			}
-			if f.status == 0 {
+			if atomic.LoadInt32(&f.status) == 0 {
 				flush()
 				return
 			}
@@ -246,9 +246,7 @@ func (f *RotateFile) WriteBuf(data *bufpool.Buffer) (int, error) {
 }
 
 func (f *RotateFile) Close() {
-	if atomic.SwapInt32(&f.status, 0) == 1 {
-		close(f.notice)
-	}
+	atomic.StoreInt32(&f.status, 0)
 	f.closewait.Wait()
 	f.file.Load().(*os.File).Close()
 }

@@ -31,7 +31,6 @@ func (l *CasList) Push(data unsafe.Pointer) {
 		next:  nil,
 	}
 	temptail := l.tail
-	oldtail := l.tail
 	for {
 		for temptail.next != nil {
 			temptail = temptail.next
@@ -41,7 +40,7 @@ func (l *CasList) Push(data unsafe.Pointer) {
 		}
 		runtime.Gosched()
 	}
-	atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&l.tail)), unsafe.Pointer(oldtail), unsafe.Pointer(n))
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&l.tail)), unsafe.Pointer(n))
 }
 
 //pop front
