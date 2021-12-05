@@ -263,7 +263,7 @@ func transGrpcError(e error) *cerror.Error {
 		return cerror.MakeError(-1, http.StatusServiceUnavailable, s.Message())
 	default:
 		ee := cerror.ConvertErrorstr(s.Message())
-		ee.Httpcode = int32(s.Code())
+		ee.SetHttpcode(int32(s.Code()))
 		return ee
 	}
 }

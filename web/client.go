@@ -310,7 +310,7 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 				e = cerror.MakeError(-1, int32(resp.StatusCode), http.StatusText(resp.StatusCode))
 			} else {
 				tempe := cerror.ConvertErrorstr(common.Byte2str(respbody))
-				tempe.Httpcode = int32(resp.StatusCode)
+				tempe.SetHttpcode(int32(resp.StatusCode))
 				e = tempe
 			}
 			trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, e)

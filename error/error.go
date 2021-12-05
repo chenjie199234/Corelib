@@ -122,3 +122,6 @@ func (this *Error) Error() string {
 func (this *Error) GRPCStatus() *status.Status {
 	return status.New(codes.Code(this.Httpcode), this.Error())
 }
+func (this *Error) SetHttpcode(httpcode int32) {
+	this.Httpcode = httpcode
+}
