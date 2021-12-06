@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -268,12 +269,13 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 	if ok {
 		msg.Deadline = dl.UnixNano()
 	}
-	traceid, _, _, selfmethod, selfpath := trace.GetTrace(ctx)
+	traceid, _, _, selfmethod, selfpath, selfdeep := trace.GetTrace(ctx)
 	if traceid != "" {
 		msg.Tracedata = map[string]string{
 			"Traceid":      traceid,
 			"SourceMethod": selfmethod,
 			"SourcePath":   selfpath,
+			"Deep":         strconv.Itoa(selfdeep),
 		}
 	}
 	d, _ := proto.Marshal(msg)

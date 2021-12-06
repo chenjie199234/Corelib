@@ -100,11 +100,14 @@ func write(ctx context.Context, buf *bufpool.Buffer, datas ...interface{}) {
 	buf.AppendString(file)
 	buf.AppendByte(':')
 	buf.AppendInt(line)
-	traceid, _, _, _, _ := trace.GetTrace(ctx)
+	traceid, _, _, _, _, deep := trace.GetTrace(ctx)
 	if traceid != "" {
 		buf.AppendByte(' ')
 		buf.AppendString("Traceid: ")
 		buf.AppendString(traceid)
+		buf.AppendByte(' ')
+		buf.AppendString("Tracedeep: ")
+		buf.AppendInt(deep)
 	}
 	for _, data := range datas {
 		buf.AppendByte(' ')

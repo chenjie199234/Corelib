@@ -505,7 +505,24 @@ func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	ctx := trace.InitTrace(r.Context(), r.Header.Get("Core_tracedata"), this.selfappname, host.Hostip, r.Method, r.URL.Path)
+	var ctx context.Context
+	if tracedata := r.Header.Values("Core_tracedata"); len(tracedata) == 0 || tracedata[0] == "" {
+		ctx = trace.InitTrace(r.Context(), "", this.selfappname, host.Hostip, r.Method, r.URL.Path, 0)
+	} else if len(tracedata) != 5 || tracedata[4] == "" {
+		log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: tracedata:", tracedata, "format error")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(common.Str2byte(_ErrReqStr))
+		return
+	} else if clientdeep, e := strconv.Atoi(tracedata[4]); e != nil {
+		log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: tracedata:", tracedata, "format error")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(common.Str2byte(_ErrReqStr))
+		return
+	} else {
+		ctx = trace.InitTrace(r.Context(), tracedata[0], this.selfappname, host.Hostip, r.Method, r.URL.Path, clientdeep)
+	}
 	this.router.ServeHTTP(w, r.Clone(ctx))
 	if atomic.LoadInt32(&this.totalreqnum) < 0 {
 		select {
@@ -550,21 +567,15 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 				headers.Set("Access-Control-Expose-Headers", this.c.Cors.exposestr)
 			}
 		}
-		traceid, _, _, _, _ := trace.GetTrace(ctx)
+		traceid, _, _, _, _, selfdeep := trace.GetTrace(ctx)
 		sourceip := r.RemoteAddr
 		sourceapp := "unknown"
 		sourcemethod := "unknown"
 		sourcepath := "unknown"
-		if values := r.Header.Values("Core_tracedata"); len(values) != 4 && len(values) != 0 {
-			log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: tracedata:", values, "format error")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Header().Set("Content-Type", "application/json")
-			w.Write(common.Str2byte(_ErrReqStr))
-			return
-		} else if len(values) > 0 {
-			sourceapp = values[1]
-			sourcemethod = values[2]
-			sourcepath = values[3]
+		if tracedata := r.Header.Values("Core_tracedata"); len(tracedata) != 0 {
+			sourceapp = tracedata[1]
+			sourcemethod = tracedata[2]
+			sourcepath = tracedata[3]
 		}
 		var mdata map[string]string
 		if mdstr := r.Header.Get("Core_metadata"); mdstr != "" {
@@ -611,7 +622,7 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 				w.Header().Set("Content-Type", "application/json")
 				w.Write(common.Str2byte(_ErrDeadlineExceededStr))
 				end := time.Now()
-				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, cerror.ErrDeadlineExceeded)
+				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, cerror.ErrDeadlineExceeded)
 				return
 			}
 			var cancel context.CancelFunc
@@ -629,10 +640,10 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write(common.Str2byte(_ErrPanicStr))
 				end := time.Now()
-				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, ErrPanic)
+				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, ErrPanic)
 			} else {
 				end := time.Now()
-				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, workctx.e)
+				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, workctx.e)
 			}
 			this.putContext(workctx)
 		}()

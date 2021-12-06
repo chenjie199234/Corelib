@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	cerror "github.com/chenjie199234/Corelib/error"
@@ -209,9 +210,9 @@ func (c *GrpcClient) Call(ctx context.Context, path string, req interface{}, res
 		d, _ := json.Marshal(metadata)
 		md.Set("core_metadata", common.Byte2str(d))
 	}
-	traceid, _, _, selfmethod, selfpath := trace.GetTrace(ctx)
+	traceid, _, _, selfmethod, selfpath, selfdeep := trace.GetTrace(ctx)
 	if traceid != "" {
-		md.Set("core_tracedata", traceid, c.selfappname, selfmethod, selfpath)
+		md.Set("core_tracedata", traceid, c.selfappname, selfmethod, selfpath, strconv.Itoa(selfdeep))
 	}
 	md.Set("core_target", c.appname)
 	ctx = gmetadata.NewOutgoingContext(ctx, md)

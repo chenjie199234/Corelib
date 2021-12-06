@@ -7,7 +7,7 @@ import (
 )
 
 func Test_Trace(t *testing.T) {
-	ctx := InitTrace(context.Background(), "", "fromapp", "fromip", "frommethod", "frompath")
+	ctx := InitTrace(context.Background(), "", "fromapp", "fromip", "frommethod", "frompath", 0)
 	now := time.Now()
 	before := now.Add(-time.Minute)
 	after := now.Add(time.Minute)

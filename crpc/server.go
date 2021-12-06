@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -237,7 +238,7 @@ func (s *CrpcServer) RegisterHandler(path string, handlers ...OutsideHandler) {
 func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func(context.Context, *stream.Peer, *Msg) {
 	totalhandlers := append(s.global, handlers...)
 	return func(ctx context.Context, p *stream.Peer, msg *Msg) {
-		traceid, _, _, _, _ := trace.GetTrace(ctx)
+		traceid, _, _, _, _, selfdeep := trace.GetTrace(ctx)
 		var sourceapp, sourceip, sourcemethod, sourcepath string
 		if msg.Tracedata != nil {
 			sourcemethod = msg.Tracedata["SourceMethod"]
@@ -299,7 +300,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 				msg.Tracedata = nil
 			}
 			end := time.Now()
-			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "CRPC", path, &start, &end, msg.Error)
+			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "CRPC", path, &start, &end, msg.Error)
 			s.putContext(workctx)
 		}()
 		workctx.run()
@@ -343,11 +344,20 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		c.RUnlock()
 		return
 	}
-	var traceid string
-	if msg.Tracedata != nil {
-		traceid = msg.Tracedata["Traceid"]
+	var tracectx context.Context
+	if len(msg.Tracedata) == 0 || msg.Tracedata["Traceid"] == "" {
+		tracectx = trace.InitTrace(p, "", s.instance.GetSelfName(), host.Hostip, "CRPC", msg.Path, 0)
+	} else if len(msg.Tracedata) != 4 || msg.Tracedata["Deep"] == "" {
+		log.Error(nil, "[crpc.server.userfunc] client:", p.GetPeerUniqueName(), "path:", msg.Path, "method: CRPC error: tracedata:", msg.Tracedata, "format error")
+		p.Close()
+		return
+	} else if clientdeep, e := strconv.Atoi(msg.Tracedata["Deep"]); e != nil {
+		log.Error(nil, "[crpc.server.userfunc] client:", p.GetPeerUniqueName(), "path:", msg.Path, "method: CRPC error: tracedata:", msg.Tracedata, "format error")
+		p.Close()
+		return
+	} else {
+		tracectx = trace.InitTrace(p, msg.Tracedata["Traceid"], s.instance.GetSelfName(), host.Hostip, "CRPC", msg.Path, clientdeep)
 	}
-	tracectx := trace.InitTrace(p, traceid, s.instance.GetSelfName(), host.Hostip, "CRPC", msg.Path)
 	handler, ok := s.handler[msg.Path]
 	if !ok {
 		log.Error(tracectx, "[crpc.server.userfunc] client:", p.GetPeerUniqueName(), "call path:", msg.Path, "error: unknown path")

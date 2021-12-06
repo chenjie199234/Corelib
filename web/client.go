@@ -231,12 +231,13 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 		d, _ := json.Marshal(metadata)
 		header.Set("Core_metadata", common.Byte2str(d))
 	}
-	traceid, _, _, selfmethod, selfpath := trace.GetTrace(ctx)
+	traceid, _, _, selfmethod, selfpath, selfdeep := trace.GetTrace(ctx)
 	if traceid != "" {
 		header.Set("Core_tracedata", traceid)
 		header.Add("Core_tracedata", this.selfappname)
 		header.Add("Core_tracedata", selfmethod)
 		header.Add("Core_tracedata", selfpath)
+		header.Add("Core_tracedata", strconv.Itoa(selfdeep))
 	}
 	if this.c.GlobalTimeout != 0 {
 		var cancel context.CancelFunc

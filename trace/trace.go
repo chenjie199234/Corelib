@@ -55,8 +55,9 @@ const (
 
 type TraceLog struct {
 	TraceId    string `json:"trace_id"` //the whole trace route
-	Start      int64  `json:"start"`    //nanosecond
-	End        int64  `json:"end"`      //nanosecond
+	Deep       int    `json:"deep"`
+	Start      int64  `json:"start"` //nanosecond
+	End        int64  `json:"end"`   //nanosecond
 	HostName   string `json:"host_name"`
 	Role       string `json:"role"`
 	FromApp    string `json:"from_app"`
@@ -73,7 +74,7 @@ type TraceLog struct {
 
 type tracekey struct{}
 
-func InitTrace(ctx context.Context, traceid, app, ip, method, path string) context.Context {
+func InitTrace(ctx context.Context, traceid, app, ip, method, path string, deep int) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -83,14 +84,16 @@ func InitTrace(ctx context.Context, traceid, app, ip, method, path string) conte
 			panic("[trace] init error: missing params")
 		}
 		if traceid == "" {
+			deep = 0
 			traceid = maketraceid()
 		}
-		return context.WithValue(ctx, tracekey{}, map[string]string{"Traceid": traceid, "App": app, "Ip": ip, "Method": method, "Path": path})
+		deep++
+		return context.WithValue(ctx, tracekey{}, map[string]string{"Traceid": traceid, "Deep": strconv.Itoa(deep), "App": app, "Ip": ip, "Method": method, "Path": path})
 	}
 	return ctx
 }
 
-func GetTrace(ctx context.Context) (traceid, curapp, curip, curmethod, curpath string) {
+func GetTrace(ctx context.Context) (traceid, curapp, curip, curmethod, curpath string, curdeep int) {
 	if ctx == nil {
 		return
 	}
@@ -103,6 +106,7 @@ func GetTrace(ctx context.Context) (traceid, curapp, curip, curmethod, curpath s
 	curip = tracedata["Ip"]
 	curmethod = tracedata["Method"]
 	curpath = tracedata["Path"]
+	curdeep, _ = strconv.Atoi(tracedata["Deep"])
 	return
 }
 
@@ -128,7 +132,7 @@ func maketraceid() string {
 }
 
 func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string, start, end *time.Time, e error) {
-	traceid, fromapp, fromip, frommethod, frompath := GetTrace(ctx)
+	traceid, fromapp, fromip, frommethod, frompath, deep := GetTrace(ctx)
 	if traceid == "" {
 		return
 	}
@@ -142,7 +146,9 @@ func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string,
 	buf.AppendString("[TRACE] {")
 	buf.AppendString("\"trace_id\":\"")
 	buf.AppendString(traceid)
-	buf.AppendString("\",\"start\":")
+	buf.AppendString("\",\"deep\":")
+	buf.AppendInt(deep)
+	buf.AppendString(",\"start\":")
 	buf.AppendInt64(start.UnixNano())
 	buf.AppendString(",\"end\":")
 	buf.AppendInt64(end.UnixNano())

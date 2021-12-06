@@ -9,6 +9,7 @@ import (
 	"math"
 	"net"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -282,21 +283,24 @@ func (s *GrpcServer) insidehandler(sname, mname string, handlers ...OutsideHandl
 		sourceapp := "unknown"
 		sourcemethod := "unknown"
 		sourcepath := "unknown"
+		selfdeep := 0
 		if ok {
-			data := grpcmetadata.Get("core_tracedata")
-			if len(data) != 4 && len(data) != 0 {
-				log.Error(nil, "[grpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC error: tracedata format error")
+			if data := grpcmetadata.Get("core_tracedata"); len(data) == 0 || data[0] == "" {
+				ctx = trace.InitTrace(ctx, "", s.selfappname, host.Hostip, "GRPC", path, 0)
+			} else if len(data) != 5 || data[4] == "" {
+				log.Error(nil, "[grpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format error")
 				return nil, cerror.ErrReq
-			}
-			if len(data) > 0 {
-				traceid = data[0]
+			} else if clientdeep, e := strconv.Atoi(data[4]); e != nil {
+				log.Error(nil, "[grpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format error")
+				return nil, cerror.ErrReq
+			} else {
+				ctx = trace.InitTrace(ctx, data[0], s.selfappname, host.Hostip, "GRPC", path, clientdeep)
 				sourceapp = data[1]
 				sourcemethod = data[2]
 				sourcepath = data[3]
 			}
 		}
-		ctx = trace.InitTrace(ctx, traceid, s.selfappname, host.Hostip, "GRPC", path)
-		traceid, _, _, _, _ = trace.GetTrace(ctx)
+		traceid, _, _, _, _, selfdeep = trace.GetTrace(ctx)
 		var mdata map[string]string
 		if ok {
 			data := grpcmetadata.Get("core_metadata")
@@ -330,7 +334,7 @@ func (s *GrpcServer) insidehandler(sname, mname string, handlers ...OutsideHandl
 				workctx.resp = nil
 			}
 			end := time.Now()
-			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath), trace.SERVER, s.selfappname, host.Hostip, "GRPC", path, &start, &end, workctx.e)
+			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip, "GRPC", path, &start, &end, workctx.e)
 			resp = workctx.resp
 			if workctx.e != nil {
 				e = workctx.e
