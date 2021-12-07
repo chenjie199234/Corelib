@@ -12,6 +12,7 @@ const text = `syntax="proto3";
 package {{.}};
 //this is the golang's package name,all proto in this project must use this name as the golang's package name
 option go_package="{{.}}/api;api";
+//https://github.com/chenjie199234/Corelib/blob/main/pbex/pbex.proto
 import "pbex/pbex.proto";
 
 //this is the proto file for status service
