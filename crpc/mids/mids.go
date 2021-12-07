@@ -3,7 +3,7 @@ package mids
 import (
 	"github.com/chenjie199234/Corelib/crpc"
 	cerror "github.com/chenjie199234/Corelib/error"
-	sharemids "github.com/chenjie199234/Corelib/mids"
+	publicmids "github.com/chenjie199234/Corelib/mids"
 )
 
 //dosn't include global mids in here
@@ -19,7 +19,7 @@ func AllMids() map[string]crpc.OutsideHandler {
 	return all
 }
 func rate(ctx *crpc.Context) {
-	if !sharemids.CrpcRate(ctx.GetPath()) {
+	if !publicmids.CrpcRate(ctx.GetPath()) {
 		ctx.Abort(cerror.ErrLimit)
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	cerror "github.com/chenjie199234/Corelib/error"
-	sharemids "github.com/chenjie199234/Corelib/mids"
+	publicmids "github.com/chenjie199234/Corelib/mids"
 	"github.com/chenjie199234/Corelib/web"
 )
 
@@ -23,23 +23,23 @@ func AllMids() map[string]web.OutsideHandler {
 func rate(ctx *web.Context) {
 	switch ctx.GetMethod() {
 	case http.MethodGet:
-		if !sharemids.HttpGetRate(ctx.GetPath()) {
+		if !publicmids.HttpGetRate(ctx.GetPath()) {
 			ctx.Abort(cerror.ErrLimit)
 		}
 	case http.MethodPost:
-		if !sharemids.HttpPostRate(ctx.GetPath()) {
+		if !publicmids.HttpPostRate(ctx.GetPath()) {
 			ctx.Abort(cerror.ErrLimit)
 		}
 	case http.MethodPut:
-		if !sharemids.HttpPutRate(ctx.GetPath()) {
+		if !publicmids.HttpPutRate(ctx.GetPath()) {
 			ctx.Abort(cerror.ErrLimit)
 		}
 	case http.MethodPatch:
-		if !sharemids.HttpPatchRate(ctx.GetPath()) {
+		if !publicmids.HttpPatchRate(ctx.GetPath()) {
 			ctx.Abort(cerror.ErrLimit)
 		}
 	case http.MethodDelete:
-		if !sharemids.HttpDelRate(ctx.GetPath()) {
+		if !publicmids.HttpDelRate(ctx.GetPath()) {
 			ctx.Abort(cerror.ErrLimit)
 		}
 	default:
