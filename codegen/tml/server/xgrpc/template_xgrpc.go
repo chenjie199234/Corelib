@@ -16,17 +16,17 @@ import (
 	"{{.}}/config"
 	"{{.}}/service"
 
-	"github.com/chenjie199234/Corelib/grpc"
-	"github.com/chenjie199234/Corelib/grpc/mids"
+	"github.com/chenjie199234/Corelib/cgrpc"
+	"github.com/chenjie199234/Corelib/cgrpc/mids"
 	"github.com/chenjie199234/Corelib/log"
 )
 
-var s *grpc.GrpcServer
+var s *cgrpc.CGrpcServer
 
-//StartGrpcServer -
-func StartGrpcServer() {
-	c := config.GetGrpcServerConfig()
-	grpcc := &grpc.ServerConfig{
+//StartCGrpcServer -
+func StartCGrpcServer() {
+	c := config.GetCGrpcServerConfig()
+	cgrpcc := &cgrpc.ServerConfig{
 		GlobalTimeout: time.Duration(c.GlobalTimeout),
 		HeartPorbe:    time.Duration(c.HeartProbe),
 		SocketRBuf:    2048,
@@ -34,7 +34,7 @@ func StartGrpcServer() {
 		MaxMsgLen:     65535,
 	}
 	var e error
-	if s, e = grpc.NewGrpcServer(grpcc, api.Group, api.Name); e != nil {
+	if s, e = cgrpc.NewCGrpcServer(cgrpcc, api.Group, api.Name); e != nil {
 		log.Error(nil,"[xgrpc] new error:", e)
 		return
 	}
@@ -44,18 +44,15 @@ func StartGrpcServer() {
 	//s.Use(globalmidwares)
 
 	//you just need to register your service here
-	api.RegisterStatusGrpcServer(s, service.SvcStatus, mids.AllMids())
+	api.RegisterStatusCGrpcServer(s, service.SvcStatus, mids.AllMids())
 	//example
-	//api.RegisterExampleGrpcServer(s, service.SvcExample, mids.AllMids())
+	//api.RegisterExampleCGrpcServer(s, service.SvcExample, mids.AllMids())
 
-	if e = s.StartGrpcServer(":7000"); e != nil {
-		if e != grpc.ErrServerClosed {
-			log.Error(nil,"[xgrpc] start error:", e)
-		} else {
-			log.Info(nil,"[xgrpc] server closed")
-		}
+	if e = s.StartCGrpcServer(":7000"); e != nil && e != cgrpc.ErrServerClosed {
+		log.Error(nil,"[xgrpc] start error:", e)
 		return
 	}
+	log.Info(nil,"[xgrpc] server closed")
 }
 
 //UpdateHandlerTimeout -
@@ -77,10 +74,10 @@ func UpdateHandlerTimeout(c *config.AppConfig) {
 	}
 }
 
-//StopGrpcServer -
-func StopGrpcServer() {
+//StopCGrpcServer -
+func StopCGrpcServer() {
 	if s != nil {
-		s.StopGrpcServer()
+		s.StopCGrpcServer()
 	}
 }`
 

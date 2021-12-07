@@ -1,4 +1,4 @@
-package grpc
+package cgrpc
 
 import (
 	"math"

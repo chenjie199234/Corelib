@@ -231,27 +231,27 @@ import (
 
 //sourceConfig can't hot update
 type sourceConfig struct {
-	GrpcServer *GrpcServerConfig       $json:"grpc_server"$
-	GrpcClient *GrpcClientConfig       $json:"grpc_client"$
-	CrpcServer *CrpcServerConfig       $json:"crpc_server"$
-	CrpcClient *CrpcClientConfig       $json:"crpc_client"$
-	WebServer  *WebServerConfig        $json:"web_server"$
-	WebClient  *WebClientConfig        $json:"web_client"$
-	Mongo      map[string]*MongoConfig $json:"mongo"$     //key example:xxx_mongo
-	Sql        map[string]*SqlConfig   $json:"sql"$       //key example:xx_sql
-	Redis      map[string]*RedisConfig $json:"redis"$     //key example:xx_redis
-	KafkaPub   []*KafkaPubConfig       $json:"kafka_pub"$
-	KafkaSub   []*KafkaSubConfig       $json:"kafka_sub"$
+	CGrpcServer *CGrpcServerConfig      $json:"cgrpc_server"$
+	CGrpcClient *CGrpcClientConfig      $json:"cgrpc_client"$
+	CrpcServer  *CrpcServerConfig       $json:"crpc_server"$
+	CrpcClient  *CrpcClientConfig       $json:"crpc_client"$
+	WebServer   *WebServerConfig        $json:"web_server"$
+	WebClient   *WebClientConfig        $json:"web_client"$
+	Mongo       map[string]*MongoConfig $json:"mongo"$     //key example:xxx_mongo
+	Sql         map[string]*SqlConfig   $json:"sql"$       //key example:xx_sql
+	Redis       map[string]*RedisConfig $json:"redis"$     //key example:xx_redis
+	KafkaPub    []*KafkaPubConfig       $json:"kafka_pub"$
+	KafkaSub    []*KafkaSubConfig       $json:"kafka_sub"$
 }
 
-//GrpcServerConfig
-type GrpcServerConfig struct {
+//CGrpcServerConfig
+type CGrpcServerConfig struct {
 	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
 	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
 }
 
-//GrpcClientConfig
-type GrpcClientConfig struct {
+//CGrpcClientConfig
+type CGrpcClientConfig struct {
 	ConnTimeout   ctime.Duration $json:"conn_timeout"$   //default 500ms
 	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
 	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
@@ -727,14 +727,14 @@ func initsource(path string) {
 	}
 }
 
-//GetGrpcServerConfig get the grpc net config
-func GetGrpcServerConfig() *GrpcServerConfig {
-	return sc.GrpcServer
+//GetCGrpcServerConfig get the grpc net config
+func GetCGrpcServerConfig() *CGrpcServerConfig {
+	return sc.CGrpcServer
 }
 
-//GetGrpcClientConfig get the grpc net config
-func GetGrpcClientConfig() *GrpcClientConfig {
-	return sc.GrpcClient
+//GetCGrpcClientConfig get the grpc net config
+func GetCGrpcClientConfig() *CGrpcClientConfig {
+	return sc.CGrpcClient
 }
 
 //GetCrpcServerConfig get the crpc net config

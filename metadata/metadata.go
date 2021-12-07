@@ -3,8 +3,8 @@ package metadata
 import (
 	"context"
 
+	"github.com/chenjie199234/Corelib/cgrpc"
 	"github.com/chenjie199234/Corelib/crpc"
-	"github.com/chenjie199234/Corelib/grpc"
 	"github.com/chenjie199234/Corelib/web"
 )
 
@@ -18,7 +18,7 @@ func GetMetadata(ctx context.Context) map[string]string {
 		return wc.GetMetadata()
 	} else if cc, ok := ctx.(*crpc.Context); ok {
 		return cc.GetMetadata()
-	} else if gc, ok := ctx.(*grpc.Context); ok {
+	} else if gc, ok := ctx.(*cgrpc.Context); ok {
 		return gc.GetMetadata()
 	} else if md, ok := ctx.Value(metadatakey{}).(map[string]string); ok {
 		return md

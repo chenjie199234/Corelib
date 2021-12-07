@@ -1,4 +1,4 @@
-package grpc
+package cgrpc
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 )
 
 type resolverBuilder struct {
-	c *GrpcClient
+	c *CGrpcClient
 }
 
 func (b *resolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {

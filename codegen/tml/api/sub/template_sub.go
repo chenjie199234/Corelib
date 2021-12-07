@@ -25,9 +25,9 @@ service {{.Sname}}{
 	//	option (pbex.crpc_midwares)="b";
 	//	option (pbex.crpc_midwares)="c";
 	//	option (pbex.crpc_midwares)="a";//this function on crpc protocol has 3 midwares,it's order is b,c,a
-	//	option (pbex.grpc_midwares)="b";
-	//	option (pbex.grpc_midwares)="c";
-	//	option (pbex.grpc_midwares)="a";//this function on grpc protocol has 3 midwares,it's order is b,c,a
+	//	option (pbex.cgrpc_midwares)="b";
+	//	option (pbex.cgrpc_midwares)="c";
+	//	option (pbex.cgrpc_midwares)="a";//this function on grpc protocol has 3 midwares,it's order is b,c,a
 	//}
 }
 //req can be set with pbex extentions

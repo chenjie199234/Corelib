@@ -1,4 +1,4 @@
-package grpc
+package cgrpc
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 )
 
 type balancerBuilder struct {
-	c *GrpcClient
+	c *CGrpcClient
 }
 
 func (b *balancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
@@ -32,7 +32,7 @@ func (b *balancerBuilder) Name() string {
 }
 
 type corelibBalancer struct {
-	c        *GrpcClient
+	c        *CGrpcClient
 	cc       balancer.ClientConn
 	servers  map[balancer.SubConn]*ServerForPick
 	pservers []*ServerForPick
@@ -167,12 +167,12 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 		return
 	}
 	if s.ConnectivityState == connectivity.Idle && atomic.LoadInt32(&exist.status) == int32(connectivity.Ready) {
-		log.Info(nil, "[grpc.client] server:", b.c.appname+":"+exist.addr, "offline")
+		log.Info(nil, "[cgrpc.client] server:", b.c.appname+":"+exist.addr, "offline")
 	} else if s.ConnectivityState == connectivity.Ready {
 		b.c.resolver.wakemanual()
-		log.Info(nil, "[grpc.client] server:", b.c.appname+":"+exist.addr, "online")
+		log.Info(nil, "[cgrpc.client] server:", b.c.appname+":"+exist.addr, "online")
 	} else if s.ConnectivityState == connectivity.TransientFailure {
-		log.Error(nil, "[grpc.client] connect to server:", b.c.appname+":"+exist.addr, "error:", s.ConnectionError)
+		log.Error(nil, "[cgrpc.client] connect to server:", b.c.appname+":"+exist.addr, "error:", s.ConnectionError)
 	}
 	olds := atomic.LoadInt32(&exist.status)
 	atomic.StoreInt32(&exist.status, int32(s.ConnectivityState))

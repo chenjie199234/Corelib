@@ -7,11 +7,11 @@ import (
 )
 
 const textsource = `{
-	"grpc_server":{
+	"cgrpc_server":{
 		"global_timeout":"200ms",
 		"heart_probe":"1.5s"
 	},
-	"grpc_client":{
+	"cgrpc_client":{
 		"conn_timeout":"200ms",
 		"global_timeout":"200ms",
 		"heart_probe":"1.5s"

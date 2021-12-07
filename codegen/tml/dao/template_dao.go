@@ -16,13 +16,13 @@ import (
 	//example "{{.}}/api/deps/example"
 	"{{.}}/config"
 
+	"github.com/chenjie199234/Corelib/cgrpc"
 	"github.com/chenjie199234/Corelib/crpc"
-	"github.com/chenjie199234/Corelib/grpc"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/web"
 )
 
-//var ExampleGrpcApi example.ExampleGrpcClient
+//var ExampleCGrpcApi example.ExampleCGrpcClient
 //var ExampleCrpcApi example.ExampleCrpcClient
 //var ExampleWebApi  example.ExampleWebClient
 
@@ -31,15 +31,15 @@ func NewApi() error {
 	var e error
 	_ = e //avoid unuse
 
-	grpcc := getGrpcClientConfig()
-	_ = grpcc //avoid unuse
+	cgrpcc := getCGrpcClientConfig()
+	_ = cgrpcc //avoid unuse
 
-	//init grpc client below
-	//examplegrpc e = grpc.NewGrpcClient(grpcc, api.Group, api.Name, "examplegroup", "examplename")
+	//init cgrpc client below
+	//examplecgrpc e = cgrpc.NewCGrpcClient(cgrpcc, api.Group, api.Name, "examplegroup", "examplename")
 	//if e != nil {
 	//         return e
 	//}
-	//ExampleGrpcApi = example.NewExampleGrpcClient(examplegrpc)
+	//ExampleCGrpcApi = example.NewExampleCGrpcClient(examplecgrpc)
 
 	crpcc := getCrpcClientConfig()
 	_ = crpcc //avoid unuse
@@ -64,20 +64,20 @@ func NewApi() error {
 	return nil
 }
 
-func getGrpcClientConfig() *grpc.ClientConfig {
-	gc := config.GetGrpcClientConfig()
-	return &grpc.ClientConfig{
+func getCGrpcClientConfig() *cgrpc.ClientConfig {
+	gc := config.GetCGrpcClientConfig()
+	return &cgrpc.ClientConfig{
 		ConnTimeout:   time.Duration(gc.ConnTimeout),
 		GlobalTimeout: time.Duration(gc.GlobalTimeout),
 		HeartPorbe:    time.Duration(gc.HeartProbe),
 		SocketRBuf:    2048,
 		SocketWBuf:    2048,
 		MaxMsgLen:     65535,
-		Discover:      grpcDNS,
+		Discover:      cgrpcDNS,
 	}
 }
 
-func grpcDNS(group, name string, manually <-chan *struct{}, client *grpc.GrpcClient) {
+func cgrpcDNS(group, name string, manually <-chan *struct{}, client *cgrpc.CGrpcClient) {
 	tker := time.NewTicker(time.Second * 10)
 	for {
 		select {
@@ -85,10 +85,10 @@ func grpcDNS(group, name string, manually <-chan *struct{}, client *grpc.GrpcCli
 		case <-manually:
 			tker.Reset(time.Second * 10)
 		}
-		result := make(map[string]*grpc.RegisterData)
+		result := make(map[string]*cgrpc.RegisterData)
 		addrs, e := net.LookupHost(name + "-service-headless" + "." + group)
 		if e != nil {
-			log.Error(nil, "[grpc.dns] get:", name+"-service-headless", "addrs error:", e)
+			log.Error(nil, "[cgrpc.dns] get:", name+"-service-headless", "addrs error:", e)
 			continue
 		}
 		for i := range addrs {
@@ -97,7 +97,7 @@ func grpcDNS(group, name string, manually <-chan *struct{}, client *grpc.GrpcCli
 		dserver := make(map[string]struct{})
 		dserver["dns"] = struct{}{}
 		for _, addr := range addrs {
-			result[addr] = &grpc.RegisterData{DServers: dserver}
+			result[addr] = &cgrpc.RegisterData{DServers: dserver}
 		}
 		for len(tker.C) > 0 {
 			<-tker.C

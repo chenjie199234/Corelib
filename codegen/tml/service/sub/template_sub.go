@@ -16,9 +16,9 @@ import (
 	{{.Sname}}dao "{{.Pname}}/dao/{{.Sname}}"
 	"{{.Pname}}/ecode"
 
-	//"github.com/chenjie199234/Corelib/log"
-	//"github.com/chenjie199234/Corelib/grpc"
+	//"github.com/chenjie199234/Corelib/cgrpc"
 	//"github.com/chenjie199234/Corelib/crpc"
+	//"github.com/chenjie199234/Corelib/log"
 	//"github.com/chenjie199234/Corelib/web"
 )
 

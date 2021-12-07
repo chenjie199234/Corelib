@@ -60,14 +60,11 @@ func StartWebServer() {
 	//example
 	//api.RegisterExampleWebServer(s, service.SvcExample, mids.AllMids())
 
-	if e = s.StartWebServer(":8000"); e != nil {
-		if e != web.ErrServerClosed {
-			log.Error(nil,"[xweb] start error:", e)
-		} else {
-			log.Info(nil,"[xweb] server closed")
-		}
+	if e = s.StartWebServer(":8000"); e != nil && e != web.ErrServerClosed {
+		log.Error(nil,"[xweb] start error:", e)
 		return
 	}
+	log.Info(nil,"[xweb] server closed")
 }
 
 //UpdateHandlerTimeout -

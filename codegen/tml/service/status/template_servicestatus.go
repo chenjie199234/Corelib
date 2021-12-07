@@ -17,9 +17,9 @@ import (
 	statusdao "{{.}}/dao/status"
 	//"{{.}}/ecode"
 
-	//"github.com/chenjie199234/Corelib/log"
+	//"github.com/chenjie199234/Corelib/cgrpc"
 	//"github.com/chenjie199234/Corelib/crpc"
-	//"github.com/chenjie199234/Corelib/grpc"
+	//"github.com/chenjie199234/Corelib/log"
 	//"github.com/chenjie199234/Corelib/web"
 )
 
@@ -40,8 +40,8 @@ func (s *Service) Ping(ctx context.Context,in *api.Pingreq) (*api.Pingresp, erro
 	//if _, ok := ctx.(*crpc.Context); ok {
 	//        log.Info("this is a crpc call")
 	//}
-	//if _, ok := ctx.(*grpc.Context); ok {
-	//        log.Info("this is a grpc call")
+	//if _, ok := ctx.(*cgrpc.Context); ok {
+	//        log.Info("this is a cgrpc call")
 	//}
 	//if _, ok := ctx.(*web.Context); ok {
 	//        log.Info("this is a web call")

@@ -48,14 +48,11 @@ func StartCrpcServer() {
 	//example
 	//api.RegisterExampleCrpcServer(s, service.SvcExample,mids.AllMids())
 
-	if e = s.StartCrpcServer(":9000"); e != nil {
-		if e != crpc.ErrServerClosed {
-			log.Error(nil,"[xcrpc] start error:", e)
-		} else {
-			log.Info(nil,"[xcrpc] server closed")
-		}
+	if e = s.StartCrpcServer(":9000"); e != nil && e != crpc.ErrServerClosed {
+		log.Error(nil,"[xcrpc] start error:", e)
 		return
 	}
+	log.Info(nil,"[xcrpc] server closed")
 }
 
 //UpdateHandlerTimeout -

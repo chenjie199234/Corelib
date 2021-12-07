@@ -41,7 +41,7 @@ func main() {
 				}
 			}
 			//delete old file
-			oldfile := f.GeneratedFilenamePrefix + "_grpc.pb.go"
+			oldfile := f.GeneratedFilenamePrefix + "_cgrpc.pb.go"
 			if e := os.RemoveAll(oldfile); e != nil {
 				panic("remove old file " + oldfile + " error:" + e.Error())
 			}

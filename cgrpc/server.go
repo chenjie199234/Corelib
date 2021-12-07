@@ -1,4 +1,4 @@
-package grpc
+package cgrpc
 
 import (
 	"context"
@@ -72,7 +72,7 @@ func (c *ServerConfig) validate() {
 	}
 }
 
-type GrpcServer struct {
+type CGrpcServer struct {
 	c              *ServerConfig
 	selfappname    string
 	global         []OutsideHandler
@@ -86,7 +86,7 @@ type GrpcServer struct {
 	refreshclosewait chan *struct{}
 }
 
-func NewGrpcServer(c *ServerConfig, selfgroup, selfname string) (*GrpcServer, error) {
+func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -101,7 +101,7 @@ func NewGrpcServer(c *ServerConfig, selfgroup, selfname string) (*GrpcServer, er
 		c = &ServerConfig{}
 	}
 	c.validate()
-	serverinstance := &GrpcServer{
+	serverinstance := &CGrpcServer{
 		c:                c,
 		selfappname:      selfgroup + "." + selfname,
 		global:           make([]OutsideHandler, 0),
@@ -136,12 +136,12 @@ func NewGrpcServer(c *ServerConfig, selfgroup, selfname string) (*GrpcServer, er
 	return serverinstance, nil
 }
 
-var ErrServerClosed = errors.New("[grpc.server] closed")
+var ErrServerClosed = errors.New("[cgrpc.server] closed")
 
-func (s *GrpcServer) StartGrpcServer(listenaddr string) error {
+func (s *CGrpcServer) StartCGrpcServer(listenaddr string) error {
 	l, e := net.Listen("tcp", listenaddr)
 	if e != nil {
-		return errors.New("[grpc.server] listen tcp addr: " + listenaddr + " error:" + e.Error())
+		return errors.New("[cgrpc.server] listen tcp addr: " + listenaddr + " error:" + e.Error())
 	}
 	for _, service := range s.services {
 		s.server.RegisterService(service, nil)
@@ -154,7 +154,7 @@ func (s *GrpcServer) StartGrpcServer(listenaddr string) error {
 	}
 	return nil
 }
-func (s *GrpcServer) StopGrpcServer() {
+func (s *CGrpcServer) StopCGrpcServer() {
 	defer s.closewait.Wait()
 	stop := false
 	for {
@@ -191,7 +191,7 @@ func (s *GrpcServer) StopGrpcServer() {
 }
 
 //map key path,map value handler timeout,0 means no handler specific timeout,but still has global timeout
-func (this *GrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
+func (this *CGrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
 	tmp := make(map[string]time.Duration)
 	for path, timeout := range htcs {
 		if timeout == 0 {
@@ -206,7 +206,7 @@ func (this *GrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout)), unsafe.Pointer(&tmp))
 }
 
-func (this *GrpcServer) getHandlerTimeout(path string) time.Duration {
+func (this *CGrpcServer) getHandlerTimeout(path string) time.Duration {
 	handlerTimeout := *(*map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout))))
 	if t, ok := handlerTimeout[path]; ok {
 		if this.c.GlobalTimeout <= t {
@@ -218,12 +218,12 @@ func (this *GrpcServer) getHandlerTimeout(path string) time.Duration {
 }
 
 //thread unsafe
-func (s *GrpcServer) Use(globalMids ...OutsideHandler) {
+func (s *CGrpcServer) Use(globalMids ...OutsideHandler) {
 	s.global = append(s.global, globalMids...)
 }
 
 //thread unsafe
-func (s *GrpcServer) RegisterHandler(sname, mname string, handlers ...OutsideHandler) {
+func (s *CGrpcServer) RegisterHandler(sname, mname string, handlers ...OutsideHandler) {
 	service, ok := s.services[sname]
 	if !ok {
 		service = &grpc.ServiceDesc{
@@ -240,7 +240,7 @@ func (s *GrpcServer) RegisterHandler(sname, mname string, handlers ...OutsideHan
 		Handler:    s.insidehandler(sname, mname, handlers...),
 	})
 }
-func (s *GrpcServer) insidehandler(sname, mname string, handlers ...OutsideHandler) func(interface{}, context.Context, func(interface{}) error, grpc.UnaryServerInterceptor) (interface{}, error) {
+func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHandler) func(interface{}, context.Context, func(interface{}) error, grpc.UnaryServerInterceptor) (interface{}, error) {
 	path := "/" + sname + "/" + mname
 	totalhandlers := append(s.global, handlers...)
 	return func(_ interface{}, ctx context.Context, decode func(interface{}) error, _ grpc.UnaryServerInterceptor) (resp interface{}, e error) {
@@ -288,10 +288,10 @@ func (s *GrpcServer) insidehandler(sname, mname string, handlers ...OutsideHandl
 			if data := grpcmetadata.Get("core_tracedata"); len(data) == 0 || data[0] == "" {
 				ctx = trace.InitTrace(ctx, "", s.selfappname, host.Hostip, "GRPC", path, 0)
 			} else if len(data) != 5 || data[4] == "" {
-				log.Error(nil, "[grpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format error")
+				log.Error(nil, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format error")
 				return nil, cerror.ErrReq
 			} else if clientdeep, e := strconv.Atoi(data[4]); e != nil {
-				log.Error(nil, "[grpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format error")
+				log.Error(nil, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format error")
 				return nil, cerror.ErrReq
 			} else {
 				ctx = trace.InitTrace(ctx, data[0], s.selfappname, host.Hostip, "GRPC", path, clientdeep)
@@ -307,7 +307,7 @@ func (s *GrpcServer) insidehandler(sname, mname string, handlers ...OutsideHandl
 			if len(data) != 0 {
 				mdata = make(map[string]string)
 				if e := json.Unmarshal(common.Str2byte(data[0]), &mdata); e != nil {
-					log.Error(nil, "[grpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC metadata:", data[0], "format error:", e)
+					log.Error(nil, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC metadata:", data[0], "format error:", e)
 					return nil, cerror.ErrReq
 				}
 			}
@@ -329,7 +329,7 @@ func (s *GrpcServer) insidehandler(sname, mname string, handlers ...OutsideHandl
 			if e := recover(); e != nil {
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[grpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC panic:", e, "stack:", base64.StdEncoding.EncodeToString(stack[:n]))
+				log.Error(workctx, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC panic:", e, "stack:", base64.StdEncoding.EncodeToString(stack[:n]))
 				workctx.e = ErrPanic
 				workctx.resp = nil
 			}

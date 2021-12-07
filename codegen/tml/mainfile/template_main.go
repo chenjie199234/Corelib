@@ -64,7 +64,7 @@ func main() {
 	}()
 	wg.Add(1)
 	go func() {
-		xgrpc.StartGrpcServer()
+		xgrpc.StartCGrpcServer()
 		select {
 		case ch <- syscall.SIGTERM:
 		default:
@@ -88,7 +88,7 @@ func main() {
 	}()
 	wg.Add(1)
 	go func() {
-		xgrpc.StopGrpcServer()
+		xgrpc.StopCGrpcServer()
 		wg.Done()
 	}()
 	wg.Wait()

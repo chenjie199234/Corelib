@@ -38,7 +38,7 @@ pb() {
 	cd $workdir
 	protoc -I ./ -I $corelib --go_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --go-pbex_out=paths=source_relative:. ./api/*.proto
-	protoc -I ./ -I $corelib --go-grpc_out=paths=source_relative:. ./api/*.proto
+	protoc -I ./ -I $corelib --go-cgrpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --go-crpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --go-web_out=paths=source_relative:. ./api/*.proto
 	go mod tidy
@@ -239,7 +239,7 @@ if "%1" == "new" (
 	cd %workdir%
 	protoc -I ./ -I %corelib% --go_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-pbex_out=paths=source_relative:. ./api/*.proto
-	protoc -I ./ -I %corelib% --go-grpc_out=paths=source_relative:. ./api/*.proto
+	protoc -I ./ -I %corelib% --go-cgrpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-crpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-web_out=paths=source_relative:. ./api/*.proto
 	go mod tidy

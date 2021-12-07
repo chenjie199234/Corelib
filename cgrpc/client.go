@@ -1,4 +1,4 @@
-package grpc
+package cgrpc
 
 import (
 	"context"
@@ -30,7 +30,7 @@ import (
 
 type PickHandler func(servers []*ServerForPick) *ServerForPick
 
-type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *GrpcClient)
+type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *CGrpcClient)
 
 type ClientConfig struct {
 	ConnTimeout   time.Duration
@@ -76,7 +76,7 @@ func (c *ClientConfig) validate() {
 	}
 }
 
-type GrpcClient struct {
+type CGrpcClient struct {
 	c           *ClientConfig
 	selfappname string
 	appname     string
@@ -85,7 +85,7 @@ type GrpcClient struct {
 	balancer    *corelibBalancer
 }
 
-func NewGrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*GrpcClient, error) {
+func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*CGrpcClient, error) {
 	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
 		return nil, e
 	}
@@ -107,17 +107,17 @@ func NewGrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*G
 		return nil, e
 	}
 	if c == nil {
-		return nil, errors.New("[grpc.client] missing config")
+		return nil, errors.New("[cgrpc.client] missing config")
 	}
 	if c.Discover == nil {
-		return nil, errors.New("[grpc.client] missing discover in config")
+		return nil, errors.New("[cgrpc.client] missing discover in config")
 	}
 	if c.Picker == nil {
-		log.Warning(nil, "[grpc.client] missing picker in config,default picker will be used")
+		log.Warning(nil, "[cgrpc.client] missing picker in config,default picker will be used")
 		c.Picker = defaultPicker
 	}
 	c.validate()
-	clientinstance := &GrpcClient{
+	clientinstance := &CGrpcClient{
 		c:           c,
 		selfappname: selfappname,
 		appname:     appname,
@@ -133,10 +133,10 @@ func NewGrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*G
 			for _, cert := range c.CAs {
 				certPEM, e := os.ReadFile(cert)
 				if e != nil {
-					return nil, errors.New("[grpc.client] read cert file:" + cert + " error:" + e.Error())
+					return nil, errors.New("[cgrpc.client] read cert file:" + cert + " error:" + e.Error())
 				}
 				if !certpool.AppendCertsFromPEM(certPEM) {
-					return nil, errors.New("[grpc.client] load cert file:" + cert + " error:" + e.Error())
+					return nil, errors.New("[cgrpc.client] load cert file:" + cert + " error:" + e.Error())
 				}
 			}
 		}
@@ -176,7 +176,7 @@ type RegisterData struct {
 }
 
 //all: key server's addr "ip:port"
-func (c *GrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
+func (c *CGrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 	s := resolver.State{
 		Addresses: make([]resolver.Address, 0, len(all)),
 	}
@@ -194,7 +194,7 @@ func (c *GrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 	}
 	c.resolver.cc.UpdateState(s)
 }
-func (c *GrpcClient) Call(ctx context.Context, path string, req interface{}, resp interface{}, metadata map[string]string) error {
+func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, resp interface{}, metadata map[string]string) error {
 	start := time.Now()
 	if c.c.GlobalTimeout != 0 {
 		var cancel context.CancelFunc

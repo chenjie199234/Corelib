@@ -1,4 +1,4 @@
-package grpc
+package cgrpc
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-func (s *GrpcServer) getcontext(c context.Context, path string, peername string, peeraddr string, metadata map[string]string, handlers []OutsideHandler, d func(interface{}) error) *Context {
+func (s *CGrpcServer) getcontext(c context.Context, path string, peername string, peeraddr string, metadata map[string]string, handlers []OutsideHandler, d func(interface{}) error) *Context {
 	ctx, ok := s.ctxpool.Get().(*Context)
 	if !ok {
 		return &Context{
@@ -35,7 +35,7 @@ func (s *GrpcServer) getcontext(c context.Context, path string, peername string,
 	ctx.status = 0
 	return ctx
 }
-func (s *GrpcServer) putcontext(ctx *Context) {
+func (s *CGrpcServer) putcontext(ctx *Context) {
 	s.ctxpool.Put(ctx)
 }
 
@@ -66,7 +66,7 @@ func (c *Context) Abort(e error) {
 	c.status = -1
 	c.e = cerror.ConvertStdError(e)
 	if c.e != nil && (c.e.Httpcode < 400 || c.e.Httpcode > 999) {
-		panic("[grpc.Context.Abort] httpcode must in [400,999]")
+		panic("[cgrpc.Context.Abort] httpcode must in [400,999]")
 	}
 }
 
