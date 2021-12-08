@@ -48,7 +48,7 @@ func StartCGrpcServer() {
 	//example
 	//api.RegisterExampleCGrpcServer(s, service.SvcExample, mids.AllMids())
 
-	if e = s.StartCGrpcServer(":7000"); e != nil && e != cgrpc.ErrServerClosed {
+	if e = s.StartCGrpcServer(":10000"); e != nil && e != cgrpc.ErrServerClosed {
 		log.Error(nil,"[xgrpc] start error:", e)
 		return
 	}

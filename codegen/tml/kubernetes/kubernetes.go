@@ -6,10 +6,22 @@ import (
 	"text/template"
 )
 
-const dockerfiletext = `FROM debian:buster
-RUN apt-get update && apt-get install -y ca-certificates curl procps neovim && mkdir /root/app && mkdir /root/app/kubeconfig && mkdir /root/app/remoteconfig
+const dockerfiletext = `FROM golang:1.17.4 as builder
+ENV GOSUMDB='off' \
+	GOOS='linux' \
+	GOARCH='amd64' \
+	CGO_ENABLED=0
+
+RUN mkdir /code
+ADD . /code
+WORKDIR /code
+RUN echo "start build" && go mod tidy && go build -ldflags '-w -s' -o main && echo "end build"
+
+FROM debian:buster
+RUN apt-get update && apt-get install -y ca-certificates curl inetutils-telnet inetutils-ping inetutils-traceroute dnsutils iproute2 procps neovim && mkdir /root/app && mkdir /root/app/kubeconfig && mkdir /root/app/remoteconfig
 WORKDIR /root/app
-COPY main probe.sh AppConfig.json SourceConfig.json ./
+EXPOSE 8000 9000 10000
+COPY --from=builder /code/main /code/probe.sh /code/AppConfig.json /code/SourceConfig.json ./
 ENTRYPOINT ["./main"]`
 
 const deploymenttext = `apiVersion: apps/v1
@@ -56,8 +68,6 @@ spec:
               value: kube
             - name: RUN_ENV
               value: <RUN_ENV>
-            - name: SERVER_VERIFY_DATA
-              value: <SERVER_VERIFY_DATA>
             - name: CONFIG_TYPE
               value: <CONFIG_TYPE>
             - name: REMOTE_CONFIG_ADDRS
