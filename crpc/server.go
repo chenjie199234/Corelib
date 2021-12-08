@@ -19,6 +19,7 @@ import (
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/host"
+	"github.com/chenjie199234/Corelib/util/name"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -85,14 +86,8 @@ type client struct {
 }
 
 func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, error) {
-	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
-		return nil, e
-	}
-	if e := common.NameCheck(selfgroup, false, true, false, true); e != nil {
-		return nil, e
-	}
 	appname := selfgroup + "." + selfname
-	if e := common.NameCheck(appname, true, true, false, true); e != nil {
+	if e := name.FullCheck(appname); e != nil {
 		return nil, e
 	}
 	if c == nil {

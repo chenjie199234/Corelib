@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/rotatefile"
-	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/name"
 )
 
 const (
@@ -97,14 +97,8 @@ type Cmd struct {
 
 func (s *Super) CreateGroup(groupname, appname, url string, buildcmds []*Cmd, runcmd *Cmd) error {
 	//check group name
-	if e := common.NameCheck(appname, false, true, false, true); e != nil {
-		return e
-	}
-	if e := common.NameCheck(groupname, false, true, false, true); e != nil {
-		return e
-	}
 	fullappname := groupname + "." + appname
-	if e := common.NameCheck(fullappname, true, true, false, true); e != nil {
+	if e := name.FullCheck(fullappname); e != nil {
 		return e
 	}
 	s.lker.Lock()

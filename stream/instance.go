@@ -6,27 +6,21 @@ import (
 	"net"
 	"sync"
 
-	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/name"
 )
 
 type Instance struct {
-	selfname string
-	c        *InstanceConfig
+	selfappname string
+	c           *InstanceConfig
 
 	sync.Mutex
 	listeners []*net.TCPListener
 	mng       *connmng
 }
 
-//be careful about the callback func race
-func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
-	if e := common.NameCheck(name, false, true, false, true); e != nil {
-		return nil, e
-	}
-	if e := common.NameCheck(group, false, true, false, true); e != nil {
-		return nil, e
-	}
-	if e := common.NameCheck(group+"."+name, true, true, false, true); e != nil {
+func NewInstance(c *InstanceConfig, selfgroup, selfname string) (*Instance, error) {
+	selfappname := selfgroup + "." + selfname
+	if e := name.FullCheck(selfappname); e != nil {
 		return nil, e
 	}
 	if c == nil {
@@ -43,10 +37,10 @@ func NewInstance(c *InstanceConfig, group, name string) (*Instance, error) {
 	}
 	c.validate()
 	stream := &Instance{
-		selfname:  group + "." + name,
-		c:         c,
-		listeners: make([]*net.TCPListener, 0),
-		mng:       newconnmng(int(c.GroupNum), c.HeartprobeInterval, c.SendIdleTimeout, c.RecvIdleTimeout),
+		selfappname: selfappname,
+		c:           c,
+		listeners:   make([]*net.TCPListener, 0),
+		mng:         newconnmng(int(c.GroupNum), c.HeartprobeInterval, c.SendIdleTimeout, c.RecvIdleTimeout),
 	}
 	return stream, nil
 }
@@ -59,7 +53,7 @@ func (this *Instance) Stop() {
 	this.Unlock()
 }
 func (this *Instance) GetSelfName() string {
-	return this.selfname
+	return this.selfappname
 }
 func (this *Instance) GetPeerNum() int32 {
 	return this.mng.GetPeerNum()

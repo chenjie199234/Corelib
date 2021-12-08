@@ -93,7 +93,7 @@ func (this *Instance) sworker(p *Peer) {
 		return
 	}
 	//verify client success,send self's verify message to client
-	verifymsg := makeVerifyMsg(this.selfname, verifydata, p.selfmaxmsglen)
+	verifymsg := makeVerifyMsg(this.selfappname, verifydata, p.selfmaxmsglen)
 	defer bufpool.PutBuffer(verifymsg)
 	if _, e := p.conn.Write(verifymsg.Bytes()); e != nil {
 		log.Error(nil, "[Stream.sworker] write verify msg to:", p.peeruniquename, "error:", e)
@@ -167,7 +167,7 @@ func (this *Instance) cworker(p *Peer, verifydata []byte, dl time.Time) bool {
 		}
 	}
 	//send self's verify message to server
-	verifymsg := makeVerifyMsg(this.selfname, verifydata, p.selfmaxmsglen)
+	verifymsg := makeVerifyMsg(this.selfappname, verifydata, p.selfmaxmsglen)
 	defer bufpool.PutBuffer(verifymsg)
 	if _, e := p.conn.Write(verifymsg.Bytes()); e != nil {
 		log.Error(nil, "[Stream.cworker] write verify msg to:", p.conn.RemoteAddr().String(), "error:", e)

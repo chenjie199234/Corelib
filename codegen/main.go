@@ -30,13 +30,13 @@ import (
 	"github.com/chenjie199234/Corelib/codegen/tml/service"
 	servicestatus "github.com/chenjie199234/Corelib/codegen/tml/service/status"
 	subservice "github.com/chenjie199234/Corelib/codegen/tml/service/sub"
-	"github.com/chenjie199234/Corelib/util/common"
+	cname "github.com/chenjie199234/Corelib/util/name"
 )
 
-var name = flag.String("n", "", "project's name\ncharacter:[a-z][0-9]\nfirst character must in [a-z]")
-var group = flag.String("g", "", "project's group\ncharacter:[a-z][0-9]\nfirst character must in [a-z]")
+var name = flag.String("n", "", "project's name\ncharacter:[a-z][A-Z][0-9][_]\nfirst character must in [a-z][A-Z]")
+var group = flag.String("g", "", "project's group\ncharacter:[a-z][A-Z][0-9][-_|()[]{}<>]\nfirst character must in [a-z][A-Z]")
 var dir = flag.String("d", "", "project's create dir")
-var sub = flag.String("s", "", "create subservice's name in project\ncharacter:[a-z][A-Z][0-9]")
+var sub = flag.String("s", "", "create subservice's name in project\ncharacter:[a-z][A-Z][0-9][_]\nfirst character must in [a-z][A-Z]")
 var kub = flag.Bool("k", false, "update exist project's kubernetes config file")
 var needkubernetes bool
 var needkubernetesservice bool
@@ -46,13 +46,7 @@ var kubernetesingresshost string
 func main() {
 	flag.Parse()
 	//pre check
-	if e := common.NameCheck(*name, false, true, false, true); e != nil {
-		panic(e)
-	}
-	if e := common.NameCheck(*group, false, true, false, true); e != nil {
-		panic(e)
-	}
-	if e := common.NameCheck(*group+"."+*name, true, true, false, true); e != nil {
+	if e := cname.FullCheck(*group + "." + *name); e != nil {
 		panic(e)
 	}
 	if len(*sub) == 0 {
@@ -62,7 +56,7 @@ func main() {
 		} else {
 			createBaseProject()
 		}
-	} else if e := common.NameCheck(*sub, false, true, false, true); e != nil {
+	} else if e := cname.NameCheck(*sub); e != nil {
 		panic(e)
 	} else {
 		checkBaseProjectName()

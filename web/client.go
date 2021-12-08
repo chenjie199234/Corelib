@@ -19,6 +19,7 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/name"
 )
 
 type PickHandler func(servers []*ServerForPick) *ServerForPick
@@ -81,25 +82,13 @@ type WebClient struct {
 	balancer *corelibBalancer
 }
 
-func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*WebClient, error) {
-	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
-		return nil, e
-	}
-	if e := common.NameCheck(name, false, true, false, true); e != nil {
-		return nil, e
-	}
-	if e := common.NameCheck(selfgroup, false, true, false, true); e != nil {
-		return nil, e
-	}
-	if e := common.NameCheck(group, false, true, false, true); e != nil {
-		return nil, e
-	}
-	appname := group + "." + name
-	if e := common.NameCheck(appname, true, true, false, true); e != nil {
+func NewWebClient(c *ClientConfig, selfgroup, selfname, peergroup, peername string) (*WebClient, error) {
+	appname := peergroup + "." + peername
+	if e := name.FullCheck(appname); e != nil {
 		return nil, e
 	}
 	selfappname := selfgroup + "." + selfname
-	if e := common.NameCheck(selfappname, true, true, false, true); e != nil {
+	if e := name.FullCheck(selfappname); e != nil {
 		return nil, e
 	}
 	if c == nil {
@@ -137,7 +126,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, group, name string) (*We
 	}
 	client.balancer = newCorelibBalancer(client)
 	//init discover
-	client.resolver = newCorelibResolver(group, name, client)
+	client.resolver = newCorelibResolver(peergroup, peername, client)
 	return client, nil
 }
 

@@ -17,6 +17,7 @@ import (
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/name"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -82,25 +83,13 @@ type CrpcClient struct {
 	reqpool *sync.Pool
 }
 
-func NewCrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*CrpcClient, error) {
-	if e := common.NameCheck(selfname, false, true, false, true); e != nil {
-		return nil, e
-	}
-	if e := common.NameCheck(name, false, true, false, true); e != nil {
-		return nil, e
-	}
-	if e := common.NameCheck(selfgroup, false, true, false, true); e != nil {
-		return nil, e
-	}
-	if e := common.NameCheck(group, false, true, false, true); e != nil {
-		return nil, e
-	}
-	appname := group + "." + name
-	if e := common.NameCheck(appname, true, true, false, true); e != nil {
+func NewCrpcClient(c *ClientConfig, selfgroup, selfname, peergroup, peername string) (*CrpcClient, error) {
+	appname := peergroup + "." + peername
+	if e := name.FullCheck(appname); e != nil {
 		return nil, e
 	}
 	selfappname := selfgroup + "." + selfname
-	if e := common.NameCheck(selfappname, true, true, false, true); e != nil {
+	if e := name.FullCheck(selfappname); e != nil {
 		return nil, e
 	}
 	if c == nil {
@@ -156,7 +145,7 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, group, name string) (*C
 	instancec.Offlinefunc = client.offlinefunc
 	client.instance, _ = stream.NewInstance(instancec, selfgroup, selfname)
 	//init discover
-	client.resolver = newCorelibResolver(group, name, client)
+	client.resolver = newCorelibResolver(peergroup, peername, client)
 	return client, nil
 }
 

@@ -1,98 +1,9 @@
 package common
 
 import (
-	"errors"
 	"unsafe"
 )
 
-func NameCheck(name string, point bool, number bool, upper bool, lower bool) error {
-	if !upper && !lower {
-		return errors.New("[name.check] option error:upper or lower must be allowed")
-	}
-	if len(name) == 0 {
-		return errors.New("[name.check] empty")
-	}
-	if len(name) > 32 {
-		return errors.New("[name.check] too long")
-	}
-	if upper && lower {
-		if name[0] < 65 || (name[0] > 90 && name[0] < 97) || name[0] > 122 {
-			return errors.New("[name.check] first character must in [a-z][A-Z]")
-		}
-	} else if upper {
-		if name[0] < 65 || name[0] > 90 {
-			return errors.New("[name.check] first character must in [A-Z]")
-		}
-	} else {
-		if name[0] < 97 || name[0] > 122 {
-			return errors.New("[name.check] first character must in [a-z]")
-		}
-	}
-	for _, v := range name {
-		if point {
-			if number {
-				if upper && lower {
-					if (v != 46 && v < 48) || (v > 57 && v < 65) || (v > 90 && v < 97) || v > 122 {
-						return errors.New("[name.check] illegal character,must in [a-z][A-Z][0-9][.]")
-					}
-				} else if upper {
-					if (v != 46 && v < 48) || (v > 57 && v < 65) || (v > 90) {
-						return errors.New("[name.check] illegal character,must in [A-Z][0-9][.]")
-					}
-				} else {
-					if (v != 46 && v < 48) || (v > 57 && v < 97) || v > 122 {
-						return errors.New("[name.check] illegal character,must in [a-z][0-9][.]")
-					}
-				}
-			} else {
-				if upper && lower {
-					if (v != 46 && v < 65) || (v > 90 && v < 97) || v > 122 {
-						return errors.New("[name.check] illegal character,must in [a-z][A-Z][.]")
-					}
-				} else if upper {
-					if (v != 46 && v < 65) || v > 90 {
-						return errors.New("[name.check] illegal character,must in [A-Z][.]")
-					}
-				} else {
-					if (v != 46 && v < 97) || v > 122 {
-						return errors.New("[name.check] illegal character,must in [a-z][.]")
-					}
-				}
-			}
-		} else {
-			if number {
-				if upper && lower {
-					if v < 48 || (v > 57 && v < 65) || (v > 90 && v < 97) || v > 122 {
-						return errors.New("[name.check] illegal character,must in [a-z][A-Z][0-9]")
-					}
-				} else if upper {
-					if v < 48 || (v > 57 && v < 65) || v > 90 {
-						return errors.New("[name.check] illegal character,must in [A-Z][0-9]")
-					}
-				} else {
-					if v < 48 || (v > 57 && v < 97) || v > 122 {
-						return errors.New("[name.check] illegal character,must in [a-z][0-9]")
-					}
-				}
-			} else {
-				if upper && lower {
-					if v < 65 || (v > 90 && v < 97) || v > 122 {
-						return errors.New("[name.check] illegal character,must in [a-z][A-Z]")
-					}
-				} else if upper {
-					if name[0] < 65 || name[0] > 90 {
-						return errors.New("[name.check] illegal character,must in [A-Z]")
-					}
-				} else {
-					if name[0] < 97 || name[0] > 122 {
-						return errors.New("[name.check] illegal character,must in [a-z]")
-					}
-				}
-			}
-		}
-	}
-	return nil
-}
 func Str2byte(data string) []byte {
 	temp := (*[2]uintptr)(unsafe.Pointer(&data))
 	result := [3]uintptr{temp[0], temp[1], temp[1]}
