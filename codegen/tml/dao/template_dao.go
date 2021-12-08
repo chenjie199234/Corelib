@@ -92,7 +92,7 @@ func cgrpcDNS(group, name string, manually <-chan *struct{}, client *cgrpc.CGrpc
 			continue
 		}
 		for i := range addrs {
-			addrs[i] = addrs[i] + ":7000"
+			addrs[i] = addrs[i] + ":10000"
 		}
 		dserver := make(map[string]struct{})
 		dserver["dns"] = struct{}{}
