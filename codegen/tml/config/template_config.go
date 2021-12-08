@@ -383,6 +383,36 @@ func initsource(path string) {
 		Close()
 		os.Exit(1)
 	}
+	if sc.CGrpcServer == nil {
+		sc.CGrpcServer = &CGrpcServerConfig{
+			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
+			HeartProbe:    ctime.Duration(1500 * time.Millisecond),
+		}
+	} else {
+		if sc.CGrpcServer.GlobalTimeout <= 0 {
+			sc.CGrpcServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
+		}
+		if sc.CGrpcServer.HeartProbe <= 0 {
+			sc.CGrpcServer.HeartProbe = ctime.Duration(1500 * time.Millisecond)
+		}
+	}
+	if sc.CGrpcClient == nil {
+		sc.CGrpcClient = &CGrpcClientConfig{
+			ConnTimeout:   ctime.Duration(time.Millisecond * 500),
+			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
+			HeartProbe:    ctime.Duration(time.Millisecond * 1500),
+		}
+	} else {
+		if sc.CGrpcClient.ConnTimeout <= 0 {
+			sc.CGrpcClient.ConnTimeout = ctime.Duration(time.Millisecond * 500)
+		}
+		if sc.CGrpcClient.GlobalTimeout <= 0 {
+			sc.CGrpcClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
+		}
+		if sc.CGrpcClient.HeartProbe <= 0 {
+			sc.CGrpcClient.HeartProbe = ctime.Duration(time.Millisecond * 1500)
+		}
+	}
 	if sc.CrpcServer == nil {
 		sc.CrpcServer = &CrpcServerConfig{
 			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
