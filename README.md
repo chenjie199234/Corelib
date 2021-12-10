@@ -22,8 +22,6 @@
 	代码脚手架
 ## error
 	错误格式
-## nacos
-	nacos远程配置中心的封装
 ## id
 	分布式id生成器
 ## log
