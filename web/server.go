@@ -155,7 +155,6 @@ func (c *ServerConfig) getCorsExpose() string {
 }
 
 type WebServer struct {
-	allpaths         map[string]map[string]struct{}      //key method,second key path
 	handlerTimeout   map[string]map[string]time.Duration //first key method,second key path,value timeout
 	selfappname      string
 	c                *ServerConfig
@@ -180,7 +179,6 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	c.validate()
 	//new server
 	instance := &WebServer{
-		allpaths:       make(map[string]map[string]struct{}),
 		handlerTimeout: make(map[string]map[string]time.Duration),
 		selfappname:    selfappname,
 		c:              c,
@@ -205,6 +203,12 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		closewait:        &sync.WaitGroup{},
 		refreshclosewait: make(chan *struct{}, 1),
 	}
+	instance.s.Handler = instance
+	if c.HeartProbe < 0 {
+		instance.s.SetKeepAlivesEnabled(false)
+	} else {
+		instance.s.SetKeepAlivesEnabled(true)
+	}
 	if len(c.CertKeys) > 0 {
 		certificates := make([]tls.Certificate, 0, len(c.CertKeys))
 		for cert, key := range c.CertKeys {
@@ -215,12 +219,6 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 			certificates = append(certificates, temp)
 		}
 		instance.s.TLSConfig = &tls.Config{Certificates: certificates}
-	}
-	instance.s.Handler = instance
-	if c.HeartProbe < 0 {
-		instance.s.SetKeepAlivesEnabled(false)
-	} else {
-		instance.s.SetKeepAlivesEnabled(true)
 	}
 	instance.closewait.Add(1)
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -279,25 +277,6 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	return instance, nil
 }
 
-func (this *WebServer) printPaths() {
-	for method, paths := range this.allpaths {
-		for path := range paths {
-			switch method {
-			case http.MethodGet:
-				log.Info(nil, "\t", method, "      ", path)
-			case http.MethodDelete:
-				log.Info(nil, "\t", method, "   ", path)
-			case http.MethodPost:
-				log.Info(nil, "\t", method, "     ", path)
-			case http.MethodPut:
-				log.Info(nil, "\t", method, "      ", path)
-			case http.MethodPatch:
-				log.Info(nil, "\t", method, "    ", path)
-			}
-		}
-	}
-}
-
 var ErrServerClosed = errors.New("[web.server] closed")
 
 func (this *WebServer) StartWebServer(listenaddr string) error {
@@ -309,7 +288,6 @@ func (this *WebServer) StartWebServer(listenaddr string) error {
 	if e != nil {
 		return errors.New("[web.server] listen addr:" + listenaddr + " error:" + e.Error())
 	}
-	this.printPaths()
 	if len(this.c.CertKeys) > 0 {
 		e = this.s.ServeTLS(l, "", "")
 	} else {
@@ -327,7 +305,6 @@ func (this *WebServer) ReplaceWebServer(newserver *WebServer) {
 	this.s.Handler = newserver
 	newserver.s = this.s
 	*this = *newserver
-	newserver.printPaths()
 }
 func (this *WebServer) StopWebServer() {
 	defer this.closewait.Wait()
@@ -413,10 +390,6 @@ func (this *WebServer) Get(path string, handlers ...OutsideHandler) {
 		panic("[web.server] path must start with /")
 	}
 	this.router.Handler(http.MethodGet, path, this.insideHandler(http.MethodGet, path, handlers))
-	if _, ok := this.allpaths[http.MethodGet]; !ok {
-		this.allpaths[http.MethodGet] = make(map[string]struct{})
-	}
-	this.allpaths[http.MethodGet][path] = struct{}{}
 }
 
 //thread unsafe
@@ -425,11 +398,6 @@ func (this *WebServer) Delete(path string, handlers ...OutsideHandler) {
 		panic("[web.server] path must start with /")
 	}
 	this.router.Handler(http.MethodDelete, path, this.insideHandler(http.MethodDelete, path, handlers))
-	if _, ok := this.allpaths[http.MethodDelete]; !ok {
-		this.allpaths[http.MethodDelete] = make(map[string]struct{})
-	}
-	this.allpaths[http.MethodDelete][path] = struct{}{}
-	return
 }
 
 //thread unsafe
@@ -438,11 +406,6 @@ func (this *WebServer) Post(path string, handlers ...OutsideHandler) {
 		panic("[web.server] path must start with /")
 	}
 	this.router.Handler(http.MethodPost, path, this.insideHandler(http.MethodPost, path, handlers))
-	if _, ok := this.allpaths[http.MethodPost]; !ok {
-		this.allpaths[http.MethodPost] = make(map[string]struct{})
-	}
-	this.allpaths[http.MethodPost][path] = struct{}{}
-	return
 }
 
 //thread unsafe
@@ -451,11 +414,6 @@ func (this *WebServer) Put(path string, handlers ...OutsideHandler) {
 		panic("[web.server] path must start with /")
 	}
 	this.router.Handler(http.MethodPut, path, this.insideHandler(http.MethodPut, path, handlers))
-	if _, ok := this.allpaths[http.MethodPut]; !ok {
-		this.allpaths[http.MethodPut] = make(map[string]struct{})
-	}
-	this.allpaths[http.MethodPut][path] = struct{}{}
-	return
 }
 
 //thread unsafe
@@ -464,11 +422,6 @@ func (this *WebServer) Patch(path string, handlers ...OutsideHandler) {
 		panic("[web.server] path must start with /")
 	}
 	this.router.Handler(http.MethodPatch, path, this.insideHandler(http.MethodPatch, path, handlers))
-	if _, ok := this.allpaths[http.MethodPatch]; !ok {
-		this.allpaths[http.MethodPatch] = make(map[string]struct{})
-	}
-	this.allpaths[http.MethodPatch][path] = struct{}{}
-	return
 }
 
 func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {

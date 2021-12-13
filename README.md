@@ -18,7 +18,7 @@
 ## stream
 	tcp长连接框架
 ## crpc
-	因grpc性能较差,所以重新造了个rpc轮子,性能相较grpc有15%+的提升.基于stream的rpc框架,内含proto解析工具,可由proto生成crpc打桩代码
+	因grpc性能较差,所以重新造了个rpc轮子,性能相较grpc有30%+的提升.基于stream的rpc框架,内含proto解析工具,可由proto生成crpc打桩代码
 ## codegen
 	代码脚手架
 ## error
