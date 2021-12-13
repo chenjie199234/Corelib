@@ -351,7 +351,7 @@ func (this *WebServer) UpdateHandlerTimeout(htcs map[string]map[string]time.Dura
 			continue
 		}
 		for path, timeout := range paths {
-			if timeout == 0 {
+			if timeout <= 0 {
 				continue
 			}
 			if _, ok := tmp[method]; !ok {

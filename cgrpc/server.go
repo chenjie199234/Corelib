@@ -189,7 +189,7 @@ func (s *CGrpcServer) StopCGrpcServer() {
 func (this *CGrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
 	tmp := make(map[string]time.Duration)
 	for path, timeout := range htcs {
-		if timeout == 0 {
+		if timeout <= 0 {
 			//jump,0 means no handler specific timeout
 			continue
 		}
