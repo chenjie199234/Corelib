@@ -24,6 +24,8 @@ import (
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
 	"github.com/julienschmidt/httprouter"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 type OutsideHandler func(*Context)
@@ -203,7 +205,6 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		closewait:        &sync.WaitGroup{},
 		refreshclosewait: make(chan *struct{}, 1),
 	}
-	instance.s.Handler = instance
 	if c.HeartProbe < 0 {
 		instance.s.SetKeepAlivesEnabled(false)
 	} else {
@@ -222,13 +223,11 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	}
 	instance.closewait.Add(1)
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Error(r.Context(), "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
 		w.WriteHeader(http.StatusNotImplemented)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(common.Str2byte(_ErrNoapiStr))
 	})
 	instance.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Error(r.Context(), "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown method")
 		w.WriteHeader(http.StatusNotImplemented)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(common.Str2byte(_ErrNoapiStr))
@@ -289,8 +288,12 @@ func (this *WebServer) StartWebServer(listenaddr string) error {
 		return errors.New("[web.server] listen addr:" + listenaddr + " error:" + e.Error())
 	}
 	if len(this.c.CertKeys) > 0 {
+		//enable h2
+		this.s.Handler = this.router
 		e = this.s.ServeTLS(l, "", "")
 	} else {
+		//enable h2c
+		this.s.Handler = h2c.NewHandler(this.router, &http2.Server{})
 		e = this.s.Serve(l)
 	}
 	if e != nil {
@@ -301,10 +304,14 @@ func (this *WebServer) StartWebServer(listenaddr string) error {
 	}
 	return nil
 }
-func (this *WebServer) ReplaceWebServer(newserver *WebServer) {
-	this.s.Handler = newserver
-	newserver.s = this.s
-	*this = *newserver
+func (this *WebServer) ReplaceAllPath(newserver *WebServer) {
+	if len(this.c.CertKeys) > 0 {
+		//enable h2
+		this.s.Handler = newserver.router
+	} else {
+		//enable h2c
+		this.s.Handler = h2c.NewHandler(newserver.router, &http2.Server{})
+	}
 }
 func (this *WebServer) StopWebServer() {
 	defer this.closewait.Wait()
@@ -421,67 +428,17 @@ func (this *WebServer) Patch(path string, handlers ...OutsideHandler) {
 	this.router.Handler(http.MethodPatch, path, this.insideHandler(http.MethodPatch, path, handlers))
 }
 
-func (this *WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if target := r.Header.Get("Core_target"); target != "" && target != this.selfappname {
-		//this is not the required server.tell peer self closed
-		w.WriteHeader(888)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(common.Str2byte(_ErrClosingStr))
-		return
-	}
-	//check server status
-	for {
-		old := atomic.LoadInt32(&this.totalreqnum)
-		if old >= 0 {
-			//add req num
-			if atomic.CompareAndSwapInt32(&this.totalreqnum, old, old+1) {
-				break
-			}
-		} else {
-			//refresh close wait
-			select {
-			case this.refreshclosewait <- nil:
-			default:
-			}
-			//tell peer self closed
+func (this *WebServer) insideHandler(method, path string, handlers []OutsideHandler) http.HandlerFunc {
+	totalhandlers := append(this.global, handlers...)
+	return func(w http.ResponseWriter, r *http.Request) {
+		//target
+		if target := r.Header.Get("Core_target"); target != "" && target != this.selfappname {
+			//this is not the required server.tell peer self closed
 			w.WriteHeader(888)
 			w.Header().Set("Content-Type", "application/json")
 			w.Write(common.Str2byte(_ErrClosingStr))
 			return
 		}
-	}
-	var ctx context.Context
-	if tracedata := r.Header.Values("Core_tracedata"); len(tracedata) == 0 || tracedata[0] == "" {
-		ctx = trace.InitTrace(r.Context(), "", this.selfappname, host.Hostip, r.Method, r.URL.Path, 0)
-	} else if len(tracedata) != 5 || tracedata[4] == "" {
-		log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: tracedata:", tracedata, "format error")
-		w.WriteHeader(http.StatusBadRequest)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(common.Str2byte(_ErrReqStr))
-		return
-	} else if clientdeep, e := strconv.Atoi(tracedata[4]); e != nil {
-		log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: tracedata:", tracedata, "format error")
-		w.WriteHeader(http.StatusBadRequest)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(common.Str2byte(_ErrReqStr))
-		return
-	} else {
-		ctx = trace.InitTrace(r.Context(), tracedata[0], this.selfappname, host.Hostip, r.Method, r.URL.Path, clientdeep)
-	}
-	this.router.ServeHTTP(w, r.Clone(ctx))
-	if atomic.LoadInt32(&this.totalreqnum) < 0 {
-		select {
-		case this.refreshclosewait <- nil:
-		default:
-		}
-	}
-	atomic.AddInt32(&this.totalreqnum, -1)
-}
-
-func (this *WebServer) insideHandler(method, path string, handlers []OutsideHandler) http.HandlerFunc {
-	totalhandlers := append(this.global, handlers...)
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
 		//cors
 		if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
 			headers := w.Header()
@@ -512,16 +469,65 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 				headers.Set("Access-Control-Expose-Headers", this.c.Cors.exposestr)
 			}
 		}
-		traceid, _, _, _, _, selfdeep := trace.GetTrace(ctx)
+		//check server status
+		for {
+			old := atomic.LoadInt32(&this.totalreqnum)
+			if old >= 0 {
+				//add req num
+				if atomic.CompareAndSwapInt32(&this.totalreqnum, old, old+1) {
+					break
+				}
+			} else {
+				//refresh close wait
+				select {
+				case this.refreshclosewait <- nil:
+				default:
+				}
+				//tell peer self closed
+				w.WriteHeader(888)
+				w.Header().Set("Content-Type", "application/json")
+				w.Write(common.Str2byte(_ErrClosingStr))
+				return
+			}
+		}
+		defer func() {
+			if atomic.LoadInt32(&this.totalreqnum) < 0 {
+				select {
+				case this.refreshclosewait <- nil:
+				default:
+				}
+			}
+			atomic.AddInt32(&this.totalreqnum, -1)
+		}()
+		//trace
+		var ctx context.Context
+		traceid := ""
 		sourceip := r.RemoteAddr
 		sourceapp := "unknown"
 		sourcemethod := "unknown"
 		sourcepath := "unknown"
-		if tracedata := r.Header.Values("Core_tracedata"); len(tracedata) != 0 {
+		selfdeep := 0
+		if tracedata := r.Header.Values("Core_tracedata"); len(tracedata) == 0 || tracedata[0] == "" {
+			ctx = trace.InitTrace(r.Context(), "", this.selfappname, host.Hostip, r.Method, r.URL.Path, 0)
+		} else if len(tracedata) != 5 || tracedata[4] == "" {
+			log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: tracedata:", tracedata, "format error")
+			w.WriteHeader(http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(common.Str2byte(_ErrReqStr))
+			return
+		} else if clientdeep, e := strconv.Atoi(tracedata[4]); e != nil {
+			log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: tracedata:", tracedata, "format error")
+			w.WriteHeader(http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(common.Str2byte(_ErrReqStr))
+			return
+		} else {
+			ctx = trace.InitTrace(r.Context(), tracedata[0], this.selfappname, host.Hostip, r.Method, r.URL.Path, clientdeep)
 			sourceapp = tracedata[1]
 			sourcemethod = tracedata[2]
 			sourcepath = tracedata[3]
 		}
+		traceid, _, _, _, _, selfdeep = trace.GetTrace(ctx)
 		var mdata map[string]string
 		if mdstr := r.Header.Get("Core_metadata"); mdstr != "" {
 			mdata = make(map[string]string)
