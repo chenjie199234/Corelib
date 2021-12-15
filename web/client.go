@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/textproto"
 	"os"
@@ -76,7 +77,7 @@ type WebClient struct {
 	selfappname string
 	appname     string
 	c           *ClientConfig
-	tlsc        *tls.Config
+	transport   *http.Transport
 
 	resolver *corelibResolver
 	balancer *corelibBalancer
@@ -119,10 +120,27 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, peergroup, peername stri
 		selfappname: selfappname,
 		appname:     appname,
 		c:           c,
-		tlsc: &tls.Config{
-			InsecureSkipVerify: c.SkipVerifyTLS,
-			RootCAs:            certpool,
+		transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   c.ConnTimeout,
+				KeepAlive: c.HeartProbe,
+			}).DialContext,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: c.SkipVerifyTLS,
+				RootCAs:            certpool,
+			},
+			TLSHandshakeTimeout:    c.ConnTimeout,
+			ForceAttemptHTTP2:      true,
+			MaxIdleConnsPerHost:    50,
+			IdleConnTimeout:        c.IdleTimeout,
+			MaxResponseHeaderBytes: int64(c.MaxHeader),
+			ReadBufferSize:         int(c.SocketRBuf),
+			WriteBufferSize:        int(c.SocketWBuf),
 		},
+	}
+	if c.HeartProbe < 0 {
+		client.transport.DisableKeepAlives = true
 	}
 	client.balancer = newCorelibBalancer(client)
 	//init discover

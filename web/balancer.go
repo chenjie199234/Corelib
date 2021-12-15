@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"net"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -25,7 +24,6 @@ type ServerForPick struct {
 	addr     string
 	client   *http.Client
 	dservers map[string]struct{} //this server registered on how many discoveryservers
-	//status   int32               //1 - working,0 - closed
 
 	Pickinfo *pickinfo
 }
@@ -104,21 +102,8 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 			b.servers[addr] = &ServerForPick{
 				addr: addr,
 				client: &http.Client{
-					Transport: &http.Transport{
-						Proxy: http.ProxyFromEnvironment,
-						DialContext: (&net.Dialer{
-							Timeout:   b.c.c.ConnTimeout,
-							KeepAlive: b.c.c.HeartProbe,
-						}).DialContext,
-						TLSClientConfig:        b.c.tlsc,
-						ForceAttemptHTTP2:      true,
-						MaxIdleConnsPerHost:    50,
-						IdleConnTimeout:        b.c.c.IdleTimeout,
-						MaxResponseHeaderBytes: int64(b.c.c.MaxHeader),
-						ReadBufferSize:         int(b.c.c.SocketRBuf),
-						WriteBufferSize:        int(b.c.c.SocketWBuf),
-					},
-					Timeout: b.c.c.GlobalTimeout,
+					Transport: b.c.transport,
+					Timeout:   b.c.c.GlobalTimeout,
 				},
 				dservers: registerdata.DServers,
 				Pickinfo: &pickinfo{
