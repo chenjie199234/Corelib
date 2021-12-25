@@ -157,16 +157,16 @@ func (c *ServerConfig) getCorsExpose() string {
 }
 
 type WebServer struct {
-	handlerTimeout   map[string]map[string]time.Duration //first key method,second key path,value timeout
-	selfappname      string
-	c                *ServerConfig
-	ctxpool          *sync.Pool
-	global           []OutsideHandler
-	router           *httprouter.Router
-	s                *http.Server
-	closewait        *sync.WaitGroup
-	totalreqnum      int32
-	refreshclosewait chan *struct{}
+	handlerTimeout map[string]map[string]time.Duration //first key method,second key path,value timeout
+	selfappname    string
+	c              *ServerConfig
+	ctxpool        *sync.Pool
+	global         []OutsideHandler
+	router         *httprouter.Router
+	s              *http.Server
+	closewait      *sync.WaitGroup
+	closewaittimer *time.Timer
+	totalreqnum    int32
 }
 
 func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, error) {
@@ -202,9 +202,10 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 				return ctx
 			},
 		},
-		closewait:        &sync.WaitGroup{},
-		refreshclosewait: make(chan *struct{}, 1),
+		closewait:      &sync.WaitGroup{},
+		closewaittimer: time.NewTimer(0),
 	}
+	<-instance.closewaittimer.C
 	if c.HeartProbe < 0 {
 		instance.s.SetKeepAlivesEnabled(false)
 	} else {
@@ -315,36 +316,26 @@ func (this *WebServer) ReplaceAllPath(newserver *WebServer) {
 }
 func (this *WebServer) StopWebServer() {
 	defer this.closewait.Wait()
-	stop := false
 	for {
 		old := atomic.LoadInt32(&this.totalreqnum)
 		if old >= 0 {
 			if atomic.CompareAndSwapInt32(&this.totalreqnum, old, old-math.MaxInt32) {
-				stop = true
 				break
 			}
 		} else {
-			break
+			return
 		}
 	}
-	if stop {
-		tmer := time.NewTimer(this.c.WaitCloseTime)
-		for {
-			select {
-			case <-tmer.C:
-				if atomic.LoadInt32(&this.totalreqnum) != -math.MaxInt32 {
-					tmer.Reset(this.c.WaitCloseTime)
-				} else {
-					this.s.Shutdown(context.Background())
-					this.closewait.Done()
-					return
-				}
-			case <-this.refreshclosewait:
-				tmer.Reset(this.c.WaitCloseTime)
-				for len(tmer.C) > 0 {
-					<-tmer.C
-				}
-			}
+	//wait at least this.c.WaitCloseTime before stop the under layer socket
+	this.closewaittimer.Reset(this.c.WaitCloseTime)
+	for {
+		<-this.closewaittimer.C
+		if atomic.LoadInt32(&this.totalreqnum) != -math.MaxInt32 {
+			this.closewaittimer.Reset(this.c.WaitCloseTime)
+		} else {
+			this.s.Shutdown(context.Background())
+			this.closewait.Done()
+			return
 		}
 	}
 
@@ -479,10 +470,7 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 				}
 			} else {
 				//refresh close wait
-				select {
-				case this.refreshclosewait <- nil:
-				default:
-				}
+				this.closewaittimer.Reset(this.c.WaitCloseTime)
 				//tell peer self closed
 				w.WriteHeader(888)
 				w.Header().Set("Content-Type", "application/json")
@@ -492,10 +480,7 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 		}
 		defer func() {
 			if atomic.LoadInt32(&this.totalreqnum) < 0 {
-				select {
-				case this.refreshclosewait <- nil:
-				default:
-				}
+				this.closewaittimer.Reset(this.c.WaitCloseTime)
 			}
 			atomic.AddInt32(&this.totalreqnum, -1)
 		}()

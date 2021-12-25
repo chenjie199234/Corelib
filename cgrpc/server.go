@@ -82,9 +82,9 @@ type CGrpcServer struct {
 	services       map[string]*grpc.ServiceDesc
 	handlerTimeout map[string]time.Duration
 
-	closewait        *sync.WaitGroup
-	totalreqnum      int32
-	refreshclosewait chan *struct{}
+	closewait      *sync.WaitGroup
+	closewaittimer *time.Timer
+	totalreqnum    int32
 }
 
 func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, error) {
@@ -97,15 +97,16 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 	}
 	c.validate()
 	serverinstance := &CGrpcServer{
-		c:                c,
-		selfappname:      selfgroup + "." + selfname,
-		global:           make([]OutsideHandler, 0),
-		ctxpool:          &sync.Pool{},
-		services:         make(map[string]*grpc.ServiceDesc),
-		handlerTimeout:   make(map[string]time.Duration),
-		closewait:        &sync.WaitGroup{},
-		refreshclosewait: make(chan *struct{}, 1),
+		c:              c,
+		selfappname:    selfgroup + "." + selfname,
+		global:         make([]OutsideHandler, 0),
+		ctxpool:        &sync.Pool{},
+		services:       make(map[string]*grpc.ServiceDesc),
+		handlerTimeout: make(map[string]time.Duration),
+		closewait:      &sync.WaitGroup{},
+		closewaittimer: time.NewTimer(0),
 	}
+	<-serverinstance.closewaittimer.C
 	serverinstance.closewait.Add(1)
 	opts := make([]grpc.ServerOption, 0, 6)
 	opts = append(opts, grpc.ReadBufferSize(int(c.SocketRBuf)))
@@ -151,36 +152,26 @@ func (s *CGrpcServer) StartCGrpcServer(listenaddr string) error {
 }
 func (s *CGrpcServer) StopCGrpcServer() {
 	defer s.closewait.Wait()
-	stop := false
 	for {
 		old := atomic.LoadInt32(&s.totalreqnum)
 		if old >= 0 {
 			if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old-math.MaxInt32) {
-				stop = true
 				break
 			}
 		} else {
-			break
+			return
 		}
 	}
-	if stop {
-		tmer := time.NewTimer(s.c.WaitCloseTime)
-		for {
-			select {
-			case <-tmer.C:
-				if atomic.LoadInt32(&s.totalreqnum) != -math.MaxInt32 {
-					tmer.Reset(s.c.WaitCloseTime)
-				} else {
-					s.server.GracefulStop()
-					s.closewait.Done()
-					return
-				}
-			case <-s.refreshclosewait:
-				tmer.Reset(s.c.WaitCloseTime)
-				for len(tmer.C) > 0 {
-					<-tmer.C
-				}
-			}
+	//wait at least s.c.WaitCloseTime before stop the under layer socket
+	s.closewaittimer.Reset(s.c.WaitCloseTime)
+	for {
+		<-s.closewaittimer.C
+		if atomic.LoadInt32(&s.totalreqnum) != -math.MaxInt32 {
+			s.closewaittimer.Reset(s.c.WaitCloseTime)
+		} else {
+			s.server.GracefulStop()
+			s.closewait.Done()
+			return
 		}
 	}
 }
@@ -252,20 +243,14 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				}
 			} else {
 				//refresh close wait
-				select {
-				case s.refreshclosewait <- nil:
-				default:
-				}
+				s.closewaittimer.Reset(s.c.WaitCloseTime)
 				//tell peer self closed
 				return nil, errClosing
 			}
 		}
 		defer func() {
 			if atomic.LoadInt32(&s.totalreqnum) < 0 {
-				select {
-				case s.refreshclosewait <- nil:
-				default:
-				}
+				s.closewaittimer.Reset(s.c.WaitCloseTime)
 			}
 			atomic.AddInt32(&s.totalreqnum, -1)
 		}()

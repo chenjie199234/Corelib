@@ -69,16 +69,16 @@ func (c *ServerConfig) validate() {
 }
 
 type CrpcServer struct {
-	c                *ServerConfig
-	tlsc             *tls.Config
-	global           []OutsideHandler
-	ctxpool          *sync.Pool
-	handler          map[string]func(context.Context, *stream.Peer, *Msg)
-	handlerTimeout   map[string]time.Duration
-	instance         *stream.Instance
-	closewait        *sync.WaitGroup
-	totalreqnum      int32
-	refreshclosewait chan *struct{}
+	c              *ServerConfig
+	tlsc           *tls.Config
+	global         []OutsideHandler
+	ctxpool        *sync.Pool
+	handler        map[string]func(context.Context, *stream.Peer, *Msg)
+	handlerTimeout map[string]time.Duration
+	instance       *stream.Instance
+	closewait      *sync.WaitGroup
+	closewaittimer *time.Timer
+	totalreqnum    int32
 }
 type client struct {
 	sync.RWMutex
@@ -95,14 +95,15 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 	}
 	c.validate()
 	serverinstance := &CrpcServer{
-		c:                c,
-		global:           make([]OutsideHandler, 0, 10),
-		ctxpool:          &sync.Pool{},
-		handler:          make(map[string]func(context.Context, *stream.Peer, *Msg), 10),
-		handlerTimeout:   make(map[string]time.Duration),
-		closewait:        &sync.WaitGroup{},
-		refreshclosewait: make(chan *struct{}, 1),
+		c:              c,
+		global:         make([]OutsideHandler, 0, 10),
+		ctxpool:        &sync.Pool{},
+		handler:        make(map[string]func(context.Context, *stream.Peer, *Msg), 10),
+		handlerTimeout: make(map[string]time.Duration),
+		closewait:      &sync.WaitGroup{},
+		closewaittimer: time.NewTimer(0),
 	}
+	<-serverinstance.closewaittimer.C
 	if len(c.CertKeys) != 0 {
 		certificates := make([]tls.Certificate, 0, len(c.CertKeys))
 		for cert, key := range c.CertKeys {
@@ -142,43 +143,32 @@ func (s *CrpcServer) StartCrpcServer(listenaddr string) error {
 }
 func (s *CrpcServer) StopCrpcServer() {
 	defer s.closewait.Wait()
-	stop := false
 	for {
 		old := atomic.LoadInt32(&s.totalreqnum)
 		if old >= 0 {
 			if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old-math.MaxInt32) {
-				stop = true
 				break
 			}
 		} else {
-			break
+			return
 		}
 	}
-	if stop {
-		//tel all peers self closed
-		d, _ := proto.Marshal(&Msg{
-			Callid: 0,
-			Error:  errClosing,
-		})
-		s.instance.SendMessageAll(nil, d, nil, nil)
-		//wait at least s.c.WaitCloseTime before stop the under layer socket
-		tmer := time.NewTimer(s.c.WaitCloseTime)
-		for {
-			select {
-			case <-tmer.C:
-				if atomic.LoadInt32(&s.totalreqnum) != -math.MaxInt32 {
-					tmer.Reset(s.c.WaitCloseTime)
-				} else {
-					s.instance.Stop()
-					s.closewait.Done()
-					return
-				}
-			case <-s.refreshclosewait:
-				tmer.Reset(s.c.WaitCloseTime)
-				for len(tmer.C) > 0 {
-					<-tmer.C
-				}
-			}
+	//tel all peers self closed
+	d, _ := proto.Marshal(&Msg{
+		Callid: 0,
+		Error:  errClosing,
+	})
+	s.instance.SendMessageAll(nil, d, nil, nil)
+	//wait at least s.c.WaitCloseTime before stop the under layer socket
+	s.closewaittimer.Reset(s.c.WaitCloseTime)
+	for {
+		<-s.closewaittimer.C
+		if atomic.LoadInt32(&s.totalreqnum) != -math.MaxInt32 {
+			s.closewaittimer.Reset(s.c.WaitCloseTime)
+		} else {
+			s.instance.Stop()
+			s.closewait.Done()
+			return
 		}
 	}
 }
@@ -298,6 +288,8 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 		workctx.run()
 	}
 }
+
+//return false will close the connection
 func (s *CrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peerVerifyData []byte) ([]byte, bool) {
 	if atomic.LoadInt32(&s.totalreqnum) < 0 {
 		//self closed
@@ -308,10 +300,18 @@ func (s *CrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peer
 	}
 	return nil, true
 }
+
+//return false will close the connection
 func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 	if atomic.LoadInt32(&s.totalreqnum) < 0 {
 		//self closed
-		return false
+		s.closewaittimer.Reset(s.c.WaitCloseTime)
+		//tel all peers self closed
+		d, _ := proto.Marshal(&Msg{
+			Callid: 0,
+			Error:  errClosing,
+		})
+		p.SendMessage(nil, d, nil, nil)
 	}
 	c := &client{
 		calls: make(map[uint64]context.CancelFunc),
@@ -374,10 +374,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			}
 		} else {
 			//refresh close wait
-			select {
-			case s.refreshclosewait <- nil:
-			default:
-			}
+			s.closewaittimer.Reset(s.c.WaitCloseTime)
 			//tell peer self closed
 			msg.Path = ""
 			msg.Deadline = 0
@@ -413,10 +410,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			}
 		}
 		if atomic.LoadInt32(&s.totalreqnum) < 0 {
-			select {
-			case s.refreshclosewait <- nil:
-			default:
-			}
+			s.closewaittimer.Reset(s.c.WaitCloseTime)
 		}
 		atomic.AddInt32(&s.totalreqnum, -1)
 		c.Lock()

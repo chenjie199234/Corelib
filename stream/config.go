@@ -20,7 +20,7 @@ type HandleVerifyFunc func(ctx context.Context, peeruniquename string, peerVerif
 
 //This is a notice func after verify each other success
 //success = true means online success
-//success = false means online failed
+//success = false means online failed,connection will be closed
 //Peer is a cancel context,it will be canceled when the connection closed
 //You can control the timeout by yourself through context.WithTimeout(p,time.Second)
 type HandleOnlineFunc func(p *Peer) (success bool)
