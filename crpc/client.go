@@ -201,7 +201,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 		return
 	}
 	server.lker.Lock()
-	if msg.Error != nil && cerror.Equal(msg.Error, errClosing) {
+	if msg.Error != nil && cerror.Equal(msg.Error, cerror.ErrClosing) {
 		//update pickable status
 		server.setpeer(nil)
 		//all calls' callid big and equal then this msg's callid are unprocessed
@@ -230,7 +230,7 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server.lker.Lock()
 	for callid, req := range server.reqs {
 		req.respdata = nil
-		req.err = ErrClosed
+		req.err = cerror.ErrClosed
 		req.finish <- nil
 		delete(server.reqs, callid)
 	}
@@ -293,7 +293,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 			if r.err != nil {
 				//req error,update last fail time
 				server.Pickinfo.LastFailTime = time.Now().UnixNano()
-				if cerror.Equal(r.err, errClosing) {
+				if cerror.Equal(r.err, cerror.ErrClosing) {
 					//triger manually discovery
 					c.resolver.manual(nil)
 					//server is closing,this req can be retry

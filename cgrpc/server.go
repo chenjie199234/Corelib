@@ -230,7 +230,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		grpcmetadata, ok := metadata.FromIncomingContext(ctx)
 		if ok {
 			if data := grpcmetadata.Get("core_target"); len(data) != 0 && data[0] != s.selfappname {
-				return nil, errClosing
+				return nil, cerror.ErrClosing
 			}
 		}
 		//check for server status
@@ -245,7 +245,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				//refresh close wait
 				s.closewaittimer.Reset(s.c.WaitCloseTime)
 				//tell peer self closed
-				return nil, errClosing
+				return nil, cerror.ErrClosing
 			}
 		}
 		defer func() {
@@ -307,7 +307,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
 				log.Error(workctx, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC panic:", e, "stack:", base64.StdEncoding.EncodeToString(stack[:n]))
-				workctx.e = ErrPanic
+				workctx.e = cerror.ErrPanic
 				workctx.resp = nil
 			}
 			end := time.Now()

@@ -226,12 +226,12 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotImplemented)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(common.Str2byte(ErrNoapi.Error()))
+		w.Write(common.Str2byte(cerror.ErrNoapi.Error()))
 	})
 	instance.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotImplemented)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(common.Str2byte(ErrNoapi.Error()))
+		w.Write(common.Str2byte(cerror.ErrNoapi.Error()))
 	})
 	instance.router.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//for OPTIONS preflight
@@ -425,9 +425,9 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 		//target
 		if target := r.Header.Get("Core_target"); target != "" && target != this.selfappname {
 			//this is not the required server.tell peer self closed
-			w.WriteHeader(888)
+			w.WriteHeader(int(cerror.ErrClosing.Httpcode))
 			w.Header().Set("Content-Type", "application/json")
-			w.Write(common.Str2byte(errClosing.Error()))
+			w.Write(common.Str2byte(cerror.ErrClosing.Error()))
 			return
 		}
 		//cors
@@ -448,8 +448,6 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 				if !find {
 					w.WriteHeader(http.StatusMethodNotAllowed)
 					w.Header().Set("Allow", strings.Join(this.c.Cors.AllowedOrigin, ","))
-					w.Header().Set("Content-Type", "application/json")
-					w.Write(common.Str2byte(ErrCors.Error()))
 					return
 				}
 			}
@@ -472,9 +470,9 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 				//refresh close wait
 				this.closewaittimer.Reset(this.c.WaitCloseTime)
 				//tell peer self closed
-				w.WriteHeader(888)
+				w.WriteHeader(int(cerror.ErrClosing.Httpcode))
 				w.Header().Set("Content-Type", "application/json")
-				w.Write(common.Str2byte(errClosing.Error()))
+				w.Write(common.Str2byte(cerror.ErrClosing.Error()))
 				return
 			}
 		}
@@ -574,9 +572,9 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 				log.Error(workctx, "[web.server] client:", sourceapp+":"+sourceip, "path:", path, "method:", method, "panic:", e, "stack:", base64.StdEncoding.EncodeToString(stack[:n]))
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write(common.Str2byte(ErrPanic.Error()))
+				w.Write(common.Str2byte(cerror.ErrPanic.Error()))
 				end := time.Now()
-				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, ErrPanic)
+				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, cerror.ErrPanic)
 			} else {
 				end := time.Now()
 				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, workctx.e)

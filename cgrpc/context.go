@@ -65,8 +65,8 @@ func (c *Context) run() {
 func (c *Context) Abort(e error) {
 	c.status = -1
 	c.e = cerror.ConvertStdError(e)
-	if c.e != nil && (c.e.Httpcode < 400 || c.e.Httpcode > 999) {
-		panic("[cgrpc.Context.Abort] httpcode must in [400,999]")
+	if c.e != nil && (c.e.Httpcode < 400 || c.e.Httpcode == 888 || c.e.Httpcode > 999) {
+		panic("[cgrpc.Context.Abort] httpcode must in [400,888) or (888,999]")
 	}
 }
 

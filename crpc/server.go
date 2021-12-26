@@ -160,7 +160,7 @@ func (s *CrpcServer) StopCrpcServer() {
 			c.RLock()
 			d, _ := proto.Marshal(&Msg{
 				Callid: c.maxcallid + 1,
-				Error:  errClosing,
+				Error:  cerror.ErrClosing,
 			})
 			c.maxcallid = 0
 			p.SendMessage(nil, d, nil, nil)
@@ -278,7 +278,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
-				msg.Error = ErrPanic
+				msg.Error = cerror.ErrPanic
 				msg.Metadata = nil
 				msg.Tracedata = nil
 			}
@@ -308,7 +308,7 @@ func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 		//tel all peers self closed
 		d, _ := proto.Marshal(&Msg{
 			Callid: 0,
-			Error:  errClosing,
+			Error:  cerror.ErrClosing,
 		})
 		p.SendMessage(nil, d, nil, nil)
 	}
@@ -356,7 +356,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
-		msg.Error = ErrNoapi
+		msg.Error = cerror.ErrNoapi
 		msg.Metadata = nil
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
@@ -372,7 +372,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			msg.Path = ""
 			msg.Deadline = 0
 			msg.Body = nil
-			msg.Error = errClosing
+			msg.Error = cerror.ErrClosing
 			msg.Metadata = nil
 			msg.Tracedata = nil
 			d, _ := proto.Marshal(msg)
@@ -393,7 +393,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
-		msg.Error = errClosing
+		msg.Error = cerror.ErrClosing
 		msg.Metadata = nil
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
@@ -418,7 +418,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
-				msg.Error = ErrRespmsgLen
+				msg.Error = cerror.ErrRespmsgLen
 				msg.Metadata = nil
 				msg.Tracedata = nil
 				d, _ = proto.Marshal(msg)

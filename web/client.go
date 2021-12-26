@@ -303,7 +303,7 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 			this.balancer.RebuildPicker()
 			this.resolver.manual(nil)
 			resp.Body.Close()
-			trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, errClosing)
+			trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, cerror.ErrClosing)
 			continue
 		}
 		respbody, e := io.ReadAll(resp.Body)

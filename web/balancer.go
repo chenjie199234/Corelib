@@ -155,7 +155,7 @@ func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 			return server, nil
 		}
 		if refresh {
-			return nil, ErrNoserver
+			return nil, cerror.ErrNoserver
 		}
 		if e := b.c.resolver.waitmanual(ctx); e != nil {
 			if e == context.DeadlineExceeded {

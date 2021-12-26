@@ -215,7 +215,7 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 			//req send,recv error
 			trace.Trace(ctx, trace.CLIENT, c.appname, p.Addr.String(), "GRPC", path, &start, &end, e)
 		}
-		if cerror.Equal(e, errClosing) {
+		if cerror.Equal(e, cerror.ErrClosing) {
 			continue
 		}
 		if e == nil {
@@ -244,7 +244,7 @@ func transGrpcError(e error) *cerror.Error {
 	case codes.ResourceExhausted:
 		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
 	case codes.Unimplemented:
-		return ErrNoapi
+		return cerror.ErrNoapi
 	case codes.Internal:
 		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
 	case codes.Unavailable:
