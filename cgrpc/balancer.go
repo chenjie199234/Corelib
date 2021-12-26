@@ -215,7 +215,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 					atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 					if doneinfo.Err != nil {
 						server.Pickinfo.LastFailTime = time.Now().UnixNano()
-						if cerror.Equal(transGrpcError(doneinfo.Err), errClosing) {
+						if cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrClosing) {
 							atomic.StoreInt32(&server.status, int32(connectivity.Shutdown))
 						}
 					}
@@ -223,7 +223,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 			}, nil
 		}
 		if refresh {
-			return balancer.PickResult{}, ErrNoserver
+			return balancer.PickResult{}, cerror.ErrNoserver
 		}
 		if e := b.c.resolver.waitmanual(info.Ctx); e != nil {
 			if e == context.DeadlineExceeded {

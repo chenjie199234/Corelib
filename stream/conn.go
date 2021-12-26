@@ -43,6 +43,12 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 		p := newPeer(this.c.TcpC.MaxMsgLen)
 		conn, e := tmplistener.AcceptTCP()
 		if e != nil {
+			if ee, ok := e.(interface {
+				Temporary() bool
+			}); ok && ee.Temporary() {
+				log.Error(nil, "[Stream.StartTcpServer] accept with temporary error:", ee)
+				continue
+			}
 			tmplistener.Close()
 			if this.mng.Finishing() {
 				return ErrServerClosed

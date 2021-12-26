@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"math"
 	"net"
 	"runtime"
 	"strconv"
@@ -31,9 +30,6 @@ import (
 type OutsideHandler func(*Context)
 
 type ServerConfig struct {
-	//when server close,server will wait this time before close,every request will refresh the time
-	//min is 1 second
-	WaitCloseTime time.Duration
 	//global timeout for every rpc call(including connection establish time)
 	GlobalTimeout time.Duration
 	HeartPorbe    time.Duration
@@ -44,9 +40,6 @@ type ServerConfig struct {
 }
 
 func (c *ServerConfig) validate() {
-	if c.WaitCloseTime < time.Second {
-		c.WaitCloseTime = time.Second
-	}
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
 	}
@@ -82,9 +75,7 @@ type CGrpcServer struct {
 	services       map[string]*grpc.ServiceDesc
 	handlerTimeout map[string]time.Duration
 
-	closewait      *sync.WaitGroup
-	closewaittimer *time.Timer
-	totalreqnum    int32
+	totalreqnum int32
 }
 
 func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, error) {
@@ -103,11 +94,7 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 		ctxpool:        &sync.Pool{},
 		services:       make(map[string]*grpc.ServiceDesc),
 		handlerTimeout: make(map[string]time.Duration),
-		closewait:      &sync.WaitGroup{},
-		closewaittimer: time.NewTimer(0),
 	}
-	<-serverinstance.closewaittimer.C
-	serverinstance.closewait.Add(1)
 	opts := make([]grpc.ServerOption, 0, 6)
 	opts = append(opts, grpc.ReadBufferSize(int(c.SocketRBuf)))
 	opts = append(opts, grpc.WriteBufferSize(int(c.SocketWBuf)))
@@ -151,29 +138,13 @@ func (s *CGrpcServer) StartCGrpcServer(listenaddr string) error {
 	return nil
 }
 func (s *CGrpcServer) StopCGrpcServer() {
-	defer s.closewait.Wait()
-	for {
-		old := atomic.LoadInt32(&s.totalreqnum)
-		if old >= 0 {
-			if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old-math.MaxInt32) {
-				break
-			}
-		} else {
-			return
-		}
-	}
-	//wait at least s.c.WaitCloseTime before stop the under layer socket
-	s.closewaittimer.Reset(s.c.WaitCloseTime)
-	for {
-		<-s.closewaittimer.C
-		if atomic.LoadInt32(&s.totalreqnum) != -math.MaxInt32 {
-			s.closewaittimer.Reset(s.c.WaitCloseTime)
-		} else {
-			s.server.GracefulStop()
-			s.closewait.Done()
-			return
-		}
-	}
+	s.server.GracefulStop()
+}
+
+//func (this *CGrpcServer) GetClientNum() int {
+//}
+func (this *CGrpcServer) GetReqNum() int32 {
+	return this.totalreqnum
 }
 
 //map key path,map value handler timeout,0 means no handler specific timeout,but still has global timeout
@@ -233,27 +204,8 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				return nil, cerror.ErrClosing
 			}
 		}
-		//check for server status
-		for {
-			old := atomic.LoadInt32(&s.totalreqnum)
-			if old >= 0 {
-				//add req num
-				if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old+1) {
-					break
-				}
-			} else {
-				//refresh close wait
-				s.closewaittimer.Reset(s.c.WaitCloseTime)
-				//tell peer self closed
-				return nil, cerror.ErrClosing
-			}
-		}
-		defer func() {
-			if atomic.LoadInt32(&s.totalreqnum) < 0 {
-				s.closewaittimer.Reset(s.c.WaitCloseTime)
-			}
-			atomic.AddInt32(&s.totalreqnum, -1)
-		}()
+		atomic.AddInt32(&s.totalreqnum, 1)
+		defer atomic.AddInt32(&s.totalreqnum, -1)
 		p, _ := peer.FromContext(ctx)
 		traceid := ""
 		sourceip := p.Addr.String()

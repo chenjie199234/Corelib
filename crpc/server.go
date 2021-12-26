@@ -71,7 +71,6 @@ type CrpcServer struct {
 	handlerTimeout map[string]time.Duration
 	instance       *stream.Instance
 	closewait      *sync.WaitGroup
-	closewaittimer *time.Timer
 	totalreqnum    int32
 }
 type client struct {
@@ -96,9 +95,7 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 		handler:        make(map[string]func(context.Context, *stream.Peer, *Msg), 10),
 		handlerTimeout: make(map[string]time.Duration),
 		closewait:      &sync.WaitGroup{},
-		closewaittimer: time.NewTimer(0),
 	}
-	<-serverinstance.closewaittimer.C
 	if len(c.CertKeys) != 0 {
 		certificates := make([]tls.Certificate, 0, len(c.CertKeys))
 		for cert, key := range c.CertKeys {
