@@ -79,7 +79,6 @@ type CrpcClient struct {
 	resolver *corelibResolver
 	balancer *corelibBalancer
 
-	callid  uint64
 	reqpool *sync.Pool
 }
 
@@ -125,7 +124,6 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, peergroup, peername str
 			RootCAs:            certpool,
 		},
 
-		callid:  0,
 		reqpool: &sync.Pool{},
 	}
 	client.balancer = newCorelibBalancer(client)
@@ -202,20 +200,25 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 		log.Error(nil, "[crpc.client.userfunc] server:", p.GetPeerUniqueName(), "data format error:", e)
 		return
 	}
-	if msg.Error != nil && cerror.Equal(msg.Error, errClosing) {
-		server.setpeer(nil)
-		c.balancer.RebuildPicker()
-	}
 	server.lker.Lock()
-	req, ok := server.reqs[msg.Callid]
-	if !ok {
-		server.lker.Unlock()
-		return
+	if msg.Error != nil && cerror.Equal(msg.Error, errClosing) {
+		//update pickable status
+		server.setpeer(nil)
+		//all calls' callid big and equal then this msg's callid are unprocessed
+		for callid, req := range server.reqs {
+			if callid >= msg.Callid {
+				req.respdata = msg.Body
+				req.err = msg.Error
+				req.finish <- nil
+				delete(server.reqs, callid)
+			}
+		}
+	} else if req, ok := server.reqs[msg.Callid]; ok {
+		req.respdata = msg.Body
+		req.err = msg.Error
+		req.finish <- nil
+		delete(server.reqs, msg.Callid)
 	}
-	delete(server.reqs, msg.Callid)
-	req.resp = msg.Body
-	req.err = msg.Error
-	req.finish <- nil
 	server.lker.Unlock()
 }
 
@@ -226,7 +229,7 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	c.balancer.RebuildPicker()
 	server.lker.Lock()
 	for callid, req := range server.reqs {
-		req.resp = nil
+		req.respdata = nil
 		req.err = ErrClosed
 		req.finish <- nil
 		delete(server.reqs, callid)
@@ -249,7 +252,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		return nil, cerror.ErrDeadlineExceeded
 	}
 	msg := &Msg{
-		Callid:   atomic.AddUint64(&c.callid, 1),
+		//Callid:   atomic.AddUint64(&c.callid, 1),
 		Type:     MsgType_CALL,
 		Path:     path,
 		Body:     in,
@@ -267,13 +270,13 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 			"Deep":         strconv.Itoa(selfdeep),
 		}
 	}
-	d, _ := proto.Marshal(msg)
-	r := c.getreq(msg.Callid, d)
+	r := c.getreq(msg)
 	for {
 		server, e := c.balancer.Pick(ctx)
 		if e != nil {
 			return nil, e
 		}
+		msg.Callid = atomic.AddUint64(&server.callid, 1)
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 		if e = server.sendmessage(ctx, r); e != nil {
 			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
@@ -294,13 +297,13 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 					//triger manually discovery
 					c.resolver.manual(nil)
 					//server is closing,this req can be retry
-					r.resp = nil
+					r.respdata = nil
 					r.err = nil
 					continue
 				}
 				e = r.err
 			}
-			resp := r.resp
+			resp := r.respdata
 			c.putreq(r)
 			//resp and err maybe both nil
 			return resp, e
@@ -333,31 +336,28 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 }
 
 type req struct {
-	callid uint64
-	finish chan *struct{}
-	req    []byte
-	resp   []byte
-	err    *cerror.Error
+	finish   chan *struct{}
+	reqdata  *Msg
+	respdata []byte
+	err      *cerror.Error
 }
 
-func (c *CrpcClient) getreq(callid uint64, reqdata []byte) *req {
+func (c *CrpcClient) getreq(reqdata *Msg) *req {
 	r, ok := c.reqpool.Get().(*req)
 	if ok {
-		r.callid = callid
 		for len(r.finish) > 0 {
 			<-r.finish
 		}
-		r.req = reqdata
-		r.resp = nil
+		r.reqdata = reqdata
+		r.respdata = nil
 		r.err = nil
 		return r
 	}
 	return &req{
-		callid: callid,
-		finish: make(chan *struct{}, 1),
-		req:    reqdata,
-		resp:   nil,
-		err:    nil,
+		finish:   make(chan *struct{}, 1),
+		reqdata:  reqdata,
+		respdata: nil,
+		err:      nil,
 	}
 }
 func (c *CrpcClient) putreq(r *req) {

@@ -1,7 +1,6 @@
 package stream
 
 import (
-	"context"
 	"errors"
 	"net"
 	"sync"
@@ -44,6 +43,22 @@ func NewInstance(c *InstanceConfig, selfgroup, selfname string) (*Instance, erro
 	}
 	return stream, nil
 }
+
+//new connections failed
+//old connections working
+//WARN: this will cause StartxxxServer return
+func (this *Instance) PreStop() {
+	this.mng.PreStop()
+	this.Lock()
+	for _, listener := range this.listeners {
+		listener.Close()
+	}
+	this.Unlock()
+}
+
+//new connections failed
+//old connections closed
+//WARN: this will cause StartxxxServer return
 func (this *Instance) Stop() {
 	this.mng.Stop()
 	this.Lock()
@@ -58,6 +73,6 @@ func (this *Instance) GetSelfName() string {
 func (this *Instance) GetPeerNum() int32 {
 	return this.mng.GetPeerNum()
 }
-func (this *Instance) SendMessageAll(ctx context.Context, data []byte, beforeSend func(*Peer), afterSend func(*Peer, error)) {
-	this.mng.SendMessage(ctx, data, beforeSend, afterSend)
+func (this *Instance) RangePeers(handler func(p *Peer)) {
+	this.mng.RangePeers(handler)
 }

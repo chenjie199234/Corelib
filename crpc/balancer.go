@@ -11,6 +11,7 @@ import (
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/stream"
+	"google.golang.org/protobuf/proto"
 )
 
 type corelibBalancer struct {
@@ -21,6 +22,7 @@ type corelibBalancer struct {
 	pservers   []*ServerForPick
 }
 type ServerForPick struct {
+	callid   uint64 //start from 100
 	addr     string
 	dservers map[string]struct{} //this app registered on which discovery server
 	peer     *stream.Peer
@@ -65,10 +67,11 @@ func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 			s.lker.Unlock()
 			return
 		}
-		s.reqs[r.callid] = r
+		s.reqs[r.reqdata.Callid] = r
 		s.lker.Unlock()
 	}
-	if e = p.SendMessage(ctx, r.req, beforeSend, afterSend); e != nil {
+	d, _ := proto.Marshal(r.reqdata)
+	if e = p.SendMessage(ctx, d, beforeSend, afterSend); e != nil {
 		if e == stream.ErrMsgLarge {
 			e = ErrReqmsgLen
 		} else if e == stream.ErrConnClosed {
@@ -137,6 +140,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 		if !ok {
 			//this is a new register
 			server := &ServerForPick{
+				callid:   100, //start from 100
 				addr:     addr,
 				dservers: registerdata.DServers,
 				peer:     nil,

@@ -27,9 +27,6 @@ import (
 type OutsideHandler func(*Context)
 
 type ServerConfig struct {
-	//when server close,server will wait this time before close,every request will refresh the time
-	//min is 1 second
-	WaitCloseTime time.Duration
 	GlobalTimeout time.Duration //global timeout for every rpc call(including connection establish time)
 	HeartPorbe    time.Duration //default 1s,3 probe missing means disconnect
 	SocketRBuf    uint32
@@ -39,9 +36,6 @@ type ServerConfig struct {
 }
 
 func (c *ServerConfig) validate() {
-	if c.WaitCloseTime < time.Second {
-		c.WaitCloseTime = time.Second
-	}
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
 	}
@@ -82,7 +76,8 @@ type CrpcServer struct {
 }
 type client struct {
 	sync.RWMutex
-	calls map[uint64]context.CancelFunc
+	maxcallid uint64 //0-server is closing
+	calls     map[uint64]context.CancelFunc
 }
 
 func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, error) {
@@ -142,9 +137,14 @@ func (s *CrpcServer) StartCrpcServer(listenaddr string) error {
 	return e
 }
 func (s *CrpcServer) StopCrpcServer() {
-	defer s.closewait.Wait()
+	defer func() {
+		s.closewait.Wait()
+		s.instance.Stop()
+	}()
+	s.instance.PreStop()
+	var old int32
 	for {
-		old := atomic.LoadInt32(&s.totalreqnum)
+		old = atomic.LoadInt32(&s.totalreqnum)
 		if old >= 0 {
 			if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old-math.MaxInt32) {
 				break
@@ -154,22 +154,23 @@ func (s *CrpcServer) StopCrpcServer() {
 		}
 	}
 	//tel all peers self closed
-	d, _ := proto.Marshal(&Msg{
-		Callid: 0,
-		Error:  errClosing,
-	})
-	s.instance.SendMessageAll(nil, d, nil, nil)
-	//wait at least s.c.WaitCloseTime before stop the under layer socket
-	s.closewaittimer.Reset(s.c.WaitCloseTime)
-	for {
-		<-s.closewaittimer.C
-		if atomic.LoadInt32(&s.totalreqnum) != -math.MaxInt32 {
-			s.closewaittimer.Reset(s.c.WaitCloseTime)
-		} else {
-			s.instance.Stop()
-			s.closewait.Done()
-			return
+	s.instance.RangePeers(func(p *stream.Peer) {
+		if tmpdata := p.GetData(); tmpdata != nil {
+			c := (*client)(tmpdata)
+			c.RLock()
+			d, _ := proto.Marshal(&Msg{
+				Callid: c.maxcallid + 1,
+				Error:  errClosing,
+			})
+			c.maxcallid = 0
+			p.SendMessage(nil, d, nil, nil)
+			c.RUnlock()
 		}
+	})
+	//if there are calls,done status will be checked when each call finishes
+	//this is used to prevent there are no calls
+	if old == 0 {
+		s.closewait.Done()
 	}
 }
 func (s *CrpcServer) GetClientNum() int32 {
@@ -304,8 +305,6 @@ func (s *CrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peer
 //return false will close the connection
 func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 	if atomic.LoadInt32(&s.totalreqnum) < 0 {
-		//self closed
-		s.closewaittimer.Reset(s.c.WaitCloseTime)
 		//tel all peers self closed
 		d, _ := proto.Marshal(&Msg{
 			Callid: 0,
@@ -314,7 +313,8 @@ func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 		p.SendMessage(nil, d, nil, nil)
 	}
 	c := &client{
-		calls: make(map[uint64]context.CancelFunc),
+		maxcallid: 1,
+		calls:     make(map[uint64]context.CancelFunc),
 	}
 	p.SetData(unsafe.Pointer(c))
 	log.Info(nil, "[crpc.server.onlinefunc] client:", p.GetPeerUniqueName(), "online")
@@ -367,14 +367,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	}
 	for {
 		old := atomic.LoadInt32(&s.totalreqnum)
-		if old >= 0 {
-			//add req num
-			if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old+1) {
-				break
-			}
-		} else {
-			//refresh close wait
-			s.closewaittimer.Reset(s.c.WaitCloseTime)
+		if old < 0 {
 			//tell peer self closed
 			msg.Path = ""
 			msg.Deadline = 0
@@ -388,9 +381,32 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			}
 			return
 		}
+		//add req num
+		if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old+1) {
+			break
+		}
 	}
-	ctx, cancel := context.WithCancel(tracectx)
 	c.Lock()
+	if c.maxcallid == 0 {
+		c.Unlock()
+		//tell peer self closed
+		msg.Path = ""
+		msg.Deadline = 0
+		msg.Body = nil
+		msg.Error = errClosing
+		msg.Metadata = nil
+		msg.Tracedata = nil
+		d, _ := proto.Marshal(msg)
+		if e := p.SendMessage(tracectx, d, nil, nil); e != nil {
+			log.Error(tracectx, "[crpc.server.userfunc] send messge to client:", p.GetPeerUniqueName(), "error:", e)
+		}
+		if atomic.AddInt32(&s.totalreqnum, -1) == -math.MaxInt32 {
+			s.closewait.Done()
+		}
+		return
+	}
+	c.maxcallid = msg.Callid
+	ctx, cancel := context.WithCancel(tracectx)
 	c.calls[msg.Callid] = cancel
 	c.Unlock()
 	go func() {
@@ -409,16 +425,15 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				p.SendMessage(ctx, d, nil, nil)
 			}
 		}
-		if atomic.LoadInt32(&s.totalreqnum) < 0 {
-			s.closewaittimer.Reset(s.c.WaitCloseTime)
-		}
-		atomic.AddInt32(&s.totalreqnum, -1)
 		c.Lock()
 		if cancel, ok := c.calls[msg.Callid]; ok {
 			cancel()
 			delete(c.calls, msg.Callid)
 		}
 		c.Unlock()
+		if atomic.AddInt32(&s.totalreqnum, -1) == -math.MaxInt32 {
+			s.closewait.Done()
+		}
 	}()
 }
 func (s *CrpcServer) offlinefunc(p *stream.Peer) {
