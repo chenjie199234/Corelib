@@ -6,7 +6,6 @@ import "pbex.proto";
 service test {
 	rpc hello(helloreq)returns(helloresp){
 		option (pbex.method)="get";
-		option (pbex.timeout)="200ms";
 		option (pbex.web_midwares)="user";
 		option (pbex.web_midwares)="limit";
 	}
@@ -24,14 +23,14 @@ message test_data{
 	repeated int64 ri64=6;
 	uint64 ui64=7;
 	repeated uint64 rui64=8;
-	bytes bs=9;
+	bytes bs=9[(pbex.string_bytes_in)="1",(pbex.string_bytes_in)="2",(pbex.string_bytes_not_in)="a",(pbex.string_bytes_not_in)="b"];
 	repeated bytes rbs=10;
-	string ss=11;
-	repeated string rss=12[(pbex.string_bytes_reg_not_match)="123*"];
+	string ss=11[(pbex.string_bytes_in)="1",(pbex.string_bytes_in)="2",(pbex.string_bytes_not_in)="a",(pbex.string_bytes_not_in)="b"];
+	repeated string rss=12[(pbex.string_bytes_reg_not_match)="123*",(pbex.string_bytes_reg_not_match)="789*",(pbex.string_bytes_reg_match)="abc*",(pbex.string_bytes_reg_match)="xyz*"];
 	float f=13;
 	repeated float rf=14;
-	double d=15;
-	repeated double rd=16;
+	double d=15[(pbex.float_not_in)=1.0,(pbex.float_not_in)=2.0];
+	repeated double rd=16[(pbex.float_in)=1.0,(pbex.float_in)=2.0];
 	TestEnum e=17;
 	repeated TestEnum re=18;
 	test_data m=19;
@@ -93,8 +92,8 @@ message test_data{
 	map<string,test_data> mss_m=70;
 }
 message helloreq{
-	int32 i32=1[(pbex.int_in)=1];
-	repeated int32 ri32=2[(pbex.int_not_in)=1];
+	int32 i32=1[(pbex.int_in)=1,(pbex.int_in)=2];
+	repeated int32 ri32=2[(pbex.int_not_in)=1,(pbex.int_not_in)=2];
 	uint32 ui32=3[(pbex.uint_in)=1];
 	repeated uint32 rui32=4[(pbex.map_repeated_len_gt)=2,(pbex.uint_not_in)=1];
 	int64 i64=5;

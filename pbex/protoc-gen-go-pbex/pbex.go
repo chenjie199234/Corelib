@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/chenjie199234/Corelib/pbex"
 
@@ -267,36 +268,44 @@ func intcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 		in := proto.GetExtension(fop, pbex.E_IntIn).([]int64)
 		if field.Desc.IsList() {
 			g.P("for _,v:= range m.", field.GoName, "{")
+			all := make([]string, 0, 10)
 			for _, v := range in {
-				g.P("if v!=", v, "{")
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int in failed\"")
-				g.P("}")
+				all = append(all, "v!="+strconv.FormatInt(v, 10))
 			}
+			g.P("if ", strings.Join(all, "&&"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int in failed\"")
+			g.P("}")
 			g.P("}")
 		} else {
+			all := make([]string, 0, 10)
 			for _, v := range in {
-				g.P("if m.", field.GoName, "!=", v, "{")
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int in failed\"")
-				g.P("}")
+				all = append(all, "m."+field.GoName+"!="+strconv.FormatInt(v, 10))
 			}
+			g.P("if ", strings.Join(all, "&&"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int in failed\"")
+			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_IntNotIn) {
 		notin := proto.GetExtension(fop, pbex.E_IntNotIn).([]int64)
 		if field.Desc.IsList() {
 			g.P("for _,v:= range m.", field.GoName, "{")
+			all := make([]string, 0, 10)
 			for _, v := range notin {
-				g.P("if v==", v, "{")
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int not in failed\"")
-				g.P("}")
+				all = append(all, "v=="+strconv.FormatInt(v, 10))
 			}
+			g.P("if ", strings.Join(all, "||"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int not in failed\"")
+			g.P("}")
 			g.P("}")
 		} else {
+			all := make([]string, 0, 10)
 			for _, v := range notin {
-				g.P("if m.", field.GoName, "==", v, "{")
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int not in failed\"")
-				g.P("}")
+				all = append(all, "m."+field.GoName+"=="+strconv.FormatInt(v, 10))
 			}
+			g.P("if ", strings.Join(all, "||"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int not in failed\"")
+			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_IntGt) {
@@ -361,38 +370,44 @@ func uintcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 		in := proto.GetExtension(fop, pbex.E_UintIn).([]uint64)
 		if field.Desc.IsList() {
 			g.P("for _,v:= range m.", field.GoName, "{")
+			all := make([]string, 0, 10)
 			for _, v := range in {
-				g.P("if v!=", v, "{")
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint in failed\"")
-				//g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(\"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint in failed\")")
-				//g.P("return false")
-				g.P("}")
+				all = append(all, "v!="+strconv.FormatUint(v, 10))
 			}
+			g.P("if ", strings.Join(all, "&&"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint in failed\"")
+			g.P("}")
 			g.P("}")
 		} else {
+			all := make([]string, 0, 10)
 			for _, v := range in {
-				g.P("if m.", field.GoName, "!=", v, "{")
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint in failed\"")
-				g.P("}")
+				all = append(all, "m."+field.GoName+"!="+strconv.FormatUint(v, 10))
 			}
+			g.P("if ", strings.Join(all, "&&"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint in failed\"")
+			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_UintNotIn) {
 		notin := proto.GetExtension(fop, pbex.E_UintNotIn).([]uint64)
 		if field.Desc.IsList() {
 			g.P("for _,v:= range m.", field.GoName, "{")
+			all := make([]string, 0, 10)
 			for _, v := range notin {
-				g.P("if v==", v, "{")
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint not in failed\"")
-				g.P("}")
+				all = append(all, "v=="+strconv.FormatUint(v, 10))
 			}
+			g.P("if ", strings.Join(all, "||"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint not in failed\"")
+			g.P("}")
 			g.P("}")
 		} else {
+			all := make([]string, 0, 10)
 			for _, v := range notin {
-				g.P("if m.", field.GoName, "==", v, "{")
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint not in failed\"")
-				g.P("}")
+				all = append(all, "m."+field.GoName+"=="+strconv.FormatUint(v, 10))
 			}
+			g.P("if ", strings.Join(all, "||"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint not in failed\"")
+			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_UintGt) {
@@ -457,36 +472,44 @@ func floatcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protog
 		in := proto.GetExtension(fop, pbex.E_FloatIn).([]float64)
 		if field.Desc.IsList() {
 			g.P("for _,v:= range m.", field.GoName, "{")
+			all := make([]string, 0, 10)
 			for _, v := range in {
-				g.P("if v!=", v, "{")
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float in failed\"")
-				g.P("}")
+				all = append(all, "v!="+strconv.FormatFloat(v, 'f', -1, 64))
 			}
+			g.P("if ", strings.Join(all, "&&"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float in failed\"")
+			g.P("}")
 			g.P("}")
 		} else {
+			all := make([]string, 0, 10)
 			for _, v := range in {
-				g.P("if m.", field.GoName, "!=", v, "{")
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float in failed\"")
-				g.P("}")
+				all = append(all, "m."+field.GoName+"!="+strconv.FormatFloat(v, 'f', -1, 64))
 			}
+			g.P("if ", strings.Join(all, "&&"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float in failed\"")
+			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_FloatNotIn) {
 		notin := proto.GetExtension(fop, pbex.E_FloatNotIn).([]float64)
 		if field.Desc.IsList() {
 			g.P("for _,v:= range m.", field.GoName, "{")
+			all := make([]string, 0, 10)
 			for _, v := range notin {
-				g.P("if v==", v, "{")
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float not in failed\"")
-				g.P("}")
+				all = append(all, "v=="+strconv.FormatFloat(v, 'f', -1, 64))
 			}
+			g.P("if ", strings.Join(all, "||"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float not in failed\"")
+			g.P("}")
 			g.P("}")
 		} else {
+			all := make([]string, 0, 10)
 			for _, v := range notin {
-				g.P("if m.", field.GoName, "==", v, "{")
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float not in failed\"")
-				g.P("}")
+				all = append(all, "m."+field.GoName+"=="+strconv.FormatFloat(v, 'f', -1, 64))
 			}
+			g.P("if ", strings.Join(all, "||"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float not in failed\"")
+			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_FloatGt) {
@@ -635,104 +658,120 @@ func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOption
 		in := proto.GetExtension(fop, pbex.E_StringBytesIn).([]string)
 		if field.Desc.IsList() {
 			g.P("for _,v:=range m.", field.GoName, "{")
+			all := make([]string, 0, 10)
 			for _, v := range in {
 				if isslice {
-					g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(v)!=", strconv.Quote(v), "{")
+					all = append(all, g.QualifiedGoIdent(commonPackage.Ident("Byte2str"))+"(v)!=", strconv.Quote(v))
 				} else {
-					g.P("if v!=", strconv.Quote(v), "{")
+					all = append(all, "v!="+strconv.Quote(v))
 				}
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str in failed\"")
-				g.P("}")
 			}
+			g.P("if ", strings.Join(all, "&&"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str in failed\"")
+			g.P("}")
 			g.P("}")
 		} else {
+			all := make([]string, 0, 10)
 			for _, v := range in {
 				if isslice {
-					g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(m.", field.GoName, ")!=", strconv.Quote(v), "{")
+					all = append(all, g.QualifiedGoIdent(commonPackage.Ident("Byte2str"))+"(m."+field.GoName+")!="+strconv.Quote(v))
 				} else {
-					g.P("if m.", field.GoName, "!=", strconv.Quote(v), "{")
+					all = append(all, "m."+field.GoName+"!="+strconv.Quote(v))
 				}
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str in failed\"")
-				g.P("}")
 			}
+			g.P("if ", strings.Join(all, "&&"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str in failed\"")
+			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_StringBytesNotIn) {
 		notin := proto.GetExtension(fop, pbex.E_StringBytesNotIn).([]string)
 		if field.Desc.IsList() {
 			g.P("for _,v:=range m.", field.GoName, "{")
+			all := make([]string, 0, 10)
 			for _, v := range notin {
 				if isslice {
-					g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(v)==", strconv.Quote(v), "{")
+					all = append(all, g.QualifiedGoIdent(commonPackage.Ident("Byte2str"))+"(v)==", strconv.Quote(v))
 				} else {
-					g.P("if v==", strconv.Quote(v), "{")
+					all = append(all, "v=="+strconv.Quote(v))
 				}
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not in failed\"")
-				g.P("}")
 			}
+			g.P("if ", strings.Join(all, "||"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not in failed\"")
+			g.P("}")
 			g.P("}")
 		} else {
+			all := make([]string, 0, 10)
 			for _, v := range notin {
 				if isslice {
-					g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(m.", field.GoName, ")==", strconv.Quote(v), "{")
+					all = append(all, g.QualifiedGoIdent(commonPackage.Ident("Byte2str"))+"(m."+field.GoName+")=="+strconv.Quote(v))
 				} else {
-					g.P("if m.", field.GoName, "==", strconv.Quote(v), "{")
+					all = append(all, "m."+field.GoName+"=="+strconv.Quote(v))
 				}
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not in failed\"")
-				g.P("}")
 			}
+			g.P("if ", strings.Join(all, "||"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not in failed\"")
+			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_StringBytesRegMatch) {
 		match := proto.GetExtension(fop, pbex.E_StringBytesRegMatch).([]string)
 		if field.Desc.IsList() {
 			g.P("for _,v:=range m.", field.GoName, "{")
+			all := make([]string, 0, 10)
 			for i := range match {
 				if isslice {
-					g.P("if !_", field.Parent.GoIdent.GoName, field.GoName, "Regexp", i, ".Match(v){")
+					all = append(all, "!_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".Match(v)")
 				} else {
-					g.P("if !_", field.Parent.GoIdent.GoName, field.GoName, "Regexp", i, ".MatchString(v){")
+					all = append(all, "!_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".MatchString(v)")
 				}
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str match failed\"")
-				g.P("}")
 			}
+			g.P("if ", strings.Join(all, "||"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str match failed\"")
+			g.P("}")
 			g.P("}")
 		} else {
+			all := make([]string, 0, 10)
 			for i := range match {
 				if isslice {
-					g.P("if !_", field.Parent.GoIdent.GoName, field.GoName, "Regexp", i, ".Match(m.", field.GoName, "){")
+					all = append(all, "!_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".Match(m."+field.GoName+")")
 				} else {
-					g.P("if !_", field.Parent.GoIdent.GoName, field.GoName, "Regexp", i, ".MatchString(m.", field.GoName, "){")
+					all = append(all, "!_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".MatchString(m."+field.GoName+")")
 				}
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str match failed\"")
-				g.P("}")
 			}
+			g.P("if ", strings.Join(all, "||"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str match failed\"")
+			g.P("}")
 		}
 	}
 	if proto.HasExtension(fop, pbex.E_StringBytesRegNotMatch) {
 		notmatch := proto.GetExtension(fop, pbex.E_StringBytesRegNotMatch).([]string)
 		if field.Desc.IsList() {
 			g.P("for _,v:=range m.", field.GoName, "{")
+			all := make([]string, 0, 10)
 			for i := range notmatch {
 				if isslice {
-					g.P("if _", field.Parent.GoIdent.GoName, field.GoName, "Regexp", i, ".Match(v){")
+					all = append(all, "_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".Match(v)")
 				} else {
-					g.P("if _", field.Parent.GoIdent.GoName, field.GoName, "Regexp", i, ".MatchString(v){")
+					all = append(all, "_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".MatchString(v)")
 				}
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not match failed\"")
-				g.P("}")
 			}
+			g.P("if ", strings.Join(all, "||"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not match failed\"")
+			g.P("}")
 			g.P("}")
 		} else {
+			all := make([]string, 0, 10)
 			for i := range notmatch {
 				if isslice {
-					g.P("if _", field.Parent.GoIdent.GoName, field.GoName, "Regexp", i, ".Match(m.", field.GoName, "){")
+					all = append(all, "_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".Match(m."+field.GoName+")")
 				} else {
-					g.P("if _", field.Parent.GoIdent.GoName, field.GoName, "Regexp", i, ".MatchString(m.", field.GoName, "){")
+					all = append(all, "_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".MatchString(m."+field.GoName+")")
 				}
-				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not match failed\"")
-				g.P("}")
 			}
+			g.P("if ", strings.Join(all, "||"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str not match failed\"")
+			g.P("}")
 		}
 	}
 }
@@ -932,19 +971,23 @@ func mapcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 		case protoreflect.Sfixed64Kind:
 			if proto.HasExtension(fop, pbex.E_MapKeyIntIn) {
 				keyin := proto.GetExtension(fop, pbex.E_MapKeyIntIn).([]int64)
+				all := make([]string, 0, 10)
 				for _, v := range keyin {
-					g.P("if k!=", v, "{")
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int in failed\"")
-					g.P("}")
+					all = append(all, "k!="+strconv.FormatInt(v, 10))
 				}
+				g.P("if ", strings.Join(all, "&&"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int in failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyIntNotIn) {
 				keynotin := proto.GetExtension(fop, pbex.E_MapKeyIntNotIn).([]int64)
+				all := make([]string, 0, 10)
 				for _, v := range keynotin {
-					g.P("if k==", v, "{")
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int not in failed\"")
-					g.P("}")
+					all = append(all, "k=="+strconv.FormatInt(v, 10))
 				}
+				g.P("if ", strings.Join(all, "||"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key int not in failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyIntGt) {
 				keygt := proto.GetExtension(fop, pbex.E_MapKeyIntGt).(int64)
@@ -979,19 +1022,23 @@ func mapcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 		case protoreflect.Fixed64Kind:
 			if proto.HasExtension(fop, pbex.E_MapKeyUintIn) {
 				keyin := proto.GetExtension(fop, pbex.E_MapKeyUintIn).([]uint64)
+				all := make([]string, 0, 10)
 				for _, v := range keyin {
-					g.P("if k!=", v, "{")
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint in failed\"")
-					g.P("}")
+					all = append(all, "k!="+strconv.FormatUint(v, 10))
 				}
+				g.P("if ", strings.Join(all, "&&"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint in failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyUintNotIn) {
 				keynotin := proto.GetExtension(fop, pbex.E_MapKeyUintNotIn).([]uint64)
+				all := make([]string, 0, 10)
 				for _, v := range keynotin {
-					g.P("if k==", v, "{")
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint not in failed\"")
-					g.P("}")
+					all = append(all, "k=="+strconv.FormatUint(v, 10))
 				}
+				g.P("if ", strings.Join(all, "||"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key uint not in failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyUintGt) {
 				keygt := proto.GetExtension(fop, pbex.E_MapKeyUintGt).(uint64)
@@ -1020,35 +1067,43 @@ func mapcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 		case protoreflect.StringKind:
 			if proto.HasExtension(fop, pbex.E_MapKeyStringIn) {
 				keyin := proto.GetExtension(fop, pbex.E_MapKeyStringIn).([]string)
+				all := make([]string, 0, 10)
 				for _, v := range keyin {
-					g.P("if k!=", strconv.Quote(v), "{")
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str in failed\"")
-					g.P("}")
+					all = append(all, "k!="+strconv.Quote(v))
 				}
+				g.P("if ", strings.Join(all, "&&"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str in failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringNotIn) {
 				keynotin := proto.GetExtension(fop, pbex.E_MapKeyStringNotIn).([]string)
+				all := make([]string, 0, 10)
 				for _, v := range keynotin {
-					g.P("if k==", strconv.Quote(v), "{")
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str not in failed\"")
-					g.P("}")
+					all = append(all, "k=="+strconv.Quote(v))
 				}
+				g.P("if ", strings.Join(all, "||"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str not in failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringRegMatch) {
 				keymatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegMatch).([]string)
+				all := make([]string, 0, 10)
 				for i := range keymatch {
-					g.P("if !_", field.Parent.GoIdent.GoName, field.GoName, "MapKeyRegexp", i, ".MatchString(k){")
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str match failed\"")
-					g.P("}")
+					all = append(all, "!_"+field.Parent.GoIdent.GoName+field.GoName+"MapKeyRegexp"+strconv.Itoa(i)+".MatchString(k)")
 				}
+				g.P("if ", strings.Join(all, "||"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str match failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringRegNotMatch) {
 				keynotmatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegNotMatch).([]string)
+				all := make([]string, 0, 10)
 				for i := range keynotmatch {
-					g.P("if _", field.Parent.GoIdent.GoName, field.GoName, "MapKeyRegexp", i, ".MatchString(k){")
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str not match failed\"")
-					g.P("}")
+					all = append(all, "_"+field.Parent.GoIdent.GoName+field.GoName+"MapKeyRegexp"+strconv.Itoa(i)+".MatchString(k)")
 				}
+				g.P("if ", strings.Join(all, "||"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map key str not match failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapKeyStringLenEq) {
 				keyleneq := proto.GetExtension(fop, pbex.E_MapKeyStringLenEq).(uint64)
@@ -1114,19 +1169,23 @@ func mapcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 		case protoreflect.Sfixed64Kind:
 			if proto.HasExtension(fop, pbex.E_MapValueIntIn) {
 				valin := proto.GetExtension(fop, pbex.E_MapValueIntIn).([]int64)
+				all := make([]string, 0, 10)
 				for _, v := range valin {
-					g.P("if v!=", v, "{")
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int in failed\"")
-					g.P("}")
+					all = append(all, "v!="+strconv.FormatInt(v, 10))
 				}
+				g.P("if ", strings.Join(all, "&&"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int in failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueIntNotIn) {
 				valnotin := proto.GetExtension(fop, pbex.E_MapValueIntNotIn).([]int64)
+				all := make([]string, 0, 10)
 				for _, v := range valnotin {
-					g.P("if v==", v, "{")
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int not in failed\"")
-					g.P("}")
+					all = append(all, "v=="+strconv.FormatInt(v, 10))
 				}
+				g.P("if ", strings.Join(all, "||"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value int not in failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueIntGt) {
 				valgt := proto.GetExtension(fop, pbex.E_MapValueIntGt).(int64)
@@ -1161,19 +1220,23 @@ func mapcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 		case protoreflect.Fixed64Kind:
 			if proto.HasExtension(fop, pbex.E_MapValueUintIn) {
 				valin := proto.GetExtension(fop, pbex.E_MapValueUintIn).([]uint64)
+				all := make([]string, 0, 10)
 				for _, v := range valin {
-					g.P("if v!=", v, "{")
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint in failed\"")
-					g.P("}")
+					all = append(all, "v!="+strconv.FormatUint(v, 10))
 				}
+				g.P("if ", strings.Join(all, "&&"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint in failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueUintNotIn) {
 				valnotin := proto.GetExtension(fop, pbex.E_MapValueUintNotIn).([]uint64)
+				all := make([]string, 0, 10)
 				for _, v := range valnotin {
-					g.P("if v==", v, "{")
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint not in failed\"")
-					g.P("}")
+					all = append(all, "v=="+strconv.FormatUint(v, 10))
 				}
+				g.P("if ", strings.Join(all, "||"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value uint not in failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueUintGt) {
 				valgt := proto.GetExtension(fop, pbex.E_MapValueUintGt).(uint64)
@@ -1204,19 +1267,23 @@ func mapcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 		case protoreflect.DoubleKind:
 			if proto.HasExtension(fop, pbex.E_MapValueFloatIn) {
 				valin := proto.GetExtension(fop, pbex.E_MapValueFloatIn).([]float64)
+				all := make([]string, 0, 10)
 				for _, v := range valin {
-					g.P("if v!=", v, "{")
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float in failed\"")
-					g.P("}")
+					all = append(all, "v!="+strconv.FormatFloat(v, 'f', -1, 64))
 				}
+				g.P("if ", strings.Join(all, "&&"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float in failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueFloatNotIn) {
 				valnotin := proto.GetExtension(fop, pbex.E_MapValueFloatNotIn).([]float64)
+				all := make([]string, 0, 10)
 				for _, v := range valnotin {
-					g.P("if v==", v, "{")
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float not in failed\"")
-					g.P("}")
+					all = append(all, "v=="+strconv.FormatFloat(v, 'f', -1, 64))
 				}
+				g.P("if ", strings.Join(all, "||"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value float not in failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueFloatGt) {
 				valgt := proto.GetExtension(fop, pbex.E_MapValueFloatGt).(float64)
@@ -1248,51 +1315,59 @@ func mapcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 		case protoreflect.StringKind:
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesIn) {
 				valin := proto.GetExtension(fop, pbex.E_MapValueStringBytesIn).([]string)
+				all := make([]string, 0, 10)
 				for _, v := range valin {
 					if isbyteslice {
-						g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(v)!=", strconv.Quote(v), "{")
+						all = append(all, g.QualifiedGoIdent(commonPackage.Ident("Byte2str"))+"(v)!="+strconv.Quote(v))
 					} else {
-						g.P("if v!=", strconv.Quote(v), "{")
+						all = append(all, "v!="+strconv.Quote(v))
 					}
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str in failed\"")
-					g.P("}")
 				}
+				g.P("if ", strings.Join(all, "&&"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str in failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesNotIn) {
 				valnotin := proto.GetExtension(fop, pbex.E_MapValueStringBytesNotIn).([]string)
+				all := make([]string, 0, 10)
 				for _, v := range valnotin {
 					if isbyteslice {
-						g.P("if ", g.QualifiedGoIdent(commonPackage.Ident("Byte2Str")), "(v)==", strconv.Quote(v), "{")
+						all = append(all, g.QualifiedGoIdent(commonPackage.Ident("Byte2str"))+"(v)=="+strconv.Quote(v))
 					} else {
-						g.P("if v==", strconv.Quote(v), "{")
+						all = append(all, "v=="+strconv.Quote(v))
 					}
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str not in failed\"")
-					g.P("}")
 				}
+				g.P("if ", strings.Join(all, "||"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str not in failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesRegMatch) {
 				valmatch := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegMatch).([]string)
+				all := make([]string, 0, 10)
 				for i := range valmatch {
 					if isbyteslice {
-						g.P("if !_", field.Parent.GoIdent.GoName, field.GoName, "MapValueRegexp", i, ".Match(v){")
+						all = append(all, "!_"+field.Parent.GoIdent.GoName+field.GoName+"MapValueRegexp"+strconv.Itoa(i)+".Match(v)")
 					} else {
-						g.P("if !_", field.Parent.GoIdent.GoName, field.GoName, "MapValueRegexp", i, ".MatchString(v){")
+						all = append(all, "!_"+field.Parent.GoIdent.GoName+field.GoName+"MapValueRegexp"+strconv.Itoa(i)+".MatchString(v)")
 					}
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str match failed\"")
-					g.P("}")
 				}
+				g.P("if ", strings.Join(all, "||"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str match failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesRegNotMatch) {
 				valnotmatch := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegNotMatch).([]string)
+				all := make([]string, 0, 10)
 				for i := range valnotmatch {
 					if isbyteslice {
-						g.P("if _", field.Parent.GoIdent.GoName, field.GoName, "MapValueRegexp", i, ".Match(v){")
+						all = append(all, "_"+field.Parent.GoIdent.GoName+field.GoName+"MapValueRegexp"+strconv.Itoa(i)+".Match(v)")
 					} else {
-						g.P("if _", field.Parent.GoIdent.GoName, field.GoName, "MapValueRegexp", i, ".MatchString(v){")
+						all = append(all, "_"+field.Parent.GoIdent.GoName+field.GoName+"MapValueRegexp"+strconv.Itoa(i)+".MatchString(v)")
 					}
-					g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str not match failed\"")
-					g.P("}")
 				}
+				g.P("if ", strings.Join(all, "||"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value str not match failed\"")
+				g.P("}")
 			}
 			if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenEq) {
 				valleneq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenEq).(uint64)
