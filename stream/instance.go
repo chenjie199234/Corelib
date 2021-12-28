@@ -9,7 +9,7 @@ import (
 )
 
 type Instance struct {
-	selfappname string
+	selfappname string //group.name
 	c           *InstanceConfig
 
 	sync.Mutex
@@ -67,7 +67,7 @@ func (this *Instance) Stop() {
 	}
 	this.Unlock()
 }
-func (this *Instance) GetSelfName() string {
+func (this *Instance) GetSelfAppName() string {
 	return this.selfappname
 }
 func (this *Instance) GetPeerNum() int32 {

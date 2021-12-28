@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/stats"
 )
 
 type OutsideHandler func(*Context)
@@ -68,10 +69,11 @@ func (c *ServerConfig) validate() {
 
 type CGrpcServer struct {
 	c              *ServerConfig
-	selfappname    string
+	selfappname    string //group.name
 	global         []OutsideHandler
 	ctxpool        *sync.Pool
 	server         *grpc.Server
+	clientnum      int32
 	services       map[string]*grpc.ServiceDesc
 	handlerTimeout map[string]time.Duration
 
@@ -79,8 +81,8 @@ type CGrpcServer struct {
 }
 
 func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, error) {
-	appname := selfgroup + "." + selfname
-	if e := name.FullCheck(appname); e != nil {
+	selfappname := selfgroup + "." + selfname
+	if e := name.FullCheck(selfappname); e != nil {
 		return nil, e
 	}
 	if c == nil {
@@ -89,13 +91,14 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 	c.validate()
 	serverinstance := &CGrpcServer{
 		c:              c,
-		selfappname:    selfgroup + "." + selfname,
+		selfappname:    selfappname,
 		global:         make([]OutsideHandler, 0),
 		ctxpool:        &sync.Pool{},
 		services:       make(map[string]*grpc.ServiceDesc),
 		handlerTimeout: make(map[string]time.Duration),
 	}
 	opts := make([]grpc.ServerOption, 0, 6)
+	opts = append(opts, grpc.StatsHandler(serverinstance))
 	opts = append(opts, grpc.ReadBufferSize(int(c.SocketRBuf)))
 	opts = append(opts, grpc.WriteBufferSize(int(c.SocketWBuf)))
 	opts = append(opts, grpc.MaxRecvMsgSize(int(c.MaxMsgLen)))
@@ -141,10 +144,11 @@ func (s *CGrpcServer) StopCGrpcServer() {
 	s.server.GracefulStop()
 }
 
-//func (this *CGrpcServer) GetClientNum() int {
-//}
+func (this *CGrpcServer) GetClientNum() int32 {
+	return atomic.LoadInt32(&this.clientnum)
+}
 func (this *CGrpcServer) GetReqNum() int32 {
-	return this.totalreqnum
+	return atomic.LoadInt32(&this.totalreqnum)
 }
 
 //map key path,map value handler timeout,0 means no handler specific timeout,but still has global timeout
@@ -271,5 +275,30 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		}()
 		workctx.run()
 		return
+	}
+}
+func (s *CGrpcServer) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	return ctx
+}
+func (s *CGrpcServer) HandleRPC(context.Context, stats.RPCStats) {
+}
+
+type serverconnkey struct{}
+
+func (s *CGrpcServer) TagConn(ctx context.Context, info *stats.ConnTagInfo) context.Context {
+	return context.WithValue(ctx, serverconnkey{}, info)
+}
+func (s *CGrpcServer) HandleConn(ctx context.Context, stat stats.ConnStats) {
+	info, ok := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)
+	if !ok {
+		return
+	}
+	switch stat.(type) {
+	case *stats.ConnBegin:
+		atomic.AddInt32(&s.clientnum, 1)
+		log.Info(nil, "[cgrpc.server] client:", info.RemoteAddr.String(), "online")
+	case *stats.ConnEnd:
+		atomic.AddInt32(&s.clientnum, -1)
+		log.Info(nil, "[cgrpc.server] client:", info.RemoteAddr.String(), "offline")
 	}
 }

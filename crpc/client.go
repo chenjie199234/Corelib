@@ -23,7 +23,7 @@ import (
 
 type PickHandler func(servers []*ServerForPick) *ServerForPick
 
-type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *CrpcClient)
+type DiscoveryHandler func(servergroup, servername string, manually <-chan *struct{}, client *CrpcClient)
 
 type ClientConfig struct {
 	ConnTimeout   time.Duration //default 500ms
@@ -70,11 +70,10 @@ func (c *ClientConfig) validate() {
 }
 
 type CrpcClient struct {
-	selfappname string
-	appname     string
-	c           *ClientConfig
-	tlsc        *tls.Config
-	instance    *stream.Instance
+	serverappname string //group.name
+	c             *ClientConfig
+	tlsc          *tls.Config
+	instance      *stream.Instance
 
 	resolver *corelibResolver
 	balancer *corelibBalancer
@@ -82,9 +81,9 @@ type CrpcClient struct {
 	reqpool *sync.Pool
 }
 
-func NewCrpcClient(c *ClientConfig, selfgroup, selfname, peergroup, peername string) (*CrpcClient, error) {
-	appname := peergroup + "." + peername
-	if e := name.FullCheck(appname); e != nil {
+func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername string) (*CrpcClient, error) {
+	serverappname := servergroup + "." + servername
+	if e := name.FullCheck(serverappname); e != nil {
 		return nil, e
 	}
 	selfappname := selfgroup + "." + selfname
@@ -116,9 +115,8 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, peergroup, peername str
 		}
 	}
 	client := &CrpcClient{
-		selfappname: selfappname,
-		appname:     appname,
-		c:           c,
+		serverappname: serverappname,
+		c:             c,
 		tlsc: &tls.Config{
 			InsecureSkipVerify: c.SkipVerifyTLS,
 			RootCAs:            certpool,
@@ -143,7 +141,7 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, peergroup, peername str
 	instancec.Offlinefunc = client.offlinefunc
 	client.instance, _ = stream.NewInstance(instancec, selfgroup, selfname)
 	//init discover
-	client.resolver = newCorelibResolver(peergroup, peername, client)
+	client.resolver = newCorelibResolver(servergroup, servername, client)
 	return client, nil
 }
 
@@ -162,12 +160,11 @@ func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 		//can't reconnect to server
 		return
 	}
-	tempverifydata := c.appname
 	var tlsc *tls.Config
 	if c.c.UseTLS {
 		tlsc = c.tlsc
 	}
-	if !c.instance.StartTcpClient(server.addr, common.Str2byte(tempverifydata), tlsc) {
+	if !c.instance.StartTcpClient(server.addr, common.Str2byte(c.serverappname), tlsc) {
 		time.Sleep(time.Millisecond * 100)
 		go c.start(server, true)
 	}
@@ -289,7 +286,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		case <-r.finish:
 			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "CRPC", path, &start, &end, r.err)
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, server.addr, "CRPC", path, &start, &end, r.err)
 			if r.err != nil {
 				//req error,update last fail time
 				server.Pickinfo.LastFailTime = time.Now().UnixNano()
@@ -329,7 +326,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 				e = cerror.ConvertStdError(ctx.Err())
 			}
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.appname, server.addr, "CRPC", path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, server.addr, "CRPC", path, &start, &end, e)
 			return nil, e
 		}
 	}

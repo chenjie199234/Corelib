@@ -11,12 +11,12 @@ const text = `module {{.}}
 go 1.17
 
 require (
-	github.com/chenjie199234/Config v0.0.19
-	github.com/chenjie199234/Corelib v0.0.33
+	github.com/chenjie199234/Config v0.0.20
+	github.com/chenjie199234/Corelib v0.0.34
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/segmentio/kafka-go v0.4.23
-	go.mongodb.org/mongo-driver v1.7.4
+	github.com/segmentio/kafka-go v0.4.25
+	go.mongodb.org/mongo-driver v1.8.1
 	google.golang.org/protobuf v1.27.1
 )`
 

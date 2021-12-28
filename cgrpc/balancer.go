@@ -167,12 +167,12 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 		return
 	}
 	if s.ConnectivityState == connectivity.Idle && atomic.LoadInt32(&exist.status) == int32(connectivity.Ready) {
-		log.Info(nil, "[cgrpc.client] server:", b.c.appname+":"+exist.addr, "offline")
+		log.Info(nil, "[cgrpc.client] server:", b.c.serverappname+":"+exist.addr, "offline")
 	} else if s.ConnectivityState == connectivity.Ready {
 		b.c.resolver.wakemanual()
-		log.Info(nil, "[cgrpc.client] server:", b.c.appname+":"+exist.addr, "online")
+		log.Info(nil, "[cgrpc.client] server:", b.c.serverappname+":"+exist.addr, "online")
 	} else if s.ConnectivityState == connectivity.TransientFailure {
-		log.Error(nil, "[cgrpc.client] connect to server:", b.c.appname+":"+exist.addr, "error:", s.ConnectionError)
+		log.Error(nil, "[cgrpc.client] connect to server:", b.c.serverappname+":"+exist.addr, "error:", s.ConnectionError)
 	}
 	olds := atomic.LoadInt32(&exist.status)
 	atomic.StoreInt32(&exist.status, int32(s.ConnectivityState))

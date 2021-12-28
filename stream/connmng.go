@@ -133,23 +133,24 @@ func (m *connmng) PreStop() {
 func (m *connmng) Stop() {
 	defer m.closewait.Wait()
 	for {
-		old := atomic.LoadInt32(&m.peernum)
-		if old < 0 {
-			return
-		}
-		if atomic.CompareAndSwapInt32(&m.peernum, old, old-math.MaxInt32) {
-			for _, tw := range m.groups {
-				for _, g := range tw.wheel {
-					g.Lock()
-					for _, p := range g.peers {
-						p.Close()
-					}
-					g.Unlock()
-				}
+		if old := atomic.LoadInt32(&m.peernum); old >= 0 {
+			if atomic.CompareAndSwapInt32(&m.peernum, old, old-math.MaxInt32) {
+				break
 			}
+		} else {
 			break
 		}
 	}
+	for _, tw := range m.groups {
+		for _, g := range tw.wheel {
+			g.Lock()
+			for _, p := range g.peers {
+				p.Close()
+			}
+			g.Unlock()
+		}
+	}
+	//prevent there are no peers
 	select {
 	case m.delpeerch <- nil:
 	default:

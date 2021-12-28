@@ -297,7 +297,7 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 			trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, e)
 			return nil, e
 		}
-		if resp.StatusCode == 888 {
+		if resp.StatusCode == int(cerror.ErrClosing.Httpcode) {
 			server.Pickinfo.LastFailTime = time.Now().UnixNano()
 			server.setclient(nil)
 			this.balancer.RebuildPicker()

@@ -8,21 +8,24 @@ import (
 
 const text = `package api
 
+import "os"
+
 //      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
 
-const Name = "{{.Pname}}"
-const Group = "{{.Gname}}"`
+const Name = "{{.}}"
+var Group = os.Getenv("GROUP")
+
+func init() {
+	if Group == "" || Group == "<GROUP>" {
+		panic("missing GROUP env")
+	}
+}`
 
 const path = "./api/"
 const filename = "client.go"
 
 var tml *template.Template
 var file *os.File
-
-type data struct {
-	Pname string
-	Gname string
-}
 
 func init() {
 	var e error
@@ -41,8 +44,8 @@ func CreatePathAndFile() {
 		panic(fmt.Sprintf("make file:%s error:%s", path+filename, e))
 	}
 }
-func Execute(pname, gname string) {
-	if e := tml.Execute(file, &data{Pname: pname, Gname: gname}); e != nil {
+func Execute(pname string) {
+	if e := tml.Execute(file, pname); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+filename, e))
 	}
 }

@@ -80,8 +80,8 @@ type client struct {
 }
 
 func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, error) {
-	appname := selfgroup + "." + selfname
-	if e := name.FullCheck(appname); e != nil {
+	selfappname := selfgroup + "." + selfname
+	if e := name.FullCheck(selfappname); e != nil {
 		return nil, e
 	}
 	if c == nil {
@@ -280,7 +280,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 				msg.Tracedata = nil
 			}
 			end := time.Now()
-			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.instance.GetSelfName(), host.Hostip, "CRPC", path, &start, &end, msg.Error)
+			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.instance.GetSelfAppName(), host.Hostip, "CRPC", path, &start, &end, msg.Error)
 			s.putContext(workctx)
 		}()
 		workctx.run()
@@ -293,7 +293,7 @@ func (s *CrpcServer) verifyfunc(ctx context.Context, peeruniquename string, peer
 		//self closed
 		return nil, false
 	}
-	if common.Byte2str(peerVerifyData) != s.instance.GetSelfName() {
+	if common.Byte2str(peerVerifyData) != s.instance.GetSelfAppName() {
 		return nil, false
 	}
 	return nil, true
@@ -335,7 +335,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	}
 	var tracectx context.Context
 	if len(msg.Tracedata) == 0 || msg.Tracedata["Traceid"] == "" {
-		tracectx = trace.InitTrace(p, "", s.instance.GetSelfName(), host.Hostip, "CRPC", msg.Path, 0)
+		tracectx = trace.InitTrace(p, "", s.instance.GetSelfAppName(), host.Hostip, "CRPC", msg.Path, 0)
 	} else if len(msg.Tracedata) != 4 || msg.Tracedata["Deep"] == "" {
 		log.Error(nil, "[crpc.server.userfunc] client:", p.GetPeerUniqueName(), "path:", msg.Path, "method: CRPC error: tracedata:", msg.Tracedata, "format error")
 		p.Close()
@@ -345,7 +345,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		p.Close()
 		return
 	} else {
-		tracectx = trace.InitTrace(p, msg.Tracedata["Traceid"], s.instance.GetSelfName(), host.Hostip, "CRPC", msg.Path, clientdeep)
+		tracectx = trace.InitTrace(p, msg.Tracedata["Traceid"], s.instance.GetSelfAppName(), host.Hostip, "CRPC", msg.Path, clientdeep)
 	}
 	handler, ok := s.handler[msg.Path]
 	if !ok {

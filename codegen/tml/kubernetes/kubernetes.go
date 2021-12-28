@@ -6,7 +6,7 @@ import (
 	"text/template"
 )
 
-const dockerfiletext = `FROM golang:1.17.4 as builder
+const dockerfiletext = `FROM golang:1.17.5 as builder
 ENV GOSUMDB='off' \
 	GOOS='linux' \
 	GOARCH='amd64' \
@@ -28,7 +28,7 @@ const deploymenttext = `apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{.ProjectName}}-deployment
-  namespace: {{.NameSpace}}
+  namespace: <GROUP>
   labels:
     app: {{.ProjectName}}
 spec:
@@ -66,6 +66,10 @@ spec:
                   fieldPath: status.podIP
             - name: DEPLOY_ENV
               value: kube
+            - name: GROUP
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: RUN_ENV
               value: <RUN_ENV>
             - name: CONFIG_TYPE
@@ -109,13 +113,13 @@ spec:
               - key: source-config
                 path: SourceConfig.json
       imagePullSecrets:
-        - name: {{.NameSpace}}-secret
+        - name: <NAME_SPACE>-secret
 ---
 apiVersion: autoscaling/v2beta2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {{.ProjectName}}-hpa
-  namespace: {{.NameSpace}}
+  namespace: <GROUP>
 spec:
   scaleTargetRef:   
     apiVersion: apps/v1
@@ -141,7 +145,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{.ProjectName}}-service-headless
-  namespace: {{.NameSpace}}
+  namespace: <GROUP>
   labels:
     app: {{.ProjectName}}
 spec:
@@ -159,7 +163,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{.ProjectName}}-service
-  namespace: {{.NameSpace}}
+  namespace: <GROUP>
   labels:
     app: {{.ProjectName}}
 spec:
@@ -176,7 +180,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{.ProjectName}}-ingress
-  namespace: {{.NameSpace}}
+  namespace: <GROUP>
 spec:
   rules: 
   - host: {{.HostName}}
@@ -227,19 +231,17 @@ func CreatePathAndFile() {
 
 type data struct {
 	ProjectName string
-	NameSpace   string
 	NeedService bool
 	NeedIngress bool
 	HostName    string
 }
 
-func Execute(projectname string, namespace string, needservice bool, needingress bool, hostname string) {
+func Execute(projectname string, needservice bool, needingress bool, hostname string) {
 	if e := dockerfiletml.Execute(dockerfilefile, projectname); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+dockerfilename, e))
 	}
 	tempdata := &data{
 		ProjectName: projectname,
-		NameSpace:   namespace,
 		NeedService: needservice,
 		NeedIngress: needingress,
 		HostName:    hostname,

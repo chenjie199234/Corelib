@@ -31,7 +31,7 @@ import (
 
 type PickHandler func(servers []*ServerForPick) *ServerForPick
 
-type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *CGrpcClient)
+type DiscoveryHandler func(servergroup, servername string, manually <-chan *struct{}, client *CGrpcClient)
 
 type ClientConfig struct {
 	ConnTimeout   time.Duration
@@ -78,17 +78,17 @@ func (c *ClientConfig) validate() {
 }
 
 type CGrpcClient struct {
-	c           *ClientConfig
-	selfappname string
-	appname     string
-	conn        *grpc.ClientConn
-	resolver    *corelibResolver
-	balancer    *corelibBalancer
+	c             *ClientConfig
+	selfappname   string
+	serverappname string //group.name
+	conn          *grpc.ClientConn
+	resolver      *corelibResolver
+	balancer      *corelibBalancer
 }
 
-func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, peergroup, peername string) (*CGrpcClient, error) {
-	appname := peergroup + "." + peername
-	if e := name.FullCheck(appname); e != nil {
+func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername string) (*CGrpcClient, error) {
+	serverappname := servergroup + "." + servername
+	if e := name.FullCheck(serverappname); e != nil {
 		return nil, e
 	}
 	selfappname := selfgroup + "." + selfname
@@ -107,9 +107,9 @@ func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, peergroup, peername st
 	}
 	c.validate()
 	clientinstance := &CGrpcClient{
-		c:           c,
-		selfappname: selfappname,
-		appname:     appname,
+		c:             c,
+		selfappname:   selfappname,
+		serverappname: serverappname,
 	}
 	opts := make([]grpc.DialOption, 0)
 	opts = append(opts, grpc.WithDisableRetry())
@@ -151,7 +151,7 @@ func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, peergroup, peername st
 	opts = append(opts, grpc.WithDefaultServiceConfig("{\"loadBalancingConfig\":[{\"corelib\":{}}]}"))
 	//resolver
 	opts = append(opts, grpc.WithResolvers(&resolverBuilder{c: clientinstance}))
-	conn, e := grpc.Dial("corelib:///"+appname, opts...)
+	conn, e := grpc.Dial("corelib:///"+serverappname, opts...)
 	if e != nil {
 		return nil, e
 	}
@@ -203,7 +203,7 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 	if traceid != "" {
 		md.Set("core_tracedata", traceid, c.selfappname, selfmethod, selfpath, strconv.Itoa(selfdeep))
 	}
-	md.Set("core_target", c.appname)
+	md.Set("core_target", c.serverappname)
 	ctx = gmetadata.NewOutgoingContext(ctx, md)
 	for {
 		p := &peer.Peer{}
@@ -213,7 +213,7 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 			//pick error or create stream unretryable error,req doesn't send
 		} else {
 			//req send,recv error
-			trace.Trace(ctx, trace.CLIENT, c.appname, p.Addr.String(), "GRPC", path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, p.Addr.String(), "GRPC", path, &start, &end, e)
 		}
 		if cerror.Equal(e, cerror.ErrClosing) {
 			continue

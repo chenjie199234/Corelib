@@ -301,7 +301,6 @@ func (this *WebServer) StartWebServer(listenaddr string) error {
 		if e == http.ErrServerClosed {
 			return ErrServerClosed
 		}
-		return errors.New("[web.server] serve error:" + e.Error())
 	}
 	return nil
 }
@@ -338,7 +337,6 @@ func (this *WebServer) StopWebServer() {
 			return
 		}
 	}
-
 }
 
 //first key method,second key path,value timeout

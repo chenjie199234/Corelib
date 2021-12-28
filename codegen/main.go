@@ -34,7 +34,6 @@ import (
 )
 
 var name = flag.String("n", "", "project's name\ncharacter:[a-z][A-Z][0-9][_]\nfirst character must in [a-z][A-Z]")
-var group = flag.String("g", "", "project's group\ncharacter:[a-z][A-Z][0-9][-_|()[]{}<>]\nfirst character must in [a-z][A-Z]")
 var dir = flag.String("d", "", "project's create dir")
 var sub = flag.String("s", "", "create subservice's name in project\ncharacter:[a-z][A-Z][0-9][_]\nfirst character must in [a-z][A-Z]")
 var kub = flag.Bool("k", false, "update exist project's kubernetes config file")
@@ -46,7 +45,7 @@ var kubernetesingresshost string
 func main() {
 	flag.Parse()
 	//pre check
-	if e := cname.FullCheck(*group + "." + *name); e != nil {
+	if e := cname.NameCheck(*name); e != nil {
 		panic(e)
 	}
 	if len(*sub) == 0 {
@@ -69,7 +68,7 @@ func checkBaseProjectName() {
 		panic("please change dir to project's root dir,then run this manually or run the cmd script")
 	}
 	bio := bufio.NewReader(bytes.NewBuffer(data))
-	var tempname, tempgroup string
+	var tempname string
 	for {
 		line, _, e := bio.ReadLine()
 		if e != nil {
@@ -86,18 +85,11 @@ func checkBaseProjectName() {
 			}
 			tempname = tempname[1 : len(tempname)-1]
 		}
-		if strings.HasPrefix(str, "const Group = ") {
-			tempgroup = str[14:]
-			if len(tempgroup) <= 2 || tempgroup[0] != '"' || tempgroup[len(tempgroup)-1] != '"' {
-				panic("api/client.go broken!")
-			}
-			tempgroup = tempgroup[1 : len(tempgroup)-1]
-		}
-		if tempname != "" && tempgroup != "" {
+		if tempname != "" {
 			break
 		}
 	}
-	if tempname != *name && tempgroup != *group {
+	if tempname != *name {
 		panic("please change dir to project's root dir,then run this manually or run the cmd script")
 	}
 }
@@ -221,7 +213,7 @@ func createBaseProject() {
 	servicestatus.Execute(*name)
 
 	cmd.CreatePathAndFile()
-	cmd.Execute(*name, *group)
+	cmd.Execute(*name)
 
 	readme.CreatePathAndFile()
 	readme.Execute(*name)
@@ -230,7 +222,7 @@ func createBaseProject() {
 	git.Execute(*name)
 
 	clientapi.CreatePathAndFile()
-	clientapi.Execute(*name, *group)
+	clientapi.Execute(*name)
 
 	fmt.Println("base project create success!")
 	createkubernetes()
@@ -313,7 +305,7 @@ func createkubernetes() {
 	if needkubernetes {
 		fmt.Println("start create kubernetes config.")
 		kubernetes.CreatePathAndFile()
-		kubernetes.Execute(*name, *group, needkubernetesservice, needkubernetesingress, kubernetesingresshost)
+		kubernetes.Execute(*name, needkubernetesservice, needkubernetesingress, kubernetesingresshost)
 		fmt.Println("create kubernetes config success!")
 	}
 }

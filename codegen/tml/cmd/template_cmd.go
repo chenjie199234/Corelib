@@ -60,11 +60,11 @@ build() {
 }
 
 new() {
-	codegen -n {{.Pname}} -g {{.Gname}} -s $1
+	codegen -n {{.Pname}} -s $1
 }
 
 kube() {
-	codegen -n {{.Pname}} -g {{.Gname}} -k
+	codegen -n {{.Pname}} -k
 }
 
 if !(type git >/dev/null 2>&1);then
@@ -262,11 +262,11 @@ goto :end
 goto :end
 
 :kube
-	codegen -n {{.Pname}} -g {{.Gname}} -k
+	codegen -n {{.Pname}} -k
 goto :end
 
 :new
-	codegen -n {{.Pname}} -g {{.Gname}} -s %2
+	codegen -n {{.Pname}} -s %2
 goto :end
 
 :help
@@ -301,8 +301,7 @@ then
 exit 0
 else
 exit 1
-fi
-`
+fi`
 
 const path = "./"
 const namebash = "cmd.sh"
@@ -318,7 +317,6 @@ var fileprobe *os.File
 
 type Data struct {
 	Pname        string
-	Gname        string
 	GoListFormat string
 }
 
@@ -363,11 +361,11 @@ func CreatePathAndFile() {
 		panic(fmt.Sprintf("change file:%s execute right error:%s", path+nameprobe, e))
 	}
 }
-func Execute(pname, gname string) {
-	if e := tmlbash.Execute(filebash, &Data{Pname: pname, Gname: gname, GoListFormat: "\"{{.Dir}}\""}); e != nil {
+func Execute(pname string) {
+	if e := tmlbash.Execute(filebash, &Data{Pname: pname, GoListFormat: "\"{{.Dir}}\""}); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+namebash, e))
 	}
-	if e := tmlbat.Execute(filebat, &Data{Pname: pname, Gname: gname, GoListFormat: "\"{{.Dir}}\""}); e != nil {
+	if e := tmlbat.Execute(filebat, &Data{Pname: pname, GoListFormat: "\"{{.Dir}}\""}); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+namebat, e))
 	}
 	if e := tmlprobe.Execute(fileprobe, nil); e != nil {

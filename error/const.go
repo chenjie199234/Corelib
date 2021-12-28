@@ -7,7 +7,7 @@ import (
 
 //system,start from 1000
 var (
-	ErrClosing    = &Error{Code: 1000, Httpcode: 888, Msg: "server is closing"}
+	ErrClosing    = &Error{Code: 1000, Httpcode: 449, Msg: "server is closing,retry this request"}
 	ErrNoapi      = &Error{Code: 1001, Httpcode: http.StatusNotImplemented, Msg: "api not implement"}
 	ErrPanic      = &Error{Code: 1002, Httpcode: http.StatusServiceUnavailable, Msg: "server panic"}
 	ErrNoserver   = &Error{Code: 1003, Httpcode: http.StatusServiceUnavailable, Msg: "no servers"}
