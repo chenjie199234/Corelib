@@ -113,7 +113,7 @@ spec:
               - key: source-config
                 path: SourceConfig.json
       imagePullSecrets:
-        - name: <NAME_SPACE>-secret
+        - name: <GROUP>-secret
 ---
 apiVersion: autoscaling/v2beta2
 kind: HorizontalPodAutoscaler
