@@ -40,7 +40,6 @@ var kub = flag.Bool("k", false, "update exist project's kubernetes config file")
 var needkubernetes bool
 var needkubernetesservice bool
 var needkubernetesingress bool
-var kubernetesingresshost string
 
 func main() {
 	flag.Parse()
@@ -280,18 +279,6 @@ func createkubernetes() {
 			needkubernetesingress = true
 		}
 	}
-	if needkubernetesingress {
-		input = ""
-		for len(input) == 0 {
-			fmt.Printf("ingress host: ")
-			_, e := fmt.Scanln(&input)
-			if e != nil {
-				panic(e)
-			}
-			input = strings.TrimSpace(input)
-		}
-		kubernetesingresshost = input
-	}
 	if e := os.Remove("./Dockerfile"); e != nil {
 		if !os.IsNotExist(e) {
 			panic("delete old dockerfile error:" + e.Error())
@@ -305,7 +292,7 @@ func createkubernetes() {
 	if needkubernetes {
 		fmt.Println("start create kubernetes config.")
 		kubernetes.CreatePathAndFile()
-		kubernetes.Execute(*name, needkubernetesservice, needkubernetesingress, kubernetesingresshost)
+		kubernetes.Execute(*name, needkubernetesservice, needkubernetesingress)
 		fmt.Println("create kubernetes config success!")
 	}
 }

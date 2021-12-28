@@ -183,7 +183,7 @@ metadata:
   namespace: <GROUP>
 spec:
   rules: 
-  - host: {{.HostName}}
+  - host: <HOST>
     http:
       paths:
       - path: /{{.ProjectName}}
@@ -233,10 +233,9 @@ type data struct {
 	ProjectName string
 	NeedService bool
 	NeedIngress bool
-	HostName    string
 }
 
-func Execute(projectname string, needservice bool, needingress bool, hostname string) {
+func Execute(projectname string, needservice bool, needingress bool) {
 	if e := dockerfiletml.Execute(dockerfilefile, projectname); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+dockerfilename, e))
 	}
@@ -244,7 +243,6 @@ func Execute(projectname string, needservice bool, needingress bool, hostname st
 		ProjectName: projectname,
 		NeedService: needservice,
 		NeedIngress: needingress,
-		HostName:    hostname,
 	}
 	if e := deploymenttml.Execute(deploymentfile, tempdata); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+deploymentname, e))
