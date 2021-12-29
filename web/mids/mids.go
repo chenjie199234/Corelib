@@ -20,6 +20,12 @@ func init() {
 func AllMids() map[string]web.OutsideHandler {
 	return all
 }
+
+//thread unsafe
+func RegMid(name string, handler web.OutsideHandler) {
+	all[name] = handler
+}
+
 func rate(ctx *web.Context) {
 	switch ctx.GetMethod() {
 	case http.MethodGet:

@@ -19,6 +19,10 @@ func AllMids() map[string]cgrpc.OutsideHandler {
 	return all
 }
 
+//thread unsafe
+func RegMid(name string, handler cgrpc.OutsideHandler) {
+	all[name] = handler
+}
 func rate(ctx *cgrpc.Context) {
 	if !publicmids.GrpcRate(ctx.GetPath()) {
 		ctx.Abort(cerror.ErrLimit)

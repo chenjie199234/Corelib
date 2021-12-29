@@ -18,6 +18,12 @@ func init() {
 func AllMids() map[string]crpc.OutsideHandler {
 	return all
 }
+
+//thread unsafe
+func RegMid(name string, handler crpc.OutsideHandler) {
+	all[name] = handler
+}
+
 func rate(ctx *crpc.Context) {
 	if !publicmids.CrpcRate(ctx.GetPath()) {
 		ctx.Abort(cerror.ErrLimit)
