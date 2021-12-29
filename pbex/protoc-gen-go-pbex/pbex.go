@@ -162,9 +162,6 @@ func genMessage(g *protogen.GeneratedFile, m *protogen.Message) {
 				fallthrough
 			case protoreflect.DoubleKind:
 				//float64 or []float64
-				if field.Desc.IsList() {
-					elementnumcheck(field, fop, g)
-				}
 				floatcheck(field, fop, g)
 			case protoreflect.BytesKind:
 				//[]bytes or [][]bytes
@@ -172,9 +169,6 @@ func genMessage(g *protogen.GeneratedFile, m *protogen.Message) {
 				fallthrough
 			case protoreflect.StringKind:
 				//string or []string
-				if field.Desc.IsList() {
-					elementnumcheck(field, fop, g)
-				}
 				strcheck(field, isbyteslice, fop, g)
 			case protoreflect.MessageKind:
 				//message or []message or map
