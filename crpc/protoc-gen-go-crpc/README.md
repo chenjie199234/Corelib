@@ -1,7 +1,7 @@
 # protoc-gen-go-crpc
 
 ## Description
-	protoc-gen-go-crpc是一个基于proto文件生成crpc框架的打桩代码的工具
+	protoc-gen-go-crpc是一个基于proto文件生成crpc框架的桩代码的工具
 	所有的接口定义都使用一套proto文件,清晰明了,规范化接口管理
 
 ## Installation

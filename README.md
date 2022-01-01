@@ -12,13 +12,13 @@
 	(groupname格式,[a-z][A-Z][0-9][-_|()[]{}<>],首字母必须是[a-z][A-Z])
 # Description
 ## web
-	web框架,内含proto解析工具,可由proto生成web打桩代码
+	web框架,内含proto解析工具,可由proto生成web桩代码
 ## cgrpc
-	grpc框架,二次封装,内含proto解析工具,可由proto生成web打桩代码
+	grpc框架,二次封装,内含proto解析工具,可由proto生成cgrpc桩代码
 ## stream
 	tcp长连接框架
 ## crpc
-	因grpc性能较差,所以重新造了个rpc轮子,性能相较grpc有30%+的提升.基于stream的rpc框架,内含proto解析工具,可由proto生成crpc打桩代码
+	因grpc性能较差,所以重新造了个rpc轮子,性能相较grpc有30%+的提升.基于stream的rpc框架,内含proto解析工具,可由proto生成crpc桩代码
 ## codegen
 	代码脚手架
 ## error

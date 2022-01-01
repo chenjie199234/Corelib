@@ -134,6 +134,10 @@ type AppConfig struct {
 	HandlerRate    []*publicmids.RateConfig             $json:"handler_rate"$
 }
 
+func validateAppConfig(ac *AppConfig) {
+
+}
+
 //AC -
 var AC *AppConfig
 
@@ -152,6 +156,7 @@ func initapp(path string, notice func(*AppConfig)) {
 		Close()
 		os.Exit(1)
 	}
+	validateAppConfig(AC)
 	if notice != nil {
 		notice(AC)
 	}
@@ -193,6 +198,7 @@ func initapp(path string, notice func(*AppConfig)) {
 					log.Error(nil, "[config.initapp] hot update config file format error:", e)
 					continue
 				}
+				validateAppConfig(c)
 				if notice != nil {
 					notice(c)
 				}
