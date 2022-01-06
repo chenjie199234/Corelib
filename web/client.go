@@ -11,21 +11,16 @@ import (
 	"net"
 	"net/http"
 	"net/textproto"
+	"net/url"
 	"os"
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	cerror "github.com/chenjie199234/Corelib/error"
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/name"
 )
-
-type PickHandler func(servers []*ServerForPick) *ServerForPick
-
-type DiscoveryHandler func(group, name string, manually <-chan *struct{}, client *WebClient)
 
 type ClientConfig struct {
 	ConnTimeout   time.Duration
@@ -37,11 +32,8 @@ type ClientConfig struct {
 	MaxHeader     uint
 	SocketRBuf    uint
 	SocketWBuf    uint
-	UseTLS        bool     //http or https
 	SkipVerifyTLS bool     //don't verify the server's cert
 	CAs           []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
-	Picker        PickHandler
-	Discover      DiscoveryHandler //this function will be called in goroutine in NewWebClient
 }
 
 func (c *ClientConfig) validate() {
@@ -74,18 +66,15 @@ func (c *ClientConfig) validate() {
 }
 
 type WebClient struct {
-	selfappname string
-	appname     string
-	c           *ClientConfig
-	transport   *http.Transport
-
-	resolver *corelibResolver
-	balancer *corelibBalancer
+	selfappname   string
+	serverappname string
+	c             *ClientConfig
+	httpclient    *http.Client
 }
 
-func NewWebClient(c *ClientConfig, selfgroup, selfname, peergroup, peername string) (*WebClient, error) {
-	appname := peergroup + "." + peername
-	if e := name.FullCheck(appname); e != nil {
+func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername string) (*WebClient, error) {
+	serverappname := servergroup + "." + servername
+	if e := name.FullCheck(serverappname); e != nil {
 		return nil, e
 	}
 	selfappname := selfgroup + "." + selfname
@@ -93,14 +82,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, peergroup, peername stri
 		return nil, e
 	}
 	if c == nil {
-		return nil, errors.New("[web.client] missing config")
-	}
-	if c.Discover == nil {
-		return nil, errors.New("[web.client] missing discover in config")
-	}
-	if c.Picker == nil {
-		log.Warning(nil, "[web.client] missing picker in config,default picker will be used")
-		c.Picker = defaultPicker
+		c = &ClientConfig{}
 	}
 	c.validate()
 	var certpool *x509.CertPool
@@ -116,46 +98,37 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, peergroup, peername stri
 			}
 		}
 	}
-	client := &WebClient{
-		selfappname: selfappname,
-		appname:     appname,
-		c:           c,
-		transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   c.ConnTimeout,
-				KeepAlive: c.HeartProbe,
-			}).DialContext,
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: c.SkipVerifyTLS,
-				RootCAs:            certpool,
-			},
-			TLSHandshakeTimeout:    c.ConnTimeout,
-			ForceAttemptHTTP2:      true,
-			MaxIdleConnsPerHost:    50,
-			IdleConnTimeout:        c.IdleTimeout,
-			MaxResponseHeaderBytes: int64(c.MaxHeader),
-			ReadBufferSize:         int(c.SocketRBuf),
-			WriteBufferSize:        int(c.SocketWBuf),
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   c.ConnTimeout,
+			KeepAlive: c.HeartProbe,
+		}).DialContext,
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: c.SkipVerifyTLS,
+			RootCAs:            certpool,
 		},
+		TLSHandshakeTimeout:    c.ConnTimeout,
+		ForceAttemptHTTP2:      true,
+		MaxIdleConnsPerHost:    50,
+		IdleConnTimeout:        c.IdleTimeout,
+		MaxResponseHeaderBytes: int64(c.MaxHeader),
+		ReadBufferSize:         int(c.SocketRBuf),
+		WriteBufferSize:        int(c.SocketWBuf),
 	}
 	if c.HeartProbe < 0 {
-		client.transport.DisableKeepAlives = true
+		transport.DisableKeepAlives = true
 	}
-	client.balancer = newCorelibBalancer(client)
-	//init discover
-	client.resolver = newCorelibResolver(peergroup, peername, client)
+	client := &WebClient{
+		selfappname:   selfappname,
+		serverappname: serverappname,
+		c:             c,
+		httpclient: &http.Client{
+			Transport: transport,
+			Timeout:   c.GlobalTimeout,
+		},
+	}
 	return client, nil
-}
-
-type RegisterData struct {
-	DServers map[string]struct{} //server register on which discovery server
-	Addition []byte
-}
-
-//all: key server's addr "host:port"
-func (this *WebClient) UpdateDiscovery(all map[string]*RegisterData) {
-	this.balancer.UpdateDiscovery(all)
 }
 
 func forbiddenHeader(header http.Header) bool {
@@ -223,9 +196,9 @@ func (this *WebClient) Patch(ctx context.Context, path, query string, header htt
 	return this.call(http.MethodPatch, ctx, path, query, header, metadata, nil)
 }
 func (this *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body *bytes.Buffer) ([]byte, error) {
-	start := time.Now()
-	if len(path) == 0 || path[0] != '/' {
-		path = "/" + path
+	url, e := url.Parse(path)
+	if e != nil {
+		return nil, cerror.ConvertStdError(e)
 	}
 	if len(query) != 0 && query[0] != '?' {
 		query = "?" + query
@@ -233,7 +206,7 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 	if header == nil {
 		header = make(http.Header)
 	}
-	header.Set("Core_target", this.appname)
+	header.Set("Core_target", this.serverappname)
 	if len(metadata) != 0 {
 		d, _ := json.Marshal(metadata)
 		header.Set("Core_metadata", common.Byte2str(d))
@@ -248,72 +221,45 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 	}
 	if this.c.GlobalTimeout != 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithDeadline(ctx, start.Add(this.c.GlobalTimeout))
+		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(this.c.GlobalTimeout))
 		defer cancel()
 	}
 	dl, ok := ctx.Deadline()
 	if ok {
-		if dl.UnixNano() < start.UnixNano()+int64(time.Millisecond*5) {
-			return nil, cerror.ErrDeadlineExceeded
-		}
 		header.Set("Core_deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
 	header.Del("Origin")
 	for {
-		server, e := this.balancer.Pick(ctx)
-		if e != nil {
-			return nil, e
-		}
-		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
+		start := time.Now()
 		if ok && dl.UnixNano() < start.UnixNano()+int64(5*time.Millisecond) {
-			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
+			//at least 5ms for net lag and server logic
 			return nil, cerror.ErrDeadlineExceeded
 		}
-		var scheme string
-		if this.c.UseTLS {
-			scheme = "https"
-		} else {
-			scheme = "http"
-		}
-		var req *http.Request
-		if body == nil {
-			req, e = http.NewRequestWithContext(ctx, method, scheme+"://"+server.addr+path+query, nil)
-		} else {
-			req, e = http.NewRequestWithContext(ctx, method, scheme+"://"+server.addr+path+query, body)
-		}
+		req, e := http.NewRequestWithContext(ctx, method, path+query, nil)
 		if e != nil {
-			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 			return nil, cerror.ConvertStdError(e)
 		}
 		req.Header = header
 		//start call
 		var resp *http.Response
-		resp, e = server.client.Do(req)
-		atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
+		resp, e = this.httpclient.Do(req)
 		end := time.Now()
 		if e != nil {
-			server.Pickinfo.LastFailTime = time.Now().UnixNano()
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
 			return nil, e
-		}
-		if resp.StatusCode == int(cerror.ErrClosing.Httpcode) {
-			server.Pickinfo.LastFailTime = time.Now().UnixNano()
-			server.setclient(nil)
-			this.balancer.RebuildPicker()
-			this.resolver.manual(nil)
-			resp.Body.Close()
-			trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, cerror.ErrClosing)
-			continue
 		}
 		respbody, e := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
 			return nil, e
 		}
-		if resp.StatusCode != 200 {
+		if resp.StatusCode == int(cerror.ErrClosing.Httpcode) && cerror.Equal(cerror.ConvertErrorstr(common.Byte2str(respbody)), cerror.ErrClosing) {
+			trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, cerror.ErrClosing)
+			continue
+		} else if resp.StatusCode != http.StatusOK {
 			if len(respbody) == 0 {
 				e = cerror.MakeError(-1, int32(resp.StatusCode), http.StatusText(resp.StatusCode))
 			} else {
@@ -321,10 +267,10 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 				tempe.SetHttpcode(int32(resp.StatusCode))
 				e = tempe
 			}
-			trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
 			return nil, e
 		}
-		trace.Trace(ctx, trace.CLIENT, this.appname, server.addr, method, path, &start, &end, nil)
+		trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, nil)
 		return respbody, nil
 	}
 }

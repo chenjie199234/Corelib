@@ -59,7 +59,7 @@ func NewApi() error {
 	//if e != nil {
 	// 	return e
 	//}
-	//ExampleWebApi = example.NewExampleWebClient(exampleweb)
+	//ExampleWebApi = example.NewExampleWebClient(exampleweb,"http://examplehost:exampleport")
 
 	return nil
 }
@@ -158,36 +158,6 @@ func getWebClientConfig() *web.ClientConfig {
 		MaxHeader:     1024,
 		SocketRBuf:    2048,
 		SocketWBuf:    2048,
-		Discover:      webDNS,
-	}
-}
-
-func webDNS(group, name string, manually <-chan *struct{}, client *web.WebClient) {
-	tker := time.NewTicker(time.Second * 10)
-	for{
-		select {
-		case <-tker.C:
-		case <-manually:
-			tker.Reset(time.Second * 10)
-		}
-		result := make(map[string]*web.RegisterData)
-		addrs, e := net.LookupHost(name + "-service-headless" + "." + group)
-		if e != nil {
-			log.Error(nil,"[web.dns] get:", name+"-service-headless", "addrs error:", e)
-			continue
-		}
-		for i := range addrs {
-			addrs[i] = addrs[i] + ":8000"
-		}
-		dserver := make(map[string]struct{})
-		dserver["dns"] = struct{}{}
-		for _, addr := range addrs {
-			result[addr] = &web.RegisterData{DServers: dserver}
-		}
-		for len(tker.C) > 0 {
-			<-tker.C
-		}
-		client.UpdateDiscovery(result)
 	}
 }`
 

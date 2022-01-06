@@ -386,9 +386,10 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	g.P()
 	g.P("type ", lowclientName, " struct{")
 	g.P("cc *", g.QualifiedGoIdent(webPackage.Ident("WebClient")))
+	g.P("host string")
 	g.P("}")
-	g.P("func New", clientName, "(c *", g.QualifiedGoIdent(webPackage.Ident("WebClient")), ")(", clientName, "){")
-	g.P("return &", lowclientName, "{cc:c}")
+	g.P("func New", clientName, "(c *", g.QualifiedGoIdent(webPackage.Ident("WebClient")), ",host string)(", clientName, "){")
+	g.P("return &", lowclientName, "{cc:c,host:host}")
 	g.P("}")
 	g.P()
 	// Client handler
@@ -576,9 +577,9 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			}
 			switch httpmetohd {
 			case http.MethodGet:
-				g.P("data,e:=c.cc.Get(ctx,", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
+				g.P("data,e:=c.cc.Get(ctx,c.host+", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			case http.MethodDelete:
-				g.P("data,e:=c.cc.Delete(ctx,", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
+				g.P("data,e:=c.cc.Delete(ctx,c.host+", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			}
 		} else {
 			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")
@@ -586,11 +587,11 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
 			switch httpmetohd {
 			case http.MethodPost:
-				g.P("data,e:=c.cc.Post(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("data,e:=c.cc.Post(ctx,c.host+", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			case http.MethodPut:
-				g.P("data,e:=c.cc.Put(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("data,e:=c.cc.Put(ctx,c.host+", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			case http.MethodPatch:
-				g.P("data,e:=c.cc.Patch(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("data,e:=c.cc.Patch(ctx,c.host+", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			}
 		}
 		g.P("if e != nil {")

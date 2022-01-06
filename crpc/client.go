@@ -107,10 +107,10 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername
 		for _, cert := range c.CAs {
 			certPEM, e := os.ReadFile(cert)
 			if e != nil {
-				return nil, errors.New("[web.client] read cert file:" + cert + " error:" + e.Error())
+				return nil, errors.New("[crpc.client] read cert file:" + cert + " error:" + e.Error())
 			}
 			if !certpool.AppendCertsFromPEM(certPEM) {
-				return nil, errors.New("[web.client] load cert file:" + cert + " error:" + e.Error())
+				return nil, errors.New("[crpc.client] load cert file:" + cert + " error:" + e.Error())
 			}
 		}
 	}
@@ -238,25 +238,11 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 var errPickAgain = errors.New("[crpc.client] picked server closed")
 
 func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata map[string]string) ([]byte, error) {
-	start := time.Now()
-	if c.c.GlobalTimeout != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithDeadline(ctx, start.Add(c.c.GlobalTimeout))
-		defer cancel()
-	}
-	dl, ok := ctx.Deadline()
-	if ok && dl.UnixNano() <= start.UnixNano()+int64(5*time.Millisecond) {
-		return nil, cerror.ErrDeadlineExceeded
-	}
 	msg := &Msg{
-		//Callid:   atomic.AddUint64(&c.callid, 1),
 		Type:     MsgType_CALL,
 		Path:     path,
 		Body:     in,
 		Metadata: metadata,
-	}
-	if ok {
-		msg.Deadline = dl.UnixNano()
 	}
 	traceid, _, _, selfmethod, selfpath, selfdeep := trace.GetTrace(ctx)
 	if traceid != "" {
@@ -267,8 +253,22 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 			"Deep":         strconv.Itoa(selfdeep),
 		}
 	}
+	if c.c.GlobalTimeout != 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout))
+		defer cancel()
+	}
+	dl, ok := ctx.Deadline()
+	if ok {
+		msg.Deadline = dl.UnixNano()
+	}
 	r := c.getreq(msg)
 	for {
+		start := time.Now()
+		if ok && dl.UnixNano() <= start.UnixNano()+int64(5*time.Millisecond) {
+			//at least 5ms for net lag and server logic
+			return nil, cerror.ErrDeadlineExceeded
+		}
 		server, e := c.balancer.Pick(ctx)
 		if e != nil {
 			return nil, e
