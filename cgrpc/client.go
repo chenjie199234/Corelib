@@ -189,7 +189,6 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout))
 		defer cancel()
 	}
-	dl, ok := ctx.Deadline()
 	md := gmetadata.New(nil)
 	if len(metadata) != 0 {
 		d, _ := json.Marshal(metadata)
@@ -203,10 +202,6 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 	ctx = gmetadata.NewOutgoingContext(ctx, md)
 	for {
 		start := time.Now()
-		if ok && dl.UnixNano() <= start.UnixNano()+int64(5*time.Millisecond) {
-			//at least 5ms for net lag and server logic
-			return cerror.ErrDeadlineExceeded
-		}
 		p := &peer.Peer{}
 		e := transGrpcError(c.conn.Invoke(ctx, path, req, resp, grpc.Peer(p)))
 		end := time.Now()

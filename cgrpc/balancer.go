@@ -208,6 +208,10 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 	for {
 		server := b.c.c.Picker(b.getPickServers())
 		if server != nil {
+			if dl, ok := info.Ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
+				//at least 5ms for net lag and server logic
+				return balancer.PickResult{}, cerror.ErrDeadlineExceeded
+			}
 			atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 			return balancer.PickResult{
 				SubConn: server.subconn,

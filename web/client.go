@@ -10,7 +10,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/textproto"
 	"net/url"
 	"os"
 	"strconv"
@@ -132,16 +131,16 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername 
 }
 
 func forbiddenHeader(header http.Header) bool {
-	if _, ok := header[textproto.CanonicalMIMEHeaderKey("core_target")]; ok {
+	if _, ok := header["Core_target"]; ok {
 		return true
 	}
-	if _, ok := header[textproto.CanonicalMIMEHeaderKey("core_deadline")]; ok {
+	if _, ok := header["Core_deadline"]; ok {
 		return true
 	}
-	if _, ok := header[textproto.CanonicalMIMEHeaderKey("core_metadata")]; ok {
+	if _, ok := header["Core_metadata"]; ok {
 		return true
 	}
-	if _, ok := header[textproto.CanonicalMIMEHeaderKey("core_tracedata")]; ok {
+	if _, ok := header["Core_tracedata"]; ok {
 		return true
 	}
 	return false
@@ -247,8 +246,7 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 		}
 		req.Header = header
 		//start call
-		var resp *http.Response
-		resp, e = this.httpclient.Do(req)
+		resp, e := this.httpclient.Do(req)
 		end := time.Now()
 		if e != nil {
 			e = cerror.ConvertStdError(e)

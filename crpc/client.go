@@ -265,13 +265,13 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 	r := c.getreq(msg)
 	for {
 		start := time.Now()
-		if ok && dl.UnixNano() <= start.UnixNano()+int64(5*time.Millisecond) {
-			//at least 5ms for net lag and server logic
-			return nil, cerror.ErrDeadlineExceeded
-		}
 		server, e := c.balancer.Pick(ctx)
 		if e != nil {
 			return nil, e
+		}
+		if ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
+			//at least 5ms for net lag and server logic
+			return nil, cerror.ErrDeadlineExceeded
 		}
 		msg.Callid = atomic.AddUint64(&server.callid, 1)
 		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
