@@ -11,7 +11,7 @@
 
 ## 使用
 ### 1.生成项目:
-	终端运行 codegen -d path/to/create/the/project(default is current work dir) -n "project's name" -g "project belong to group's name"
+	终端运行 codegen -d path/to/create/the/project(default is current work dir) -n "project's name"
 ### 2.查看帮助:
 	linux/mac: 	终端切换工作目录到项目目录,执行 ./cmd.sh
 	windows: 	终端切换工作目录到项目目录,执行 ./cmd.bat
