@@ -235,7 +235,13 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 			//at least 5ms for net lag and server logic
 			return nil, cerror.ErrDeadlineExceeded
 		}
-		req, e := http.NewRequestWithContext(ctx, method, path+query, nil)
+		var req *http.Request
+		var e error
+		if body == nil {
+			req, e = http.NewRequestWithContext(ctx, method, path+query, nil)
+		} else {
+			req, e = http.NewRequestWithContext(ctx, method, path+query, body)
+		}
 		if e != nil {
 			return nil, cerror.ConvertStdError(e)
 		}
