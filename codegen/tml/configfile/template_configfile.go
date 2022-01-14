@@ -46,7 +46,7 @@ const textsource = `{
 		"example_mongo":{
 			"username":"",
 			"passwd":"",
-			"addr":[],
+			"addrs":[],
 			"replica_set_name":"",
 			"max_open":100,
 			"max_idletime":"10m",

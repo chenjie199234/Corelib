@@ -7,7 +7,8 @@ import (
 	"text/template"
 )
 
-const textbash = `#      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
+const textbash = `#!/bin/bash
+#      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
 
 help() {
 	echo "cmd.sh — every thing you need"
@@ -55,7 +56,7 @@ build() {
 	if (type upx >/dev/null 2>&1);then
 		upx -9  main
 	else
-		echo "recommand to use upx to compress exec file"
+		echo "recommand to use upx to compress bin file"
 	fi
 }
 
@@ -255,7 +256,7 @@ goto :end
 	go build -ldflags "-s -w" -o main.exe
 	where /q upx.exe
 	if %errorlevel% == 1 (
-		echo "recommand to use upx.exe to compress exec file"
+		echo "recommand to use upx.exe to compress bin file"
 		goto :end
 	)
 	uxp.exe -9 main.exe
@@ -291,7 +292,7 @@ goto :end
 :end
 pause
 exit /b 0`
-const textprobe = `#!/bin/sh
+const textprobe = `#!/bin/bash
 # kubernetes probe port
 port8000=*netstat -ltn | grep 8000 | wc -l*
 port9000=*netstat -ltn | grep 9000 | wc -l*

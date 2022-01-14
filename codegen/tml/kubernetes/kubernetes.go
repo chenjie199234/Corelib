@@ -6,7 +6,7 @@ import (
 	"text/template"
 )
 
-const dockerfiletext = `FROM golang:1.17.5 as builder
+const dockerfiletext = `FROM golang:1.17.6 as builder
 ENV GOSUMDB='off' \
 	GOOS='linux' \
 	GOARCH='amd64' \
@@ -18,7 +18,7 @@ WORKDIR /code
 RUN echo "start build" && go mod tidy && go build -ldflags '-w -s' -o main && echo "end build"
 
 FROM debian:buster
-RUN apt-get update && apt-get install -y ca-certificates curl inetutils-telnet inetutils-ping inetutils-traceroute dnsutils iproute2 procps neovim && mkdir /root/app && mkdir /root/app/kubeconfig && mkdir /root/app/remoteconfig
+RUN apt-get update && apt-get install -y ca-certificates curl inetutils-telnet inetutils-ping inetutils-traceroute dnsutils iproute2 procps net-tools neovim && mkdir /root/app && mkdir /root/app/kubeconfig && mkdir /root/app/remoteconfig
 WORKDIR /root/app
 EXPOSE 8000 9000 10000
 COPY --from=builder /code/main /code/probe.sh /code/AppConfig.json /code/SourceConfig.json ./
@@ -85,7 +85,7 @@ spec:
           livenessProbe:
             exec:
               command:
-                - ./probe.sh
+                - /root/app/probe.sh
             initialDelaySeconds: 2
             timeoutSeconds: 1
             periodSeconds: 1
@@ -94,7 +94,7 @@ spec:
           readinessProbe:
             exec:
               command:
-                - ./probe.sh
+                - /root/app/probe.sh
             initialDelaySeconds: 2
             timeoutSeconds: 1
             periodSeconds: 1
@@ -151,11 +151,6 @@ metadata:
 spec:
   type: ClusterIP
   clusterIP: None
-  ports:
-  - name: web
-    protocol: TCP
-    port: 80
-    targetPort: 8000
   selector:
     app: {{.ProjectName}}
 ---
