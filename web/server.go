@@ -418,7 +418,9 @@ func (this *WebServer) Patch(path string, handlers ...OutsideHandler) {
 }
 
 func (this *WebServer) insideHandler(method, path string, handlers []OutsideHandler) http.HandlerFunc {
-	totalhandlers := append(this.global, handlers...)
+	totalhandlers := make([]OutsideHandler, len(this.global)+len(handlers))
+	copy(totalhandlers, this.global)
+	copy(totalhandlers[len(this.global):], handlers)
 	return func(w http.ResponseWriter, r *http.Request) {
 		//target
 		if target := r.Header.Get("Core_target"); target != "" && target != this.selfappname {

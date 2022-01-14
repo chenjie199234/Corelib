@@ -216,7 +216,9 @@ func (s *CrpcServer) RegisterHandler(path string, handlers ...OutsideHandler) {
 }
 
 func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func(context.Context, *stream.Peer, *Msg) {
-	totalhandlers := append(s.global, handlers...)
+	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
+	copy(totalhandlers, s.global)
+	copy(totalhandlers[len(s.global):], handlers)
 	return func(ctx context.Context, p *stream.Peer, msg *Msg) {
 		traceid, _, _, _, _, selfdeep := trace.GetTrace(ctx)
 		var sourceapp, sourceip, sourcemethod, sourcepath string

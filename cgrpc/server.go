@@ -200,7 +200,9 @@ func (s *CGrpcServer) RegisterHandler(sname, mname string, handlers ...OutsideHa
 }
 func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHandler) func(interface{}, context.Context, func(interface{}) error, grpc.UnaryServerInterceptor) (interface{}, error) {
 	path := "/" + sname + "/" + mname
-	totalhandlers := append(s.global, handlers...)
+	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
+	copy(totalhandlers, s.global)
+	copy(totalhandlers[len(s.global):], handlers)
 	return func(_ interface{}, ctx context.Context, decode func(interface{}) error, _ grpc.UnaryServerInterceptor) (resp interface{}, e error) {
 		grpcmetadata, ok := metadata.FromIncomingContext(ctx)
 		if ok {
