@@ -37,6 +37,7 @@ var ErrPoolExhausted = redis.ErrPoolExhausted
 
 func NewRedis(c *Config) *Pool {
 	return &Pool{
+		c: c,
 		p: &redis.Pool{
 			DialContext: func(ctx context.Context) (redis.Conn, error) {
 				if c.ConnTimeout > 0 {
