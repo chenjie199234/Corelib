@@ -394,10 +394,14 @@ func initsource(path string) {
 	}
 	if sc.CGrpcServer == nil {
 		sc.CGrpcServer = &CGrpcServerConfig{
+			ConnectTimeout:ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
 			HeartProbe:    ctime.Duration(1500 * time.Millisecond),
 		}
 	} else {
+		if sc.CGrpcServer.ConnectTimeout <= 0 {
+			sc.CGrpcServer.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
+		}
 		if sc.CGrpcServer.GlobalTimeout <= 0 {
 			sc.CGrpcServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
@@ -407,13 +411,13 @@ func initsource(path string) {
 	}
 	if sc.CGrpcClient == nil {
 		sc.CGrpcClient = &CGrpcClientConfig{
-			ConnTimeout:   ctime.Duration(time.Millisecond * 500),
-			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
-			HeartProbe:    ctime.Duration(time.Millisecond * 1500),
+			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
+			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
+			HeartProbe:     ctime.Duration(time.Millisecond * 1500),
 		}
 	} else {
-		if sc.CGrpcClient.ConnTimeout <= 0 {
-			sc.CGrpcClient.ConnTimeout = ctime.Duration(time.Millisecond * 500)
+		if sc.CGrpcClient.ConnectTimeout <= 0 {
+			sc.CGrpcClient.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if sc.CGrpcClient.GlobalTimeout <= 0 {
 			sc.CGrpcClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
@@ -424,10 +428,14 @@ func initsource(path string) {
 	}
 	if sc.CrpcServer == nil {
 		sc.CrpcServer = &CrpcServerConfig{
-			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
-			HeartProbe:    ctime.Duration(1500 * time.Millisecond),
+			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
+			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
+			HeartProbe:     ctime.Duration(1500 * time.Millisecond),
 		}
 	} else {
+		if sc.CrpcServer.ConnectTimeout <= 0 {
+			sc.CrpcServer.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
+		}
 		if sc.CrpcServer.GlobalTimeout <= 0 {
 			sc.CrpcServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
@@ -437,13 +445,13 @@ func initsource(path string) {
 	}
 	if sc.CrpcClient == nil {
 		sc.CrpcClient = &CrpcClientConfig{
-			ConnTimeout:   ctime.Duration(time.Millisecond * 500),
+			ConnectTimeout:   ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
 			HeartProbe:    ctime.Duration(time.Millisecond * 1500),
 		}
 	} else {
-		if sc.CrpcClient.ConnTimeout <= 0 {
-			sc.CrpcClient.ConnTimeout = ctime.Duration(time.Millisecond * 500)
+		if sc.CrpcClient.ConnectTimeout <= 0 {
+			sc.CrpcClient.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if sc.CrpcClient.GlobalTimeout <= 0 {
 			sc.CrpcClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
@@ -454,6 +462,7 @@ func initsource(path string) {
 	}
 	if sc.WebServer == nil {
 		sc.WebServer = &WebServerConfig{
+			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
 			IdleTimeout:    ctime.Duration(time.Second * 5),
 			HeartProbe:     ctime.Duration(time.Millisecond * 1500),
@@ -465,6 +474,9 @@ func initsource(path string) {
 			},
 		}
 	} else {
+		if sc.WebServer.ConnectTimeout <= 0 {
+			sc.WebServer.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
+		}
 		if sc.WebServer.GlobalTimeout <= 0 {
 			sc.WebServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
@@ -484,14 +496,14 @@ func initsource(path string) {
 	}
 	if sc.WebClient == nil {
 		sc.WebClient = &WebClientConfig{
-			ConnTimeout:      ctime.Duration(time.Millisecond * 500),
-			GlobalTimeout:    ctime.Duration(time.Millisecond * 500),
-			IdleTimeout:      ctime.Duration(time.Second * 5),
-			HeartProbe:       ctime.Duration(time.Millisecond * 1500),
+			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
+			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
+			IdleTimeout:    ctime.Duration(time.Second * 5),
+			HeartProbe:     ctime.Duration(time.Millisecond * 1500),
 		}
 	} else {
-		if sc.WebClient.ConnTimeout <= 0 {
-			sc.WebClient.ConnTimeout = ctime.Duration(time.Millisecond * 500)
+		if sc.WebClient.ConnectTimeout <= 0 {
+			sc.WebClient.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if sc.WebClient.GlobalTimeout <= 0 {
 			sc.WebClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
