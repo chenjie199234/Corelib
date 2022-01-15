@@ -166,8 +166,7 @@ spec:
   ports:
   - name: web
     protocol: TCP
-    port: 80
-    targetPort: 8000
+    port: 8000
   selector:
     app: {{.ProjectName}}{{ end }}{{ if .NeedIngress}}
 ---
@@ -184,7 +183,7 @@ spec:
       - path: /{{.ProjectName}}
         backend:
           serviceName: {{.ProjectName}}-service
-          servicePort: 80{{ end }}`
+          servicePort: 8000{{ end }}`
 
 const path = "./"
 const dockerfilename = "Dockerfile"
