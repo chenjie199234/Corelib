@@ -14,7 +14,7 @@ const textsource = `{
 	},
 	"cgrpc_client":{
 		"connect_timeout":"200ms",
-		"global_timeout":"200ms",
+		"global_timeout":"0",
 		"heart_probe":"1.5s"
 	},
 	"crpc_server":{
@@ -24,7 +24,7 @@ const textsource = `{
 	},
 	"crpc_client":{
 		"connect_timeout":"200ms",
-		"global_timeout":"200ms",
+		"global_timeout":"0",
 		"heart_probe":"1.5s"
 	},
 	"web_server":{
@@ -41,7 +41,7 @@ const textsource = `{
 	},
 	"web_client":{
 		"connect_timeout":"200ms",
-		"global_timeout":"200ms",
+		"global_timeout":"0",
 		"idle_timeout":"5s",
 		"heart_probe":"1.5s"
 	},
