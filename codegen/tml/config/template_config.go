@@ -252,35 +252,38 @@ type sourceConfig struct {
 
 //CGrpcServerConfig
 type CGrpcServerConfig struct {
-	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
-	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
+	ConnectTimeout ctime.Duration $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
+	GlobalTimeout  ctime.Duration $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
+	HeartProbe     ctime.Duration $json:"heart_probe"$     //default 1.5s
 }
 
 //CGrpcClientConfig
 type CGrpcClientConfig struct {
-	ConnTimeout   ctime.Duration $json:"conn_timeout"$   //default 500ms
-	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
-	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
+	ConnectTimeout   ctime.Duration $json:"conn_timeout"$ //default 500ms,max time to finish the handshake
+	GlobalTimeout ctime.Duration $json:"global_timeout"$  //default 500ms,max time to handle the request
+	HeartProbe    ctime.Duration $json:"heart_probe"$     //default 1.5s
 }
 
 //CrpcServerConfig -
 type CrpcServerConfig struct {
-	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
-	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
+	ConnectTimeout ctime.Duration $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
+	GlobalTimeout  ctime.Duration $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
+	HeartProbe     ctime.Duration $json:"heart_probe"$     //default 1.5s
 }
 
 //CrpcClientConfig -
 type CrpcClientConfig struct {
-	ConnTimeout      ctime.Duration $json:"conn_timeout"$      //default 500ms
-	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms
+	ConnectTimeout      ctime.Duration $json:"conn_timeout"$   //default 500ms,max time to finish the handshake
+	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms,max time to handle the request
 	HeartProbe       ctime.Duration $json:"heart_probe"$       //default 1.5s
 }
 
 //WebServerConfig -
 type WebServerConfig struct {
-	GlobalTimeout  ctime.Duration $json:"global_timeout"$ //default 500ms
-	IdleTimeout    ctime.Duration $json:"idle_timeout"$   //default 5s
-	HeartProbe     ctime.Duration $json:"heart_probe"$    //default 1.5s
+	ConnectTimeout ctime.Duration $json:"connect_timeout"$ //default 500ms,max time to finish the handshake and read each whole request
+	GlobalTimeout  ctime.Duration $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
+	IdleTimeout    ctime.Duration $json:"idle_timeout"$    //default 5s
+	HeartProbe     ctime.Duration $json:"heart_probe"$     //default 1.5s
 	StaticFilePath string         $json:"static_file_path"$
 	//cors
 	Cors *WebCorsConfig $json:"cors"$
@@ -295,8 +298,8 @@ type WebCorsConfig struct {
 
 //WebClientConfig -
 type WebClientConfig struct {
-	ConnTimeout      ctime.Duration $json:"conn_timeout"$      //default 500ms
-	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms
+	ConnectTimeout      ctime.Duration $json:"conn_timeout"$   //default 500ms,max time to finish the handshake
+	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms,max time to handle the request
 	IdleTimeout      ctime.Duration $json:"idle_timeout"$      //default 5s
 	HeartProbe       ctime.Duration $json:"heart_probe"$       //default 1.5s
 }

@@ -28,6 +28,7 @@ var s *web.WebServer
 func StartWebServer() {
 	c := config.GetWebServerConfig()
 	webc := &web.ServerConfig{
+		ConnectTimeout:     time.Duration(c.ConnectTimeout),
 		GlobalTimeout:      time.Duration(c.GlobalTimeout),
 		IdleTimeout:        time.Duration(c.IdleTimeout),
 		HeartProbe:         time.Duration(c.HeartProbe),

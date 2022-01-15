@@ -34,22 +34,22 @@ type PickHandler func(servers []*ServerForPick) *ServerForPick
 type DiscoveryHandler func(servergroup, servername string, manually <-chan *struct{}, client *CGrpcClient)
 
 type ClientConfig struct {
-	ConnTimeout   time.Duration
-	GlobalTimeout time.Duration //global timeout for every rpc call(including connection establish time)
-	HeartPorbe    time.Duration
-	SocketRBuf    uint32
-	SocketWBuf    uint32
-	MaxMsgLen     uint32
-	UseTLS        bool             //grpc or grpcs
-	SkipVerifyTLS bool             //don't verify the server's cert
-	CAs           []string         //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
-	Discover      DiscoveryHandler //this function will be called in goroutine in NewGrpcClient
-	Picker        PickHandler
+	ConnectTimeout time.Duration
+	GlobalTimeout  time.Duration //global timeout for every rpc call
+	HeartPorbe     time.Duration
+	SocketRBuf     uint32
+	SocketWBuf     uint32
+	MaxMsgLen      uint32
+	UseTLS         bool             //grpc or grpcs
+	SkipVerifyTLS  bool             //don't verify the server's cert
+	CAs            []string         //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
+	Discover       DiscoveryHandler //this function will be called in goroutine in NewGrpcClient
+	Picker         PickHandler
 }
 
 func (c *ClientConfig) validate() {
-	if c.ConnTimeout <= 0 {
-		c.ConnTimeout = time.Millisecond * 500
+	if c.ConnectTimeout <= 0 {
+		c.ConnectTimeout = time.Millisecond * 500
 	}
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
@@ -137,7 +137,7 @@ func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servernam
 	opts = append(opts, grpc.WithReadBufferSize(int(c.SocketRBuf)))
 	opts = append(opts, grpc.WithWriteBufferSize(int(c.SocketWBuf)))
 	opts = append(opts, grpc.WithConnectParams(grpc.ConnectParams{
-		MinConnectTimeout: c.ConnTimeout,
+		MinConnectTimeout: c.ConnectTimeout,
 		Backoff: backoff.Config{
 			BaseDelay: time.Millisecond * 100,
 			MaxDelay:  time.Millisecond * 100,

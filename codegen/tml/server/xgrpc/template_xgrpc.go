@@ -27,11 +27,12 @@ var s *cgrpc.CGrpcServer
 func StartCGrpcServer() {
 	c := config.GetCGrpcServerConfig()
 	cgrpcc := &cgrpc.ServerConfig{
-		GlobalTimeout: time.Duration(c.GlobalTimeout),
-		HeartPorbe:    time.Duration(c.HeartProbe),
-		SocketRBuf:    2048,
-		SocketWBuf:    2048,
-		MaxMsgLen:     65535,
+		ConnectTimeout: time.Duration(c.ConnectTimeout),
+		GlobalTimeout:  time.Duration(c.GlobalTimeout),
+		HeartPorbe:     time.Duration(c.HeartProbe),
+		SocketRBuf:     2048,
+		SocketWBuf:     2048,
+		MaxMsgLen:      65535,
 	}
 	var e error
 	if s, e = cgrpc.NewCGrpcServer(cgrpcc, api.Group, api.Name); e != nil {

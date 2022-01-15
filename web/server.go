@@ -33,11 +33,11 @@ type OutsideHandler func(*Context)
 type ServerConfig struct {
 	//when server close,server will wait at least this time before close,every request will refresh the time
 	//min is 1 second
-	WaitCloseTime time.Duration
-	//request's max handling time(including connection establish time)
-	GlobalTimeout time.Duration
+	WaitCloseTime  time.Duration
+	ConnectTimeout time.Duration //max time for read the whole request,including the tls handshake
+	GlobalTimeout  time.Duration //request's max handling time
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
-	//if this is 0,GlobalTimeout will be used as IdleTimeout
+	//if this is 0,ConnectTimeout will be used as IdleTimeout
 	IdleTimeout        time.Duration
 	HeartProbe         time.Duration //system's tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
 	StaticFileRootPath string
@@ -72,6 +72,9 @@ func (c *ServerConfig) validate() {
 	}
 	if c.WaitCloseTime < time.Second {
 		c.WaitCloseTime = time.Second
+	}
+	if c.ConnectTimeout <= 0 {
+		c.ConnectTimeout = 500 * time.Millisecond
 	}
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
@@ -188,8 +191,7 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		global:         make([]OutsideHandler, 0, 10),
 		router:         httprouter.New(),
 		s: &http.Server{
-			ReadTimeout:    c.GlobalTimeout,
-			WriteTimeout:   c.GlobalTimeout,
+			ReadTimeout:    c.ConnectTimeout,
 			IdleTimeout:    c.IdleTimeout,
 			MaxHeaderBytes: int(c.MaxHeader),
 			ConnContext: func(ctx context.Context, conn net.Conn) context.Context {

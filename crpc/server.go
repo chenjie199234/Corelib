@@ -27,15 +27,19 @@ import (
 type OutsideHandler func(*Context)
 
 type ServerConfig struct {
-	GlobalTimeout time.Duration //global timeout for every rpc call(including connection establish time)
-	HeartPorbe    time.Duration //default 1s,3 probe missing means disconnect
-	SocketRBuf    uint32
-	SocketWBuf    uint32
-	MaxMsgLen     uint32
-	CertKeys      map[string]string //mapkey: cert path,mapvalue: key path
+	ConnectTimeout time.Duration
+	GlobalTimeout  time.Duration //global timeout for every rpc call
+	HeartPorbe     time.Duration //default 1s,3 probe missing means disconnect
+	SocketRBuf     uint32
+	SocketWBuf     uint32
+	MaxMsgLen      uint32
+	CertKeys       map[string]string //mapkey: cert path,mapvalue: key path
 }
 
 func (c *ServerConfig) validate() {
+	if c.ConnectTimeout <= 0 {
+		c.ConnectTimeout = 500 * time.Millisecond
+	}
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
 	}
@@ -111,9 +115,10 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 	instancec := &stream.InstanceConfig{
 		HeartprobeInterval: c.HeartPorbe,
 		TcpC: &stream.TcpConfig{
-			SocketRBufLen: c.SocketRBuf,
-			SocketWBufLen: c.SocketWBuf,
-			MaxMsgLen:     c.MaxMsgLen,
+			ConnectTimeout: c.ConnectTimeout,
+			SocketRBufLen:  c.SocketRBuf,
+			SocketWBufLen:  c.SocketWBuf,
+			MaxMsgLen:      c.MaxMsgLen,
 		},
 	}
 	instancec.Verifyfunc = serverinstance.verifyfunc
@@ -250,7 +255,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 			}
 		} else if msg.Deadline != 0 {
 			min = msg.Deadline
-		} else if s.c.GlobalTimeout != 0 {
+		} else if servertimeout != 0 {
 			min = start.UnixNano() + servertimeout
 		}
 		if min != 0 {

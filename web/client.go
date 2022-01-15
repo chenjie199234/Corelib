@@ -22,9 +22,9 @@ import (
 )
 
 type ClientConfig struct {
-	ConnTimeout   time.Duration
-	GlobalTimeout time.Duration //request's max handling time(including connection establish time)
-	HeartProbe    time.Duration //tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
+	ConnectTimeout time.Duration
+	GlobalTimeout  time.Duration //request's max handling time
+	HeartProbe     time.Duration //tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
 	//if this is 0,means useless,connection will keep alive until it is closed
 	IdleTimeout   time.Duration
@@ -100,14 +100,14 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername 
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout:   c.ConnTimeout,
+			Timeout:   c.ConnectTimeout,
 			KeepAlive: c.HeartProbe,
 		}).DialContext,
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: c.SkipVerifyTLS,
 			RootCAs:            certpool,
 		},
-		TLSHandshakeTimeout:    c.ConnTimeout,
+		TLSHandshakeTimeout:    c.ConnectTimeout,
 		ForceAttemptHTTP2:      true,
 		MaxIdleConnsPerHost:    50,
 		IdleConnTimeout:        c.IdleTimeout,

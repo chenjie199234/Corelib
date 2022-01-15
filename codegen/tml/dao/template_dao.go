@@ -67,13 +67,13 @@ func NewApi() error {
 func getCGrpcClientConfig() *cgrpc.ClientConfig {
 	gc := config.GetCGrpcClientConfig()
 	return &cgrpc.ClientConfig{
-		ConnTimeout:   time.Duration(gc.ConnTimeout),
-		GlobalTimeout: time.Duration(gc.GlobalTimeout),
-		HeartPorbe:    time.Duration(gc.HeartProbe),
-		SocketRBuf:    2048,
-		SocketWBuf:    2048,
-		MaxMsgLen:     65535,
-		Discover:      cgrpcDNS,
+		ConnectTimeout: time.Duration(gc.ConnectTimeout),
+		GlobalTimeout:  time.Duration(gc.GlobalTimeout),
+		HeartPorbe:     time.Duration(gc.HeartProbe),
+		SocketRBuf:     2048,
+		SocketWBuf:     2048,
+		MaxMsgLen:      65535,
+		Discover:       cgrpcDNS,
 	}
 }
 
@@ -109,13 +109,13 @@ func cgrpcDNS(group, name string, manually <-chan *struct{}, client *cgrpc.CGrpc
 func getCrpcClientConfig() *crpc.ClientConfig {
 	rc := config.GetCrpcClientConfig()
 	return &crpc.ClientConfig{
-		ConnTimeout:   time.Duration(rc.ConnTimeout),
-		GlobalTimeout: time.Duration(rc.GlobalTimeout),
-		HeartPorbe:    time.Duration(rc.HeartProbe),
-		SocketRBuf:    2048,
-		SocketWBuf:    2048,
-		MaxMsgLen:     65535,
-		Discover:      crpcDNS,
+		ConnectTimeout: time.Duration(rc.ConnectTimeout),
+		GlobalTimeout:  time.Duration(rc.GlobalTimeout),
+		HeartPorbe:     time.Duration(rc.HeartProbe),
+		SocketRBuf:     2048,
+		SocketWBuf:     2048,
+		MaxMsgLen:      65535,
+		Discover:       crpcDNS,
 	}
 }
 
@@ -151,13 +151,13 @@ func crpcDNS(group, name string, manually <-chan *struct{}, client *crpc.CrpcCli
 func getWebClientConfig() *web.ClientConfig {
 	wc := config.GetWebClientConfig()
 	return &web.ClientConfig{
-		ConnTimeout:   time.Duration(wc.ConnTimeout),
-		GlobalTimeout: time.Duration(wc.GlobalTimeout),
-		IdleTimeout:   time.Duration(wc.IdleTimeout),
-		HeartProbe:    time.Duration(wc.HeartProbe),
-		MaxHeader:     1024,
-		SocketRBuf:    2048,
-		SocketWBuf:    2048,
+		ConnectTimeout: time.Duration(wc.ConnectTimeout),
+		GlobalTimeout:  time.Duration(wc.GlobalTimeout),
+		IdleTimeout:    time.Duration(wc.IdleTimeout),
+		HeartProbe:     time.Duration(wc.HeartProbe),
+		MaxHeader:      1024,
+		SocketRBuf:     2048,
+		SocketWBuf:     2048,
 	}
 }`
 
