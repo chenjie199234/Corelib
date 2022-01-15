@@ -195,7 +195,7 @@ func (this *WebClient) Patch(ctx context.Context, path, query string, header htt
 	return this.call(http.MethodPatch, ctx, path, query, header, metadata, nil)
 }
 func (this *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body *bytes.Buffer) ([]byte, error) {
-	url, e := url.Parse(path)
+	parsedurl, e := url.Parse(path)
 	if e != nil {
 		return nil, cerror.ConvertStdError(e)
 	}
@@ -250,18 +250,18 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 		end := time.Now()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, this.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
 			return nil, e
 		}
 		respbody, e := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, this.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
 			return nil, e
 		}
 		if resp.StatusCode == int(cerror.ErrClosing.Httpcode) && cerror.Equal(cerror.ConvertErrorstr(common.Byte2str(respbody)), cerror.ErrClosing) {
-			trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, cerror.ErrClosing)
+			trace.Trace(ctx, trace.CLIENT, this.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, cerror.ErrClosing)
 			continue
 		} else if resp.StatusCode != http.StatusOK {
 			if len(respbody) == 0 {
@@ -271,10 +271,10 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 				tempe.SetHttpcode(int32(resp.StatusCode))
 				e = tempe
 			}
-			trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, this.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
 			return nil, e
 		}
-		trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, nil)
+		trace.Trace(ctx, trace.CLIENT, this.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, nil)
 		return respbody, nil
 	}
 }
