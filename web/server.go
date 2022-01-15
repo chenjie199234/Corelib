@@ -365,7 +365,7 @@ func (this *WebServer) UpdateHandlerTimeout(htcs map[string]map[string]time.Dura
 func (this *WebServer) getHandlerTimeout(method, path string) time.Duration {
 	handlerTimeout := *(*map[string]map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout))))
 	if m, ok := handlerTimeout[method]; ok {
-		if t, ok := m[path]; ok && (this.c.GlobalTimeout == 0 || t < this.c.GlobalTimeout) {
+		if t, ok := m[path]; ok && t != 0 {
 			return t
 		}
 	}

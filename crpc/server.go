@@ -199,7 +199,7 @@ func (this *CrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
 
 func (this *CrpcServer) getHandlerTimeout(path string) time.Duration {
 	handlerTimeout := *(*map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout))))
-	if t, ok := handlerTimeout[path]; ok && (this.c.GlobalTimeout == 0 || t < this.c.GlobalTimeout) {
+	if t, ok := handlerTimeout[path]; ok && t != 0 {
 		return t
 	}
 	return this.c.GlobalTimeout
