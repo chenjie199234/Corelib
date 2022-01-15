@@ -279,7 +279,7 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 
 var ErrServerClosed = errors.New("[web.server] closed")
 
-func (this *WebServer) StartWebServer(listenaddr string) error {
+func (s *WebServer) StartWebServer(listenaddr string) error {
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
 		return errors.New("[web.server] resolve addr:" + listenaddr + " error:" + e.Error())
@@ -288,14 +288,14 @@ func (this *WebServer) StartWebServer(listenaddr string) error {
 	if e != nil {
 		return errors.New("[web.server] listen addr:" + listenaddr + " error:" + e.Error())
 	}
-	if len(this.c.CertKeys) > 0 {
+	if len(s.c.CertKeys) > 0 {
 		//enable h2
-		this.s.Handler = this.router
-		e = this.s.ServeTLS(l, "", "")
+		s.s.Handler = s.router
+		e = s.s.ServeTLS(l, "", "")
 	} else {
 		//enable h2c
-		this.s.Handler = h2c.NewHandler(this.router, &http2.Server{})
-		e = this.s.Serve(l)
+		s.s.Handler = h2c.NewHandler(s.router, &http2.Server{})
+		e = s.s.Serve(l)
 	}
 	if e != nil {
 		if e == http.ErrServerClosed {
@@ -304,21 +304,21 @@ func (this *WebServer) StartWebServer(listenaddr string) error {
 	}
 	return nil
 }
-func (this *WebServer) ReplaceAllPath(newserver *WebServer) {
-	if len(this.c.CertKeys) > 0 {
+func (s *WebServer) ReplaceAllPath(newserver *WebServer) {
+	if len(s.c.CertKeys) > 0 {
 		//enable h2
-		this.s.Handler = newserver.router
+		s.s.Handler = newserver.router
 	} else {
 		//enable h2c
-		this.s.Handler = h2c.NewHandler(newserver.router, &http2.Server{})
+		s.s.Handler = h2c.NewHandler(newserver.router, &http2.Server{})
 	}
 }
-func (this *WebServer) StopWebServer() {
-	defer this.closewait.Wait()
+func (s *WebServer) StopWebServer() {
+	defer s.closewait.Wait()
 	for {
-		old := atomic.LoadInt32(&this.totalreqnum)
+		old := atomic.LoadInt32(&s.totalreqnum)
 		if old >= 0 {
-			if atomic.CompareAndSwapInt32(&this.totalreqnum, old, old-math.MaxInt32) {
+			if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old-math.MaxInt32) {
 				break
 			}
 		} else {
@@ -326,21 +326,21 @@ func (this *WebServer) StopWebServer() {
 		}
 	}
 	//wait at least this.c.WaitCloseTime before stop the under layer socket
-	this.closewaittimer.Reset(this.c.WaitCloseTime)
+	s.closewaittimer.Reset(s.c.WaitCloseTime)
 	for {
-		<-this.closewaittimer.C
-		if atomic.LoadInt32(&this.totalreqnum) != -math.MaxInt32 {
-			this.closewaittimer.Reset(this.c.WaitCloseTime)
+		<-s.closewaittimer.C
+		if atomic.LoadInt32(&s.totalreqnum) != -math.MaxInt32 {
+			s.closewaittimer.Reset(s.c.WaitCloseTime)
 		} else {
-			this.s.Shutdown(context.Background())
-			this.closewait.Done()
+			s.s.Shutdown(context.Background())
+			s.closewait.Done()
 			return
 		}
 	}
 }
 
 //first key method,second key path,value timeout
-func (this *WebServer) UpdateHandlerTimeout(htcs map[string]map[string]time.Duration) {
+func (s *WebServer) UpdateHandlerTimeout(htcs map[string]map[string]time.Duration) {
 	tmp := make(map[string]map[string]time.Duration)
 	for method, paths := range htcs {
 		if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
@@ -359,71 +359,71 @@ func (this *WebServer) UpdateHandlerTimeout(htcs map[string]map[string]time.Dura
 			tmp[method][path] = timeout
 		}
 	}
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout)), unsafe.Pointer(&tmp))
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s.handlerTimeout)), unsafe.Pointer(&tmp))
 }
 
-func (this *WebServer) getHandlerTimeout(method, path string) time.Duration {
-	handlerTimeout := *(*map[string]map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout))))
+func (s *WebServer) getHandlerTimeout(method, path string) time.Duration {
+	handlerTimeout := *(*map[string]map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.handlerTimeout))))
 	if m, ok := handlerTimeout[method]; ok {
-		if t, ok := m[path]; ok && (this.c.GlobalTimeout == 0 || t < this.c.GlobalTimeout) {
+		if t, ok := m[path]; ok && (s.c.GlobalTimeout == 0 || t < s.c.GlobalTimeout) {
 			return t
 		}
 	}
-	return this.c.GlobalTimeout
+	return s.c.GlobalTimeout
 }
 
 //thread unsafe
-func (this *WebServer) Use(globalMids ...OutsideHandler) {
-	this.global = append(this.global, globalMids...)
+func (s *WebServer) Use(globalMids ...OutsideHandler) {
+	s.global = append(s.global, globalMids...)
 }
 
 //thread unsafe
-func (this *WebServer) Get(path string, handlers ...OutsideHandler) {
+func (s *WebServer) Get(path string, handlers ...OutsideHandler) {
 	if len(path) == 0 || path[0] != '/' {
 		panic("[web.server] path must start with /")
 	}
-	this.router.Handler(http.MethodGet, path, this.insideHandler(http.MethodGet, path, handlers))
+	s.router.Handler(http.MethodGet, path, s.insideHandler(http.MethodGet, path, handlers))
 }
 
 //thread unsafe
-func (this *WebServer) Delete(path string, handlers ...OutsideHandler) {
+func (s *WebServer) Delete(path string, handlers ...OutsideHandler) {
 	if len(path) == 0 || path[0] != '/' {
 		panic("[web.server] path must start with /")
 	}
-	this.router.Handler(http.MethodDelete, path, this.insideHandler(http.MethodDelete, path, handlers))
+	s.router.Handler(http.MethodDelete, path, s.insideHandler(http.MethodDelete, path, handlers))
 }
 
 //thread unsafe
-func (this *WebServer) Post(path string, handlers ...OutsideHandler) {
+func (s *WebServer) Post(path string, handlers ...OutsideHandler) {
 	if len(path) == 0 || path[0] != '/' {
 		panic("[web.server] path must start with /")
 	}
-	this.router.Handler(http.MethodPost, path, this.insideHandler(http.MethodPost, path, handlers))
+	s.router.Handler(http.MethodPost, path, s.insideHandler(http.MethodPost, path, handlers))
 }
 
 //thread unsafe
-func (this *WebServer) Put(path string, handlers ...OutsideHandler) {
+func (s *WebServer) Put(path string, handlers ...OutsideHandler) {
 	if len(path) == 0 || path[0] != '/' {
 		panic("[web.server] path must start with /")
 	}
-	this.router.Handler(http.MethodPut, path, this.insideHandler(http.MethodPut, path, handlers))
+	s.router.Handler(http.MethodPut, path, s.insideHandler(http.MethodPut, path, handlers))
 }
 
 //thread unsafe
-func (this *WebServer) Patch(path string, handlers ...OutsideHandler) {
+func (s *WebServer) Patch(path string, handlers ...OutsideHandler) {
 	if len(path) == 0 || path[0] != '/' {
 		panic("[web.server] path must start with /")
 	}
-	this.router.Handler(http.MethodPatch, path, this.insideHandler(http.MethodPatch, path, handlers))
+	s.router.Handler(http.MethodPatch, path, s.insideHandler(http.MethodPatch, path, handlers))
 }
 
-func (this *WebServer) insideHandler(method, path string, handlers []OutsideHandler) http.HandlerFunc {
-	totalhandlers := make([]OutsideHandler, len(this.global)+len(handlers))
-	copy(totalhandlers, this.global)
-	copy(totalhandlers[len(this.global):], handlers)
+func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler) http.HandlerFunc {
+	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
+	copy(totalhandlers, s.global)
+	copy(totalhandlers[len(s.global):], handlers)
 	return func(w http.ResponseWriter, r *http.Request) {
 		//target
-		if target := r.Header.Get("Core_target"); target != "" && target != this.selfappname {
+		if target := r.Header.Get("Core_target"); target != "" && target != s.selfappname {
 			//this is not the required server.tell peer self closed
 			w.WriteHeader(int(cerror.ErrClosing.Httpcode))
 			w.Header().Set("Content-Type", "application/json")
@@ -434,11 +434,11 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 		if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
 			headers := w.Header()
 			headers.Add("Vary", "Origin")
-			if this.c.Cors.allorigin {
+			if s.c.Cors.allorigin {
 				headers.Set("Access-Control-Allow-Origin", "*")
 			} else {
 				find := false
-				for _, v := range this.c.Cors.AllowedOrigin {
+				for _, v := range s.c.Cors.AllowedOrigin {
 					if origin == v {
 						headers.Set("Access-Control-Allow-Origin", origin)
 						find = true
@@ -447,28 +447,28 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 				}
 				if !find {
 					w.WriteHeader(http.StatusMethodNotAllowed)
-					w.Header().Set("Allow", strings.Join(this.c.Cors.AllowedOrigin, ","))
+					w.Header().Set("Allow", strings.Join(s.c.Cors.AllowedOrigin, ","))
 					return
 				}
 			}
-			if this.c.Cors.AllowCredentials {
+			if s.c.Cors.AllowCredentials {
 				headers.Set("Access-Control-Allow-Credentials", "true")
 			}
-			if len(this.c.Cors.exposestr) > 0 {
-				headers.Set("Access-Control-Expose-Headers", this.c.Cors.exposestr)
+			if len(s.c.Cors.exposestr) > 0 {
+				headers.Set("Access-Control-Expose-Headers", s.c.Cors.exposestr)
 			}
 		}
 		//check server status
 		for {
-			old := atomic.LoadInt32(&this.totalreqnum)
+			old := atomic.LoadInt32(&s.totalreqnum)
 			if old >= 0 {
 				//add req num
-				if atomic.CompareAndSwapInt32(&this.totalreqnum, old, old+1) {
+				if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old+1) {
 					break
 				}
 			} else {
 				//refresh close wait
-				this.closewaittimer.Reset(this.c.WaitCloseTime)
+				s.closewaittimer.Reset(s.c.WaitCloseTime)
 				//tell peer self closed
 				w.WriteHeader(int(cerror.ErrClosing.Httpcode))
 				w.Header().Set("Content-Type", "application/json")
@@ -477,10 +477,10 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 			}
 		}
 		defer func() {
-			if atomic.LoadInt32(&this.totalreqnum) < 0 {
-				this.closewaittimer.Reset(this.c.WaitCloseTime)
+			if atomic.LoadInt32(&s.totalreqnum) < 0 {
+				s.closewaittimer.Reset(s.c.WaitCloseTime)
 			}
-			atomic.AddInt32(&this.totalreqnum, -1)
+			atomic.AddInt32(&s.totalreqnum, -1)
 		}()
 		//trace
 		var ctx context.Context
@@ -491,7 +491,7 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 		sourcepath := "unknown"
 		selfdeep := 0
 		if tracedata := r.Header.Values("Core_tracedata"); len(tracedata) == 0 || tracedata[0] == "" {
-			ctx = trace.InitTrace(r.Context(), "", this.selfappname, host.Hostip, r.Method, r.URL.Path, 0)
+			ctx = trace.InitTrace(r.Context(), "", s.selfappname, host.Hostip, r.Method, r.URL.Path, 0)
 		} else if len(tracedata) != 5 || tracedata[4] == "" {
 			log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: tracedata:", tracedata, "format error")
 			w.WriteHeader(http.StatusBadRequest)
@@ -505,7 +505,7 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 			w.Write(common.Str2byte(cerror.ErrReq.Error()))
 			return
 		} else {
-			ctx = trace.InitTrace(r.Context(), tracedata[0], this.selfappname, host.Hostip, r.Method, r.URL.Path, clientdeep)
+			ctx = trace.InitTrace(r.Context(), tracedata[0], s.selfappname, host.Hostip, r.Method, r.URL.Path, clientdeep)
 			sourceapp = tracedata[1]
 			sourcemethod = tracedata[2]
 			sourcepath = tracedata[3]
@@ -536,7 +536,7 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 		//set timeout
 		start := time.Now()
 		var min int64
-		servertimeout := int64(this.getHandlerTimeout(method, path))
+		servertimeout := int64(s.getHandlerTimeout(method, path))
 		if clientdl != 0 && servertimeout != 0 {
 			serverdl := start.UnixNano() + servertimeout
 			if clientdl <= serverdl {
@@ -555,7 +555,7 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 				w.Header().Set("Content-Type", "application/json")
 				w.Write(common.Str2byte(cerror.ErrDeadlineExceeded.Error()))
 				end := time.Now()
-				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, cerror.ErrDeadlineExceeded)
+				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip, method, path, &start, &end, cerror.ErrDeadlineExceeded)
 				return
 			}
 			var cancel context.CancelFunc
@@ -563,7 +563,7 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 			defer cancel()
 		}
 		//logic
-		workctx := this.getContext(w, r, ctx, sourceapp, mdata, totalhandlers)
+		workctx := s.getContext(w, r, ctx, sourceapp, mdata, totalhandlers)
 		defer func() {
 			if e := recover(); e != nil {
 				stack := make([]byte, 1024)
@@ -573,12 +573,12 @@ func (this *WebServer) insideHandler(method, path string, handlers []OutsideHand
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write(common.Str2byte(cerror.ErrPanic.Error()))
 				end := time.Now()
-				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, cerror.ErrPanic)
+				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip, method, path, &start, &end, cerror.ErrPanic)
 			} else {
 				end := time.Now()
-				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, this.selfappname, host.Hostip, method, path, &start, &end, workctx.e)
+				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip, method, path, &start, &end, workctx.e)
 			}
-			this.putContext(workctx)
+			s.putContext(workctx)
 		}()
 		workctx.run()
 	}

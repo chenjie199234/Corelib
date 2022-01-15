@@ -147,54 +147,54 @@ func forbiddenHeader(header http.Header) bool {
 }
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (this *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
+func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
 	}
-	return this.call(http.MethodGet, ctx, path, query, header, metadata, nil)
+	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil)
 }
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (this *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
+func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
 	}
-	return this.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
+	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
 }
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (this *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
+func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
 	}
 	if len(body) != 0 {
-		return this.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewBuffer(body))
+		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
-	return this.call(http.MethodPost, ctx, path, query, header, metadata, nil)
+	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil)
 }
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (this *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
+func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
 	}
 	if len(body) != 0 {
-		return this.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewBuffer(body))
+		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
-	return this.call(http.MethodPut, ctx, path, query, header, metadata, nil)
+	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil)
 }
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (this *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
+func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if forbiddenHeader(header) {
 		return nil, errors.New("[web.client] forbidden header")
 	}
 	if len(body) != 0 {
-		return this.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewBuffer(body))
+		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
-	return this.call(http.MethodPatch, ctx, path, query, header, metadata, nil)
+	return c.call(http.MethodPatch, ctx, path, query, header, metadata, nil)
 }
-func (this *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body *bytes.Buffer) ([]byte, error) {
+func (c *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body *bytes.Buffer) ([]byte, error) {
 	url, e := url.Parse(path)
 	if e != nil {
 		return nil, cerror.ConvertStdError(e)
@@ -205,7 +205,7 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 	if header == nil {
 		header = make(http.Header)
 	}
-	header.Set("Core_target", this.serverappname)
+	header.Set("Core_target", c.serverappname)
 	if len(metadata) != 0 {
 		d, _ := json.Marshal(metadata)
 		header.Set("Core_metadata", common.Byte2str(d))
@@ -213,14 +213,14 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 	traceid, _, _, selfmethod, selfpath, selfdeep := trace.GetTrace(ctx)
 	if traceid != "" {
 		header.Set("Core_tracedata", traceid)
-		header.Add("Core_tracedata", this.selfappname)
+		header.Add("Core_tracedata", c.selfappname)
 		header.Add("Core_tracedata", selfmethod)
 		header.Add("Core_tracedata", selfpath)
 		header.Add("Core_tracedata", strconv.Itoa(selfdeep))
 	}
-	if this.c.GlobalTimeout != 0 {
+	if c.c.GlobalTimeout != 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(this.c.GlobalTimeout))
+		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout))
 		defer cancel()
 	}
 	dl, ok := ctx.Deadline()
@@ -246,22 +246,22 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 		}
 		req.Header = header
 		//start call
-		resp, e := this.httpclient.Do(req)
+		resp, e := c.httpclient.Do(req)
 		end := time.Now()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
 			return nil, e
 		}
 		respbody, e := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
 			return nil, e
 		}
 		if resp.StatusCode == int(cerror.ErrClosing.Httpcode) && cerror.Equal(cerror.ConvertErrorstr(common.Byte2str(respbody)), cerror.ErrClosing) {
-			trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, cerror.ErrClosing)
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, url.Host, method, "/"+url.Path, &start, &end, cerror.ErrClosing)
 			continue
 		} else if resp.StatusCode != http.StatusOK {
 			if len(respbody) == 0 {
@@ -271,10 +271,10 @@ func (this *WebClient) call(method string, ctx context.Context, path, query stri
 				tempe.SetHttpcode(int32(resp.StatusCode))
 				e = tempe
 			}
-			trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
 			return nil, e
 		}
-		trace.Trace(ctx, trace.CLIENT, this.serverappname, url.Host, method, "/"+url.Path, &start, &end, nil)
+		trace.Trace(ctx, trace.CLIENT, c.serverappname, url.Host, method, "/"+url.Path, &start, &end, nil)
 		return respbody, nil
 	}
 }

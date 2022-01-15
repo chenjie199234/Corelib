@@ -12,8 +12,8 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context.Context, peername string, metadata map[string]string, handlers []OutsideHandler) *Context {
-	ctx, ok := this.ctxpool.Get().(*Context)
+func (s *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context.Context, peername string, metadata map[string]string, handlers []OutsideHandler) *Context {
+	ctx, ok := s.ctxpool.Get().(*Context)
 	if !ok {
 		return &Context{
 			Context:  c,
@@ -37,8 +37,8 @@ func (this *WebServer) getContext(w http.ResponseWriter, r *http.Request, c cont
 	return ctx
 }
 
-func (this *WebServer) putContext(ctx *Context) {
-	this.ctxpool.Put(ctx)
+func (s *WebServer) putContext(ctx *Context) {
+	s.ctxpool.Put(ctx)
 }
 
 type Context struct {
@@ -52,79 +52,79 @@ type Context struct {
 	e        *cerror.Error
 }
 
-func (this *Context) run() {
-	for _, handler := range this.handlers {
-		handler(this)
-		if this.status != 0 {
+func (c *Context) run() {
+	for _, handler := range c.handlers {
+		handler(c)
+		if c.status != 0 {
 			break
 		}
 	}
 }
 
 //has race
-func (this *Context) Abort(e error) {
-	this.status = -1
-	this.e = cerror.ConvertStdError(e)
-	if this.e != nil {
-		this.w.Header().Set("Content-Type", "application/json")
-		if this.e.Httpcode < 400 || this.e.Httpcode > 999 {
+func (c *Context) Abort(e error) {
+	c.status = -1
+	c.e = cerror.ConvertStdError(e)
+	if c.e != nil {
+		c.w.Header().Set("Content-Type", "application/json")
+		if c.e.Httpcode < 400 || c.e.Httpcode > 999 {
 			panic("[web.Context.Abort] httpcode must in [400,999]")
 		}
-		this.w.WriteHeader(int(this.e.Httpcode))
-		this.w.Write(common.Str2byte(this.e.Error()))
+		c.w.WriteHeader(int(c.e.Httpcode))
+		c.w.Write(common.Str2byte(c.e.Error()))
 	}
 }
 
 //has race
-func (this *Context) Write(contenttype string, msg []byte) {
-	this.status = 1
-	this.w.WriteHeader(http.StatusOK)
-	this.w.Header().Set("Content-Type", contenttype)
-	this.w.Write(msg)
+func (c *Context) Write(contenttype string, msg []byte) {
+	c.status = 1
+	c.w.WriteHeader(http.StatusOK)
+	c.w.Header().Set("Content-Type", contenttype)
+	c.w.Write(msg)
 }
 
-func (this *Context) WriteString(contenttype, msg string) {
-	this.Write(contenttype, common.Str2byte(msg))
+func (c *Context) WriteString(contenttype, msg string) {
+	c.Write(contenttype, common.Str2byte(msg))
 }
 
-func (this *Context) SetHeader(k, v string) {
-	this.w.Header().Set(k, v)
+func (c *Context) SetHeader(k, v string) {
+	c.w.Header().Set(k, v)
 }
-func (this *Context) AddHeader(k, v string) {
-	this.w.Header().Add(k, v)
+func (c *Context) AddHeader(k, v string) {
+	c.w.Header().Add(k, v)
 }
-func (this *Context) GetRequest() *http.Request {
-	return this.r
+func (c *Context) GetRequest() *http.Request {
+	return c.r
 }
-func (this *Context) GetResponse() http.ResponseWriter {
-	return this.w
+func (c *Context) GetResponse() http.ResponseWriter {
+	return c.w
 }
-func (this *Context) GetHost() string {
-	return this.r.URL.Host
+func (c *Context) GetHost() string {
+	return c.r.URL.Host
 }
-func (this *Context) GetPath() string {
-	return this.r.URL.Path
+func (c *Context) GetPath() string {
+	return c.r.URL.Path
 }
-func (this *Context) GetMethod() string {
-	return this.r.Method
+func (c *Context) GetMethod() string {
+	return c.r.Method
 }
-func (this *Context) GetMetadata() map[string]string {
-	return this.metadata
+func (c *Context) GetMetadata() map[string]string {
+	return c.metadata
 }
-func (this *Context) GetHeaders() http.Header {
-	return this.r.Header
+func (c *Context) GetHeaders() http.Header {
+	return c.r.Header
 }
-func (this *Context) GetHeader(key string) string {
-	return this.r.Header.Get(key)
+func (c *Context) GetHeader(key string) string {
+	return c.r.Header.Get(key)
 }
-func (this *Context) GetPeerName() string {
-	return this.peername
+func (c *Context) GetPeerName() string {
+	return c.peername
 }
-func (this *Context) GetPeerAddr() string {
-	return this.r.RemoteAddr
+func (c *Context) GetPeerAddr() string {
+	return c.r.RemoteAddr
 }
-func (this *Context) GetClientIp() string {
-	return getclientip(this.r)
+func (c *Context) GetClientIp() string {
+	return getclientip(c.r)
 }
 func getclientip(r *http.Request) string {
 	ip := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
@@ -139,69 +139,69 @@ func getclientip(r *http.Request) string {
 	}
 	return ip
 }
-func (this *Context) GetUserAgent() string {
-	return this.r.Header.Get("User-Agent")
+func (c *Context) GetUserAgent() string {
+	return c.r.Header.Get("User-Agent")
 }
-func (this *Context) GetReferer() string {
-	return this.r.Header.Get("Referer")
+func (c *Context) GetReferer() string {
+	return c.r.Header.Get("Referer")
 }
-func (this *Context) GetContentType() string {
-	return this.r.Header.Get("Content-Type")
+func (c *Context) GetContentType() string {
+	return c.r.Header.Get("Content-Type")
 }
-func (this *Context) GetContentLanguage() string {
-	return this.r.Header.Get("Content-Language")
+func (c *Context) GetContentLanguage() string {
+	return c.r.Header.Get("Content-Language")
 }
-func (this *Context) GetContentLength() int64 {
-	return this.r.ContentLength
+func (c *Context) GetContentLength() int64 {
+	return c.r.ContentLength
 }
-func (this *Context) GetAcceptType() string {
-	return this.r.Header.Get("Accept")
+func (c *Context) GetAcceptType() string {
+	return c.r.Header.Get("Accept")
 }
-func (this *Context) GetAcceptEncoding() string {
-	return this.r.Header.Get("Accept-Encoding")
+func (c *Context) GetAcceptEncoding() string {
+	return c.r.Header.Get("Accept-Encoding")
 }
-func (this *Context) GetAcceptLanguage() string {
-	return this.r.Header.Get("Accept-Language")
+func (c *Context) GetAcceptLanguage() string {
+	return c.r.Header.Get("Accept-Language")
 }
-func (this *Context) GetCookies() []*http.Cookie {
-	return this.r.Cookies()
+func (c *Context) GetCookies() []*http.Cookie {
+	return c.r.Cookies()
 }
-func (this *Context) GetCookie(key string) *http.Cookie {
-	result, e := this.r.Cookie(key)
+func (c *Context) GetCookie(key string) *http.Cookie {
+	result, e := c.r.Cookie(key)
 	if e == http.ErrNoCookie {
 		return nil
 	}
 	return result
 }
-func (this *Context) ParseForm() error {
-	if e := this.r.ParseForm(); e != nil {
+func (c *Context) ParseForm() error {
+	if e := c.r.ParseForm(); e != nil {
 		return e
 	}
-	if e := this.r.ParseMultipartForm(32 << 20); e != nil && e != http.ErrNotMultipart {
+	if e := c.r.ParseMultipartForm(32 << 20); e != nil && e != http.ErrNotMultipart {
 		return e
 	}
 	return nil
 }
 
-//must call ParseForm before this
-func (this *Context) GetForm(key string) string {
-	if len(this.r.Form) == 0 {
+//must call ParseForm before c
+func (c *Context) GetForm(key string) string {
+	if len(c.r.Form) == 0 {
 		return ""
 	}
-	return this.r.Form.Get(key)
+	return c.r.Form.Get(key)
 }
-func (this *Context) GetBody() ([]byte, error) {
-	return io.ReadAll(this.r.Body)
-}
-
-//param is the value in dynamic url,see httprouter's dynamic path
-//https://github.com/julienschmidt/httprouter
-func (this *Context) GetParams() httprouter.Params {
-	return httprouter.ParamsFromContext(this.Context)
+func (c *Context) GetBody() ([]byte, error) {
+	return io.ReadAll(c.r.Body)
 }
 
 //param is the value in dynamic url,see httprouter's dynamic path
 //https://github.com/julienschmidt/httprouter
-func (this *Context) GetParam(key string) string {
-	return httprouter.ParamsFromContext(this.Context).ByName(key)
+func (c *Context) GetParams() httprouter.Params {
+	return httprouter.ParamsFromContext(c.Context)
+}
+
+//param is the value in dynamic url,see httprouter's dynamic path
+//https://github.com/julienschmidt/httprouter
+func (c *Context) GetParam(key string) string {
+	return httprouter.ParamsFromContext(c.Context).ByName(key)
 }
