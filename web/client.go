@@ -22,9 +22,9 @@ import (
 )
 
 type ClientConfig struct {
-	ConnTimeout   time.Duration
-	GlobalTimeout time.Duration //request's max handling time(including connection establish time)
-	HeartProbe    time.Duration //tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
+	ConnectTimeout time.Duration
+	GlobalTimeout  time.Duration //request's max handling time
+	HeartProbe     time.Duration //tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
 	//if this is 0,means useless,connection will keep alive until it is closed
 	IdleTimeout   time.Duration
@@ -100,14 +100,14 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername 
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout:   c.ConnTimeout,
+			Timeout:   c.ConnectTimeout,
 			KeepAlive: c.HeartProbe,
 		}).DialContext,
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: c.SkipVerifyTLS,
 			RootCAs:            certpool,
 		},
-		TLSHandshakeTimeout:    c.ConnTimeout,
+		TLSHandshakeTimeout:    c.ConnectTimeout,
 		ForceAttemptHTTP2:      true,
 		MaxIdleConnsPerHost:    50,
 		IdleConnTimeout:        c.IdleTimeout,
@@ -195,7 +195,7 @@ func (c *WebClient) Patch(ctx context.Context, path, query string, header http.H
 	return c.call(http.MethodPatch, ctx, path, query, header, metadata, nil)
 }
 func (c *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body *bytes.Buffer) ([]byte, error) {
-	url, e := url.Parse(path)
+	parsedurl, e := url.Parse(path)
 	if e != nil {
 		return nil, cerror.ConvertStdError(e)
 	}
@@ -250,18 +250,18 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		end := time.Now()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
 			return nil, e
 		}
 		respbody, e := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
 			return nil, e
 		}
 		if resp.StatusCode == int(cerror.ErrClosing.Httpcode) && cerror.Equal(cerror.ConvertErrorstr(common.Byte2str(respbody)), cerror.ErrClosing) {
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, url.Host, method, "/"+url.Path, &start, &end, cerror.ErrClosing)
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, cerror.ErrClosing)
 			continue
 		} else if resp.StatusCode != http.StatusOK {
 			if len(respbody) == 0 {
@@ -271,10 +271,10 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				tempe.SetHttpcode(int32(resp.StatusCode))
 				e = tempe
 			}
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, url.Host, method, "/"+url.Path, &start, &end, e)
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
 			return nil, e
 		}
-		trace.Trace(ctx, trace.CLIENT, c.serverappname, url.Host, method, "/"+url.Path, &start, &end, nil)
+		trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, nil)
 		return respbody, nil
 	}
 }

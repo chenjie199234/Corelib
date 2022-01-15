@@ -252,35 +252,38 @@ type sourceConfig struct {
 
 //CGrpcServerConfig
 type CGrpcServerConfig struct {
-	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
-	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
+	ConnectTimeout ctime.Duration $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
+	GlobalTimeout  ctime.Duration $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
+	HeartProbe     ctime.Duration $json:"heart_probe"$     //default 1.5s
 }
 
 //CGrpcClientConfig
 type CGrpcClientConfig struct {
-	ConnTimeout   ctime.Duration $json:"conn_timeout"$   //default 500ms
-	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
-	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
+	ConnectTimeout   ctime.Duration $json:"conn_timeout"$ //default 500ms,max time to finish the handshake
+	GlobalTimeout ctime.Duration $json:"global_timeout"$  //default 500ms,max time to handle the request
+	HeartProbe    ctime.Duration $json:"heart_probe"$     //default 1.5s
 }
 
 //CrpcServerConfig -
 type CrpcServerConfig struct {
-	GlobalTimeout ctime.Duration $json:"global_timeout"$ //default 500ms
-	HeartProbe    ctime.Duration $json:"heart_probe"$    //default 1.5s
+	ConnectTimeout ctime.Duration $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
+	GlobalTimeout  ctime.Duration $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
+	HeartProbe     ctime.Duration $json:"heart_probe"$     //default 1.5s
 }
 
 //CrpcClientConfig -
 type CrpcClientConfig struct {
-	ConnTimeout      ctime.Duration $json:"conn_timeout"$      //default 500ms
-	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms
+	ConnectTimeout      ctime.Duration $json:"conn_timeout"$   //default 500ms,max time to finish the handshake
+	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms,max time to handle the request
 	HeartProbe       ctime.Duration $json:"heart_probe"$       //default 1.5s
 }
 
 //WebServerConfig -
 type WebServerConfig struct {
-	GlobalTimeout  ctime.Duration $json:"global_timeout"$ //default 500ms
-	IdleTimeout    ctime.Duration $json:"idle_timeout"$   //default 5s
-	HeartProbe     ctime.Duration $json:"heart_probe"$    //default 1.5s
+	ConnectTimeout ctime.Duration $json:"connect_timeout"$ //default 500ms,max time to finish the handshake and read each whole request
+	GlobalTimeout  ctime.Duration $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
+	IdleTimeout    ctime.Duration $json:"idle_timeout"$    //default 5s
+	HeartProbe     ctime.Duration $json:"heart_probe"$     //default 1.5s
 	StaticFilePath string         $json:"static_file_path"$
 	//cors
 	Cors *WebCorsConfig $json:"cors"$
@@ -295,8 +298,8 @@ type WebCorsConfig struct {
 
 //WebClientConfig -
 type WebClientConfig struct {
-	ConnTimeout      ctime.Duration $json:"conn_timeout"$      //default 500ms
-	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms
+	ConnectTimeout      ctime.Duration $json:"conn_timeout"$   //default 500ms,max time to finish the handshake
+	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms,max time to handle the request
 	IdleTimeout      ctime.Duration $json:"idle_timeout"$      //default 5s
 	HeartProbe       ctime.Duration $json:"heart_probe"$       //default 1.5s
 }
@@ -391,10 +394,14 @@ func initsource(path string) {
 	}
 	if sc.CGrpcServer == nil {
 		sc.CGrpcServer = &CGrpcServerConfig{
+			ConnectTimeout:ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
 			HeartProbe:    ctime.Duration(1500 * time.Millisecond),
 		}
 	} else {
+		if sc.CGrpcServer.ConnectTimeout <= 0 {
+			sc.CGrpcServer.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
+		}
 		if sc.CGrpcServer.GlobalTimeout <= 0 {
 			sc.CGrpcServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
@@ -404,13 +411,13 @@ func initsource(path string) {
 	}
 	if sc.CGrpcClient == nil {
 		sc.CGrpcClient = &CGrpcClientConfig{
-			ConnTimeout:   ctime.Duration(time.Millisecond * 500),
-			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
-			HeartProbe:    ctime.Duration(time.Millisecond * 1500),
+			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
+			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
+			HeartProbe:     ctime.Duration(time.Millisecond * 1500),
 		}
 	} else {
-		if sc.CGrpcClient.ConnTimeout <= 0 {
-			sc.CGrpcClient.ConnTimeout = ctime.Duration(time.Millisecond * 500)
+		if sc.CGrpcClient.ConnectTimeout <= 0 {
+			sc.CGrpcClient.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if sc.CGrpcClient.GlobalTimeout <= 0 {
 			sc.CGrpcClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
@@ -421,10 +428,14 @@ func initsource(path string) {
 	}
 	if sc.CrpcServer == nil {
 		sc.CrpcServer = &CrpcServerConfig{
-			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
-			HeartProbe:    ctime.Duration(1500 * time.Millisecond),
+			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
+			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
+			HeartProbe:     ctime.Duration(1500 * time.Millisecond),
 		}
 	} else {
+		if sc.CrpcServer.ConnectTimeout <= 0 {
+			sc.CrpcServer.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
+		}
 		if sc.CrpcServer.GlobalTimeout <= 0 {
 			sc.CrpcServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
@@ -434,13 +445,13 @@ func initsource(path string) {
 	}
 	if sc.CrpcClient == nil {
 		sc.CrpcClient = &CrpcClientConfig{
-			ConnTimeout:   ctime.Duration(time.Millisecond * 500),
+			ConnectTimeout:   ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
 			HeartProbe:    ctime.Duration(time.Millisecond * 1500),
 		}
 	} else {
-		if sc.CrpcClient.ConnTimeout <= 0 {
-			sc.CrpcClient.ConnTimeout = ctime.Duration(time.Millisecond * 500)
+		if sc.CrpcClient.ConnectTimeout <= 0 {
+			sc.CrpcClient.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if sc.CrpcClient.GlobalTimeout <= 0 {
 			sc.CrpcClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
@@ -451,6 +462,7 @@ func initsource(path string) {
 	}
 	if sc.WebServer == nil {
 		sc.WebServer = &WebServerConfig{
+			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
 			IdleTimeout:    ctime.Duration(time.Second * 5),
 			HeartProbe:     ctime.Duration(time.Millisecond * 1500),
@@ -462,6 +474,9 @@ func initsource(path string) {
 			},
 		}
 	} else {
+		if sc.WebServer.ConnectTimeout <= 0 {
+			sc.WebServer.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
+		}
 		if sc.WebServer.GlobalTimeout <= 0 {
 			sc.WebServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
@@ -481,14 +496,14 @@ func initsource(path string) {
 	}
 	if sc.WebClient == nil {
 		sc.WebClient = &WebClientConfig{
-			ConnTimeout:      ctime.Duration(time.Millisecond * 500),
-			GlobalTimeout:    ctime.Duration(time.Millisecond * 500),
-			IdleTimeout:      ctime.Duration(time.Second * 5),
-			HeartProbe:       ctime.Duration(time.Millisecond * 1500),
+			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
+			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
+			IdleTimeout:    ctime.Duration(time.Second * 5),
+			HeartProbe:     ctime.Duration(time.Millisecond * 1500),
 		}
 	} else {
-		if sc.WebClient.ConnTimeout <= 0 {
-			sc.WebClient.ConnTimeout = ctime.Duration(time.Millisecond * 500)
+		if sc.WebClient.ConnectTimeout <= 0 {
+			sc.WebClient.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if sc.WebClient.GlobalTimeout <= 0 {
 			sc.WebClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)

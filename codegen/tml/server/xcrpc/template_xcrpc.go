@@ -27,11 +27,12 @@ var s *crpc.CrpcServer
 func StartCrpcServer() {
 	c := config.GetCrpcServerConfig()
 	crpcc := &crpc.ServerConfig{
-		GlobalTimeout: time.Duration(c.GlobalTimeout),
-		HeartPorbe:    time.Duration(c.HeartProbe),
-		SocketRBuf:    2048,
-		SocketWBuf:    2048,
-		MaxMsgLen:     65535,
+		ConnectTimeout: time.Duration(c.ConnectTimeout),
+		GlobalTimeout:  time.Duration(c.GlobalTimeout),
+		HeartPorbe:     time.Duration(c.HeartProbe),
+		SocketRBuf:     2048,
+		SocketWBuf:     2048,
+		MaxMsgLen:      65535,
 	}
 	var e error
 	if s, e = crpc.NewCrpcServer(crpcc, api.Group, api.Name); e != nil {

@@ -8,24 +8,27 @@ import (
 
 const textsource = `{
 	"cgrpc_server":{
+		"connect_timeout":"200ms",
 		"global_timeout":"200ms",
 		"heart_probe":"1.5s"
 	},
 	"cgrpc_client":{
-		"conn_timeout":"200ms",
+		"connect_timeout":"200ms",
 		"global_timeout":"200ms",
 		"heart_probe":"1.5s"
 	},
 	"crpc_server":{
+		"connect_timeout":"200ms",
 		"global_timeout":"200ms",
 		"heart_probe":"1.5s"
 	},
 	"crpc_client":{
-		"conn_timeout":"200ms",
+		"connect_timeout":"200ms",
 		"global_timeout":"200ms",
 		"heart_probe":"1.5s"
 	},
 	"web_server":{
+		"connect_timeout":"200ms",
 		"global_timeout":"200ms",
 		"idle_timeout":"5s",
 		"heart_probe":"1.5s",
@@ -37,7 +40,7 @@ const textsource = `{
 		}
 	},
 	"web_client":{
-		"conn_timeout":"200ms",
+		"connect_timeout":"200ms",
 		"global_timeout":"200ms",
 		"idle_timeout":"5s",
 		"heart_probe":"1.5s"

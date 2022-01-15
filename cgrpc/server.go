@@ -31,16 +31,19 @@ import (
 type OutsideHandler func(*Context)
 
 type ServerConfig struct {
-	//global timeout for every rpc call(including connection establish time)
-	GlobalTimeout time.Duration
-	HeartPorbe    time.Duration
-	SocketRBuf    uint32
-	SocketWBuf    uint32
-	MaxMsgLen     uint32
-	CertKeys      map[string]string //mapkey: cert path,mapvalue: key path
+	ConnectTimeout time.Duration
+	GlobalTimeout  time.Duration //global timeout for every rpc call(including connection establish time)
+	HeartPorbe     time.Duration
+	SocketRBuf     uint32
+	SocketWBuf     uint32
+	MaxMsgLen      uint32
+	CertKeys       map[string]string //mapkey: cert path,mapvalue: key path
 }
 
 func (c *ServerConfig) validate() {
+	if c.ConnectTimeout <= 0 {
+		c.ConnectTimeout = 500 * time.Millisecond
+	}
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
 	}
@@ -103,8 +106,8 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 	opts = append(opts, grpc.WriteBufferSize(int(c.SocketWBuf)))
 	opts = append(opts, grpc.MaxRecvMsgSize(int(c.MaxMsgLen)))
 	opts = append(opts, grpc.MaxSendMsgSize(int(c.MaxMsgLen)))
-	if c.GlobalTimeout != 0 {
-		opts = append(opts, grpc.ConnectionTimeout(c.GlobalTimeout))
+	if c.ConnectTimeout != 0 {
+		opts = append(opts, grpc.ConnectionTimeout(c.ConnectTimeout))
 	}
 	opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{Time: c.HeartPorbe, Timeout: c.HeartPorbe*3 + c.HeartPorbe/3}))
 	if len(c.CertKeys) > 0 {
@@ -169,7 +172,7 @@ func (this *CGrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
 
 func (this *CGrpcServer) getHandlerTimeout(path string) time.Duration {
 	handlerTimeout := *(*map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout))))
-	if t, ok := handlerTimeout[path]; ok && (this.c.GlobalTimeout == 0 || t < this.c.GlobalTimeout) {
+	if t, ok := handlerTimeout[path]; ok && t != 0 {
 		return t
 	}
 	return this.c.GlobalTimeout
