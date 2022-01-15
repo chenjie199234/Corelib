@@ -260,7 +260,7 @@ type CGrpcServerConfig struct {
 //CGrpcClientConfig
 type CGrpcClientConfig struct {
 	ConnectTimeout   ctime.Duration $json:"conn_timeout"$ //default 500ms,max time to finish the handshake
-	GlobalTimeout ctime.Duration $json:"global_timeout"$  //default 500ms,max time to handle the request
+	GlobalTimeout ctime.Duration $json:"global_timeout"$  //max time to handle the request,0 means no default timeout
 	HeartProbe    ctime.Duration $json:"heart_probe"$     //default 1.5s
 }
 
@@ -274,7 +274,7 @@ type CrpcServerConfig struct {
 //CrpcClientConfig -
 type CrpcClientConfig struct {
 	ConnectTimeout      ctime.Duration $json:"conn_timeout"$   //default 500ms,max time to finish the handshake
-	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms,max time to handle the request
+	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //max time to handle the request,0 means no default timeout
 	HeartProbe       ctime.Duration $json:"heart_probe"$       //default 1.5s
 }
 
@@ -299,7 +299,7 @@ type WebCorsConfig struct {
 //WebClientConfig -
 type WebClientConfig struct {
 	ConnectTimeout      ctime.Duration $json:"conn_timeout"$   //default 500ms,max time to finish the handshake
-	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //default 500ms,max time to handle the request
+	GlobalTimeout    ctime.Duration $json:"global_timeout"$    //max time to handle the request,0 means no default timeout
 	IdleTimeout      ctime.Duration $json:"idle_timeout"$      //default 5s
 	HeartProbe       ctime.Duration $json:"heart_probe"$       //default 1.5s
 }
@@ -419,8 +419,8 @@ func initsource(path string) {
 		if sc.CGrpcClient.ConnectTimeout <= 0 {
 			sc.CGrpcClient.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
 		}
-		if sc.CGrpcClient.GlobalTimeout <= 0 {
-			sc.CGrpcClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
+		if sc.CGrpcClient.GlobalTimeout < 0 {
+			sc.CGrpcClient.GlobalTimeout = 0
 		}
 		if sc.CGrpcClient.HeartProbe <= 0 {
 			sc.CGrpcClient.HeartProbe = ctime.Duration(time.Millisecond * 1500)
@@ -453,8 +453,8 @@ func initsource(path string) {
 		if sc.CrpcClient.ConnectTimeout <= 0 {
 			sc.CrpcClient.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
 		}
-		if sc.CrpcClient.GlobalTimeout <= 0 {
-			sc.CrpcClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
+		if sc.CrpcClient.GlobalTimeout < 0 {
+			sc.CrpcClient.GlobalTimeout = 0
 		}
 		if sc.CrpcClient.HeartProbe <= 0 {
 			sc.CrpcClient.HeartProbe = ctime.Duration(time.Millisecond * 1500)
@@ -505,8 +505,8 @@ func initsource(path string) {
 		if sc.WebClient.ConnectTimeout <= 0 {
 			sc.WebClient.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
 		}
-		if sc.WebClient.GlobalTimeout <= 0 {
-			sc.WebClient.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
+		if sc.WebClient.GlobalTimeout < 0 {
+			sc.WebClient.GlobalTimeout = 0
 		}
 		if sc.WebClient.IdleTimeout <= 0 {
 			sc.WebClient.IdleTimeout = ctime.Duration(time.Second * 5)
