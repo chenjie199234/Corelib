@@ -239,10 +239,11 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			}
 		}
 		traceid, _, _, _, _, selfdeep = trace.GetTrace(ctx)
-		mdata := make(map[string]string)
+		var mdata map[string]string
 		if ok {
 			data := grpcmetadata.Get("core_metadata")
 			if len(data) != 0 {
+				mdata = make(map[string]string)
 				if e := json.Unmarshal(common.Str2byte(data[0]), &mdata); e != nil {
 					log.Error(nil, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC metadata:", data[0], "format error:", e)
 					return nil, cerror.ErrReq

@@ -414,9 +414,6 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	c.calls[msg.Callid] = cancel
 	c.Unlock()
 	go func() {
-		if msg.Metadata == nil {
-			msg.Metadata = make(map[string]string)
-		}
 		handler(ctx, p, msg)
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(ctx, d, nil, nil); e != nil {

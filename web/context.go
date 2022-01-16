@@ -15,7 +15,7 @@ import (
 func (s *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context.Context, peername string, metadata map[string]string, handlers []OutsideHandler) *Context {
 	ctx, ok := s.ctxpool.Get().(*Context)
 	if !ok {
-		return &Context{
+		ctx = &Context{
 			Context:  c,
 			w:        w,
 			r:        r,
@@ -25,12 +25,18 @@ func (s *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context
 			status:   0,
 			e:        nil,
 		}
+		if metadata == nil {
+			ctx.metadata = make(map[string]string)
+		}
+		return ctx
 	}
 	ctx.Context = c
 	ctx.w = w
 	ctx.r = r
 	ctx.peername = peername
-	ctx.metadata = metadata
+	if metadata != nil {
+		ctx.metadata = metadata
+	}
 	ctx.handlers = handlers
 	ctx.status = 0
 	ctx.e = nil
@@ -38,6 +44,9 @@ func (s *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context
 }
 
 func (s *WebServer) putContext(ctx *Context) {
+	for k := range ctx.metadata {
+		delete(ctx.metadata, k)
+	}
 	s.ctxpool.Put(ctx)
 }
 

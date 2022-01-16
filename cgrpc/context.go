@@ -10,7 +10,7 @@ import (
 func (s *CGrpcServer) getcontext(c context.Context, path string, peername string, peeraddr string, metadata map[string]string, handlers []OutsideHandler, d func(interface{}) error) *Context {
 	ctx, ok := s.ctxpool.Get().(*Context)
 	if !ok {
-		return &Context{
+		ctx = &Context{
 			Context:    c,
 			decodefunc: d,
 			handlers:   handlers,
@@ -22,6 +22,10 @@ func (s *CGrpcServer) getcontext(c context.Context, path string, peername string
 			e:          nil,
 			status:     0,
 		}
+		if metadata == nil {
+			ctx.metadata = make(map[string]string)
+		}
+		return ctx
 	}
 	ctx.Context = c
 	ctx.decodefunc = d
@@ -29,13 +33,18 @@ func (s *CGrpcServer) getcontext(c context.Context, path string, peername string
 	ctx.path = path
 	ctx.peername = peername
 	ctx.peeraddr = peeraddr
-	ctx.metadata = metadata
+	if metadata != nil {
+		ctx.metadata = metadata
+	}
 	ctx.resp = nil
 	ctx.e = nil
 	ctx.status = 0
 	return ctx
 }
 func (s *CGrpcServer) putcontext(ctx *Context) {
+	for k := range ctx.metadata {
+		delete(ctx.metadata, k)
+	}
 	s.ctxpool.Put(ctx)
 }
 

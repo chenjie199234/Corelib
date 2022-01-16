@@ -8,32 +8,44 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-func (s *CrpcServer) getContext(ctx context.Context, p *stream.Peer, msg *Msg, handlers []OutsideHandler) *Context {
-	result, ok := s.ctxpool.Get().(*Context)
+func (s *CrpcServer) getContext(c context.Context, p *stream.Peer, msg *Msg, handlers []OutsideHandler) *Context {
+	ctx, ok := s.ctxpool.Get().(*Context)
 	if !ok {
-		return &Context{
-			Context:  ctx,
+		ctx = &Context{
+			Context:  c,
 			peer:     p,
 			msg:      msg,
+			metadata: msg.Metadata,
 			handlers: handlers,
 			status:   0,
 		}
+		if msg.Metadata == nil {
+			ctx.metadata = make(map[string]string)
+		}
+		return ctx
 	}
-	result.Context = ctx
-	result.peer = p
-	result.msg = msg
-	result.handlers = handlers
-	result.status = 0
-	return result
+	ctx.Context = c
+	ctx.peer = p
+	ctx.msg = msg
+	if msg.Metadata != nil {
+		ctx.metadata = msg.Metadata
+	}
+	ctx.handlers = handlers
+	ctx.status = 0
+	return ctx
 }
 
 func (s *CrpcServer) putContext(ctx *Context) {
+	for k := range ctx.metadata {
+		delete(ctx.metadata, k)
+	}
 	s.ctxpool.Put(ctx)
 }
 
 type Context struct {
 	context.Context
 	msg      *Msg
+	metadata map[string]string
 	peer     *stream.Peer
 	handlers []OutsideHandler
 	status   int8
@@ -93,5 +105,5 @@ func (c *Context) GetPeerAddr() string {
 	return c.peer.GetRemoteAddr()
 }
 func (c *Context) GetMetadata() map[string]string {
-	return c.msg.Metadata
+	return c.metadata
 }

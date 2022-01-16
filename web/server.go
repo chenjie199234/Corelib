@@ -513,8 +513,9 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 			sourcepath = tracedata[3]
 		}
 		traceid, _, _, _, _, selfdeep = trace.GetTrace(ctx)
-		mdata := make(map[string]string)
+		var mdata map[string]string
 		if mdstr := r.Header.Get("Core_metadata"); mdstr != "" {
+			mdata = make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(mdstr), &mdata); e != nil {
 				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: metadata:", mdstr, "format error")
 				w.WriteHeader(http.StatusBadRequest)
