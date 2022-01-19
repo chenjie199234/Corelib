@@ -83,18 +83,16 @@ spec:
             - name: REMOTE_CONFIG_REPLICASET
               value: <REMOTE_CONFIG_REPLICASET>
           livenessProbe:
-            exec:
-              command:
-                - /root/app/probe.sh
+            tcpSocket:
+              port: 8000
             initialDelaySeconds: 2
             timeoutSeconds: 1
             periodSeconds: 1
             successThreshold: 1
             failureThreshold: 3
           readinessProbe:
-            exec:
-              command:
-                - /root/app/probe.sh
+            tcpSocket:
+              port: 8000
             initialDelaySeconds: 2
             timeoutSeconds: 1
             periodSeconds: 1
