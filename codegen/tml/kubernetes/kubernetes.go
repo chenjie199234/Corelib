@@ -21,7 +21,7 @@ FROM debian:buster
 RUN apt-get update && apt-get install -y ca-certificates curl inetutils-telnet inetutils-ping inetutils-traceroute dnsutils iproute2 procps net-tools neovim && mkdir /root/app && mkdir /root/app/kubeconfig && mkdir /root/app/remoteconfig
 WORKDIR /root/app
 EXPOSE 8000 9000 10000
-COPY --from=builder /code/main /code/probe.sh /code/AppConfig.json /code/SourceConfig.json ./
+COPY --from=builder /code/main /code/AppConfig.json /code/SourceConfig.json ./
 ENTRYPOINT ["./main"]`
 
 const deploymenttext = `apiVersion: apps/v1
