@@ -86,7 +86,7 @@ func genPath(file *protogen.File, service *protogen.Service, g *protogen.Generat
 			panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", method.Desc.Name(), service.Desc.Name(), httpmetohd))
 		}
 		pathname := "_WebPath" + service.GoName + method.GoName
-		pathurl := "/" + *file.Proto.Package + "/" + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
+		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		g.P("var ", pathname, "=", strconv.Quote(pathurl))
 	}
 	g.P()
