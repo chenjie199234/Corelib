@@ -62,4 +62,6 @@ func CrpcServer() {
 func getinfo() {
 	m.Routinenum = runtime.NumGoroutine()
 	m.Threadnum, _ = runtime.ThreadCreateProfile(nil)
+	runtime.MemProfile()
+	//runtime.ReadMemStats()
 }

@@ -299,10 +299,8 @@ const namebat = "cmd.bat"
 
 var tmlbash *template.Template
 var tmlbat *template.Template
-var tmlprobe *template.Template
 var filebash *os.File
 var filebat *os.File
-var fileprobe *os.File
 
 type Data struct {
 	Pname        string
