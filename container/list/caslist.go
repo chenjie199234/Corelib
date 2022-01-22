@@ -11,10 +11,6 @@ type CasList struct {
 	head *node
 	tail *node
 }
-type node struct {
-	value unsafe.Pointer
-	next  *node
-}
 
 func NewCasList() *CasList {
 	tempnode := &node{}
@@ -55,4 +51,10 @@ func (l *CasList) Pop() unsafe.Pointer {
 		}
 		runtime.Gosched()
 	}
+}
+func (l *CasList) GetHead() unsafe.Pointer {
+	return l.head.value
+}
+func (l *CasList) GetTail() unsafe.Pointer {
+	return l.tail.value
 }

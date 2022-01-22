@@ -49,3 +49,9 @@ func (l *StdList) Pop() unsafe.Pointer {
 	l.putnode(temp)
 	return l.head.value
 }
+func (l *StdList) GetHead() unsafe.Pointer {
+	return l.head.value
+}
+func (l *StdList) GetTail() unsafe.Pointer {
+	return l.tail.value
+}
