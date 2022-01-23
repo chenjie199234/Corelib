@@ -16,6 +16,7 @@ import (
 	"time"
 
 	cerror "github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/name"
@@ -251,6 +252,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		if e != nil {
 			e = cerror.ConvertStdError(e)
 			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
+			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, e, uint64(end.UnixMilli()-start.UnixNano()))
 			return nil, e
 		}
 		respbody, e := io.ReadAll(resp.Body)
@@ -258,10 +260,12 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		if e != nil {
 			e = cerror.ConvertStdError(e)
 			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
+			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, e, uint64(end.UnixMilli()-start.UnixNano()))
 			return nil, e
 		}
 		if resp.StatusCode == int(cerror.ErrClosing.Httpcode) && cerror.Equal(cerror.ConvertErrorstr(common.Byte2str(respbody)), cerror.ErrClosing) {
 			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, cerror.ErrClosing)
+			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, cerror.ErrClosing, uint64(end.UnixMilli()-start.UnixNano()))
 			continue
 		} else if resp.StatusCode != http.StatusOK {
 			if len(respbody) == 0 {
@@ -272,9 +276,11 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				e = tempe
 			}
 			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
+			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, e, uint64(end.UnixMilli()-start.UnixNano()))
 			return nil, e
 		}
 		trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, nil)
+		monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, nil, uint64(end.UnixMilli()-start.UnixNano()))
 		return respbody, nil
 	}
 }

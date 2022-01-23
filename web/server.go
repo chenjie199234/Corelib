@@ -19,6 +19,7 @@ import (
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/host"
@@ -557,8 +558,6 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 				w.WriteHeader(http.StatusGatewayTimeout)
 				w.Header().Set("Content-Type", "application/json")
 				w.Write(common.Str2byte(cerror.ErrDeadlineExceeded.Error()))
-				end := time.Now()
-				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip, method, path, &start, &end, cerror.ErrDeadlineExceeded)
 				return
 			}
 			var cancel context.CancelFunc
@@ -575,12 +574,11 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write(common.Str2byte(cerror.ErrPanic.Error()))
-				end := time.Now()
-				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip, method, path, &start, &end, cerror.ErrPanic)
-			} else {
-				end := time.Now()
-				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip, method, path, &start, &end, workctx.e)
+				workctx.e = cerror.ErrPanic
 			}
+			end := time.Now()
+			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip, method, path, &start, &end, workctx.e)
+			monitor.WebServerMonitor(sourceapp, method, path, workctx.e, uint64(end.UnixNano()-start.UnixNano()))
 			s.putContext(workctx)
 		}()
 		workctx.run()

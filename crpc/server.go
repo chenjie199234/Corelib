@@ -15,6 +15,7 @@ import (
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -288,6 +289,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 			}
 			end := time.Now()
 			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.instance.GetSelfAppName(), host.Hostip, "CRPC", path, &start, &end, msg.Error)
+			monitor.CrpcServerMonitor(sourceapp, "CRPC", path, msg.Error, uint64(end.UnixNano()-start.UnixNano()))
 			s.putContext(workctx)
 		}()
 		workctx.run()

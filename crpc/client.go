@@ -14,6 +14,7 @@ import (
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -287,6 +288,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 			end := time.Now()
 			trace.Trace(ctx, trace.CLIENT, c.serverappname, server.addr, "CRPC", path, &start, &end, r.err)
+			monitor.CrpcClientMonitor(c.serverappname, "CRPC", path, r.err, uint64(end.UnixNano()-start.UnixNano()))
 			if r.err != nil {
 				//req error,update last fail time
 				server.Pickinfo.LastFailTime = time.Now().UnixNano()
@@ -327,6 +329,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 			}
 			end := time.Now()
 			trace.Trace(ctx, trace.CLIENT, c.serverappname, server.addr, "CRPC", path, &start, &end, e)
+			monitor.CrpcClientMonitor(c.serverappname, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 	}
