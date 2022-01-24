@@ -47,6 +47,9 @@ func (s *WebServer) putContext(ctx *Context) {
 	for k := range ctx.metadata {
 		delete(ctx.metadata, k)
 	}
+	ctx.r = nil
+	ctx.w = nil
+	ctx.Context = nil
 	s.ctxpool.Put(ctx)
 }
 
