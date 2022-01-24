@@ -227,13 +227,13 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	}
 	instance.closewait.Add(1)
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotImplemented)
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotImplemented)
 		w.Write(common.Str2byte(cerror.ErrNoapi.Error()))
 	})
 	instance.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotImplemented)
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotImplemented)
 		w.Write(common.Str2byte(cerror.ErrNoapi.Error()))
 	})
 	instance.router.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -428,8 +428,8 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 		//target
 		if target := r.Header.Get("Core_target"); target != "" && target != s.selfappname {
 			//this is not the required server.tell peer self closed
-			w.WriteHeader(int(cerror.ErrClosing.Httpcode))
 			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(int(cerror.ErrClosing.Httpcode))
 			w.Write(common.Str2byte(cerror.ErrClosing.Error()))
 			return
 		}
@@ -449,8 +449,8 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 					}
 				}
 				if !find {
-					w.WriteHeader(http.StatusMethodNotAllowed)
 					w.Header().Set("Allow", strings.Join(s.c.Cors.AllowedOrigin, ","))
+					w.WriteHeader(http.StatusMethodNotAllowed)
 					return
 				}
 			}
@@ -473,8 +473,8 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 				//refresh close wait
 				s.closewaittimer.Reset(s.c.WaitCloseTime)
 				//tell peer self closed
-				w.WriteHeader(int(cerror.ErrClosing.Httpcode))
 				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(int(cerror.ErrClosing.Httpcode))
 				w.Write(common.Str2byte(cerror.ErrClosing.Error()))
 				return
 			}
@@ -497,14 +497,14 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 			ctx = trace.InitTrace(r.Context(), "", s.selfappname, host.Hostip, r.Method, r.URL.Path, 0)
 		} else if len(tracedata) != 5 || tracedata[4] == "" {
 			log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: tracedata:", tracedata, "format error")
-			w.WriteHeader(http.StatusBadRequest)
 			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
 			w.Write(common.Str2byte(cerror.ErrReq.Error()))
 			return
 		} else if clientdeep, e := strconv.Atoi(tracedata[4]); e != nil {
 			log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: tracedata:", tracedata, "format error")
-			w.WriteHeader(http.StatusBadRequest)
 			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
 			w.Write(common.Str2byte(cerror.ErrReq.Error()))
 			return
 		} else {
@@ -519,8 +519,8 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 			mdata = make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(mdstr), &mdata); e != nil {
 				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: metadata:", mdstr, "format error")
-				w.WriteHeader(http.StatusBadRequest)
 				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(cerror.ErrReq.Error()))
 				return
 			}
@@ -531,8 +531,8 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 			clientdl, e = strconv.ParseInt(temp, 10, 64)
 			if e != nil {
 				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: Deadline:", temp, "format error")
-				w.WriteHeader(http.StatusBadRequest)
 				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(cerror.ErrReq.Error()))
 				return
 			}
@@ -555,8 +555,8 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 		}
 		if min != 0 {
 			if min < start.UnixNano()+int64(time.Millisecond) {
-				w.WriteHeader(http.StatusGatewayTimeout)
 				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusGatewayTimeout)
 				w.Write(common.Str2byte(cerror.ErrDeadlineExceeded.Error()))
 				return
 			}

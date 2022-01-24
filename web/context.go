@@ -87,8 +87,8 @@ func (c *Context) Abort(e error) {
 //has race
 func (c *Context) Write(contenttype string, msg []byte) {
 	c.status = 1
-	c.w.WriteHeader(http.StatusOK)
 	c.w.Header().Set("Content-Type", contenttype)
+	c.w.WriteHeader(http.StatusOK)
 	c.w.Write(msg)
 }
 
