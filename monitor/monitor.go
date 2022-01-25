@@ -46,8 +46,7 @@ type callinfo struct {
 	Callinfos      map[string]map[string]*pathinfo //first key peername,second key path
 }
 type pathinfo struct {
-	SuccessCount uint32
-	ErrCount     uint32
+	TotalCount   uint32
 	ErrCodeCount map[int32]uint32
 	T50          uint64      //nano second
 	T90          uint64      //nano second
@@ -222,15 +221,15 @@ func WebClientMonitor(peername, method, path string, e error, timewaste uint64) 
 		}
 	}
 	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
+	atomic.AddUint32(&pinfo.TotalCount, 1)
 	//error
 	ee := cerror.ConvertStdError(e)
-	if ee == nil {
-		atomic.AddUint32(&pinfo.SuccessCount, 1)
-		return
-	}
-	atomic.AddUint32(&pinfo.ErrCount, 1)
 	pinfo.lker.Lock()
-	pinfo.ErrCodeCount[ee.Code]++
+	if ee == nil {
+		pinfo.ErrCodeCount[0]++
+	} else {
+		pinfo.ErrCodeCount[ee.Code]++
+	}
 	pinfo.lker.Unlock()
 }
 func WebServerMonitor(peername, method, path string, e error, timewaste uint64) {
@@ -264,15 +263,15 @@ func WebServerMonitor(peername, method, path string, e error, timewaste uint64) 
 		}
 	}
 	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
+	atomic.AddUint32(&pinfo.TotalCount, 1)
 	//error
 	ee := cerror.ConvertStdError(e)
-	if ee == nil {
-		atomic.AddUint32(&pinfo.SuccessCount, 1)
-		return
-	}
-	atomic.AddUint32(&pinfo.ErrCount, 1)
 	pinfo.lker.Lock()
-	pinfo.ErrCodeCount[ee.Code]++
+	if ee == nil {
+		pinfo.ErrCodeCount[0]++
+	} else {
+		pinfo.ErrCodeCount[ee.Code]++
+	}
 	pinfo.lker.Unlock()
 }
 func GrpcClientMonitor(peername, method, path string, e error, timewaste uint64) {
@@ -306,15 +305,15 @@ func GrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 		}
 	}
 	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
+	atomic.AddUint32(&pinfo.TotalCount, 1)
 	//error
 	ee := cerror.ConvertStdError(e)
-	if ee == nil {
-		atomic.AddUint32(&pinfo.SuccessCount, 1)
-		return
-	}
-	atomic.AddUint32(&pinfo.ErrCount, 1)
 	pinfo.lker.Lock()
-	pinfo.ErrCodeCount[ee.Code]++
+	if ee == nil {
+		pinfo.ErrCodeCount[0]++
+	} else {
+		pinfo.ErrCodeCount[ee.Code]++
+	}
 	pinfo.lker.Unlock()
 
 }
@@ -349,15 +348,15 @@ func GrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 		}
 	}
 	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
+	atomic.AddUint32(&pinfo.TotalCount, 1)
 	//error
 	ee := cerror.ConvertStdError(e)
-	if ee == nil {
-		atomic.AddUint32(&pinfo.SuccessCount, 1)
-		return
-	}
-	atomic.AddUint32(&pinfo.ErrCount, 1)
 	pinfo.lker.Lock()
-	pinfo.ErrCodeCount[ee.Code]++
+	if ee == nil {
+		pinfo.ErrCodeCount[0]++
+	} else {
+		pinfo.ErrCodeCount[ee.Code]++
+	}
 	pinfo.lker.Unlock()
 }
 func CrpcClientMonitor(peername, method, path string, e error, timewaste uint64) {
@@ -391,15 +390,15 @@ func CrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 		}
 	}
 	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
+	atomic.AddUint32(&pinfo.TotalCount, 1)
 	//error
 	ee := cerror.ConvertStdError(e)
-	if ee == nil {
-		atomic.AddUint32(&pinfo.SuccessCount, 1)
-		return
-	}
-	atomic.AddUint32(&pinfo.ErrCount, 1)
 	pinfo.lker.Lock()
-	pinfo.ErrCodeCount[ee.Code]++
+	if ee == nil {
+		pinfo.ErrCodeCount[0]++
+	} else {
+		pinfo.ErrCodeCount[ee.Code]++
+	}
 	pinfo.lker.Unlock()
 }
 func CrpcServerMonitor(peername, method, path string, e error, timewaste uint64) {
@@ -433,15 +432,15 @@ func CrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 		}
 	}
 	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
+	atomic.AddUint32(&pinfo.TotalCount, 1)
 	//error
 	ee := cerror.ConvertStdError(e)
-	if ee == nil {
-		atomic.AddUint32(&pinfo.SuccessCount, 1)
-		return
-	}
-	atomic.AddUint32(&pinfo.ErrCount, 1)
 	pinfo.lker.Lock()
-	pinfo.ErrCodeCount[ee.Code]++
+	if ee == nil {
+		pinfo.ErrCodeCount[0]++
+	} else {
+		pinfo.ErrCodeCount[ee.Code]++
+	}
 	pinfo.lker.Unlock()
 }
 
@@ -469,42 +468,42 @@ func GetMonitorInfo() *Monitor {
 	for _, cinfo := range r.WebClientinfos {
 		for _, peer := range cinfo.Callinfos {
 			for _, path := range peer {
-				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.SuccessCount+path.ErrCount)
+				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
 			}
 		}
 	}
 	for _, cinfo := range r.WebServerinfos {
 		for _, peer := range cinfo.Callinfos {
 			for _, path := range peer {
-				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.SuccessCount+path.ErrCount)
+				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
 			}
 		}
 	}
 	for _, cinfo := range r.GrpcClientinfos {
 		for _, peer := range cinfo.Callinfos {
 			for _, path := range peer {
-				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.SuccessCount+path.ErrCount)
+				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
 			}
 		}
 	}
 	for _, cinfo := range r.GrpcServerinfos {
 		for _, peer := range cinfo.Callinfos {
 			for _, path := range peer {
-				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.SuccessCount+path.ErrCount)
+				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
 			}
 		}
 	}
 	for _, cinfo := range r.CrpcClientinfos {
 		for _, peer := range cinfo.Callinfos {
 			for _, path := range peer {
-				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.SuccessCount+path.ErrCount)
+				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
 			}
 		}
 	}
 	for _, cinfo := range r.CrpcServerinfos {
 		for _, peer := range cinfo.Callinfos {
 			for _, path := range peer {
-				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.SuccessCount+path.ErrCount)
+				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
 			}
 		}
 	}
