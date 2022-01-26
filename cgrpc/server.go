@@ -35,8 +35,6 @@ type ServerConfig struct {
 	ConnectTimeout time.Duration
 	GlobalTimeout  time.Duration //global timeout for every rpc call(including connection establish time)
 	HeartPorbe     time.Duration
-	SocketRBuf     uint32
-	SocketWBuf     uint32
 	MaxMsgLen      uint32
 	CertKeys       map[string]string //mapkey: cert path,mapvalue: key path
 }
@@ -50,18 +48,6 @@ func (c *ServerConfig) validate() {
 	}
 	if c.HeartPorbe < time.Second {
 		c.HeartPorbe = 1500 * time.Millisecond
-	}
-	if c.SocketRBuf == 0 {
-		c.SocketRBuf = 1024
-	}
-	if c.SocketRBuf > 65535 {
-		c.SocketRBuf = 65535
-	}
-	if c.SocketWBuf == 0 {
-		c.SocketWBuf = 1024
-	}
-	if c.SocketWBuf > 65535 {
-		c.SocketWBuf = 65535
 	}
 	if c.MaxMsgLen < 1024 {
 		c.MaxMsgLen = 65535
@@ -103,8 +89,6 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 	}
 	opts := make([]grpc.ServerOption, 0, 6)
 	opts = append(opts, grpc.StatsHandler(serverinstance))
-	opts = append(opts, grpc.ReadBufferSize(int(c.SocketRBuf)))
-	opts = append(opts, grpc.WriteBufferSize(int(c.SocketWBuf)))
 	opts = append(opts, grpc.MaxRecvMsgSize(int(c.MaxMsgLen)))
 	opts = append(opts, grpc.MaxSendMsgSize(int(c.MaxMsgLen)))
 	if c.ConnectTimeout != 0 {

@@ -63,8 +63,6 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 		//disable system's keep alive probe
 		//use self's heartbeat probe
 		conn.SetKeepAlive(false)
-		conn.SetReadBuffer(int(this.c.TcpC.SocketRBufLen))
-		conn.SetWriteBuffer(int(this.c.TcpC.SocketWBufLen))
 		if tlsc != nil {
 			p.conn = tls.Server(conn, tlsc)
 			p.tls = true
@@ -148,8 +146,6 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte, tlsc 
 	//disable system's keep alive probe
 	//use self's heartbeat probe
 	(conn.(*net.TCPConn)).SetKeepAlive(false)
-	(conn.(*net.TCPConn)).SetReadBuffer(int(this.c.TcpC.SocketRBufLen))
-	(conn.(*net.TCPConn)).SetWriteBuffer(int(this.c.TcpC.SocketWBufLen))
 	p := newPeer(this.c.TcpC.MaxMsgLen)
 	if tlsc != nil {
 		p.conn = tls.Client(conn, tlsc)

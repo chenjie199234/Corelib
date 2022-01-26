@@ -30,8 +30,6 @@ func StartCGrpcServer() {
 		ConnectTimeout: time.Duration(c.ConnectTimeout),
 		GlobalTimeout:  time.Duration(c.GlobalTimeout),
 		HeartPorbe:     time.Duration(c.HeartProbe),
-		SocketRBuf:     2048,
-		SocketWBuf:     2048,
 		MaxMsgLen:      65535,
 	}
 	var e error

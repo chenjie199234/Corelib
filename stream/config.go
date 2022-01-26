@@ -46,34 +46,17 @@ type TcpConfig struct {
 	//include connect time and verify time
 	ConnectTimeout time.Duration //default 500ms
 
-	SocketRBufLen uint32 //default 1024 byte,max 65535 byte
-	SocketWBufLen uint32 //default 1024 byte,max 65535 byte
-
 	MaxMsgLen uint32 //min 1024,max 65535,default is max
 }
 
 var defaultTcpConfig = &TcpConfig{
 	ConnectTimeout: 500 * time.Millisecond,
-	SocketRBufLen:  1024,
-	SocketWBufLen:  1024,
 	MaxMsgLen:      65535,
 }
 
 func (c *TcpConfig) validate() {
 	if c.ConnectTimeout <= 0 {
 		c.ConnectTimeout = 500 * time.Millisecond
-	}
-	if c.SocketRBufLen == 0 {
-		c.SocketRBufLen = 1024
-	}
-	if c.SocketRBufLen > 65535 {
-		c.SocketRBufLen = 65535
-	}
-	if c.SocketWBufLen == 0 {
-		c.SocketWBufLen = 1024
-	}
-	if c.SocketWBufLen > 65535 {
-		c.SocketWBufLen = 65535
 	}
 	if c.MaxMsgLen < 1024 {
 		c.MaxMsgLen = 65535

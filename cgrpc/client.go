@@ -38,8 +38,6 @@ type ClientConfig struct {
 	ConnectTimeout time.Duration
 	GlobalTimeout  time.Duration //global timeout for every rpc call
 	HeartPorbe     time.Duration
-	SocketRBuf     uint32
-	SocketWBuf     uint32
 	MaxMsgLen      uint32
 	UseTLS         bool             //grpc or grpcs
 	SkipVerifyTLS  bool             //don't verify the server's cert
@@ -57,18 +55,6 @@ func (c *ClientConfig) validate() {
 	}
 	if c.HeartPorbe < time.Second {
 		c.HeartPorbe = 1500 * time.Millisecond
-	}
-	if c.SocketRBuf == 0 {
-		c.SocketRBuf = 1024
-	}
-	if c.SocketRBuf > 65535 {
-		c.SocketRBuf = 65535
-	}
-	if c.SocketWBuf == 0 {
-		c.SocketWBuf = 1024
-	}
-	if c.SocketWBuf > 65535 {
-		c.SocketWBuf = 65535
 	}
 	if c.MaxMsgLen < 1024 {
 		c.MaxMsgLen = 65535
@@ -135,8 +121,6 @@ func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servernam
 			RootCAs:            certpool,
 		})))
 	}
-	opts = append(opts, grpc.WithReadBufferSize(int(c.SocketRBuf)))
-	opts = append(opts, grpc.WithWriteBufferSize(int(c.SocketWBuf)))
 	opts = append(opts, grpc.WithConnectParams(grpc.ConnectParams{
 		MinConnectTimeout: c.ConnectTimeout,
 		Backoff: backoff.Config{

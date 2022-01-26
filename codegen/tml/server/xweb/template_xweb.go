@@ -34,8 +34,6 @@ func StartWebServer() {
 		HeartProbe:         time.Duration(c.HeartProbe),
 		StaticFileRootPath: c.StaticFilePath,
 		MaxHeader:          1024,
-		SocketRBuf:         2048,
-		SocketWBuf:         2048,
 	}
 	if c.Cors != nil {
 		webc.Cors = &web.CorsConfig{

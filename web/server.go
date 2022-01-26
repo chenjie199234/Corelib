@@ -43,8 +43,6 @@ type ServerConfig struct {
 	HeartProbe         time.Duration //system's tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
 	StaticFileRootPath string
 	MaxHeader          uint
-	SocketRBuf         uint
-	SocketWBuf         uint
 	CertKeys           map[string]string //mapkey: cert path,mapvalue: key path
 	Cors               *CorsConfig
 }
@@ -90,18 +88,6 @@ func (c *ServerConfig) validate() {
 	}
 	if c.MaxHeader > 65535 {
 		c.MaxHeader = 65535
-	}
-	if c.SocketRBuf == 0 {
-		c.SocketRBuf = 1024
-	}
-	if c.SocketRBuf > 65535 {
-		c.SocketRBuf = 65535
-	}
-	if c.SocketWBuf == 0 {
-		c.SocketWBuf = 1024
-	}
-	if c.SocketWBuf > 65535 {
-		c.SocketWBuf = 65535
 	}
 	for _, v := range c.Cors.AllowedOrigin {
 		if v == "*" {
@@ -200,8 +186,6 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 					(conn.(*net.TCPConn)).SetKeepAlive(true)
 					(conn.(*net.TCPConn)).SetKeepAlivePeriod(c.HeartProbe)
 				}
-				(conn.(*net.TCPConn)).SetReadBuffer(int(c.SocketRBuf))
-				(conn.(*net.TCPConn)).SetWriteBuffer(int(c.SocketWBuf))
 				return ctx
 			},
 		},

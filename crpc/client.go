@@ -30,8 +30,6 @@ type ClientConfig struct {
 	ConnectTimeout time.Duration //default 500ms
 	GlobalTimeout  time.Duration //global timeout for every rpc call
 	HeartPorbe     time.Duration //default 1s,3 probe missing means disconnect
-	SocketRBuf     uint32
-	SocketWBuf     uint32
 	MaxMsgLen      uint32
 	UseTLS         bool     //crpc or crpcs
 	SkipVerifyTLS  bool     //don't verify the server's cert
@@ -49,18 +47,6 @@ func (c *ClientConfig) validate() {
 	}
 	if c.HeartPorbe <= 0 {
 		c.HeartPorbe = time.Second
-	}
-	if c.SocketRBuf == 0 {
-		c.SocketRBuf = 1024
-	}
-	if c.SocketRBuf > 65535 {
-		c.SocketRBuf = 65535
-	}
-	if c.SocketWBuf == 0 {
-		c.SocketWBuf = 1024
-	}
-	if c.SocketWBuf > 65535 {
-		c.SocketWBuf = 65535
 	}
 	if c.MaxMsgLen < 1024 {
 		c.MaxMsgLen = 65535
@@ -130,8 +116,6 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername
 		HeartprobeInterval: c.HeartPorbe,
 		TcpC: &stream.TcpConfig{
 			ConnectTimeout: c.ConnectTimeout,
-			SocketRBufLen:  c.SocketRBuf,
-			SocketWBufLen:  c.SocketWBuf,
 			MaxMsgLen:      c.MaxMsgLen,
 		},
 	}

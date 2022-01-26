@@ -30,8 +30,6 @@ type ClientConfig struct {
 	//if this is 0,means useless,connection will keep alive until it is closed
 	IdleTimeout   time.Duration
 	MaxHeader     uint
-	SocketRBuf    uint
-	SocketWBuf    uint
 	SkipVerifyTLS bool     //don't verify the server's cert
 	CAs           []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
 }
@@ -50,18 +48,6 @@ func (c *ClientConfig) validate() {
 	}
 	if c.MaxHeader > 65535 {
 		c.MaxHeader = 65535
-	}
-	if c.SocketRBuf == 0 {
-		c.SocketRBuf = 1024
-	}
-	if c.SocketRBuf > 65535 {
-		c.SocketRBuf = 65535
-	}
-	if c.SocketWBuf == 0 {
-		c.SocketWBuf = 1024
-	}
-	if c.SocketWBuf > 65535 {
-		c.SocketWBuf = 65535
 	}
 }
 
@@ -113,8 +99,6 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername 
 		MaxIdleConnsPerHost:    50,
 		IdleConnTimeout:        c.IdleTimeout,
 		MaxResponseHeaderBytes: int64(c.MaxHeader),
-		ReadBufferSize:         int(c.SocketRBuf),
-		WriteBufferSize:        int(c.SocketWBuf),
 	}
 	if c.HeartProbe < 0 {
 		transport.DisableKeepAlives = true
