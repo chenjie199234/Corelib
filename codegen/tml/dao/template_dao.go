@@ -70,8 +70,6 @@ func getCGrpcClientConfig() *cgrpc.ClientConfig {
 		ConnectTimeout: time.Duration(gc.ConnectTimeout),
 		GlobalTimeout:  time.Duration(gc.GlobalTimeout),
 		HeartPorbe:     time.Duration(gc.HeartProbe),
-		SocketRBuf:     2048,
-		SocketWBuf:     2048,
 		MaxMsgLen:      65535,
 		Discover:       cgrpcDNS,
 	}
@@ -112,8 +110,6 @@ func getCrpcClientConfig() *crpc.ClientConfig {
 		ConnectTimeout: time.Duration(rc.ConnectTimeout),
 		GlobalTimeout:  time.Duration(rc.GlobalTimeout),
 		HeartPorbe:     time.Duration(rc.HeartProbe),
-		SocketRBuf:     2048,
-		SocketWBuf:     2048,
 		MaxMsgLen:      65535,
 		Discover:       crpcDNS,
 	}
@@ -156,8 +152,6 @@ func getWebClientConfig() *web.ClientConfig {
 		IdleTimeout:    time.Duration(wc.IdleTimeout),
 		HeartProbe:     time.Duration(wc.HeartProbe),
 		MaxHeader:      1024,
-		SocketRBuf:     2048,
-		SocketWBuf:     2048,
 	}
 }`
 
