@@ -29,7 +29,7 @@ $$$
 ## 环境变量
 $$$
 GROUP                                   该项目所属的分组(k8s的namespace名字),如果不使用k8s需要手动指定,如果使用k8s无需手动指定,请查看项目根目录的deployment.yaml
-MonitorSampleRate                       系统监控采样频率,单位为秒,不设置或者<=0,将关闭系统监控
+MONITOR_SAMPLE_RATE                     系统监控采样频率,单位为秒,不设置或者<=0,将关闭系统监控
 CONFIG_TYPE 				配置类型
 					0-使用本地配置,路径:./
 					1-使用kuberneters的configmap,路径:./kubeconfig

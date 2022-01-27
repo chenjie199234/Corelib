@@ -61,17 +61,17 @@ type pathinfo struct {
 
 func init() {
 	var e error
-	if str := os.Getenv("MonitorSampleRate"); str == "" || str == "<MonitorSampleRate>" {
-		log.Warning(nil, "[monitor] env MonitorSampleRate missing,monitor closed")
+	if str := os.Getenv("MONITOR_SAMPLE_RATE"); str == "" || str == "<MONITOR_SAMPLE_RATE>" {
+		log.Warning(nil, "[monitor] env MONITOR_SAMPLE_RATE missing,monitor closed")
 		return
 	} else if rate, e = strconv.Atoi(str); e != nil {
-		log.Warning(nil, "[monitor] env MonitorSampleRate format error,must be integer,monitor closed")
+		log.Warning(nil, "[monitor] env MONITOR_SAMPLE_RATE format error,must be integer,monitor closed")
 		return
 	} else if rate <= 0 {
-		log.Warning(nil, "[monitor] env MonitorSampleRate <=0,monitor closed")
+		log.Warning(nil, "[monitor] env MONITOR_SAMPLE_RATE <=0,monitor closed")
 		return
 	} else if rate < 5 {
-		log.Warning(nil, "[monitor] env MonitorSampleRate too small,smallest rate 5s will be used")
+		log.Warning(nil, "[monitor] env MONITOR_SAMPLE_RATE too small,smallest rate 5s will be used")
 		rate = 5
 	}
 	refresh(nil)
