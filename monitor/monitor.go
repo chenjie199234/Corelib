@@ -1,6 +1,8 @@
 package monitor
 
 import (
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"runtime"
 	"strconv"
@@ -8,11 +10,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/chenjie199234/Corelib/bufpool"
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
 )
 
-var m Monitor
+var m monitor
 var lastclean int64 //prevent too many objects in monitor
 var rate int
 
@@ -24,7 +27,7 @@ var gslker sync.Mutex
 var cclker sync.Mutex
 var cslker sync.Mutex
 
-type Monitor struct {
+type monitor struct {
 	Sysinfos        []*sysinfo  //sorted by sysinfo.Timestamp
 	GCinfos         []*gcinfo   //sorted by gcinfo.Timestamp
 	WebClientinfos  []*callinfo //sorted by callinfo.StartTimestamp
@@ -76,11 +79,45 @@ func init() {
 	}
 	refresh(nil)
 	go func() {
-		tker := time.NewTicker(time.Second * 5)
+		tker := time.NewTicker(time.Second * time.Duration(rate))
 		for {
 			<-tker.C
 			sysMonitor()
 		}
+	}()
+	go func() {
+		http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+			tmpm := getMonitorInfo()
+			if tmpm == nil {
+				return
+			}
+			buf := bufpool.GetBuffer()
+			for _, sysinfo := range tmpm.Sysinfos {
+
+			}
+			for _, gcinfo := range tmpm.GCinfos {
+
+			}
+			for _, webcinfo := range tmpm.WebClientinfos {
+
+			}
+			for _, websinfo := range tmpm.WebServerinfos {
+
+			}
+			for _, grpccinfo := range tmpm.GrpcClientinfos {
+
+			}
+			for _, grpcsinfo := range tmpm.GrpcServerinfos {
+
+			}
+			for _, crpccinfo := range tmpm.CrpcClientinfos {
+
+			}
+			for _, crpcsinfo := range tmpm.CrpcServerinfos {
+
+			}
+		})
+		http.ListenAndServe(":6060", nil)
 	}()
 }
 func refresh(now *time.Time) {
@@ -466,13 +503,13 @@ func CrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 
-func GetMonitorInfo() *Monitor {
+func getMonitorInfo() *monitor {
 	if rate <= 0 {
 		return nil
 	}
 	now := time.Now()
 	lker.Lock()
-	r := &Monitor{
+	r := &monitor{
 		Sysinfos:        m.Sysinfos,
 		GCinfos:         m.GCinfos,
 		WebClientinfos:  m.WebClientinfos,
