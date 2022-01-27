@@ -1,16 +1,20 @@
 package monitor
 
 import (
+	"os"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	cerror "github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/log"
 )
 
 var m Monitor
 var lastclean int64 //prevent too many objects in monitor
+var rate int
 
 var lker sync.RWMutex
 var wclker sync.Mutex
@@ -31,7 +35,7 @@ type Monitor struct {
 	CrpcServerinfos []*callinfo //sorted by callinfo.StartTimestamp
 }
 type sysinfo struct {
-	Timestamp  int64 //nano second
+	Timestamp  uint64 //nano second
 	Routinenum int
 	Threadnum  int
 	HeapObjnum int
@@ -41,9 +45,8 @@ type gcinfo struct {
 	Timewaste uint64 //nano second
 }
 type callinfo struct {
-	StartTimestamp int64                           //nano second
-	EndTimestamp   int64                           //nano second
-	Callinfos      map[string]map[string]*pathinfo //first key peername,second key path
+	Timestamp uint64                          //nano second
+	Callinfos map[string]map[string]*pathinfo //first key peername,second key path
 }
 type pathinfo struct {
 	TotalCount   uint32
@@ -57,6 +60,20 @@ type pathinfo struct {
 }
 
 func init() {
+	var e error
+	if str := os.Getenv("MonitorSampleRate"); str == "" || str == "<MonitorSampleRate>" {
+		log.Warning(nil, "[monitor] env MonitorSampleRate missing,monitor closed")
+		return
+	} else if rate, e = strconv.Atoi(str); e != nil {
+		log.Warning(nil, "[monitor] env MonitorSampleRate format error,must be integer,monitor closed")
+		return
+	} else if rate <= 0 {
+		log.Warning(nil, "[monitor] env MonitorSampleRate <=0,monitor closed")
+		return
+	} else if rate < 5 {
+		log.Warning(nil, "[monitor] env MonitorSampleRate too small,smallest rate 5s will be used")
+		rate = 5
+	}
 	refresh(nil)
 	go func() {
 		tker := time.NewTicker(time.Second * 5)
@@ -71,37 +88,31 @@ func refresh(now *time.Time) {
 		tmp := time.Now()
 		now = &tmp
 	}
-	m.Sysinfos = make([]*sysinfo, 0, 3)
+	m.Sysinfos = make([]*sysinfo, 0, 120/rate+1)
 	m.GCinfos = make([]*gcinfo, 0, 10)
-	m.WebClientinfos = make([]*callinfo, 0, 24)
+	m.WebClientinfos = make([]*callinfo, 0, 120/rate+1)
 	m.WebClientinfos = append(m.WebClientinfos, &callinfo{
-		StartTimestamp: now.UnixNano(),
-		Callinfos:      make(map[string]map[string]*pathinfo),
+		Callinfos: make(map[string]map[string]*pathinfo),
 	})
-	m.WebServerinfos = make([]*callinfo, 0, 24)
+	m.WebServerinfos = make([]*callinfo, 0, 120/rate+1)
 	m.WebServerinfos = append(m.WebServerinfos, &callinfo{
-		StartTimestamp: now.UnixNano(),
-		Callinfos:      make(map[string]map[string]*pathinfo),
+		Callinfos: make(map[string]map[string]*pathinfo),
 	})
-	m.GrpcClientinfos = make([]*callinfo, 0, 24)
+	m.GrpcClientinfos = make([]*callinfo, 0, 120/rate+1)
 	m.GrpcClientinfos = append(m.GrpcClientinfos, &callinfo{
-		StartTimestamp: now.UnixNano(),
-		Callinfos:      make(map[string]map[string]*pathinfo),
+		Callinfos: make(map[string]map[string]*pathinfo),
 	})
-	m.GrpcServerinfos = make([]*callinfo, 0, 24)
+	m.GrpcServerinfos = make([]*callinfo, 0, 120/rate+1)
 	m.GrpcServerinfos = append(m.GrpcServerinfos, &callinfo{
-		StartTimestamp: now.UnixNano(),
-		Callinfos:      make(map[string]map[string]*pathinfo),
+		Callinfos: make(map[string]map[string]*pathinfo),
 	})
-	m.CrpcClientinfos = make([]*callinfo, 0, 24)
+	m.CrpcClientinfos = make([]*callinfo, 0, 120/rate+1)
 	m.CrpcClientinfos = append(m.CrpcClientinfos, &callinfo{
-		StartTimestamp: now.UnixNano(),
-		Callinfos:      make(map[string]map[string]*pathinfo),
+		Callinfos: make(map[string]map[string]*pathinfo),
 	})
-	m.CrpcServerinfos = make([]*callinfo, 0, 24)
+	m.CrpcServerinfos = make([]*callinfo, 0, 120/rate+1)
 	m.CrpcServerinfos = append(m.CrpcServerinfos, &callinfo{
-		StartTimestamp: now.UnixNano(),
-		Callinfos:      make(map[string]map[string]*pathinfo),
+		Callinfos: make(map[string]map[string]*pathinfo),
 	})
 	lastclean = now.UnixNano()
 }
@@ -118,7 +129,7 @@ func sysMonitor() {
 	}
 	//sysinfo
 	s := &sysinfo{}
-	s.Timestamp = now.UnixNano()
+	s.Timestamp = uint64(now.UnixNano())
 	s.Routinenum = runtime.NumGoroutine()
 	s.Threadnum, _ = runtime.ThreadCreateProfile(nil)
 	meminfo := &runtime.MemStats{}
@@ -140,40 +151,34 @@ func sysMonitor() {
 
 	//callinfo
 	wcinfo := m.WebClientinfos[len(m.WebClientinfos)-1]
-	wcinfo.EndTimestamp = now.UnixNano()
+	wcinfo.Timestamp = uint64(now.UnixNano())
 	m.WebClientinfos = append(m.WebClientinfos, &callinfo{
-		StartTimestamp: now.UnixNano(),
-		Callinfos:      make(map[string]map[string]*pathinfo),
+		Callinfos: make(map[string]map[string]*pathinfo),
 	})
 	wsinfo := m.WebServerinfos[len(m.WebServerinfos)-1]
-	wsinfo.EndTimestamp = now.UnixNano()
+	wsinfo.Timestamp = uint64(now.UnixNano())
 	m.WebServerinfos = append(m.WebServerinfos, &callinfo{
-		StartTimestamp: now.UnixNano(),
-		Callinfos:      make(map[string]map[string]*pathinfo),
+		Callinfos: make(map[string]map[string]*pathinfo),
 	})
 	gcinfo := m.GrpcClientinfos[len(m.GrpcClientinfos)-1]
-	gcinfo.EndTimestamp = now.UnixNano()
+	gcinfo.Timestamp = uint64(now.UnixNano())
 	m.GrpcClientinfos = append(m.GrpcClientinfos, &callinfo{
-		StartTimestamp: now.UnixNano(),
-		Callinfos:      make(map[string]map[string]*pathinfo),
+		Callinfos: make(map[string]map[string]*pathinfo),
 	})
 	gsinfo := m.GrpcServerinfos[len(m.GrpcServerinfos)-1]
-	gsinfo.EndTimestamp = now.UnixNano()
+	gsinfo.Timestamp = uint64(now.UnixNano())
 	m.GrpcServerinfos = append(m.GrpcServerinfos, &callinfo{
-		StartTimestamp: now.UnixNano(),
-		Callinfos:      make(map[string]map[string]*pathinfo),
+		Callinfos: make(map[string]map[string]*pathinfo),
 	})
 	ccinfo := m.CrpcClientinfos[len(m.CrpcClientinfos)-1]
-	ccinfo.EndTimestamp = now.UnixNano()
+	ccinfo.Timestamp = uint64(now.UnixNano())
 	m.CrpcClientinfos = append(m.CrpcClientinfos, &callinfo{
-		StartTimestamp: now.UnixNano(),
-		Callinfos:      make(map[string]map[string]*pathinfo),
+		Callinfos: make(map[string]map[string]*pathinfo),
 	})
 	csinfo := m.CrpcServerinfos[len(m.CrpcServerinfos)-1]
-	csinfo.EndTimestamp = now.UnixNano()
+	csinfo.Timestamp = uint64(now.UnixNano())
 	m.CrpcServerinfos = append(m.CrpcServerinfos, &callinfo{
-		StartTimestamp: now.UnixNano(),
-		Callinfos:      make(map[string]map[string]*pathinfo),
+		Callinfos: make(map[string]map[string]*pathinfo),
 	})
 }
 func timewasteIndex(timewaste uint64) int {
@@ -191,6 +196,9 @@ func timewasteIndex(timewaste uint64) int {
 	}
 }
 func WebClientMonitor(peername, method, path string, e error, timewaste uint64) {
+	if rate <= 0 {
+		return
+	}
 	recordpath := method + ":" + path
 	lker.RLock()
 	defer lker.RUnlock()
@@ -233,6 +241,9 @@ func WebClientMonitor(peername, method, path string, e error, timewaste uint64) 
 	pinfo.lker.Unlock()
 }
 func WebServerMonitor(peername, method, path string, e error, timewaste uint64) {
+	if rate <= 0 {
+		return
+	}
 	recordpath := method + ":" + path
 	lker.RLock()
 	defer lker.RUnlock()
@@ -275,6 +286,9 @@ func WebServerMonitor(peername, method, path string, e error, timewaste uint64) 
 	pinfo.lker.Unlock()
 }
 func GrpcClientMonitor(peername, method, path string, e error, timewaste uint64) {
+	if rate <= 0 {
+		return
+	}
 	recordpath := method + ":" + path
 	lker.RLock()
 	defer lker.RUnlock()
@@ -315,9 +329,11 @@ func GrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 		pinfo.ErrCodeCount[ee.Code]++
 	}
 	pinfo.lker.Unlock()
-
 }
 func GrpcServerMonitor(peername, method, path string, e error, timewaste uint64) {
+	if rate <= 0 {
+		return
+	}
 	recordpath := method + ":" + path
 	lker.RLock()
 	defer lker.RUnlock()
@@ -360,6 +376,9 @@ func GrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 func CrpcClientMonitor(peername, method, path string, e error, timewaste uint64) {
+	if rate <= 0 {
+		return
+	}
 	recordpath := method + ":" + path
 	lker.RLock()
 	defer lker.RUnlock()
@@ -402,6 +421,9 @@ func CrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 func CrpcServerMonitor(peername, method, path string, e error, timewaste uint64) {
+	if rate <= 0 {
+		return
+	}
 	recordpath := method + ":" + path
 	lker.RLock()
 	defer lker.RUnlock()
@@ -445,6 +467,9 @@ func CrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 }
 
 func GetMonitorInfo() *Monitor {
+	if rate <= 0 {
+		return nil
+	}
 	now := time.Now()
 	lker.Lock()
 	r := &Monitor{
@@ -459,12 +484,12 @@ func GetMonitorInfo() *Monitor {
 	}
 	refresh(&now)
 	lker.Unlock()
-	r.WebClientinfos[len(r.WebClientinfos)-1].EndTimestamp = now.UnixNano()
-	r.WebServerinfos[len(r.WebServerinfos)-1].EndTimestamp = now.UnixNano()
-	r.GrpcClientinfos[len(r.GrpcClientinfos)-1].EndTimestamp = now.UnixNano()
-	r.GrpcServerinfos[len(r.GrpcServerinfos)-1].EndTimestamp = now.UnixNano()
-	r.CrpcClientinfos[len(r.CrpcClientinfos)-1].EndTimestamp = now.UnixNano()
-	r.CrpcServerinfos[len(r.CrpcServerinfos)-1].EndTimestamp = now.UnixNano()
+	r.WebClientinfos[len(r.WebClientinfos)-1].Timestamp = uint64(now.UnixNano())
+	r.WebServerinfos[len(r.WebServerinfos)-1].Timestamp = uint64(now.UnixNano())
+	r.GrpcClientinfos[len(r.GrpcClientinfos)-1].Timestamp = uint64(now.UnixNano())
+	r.GrpcServerinfos[len(r.GrpcServerinfos)-1].Timestamp = uint64(now.UnixNano())
+	r.CrpcClientinfos[len(r.CrpcClientinfos)-1].Timestamp = uint64(now.UnixNano())
+	r.CrpcServerinfos[len(r.CrpcServerinfos)-1].Timestamp = uint64(now.UnixNano())
 	for _, cinfo := range r.WebClientinfos {
 		for _, peer := range cinfo.Callinfos {
 			for _, path := range peer {

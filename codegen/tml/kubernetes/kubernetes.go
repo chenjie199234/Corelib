@@ -60,6 +60,8 @@ spec:
               memory: 256Mi
               cpu: 250m
           env:
+            - name: MonitorSampleRate
+              value: <MonitorSampleRate>
             - name: HOSTIP
               valueFrom:
                 fieldRef:
