@@ -34,7 +34,7 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 5
-  minReadySeconds: 2
+  minReadySeconds: 5
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -87,7 +87,7 @@ spec:
           livenessProbe:
             tcpSocket:
               port: 8000
-            initialDelaySeconds: 2
+            initialDelaySeconds: 5
             timeoutSeconds: 1
             periodSeconds: 1
             successThreshold: 1
@@ -95,7 +95,7 @@ spec:
           readinessProbe:
             tcpSocket:
               port: 8000
-            initialDelaySeconds: 2
+            initialDelaySeconds: 5
             timeoutSeconds: 1
             periodSeconds: 1
             successThreshold: 1
