@@ -10,16 +10,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/chenjie199234/Corelib/bufpool"
+	//"github.com/chenjie199234/Corelib/bufpool"
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
 )
 
 var m monitor
-var lastclean int64 //prevent too many objects in monitor
-var rate int
+var refresher *time.Timer
 
-var lker sync.RWMutex
 var wclker sync.Mutex
 var wslker sync.Mutex
 var gclker sync.Mutex
@@ -28,28 +26,19 @@ var cclker sync.Mutex
 var cslker sync.Mutex
 
 type monitor struct {
-	Sysinfos        []*sysinfo  //sorted by sysinfo.Timestamp
-	GCinfos         []*gcinfo   //sorted by gcinfo.Timestamp
-	WebClientinfos  []*callinfo //sorted by callinfo.StartTimestamp
-	WebServerinfos  []*callinfo //sorted by callinfo.StartTimestamp
-	GrpcClientinfos []*callinfo //sorted by callinfo.StartTimestamp
-	GrpcServerinfos []*callinfo //sorted by callinfo.StartTimestamp
-	CrpcClientinfos []*callinfo //sorted by callinfo.StartTimestamp
-	CrpcServerinfos []*callinfo //sorted by callinfo.StartTimestamp
+	Sysinfos        *sysinfo
+	WebClientinfos  map[string]map[string]*pathinfo //first key peername,second key path
+	WebServerinfos  map[string]map[string]*pathinfo //first key peername,second key path
+	GrpcClientinfos map[string]map[string]*pathinfo //first key peername,second key path
+	GrpcServerinfos map[string]map[string]*pathinfo //first key peername,second key path
+	CrpcClientinfos map[string]map[string]*pathinfo //first key peername,second key path
+	CrpcServerinfos map[string]map[string]*pathinfo //first key peername,second key path
 }
 type sysinfo struct {
-	Timestamp  uint64 //nano second
-	Routinenum int
-	Threadnum  int
-	HeapObjnum int
-}
-type gcinfo struct {
-	Timestamp uint64 //nano second
-	Timewaste uint64 //nano second
-}
-type callinfo struct {
-	Timestamp uint64                          //nano second
-	Callinfos map[string]map[string]*pathinfo //first key peername,second key path
+	RoutineNum  int
+	ThreadNum   int
+	HeapobjNum  int
+	GctimeWaste int
 }
 type pathinfo struct {
 	TotalCount   uint32
@@ -63,27 +52,20 @@ type pathinfo struct {
 }
 
 func init() {
-	var e error
-	if str := os.Getenv("MONITOR_SAMPLE_RATE"); str == "" || str == "<MONITOR_SAMPLE_RATE>" {
-		log.Warning(nil, "[monitor] env MONITOR_SAMPLE_RATE missing,monitor closed")
+	if str := os.Getenv("MONITOR"); str == "" || str == "<MONITOR>" {
+		log.Warning(nil, "[monitor] env MONITOR missing,monitor closed")
 		return
-	} else if rate, e = strconv.Atoi(str); e != nil {
-		log.Warning(nil, "[monitor] env MONITOR_SAMPLE_RATE format error,must be integer,monitor closed")
+	} else if n, e := strconv.Atoi(str); e != nil || n != 0 && n != 1 {
+		log.Warning(nil, "[monitor] env MONITOR format error,monitor closed")
 		return
-	} else if rate <= 0 {
-		log.Warning(nil, "[monitor] env MONITOR_SAMPLE_RATE <=0,monitor closed")
+	} else if n == 0 {
+		log.Warning(nil, "[monitor] env MONITOR is 0,monitor closed")
 		return
-	} else if rate < 5 {
-		log.Warning(nil, "[monitor] env MONITOR_SAMPLE_RATE too small,smallest rate 5s will be used")
-		rate = 5
 	}
-	refresh(nil)
+	refresh()
 	go func() {
-		tker := time.NewTicker(time.Second * time.Duration(rate))
-		for {
-			<-tker.C
-			sysMonitor()
-		}
+		<-refresher.C
+		refresh()
 	}()
 	go func() {
 		http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
@@ -91,133 +73,52 @@ func init() {
 			if tmpm == nil {
 				return
 			}
-			buf := bufpool.GetBuffer()
-			for _, sysinfo := range tmpm.Sysinfos {
+			//buf := bufpool.GetBuffer()
+			//for _, sysinfo := range tmpm.Sysinfos {
 
-			}
-			for _, gcinfo := range tmpm.GCinfos {
+			//}
+			//for _, gcinfo := range tmpm.GCinfos {
 
-			}
-			for _, webcinfo := range tmpm.WebClientinfos {
+			//}
+			//for _, webcinfo := range tmpm.WebClientinfos {
 
-			}
-			for _, websinfo := range tmpm.WebServerinfos {
+			//}
+			//for _, websinfo := range tmpm.WebServerinfos {
 
-			}
-			for _, grpccinfo := range tmpm.GrpcClientinfos {
+			//}
+			//for _, grpccinfo := range tmpm.GrpcClientinfos {
 
-			}
-			for _, grpcsinfo := range tmpm.GrpcServerinfos {
+			//}
+			//for _, grpcsinfo := range tmpm.GrpcServerinfos {
 
-			}
-			for _, crpccinfo := range tmpm.CrpcClientinfos {
+			//}
+			//for _, crpccinfo := range tmpm.CrpcClientinfos {
 
-			}
-			for _, crpcsinfo := range tmpm.CrpcServerinfos {
+			//}
+			//for _, crpcsinfo := range tmpm.CrpcServerinfos {
 
-			}
+			//}
 		})
 		http.ListenAndServe(":6060", nil)
 	}()
 }
-func refresh(now *time.Time) {
-	if now == nil {
-		tmp := time.Now()
-		now = &tmp
+func refresh() {
+	m.WebClientinfos = make(map[string]map[string]*pathinfo)
+	m.WebServerinfos = make(map[string]map[string]*pathinfo)
+	m.GrpcClientinfos = make(map[string]map[string]*pathinfo)
+	m.GrpcServerinfos = make(map[string]map[string]*pathinfo)
+	m.CrpcClientinfos = make(map[string]map[string]*pathinfo)
+	m.CrpcServerinfos = make(map[string]map[string]*pathinfo)
+	if refresher == nil {
+		refresher = time.NewTimer(time.Minute*2 + time.Second)
+	} else {
+		refresher.Reset(time.Minute*2 + time.Second)
+		for len(refresher.C) > 0 {
+			<-refresher.C
+		}
 	}
-	m.Sysinfos = make([]*sysinfo, 0, 120/rate+1)
-	m.GCinfos = make([]*gcinfo, 0, 10)
-	m.WebClientinfos = make([]*callinfo, 0, 120/rate+1)
-	m.WebClientinfos = append(m.WebClientinfos, &callinfo{
-		Callinfos: make(map[string]map[string]*pathinfo),
-	})
-	m.WebServerinfos = make([]*callinfo, 0, 120/rate+1)
-	m.WebServerinfos = append(m.WebServerinfos, &callinfo{
-		Callinfos: make(map[string]map[string]*pathinfo),
-	})
-	m.GrpcClientinfos = make([]*callinfo, 0, 120/rate+1)
-	m.GrpcClientinfos = append(m.GrpcClientinfos, &callinfo{
-		Callinfos: make(map[string]map[string]*pathinfo),
-	})
-	m.GrpcServerinfos = make([]*callinfo, 0, 120/rate+1)
-	m.GrpcServerinfos = append(m.GrpcServerinfos, &callinfo{
-		Callinfos: make(map[string]map[string]*pathinfo),
-	})
-	m.CrpcClientinfos = make([]*callinfo, 0, 120/rate+1)
-	m.CrpcClientinfos = append(m.CrpcClientinfos, &callinfo{
-		Callinfos: make(map[string]map[string]*pathinfo),
-	})
-	m.CrpcServerinfos = make([]*callinfo, 0, 120/rate+1)
-	m.CrpcServerinfos = append(m.CrpcServerinfos, &callinfo{
-		Callinfos: make(map[string]map[string]*pathinfo),
-	})
-	lastclean = now.UnixNano()
 }
 
-var lastgcindex uint32
-
-func sysMonitor() {
-	lker.Lock()
-	defer lker.Unlock()
-	now := time.Now()
-	if time.Duration(now.UnixNano()-lastclean) > time.Minute*2 {
-		//more then 2min,clean the old data
-		refresh(&now)
-	}
-	//sysinfo
-	s := &sysinfo{}
-	s.Timestamp = uint64(now.UnixNano())
-	s.Routinenum = runtime.NumGoroutine()
-	s.Threadnum, _ = runtime.ThreadCreateProfile(nil)
-	meminfo := &runtime.MemStats{}
-	runtime.ReadMemStats(meminfo)
-	s.HeapObjnum = int(meminfo.HeapObjects)
-	m.Sysinfos = append(m.Sysinfos, s)
-
-	//gcinfo
-	if meminfo.NumGC > lastgcindex+256 {
-		lastgcindex = meminfo.NumGC - 256
-	}
-	for lastgcindex < meminfo.NumGC {
-		tmp := &gcinfo{}
-		tmp.Timestamp = meminfo.PauseEnd[lastgcindex%256]
-		tmp.Timewaste = meminfo.PauseNs[lastgcindex%256]
-		m.GCinfos = append(m.GCinfos, tmp)
-		lastgcindex++
-	}
-
-	//callinfo
-	wcinfo := m.WebClientinfos[len(m.WebClientinfos)-1]
-	wcinfo.Timestamp = uint64(now.UnixNano())
-	m.WebClientinfos = append(m.WebClientinfos, &callinfo{
-		Callinfos: make(map[string]map[string]*pathinfo),
-	})
-	wsinfo := m.WebServerinfos[len(m.WebServerinfos)-1]
-	wsinfo.Timestamp = uint64(now.UnixNano())
-	m.WebServerinfos = append(m.WebServerinfos, &callinfo{
-		Callinfos: make(map[string]map[string]*pathinfo),
-	})
-	gcinfo := m.GrpcClientinfos[len(m.GrpcClientinfos)-1]
-	gcinfo.Timestamp = uint64(now.UnixNano())
-	m.GrpcClientinfos = append(m.GrpcClientinfos, &callinfo{
-		Callinfos: make(map[string]map[string]*pathinfo),
-	})
-	gsinfo := m.GrpcServerinfos[len(m.GrpcServerinfos)-1]
-	gsinfo.Timestamp = uint64(now.UnixNano())
-	m.GrpcServerinfos = append(m.GrpcServerinfos, &callinfo{
-		Callinfos: make(map[string]map[string]*pathinfo),
-	})
-	ccinfo := m.CrpcClientinfos[len(m.CrpcClientinfos)-1]
-	ccinfo.Timestamp = uint64(now.UnixNano())
-	m.CrpcClientinfos = append(m.CrpcClientinfos, &callinfo{
-		Callinfos: make(map[string]map[string]*pathinfo),
-	})
-	csinfo := m.CrpcServerinfos[len(m.CrpcServerinfos)-1]
-	csinfo.Timestamp = uint64(now.UnixNano())
-	m.CrpcServerinfos = append(m.CrpcServerinfos, &callinfo{
-		Callinfos: make(map[string]map[string]*pathinfo),
-	})
-}
 func timewasteIndex(timewaste uint64) int {
 	switch {
 	case timewaste < uint64(time.Millisecond*10):
@@ -233,19 +134,13 @@ func timewasteIndex(timewaste uint64) int {
 	}
 }
 func WebClientMonitor(peername, method, path string, e error, timewaste uint64) {
-	if rate <= 0 {
-		return
-	}
 	recordpath := method + ":" + path
-	lker.RLock()
-	defer lker.RUnlock()
 	wclker.Lock()
 	defer wclker.Unlock()
-	cinfo := m.WebClientinfos[len(m.WebClientinfos)-1]
-	peer, ok := cinfo.Callinfos[peername]
+	peer, ok := m.WebClientinfos[peername]
 	if !ok {
 		peer = make(map[string]*pathinfo)
-		cinfo.Callinfos[peername] = peer
+		m.WebClientinfos[peername] = peer
 	}
 	pinfo, ok := peer[recordpath]
 	if !ok {
@@ -278,19 +173,13 @@ func WebClientMonitor(peername, method, path string, e error, timewaste uint64) 
 	pinfo.lker.Unlock()
 }
 func WebServerMonitor(peername, method, path string, e error, timewaste uint64) {
-	if rate <= 0 {
-		return
-	}
 	recordpath := method + ":" + path
-	lker.RLock()
-	defer lker.RUnlock()
 	wslker.Lock()
 	defer wslker.Unlock()
-	cinfo := m.WebServerinfos[len(m.WebServerinfos)-1]
-	peer, ok := cinfo.Callinfos[peername]
+	peer, ok := m.WebServerinfos[peername]
 	if !ok {
 		peer = make(map[string]*pathinfo)
-		cinfo.Callinfos[peername] = peer
+		m.WebServerinfos[peername] = peer
 	}
 	pinfo, ok := peer[recordpath]
 	if !ok {
@@ -323,19 +212,13 @@ func WebServerMonitor(peername, method, path string, e error, timewaste uint64) 
 	pinfo.lker.Unlock()
 }
 func GrpcClientMonitor(peername, method, path string, e error, timewaste uint64) {
-	if rate <= 0 {
-		return
-	}
 	recordpath := method + ":" + path
-	lker.RLock()
-	defer lker.RUnlock()
 	gclker.Lock()
 	defer gclker.Unlock()
-	cinfo := m.GrpcClientinfos[len(m.GrpcClientinfos)-1]
-	peer, ok := cinfo.Callinfos[peername]
+	peer, ok := m.GrpcClientinfos[peername]
 	if !ok {
 		peer = make(map[string]*pathinfo)
-		cinfo.Callinfos[peername] = peer
+		m.GrpcClientinfos[peername] = peer
 	}
 	pinfo, ok := peer[recordpath]
 	if !ok {
@@ -368,19 +251,13 @@ func GrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 func GrpcServerMonitor(peername, method, path string, e error, timewaste uint64) {
-	if rate <= 0 {
-		return
-	}
 	recordpath := method + ":" + path
-	lker.RLock()
-	defer lker.RUnlock()
 	gslker.Lock()
 	defer gslker.Unlock()
-	cinfo := m.GrpcServerinfos[len(m.GrpcServerinfos)-1]
-	peer, ok := cinfo.Callinfos[peername]
+	peer, ok := m.GrpcServerinfos[peername]
 	if !ok {
 		peer = make(map[string]*pathinfo)
-		cinfo.Callinfos[peername] = peer
+		m.GrpcServerinfos[peername] = peer
 	}
 	pinfo, ok := peer[recordpath]
 	if !ok {
@@ -413,19 +290,13 @@ func GrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 func CrpcClientMonitor(peername, method, path string, e error, timewaste uint64) {
-	if rate <= 0 {
-		return
-	}
 	recordpath := method + ":" + path
-	lker.RLock()
-	defer lker.RUnlock()
 	cclker.Lock()
 	defer cclker.Unlock()
-	cinfo := m.CrpcClientinfos[len(m.CrpcClientinfos)-1]
-	peer, ok := cinfo.Callinfos[peername]
+	peer, ok := m.CrpcClientinfos[peername]
 	if !ok {
 		peer = make(map[string]*pathinfo)
-		cinfo.Callinfos[peername] = peer
+		m.CrpcClientinfos[peername] = peer
 	}
 	pinfo, ok := peer[recordpath]
 	if !ok {
@@ -458,19 +329,13 @@ func CrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 func CrpcServerMonitor(peername, method, path string, e error, timewaste uint64) {
-	if rate <= 0 {
-		return
-	}
 	recordpath := method + ":" + path
-	lker.RLock()
-	defer lker.RUnlock()
 	cslker.Lock()
 	defer cslker.Unlock()
-	cinfo := m.CrpcServerinfos[len(m.CrpcServerinfos)-1]
-	peer, ok := cinfo.Callinfos[peername]
+	peer, ok := m.CrpcServerinfos[peername]
 	if !ok {
 		peer = make(map[string]*pathinfo)
-		cinfo.Callinfos[peername] = peer
+		m.CrpcServerinfos[peername] = peer
 	}
 	pinfo, ok := peer[recordpath]
 	if !ok {
@@ -503,15 +368,17 @@ func CrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 
+var lastgcindex uint32
+
 func getMonitorInfo() *monitor {
-	if rate <= 0 {
-		return nil
-	}
-	now := time.Now()
-	lker.Lock()
+	wclker.Lock()
+	wslker.Lock()
+	gclker.Lock()
+	gslker.Lock()
+	cclker.Lock()
+	cslker.Lock()
 	r := &monitor{
-		Sysinfos:        m.Sysinfos,
-		GCinfos:         m.GCinfos,
+		Sysinfos:        &sysinfo{},
 		WebClientinfos:  m.WebClientinfos,
 		WebServerinfos:  m.WebServerinfos,
 		GrpcClientinfos: m.GrpcClientinfos,
@@ -519,57 +386,57 @@ func getMonitorInfo() *monitor {
 		CrpcClientinfos: m.CrpcClientinfos,
 		CrpcServerinfos: m.CrpcServerinfos,
 	}
-	refresh(&now)
-	lker.Unlock()
-	r.WebClientinfos[len(r.WebClientinfos)-1].Timestamp = uint64(now.UnixNano())
-	r.WebServerinfos[len(r.WebServerinfos)-1].Timestamp = uint64(now.UnixNano())
-	r.GrpcClientinfos[len(r.GrpcClientinfos)-1].Timestamp = uint64(now.UnixNano())
-	r.GrpcServerinfos[len(r.GrpcServerinfos)-1].Timestamp = uint64(now.UnixNano())
-	r.CrpcClientinfos[len(r.CrpcClientinfos)-1].Timestamp = uint64(now.UnixNano())
-	r.CrpcServerinfos[len(r.CrpcServerinfos)-1].Timestamp = uint64(now.UnixNano())
-	for _, cinfo := range r.WebClientinfos {
-		for _, peer := range cinfo.Callinfos {
-			for _, path := range peer {
-				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
-			}
+	refresh()
+	wclker.Unlock()
+	wslker.Unlock()
+	gclker.Unlock()
+	gslker.Unlock()
+	cclker.Unlock()
+	cslker.Unlock()
+	for _, peer := range r.WebClientinfos {
+		for _, path := range peer {
+			path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
 		}
 	}
-	for _, cinfo := range r.WebServerinfos {
-		for _, peer := range cinfo.Callinfos {
-			for _, path := range peer {
-				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
-			}
+	for _, peer := range r.WebServerinfos {
+		for _, path := range peer {
+			path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
 		}
 	}
-	for _, cinfo := range r.GrpcClientinfos {
-		for _, peer := range cinfo.Callinfos {
-			for _, path := range peer {
-				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
-			}
+	for _, peer := range r.GrpcClientinfos {
+		for _, path := range peer {
+			path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
 		}
 	}
-	for _, cinfo := range r.GrpcServerinfos {
-		for _, peer := range cinfo.Callinfos {
-			for _, path := range peer {
-				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
-			}
+	for _, peer := range r.GrpcServerinfos {
+		for _, path := range peer {
+			path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
 		}
 	}
-	for _, cinfo := range r.CrpcClientinfos {
-		for _, peer := range cinfo.Callinfos {
-			for _, path := range peer {
-				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
-			}
+	for _, peer := range r.CrpcClientinfos {
+		for _, path := range peer {
+			path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
 		}
 	}
-	for _, cinfo := range r.CrpcServerinfos {
-		for _, peer := range cinfo.Callinfos {
-			for _, path := range peer {
-				path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
-			}
+	for _, peer := range r.CrpcServerinfos {
+		for _, path := range peer {
+			path.T50, path.T90, path.T99 = getT(&path.timewaste, path.maxTimewaste, path.TotalCount)
 		}
+	}
+	r.Sysinfos.RoutineNum = runtime.NumGoroutine()
+	r.Sysinfos.ThreadNum, _ = runtime.ThreadCreateProfile(nil)
+	meminfo := &runtime.MemStats{}
+	runtime.ReadMemStats(meminfo)
+	r.Sysinfos.HeapobjNum = int(meminfo.HeapObjects)
+	if meminfo.NumGC > lastgcindex+256 {
+		lastgcindex = meminfo.NumGC - 256
+	}
+	for lastgcindex < meminfo.NumGC {
+		r.Sysinfos.GctimeWaste += int(meminfo.PauseNs[lastgcindex%256])
+		lastgcindex++
 	}
 	return r
+
 }
 func getT(data *[114]uint32, maxtimewaste uint64, totalcount uint32) (uint64, uint64, uint64) {
 	if totalcount == 0 {

@@ -28,7 +28,7 @@ func Test_Monitor(t *testing.T) {
 	CrpcClientMonitor("test.abc", "POST", "/api", errors.New("test error"), uint64(time.Millisecond)*100)
 	CrpcServerMonitor("test.abc", "POST", "/api", nil, uint64(time.Microsecond)*500)
 	CrpcServerMonitor("test.abc", "POST", "/api", errors.New("test error"), uint64(time.Millisecond)*1000)
-	testm := GetMonitorInfo()
+	testm := getMonitorInfo()
 	d, e := json.Marshal(testm)
 	if e != nil {
 		t.Fatal(e)
