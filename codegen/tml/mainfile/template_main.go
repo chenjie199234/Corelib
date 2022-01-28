@@ -21,6 +21,7 @@ import (
 	"{{.}}/service"
 
 	"github.com/chenjie199234/Corelib/log"
+	_ "github.com/chenjie199234/Corelib/monitor"
 	publicmids "github.com/chenjie199234/Corelib/mids"
 )
 

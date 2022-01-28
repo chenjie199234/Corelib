@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	//"github.com/chenjie199234/Corelib/bufpool"
+	"github.com/chenjie199234/Corelib/bufpool"
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
 )
@@ -35,20 +35,21 @@ type monitor struct {
 	CrpcServerinfos map[string]map[string]*pathinfo //first key peername,second key path
 }
 type sysinfo struct {
-	RoutineNum  int
-	ThreadNum   int
-	HeapobjNum  int
-	GctimeWaste int
+	RoutineNum int
+	ThreadNum  int
+	HeapobjNum int
+	GcTime     int
 }
 type pathinfo struct {
-	TotalCount   uint32
-	ErrCodeCount map[int32]uint32
-	T50          uint64      //nano second
-	T90          uint64      //nano second
-	T99          uint64      //nano second
-	maxTimewaste uint64      //nano second
-	timewaste    [114]uint32 //value:count,index:0-9(0ms-10ms) each 1ms,10-27(10ms-100ms) each 5ms,index:28-72(100ms-1s) each 20ms,index:73-112(1s-5s) each 100ms,index:113 more then 5s
-	lker         *sync.Mutex
+	TotalCount     uint32
+	ErrCodeCount   map[int32]uint32
+	T50            uint64      //nano second
+	T90            uint64      //nano second
+	T99            uint64      //nano second
+	TotaltimeWaste uint64      //nano second
+	maxTimewaste   uint64      //nano second
+	timewaste      [114]uint32 //value:count,index:0-9(0ms-10ms) each 1ms,10-27(10ms-100ms) each 5ms,index:28-72(100ms-1s) each 20ms,index:73-112(1s-5s) each 100ms,index:113 more then 5s
+	lker           *sync.Mutex
 }
 
 func init() {
@@ -70,34 +71,523 @@ func init() {
 	go func() {
 		http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
 			tmpm := getMonitorInfo()
-			if tmpm == nil {
-				return
+			buf := bufpool.GetBuffer()
+			buf.AppendString("# HELP heap_object_num\n")
+			buf.AppendString("# TYPE heap_object_num gauge\n")
+			buf.AppendString("heap_object_num ")
+			buf.AppendInt(tmpm.Sysinfos.HeapobjNum)
+			buf.AppendByte('\n')
+
+			buf.AppendString("# HELP gc_time\n")
+			buf.AppendString("# TYPE gc_time gauge\n")
+			buf.AppendString("gc_time ")
+			buf.AppendInt(tmpm.Sysinfos.GcTime)
+			buf.AppendByte('\n')
+
+			buf.AppendString("# HELP routine_num\n")
+			buf.AppendString("# TYPE routine_num gauge\n")
+			buf.AppendString("routine_num ")
+			buf.AppendInt(tmpm.Sysinfos.RoutineNum)
+			buf.AppendByte('\n')
+
+			buf.AppendString("# HELP thread_num\n")
+			buf.AppendString("# TYPE thread_num gauge\n")
+			buf.AppendString("thread_num ")
+			buf.AppendInt(tmpm.Sysinfos.ThreadNum)
+			buf.AppendByte('\n')
+
+			if len(tmpm.WebClientinfos) > 0 {
+				buf.AppendString("# HELP web_client_call_time\n")
+				buf.AppendString("# TYPE web_client_call_time summary\n")
+				for peername, peer := range tmpm.WebClientinfos {
+					for pathname, path := range peer {
+						//50 percent
+						buf.AppendString("web_client_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.50\"} ")
+						buf.AppendFloat64(float64(path.T50) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//90 percent
+						buf.AppendString("web_client_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.90\"} ")
+						buf.AppendFloat64(float64(path.T90) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//99 percent
+						buf.AppendString("web_client_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.99\"} ")
+						buf.AppendFloat64(float64(path.T99) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//sum
+						buf.AppendString("web_client_call_time_sum{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendFloat64(float64(path.TotaltimeWaste) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//count
+						buf.AppendString("web_client_call_time_count{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount)
+						buf.AppendByte('\n')
+					}
+				}
+				buf.AppendString("# HELP web_client_call_err\n")
+				buf.AppendString("# TYPE web_client_call_err summary\n")
+				for peername, peer := range tmpm.WebClientinfos {
+					for pathname, path := range peer {
+						for errcode, errcount := range path.ErrCodeCount {
+							buf.AppendString("web_client_call_err{peer=\"")
+							buf.AppendString(peername)
+							buf.AppendString("\",path=\"")
+							buf.AppendString(pathname)
+							buf.AppendString("\",quantile=\"")
+							buf.AppendInt32(errcode)
+							buf.AppendString("\"} ")
+							buf.AppendUint32(errcount)
+							buf.AppendByte('\n')
+						}
+						//sum
+						buf.AppendString("web_client_call_err_sum{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount - path.ErrCodeCount[0])
+						buf.AppendByte('\n')
+						//count
+						buf.AppendString("web_client_call_err_count{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount)
+						buf.AppendByte('\n')
+					}
+				}
 			}
-			//buf := bufpool.GetBuffer()
-			//for _, sysinfo := range tmpm.Sysinfos {
 
-			//}
-			//for _, gcinfo := range tmpm.GCinfos {
+			if len(tmpm.WebServerinfos) > 0 {
+				buf.AppendString("# HELP web_server_call_time\n")
+				buf.AppendString("# HELP web_server_call_time summary\n")
+				for peername, peer := range tmpm.WebServerinfos {
+					for pathname, path := range peer {
+						//50 percent
+						buf.AppendString("web_server_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.50\"} ")
+						buf.AppendFloat64(float64(path.T50) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//90 percent
+						buf.AppendString("web_server_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.90\"} ")
+						buf.AppendFloat64(float64(path.T90) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//99 percent
+						buf.AppendString("web_server_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.99\"} ")
+						buf.AppendFloat64(float64(path.T99) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//sum
+						buf.AppendString("web_server_call_time_sum{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendFloat64(float64(path.TotaltimeWaste) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//count
+						buf.AppendString("web_server_call_time_count{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount)
+						buf.AppendByte('\n')
+					}
+				}
+				buf.AppendString("# HELP web_server_call_err\n")
+				buf.AppendString("# HELP web_server_call_err summary\n")
+				for peername, peer := range tmpm.WebServerinfos {
+					for pathname, path := range peer {
+						for errcode, errcount := range path.ErrCodeCount {
+							buf.AppendString("web_server_call_err{peer=\"")
+							buf.AppendString(peername)
+							buf.AppendString("\",path=\"")
+							buf.AppendString(pathname)
+							buf.AppendString("\",quantile=\"")
+							buf.AppendInt32(errcode)
+							buf.AppendString("\"} ")
+							buf.AppendUint32(errcount)
+							buf.AppendByte('\n')
+						}
+						//sum
+						buf.AppendString("web_server_call_err_sum{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount - path.ErrCodeCount[0])
+						buf.AppendByte('\n')
+						//count
+						buf.AppendString("web_server_call_err_count{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount)
+						buf.AppendByte('\n')
+					}
+				}
+			}
 
-			//}
-			//for _, webcinfo := range tmpm.WebClientinfos {
+			if len(tmpm.GrpcClientinfos) > 0 {
+				buf.AppendString("# HELP grpc_client_call_time\n")
+				buf.AppendString("# HELP grpc_client_call_time summary\n")
+				for peername, peer := range tmpm.GrpcClientinfos {
+					for pathname, path := range peer {
+						//50 percent
+						buf.AppendString("grpc_client_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.50\"} ")
+						buf.AppendFloat64(float64(path.T50) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//90 percent
+						buf.AppendString("grpc_client_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.90\"} ")
+						buf.AppendFloat64(float64(path.T90) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//99 percent
+						buf.AppendString("grpc_client_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.99\"} ")
+						buf.AppendFloat64(float64(path.T99) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//sum
+						buf.AppendString("grpc_client_call_time_sum{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendFloat64(float64(path.TotaltimeWaste) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//count
+						buf.AppendString("grpc_client_call_time_count{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount)
+						buf.AppendByte('\n')
+					}
+				}
+				buf.AppendString("# HELP grpc_client_call_err\n")
+				buf.AppendString("# HELP grpc_client_call_err summary\n")
+				for peername, peer := range tmpm.GrpcClientinfos {
+					for pathname, path := range peer {
+						for errcode, errcount := range path.ErrCodeCount {
+							buf.AppendString("grpc_client_call_err{peer=\"")
+							buf.AppendString(peername)
+							buf.AppendString("\",path=\"")
+							buf.AppendString(pathname)
+							buf.AppendString("\",quantile=\"")
+							buf.AppendInt32(errcode)
+							buf.AppendString("\"} ")
+							buf.AppendUint32(errcount)
+							buf.AppendByte('\n')
+						}
+						//sum
+						buf.AppendString("grpc_client_call_err_sum{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount - path.ErrCodeCount[0])
+						buf.AppendByte('\n')
+						//count
+						buf.AppendString("grpc_client_call_err_count{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount)
+						buf.AppendByte('\n')
+					}
+				}
+			}
 
-			//}
-			//for _, websinfo := range tmpm.WebServerinfos {
+			if len(tmpm.GrpcServerinfos) > 0 {
+				buf.AppendString("# HELP grpc_server_call_time\n")
+				buf.AppendString("# HELP grpc_server_call_time summary\n")
+				for peername, peer := range tmpm.GrpcServerinfos {
+					for pathname, path := range peer {
+						//50 percent
+						buf.AppendString("grpc_server_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.50\"} ")
+						buf.AppendFloat64(float64(path.T50) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//90 percent
+						buf.AppendString("grpc_server_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.90\"} ")
+						buf.AppendFloat64(float64(path.T90) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//99 percent
+						buf.AppendString("grpc_server_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.99\"} ")
+						buf.AppendFloat64(float64(path.T99) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//sum
+						buf.AppendString("grpc_server_call_time_sum{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendFloat64(float64(path.TotaltimeWaste) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//count
+						buf.AppendString("grpc_server_call_time_count{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount)
+						buf.AppendByte('\n')
+					}
+				}
+				buf.AppendString("# HELP grpc_server_call_err\n")
+				buf.AppendString("# HELP grpc_server_call_err summary\n")
+				for peername, peer := range tmpm.GrpcServerinfos {
+					for pathname, path := range peer {
+						for errcode, errcount := range path.ErrCodeCount {
+							buf.AppendString("grpc_server_call_err{peer=\"")
+							buf.AppendString(peername)
+							buf.AppendString("\",path=\"")
+							buf.AppendString(pathname)
+							buf.AppendString("\",quantile=\"")
+							buf.AppendInt32(errcode)
+							buf.AppendString("\"} ")
+							buf.AppendUint32(errcount)
+							buf.AppendByte('\n')
+						}
+						//sum
+						buf.AppendString("grpc_server_call_err_sum{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount - path.ErrCodeCount[0])
+						buf.AppendByte('\n')
+						//count
+						buf.AppendString("grpc_server_call_err_count{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount)
+						buf.AppendByte('\n')
+					}
+				}
+			}
 
-			//}
-			//for _, grpccinfo := range tmpm.GrpcClientinfos {
+			if len(tmpm.CrpcClientinfos) > 0 {
+				buf.AppendString("# HELP crpc_client_time\n")
+				buf.AppendString("# HELP crpc_client_time summary\n")
+				for peername, peer := range tmpm.CrpcClientinfos {
+					for pathname, path := range peer {
+						//50 percent
+						buf.AppendString("crpc_client_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.50\"} ")
+						buf.AppendFloat64(float64(path.T50) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//90 percent
+						buf.AppendString("crpc_client_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.90\"} ")
+						buf.AppendFloat64(float64(path.T90) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//99 percent
+						buf.AppendString("crpc_client_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.99\"} ")
+						buf.AppendFloat64(float64(path.T99) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//sum
+						buf.AppendString("crpc_client_call_time_sum{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendFloat64(float64(path.TotaltimeWaste) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//count
+						buf.AppendString("crpc_client_call_time_count{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount)
+						buf.AppendByte('\n')
+					}
+				}
+				buf.AppendString("# HELP crpc_client_err\n")
+				buf.AppendString("# HELP crpc_client_err summary\n")
+				for peername, peer := range tmpm.CrpcClientinfos {
+					for pathname, path := range peer {
+						for errcode, errcount := range path.ErrCodeCount {
+							buf.AppendString("crpc_client_call_err{peer=\"")
+							buf.AppendString(peername)
+							buf.AppendString("\",path=\"")
+							buf.AppendString(pathname)
+							buf.AppendString("\",quantile=\"")
+							buf.AppendInt32(errcode)
+							buf.AppendString("\"} ")
+							buf.AppendUint32(errcount)
+							buf.AppendByte('\n')
+						}
+						//sum
+						buf.AppendString("crpc_client_call_err_sum{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount - path.ErrCodeCount[0])
+						buf.AppendByte('\n')
+						//count
+						buf.AppendString("crpc_client_call_err_count{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount)
+						buf.AppendByte('\n')
+					}
+				}
+			}
 
-			//}
-			//for _, grpcsinfo := range tmpm.GrpcServerinfos {
-
-			//}
-			//for _, crpccinfo := range tmpm.CrpcClientinfos {
-
-			//}
-			//for _, crpcsinfo := range tmpm.CrpcServerinfos {
-
-			//}
+			if len(tmpm.CrpcServerinfos) > 0 {
+				buf.AppendString("# HELP crpc_server_time\n")
+				buf.AppendString("# HELP crpc_server_time summary\n")
+				for peername, peer := range tmpm.CrpcServerinfos {
+					for pathname, path := range peer {
+						//50 percent
+						buf.AppendString("crpc_server_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.50\"} ")
+						buf.AppendFloat64(float64(path.T50) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//90 percent
+						buf.AppendString("crpc_server_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.90\"} ")
+						buf.AppendFloat64(float64(path.T90) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//99 percent
+						buf.AppendString("crpc_server_call_time{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\",quantile=\"0.99\"} ")
+						buf.AppendFloat64(float64(path.T99) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//sum
+						buf.AppendString("crpc_server_call_time_sum{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendFloat64(float64(path.TotaltimeWaste) / 1000 / 1000)
+						buf.AppendByte('\n')
+						//count
+						buf.AppendString("crpc_server_call_time_count{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount)
+						buf.AppendByte('\n')
+					}
+				}
+				buf.AppendString("# HELP crpc_server_err\n")
+				buf.AppendString("# HELP crpc_server_err summary\n")
+				for peername, peer := range tmpm.CrpcServerinfos {
+					for pathname, path := range peer {
+						for errcode, errcount := range path.ErrCodeCount {
+							buf.AppendString("crpc_server_call_err{peer=\"")
+							buf.AppendString(peername)
+							buf.AppendString("\",path=\"")
+							buf.AppendString(pathname)
+							buf.AppendString("\",quantile=\"")
+							buf.AppendInt32(errcode)
+							buf.AppendString("\"} ")
+							buf.AppendUint32(errcount)
+							buf.AppendByte('\n')
+						}
+						//sum
+						buf.AppendString("crpc_server_call_err_sum{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount - path.ErrCodeCount[0])
+						buf.AppendByte('\n')
+						//count
+						buf.AppendString("crpc_server_call_err_count{peer=\"")
+						buf.AppendString(peername)
+						buf.AppendString("\",path=\"")
+						buf.AppendString(pathname)
+						buf.AppendString("\"} ")
+						buf.AppendUint32(path.TotalCount)
+						buf.AppendByte('\n')
+					}
+				}
+			}
+			w.Write(buf.Bytes())
 		})
 		http.ListenAndServe(":6060", nil)
 	}()
@@ -160,6 +650,7 @@ func WebClientMonitor(peername, method, path string, e error, timewaste uint64) 
 			break
 		}
 	}
+	atomic.AddUint64(&pinfo.TotaltimeWaste, timewaste)
 	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
 	atomic.AddUint32(&pinfo.TotalCount, 1)
 	//error
@@ -199,6 +690,7 @@ func WebServerMonitor(peername, method, path string, e error, timewaste uint64) 
 			break
 		}
 	}
+	atomic.AddUint64(&pinfo.TotaltimeWaste, timewaste)
 	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
 	atomic.AddUint32(&pinfo.TotalCount, 1)
 	//error
@@ -238,6 +730,7 @@ func GrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 			break
 		}
 	}
+	atomic.AddUint64(&pinfo.TotaltimeWaste, timewaste)
 	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
 	atomic.AddUint32(&pinfo.TotalCount, 1)
 	//error
@@ -277,6 +770,7 @@ func GrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 			break
 		}
 	}
+	atomic.AddUint64(&pinfo.TotaltimeWaste, timewaste)
 	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
 	atomic.AddUint32(&pinfo.TotalCount, 1)
 	//error
@@ -316,6 +810,7 @@ func CrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 			break
 		}
 	}
+	atomic.AddUint64(&pinfo.TotaltimeWaste, timewaste)
 	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
 	atomic.AddUint32(&pinfo.TotalCount, 1)
 	//error
@@ -355,6 +850,7 @@ func CrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 			break
 		}
 	}
+	atomic.AddUint64(&pinfo.TotaltimeWaste, timewaste)
 	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
 	atomic.AddUint32(&pinfo.TotalCount, 1)
 	//error
@@ -432,7 +928,7 @@ func getMonitorInfo() *monitor {
 		lastgcindex = meminfo.NumGC - 256
 	}
 	for lastgcindex < meminfo.NumGC {
-		r.Sysinfos.GctimeWaste += int(meminfo.PauseNs[lastgcindex%256])
+		r.Sysinfos.GcTime += int(meminfo.PauseNs[lastgcindex%256])
 		lastgcindex++
 	}
 	return r
