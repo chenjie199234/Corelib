@@ -81,7 +81,7 @@ func init() {
 			buf.AppendString("# HELP gc_time\n")
 			buf.AppendString("# TYPE gc_time gauge\n")
 			buf.AppendString("gc_time ")
-			buf.AppendInt(tmpm.Sysinfos.GcTime)
+			buf.AppendFloat64(float64(tmpm.Sysinfos.GcTime) / 1000 / 1000)
 			buf.AppendByte('\n')
 
 			buf.AppendString("# HELP routine_num\n")
