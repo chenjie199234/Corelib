@@ -452,13 +452,29 @@ func getT(data *[114]uint32, maxtimewaste uint64, totalcount uint32) (uint64, ui
 		var timepiece uint64
 		switch {
 		case index < 10:
-			timepiece = uint64(time.Millisecond)
+			if maxtimewaste-prefixtime >= uint64(time.Millisecond) {
+				timepiece = uint64(time.Millisecond)
+			} else {
+				timepiece = maxtimewaste - prefixtime
+			}
 		case index < 28:
-			timepiece = uint64(time.Millisecond) * 5
+			if maxtimewaste-prefixtime >= uint64(time.Millisecond)*5 {
+				timepiece = uint64(time.Millisecond) * 5
+			} else {
+				timepiece = maxtimewaste - prefixtime
+			}
 		case index < 73:
-			timepiece = uint64(time.Millisecond) * 20
+			if maxtimewaste-prefixtime >= uint64(time.Millisecond)*20 {
+				timepiece = uint64(time.Millisecond) * 20
+			} else {
+				timepiece = maxtimewaste - prefixtime
+			}
 		case index < 113:
-			timepiece = uint64(time.Millisecond) * 100
+			if maxtimewaste-prefixtime >= uint64(time.Millisecond)*100 {
+				timepiece = uint64(time.Millisecond) * 100
+			} else {
+				timepiece = maxtimewaste - prefixtime
+			}
 		default:
 			timepiece = maxtimewaste - uint64(time.Second)*5
 		}
