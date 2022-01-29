@@ -624,6 +624,9 @@ func timewasteIndex(timewaste uint64) int {
 	}
 }
 func WebClientMonitor(peername, method, path string, e error, timewaste uint64) {
+	if refresher == nil {
+		return
+	}
 	recordpath := method + ":" + path
 	wclker.Lock()
 	defer wclker.Unlock()
@@ -664,6 +667,9 @@ func WebClientMonitor(peername, method, path string, e error, timewaste uint64) 
 	pinfo.lker.Unlock()
 }
 func WebServerMonitor(peername, method, path string, e error, timewaste uint64) {
+	if refresher == nil {
+		return
+	}
 	recordpath := method + ":" + path
 	wslker.Lock()
 	defer wslker.Unlock()
@@ -704,6 +710,9 @@ func WebServerMonitor(peername, method, path string, e error, timewaste uint64) 
 	pinfo.lker.Unlock()
 }
 func GrpcClientMonitor(peername, method, path string, e error, timewaste uint64) {
+	if refresher == nil {
+		return
+	}
 	recordpath := method + ":" + path
 	gclker.Lock()
 	defer gclker.Unlock()
@@ -744,6 +753,9 @@ func GrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 func GrpcServerMonitor(peername, method, path string, e error, timewaste uint64) {
+	if refresher == nil {
+		return
+	}
 	recordpath := method + ":" + path
 	gslker.Lock()
 	defer gslker.Unlock()
@@ -784,6 +796,9 @@ func GrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 func CrpcClientMonitor(peername, method, path string, e error, timewaste uint64) {
+	if refresher == nil {
+		return
+	}
 	recordpath := method + ":" + path
 	cclker.Lock()
 	defer cclker.Unlock()
@@ -824,6 +839,9 @@ func CrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 func CrpcServerMonitor(peername, method, path string, e error, timewaste uint64) {
+	if refresher == nil {
+		return
+	}
 	recordpath := method + ":" + path
 	cslker.Lock()
 	defer cslker.Unlock()
