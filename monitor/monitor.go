@@ -66,7 +66,19 @@ func init() {
 	refresh()
 	go func() {
 		<-refresher.C
+		wclker.Lock()
+		wslker.Lock()
+		gclker.Lock()
+		gslker.Lock()
+		cclker.Lock()
+		cslker.Lock()
 		refresh()
+		wclker.Unlock()
+		wslker.Unlock()
+		gclker.Unlock()
+		gslker.Unlock()
+		cclker.Unlock()
+		cslker.Unlock()
 	}()
 	go func() {
 		http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
