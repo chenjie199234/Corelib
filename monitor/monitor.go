@@ -600,6 +600,7 @@ func init() {
 				}
 			}
 			w.Write(buf.Bytes())
+			bufpool.PutBuffer(buf)
 		})
 		http.ListenAndServe(":6060", nil)
 	}()
