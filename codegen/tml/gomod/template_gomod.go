@@ -11,8 +11,8 @@ const text = `module {{.}}
 go 1.17
 
 require (
-	github.com/chenjie199234/Config v0.0.34
-	github.com/chenjie199234/Corelib v0.0.48
+	github.com/chenjie199234/Config v0.0.35
+	github.com/chenjie199234/Corelib v0.0.49
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/segmentio/kafka-go v0.4.27

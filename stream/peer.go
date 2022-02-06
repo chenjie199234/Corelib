@@ -138,7 +138,7 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, beforeSend func
 		return ErrMsgLarge
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = p
 	}
 	if e := p.getDispatcher(ctx); e != nil {
 		return e

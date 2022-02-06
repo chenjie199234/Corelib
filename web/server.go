@@ -214,11 +214,13 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotImplemented)
 		w.Write(common.Str2byte(cerror.ErrNoapi.Error()))
+		log.Error(nil, "[web.server] client ip:", getclientip(r), "call path:", r.URL.Path, "method:", r.Method, "error: unknown path")
 	})
 	instance.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotImplemented)
 		w.Write(common.Str2byte(cerror.ErrNoapi.Error()))
+		log.Error(nil, "[web.server] client ip:", getclientip(r), "call path:", r.URL.Path, "method:", r.Method, "error: unknown method")
 	})
 	instance.router.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//for OPTIONS preflight
@@ -478,21 +480,21 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 		sourcepath := "unknown"
 		selfdeep := 0
 		if tracedata := r.Header.Values("Core_tracedata"); len(tracedata) == 0 || tracedata[0] == "" {
-			ctx = trace.InitTrace(r.Context(), "", s.selfappname, host.Hostip, r.Method, r.URL.Path, 0)
+			ctx = trace.InitTrace(r.Context(), "", s.selfappname, host.Hostip, method, path, 0)
 		} else if len(tracedata) != 5 || tracedata[4] == "" {
-			log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: tracedata:", tracedata, "format error")
+			log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: tracedata:", tracedata, "format error")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write(common.Str2byte(cerror.ErrReq.Error()))
 			return
 		} else if clientdeep, e := strconv.Atoi(tracedata[4]); e != nil {
-			log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", r.URL.Path, "method:", r.Method, "error: tracedata:", tracedata, "format error")
+			log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: tracedata:", tracedata, "format error")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write(common.Str2byte(cerror.ErrReq.Error()))
 			return
 		} else {
-			ctx = trace.InitTrace(r.Context(), tracedata[0], s.selfappname, host.Hostip, r.Method, r.URL.Path, clientdeep)
+			ctx = trace.InitTrace(r.Context(), tracedata[0], s.selfappname, host.Hostip, method, path, clientdeep)
 			sourceapp = tracedata[1]
 			sourcemethod = tracedata[2]
 			sourcepath = tracedata[3]
@@ -542,6 +544,9 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusGatewayTimeout)
 				w.Write(common.Str2byte(cerror.ErrDeadlineExceeded.Error()))
+				end := time.Now()
+				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip, method, path, &start, &end, cerror.ErrDeadlineExceeded)
+				monitor.WebServerMonitor(sourceapp, method, path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
 				return
 			}
 			var cancel context.CancelFunc

@@ -256,6 +256,9 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		}
 		if ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 			//at least 5ms for net lag and server logic
+			end := time.Now()
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, server.addr, "CRPC", path, &start, &end, cerror.ErrDeadlineExceeded)
+			monitor.CrpcClientMonitor(c.serverappname, "CRPC", path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, cerror.ErrDeadlineExceeded
 		}
 		msg.Callid = atomic.AddUint64(&server.callid, 1)
@@ -265,6 +268,9 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 			if e == errPickAgain {
 				continue
 			}
+			end := time.Now()
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, server.addr, "CRPC", path, &start, &end, e)
+			monitor.CrpcClientMonitor(c.serverappname, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 		select {

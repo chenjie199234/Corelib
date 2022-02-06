@@ -100,7 +100,7 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 		for cert, key := range c.CertKeys {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
-				return nil, errors.New("[crpc.server] load cert:" + cert + " key:" + key + " error:" + e.Error())
+				return nil, errors.New("[cgrpc.server] load cert:" + cert + " key:" + key + " error:" + e.Error())
 			}
 			certificates = append(certificates, temp)
 		}
@@ -245,6 +245,9 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		if dl, ok := ctx.Deadline(); ok && dl.UnixNano() < start.UnixNano()+int64(time.Millisecond) {
 			resp = nil
 			e = cerror.ErrDeadlineExceeded
+			end := time.Now()
+			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip, "GRPC", path, &start, &end, e)
+			monitor.GrpcServerMonitor(sourceapp, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return
 		}
 		workctx := s.getcontext(ctx, path, sourceapp, sourceip, mdata, totalhandlers, decode)

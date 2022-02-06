@@ -116,6 +116,9 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername 
 }
 
 func forbiddenHeader(header http.Header) bool {
+	if header == nil {
+		return false
+	}
 	if _, ok := header["Core_target"]; ok {
 		return true
 	}
@@ -133,25 +136,16 @@ func forbiddenHeader(header http.Header) bool {
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
-	if forbiddenHeader(header) {
-		return nil, errors.New("[web.client] forbidden header")
-	}
 	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil)
 }
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
-	if forbiddenHeader(header) {
-		return nil, errors.New("[web.client] forbidden header")
-	}
 	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
 }
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
-	if forbiddenHeader(header) {
-		return nil, errors.New("[web.client] forbidden header")
-	}
 	if len(body) != 0 {
 		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
@@ -160,9 +154,6 @@ func (c *WebClient) Post(ctx context.Context, path, query string, header http.He
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
-	if forbiddenHeader(header) {
-		return nil, errors.New("[web.client] forbidden header")
-	}
 	if len(body) != 0 {
 		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
@@ -171,15 +162,15 @@ func (c *WebClient) Put(ctx context.Context, path, query string, header http.Hea
 
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
-	if forbiddenHeader(header) {
-		return nil, errors.New("[web.client] forbidden header")
-	}
 	if len(body) != 0 {
 		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
 	return c.call(http.MethodPatch, ctx, path, query, header, metadata, nil)
 }
 func (c *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body *bytes.Buffer) ([]byte, error) {
+	if forbiddenHeader(header) {
+		return nil, cerror.MakeError(-1, 100, "forbidden header")
+	}
 	parsedurl, e := url.Parse(path)
 	if e != nil {
 		return nil, cerror.ConvertStdError(e)
@@ -216,6 +207,9 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	for {
 		start := time.Now()
 		if ok && dl.UnixNano() < start.UnixNano()+int64(5*time.Millisecond) {
+			end := time.Now()
+			trace.Trace(ctx, trace.CLIENT, c.selfappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, cerror.ErrDeadlineExceeded)
+			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
 			//at least 5ms for net lag and server logic
 			return nil, cerror.ErrDeadlineExceeded
 		}
@@ -227,7 +221,11 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			req, e = http.NewRequestWithContext(ctx, method, path+query, body)
 		}
 		if e != nil {
-			return nil, cerror.ConvertStdError(e)
+			e = cerror.ConvertStdError(e)
+			end := time.Now()
+			trace.Trace(ctx, trace.CLIENT, c.selfappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
+			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, e, uint64(end.UnixNano()-start.UnixNano()))
+			return nil, e
 		}
 		req.Header = header
 		//start call
@@ -236,7 +234,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		if e != nil {
 			e = cerror.ConvertStdError(e)
 			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
-			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, e, uint64(end.UnixMilli()-start.UnixNano()))
+			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 		respbody, e := io.ReadAll(resp.Body)
@@ -244,12 +242,12 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		if e != nil {
 			e = cerror.ConvertStdError(e)
 			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
-			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, e, uint64(end.UnixMilli()-start.UnixNano()))
+			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 		if resp.StatusCode == int(cerror.ErrClosing.Httpcode) && cerror.Equal(cerror.ConvertErrorstr(common.Byte2str(respbody)), cerror.ErrClosing) {
 			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, cerror.ErrClosing)
-			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, cerror.ErrClosing, uint64(end.UnixMilli()-start.UnixNano()))
+			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, cerror.ErrClosing, uint64(end.UnixNano()-start.UnixNano()))
 			continue
 		} else if resp.StatusCode != http.StatusOK {
 			if len(respbody) == 0 {
@@ -260,11 +258,11 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				e = tempe
 			}
 			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
-			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, e, uint64(end.UnixMilli()-start.UnixNano()))
+			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 		trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, nil)
-		monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, nil, uint64(end.UnixMilli()-start.UnixNano()))
+		monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, nil, uint64(end.UnixNano()-start.UnixNano()))
 		return respbody, nil
 	}
 }

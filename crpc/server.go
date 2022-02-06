@@ -251,6 +251,9 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 				msg.Error = cerror.ErrDeadlineExceeded
 				msg.Metadata = nil
 				msg.Tracedata = nil
+				end := time.Now()
+				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.instance.GetSelfAppName(), host.Hostip, "CRPC", path, &start, &end, msg.Error)
+				monitor.CrpcServerMonitor(sourceapp, "CRPC", path, msg.Error, uint64(end.UnixNano()-start.UnixNano()))
 				return
 			}
 			var cancel context.CancelFunc
@@ -326,6 +329,21 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		c.RUnlock()
 		return
 	}
+	handler, ok := s.handler[msg.Path]
+	if !ok {
+		log.Error(nil, "[crpc.server.userfunc] client:", p.GetPeerUniqueName(), "call path:", msg.Path, "error: unknown path")
+		msg.Path = ""
+		msg.Deadline = 0
+		msg.Body = nil
+		msg.Error = cerror.ErrNoapi
+		msg.Metadata = nil
+		msg.Tracedata = nil
+		d, _ := proto.Marshal(msg)
+		if e := p.SendMessage(nil, d, nil, nil); e != nil {
+			log.Error(nil, "[crpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
+		}
+		return
+	}
 	var tracectx context.Context
 	if len(msg.Tracedata) == 0 || msg.Tracedata["Traceid"] == "" {
 		tracectx = trace.InitTrace(p, "", s.instance.GetSelfAppName(), host.Hostip, "CRPC", msg.Path, 0)
@@ -339,21 +357,6 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		return
 	} else {
 		tracectx = trace.InitTrace(p, msg.Tracedata["Traceid"], s.instance.GetSelfAppName(), host.Hostip, "CRPC", msg.Path, clientdeep)
-	}
-	handler, ok := s.handler[msg.Path]
-	if !ok {
-		log.Error(tracectx, "[crpc.server.userfunc] client:", p.GetPeerUniqueName(), "call path:", msg.Path, "error: unknown path")
-		msg.Path = ""
-		msg.Deadline = 0
-		msg.Body = nil
-		msg.Error = cerror.ErrNoapi
-		msg.Metadata = nil
-		msg.Tracedata = nil
-		d, _ := proto.Marshal(msg)
-		if e := p.SendMessage(tracectx, d, nil, nil); e != nil {
-			log.Error(tracectx, "[crpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
-		}
-		return
 	}
 	for {
 		old := atomic.LoadInt32(&s.totalreqnum)
