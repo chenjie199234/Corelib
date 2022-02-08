@@ -169,7 +169,7 @@ func (c *WebClient) Patch(ctx context.Context, path, query string, header http.H
 }
 func (c *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body *bytes.Buffer) ([]byte, error) {
 	if forbiddenHeader(header) {
-		return nil, cerror.MakeError(-1, 100, "forbidden header")
+		return nil, cerror.MakeError(-1, 400, "forbidden header")
 	}
 	parsedurl, e := url.Parse(path)
 	if e != nil {
