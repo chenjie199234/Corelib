@@ -25,7 +25,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 )
 
@@ -91,6 +90,13 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 	opts = append(opts, grpc.StatsHandler(serverinstance))
 	opts = append(opts, grpc.MaxRecvMsgSize(int(c.MaxMsgLen)))
 	opts = append(opts, grpc.MaxSendMsgSize(int(c.MaxMsgLen)))
+	opts = append(opts, grpc.UnknownServiceHandler(func(_ interface{}, stream grpc.ServerStream) error {
+		ctx := stream.Context()
+		conninfo := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)
+		rpcinfo := ctx.Value(serverrpckey{}).(*stats.RPCTagInfo)
+		log.Error(nil, "[cgrpc.server] client ip:", conninfo.RemoteAddr.String(), "call path:", rpcinfo.FullMethodName, "error: unknown path")
+		return cerror.ErrNoapi
+	}))
 	if c.ConnectTimeout != 0 {
 		opts = append(opts, grpc.ConnectionTimeout(c.ConnectTimeout))
 	}
@@ -200,9 +206,9 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		}
 		atomic.AddInt32(&s.totalreqnum, 1)
 		defer atomic.AddInt32(&s.totalreqnum, -1)
-		p, _ := peer.FromContext(ctx)
+		conninfo := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)
 		traceid := ""
-		sourceip := p.Addr.String()
+		sourceip := conninfo.RemoteAddr.String()
 		sourceapp := "unknown"
 		sourcemethod := "unknown"
 		sourcepath := "unknown"
@@ -230,7 +236,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			if len(data) != 0 {
 				mdata = make(map[string]string)
 				if e := json.Unmarshal(common.Str2byte(data[0]), &mdata); e != nil {
-					log.Error(nil, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC metadata:", data[0], "format error:", e)
+					log.Error(ctx, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC metadata:", data[0], "format error:", e)
 					return nil, cerror.ErrReq
 				}
 			}
@@ -271,8 +277,11 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		return
 	}
 }
+
+type serverrpckey struct{}
+
 func (s *CGrpcServer) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	return ctx
+	return context.WithValue(ctx, serverrpckey{}, info)
 }
 func (s *CGrpcServer) HandleRPC(context.Context, stats.RPCStats) {
 }

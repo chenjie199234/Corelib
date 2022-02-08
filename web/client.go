@@ -207,10 +207,10 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	for {
 		start := time.Now()
 		if ok && dl.UnixNano() < start.UnixNano()+int64(5*time.Millisecond) {
+			//at least 5ms for net lag and server logic
 			end := time.Now()
 			trace.Trace(ctx, trace.CLIENT, c.selfappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, cerror.ErrDeadlineExceeded)
 			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
-			//at least 5ms for net lag and server logic
 			return nil, cerror.ErrDeadlineExceeded
 		}
 		var req *http.Request

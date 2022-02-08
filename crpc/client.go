@@ -252,6 +252,9 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		start := time.Now()
 		server, e := c.balancer.Pick(ctx)
 		if e != nil {
+			end := time.Now()
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, "pick failed,no server addr", "CRPC", path, &start, &end, e)
+			monitor.CrpcClientMonitor(c.serverappname, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 		if ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
