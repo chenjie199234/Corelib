@@ -31,10 +31,10 @@ import (
 type OutsideHandler func(*Context)
 
 type ServerConfig struct {
-	ConnectTimeout time.Duration
-	GlobalTimeout  time.Duration //global timeout for every rpc call(including connection establish time)
-	HeartPorbe     time.Duration
-	MaxMsgLen      uint32
+	GlobalTimeout  time.Duration     //global timeout for every rpc call(including connection establish time)
+	ConnectTimeout time.Duration     //default 500ms
+	HeartPorbe     time.Duration     //default 1s
+	MaxMsgLen      uint32            //default 64M,min 64k
 	CertKeys       map[string]string //mapkey: cert path,mapvalue: key path
 }
 
@@ -46,12 +46,11 @@ func (c *ServerConfig) validate() {
 		c.GlobalTimeout = 0
 	}
 	if c.HeartPorbe < time.Second {
-		c.HeartPorbe = 1500 * time.Millisecond
+		c.HeartPorbe = time.Second
 	}
-	if c.MaxMsgLen < 1024 {
-		c.MaxMsgLen = 65535
-	}
-	if c.MaxMsgLen > 65535 {
+	if c.MaxMsgLen == 0 {
+		c.MaxMsgLen = 1024 * 1024 * 64
+	} else if c.MaxMsgLen < 65535 {
 		c.MaxMsgLen = 65535
 	}
 }
@@ -87,9 +86,8 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 		handlerTimeout: make(map[string]time.Duration),
 	}
 	opts := make([]grpc.ServerOption, 0, 6)
-	opts = append(opts, grpc.StatsHandler(serverinstance))
 	opts = append(opts, grpc.MaxRecvMsgSize(int(c.MaxMsgLen)))
-	opts = append(opts, grpc.MaxSendMsgSize(int(c.MaxMsgLen)))
+	opts = append(opts, grpc.StatsHandler(serverinstance))
 	opts = append(opts, grpc.UnknownServiceHandler(func(_ interface{}, stream grpc.ServerStream) error {
 		ctx := stream.Context()
 		conninfo := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)

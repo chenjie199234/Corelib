@@ -29,6 +29,9 @@ func GetBuffer() *Buffer {
 	return b
 }
 func PutBuffer(b *Buffer) {
+	if b == nil {
+		return
+	}
 	pool.Put(b)
 }
 func (b *Buffer) Len() int {
@@ -40,11 +43,45 @@ func (b *Buffer) Cap() int {
 func (b *Buffer) Reset() {
 	*b = (*b)[:0]
 }
+
+var m128 = uint64(1024 * 1024 * 128)
+var m972 = uint64(float64(m128) * 1.5 * 1.5 * 1.5 * 1.5 * 1.5)
+
+func nextcap(reqsize, nowcap uint64) uint64 {
+	for nowcap < reqsize {
+		if nowcap >= m972 {
+			nowcap = uint64(float64(nowcap) * 1.25)
+		} else if nowcap >= m128 {
+			nowcap = uint64(float64(nowcap) * 1.5)
+		} else {
+			nowcap *= 2
+		}
+	}
+	return nowcap
+}
+
+//old data unsafe
 func (b *Buffer) Resize(n uint32) {
-	if uint32(cap(*b)) >= n {
+	nowcap := uint32(cap(*b))
+	if nowcap >= n {
 		(*[3]uintptr)(unsafe.Pointer(b))[1] = uintptr(n)
 	} else {
-		*b = make([]byte, n)
+		olddata := *b
+		*b = make([]byte, n, nextcap(uint64(n), uint64(nowcap)))
+		PutBuffer((*Buffer)(&olddata))
+	}
+}
+
+//old data safe
+func (b *Buffer) Growth(n uint32) {
+	nowcap := uint32(cap(*b))
+	if nowcap >= n {
+		(*[3]uintptr)(unsafe.Pointer(b))[1] = uintptr(n)
+	} else {
+		olddata := *b
+		*b = make([]byte, n, nextcap(uint64(n), uint64(nowcap)))
+		copy(*b, olddata)
+		PutBuffer((*Buffer)(&olddata))
 	}
 }
 

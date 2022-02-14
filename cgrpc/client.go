@@ -35,10 +35,10 @@ type PickHandler func(servers []*ServerForPick) *ServerForPick
 type DiscoveryHandler func(servergroup, servername string, manually <-chan *struct{}, client *CGrpcClient)
 
 type ClientConfig struct {
-	ConnectTimeout time.Duration
-	GlobalTimeout  time.Duration //global timeout for every rpc call
-	HeartPorbe     time.Duration
-	MaxMsgLen      uint32
+	GlobalTimeout  time.Duration    //global timeout for every rpc call
+	ConnectTimeout time.Duration    //default 500ms
+	HeartPorbe     time.Duration    //default 1s
+	MaxMsgLen      uint32           //default 64M,min 64k
 	UseTLS         bool             //grpc or grpcs
 	SkipVerifyTLS  bool             //don't verify the server's cert
 	CAs            []string         //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
@@ -54,12 +54,11 @@ func (c *ClientConfig) validate() {
 		c.GlobalTimeout = 0
 	}
 	if c.HeartPorbe < time.Second {
-		c.HeartPorbe = 1500 * time.Millisecond
+		c.HeartPorbe = time.Second
 	}
-	if c.MaxMsgLen < 1024 {
-		c.MaxMsgLen = 65535
-	}
-	if c.MaxMsgLen > 65535 {
+	if c.MaxMsgLen == 0 {
+		c.MaxMsgLen = 1024 * 1025 * 64
+	} else if c.MaxMsgLen < 65535 {
 		c.MaxMsgLen = 65535
 	}
 }

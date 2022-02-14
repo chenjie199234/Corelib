@@ -30,29 +30,17 @@ type ClientConfig struct {
 	ConnectTimeout time.Duration //default 500ms
 	GlobalTimeout  time.Duration //global timeout for every rpc call
 	HeartPorbe     time.Duration //default 1s,3 probe missing means disconnect
-	MaxMsgLen      uint32
-	UseTLS         bool     //crpc or crpcs
-	SkipVerifyTLS  bool     //don't verify the server's cert
-	CAs            []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
+	MaxMsgLen      uint32        //default 64M,min 64k
+	UseTLS         bool          //crpc or crpcs
+	SkipVerifyTLS  bool          //don't verify the server's cert
+	CAs            []string      //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
 	Picker         PickHandler
 	Discover       DiscoveryHandler //this function will be called in goroutine in NewCrpcClient
 }
 
 func (c *ClientConfig) validate() {
-	if c.ConnectTimeout <= 0 {
-		c.ConnectTimeout = time.Millisecond * 500
-	}
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
-	}
-	if c.HeartPorbe <= 0 {
-		c.HeartPorbe = time.Second
-	}
-	if c.MaxMsgLen < 1024 {
-		c.MaxMsgLen = 65535
-	}
-	if c.MaxMsgLen > 65535 {
-		c.MaxMsgLen = 65535
 	}
 }
 

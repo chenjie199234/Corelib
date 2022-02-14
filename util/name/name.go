@@ -45,7 +45,7 @@ func FullCheck(full string) error {
 	if len(full) == 0 {
 		return errors.New("[name.FullCheck] empty")
 	}
-	if len(full) > 32 {
+	if len(full) > 255 {
 		return errors.New("[name.FullCheck] too long")
 	}
 	if strings.Count(full, ".") != 1 {

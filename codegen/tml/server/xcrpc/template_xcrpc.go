@@ -30,7 +30,6 @@ func StartCrpcServer() {
 		ConnectTimeout: time.Duration(c.ConnectTimeout),
 		GlobalTimeout:  time.Duration(c.GlobalTimeout),
 		HeartPorbe:     time.Duration(c.HeartProbe),
-		MaxMsgLen:      65535,
 	}
 	var e error
 	if s, e = crpc.NewCrpcServer(crpcc, api.Group, api.Name); e != nil {

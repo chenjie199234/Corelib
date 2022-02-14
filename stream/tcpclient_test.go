@@ -16,15 +16,18 @@ import (
 func Test_Tcpclient(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	go func() {
-		for count := 0; count < 10000; count++ {
+		for count := 0; count < 1; count++ {
 			tcpclientinstance, _ := NewInstance(&InstanceConfig{
 				HeartprobeInterval: time.Second,
 				GroupNum:           1,
-				Verifyfunc:         tcpclienthandleVerify,
-				Onlinefunc:         tcpclienthandleonline,
-				PingPongFunc:       tcpclientpingpong,
-				Userdatafunc:       tcpclienthandleuserdata,
-				Offlinefunc:        tcpclienthandleoffline,
+				TcpC: &TcpConfig{
+					MaxMsgLen: 65535,
+				},
+				Verifyfunc:   tcpclienthandleVerify,
+				Onlinefunc:   tcpclienthandleonline,
+				PingPongFunc: tcpclientpingpong,
+				Userdatafunc: tcpclienthandleuserdata,
+				Offlinefunc:  tcpclienthandleoffline,
 			}, "testgroup", "tcpclient")
 			tcpclientinstance.StartTcpClient("127.0.0.1:9234", []byte{'t', 'e', 's', 't', 'c'}, nil)
 			time.Sleep(time.Millisecond)
@@ -53,7 +56,9 @@ func tcpclienthandleonline(p *Peer) bool {
 		go func() {
 			for {
 				time.Sleep(time.Second)
-				p.SendMessage(nil, bytes.Repeat([]byte{'a'}, 10), nil, nil)
+				if e := p.SendMessage(nil, bytes.Repeat([]byte{'a'}, 65535), nil, nil); e != nil {
+					fmt.Println(e)
+				}
 			}
 		}()
 	}
@@ -68,7 +73,7 @@ func tcpclientpingpong(p *Peer) {
 	}
 }
 func tcpclienthandleuserdata(p *Peer, data []byte) {
-	fmt.Printf("%s\n", data)
+	fmt.Printf("%s:%d\n", p.GetPeerUniqueName(), len(data))
 }
 
 func tcpclienthandleoffline(p *Peer) {

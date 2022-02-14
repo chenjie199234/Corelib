@@ -15,7 +15,7 @@ import (
 //client's response is useless and it will be dropped,you can just return nil
 //success = true means verify success
 //success = false means verify failed
-//Don't reuse peerVerifyData in this function,the under layer data in 'peerVerifyData' will change when this function return
+//Don't reuse the under layer data in 'peerVerifyData,it will change when this function return
 type HandleVerifyFunc func(ctx context.Context, peeruniquename string, peerVerifyData []byte) (response []byte, success bool)
 
 //This is a notice func after verify each other success
@@ -33,7 +33,7 @@ type HandlePingPongFunc func(p *Peer)
 //This is a func to deal the user message
 //Peer is a cancel context,it will be canceled when the connection closed
 //You can control the timeout by yourself through context.WithTimeout(p,time.Second)
-//Don't reuse 'data' in this function,the under layer data in 'userdata' will change when this function return
+//Don't reuse the under layer data in 'userdata',it will change when this function return
 type HandleUserdataFunc func(p *Peer, userdata []byte)
 
 //This is a notice func after two peers disconnect with each other
@@ -45,23 +45,21 @@ type HandleOfflineFunc func(p *Peer)
 type TcpConfig struct {
 	//include connect time and verify time
 	ConnectTimeout time.Duration //default 500ms
-
-	MaxMsgLen uint32 //min 1024,max 65535,default is max
+	MaxMsgLen      uint32        //default 64M,min 64k
 }
 
 var defaultTcpConfig = &TcpConfig{
 	ConnectTimeout: 500 * time.Millisecond,
-	MaxMsgLen:      65535,
+	MaxMsgLen:      1024 * 1024 * 64,
 }
 
 func (c *TcpConfig) validate() {
 	if c.ConnectTimeout <= 0 {
 		c.ConnectTimeout = 500 * time.Millisecond
 	}
-	if c.MaxMsgLen < 1024 {
-		c.MaxMsgLen = 65535
-	}
-	if c.MaxMsgLen > 65535 {
+	if c.MaxMsgLen == 0 {
+		c.MaxMsgLen = 1024 * 1024 * 64
+	} else if c.MaxMsgLen < 65535 {
 		c.MaxMsgLen = 65535
 	}
 }

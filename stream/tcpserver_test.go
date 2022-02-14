@@ -20,10 +20,13 @@ func Test_Tcpserver(t *testing.T) {
 		HeartprobeInterval: time.Second,
 		RecvIdleTimeout:    30 * time.Second, //30s
 		GroupNum:           10,
-		Verifyfunc:         tcpserverhandleVerify,
-		Onlinefunc:         tcpserverhandleonline,
-		Userdatafunc:       tcpserverhandleuserdata,
-		Offlinefunc:        tcpserverhandleoffline,
+		TcpC: &TcpConfig{
+			MaxMsgLen: 65535,
+		},
+		Verifyfunc:   tcpserverhandleVerify,
+		Onlinefunc:   tcpserverhandleonline,
+		Userdatafunc: tcpserverhandleuserdata,
+		Offlinefunc:  tcpserverhandleoffline,
 	}, "testgroup", "tcpserver")
 	go tcpserverinstance.StartTcpServer("127.0.0.1:9234", nil)
 	go func() {
@@ -54,8 +57,12 @@ func tcpserverhandleonline(p *Peer) bool {
 	return true
 }
 func tcpserverhandleuserdata(p *Peer, data []byte) {
-	fmt.Printf("%s:%s\n", p.GetPeerUniqueName(), data)
-	p.SendMessage(nil, data, nil, nil)
+	fmt.Printf("%s:%d\n", p.GetPeerUniqueName(), len(data))
+	back := make([]byte, len(data))
+	copy(back, data)
+	if e := p.SendMessage(nil, back, nil, nil); e != nil {
+		fmt.Println(e)
+	}
 }
 func tcpserverhandleoffline(p *Peer) {
 }

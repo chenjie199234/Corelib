@@ -29,27 +29,15 @@ type OutsideHandler func(*Context)
 
 type ServerConfig struct {
 	ConnectTimeout time.Duration
-	GlobalTimeout  time.Duration //global timeout for every rpc call
-	HeartPorbe     time.Duration //default 1s,3 probe missing means disconnect
-	MaxMsgLen      uint32
+	GlobalTimeout  time.Duration     //global timeout for every rpc call
+	HeartPorbe     time.Duration     //default 1s,3 probe missing means disconnect
+	MaxMsgLen      uint32            //default 64M,min 64k
 	CertKeys       map[string]string //mapkey: cert path,mapvalue: key path
 }
 
 func (c *ServerConfig) validate() {
-	if c.ConnectTimeout <= 0 {
-		c.ConnectTimeout = 500 * time.Millisecond
-	}
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
-	}
-	if c.HeartPorbe < time.Second {
-		c.HeartPorbe = time.Second
-	}
-	if c.MaxMsgLen < 1024 {
-		c.MaxMsgLen = 65535
-	}
-	if c.MaxMsgLen > 65535 {
-		c.MaxMsgLen = 65535
 	}
 }
 
@@ -406,8 +394,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		handler(ctx, p, msg)
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(ctx, d, nil, nil); e != nil {
-			log.Error(ctx, "[crpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
-			if e == stream.ErrMsgLarge {
+			if e == stream.ErrMsgTooLarge {
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
@@ -415,7 +402,13 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				msg.Metadata = nil
 				msg.Tracedata = nil
 				d, _ = proto.Marshal(msg)
-				p.SendMessage(ctx, d, nil, nil)
+				if e = p.SendMessage(ctx, d, nil, nil); e != nil {
+					log.Error(ctx, "[crpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
+				} else {
+					log.Error(ctx, "[crpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", cerror.ErrRespmsgLen)
+				}
+			} else {
+				log.Error(ctx, "[crpc.server.userfunc] send message to client:", p.GetPeerUniqueName(), "error:", e)
 			}
 		}
 		c.Lock()
