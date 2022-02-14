@@ -222,6 +222,9 @@ func (p *Peer) GetPeerNetlag() int64 {
 func (p *Peer) GetRemoteAddr() string {
 	return p.conn.RemoteAddr().String()
 }
+func (p *Peer) GetPeerMaxMsgLen() uint32 {
+	return p.peermaxmsglen
+}
 func (p *Peer) GetData() unsafe.Pointer {
 	return p.data
 }
