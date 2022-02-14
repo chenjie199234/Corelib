@@ -54,7 +54,18 @@ func rate(ctx *web.Context) {
 	}
 }
 func access(ctx *web.Context) {
-	if !publicmids.Access(ctx.GetHeader("Access-Id"), ctx.GetHeader("Access-Key")) {
+	accessid := ctx.GetHeader("Access-Id")
+	accesskey := ctx.GetHeader("Access-Key")
+	if accessid == "" {
+		md := ctx.GetMetadata()
+		accessid = md["Access-Id"]
+		accesskey = md["Access-Key"]
+	}
+	if accessid == "" {
+		ctx.Abort(cerror.ErrAuth)
+		return
+	}
+	if !publicmids.Access(accessid, accesskey) {
 		ctx.Abort(cerror.ErrAuth)
 	}
 }

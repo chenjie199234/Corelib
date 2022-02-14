@@ -13,6 +13,7 @@ func init() {
 	all = make(map[string]cgrpc.OutsideHandler)
 	//register here
 	all["rate"] = rate
+	all["access"] = access
 }
 
 func AllMids() map[string]cgrpc.OutsideHandler {
@@ -26,5 +27,17 @@ func RegMid(name string, handler cgrpc.OutsideHandler) {
 func rate(ctx *cgrpc.Context) {
 	if !publicmids.GrpcRate(ctx.GetPath()) {
 		ctx.Abort(cerror.ErrLimit)
+	}
+}
+func access(ctx *cgrpc.Context) {
+	md := ctx.GetMetadata()
+	accessid := md["Access-Id"]
+	accesskey := md["Access-Key"]
+	if accessid == "" {
+		ctx.Abort(cerror.ErrAuth)
+		return
+	}
+	if !publicmids.Access(accessid, accesskey) {
+		ctx.Abort(cerror.ErrAuth)
 	}
 }
