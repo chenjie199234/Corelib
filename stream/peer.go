@@ -131,10 +131,10 @@ func (p *Peer) putDispatcher() {
 	}
 }
 
-type beforeSend func(*Peer)
-type afterSend func(*Peer, error)
+type BeforeSend func(*Peer)
+type AfterSend func(*Peer, error)
 
-func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs beforeSend, as afterSend) error {
+func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, as AfterSend) error {
 	if len(userdata) == 0 {
 		return nil
 	}

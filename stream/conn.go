@@ -88,7 +88,7 @@ func (this *Instance) sworker(p *Peer, usetls bool) {
 		p.conn.Close()
 		return
 	}
-	if len(verifydata)+len(this.selfappname) > maxPieceLen {
+	if 4+1+len(this.selfappname)+len(verifydata) > maxPieceLen {
 		log.Error(nil, "[Stream.sworker] self verify data too large")
 		p.conn.Close()
 		return
@@ -128,7 +128,7 @@ func (this *Instance) sworker(p *Peer, usetls bool) {
 
 //if tlsc not nil,tcp connection will be used with tls
 func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte, tlsc *tls.Config) bool {
-	if len(this.selfappname)+len(verifydata) > maxPieceLen {
+	if 4+1+len(this.selfappname)+len(verifydata) > maxPieceLen {
 		log.Error(nil, "[Stream.StartTcpClient] self verify data too large")
 		return false
 	}
