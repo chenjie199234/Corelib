@@ -89,7 +89,7 @@ type InstanceConfig struct {
 	//every userdata msg will recycle the timeout
 	RecvIdleTimeout time.Duration
 	//if this is not 0,this must > HeartprobeInterval,this is useful for slow read attact
-	SendIdleTimeout time.Duration //default HeartprobeInterval + (1 second)
+	SendIdleTimeout time.Duration //default HeartprobeInterval * 1.5
 
 	//split connections into groups
 	//every group will have an independence RWMutex to control online and offline
@@ -122,7 +122,7 @@ func (c *InstanceConfig) validate() {
 		c.RecvIdleTimeout = 0
 	}
 	if c.SendIdleTimeout <= c.HeartprobeInterval {
-		c.SendIdleTimeout = c.HeartprobeInterval + time.Second
+		c.SendIdleTimeout = time.Duration(float64(c.HeartprobeInterval) * 1.5)
 	}
 	if c.GroupNum == 0 {
 		c.GroupNum = 1

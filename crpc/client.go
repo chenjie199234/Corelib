@@ -27,8 +27,8 @@ type PickHandler func(servers []*ServerForPick) *ServerForPick
 type DiscoveryHandler func(servergroup, servername string, manually <-chan *struct{}, client *CrpcClient)
 
 type ClientConfig struct {
-	ConnectTimeout time.Duration //default 500ms
 	GlobalTimeout  time.Duration //global timeout for every rpc call
+	ConnectTimeout time.Duration //default 500ms
 	HeartPorbe     time.Duration //default 1s,3 probe missing means disconnect
 	MaxMsgLen      uint32        //default 64M,min 64k
 	UseTLS         bool          //crpc or crpcs
