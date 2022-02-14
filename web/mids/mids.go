@@ -15,6 +15,7 @@ func init() {
 	all = make(map[string]web.OutsideHandler)
 	//register here
 	all["rate"] = rate
+	all["access"] = access
 }
 
 func AllMids() map[string]web.OutsideHandler {
@@ -50,5 +51,10 @@ func rate(ctx *web.Context) {
 		}
 	default:
 		ctx.Abort(cerror.ErrNotExist)
+	}
+}
+func access(ctx *web.Context) {
+	if !publicmids.Access(ctx.GetHeader("Access-Id"), ctx.GetHeader("Access-Key")) {
+		ctx.Abort(cerror.ErrAuth)
 	}
 }

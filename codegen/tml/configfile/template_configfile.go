@@ -116,7 +116,10 @@ const textapp = `{
 		"Path":"/{{.}}.status/ping",
 		"Method":["GET","GRPC","CRPC"],
 		"MaxPerSec":100
-	}]
+	}],
+	"access_config":{
+		"testid":"testkey"
+	}
 }`
 
 const path = "./"

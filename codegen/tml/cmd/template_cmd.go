@@ -12,11 +12,11 @@ const textbash = `#!/bin/bash
 
 help() {
 	echo "cmd.sh — every thing you need"
+	echo "         please install git"
 	echo "         please install golang"
 	echo "         please install protoc"
 	echo "         please install protoc-gen-go"
-	echo "         please install protoc-gen-go-crpc"
-	echo "         please install protoc-gen-go-web"
+	echo "         please install codegen"
 	echo ""
 	echo "Usage:"
 	echo "   ./cmd.sh <option>"
@@ -272,11 +272,11 @@ goto :end
 
 :help
 	echo cmd.bat — every thing you need
+	echo           please install git
 	echo           please install golang
 	echo           please install protoc
 	echo           please install protoc-gen-go
-	echo           please install protoc-gen-go-crpc
-	echo           please install protoc-gen-go-web
+	echo           please install codegen
 	echo
 	echo Usage:
 	echo    ./cmd.bat <option^>
