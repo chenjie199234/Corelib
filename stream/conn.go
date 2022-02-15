@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/pool"
 )
 
 var ErrServerClosed = errors.New("[Stream.server] closed")
@@ -100,7 +100,7 @@ func (this *Instance) sworker(p *Peer, usetls bool) {
 	}
 	//verify client success,send self's verify message to client
 	verifymsg := makeVerifyMsg(this.selfappname, p.selfmaxmsglen, verifydata)
-	defer bufpool.PutBuffer(verifymsg)
+	defer pool.PutBuffer(verifymsg)
 	if _, e := p.conn.Write(verifymsg.Bytes()); e != nil {
 		log.Error(nil, "[Stream.sworker] write verify msg to:", p.peeruniquename, "error:", e)
 		p.conn.Close()
@@ -175,7 +175,7 @@ func (this *Instance) cworker(p *Peer, usetls bool, verifydata []byte, dl time.T
 	}
 	//send self's verify message to server
 	verifymsg := makeVerifyMsg(this.selfappname, p.selfmaxmsglen, verifydata)
-	defer bufpool.PutBuffer(verifymsg)
+	defer pool.PutBuffer(verifymsg)
 	if _, e := p.conn.Write(verifymsg.Bytes()); e != nil {
 		log.Error(nil, "[Stream.cworker] write verify msg to:", p.conn.RemoteAddr().String(), "error:", e)
 		p.conn.Close()
@@ -213,8 +213,8 @@ func (this *Instance) cworker(p *Peer, usetls bool, verifydata []byte, dl time.T
 }
 
 func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
-	buf := bufpool.GetBuffer()
-	defer bufpool.PutBuffer(buf)
+	buf := pool.GetBuffer()
+	defer pool.PutBuffer(buf)
 	_, mtype, e := p.readMessage(nil, buf)
 	if e != nil {
 		log.Error(nil, "[Stream.verifypeer] from:", p.conn.RemoteAddr(), "error:", e)
@@ -263,14 +263,14 @@ func (this *Instance) handle(p *Peer) {
 		log.Error(nil, "[Stream.handle] send first ping to:", p.peeruniquename, "error:", e)
 		return
 	}
-	var total *bufpool.Buffer
+	var total *pool.Buffer
 	for {
-		tmp := bufpool.GetBuffer()
+		tmp := pool.GetBuffer()
 		fin, mtype, e := p.readMessage(total, tmp)
 		if e != nil {
 			log.Error(nil, "[Stream.handle] from:", p.peeruniquename, "error:", e)
-			bufpool.PutBuffer(total)
-			bufpool.PutBuffer(tmp)
+			pool.PutBuffer(total)
+			pool.PutBuffer(tmp)
 			total = nil
 			return
 		}
@@ -283,12 +283,12 @@ func (this *Instance) handle(p *Peer) {
 			if this.c.PingPongFunc != nil {
 				this.c.PingPongFunc(p)
 			}
-			bufpool.PutBuffer(tmp)
+			pool.PutBuffer(tmp)
 		case _PONG:
 			if tmp.Len() != 8 {
 				log.Error(nil, "[Stream.handle.pong] from:", p.peeruniquename, "error: format wrong")
-				bufpool.PutBuffer(total)
-				bufpool.PutBuffer(tmp)
+				pool.PutBuffer(total)
+				pool.PutBuffer(tmp)
 				total = nil
 				return
 			}
@@ -297,8 +297,8 @@ func (this *Instance) handle(p *Peer) {
 			netlag := now.UnixNano() - int64(sendtime)
 			if netlag < 0 {
 				log.Error(nil, "[Stream.handle.pong] from:", p.peeruniquename, "error: format wrong")
-				bufpool.PutBuffer(total)
-				bufpool.PutBuffer(tmp)
+				pool.PutBuffer(total)
+				pool.PutBuffer(tmp)
 				total = nil
 				return
 			}
@@ -308,7 +308,7 @@ func (this *Instance) handle(p *Peer) {
 			if this.c.PingPongFunc != nil {
 				this.c.PingPongFunc(p)
 			}
-			bufpool.PutBuffer(tmp)
+			pool.PutBuffer(tmp)
 		case _USER:
 			//update lastactive time
 			now := time.Now().UnixNano()
@@ -320,16 +320,16 @@ func (this *Instance) handle(p *Peer) {
 				} else {
 					this.c.Userdatafunc(p, total.Bytes())
 				}
-				bufpool.PutBuffer(total)
-				bufpool.PutBuffer(tmp)
+				pool.PutBuffer(total)
+				pool.PutBuffer(tmp)
 				total = nil
 			} else if total == nil {
 				total = tmp
 			}
 		default:
 			log.Error(nil, "[Stream.handle] from:", p.peeruniquename, "error: message type wrong")
-			bufpool.PutBuffer(total)
-			bufpool.PutBuffer(tmp)
+			pool.PutBuffer(total)
+			pool.PutBuffer(tmp)
 			total = nil
 			return
 		}

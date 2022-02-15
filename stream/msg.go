@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/chenjie199234/Corelib/bufpool"
+	"github.com/chenjie199234/Corelib/pool"
 )
 
 var (
@@ -65,8 +65,8 @@ func decodeHeader(data byte) (fin bool, mtype int, e error) {
 //2  |-fin-|-------------------------|--type--|
 //...|----------------------------------------|
 //x  |---------------------------specific data|
-func makePingMsg(pingdata []byte) *bufpool.Buffer {
-	buf := bufpool.GetBuffer()
+func makePingMsg(pingdata []byte) *pool.Buffer {
+	buf := pool.GetBuffer()
 	buf.Resize(uint32(2 + 1 + len(pingdata)))
 	binary.BigEndian.PutUint16(buf.Bytes(), uint16(1+len(pingdata)))
 	buf.Bytes()[2] = byte(_PING | finmask)
@@ -83,8 +83,8 @@ func makePingMsg(pingdata []byte) *bufpool.Buffer {
 //2  |-fin-|-------------------------|--type--|
 //...|----------------------------------------|
 //x  |---------------------------specific data|
-func makePongMsg(pongdata []byte) *bufpool.Buffer {
-	buf := bufpool.GetBuffer()
+func makePongMsg(pongdata []byte) *pool.Buffer {
+	buf := pool.GetBuffer()
 	buf.Resize(uint32(2 + 1 + len(pongdata)))
 	binary.BigEndian.PutUint16(buf.Bytes(), uint16(1+len(pongdata)))
 	buf.Bytes()[2] = byte(_PONG | finmask)
@@ -108,8 +108,8 @@ func makePongMsg(pongdata []byte) *bufpool.Buffer {
 //x  |----------------------------------sender|
 //...|----------------------------------------|
 //y  |-----------------------------verify data|
-func makeVerifyMsg(sender string, maxmsglen uint32, verifydata []byte) *bufpool.Buffer {
-	buf := bufpool.GetBuffer()
+func makeVerifyMsg(sender string, maxmsglen uint32, verifydata []byte) *pool.Buffer {
+	buf := pool.GetBuffer()
 	buf.Resize(uint32(2 + 1 + 4 + 1 + len(sender) + len(verifydata)))
 	binary.BigEndian.PutUint16(buf.Bytes(), uint16(1+4+1+len(sender)+len(verifydata)))
 	buf.Bytes()[2] = byte(_VERIFY | finmask)
@@ -146,8 +146,8 @@ func getVerifyMsg(data []byte) (sender string, maxmsglen uint32, verifydata []by
 //2  |-fin-|-------------------------|--type--|
 //...|----------------------------------------|
 //x  |-------------------------------user data|
-func makeUserMsg(userdata []byte, fin bool) *bufpool.Buffer {
-	buf := bufpool.GetBuffer()
+func makeUserMsg(userdata []byte, fin bool) *pool.Buffer {
+	buf := pool.GetBuffer()
 	buf.Resize(uint32(2 + 1 + len(userdata)))
 	binary.BigEndian.PutUint16(buf.Bytes(), uint16(1+len(userdata)))
 	if fin {

@@ -11,8 +11,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/pool"
 )
 
 var (
@@ -78,7 +78,7 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	go p.sendPing(pingdata)
 }
 
-func (p *Peer) readMessage(total *bufpool.Buffer, tmp *bufpool.Buffer) (fin bool, mtype int, e error) {
+func (p *Peer) readMessage(total *pool.Buffer, tmp *pool.Buffer) (fin bool, mtype int, e error) {
 	tmp.Resize(3)
 	if _, e = io.ReadFull(p.conn, tmp.Bytes()); e != nil {
 		return
@@ -152,7 +152,7 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 		bs(p)
 	}
 	for len(userdata) > 0 {
-		var data *bufpool.Buffer
+		var data *pool.Buffer
 		if len(userdata) > maxPieceLen {
 			data = makeUserMsg(userdata[:maxPieceLen], false)
 			userdata = userdata[maxPieceLen:]
@@ -163,14 +163,14 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 		if _, e := p.conn.Write(data.Bytes()); e != nil {
 			log.Error(ctx, "[Stream.SendMessage] to:", p.peeruniquename, "error:", e)
 			p.conn.Close()
-			bufpool.PutBuffer(data)
+			pool.PutBuffer(data)
 			if as != nil {
 				as(p, e)
 			}
 			return ErrConnClosed
 		}
 		atomic.StoreInt64(&p.sendidlestart, time.Now().UnixNano())
-		bufpool.PutBuffer(data)
+		pool.PutBuffer(data)
 	}
 	if as != nil {
 		as(p, nil)
@@ -182,23 +182,23 @@ func (p *Peer) sendPing(pingdata []byte) error {
 	if _, e := p.conn.Write(data.Bytes()); e != nil {
 		log.Error(nil, "[Stream.sendPing] to:", p.peeruniquename, "error:", e)
 		p.conn.Close()
-		bufpool.PutBuffer(data)
+		pool.PutBuffer(data)
 		return ErrConnClosed
 	}
 	atomic.StoreInt64(&p.sendidlestart, time.Now().UnixNano())
-	bufpool.PutBuffer(data)
+	pool.PutBuffer(data)
 	return nil
 }
-func (p *Peer) sendPong(pongdata *bufpool.Buffer) error {
+func (p *Peer) sendPong(pongdata *pool.Buffer) error {
 	data := makePongMsg(pongdata.Bytes())
 	if _, e := p.conn.Write(data.Bytes()); e != nil {
 		log.Error(nil, "[Stream.sendPong] to:", p.peeruniquename, "error:", e)
 		p.conn.Close()
-		bufpool.PutBuffer(data)
+		pool.PutBuffer(data)
 		return ErrConnClosed
 	}
 	atomic.StoreInt64(&p.sendidlestart, time.Now().UnixNano())
-	bufpool.PutBuffer(data)
+	pool.PutBuffer(data)
 	return nil
 }
 
