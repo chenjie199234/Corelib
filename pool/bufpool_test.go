@@ -1,4 +1,4 @@
-package bufpool
+package pool
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 	ctime "github.com/chenjie199234/Corelib/util/time"
 )
 
-func Test_Bufpool(t *testing.T) {
+func Test_Pool(t *testing.T) {
 	b := GetBuffer()
 	var s = time.Second
 	b.AppendStdDuration(s)

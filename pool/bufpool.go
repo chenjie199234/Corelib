@@ -1,4 +1,4 @@
-package bufpool
+package pool
 
 import (
 	"strconv"
@@ -11,16 +11,16 @@ import (
 	ctime "github.com/chenjie199234/Corelib/util/time"
 )
 
-var pool *sync.Pool
+var bufpool *sync.Pool
 
 func init() {
-	pool = &sync.Pool{}
+	bufpool = &sync.Pool{}
 }
 
 type Buffer []byte
 
 func GetBuffer() *Buffer {
-	b, ok := pool.Get().(*Buffer)
+	b, ok := bufpool.Get().(*Buffer)
 	if !ok {
 		temp := Buffer(make([]byte, 0, 512))
 		return &temp
@@ -32,7 +32,7 @@ func PutBuffer(b *Buffer) {
 	if b == nil {
 		return
 	}
-	pool.Put(b)
+	bufpool.Put(b)
 }
 func (b *Buffer) Len() int {
 	return len(*b)

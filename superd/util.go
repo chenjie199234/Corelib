@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/chenjie199234/Corelib/bufpool"
+	"github.com/chenjie199234/Corelib/pool"
 	ctime "github.com/chenjie199234/Corelib/util/time"
 )
 
-func writeany(buf *bufpool.Buffer, data interface{}) {
+func writeany(buf *pool.Buffer, data interface{}) {
 	switch d := data.(type) {
 	case string:
 		buf.AppendString(d)

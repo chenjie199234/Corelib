@@ -10,9 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/chenjie199234/Corelib/bufpool"
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/pool"
 )
 
 var m monitor
@@ -83,7 +83,7 @@ func init() {
 	go func() {
 		http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
 			tmpm := getMonitorInfo()
-			buf := bufpool.GetBuffer()
+			buf := pool.GetBuffer()
 			buf.AppendString("# HELP heap_object_num\n")
 			buf.AppendString("# TYPE heap_object_num gauge\n")
 			buf.AppendString("heap_object_num ")
@@ -600,7 +600,7 @@ func init() {
 				}
 			}
 			w.Write(buf.Bytes())
-			bufpool.PutBuffer(buf)
+			pool.PutBuffer(buf)
 		})
 		http.ListenAndServe(":6060", nil)
 	}()

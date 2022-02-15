@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chenjie199234/Corelib/bufpool"
+	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/rotatefile"
 	"github.com/chenjie199234/Corelib/util/common"
 )
@@ -40,7 +40,7 @@ type process struct {
 }
 
 func (p *process) log(datas ...interface{}) {
-	buf := bufpool.GetBuffer()
+	buf := pool.GetBuffer()
 	buf.AppendStdTime(time.Now())
 	for _, data := range datas {
 		buf.AppendByte(' ')

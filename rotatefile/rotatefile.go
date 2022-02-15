@@ -12,8 +12,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/bufpool"
 	"github.com/chenjie199234/Corelib/container/list"
+	"github.com/chenjie199234/Corelib/pool"
 )
 
 //thread unsafe
@@ -95,13 +95,13 @@ func (f *RotateFile) run() {
 	write := func() bool {
 		tmp := f.caslist.Pop()
 		if tmp != nil {
-			buf := (*bufpool.Buffer)(tmp)
+			buf := (*pool.Buffer)(tmp)
 			if n, e := f.buffile.Write(buf.Bytes()); e != nil {
 				fmt.Println("[rotatefile.run] write error: " + e.Error())
 			} else {
 				f.curlen += int64(n)
 			}
-			bufpool.PutBuffer(buf)
+			pool.PutBuffer(buf)
 			return true
 		}
 		return false
@@ -221,7 +221,7 @@ func (f *RotateFile) Write(data []byte) (int, error) {
 	if atomic.LoadInt32(&f.status) == 0 {
 		return 0, fmt.Errorf("[rotatefile.Write] rotate file closed")
 	}
-	buf := bufpool.GetBuffer()
+	buf := pool.GetBuffer()
 	buf.AppendByteSlice(data)
 	f.caslist.Push(unsafe.Pointer(buf))
 	select {
@@ -230,7 +230,7 @@ func (f *RotateFile) Write(data []byte) (int, error) {
 	}
 	return len(data), nil
 }
-func (f *RotateFile) WriteBuf(data *bufpool.Buffer) (int, error) {
+func (f *RotateFile) WriteBuf(data *pool.Buffer) (int, error) {
 	if data.Len() == 0 {
 		return 0, nil
 	}

@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/chenjie199234/Corelib/bufpool"
 	cerror "github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/rotatefile"
 	"github.com/chenjie199234/Corelib/util/host"
 )
@@ -142,7 +142,7 @@ func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string,
 		ecode = int32(ee.Code)
 		emsg = ee.Msg
 	}
-	buf := bufpool.GetBuffer()
+	buf := pool.GetBuffer()
 	buf.AppendString("[TRACE] {")
 	buf.AppendString("\"trace_id\":\"")
 	buf.AppendString(traceid)
@@ -183,10 +183,10 @@ func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string,
 	if target&2 > 0 {
 		if _, e := rf.WriteBuf(buf); e != nil {
 			fmt.Printf("[trace] write rotate file error: %s with data: %s\n", e, buf.String())
-			bufpool.PutBuffer(buf)
+			pool.PutBuffer(buf)
 		}
 	} else {
-		bufpool.PutBuffer(buf)
+		pool.PutBuffer(buf)
 	}
 }
 

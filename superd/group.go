@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/chenjie199234/Corelib/bufpool"
+	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/rotatefile"
 	"github.com/chenjie199234/Corelib/util/common"
 )
@@ -52,7 +52,7 @@ type group struct {
 }
 
 func (g *group) log(datas ...interface{}) {
-	buf := bufpool.GetBuffer()
+	buf := pool.GetBuffer()
 	buf.AppendStdTime(time.Now())
 	for _, data := range datas {
 		buf.AppendByte(' ')

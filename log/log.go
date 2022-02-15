@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chenjie199234/Corelib/bufpool"
+	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/rotatefile"
 	"github.com/chenjie199234/Corelib/trace"
 	ctime "github.com/chenjie199234/Corelib/util/time"
@@ -68,7 +68,7 @@ func Debug(ctx context.Context, datas ...interface{}) {
 	if level > 0 {
 		return
 	}
-	buf := bufpool.GetBuffer()
+	buf := pool.GetBuffer()
 	buf.AppendString("[DBG] ")
 	write(ctx, buf, datas...)
 }
@@ -76,7 +76,7 @@ func Info(ctx context.Context, datas ...interface{}) {
 	if level > 1 {
 		return
 	}
-	buf := bufpool.GetBuffer()
+	buf := pool.GetBuffer()
 	buf.AppendString("[INF] ")
 	write(ctx, buf, datas...)
 }
@@ -84,16 +84,16 @@ func Warning(ctx context.Context, datas ...interface{}) {
 	if level > 2 {
 		return
 	}
-	buf := bufpool.GetBuffer()
+	buf := pool.GetBuffer()
 	buf.AppendString("[WRN] ")
 	write(ctx, buf, datas...)
 }
 func Error(ctx context.Context, datas ...interface{}) {
-	buf := bufpool.GetBuffer()
+	buf := pool.GetBuffer()
 	buf.AppendString("[ERR] ")
 	write(ctx, buf, datas...)
 }
-func write(ctx context.Context, buf *bufpool.Buffer, datas ...interface{}) {
+func write(ctx context.Context, buf *pool.Buffer, datas ...interface{}) {
 	buf.AppendStdTime(time.Now())
 	_, file, line, _ := runtime.Caller(2)
 	buf.AppendByte(' ')
@@ -120,13 +120,13 @@ func write(ctx context.Context, buf *bufpool.Buffer, datas ...interface{}) {
 	if target&2 > 0 {
 		if _, e := rf.WriteBuf(buf); e != nil {
 			fmt.Printf("[log] write rotate file error: %s with data: %s\n", e, buf.String())
-			bufpool.PutBuffer(buf)
+			pool.PutBuffer(buf)
 		}
 	} else {
-		bufpool.PutBuffer(buf)
+		pool.PutBuffer(buf)
 	}
 }
-func writeany(buf *bufpool.Buffer, data interface{}) {
+func writeany(buf *pool.Buffer, data interface{}) {
 	switch d := data.(type) {
 	case string:
 		buf.AppendString(d)
