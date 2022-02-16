@@ -62,48 +62,50 @@ func (this *Instance) StartTcpServer(listenaddr string, tlsc *tls.Config) error 
 		//use self's heartbeat probe
 		conn.SetKeepAlive(false)
 		if tlsc != nil {
-			p.conn = tls.Server(conn, tlsc)
+			p.c = tls.Server(conn, tlsc)
+			p.cr = pool.GetReader(p.c)
 		} else {
-			p.conn = conn
+			p.c = conn
+			p.cr = pool.GetReader(p.c)
 		}
 		go this.sworker(p, tlsc != nil)
 	}
 }
 
 func (this *Instance) sworker(p *Peer, usetls bool) {
-	p.conn.SetReadDeadline(time.Now().Add(this.c.TcpC.ConnectTimeout))
-	p.conn.SetWriteDeadline(time.Now().Add(this.c.TcpC.ConnectTimeout))
+	p.c.SetReadDeadline(time.Now().Add(this.c.TcpC.ConnectTimeout))
+	p.c.SetWriteDeadline(time.Now().Add(this.c.TcpC.ConnectTimeout))
 	ctx, cancel := context.WithTimeout(p, this.c.TcpC.ConnectTimeout)
 	defer cancel()
 	if usetls {
-		if e := p.conn.(*tls.Conn).HandshakeContext(ctx); e != nil {
+		if e := p.c.(*tls.Conn).HandshakeContext(ctx); e != nil {
 			log.Error(nil, "[Stream.sworker] tls handshake error:", e)
-			p.conn.Close()
+			p.c.Close()
 			return
 		}
 	}
 	//read first verify message from client
 	verifydata := this.verifypeer(ctx, p)
 	if p.peeruniquename == "" {
-		p.conn.Close()
+		p.c.Close()
 		return
 	}
 	if 4+1+len(this.selfappname)+len(verifydata) > maxPieceLen {
 		log.Error(nil, "[Stream.sworker] self verify data too large")
-		p.conn.Close()
+		p.c.Close()
 		return
 	}
 	if e := this.mng.AddPeer(p); e != nil {
 		log.Error(nil, "[Stream.sworker] add:", p.peeruniquename, "to connection manager error:", e)
-		p.conn.Close()
+		p.c.Close()
 		return
 	}
 	//verify client success,send self's verify message to client
 	verifymsg := makeVerifyMsg(this.selfappname, p.selfmaxmsglen, verifydata)
 	defer pool.PutBuffer(verifymsg)
-	if _, e := p.conn.Write(verifymsg.Bytes()); e != nil {
+	if _, e := p.c.Write(verifymsg.Bytes()); e != nil {
 		log.Error(nil, "[Stream.sworker] write verify msg to:", p.peeruniquename, "error:", e)
-		p.conn.Close()
+		p.c.Close()
 		this.mng.DelPeer(p)
 		return
 	}
@@ -113,15 +115,15 @@ func (this *Instance) sworker(p *Peer, usetls bool) {
 		if !this.c.Onlinefunc(p) {
 			log.Error(nil, "[Stream.sworker] online:", p.peeruniquename, "failed")
 			atomic.StoreInt32(&p.status, 0)
-			p.conn.Close()
+			p.c.Close()
 			this.mng.DelPeer(p)
 			p.CancelFunc()
 			return
 		}
 	}
 	//after verify,the conntimeout is useless,heartbeat will work for this
-	p.conn.SetReadDeadline(time.Time{})
-	p.conn.SetWriteDeadline(time.Time{})
+	p.c.SetReadDeadline(time.Time{})
+	p.c.SetWriteDeadline(time.Time{})
 	go this.handle(p)
 	return
 }
@@ -154,43 +156,45 @@ func (this *Instance) StartTcpClient(serveraddr string, verifydata []byte, tlsc 
 	(conn.(*net.TCPConn)).SetKeepAlive(false)
 	p := newPeer(this.c.TcpC.MaxMsgLen)
 	if tlsc != nil {
-		p.conn = tls.Client(conn, tlsc)
+		p.c = tls.Client(conn, tlsc)
+		p.cr = pool.GetReader(p.c)
 	} else {
-		p.conn = conn
+		p.c = conn
+		p.cr = pool.GetReader(p.c)
 	}
 	return this.cworker(p, tlsc != nil, verifydata, dl)
 }
 
 func (this *Instance) cworker(p *Peer, usetls bool, verifydata []byte, dl time.Time) bool {
-	p.conn.SetReadDeadline(dl)
-	p.conn.SetWriteDeadline(dl)
+	p.c.SetReadDeadline(dl)
+	p.c.SetWriteDeadline(dl)
 	ctx, cancel := context.WithDeadline(p, dl)
 	defer cancel()
 	if usetls {
-		if e := p.conn.(*tls.Conn).HandshakeContext(ctx); e != nil {
+		if e := p.c.(*tls.Conn).HandshakeContext(ctx); e != nil {
 			log.Error(nil, "[Stream.cworker] tls handshake error:", e)
-			p.conn.Close()
+			p.c.Close()
 			return false
 		}
 	}
 	//send self's verify message to server
 	verifymsg := makeVerifyMsg(this.selfappname, p.selfmaxmsglen, verifydata)
 	defer pool.PutBuffer(verifymsg)
-	if _, e := p.conn.Write(verifymsg.Bytes()); e != nil {
-		log.Error(nil, "[Stream.cworker] write verify msg to:", p.conn.RemoteAddr().String(), "error:", e)
-		p.conn.Close()
+	if _, e := p.c.Write(verifymsg.Bytes()); e != nil {
+		log.Error(nil, "[Stream.cworker] write verify msg to:", p.c.RemoteAddr().String(), "error:", e)
+		p.c.Close()
 		return false
 	}
 	//read first verify message from server
 	_ = this.verifypeer(ctx, p)
 	if p.peeruniquename == "" {
-		p.conn.Close()
+		p.c.Close()
 		return false
 	}
 	//verify server success
 	if e := this.mng.AddPeer(p); e != nil {
 		log.Error(nil, "[Stream.cworker] add:", p.peeruniquename, "to connection manager error:", e)
-		p.conn.Close()
+		p.c.Close()
 		return false
 	}
 	//verify finished set status to true
@@ -199,15 +203,15 @@ func (this *Instance) cworker(p *Peer, usetls bool, verifydata []byte, dl time.T
 		if !this.c.Onlinefunc(p) {
 			log.Error(nil, "[Stream.cworker] online:", p.peeruniquename, "failed")
 			atomic.StoreInt32(&p.status, 0)
-			p.conn.Close()
+			p.c.Close()
 			this.mng.DelPeer(p)
 			p.CancelFunc()
 			return false
 		}
 	}
 	//after verify,the conntimeout is useless,heartbeat will work for this
-	p.conn.SetReadDeadline(time.Time{})
-	p.conn.SetWriteDeadline(time.Time{})
+	p.c.SetReadDeadline(time.Time{})
+	p.c.SetWriteDeadline(time.Time{})
 	go this.handle(p)
 	return true
 }
@@ -217,26 +221,26 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 	defer pool.PutBuffer(buf)
 	_, mtype, e := p.readMessage(nil, buf)
 	if e != nil {
-		log.Error(nil, "[Stream.verifypeer] from:", p.conn.RemoteAddr(), "error:", e)
+		log.Error(nil, "[Stream.verifypeer] from:", p.c.RemoteAddr(), "error:", e)
 		return nil
 	}
 	if mtype != _VERIFY {
-		log.Error(nil, "[Stream.verifypeer] from:", p.conn.RemoteAddr(), "error: not verify msg")
+		log.Error(nil, "[Stream.verifypeer] from:", p.c.RemoteAddr(), "error: not verify msg")
 		return nil
 	}
 	sender, sendermaxmsglen, senderverifydata, e := getVerifyMsg(buf.Bytes())
 	if e != nil {
-		log.Error(nil, "[Stream.verifypeer] from:", p.conn.RemoteAddr(), "error: format wrong")
+		log.Error(nil, "[Stream.verifypeer] from:", p.c.RemoteAddr(), "error: format wrong")
 		return nil
 	}
 	if sendermaxmsglen < 65535 {
-		log.Error(nil, "[Stream.verifypeer] from:", sender+":"+p.conn.RemoteAddr().String(), "error: maxmsglen too small")
+		log.Error(nil, "[Stream.verifypeer] from:", sender+":"+p.c.RemoteAddr().String(), "error: maxmsglen too small")
 		return nil
 	}
 	p.lastactive = time.Now().UnixNano()
 	p.recvidlestart = p.lastactive
 	p.sendidlestart = p.lastactive
-	p.peeruniquename = sender + ":" + p.conn.RemoteAddr().String()
+	p.peeruniquename = sender + ":" + p.c.RemoteAddr().String()
 	p.peermaxmsglen = sendermaxmsglen
 	response, success := this.c.Verifyfunc(ctx, p.peeruniquename, senderverifydata)
 	if !success {
@@ -249,12 +253,13 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 func (this *Instance) handle(p *Peer) {
 	defer func() {
 		atomic.StoreInt32(&p.status, 0)
-		p.conn.Close()
+		p.c.Close()
 		if this.c.Offlinefunc != nil {
 			this.c.Offlinefunc(p)
 		}
 		this.mng.DelPeer(p)
 		p.CancelFunc()
+		pool.PutReader(p.cr)
 	}()
 	pingdata := make([]byte, 8)
 	binary.BigEndian.PutUint64(pingdata, uint64(time.Now().UnixNano()))

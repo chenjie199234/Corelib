@@ -43,8 +43,7 @@ type HandleUserdataFunc func(p *Peer, userdata []byte)
 type HandleOfflineFunc func(p *Peer)
 
 type TcpConfig struct {
-	//include connect time and verify time
-	ConnectTimeout time.Duration //default 500ms
+	ConnectTimeout time.Duration //default 500ms,//include connect time,handshake time and verify time
 	MaxMsgLen      uint32        //default 64M,min 64k
 }
 

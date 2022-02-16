@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"bufio"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -27,7 +28,8 @@ type Peer struct {
 	peeruniquename string
 	status         int32 //1 - working,0 - closed
 	dispatcher     chan *struct{}
-	conn           net.Conn
+	cr             *bufio.Reader
+	c              net.Conn
 	lastactive     int64          //unixnano timestamp
 	recvidlestart  int64          //unixnano timestamp
 	sendidlestart  int64          //unixnano timestamp
@@ -57,19 +59,19 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	if now-atomic.LoadInt64(&p.lastactive) > int64(heart) {
 		//heartbeat timeout
 		log.Error(nil, "[Stream.checkheart] heart timeout:", p.peeruniquename)
-		p.conn.Close()
+		p.c.Close()
 		return
 	}
 	if now-atomic.LoadInt64(&p.sendidlestart) > int64(sendidle) {
 		//send idle timeout
 		log.Error(nil, "[Stream.checkheart] send idle timeout:", p.peeruniquename)
-		p.conn.Close()
+		p.c.Close()
 		return
 	}
 	if recvidle != 0 && now-atomic.LoadInt64(&p.recvidlestart) > int64(recvidle) {
 		//recv idle timeout
 		log.Error(nil, "[Stream.checkheart] recv idle timeout:", p.peeruniquename)
-		p.conn.Close()
+		p.c.Close()
 		return
 	}
 	pingdata := make([]byte, 8)
@@ -80,7 +82,7 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 
 func (p *Peer) readMessage(total *pool.Buffer, tmp *pool.Buffer) (fin bool, mtype int, e error) {
 	tmp.Resize(3)
-	if _, e = io.ReadFull(p.conn, tmp.Bytes()); e != nil {
+	if _, e = io.ReadFull(p.cr, tmp.Bytes()); e != nil {
 		return
 	}
 	num := binary.BigEndian.Uint16(tmp.Bytes()[:2])
@@ -93,13 +95,13 @@ func (p *Peer) readMessage(total *pool.Buffer, tmp *pool.Buffer) (fin bool, mtyp
 	}
 	if mtype != _USER || total == nil {
 		tmp.Resize(uint32(num) - 1)
-		_, e = io.ReadFull(p.conn, tmp.Bytes())
+		_, e = io.ReadFull(p.cr, tmp.Bytes())
 	} else if oldlen := uint32(total.Len()); oldlen+uint32(num)-1 > p.selfmaxmsglen {
 		e = ErrMsgTooLarge
 		return
 	} else {
 		total.Growth(oldlen + uint32(num) - 1)
-		_, e = io.ReadFull(p.conn, total.Bytes()[oldlen:])
+		_, e = io.ReadFull(p.cr, total.Bytes()[oldlen:])
 	}
 	return
 }
@@ -160,9 +162,9 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 			data = makeUserMsg(userdata, true)
 			userdata = nil
 		}
-		if _, e := p.conn.Write(data.Bytes()); e != nil {
+		if _, e := p.c.Write(data.Bytes()); e != nil {
 			log.Error(ctx, "[Stream.SendMessage] to:", p.peeruniquename, "error:", e)
-			p.conn.Close()
+			p.c.Close()
 			pool.PutBuffer(data)
 			if as != nil {
 				as(p, e)
@@ -179,9 +181,9 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 }
 func (p *Peer) sendPing(pingdata []byte) error {
 	data := makePingMsg(pingdata)
-	if _, e := p.conn.Write(data.Bytes()); e != nil {
+	if _, e := p.c.Write(data.Bytes()); e != nil {
 		log.Error(nil, "[Stream.sendPing] to:", p.peeruniquename, "error:", e)
-		p.conn.Close()
+		p.c.Close()
 		pool.PutBuffer(data)
 		return ErrConnClosed
 	}
@@ -191,9 +193,9 @@ func (p *Peer) sendPing(pingdata []byte) error {
 }
 func (p *Peer) sendPong(pongdata *pool.Buffer) error {
 	data := makePongMsg(pongdata.Bytes())
-	if _, e := p.conn.Write(data.Bytes()); e != nil {
+	if _, e := p.c.Write(data.Bytes()); e != nil {
 		log.Error(nil, "[Stream.sendPong] to:", p.peeruniquename, "error:", e)
-		p.conn.Close()
+		p.c.Close()
 		pool.PutBuffer(data)
 		return ErrConnClosed
 	}
@@ -204,7 +206,7 @@ func (p *Peer) sendPong(pongdata *pool.Buffer) error {
 
 func (p *Peer) Close() {
 	atomic.StoreInt32(&p.status, 0)
-	p.conn.Close()
+	p.c.Close()
 }
 
 //peername
@@ -220,7 +222,7 @@ func (p *Peer) GetPeerNetlag() int64 {
 	return atomic.LoadInt64(&p.netlag)
 }
 func (p *Peer) GetRemoteAddr() string {
-	return p.conn.RemoteAddr().String()
+	return p.c.RemoteAddr().String()
 }
 func (p *Peer) GetPeerMaxMsgLen() uint32 {
 	return p.peermaxmsglen
