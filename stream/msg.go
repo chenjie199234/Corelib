@@ -3,160 +3,232 @@ package stream
 import (
 	"encoding/binary"
 	"errors"
+	"math"
+	"math/rand"
+	"time"
 
 	"github.com/chenjie199234/Corelib/pool"
 )
 
 var (
-	ErrMsgEmpty   = errors.New("message empty")
-	ErrMsgUnknown = errors.New("message type unknown")
-	ErrMsgFin     = errors.New("message fin error")
+	ErrMsgLarge = errors.New("message too large")
+	ErrMsgFin   = errors.New("message fin error")
+	ErrMsgType  = errors.New("message type error")
+	ErrMsgMask  = errors.New("message mask error")
 )
 
-const maxPieceLen = 65500
+// use websocket frame format,so that we can support raw tcp and websocket at the same time
+// when use raw tcp,the client don't need to use mask and don't need websocket handshake
+// when use the websocket,the client must use mask and need http handshake
+// after connection success,first message must be verify message and must be fin,verify message data format see below
 
-//msg type
+// 0                   1                   2                   3
+// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+// +-+-+-+-+-------+-+-------------+-------------------------------+
+// |F|R|R|R| opcode|M| Payload len |    Extended payload length    |
+// |I|S|S|S|  (4)  |A|     (7)     |             (16/64)           |
+// |N|V|V|V|       |S|             |   (if payload len==126/127)   |
+// | |1|2|3|       |K|             |                               |
+// +-+-+-+-+-------+-+-------------+ - - - - - - - - - - - - - - - +
+// |     Extended payload length continued, if payload len == 127  |
+// + - - - - - - - - - - - - - - - +-------------------------------+
+// |                               |Masking-key, if MASK set to 1  |
+// +-------------------------------+-------------------------------+
+// | Masking-key (continued)       |          Payload Data         |
+// +-------------------------------- - - - - - - - - - - - - - - - +
+// :                     Payload Data continued ...                :
+// + - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - +
+// |                     Payload Data continued ...                |
+// +---------------------------------------------------------------+
+
+var maxPieceLen = 65500
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 const (
-	_PING   = iota //can only be fin
-	_PONG          //can only be fin
-	_VERIFY        //can only be fin
-	_USER          //can be fin or unfin
+	_CONTINUE = 0b00000000 //can be not fin
+	_TEXT     = 0b00000001 //can be not fin
+	_BINARY   = 0b00000010 //can be not fin
+	_CLOSE    = 0b00001000 //must be fin,payload <= 125
+	_PING     = 0b00001001 //must be fin,payload <= 125
+	_PONG     = 0b00001010 //must be fin,payload <= 125
+	_RSV3     = 0b00010000
+	_RSV2     = 0b00100000
+	_RSV1     = 0b01000000
+	_FIN_MASK = 0b10000000
 )
 
-var typemask = 0b00000011
-
-//control type
-const (
-	_EMPTY = iota << 2
-)
-
-//fin
-var finmask = 0b10000000
-
-func decodeHeader(data byte) (fin bool, mtype int, e error) {
-	if int(data)&finmask > 0 {
+func decodeFirst(b byte) (fin, rsv1, rsv2, rsv3 bool, opcode int, e error) {
+	if b&_FIN_MASK > 0 {
 		fin = true
 	}
-	mtype = int(data) & typemask
-	switch mtype {
-	case _PING:
-		if !fin {
-			return false, 0, ErrMsgFin
-		}
-	case _PONG:
-		if !fin {
-			return false, 0, ErrMsgFin
-		}
-	case _VERIFY:
-		if !fin {
-			return false, 0, ErrMsgFin
-		}
-	case _USER:
-	default:
-		e = ErrMsgUnknown
+	if b&_RSV1 > 0 {
+		rsv1 = true
+	}
+	if b&_RSV2 > 0 {
+		rsv2 = true
+	}
+	if b&_RSV3 > 0 {
+		rsv3 = true
+	}
+	opcode = int(b & 0b00001111)
+	if opcode != _CONTINUE && opcode != _TEXT && opcode != _BINARY && opcode != _CLOSE && opcode != _PING && opcode != _PONG {
+		e = ErrMsgType
+		return
+	}
+	if iscontrol(opcode) && !fin {
+		e = ErrMsgFin
 	}
 	return
 }
+func decodeSecond(b byte, opcode int, peerWSClient bool) (mask bool, payload uint32, e error) {
+	if b&_FIN_MASK > 0 {
+		mask = true
+	}
+	if !mask && peerWSClient {
+		//websocket client's message must mask
+		e = ErrMsgMask
+		return
+	}
+	payload = uint32(b & 0b01111111)
+	if iscontrol(opcode) && payload > 125 {
+		e = ErrMsgLarge
+		return
+	}
+	return
+}
+func iscontrol(opcode int) bool {
+	return opcode&0b00001000 > 0
+}
 
-//   each row is one byte
-//   |8    |7   |6    |5   |4   |3   |2   |1  |
-//0  |----------------------------------------|
-//1  |-----------------------------package len|
-//2  |-fin-|-------------------------|--type--|
-//...|----------------------------------------|
-//x  |---------------------------specific data|
-func makePingMsg(pingdata []byte) *pool.Buffer {
+func makePingMsg(nowUnixnano int64, mask bool) *pool.Buffer {
 	buf := pool.GetBuffer()
-	buf.Resize(uint32(2 + 1 + len(pingdata)))
-	binary.BigEndian.PutUint16(buf.Bytes(), uint16(1+len(pingdata)))
-	buf.Bytes()[2] = byte(_PING | finmask)
-	if len(pingdata) > 0 {
-		copy(buf.Bytes()[3:], pingdata)
+	buf.AppendByte(_PING | _FIN_MASK)
+	if mask {
+		buf.AppendByte(_FIN_MASK | 8)
+		buf.Growth(14)
+		binary.BigEndian.PutUint32(buf.Bytes()[2:], rand.Uint32())
+		binary.BigEndian.PutUint64(buf.Bytes()[6:], uint64(nowUnixnano))
+		domask(buf.Bytes()[6:], buf.Bytes()[2:6])
+	} else {
+		buf.AppendByte(8)
+		buf.Growth(10)
+		binary.BigEndian.PutUint64(buf.Bytes()[2:], uint64(nowUnixnano))
 	}
 	return buf
 }
 
-//   each row is one byte
-//   |8    |7   |6    |5   |4   |3   |2   |1  |
-//0  |----------------------------------------|
-//1  |-----------------------------package len|
-//2  |-fin-|-------------------------|--type--|
-//...|----------------------------------------|
-//x  |---------------------------specific data|
-func makePongMsg(pongdata []byte) *pool.Buffer {
+func makePongMsg(pongdata []byte, mask bool) *pool.Buffer {
 	buf := pool.GetBuffer()
-	buf.Resize(uint32(2 + 1 + len(pongdata)))
-	binary.BigEndian.PutUint16(buf.Bytes(), uint16(1+len(pongdata)))
-	buf.Bytes()[2] = byte(_PONG | finmask)
-	if len(pongdata) > 0 {
-		copy(buf.Bytes()[3:], pongdata)
+	buf.AppendByte(_PONG | _FIN_MASK)
+	if mask {
+		buf.AppendByte(_FIN_MASK | byte(len(pongdata)))
+		buf.Growth(6)
+		binary.BigEndian.PutUint32(buf.Bytes()[2:], rand.Uint32())
+		domask(pongdata, buf.Bytes()[2:])
+		buf.AppendByteSlice(pongdata)
+	} else {
+		buf.AppendByte(byte(len(pongdata)))
+		buf.AppendByteSlice(pongdata)
 	}
 	return buf
 }
 
-//   each row is one byte
-//   |8    |7   |6    |5   |4   |3   |2   |1  |
-//0  |----------------------------------------|
-//1  |-----------------------------package len|
-//2  |-fin-|-------------------------|--type--|
-//3  |----------------------------------------|
-//4  |----------------------------------------|
-//5  |----------------------------------------|
-//6  |-------------------------------maxmsglen|
-//7  |------------------------------sender len|
-//...|----------------------------------------|
-//x  |----------------------------------sender|
-//...|----------------------------------------|
-//y  |-----------------------------verify data|
-func makeVerifyMsg(sender string, maxmsglen uint32, verifydata []byte) *pool.Buffer {
+//length is always <= math.MaxUint32
+func makeheader(buf *pool.Buffer, fin bool, piece int, mask bool, length uint64) (maskkey []byte) {
+	if fin && piece == 0 {
+		buf.AppendByte(_FIN_MASK | _BINARY)
+	} else if fin {
+		buf.AppendByte(_FIN_MASK | _CONTINUE)
+	} else if piece != 0 {
+		buf.AppendByte(_CONTINUE)
+	} else {
+		buf.AppendByte(_BINARY)
+	}
+	var payload uint8
+	switch {
+	case length <= 125:
+		payload = uint8(length)
+	case length <= math.MaxUint16:
+		payload = 126
+	default:
+		payload = 127
+	}
+	if mask {
+		buf.AppendByte(_FIN_MASK | payload)
+	} else {
+		buf.AppendByte(payload)
+	}
+	switch payload {
+	case 127:
+		buf.Growth(10)
+		binary.BigEndian.PutUint64(buf.Bytes()[2:], length)
+	case 126:
+		buf.Growth(4)
+		binary.BigEndian.PutUint16(buf.Bytes()[2:], uint16(length))
+	}
+	if mask {
+		buf.Growth(uint32(buf.Len()) + 4)
+		binary.BigEndian.PutUint32(buf.Bytes()[buf.Len()-4:], rand.Uint32())
+		maskkey = buf.Bytes()[buf.Len()-4:]
+	}
+	return
+}
+func domask(data []byte, maskkey []byte) {
+	for i, v := range data {
+		data[i] = v ^ maskkey[i%4]
+	}
+}
+
+//Payload Data
+//  0 1 2 3 4 5 6 7 8
+//0 |---------------|
+//1 |---------------|
+//2 |---------------|
+//3 |------maxmsglen|//big endian
+//  ...
+//  :-----verifydata|
+func makeVerifyMsg(maxmsglen uint32, verifydata []byte, mask bool) *pool.Buffer {
+	payloadlen := 4 + len(verifydata)
 	buf := pool.GetBuffer()
-	buf.Resize(uint32(2 + 1 + 4 + 1 + len(sender) + len(verifydata)))
-	binary.BigEndian.PutUint16(buf.Bytes(), uint16(1+4+1+len(sender)+len(verifydata)))
-	buf.Bytes()[2] = byte(_VERIFY | finmask)
-	binary.BigEndian.PutUint32(buf.Bytes()[3:], maxmsglen)
-	buf.Bytes()[7] = byte(len(sender))
-	copy(buf.Bytes()[8:], sender)
-	if len(verifydata) > 0 {
-		copy(buf.Bytes()[8+len(sender):], verifydata)
+	maskkey := makeheader(buf, true, 0, mask, uint64(payloadlen))
+	headlen := buf.Len()
+	buf.Growth(uint32(headlen + payloadlen))
+	binary.BigEndian.PutUint32(buf.Bytes()[headlen:], maxmsglen)
+	copy(buf.Bytes()[headlen+4:], verifydata)
+	if mask {
+		domask(buf.Bytes()[headlen:], maskkey)
 	}
 	return buf
 }
 
-//'data' doesn't contain package len and head
-func getVerifyMsg(data []byte) (sender string, maxmsglen uint32, verifydata []byte, e error) {
-	if len(data) <= 5 {
-		e = ErrMsgEmpty
+//return verifydata == nil --> format wrong
+//return len(verifydata) == 0 --> no verifydata
+func getVerifyMsg(data []byte) (maxmsglen uint32, verifydata []byte) {
+	if len(data) < 4 {
 		return
 	}
 	maxmsglen = binary.BigEndian.Uint32(data[:4])
-	senderlen := int(data[4])
-	if len(data) < (senderlen + 5) {
-		e = ErrMsgEmpty
-		return
-	}
-	sender = string(data[5 : senderlen+5])
-	verifydata = data[senderlen+5:]
+	verifydata = data[4:]
 	return
 }
 
-//   each row is one byte
-//   |8    |7   |6    |5   |4   |3   |2   |1  |
-//0  |----------------------------------------|
-//1  |-----------------------------package len|
-//2  |-fin-|-------------------------|--type--|
-//...|----------------------------------------|
-//x  |-------------------------------user data|
-func makeUserMsg(userdata []byte, fin bool) *pool.Buffer {
+//Payload Data
+//  0 1 2 3 4 5 6 7 8
+//0 |---------------|
+//  ...
+//  :-----------data|
+func makeCommonMsg(data []byte, fin bool, piece int, mask bool) *pool.Buffer {
+	payloadlen := len(data)
 	buf := pool.GetBuffer()
-	buf.Resize(uint32(2 + 1 + len(userdata)))
-	binary.BigEndian.PutUint16(buf.Bytes(), uint16(1+len(userdata)))
-	if fin {
-		buf.Bytes()[2] = byte(_USER | finmask)
-	} else {
-		buf.Bytes()[2] = byte(_USER)
-	}
-	if len(userdata) > 0 {
-		copy(buf.Bytes()[3:], userdata)
+	maskkey := makeheader(buf, fin, piece, mask, uint64(payloadlen))
+	headlen := buf.Len()
+	buf.Growth(uint32(headlen + payloadlen))
+	copy(buf.Bytes()[headlen:], data)
+	if mask {
+		domask(buf.Bytes()[headlen:], maskkey)
 	}
 	return buf
 }

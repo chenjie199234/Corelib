@@ -13,10 +13,8 @@ import (
 //Before two peers can communicate,they need to verify each other first
 //server's response will write back to the client for client to verify the server
 //client's response is useless and it will be dropped,you can just return nil
-//success = true means verify success
-//success = false means verify failed
-//Don't reuse the under layer data in 'peerVerifyData,it will change when this function return
-type HandleVerifyFunc func(ctx context.Context, peeruniquename string, peerVerifyData []byte) (response []byte, success bool)
+//Warning!!!Don't reuse the data in 'peerVerifyData',it will change when this function return,if you want to use it,copy it first
+type HandleVerifyFunc func(ctx context.Context, peerVerifyData []byte) (response []byte, success bool)
 
 //This is a notice func after verify each other success
 //success = true means online success
@@ -33,7 +31,7 @@ type HandlePingPongFunc func(p *Peer)
 //This is a func to deal the user message
 //Peer is a cancel context,it will be canceled when the connection closed
 //You can control the timeout by yourself through context.WithTimeout(p,time.Second)
-//Don't reuse the under layer data in 'userdata',it will change when this function return
+//Warning!!!Don't reuse the data in 'userdata',it will change when this function return,if you want to use it,copy it first
 type HandleUserdataFunc func(p *Peer, userdata []byte)
 
 //This is a notice func after two peers disconnect with each other
@@ -102,15 +100,15 @@ type InstanceConfig struct {
 
 	//before peer and peer confirm connection,they need to verify each other
 	//after tcp connected,this function will be called
-	Verifyfunc HandleVerifyFunc
+	VerifyFunc HandleVerifyFunc
 	//this function will be called after peer and peer verified each other
-	Onlinefunc HandleOnlineFunc
+	OnlineFunc HandleOnlineFunc
 	//this function used to tel user which peer is alive
 	PingPongFunc HandlePingPongFunc
 	//this function used to deal userdata
-	Userdatafunc HandleUserdataFunc
+	UserdataFunc HandleUserdataFunc
 	//this function will be called when peer and peer closed their connection
-	Offlinefunc HandleOfflineFunc
+	OfflineFunc HandleOfflineFunc
 }
 
 func (c *InstanceConfig) validate() {

@@ -23,6 +23,7 @@ import (
 	"github.com/chenjie199234/Corelib/codegen/tml/kubernetes"
 	"github.com/chenjie199234/Corelib/codegen/tml/mainfile"
 	"github.com/chenjie199234/Corelib/codegen/tml/model"
+	submodel "github.com/chenjie199234/Corelib/codegen/tml/model/sub"
 	"github.com/chenjie199234/Corelib/codegen/tml/readme"
 	"github.com/chenjie199234/Corelib/codegen/tml/server/xcrpc"
 	"github.com/chenjie199234/Corelib/codegen/tml/server/xgrpc"
@@ -124,6 +125,9 @@ func createSubProject() {
 	//sub service
 	subservice.CreatePathAndFile(*sub)
 	subservice.Execute(*name, *sub)
+	//sub model
+	submodel.CreatePathAndFile(*sub)
+	submodel.Execute(*sub)
 }
 func createBaseProject() {
 	//create project

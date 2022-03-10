@@ -72,7 +72,7 @@ func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 	}
 	d, _ := proto.Marshal(r.reqdata)
 	if e = p.SendMessage(ctx, d, beforeSend, afterSend); e != nil {
-		if e == stream.ErrMsgTooLarge {
+		if e == stream.ErrMsgLarge {
 			e = cerror.ErrReqmsgLen
 		} else if e == stream.ErrConnClosed {
 			e = errPickAgain

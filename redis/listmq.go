@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
-	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -30,18 +29,11 @@ var hexpire = ""
 //num decide there are how many lists will be used in redis for this mq
 //this is useful to balance all redis nodes' request
 //every special list will have a name like name_[0,num)
-//default is 10
-func (p *Pool) ListMQSub(name string, num uint64, recvbufnum uint64, stop chan struct{}) (<-chan []byte, error) {
-	if name == "" {
-		return nil, errors.New("mq name is empty")
+func (p *Pool) ListMQSub(name string, num uint64, subhandler func([]byte)) (cancel func()) {
+	stop := make(chan *struct{})
+	cancel = func() {
+		close(stop)
 	}
-	if num == 0 {
-		num = 10
-	}
-	if recvbufnum < 1024 {
-		recvbufnum = 1024
-	}
-	recv := make(chan []byte, recvbufnum)
 	for i := uint64(0); i < num; i++ {
 		index := i
 		listname := name + "_" + strconv.FormatUint(index, 10)
@@ -83,7 +75,7 @@ func (p *Pool) ListMQSub(name string, num uint64, recvbufnum uint64, stop chan s
 						conn = nil
 						break
 					}
-					recv <- data[1]
+					subhandler(data[1])
 				}
 			}
 		}()
@@ -126,7 +118,7 @@ func (p *Pool) ListMQSub(name string, num uint64, recvbufnum uint64, stop chan s
 			}
 		}()
 	}
-	return recv, nil
+	return
 }
 
 const pub = `if(redis.call("EXISTS",KEYS[2])~=0 and redis.call("EXPIRE",KEYS[1],11)~=0)

@@ -45,6 +45,7 @@ func (c *ClientConfig) validate() {
 }
 
 type CrpcClient struct {
+	selfappname   string
 	serverappname string //group.name
 	c             *ClientConfig
 	tlsc          *tls.Config
@@ -58,9 +59,6 @@ type CrpcClient struct {
 
 func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername string) (*CrpcClient, error) {
 	serverappname := servergroup + "." + servername
-	if e := name.FullCheck(serverappname); e != nil {
-		return nil, e
-	}
 	selfappname := selfgroup + "." + selfname
 	if e := name.FullCheck(selfappname); e != nil {
 		return nil, e
@@ -90,6 +88,7 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername
 		}
 	}
 	client := &CrpcClient{
+		selfappname:   selfappname,
 		serverappname: serverappname,
 		c:             c,
 		tlsc: &tls.Config{
@@ -108,11 +107,11 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername
 		},
 	}
 	//tcp instalce
-	instancec.Verifyfunc = client.verifyfunc
-	instancec.Onlinefunc = client.onlinefunc
-	instancec.Userdatafunc = client.userfunc
-	instancec.Offlinefunc = client.offlinefunc
-	client.instance, _ = stream.NewInstance(instancec, selfgroup, selfname)
+	instancec.VerifyFunc = client.verifyfunc
+	instancec.OnlineFunc = client.onlinefunc
+	instancec.UserdataFunc = client.userfunc
+	instancec.OfflineFunc = client.offlinefunc
+	client.instance, _ = stream.NewInstance(instancec)
 	//init discover
 	client.resolver = newCorelibResolver(servergroup, servername, client)
 	return client, nil
@@ -123,7 +122,7 @@ type RegisterData struct {
 	Addition []byte
 }
 
-//all: key server's addr
+//all: key server's addr,format: tcp://ip:port
 func (c *CrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 	c.balancer.UpdateDiscovery(all)
 }
@@ -137,13 +136,13 @@ func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 	if c.c.UseTLS {
 		tlsc = c.tlsc
 	}
-	if !c.instance.StartTcpClient(server.addr, common.Str2byte(c.serverappname), tlsc) {
+	if !c.instance.StartClient(server.addr, common.Str2byte(c.serverappname), tlsc) {
 		time.Sleep(time.Millisecond * 100)
 		go c.start(server, true)
 	}
 }
 
-func (c *CrpcClient) verifyfunc(ctx context.Context, appuniquename string, peerVerifyData []byte) ([]byte, bool) {
+func (c *CrpcClient) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]byte, bool) {
 	//verify success
 	return nil, true
 }
@@ -158,7 +157,7 @@ func (c *CrpcClient) onlinefunc(p *stream.Peer) bool {
 	server.setpeer(p)
 	c.balancer.RebuildPicker()
 	c.resolver.wakemanual()
-	log.Info(nil, "[crpc.client.onlinefunc] server:", p.GetPeerUniqueName(), "online")
+	log.Info(nil, "[crpc.client.onlinefunc] server RemoteAddr:", p.GetRemoteAddr(), "online")
 	return true
 }
 
@@ -167,7 +166,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
-		log.Error(nil, "[crpc.client.userfunc] server:", p.GetPeerUniqueName(), "data format error:", e)
+		log.Error(nil, "[crpc.client.userfunc] server RemoteAddr:", p.GetRemoteAddr(), "data format error:", e)
 		return
 	}
 	server.lker.Lock()
@@ -194,7 +193,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 
 func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
-	log.Info(nil, "[crpc.client.offlinefunc] server:", p.GetPeerUniqueName(), "offline")
+	log.Info(nil, "[crpc.client.offlinefunc] server RemoteAddr:", p.GetRemoteAddr(), "offline")
 	server.setpeer(nil)
 	c.balancer.RebuildPicker()
 	server.lker.Lock()
@@ -217,10 +216,11 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		Body:     in,
 		Metadata: metadata,
 	}
-	traceid, _, _, selfmethod, selfpath, selfdeep := trace.GetTrace(ctx)
+	traceid, selfappname, _, selfmethod, selfpath, selfdeep := trace.GetTrace(ctx)
 	if traceid != "" {
 		msg.Tracedata = map[string]string{
 			"Traceid":      traceid,
+			"SourceApp":    selfappname,
 			"SourceMethod": selfmethod,
 			"SourcePath":   selfpath,
 			"Deep":         strconv.Itoa(selfdeep),

@@ -74,9 +74,6 @@ type CGrpcClient struct {
 
 func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername string) (*CGrpcClient, error) {
 	serverappname := servergroup + "." + servername
-	if e := name.FullCheck(serverappname); e != nil {
-		return nil, e
-	}
 	selfappname := selfgroup + "." + selfname
 	if e := name.FullCheck(selfappname); e != nil {
 		return nil, e
@@ -134,7 +131,7 @@ func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servernam
 	opts = append(opts, grpc.WithDisableServiceConfig())
 	opts = append(opts, grpc.WithDefaultServiceConfig("{\"loadBalancingConfig\":[{\"corelib\":{}}]}"))
 	//resolver
-	opts = append(opts, grpc.WithResolvers(&resolverBuilder{c: clientinstance}))
+	opts = append(opts, grpc.WithResolvers(&resolverBuilder{servergroup: servergroup, servername: servername, c: clientinstance}))
 	conn, e := grpc.Dial("corelib:///"+serverappname, opts...)
 	if e != nil {
 		return nil, e

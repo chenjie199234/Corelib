@@ -128,7 +128,7 @@ func crpcDNS(group, name string, manually <-chan *struct{}, client *crpc.CrpcCli
 			continue
 		}
 		for i := range addrs {
-			addrs[i] = addrs[i] + ":9000"
+			addrs[i] = "tcp://" + addrs[i] + ":9000"
 		}
 		dserver := make(map[string]struct{})
 		dserver["dns"] = struct{}{}

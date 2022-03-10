@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/chenjie199234/Corelib/util/common"
 	"google.golang.org/grpc/codes"
@@ -117,7 +118,7 @@ func (this *Error) Error() string {
 	if this == nil {
 		return ""
 	}
-	return "{\"code\":" + strconv.FormatInt(int64(this.Code), 10) + ",\"msg\":\"" + this.Msg + "\"}"
+	return "{\"code\":" + strconv.FormatInt(int64(this.Code), 10) + ",\"msg\":\"" + strings.Replace(this.Msg, "\"", "\\\"", -1) + "\"}"
 }
 func (this *Error) GRPCStatus() *status.Status {
 	return status.New(codes.Code(this.Httpcode), this.Error())

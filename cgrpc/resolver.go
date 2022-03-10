@@ -2,14 +2,14 @@ package cgrpc
 
 import (
 	"context"
-	"strings"
 	"sync"
 
 	"google.golang.org/grpc/resolver"
 )
 
 type resolverBuilder struct {
-	c *CGrpcClient
+	servergroup, servername string
+	c                       *CGrpcClient
 }
 
 func (b *resolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
@@ -21,8 +21,7 @@ func (b *resolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, 
 		cc:           cc,
 	}
 	b.c.resolver.manually <- nil
-	strs := strings.Split(target.URL.Path, ".")
-	go b.c.c.Discover(strs[0], strs[1], b.c.resolver.manually, b.c)
+	go b.c.c.Discover(b.servergroup, b.servername, b.c.resolver.manually, b.c)
 	return b.c.resolver, nil
 }
 

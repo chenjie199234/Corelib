@@ -14,16 +14,14 @@ help() {
 	echo "cmd.sh — every thing you need"
 	echo "         please install git"
 	echo "         please install golang"
-	echo "         please install protoc"
-	echo "         please install protoc-gen-go"
-	echo "         please install codegen"
+	echo "         please install protoc           (github.com/protocolbuffers/protobuf)"
+	echo "         please install protoc-gen-go    (github.com/protocolbuffers/protobuf-go)"
+	echo "         please install codegen          (github.com/chenjie199234/Corelib)"
 	echo ""
 	echo "Usage:"
 	echo "   ./cmd.sh <option>"
 	echo ""
 	echo "Options:"
-	echo "   run                       Run this program"
-	echo "   build                     Complie this program to binary"
 	echo "   pb                        Generate the proto in this program"
 	echo "   new <sub service name>    Create a new sub service"
 	echo "   kube                      Update or add kubernetes config"
@@ -43,21 +41,6 @@ pb() {
 	protoc -I ./ -I $corelib --go-crpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --go-web_out=paths=source_relative:. ./api/*.proto
 	go mod tidy
-}
-
-run() {
-	go mod tidy
-	go run main.go
-}
-
-build() {
-	go mod tidy
-	go build -ldflags "-s -w" -o main
-	if (type upx >/dev/null 2>&1);then
-		upx -9  main
-	else
-		echo "recommand to use upx to compress bin file"
-	fi
 }
 
 new() {
@@ -274,16 +257,14 @@ goto :end
 	echo cmd.bat — every thing you need
 	echo           please install git
 	echo           please install golang
-	echo           please install protoc
-	echo           please install protoc-gen-go
-	echo           please install codegen
+	echo           please install protoc           (github.com/protocolbuffers/protobuf)
+	echo           please install protoc-gen-go    (github.com/protocolbuffers/protobuf-go)
+	echo           please install codegen          (github.com/chenjie199234/Corelib)
 	echo
 	echo Usage:
 	echo    ./cmd.bat <option^>
 	echo
 	echo Options:
-	echo    run                       Run this program.
-	echo    build                     Complie this program to binary.
 	echo    pb                        Generate the proto in this program.
 	echo    new <sub service name^>    Create a new sub service.
 	echo    kube                      Update or add kubernetes config.

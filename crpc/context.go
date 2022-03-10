@@ -98,11 +98,18 @@ func (c *Context) GetPath() string {
 func (c *Context) GetBody() []byte {
 	return c.msg.Body
 }
-func (c *Context) GetPeerName() string {
-	return c.peer.GetPeerName()
-}
-func (c *Context) GetPeerAddr() string {
+func (c *Context) GetRemoteAddr() string {
 	return c.peer.GetRemoteAddr()
+}
+
+//this is only useful for crpc server
+//when the client connection is based on websocket and there is a load balancer before it like nginx
+//then the realPeerIP may different from the remoteaddr
+func (c *Context) GetRealPeerIP() string {
+	return c.peer.GetRealPeerIp()
+}
+func (c *Context) GetPeerMaxMsgLen() uint32 {
+	return c.peer.GetPeerMaxMsgLen()
 }
 func (c *Context) GetMetadata() map[string]string {
 	return c.metadata

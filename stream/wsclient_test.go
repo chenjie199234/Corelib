@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func Test_Tcpclient(t *testing.T) {
+func Test_Wsclient(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	go func() {
 		for count := 0; count < 1; count++ {
@@ -28,13 +28,13 @@ func Test_Tcpclient(t *testing.T) {
 				UserdataFunc: tcpclienthandleuserdata,
 				OfflineFunc:  tcpclienthandleoffline,
 			})
-			tcpclientinstance.StartClient("tcp://127.0.0.1:9234", []byte{'t', 'e', 's', 't', 'c'}, nil)
+			tcpclientinstance.StartClient("ws://127.0.0.1:9234", []byte{'t', 'e', 's', 't', 'c'}, nil)
 			time.Sleep(time.Millisecond)
 		}
 	}()
-	http.ListenAndServe(":8081", nil)
+	http.ListenAndServe(":8082", nil)
 }
-func tcpclienthandleVerify(ctx context.Context, peerVerifyData []byte) ([]byte, bool) {
+func wsclienthandleVerify(ctx context.Context, peerVerifyData []byte) ([]byte, bool) {
 	if !bytes.Equal([]byte{'t', 'e', 's', 't'}, peerVerifyData) {
 		fmt.Println("verify error")
 		return nil, false
@@ -42,10 +42,10 @@ func tcpclienthandleVerify(ctx context.Context, peerVerifyData []byte) ([]byte, 
 	return nil, true
 }
 
-var firsttcpclient int64
-var firsttcpclientpeer *Peer
+var firstwsclient int64
+var firstwsclientpeer *Peer
 
-func tcpclienthandleonline(p *Peer) bool {
+func wsclienthandleonline(p *Peer) bool {
 	if atomic.SwapInt64(&firsttcpclient, 1) == 0 {
 		firsttcpclientpeer = p
 		go func() {
@@ -60,16 +60,16 @@ func tcpclienthandleonline(p *Peer) bool {
 	return true
 }
 
-var firsttcpclientpingpong int64
+var firstwsclientpingpong int64
 
-func tcpclientpingpong(p *Peer) {
+func wsclientpingpong(p *Peer) {
 	if p == firsttcpclientpeer {
 		fmt.Println("ping pong:", p.GetPeerNetlag())
 	}
 }
-func tcpclienthandleuserdata(p *Peer, data []byte) {
+func wsclienthandleuserdata(p *Peer, data []byte) {
 	fmt.Printf("%s:%d\n", p.c.RemoteAddr().String(), len(data))
 }
 
-func tcpclienthandleoffline(p *Peer) {
+func wsclienthandleoffline(p *Peer) {
 }

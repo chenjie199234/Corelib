@@ -76,26 +76,27 @@ func newconnmng(groupnum int, heartprobe, sendidletimeout, recvidletimeout time.
 	return mng
 }
 
-var errDupConnection = errors.New("dup connection")
-var errServerClosed = errors.New("server closed")
+var errDup = errors.New("duplicate connection")
+var errClosing = errors.New("instance closing")
 
 func (m *connmng) AddPeer(p *Peer) error {
-	tw := m.groups[common.BkdrhashString(p.peeruniquename, uint64(len(m.groups)))]
+	peeraddr := p.c.RemoteAddr().String()
+	tw := m.groups[common.BkdrhashString(peeraddr, uint64(len(m.groups)))]
 	g := tw.wheel[(atomic.LoadUint64(&tw.index)+rand.Uint64()%16+2)%20] //rand is used to reduce race
 	g.Lock()
-	if _, ok := g.peers[p.peeruniquename]; ok {
+	if _, ok := g.peers[peeraddr]; ok {
 		g.Unlock()
-		return errDupConnection
+		return errDup
 	}
 	p.peergroup = g
 	for {
 		old := atomic.LoadInt32(&m.peernum)
 		if old < 0 {
 			g.Unlock()
-			return errServerClosed
+			return errClosing
 		}
 		if atomic.CompareAndSwapInt32(&m.peernum, old, old+1) {
-			g.peers[p.peeruniquename] = p
+			g.peers[peeraddr] = p
 			break
 		}
 	}
@@ -104,7 +105,7 @@ func (m *connmng) AddPeer(p *Peer) error {
 }
 func (m *connmng) DelPeer(p *Peer) {
 	p.peergroup.Lock()
-	delete(p.peergroup.peers, p.peeruniquename)
+	delete(p.peergroup.peers, p.c.RemoteAddr().String())
 	p.peergroup.Unlock()
 	p.peergroup = nil
 	atomic.AddInt32(&m.peernum, -1)

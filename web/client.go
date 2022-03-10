@@ -60,9 +60,6 @@ type WebClient struct {
 
 func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername string) (*WebClient, error) {
 	serverappname := servergroup + "." + servername
-	if e := name.FullCheck(serverappname); e != nil {
-		return nil, e
-	}
 	selfappname := selfgroup + "." + selfname
 	if e := name.FullCheck(selfappname); e != nil {
 		return nil, e
