@@ -15,7 +15,7 @@
 ## cgrpc
 	grpc框架,二次封装,内含proto解析工具,可由proto生成cgrpc桩代码
 ## stream
-	tcp长连接框架
+	长连接框架,同时支持tcp以及websocket
 ## crpc
 	因grpc性能较差,所以重新造了个rpc轮子,性能相较grpc有30%+的提升.基于stream的rpc框架,内含proto解析工具,可由proto生成crpc桩代码
 ## codegen
