@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -267,6 +268,10 @@ func (p *Peer) sendPong(pongdata *pool.Buffer) error {
 func (p *Peer) Close() {
 	atomic.StoreInt32(&p.status, 0)
 	p.c.Close()
+}
+func (p *Peer) GetLocalPort() string {
+	laddr := p.c.LocalAddr().String()
+	return laddr[strings.LastIndex(laddr, ":")+1:]
 }
 func (p *Peer) GetPeerNetlag() int64 {
 	return atomic.LoadInt64(&p.netlag)

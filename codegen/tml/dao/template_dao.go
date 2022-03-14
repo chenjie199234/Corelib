@@ -55,11 +55,11 @@ func NewApi() error {
 	_ = webc //avoid unuse
 
 	//init web client below
-	//exampleweb, e = web.NewWebClient(webc, api.Group, api.Name, "examplegroup", "examplename")
+	//exampleweb, e = web.NewWebClient(webc, api.Group, api.Name, "examplegroup", "examplename", "http://examplehost:exampleport")
 	//if e != nil {
 	// 	return e
 	//}
-	//ExampleWebApi = example.NewExampleWebClient(exampleweb,"http://examplehost:exampleport")
+	//ExampleWebApi = example.NewExampleWebClient(exampleweb)
 
 	return nil
 }
@@ -128,7 +128,7 @@ func crpcDNS(group, name string, manually <-chan *struct{}, client *crpc.CrpcCli
 			continue
 		}
 		for i := range addrs {
-			addrs[i] = "tcp://" + addrs[i] + ":9000"
+			addrs[i] = addrs[i] + ":9000"
 		}
 		dserver := make(map[string]struct{})
 		dserver["dns"] = struct{}{}

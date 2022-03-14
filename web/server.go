@@ -186,7 +186,8 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 					(conn.(*net.TCPConn)).SetKeepAlive(true)
 					(conn.(*net.TCPConn)).SetKeepAlivePeriod(c.HeartProbe)
 				}
-				return ctx
+				localaddr := conn.LocalAddr().String()
+				return context.WithValue(ctx, localport{}, localaddr[strings.LastIndex(localaddr, ":")+1:])
 			},
 		},
 		closewait:      &sync.WaitGroup{},
@@ -474,7 +475,7 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 		//trace
 		var ctx context.Context
 		traceid := ""
-		sourceip := r.RemoteAddr
+		sourceip := getclientip(r)
 		sourceapp := "unknown"
 		sourcemethod := "unknown"
 		sourcepath := "unknown"
@@ -545,7 +546,8 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 				w.WriteHeader(http.StatusGatewayTimeout)
 				w.Write(common.Str2byte(cerror.ErrDeadlineExceeded.Error()))
 				end := time.Now()
-				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip, method, path, &start, &end, cerror.ErrDeadlineExceeded)
+
+				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip+":"+r.Context().Value(localport{}).(string), method, path, &start, &end, cerror.ErrDeadlineExceeded)
 				monitor.WebServerMonitor(sourceapp, method, path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
 				return
 			}
@@ -566,10 +568,12 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 				workctx.e = cerror.ErrPanic
 			}
 			end := time.Now()
-			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip, method, path, &start, &end, workctx.e)
+			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip+":"+r.Context().Value(localport{}).(string), method, path, &start, &end, workctx.e)
 			monitor.WebServerMonitor(sourceapp, method, path, workctx.e, uint64(end.UnixNano()-start.UnixNano()))
 			s.putContext(workctx)
 		}()
 		workctx.run()
 	}
 }
+
+type localport struct{}

@@ -122,7 +122,7 @@ type RegisterData struct {
 	Addition []byte
 }
 
-//all: key server's addr,format: tcp://ip:port
+//all: key server's addr,format: ip:port
 func (c *CrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
 	c.balancer.UpdateDiscovery(all)
 }
@@ -132,11 +132,13 @@ func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 		//can't reconnect to server
 		return
 	}
-	var tlsc *tls.Config
+	var addr string
 	if c.c.UseTLS {
-		tlsc = c.tlsc
+		addr = "tcps://" + server.addr
+	} else {
+		addr = "tcp://" + server.addr
 	}
-	if !c.instance.StartClient(server.addr, common.Str2byte(c.serverappname), tlsc) {
+	if !c.instance.StartClient(addr, common.Str2byte(c.serverappname), c.tlsc) {
 		time.Sleep(time.Millisecond * 100)
 		go c.start(server, true)
 	}

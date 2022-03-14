@@ -54,15 +54,21 @@ func (c *ClientConfig) validate() {
 type WebClient struct {
 	selfappname   string
 	serverappname string
+	serverhost    string
 	c             *ClientConfig
 	httpclient    *http.Client
 }
 
-func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername string) (*WebClient, error) {
+//serverhost format [http/https]://the.host.name[:port]
+func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername, serverhost string) (*WebClient, error) {
 	serverappname := servergroup + "." + servername
 	selfappname := selfgroup + "." + selfname
 	if e := name.FullCheck(selfappname); e != nil {
 		return nil, e
+	}
+	u, e := url.Parse(serverhost)
+	if e != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Path != "" {
+		return nil, errors.New("[web.client] host format wrong,should be [http/https]://the.host.name[:port]")
 	}
 	if c == nil {
 		c = &ClientConfig{}
@@ -103,6 +109,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername 
 	client := &WebClient{
 		selfappname:   selfappname,
 		serverappname: serverappname,
+		serverhost:    serverhost,
 		c:             c,
 		httpclient: &http.Client{
 			Transport: transport,
@@ -168,9 +175,10 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	if forbiddenHeader(header) {
 		return nil, cerror.MakeError(-1, 400, "forbidden header")
 	}
-	parsedurl, e := url.Parse(path)
-	if e != nil {
-		return nil, cerror.ConvertStdError(e)
+	if path == "" {
+		path = "/"
+	} else if path[0] != '/' {
+		path = "/" + path
 	}
 	if len(query) != 0 && query[0] != '?' {
 		query = "?" + query
@@ -206,8 +214,8 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		if ok && dl.UnixNano() < start.UnixNano()+int64(5*time.Millisecond) {
 			//at least 5ms for net lag and server logic
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.selfappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, cerror.ErrDeadlineExceeded)
-			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
+			trace.Trace(ctx, trace.CLIENT, c.selfappname, c.serverhost, method, path, &start, &end, cerror.ErrDeadlineExceeded)
+			monitor.WebClientMonitor(c.serverappname, method, path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, cerror.ErrDeadlineExceeded
 		}
 		var req *http.Request
@@ -220,8 +228,8 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		if e != nil {
 			e = cerror.ConvertStdError(e)
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.selfappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
-			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, e, uint64(end.UnixNano()-start.UnixNano()))
+			trace.Trace(ctx, trace.CLIENT, c.selfappname, c.serverhost, method, path, &start, &end, e)
+			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 		req.Header = header
@@ -230,21 +238,21 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		end := time.Now()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
-			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, e, uint64(end.UnixNano()-start.UnixNano()))
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, e)
+			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 		respbody, e := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
-			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, e, uint64(end.UnixNano()-start.UnixNano()))
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, e)
+			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 		if resp.StatusCode == int(cerror.ErrClosing.Httpcode) && cerror.Equal(cerror.ConvertErrorstr(common.Byte2str(respbody)), cerror.ErrClosing) {
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, cerror.ErrClosing)
-			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, cerror.ErrClosing, uint64(end.UnixNano()-start.UnixNano()))
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, cerror.ErrClosing)
+			monitor.WebClientMonitor(c.serverappname, method, path, cerror.ErrClosing, uint64(end.UnixNano()-start.UnixNano()))
 			continue
 		} else if resp.StatusCode != http.StatusOK {
 			if len(respbody) == 0 {
@@ -254,12 +262,12 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				tempe.SetHttpcode(int32(resp.StatusCode))
 				e = tempe
 			}
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, e)
-			monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, e, uint64(end.UnixNano()-start.UnixNano()))
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, e)
+			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
-		trace.Trace(ctx, trace.CLIENT, c.serverappname, parsedurl.Scheme+"://"+parsedurl.Host, method, parsedurl.Path, &start, &end, nil)
-		monitor.WebClientMonitor(c.serverappname, method, parsedurl.Path, nil, uint64(end.UnixNano()-start.UnixNano()))
+		trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, nil)
+		monitor.WebClientMonitor(c.serverappname, method, path, nil, uint64(end.UnixNano()-start.UnixNano()))
 		return respbody, nil
 	}
 }

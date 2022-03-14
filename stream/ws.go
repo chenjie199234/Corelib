@@ -72,7 +72,15 @@ func (this *Instance) wsServerHandshake(p *Peer) bool {
 			encoder.Write(wsSeckey)
 			accept = base64.StdEncoding.EncodeToString(encoder.Sum(nil))
 		case "X-Forwarded-For":
-			p.realPeerIP = string(headerdata)
+			if len(headerdata) > 0 {
+				if ip := string(bytes.TrimSpace(bytes.Split(headerdata, []byte{','})[0])); ip != "" {
+					p.realPeerIP = ip
+				}
+			}
+		case "X-Real-Ip":
+			if len(headerdata) > 0 {
+				p.realPeerIP = string(headerdata)
+			}
 		}
 	}
 	if check != 0b00011111 {

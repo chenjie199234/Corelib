@@ -9,6 +9,7 @@ import (
 	"net"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -205,8 +206,10 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		atomic.AddInt32(&s.totalreqnum, 1)
 		defer atomic.AddInt32(&s.totalreqnum, -1)
 		conninfo := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)
+		remoteaddr := conninfo.RemoteAddr.String()
+		localaddr := conninfo.LocalAddr.String()
 		traceid := ""
-		sourceip := conninfo.RemoteAddr.String()
+		sourceip := remoteaddr[:strings.LastIndex(remoteaddr, ":")]
 		sourceapp := "unknown"
 		sourcemethod := "unknown"
 		sourcepath := "unknown"
@@ -250,7 +253,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			resp = nil
 			e = cerror.ErrDeadlineExceeded
 			end := time.Now()
-			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip, "GRPC", path, &start, &end, e)
+			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip+":"+localaddr[strings.LastIndex(localaddr, ":")+1:], "GRPC", path, &start, &end, e)
 			monitor.GrpcServerMonitor(sourceapp, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return
 		}
@@ -264,7 +267,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				workctx.resp = nil
 			}
 			end := time.Now()
-			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip, "GRPC", path, &start, &end, workctx.e)
+			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip+":"+localaddr[strings.LastIndex(localaddr, ":")+1:], "GRPC", path, &start, &end, workctx.e)
 			monitor.GrpcServerMonitor(sourceapp, "GRPC", path, workctx.e, uint64(end.UnixNano()-start.UnixNano()))
 			resp = workctx.resp
 			if workctx.e != nil {
