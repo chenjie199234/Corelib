@@ -61,9 +61,9 @@ func CreatePathAndFile(sname string) {
 	if e = os.MkdirAll(path+sname+"/", 0755); e != nil {
 		panic(fmt.Sprintf("make dir:%s error:%s", path+sname, e))
 	}
-	file, e = os.OpenFile(path+sname+"/"+sname+".go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e = os.OpenFile(path+sname+"/service.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+sname+"/"+sname+".go", e))
+		panic(fmt.Sprintf("make file:%s error:%s", path+sname+"/service.go", e))
 	}
 }
 func Execute(pname, sname string) {

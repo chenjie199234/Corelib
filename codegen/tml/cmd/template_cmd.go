@@ -81,16 +81,6 @@ if [[ $# == 0 ]] || [[ "$1" == "h" ]] || [[ "$1" == "help" ]] || [[ "$1" == "-h"
 	exit 0
 fi
 
-if [[ "$1" == "run" ]]; then
-	run
-	exit 0
-fi
-
-if [[ "$1" == "build" ]];then
-	build
-	exit 0
-fi
-
 if [[ "$1" == "pb" ]];then
 	pb
 	exit 0
@@ -171,18 +161,6 @@ if %1 == "-help" (
 if "%1" == "-help" (
 	goto :help
 )
-if %1 == "run" (
-	goto :run
-)
-if "%1" == "run" (
-	goto :run
-)
-if %1 == "build" (
-	goto :build
-)
-if "%1" == "build" (
-	goto :build
-)
 if %1 == "pb" (
 	goto :pb
 )
@@ -227,22 +205,6 @@ if "%1" == "new" (
 	protoc -I ./ -I %corelib% --go-crpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-web_out=paths=source_relative:. ./api/*.proto
 	go mod tidy
-goto :end
-
-:run
-	go mod tidy
-	go run main.go
-goto :end
-
-:build
-	go mod tidy
-	go build -ldflags "-s -w" -o main.exe
-	where /q upx.exe
-	if %errorlevel% == 1 (
-		echo "recommand to use upx.exe to compress bin file"
-		goto :end
-	)
-	uxp.exe -9 main.exe
 goto :end
 
 :kube

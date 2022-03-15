@@ -55,7 +55,7 @@ func (s *Service) Stop() {
 }`
 
 const path = "./service/status/"
-const name = "status.go"
+const name = "service.go"
 
 var tml *template.Template
 var file *os.File

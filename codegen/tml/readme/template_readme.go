@@ -19,10 +19,10 @@ $$$
 
 ### 服务端口
 $$$
+6060                                    MONITOR AND PPROF
 8000                                    WEB
 9000                                    CRPC
 10000                                   GRPC
-6060                                    MONITOR AND PPROF
 $$$
 
 ## 环境变量

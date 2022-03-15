@@ -206,10 +206,20 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		atomic.AddInt32(&s.totalreqnum, 1)
 		defer atomic.AddInt32(&s.totalreqnum, -1)
 		conninfo := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)
-		remoteaddr := conninfo.RemoteAddr.String()
 		localaddr := conninfo.LocalAddr.String()
 		traceid := ""
-		sourceip := remoteaddr[:strings.LastIndex(remoteaddr, ":")]
+		sourceip := ""
+		if ok {
+			if forward := grpcmetadata.Get("X-Forwarded-For"); len(forward) > 0 && len(forward[0]) > 0 {
+				sourceip = strings.TrimSpace(strings.Split(forward[0], ",")[0])
+			} else if realip := grpcmetadata.Get("X-Real-Ip"); len(realip) > 0 && len(realip[0]) > 0 {
+				sourceip = strings.TrimSpace(realip[0])
+			}
+		}
+		if sourceip == "" {
+			remoteaddr := conninfo.RemoteAddr.String()
+			sourceip = remoteaddr[:strings.LastIndex(remoteaddr, ":")]
+		}
 		sourceapp := "unknown"
 		sourcemethod := "unknown"
 		sourcepath := "unknown"

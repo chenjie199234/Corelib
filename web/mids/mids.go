@@ -60,6 +60,10 @@ func access(ctx *web.Context) {
 		md := ctx.GetMetadata()
 		accessid = md["Access-Id"]
 		accesskey = md["Access-Key"]
+	} else {
+		md := ctx.GetMetadata()
+		md["Access-Id"] = accessid
+		md["Access-Key"] = accesskey
 	}
 	if accessid == "" {
 		ctx.Abort(cerror.ErrAuth)
