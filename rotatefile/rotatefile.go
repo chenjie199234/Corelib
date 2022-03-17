@@ -93,8 +93,7 @@ func (f *RotateFile) run() {
 		}
 	}
 	write := func() bool {
-		tmp := f.caslist.Pop()
-		if tmp != nil {
+		if tmp, ok := f.caslist.Pop(nil); ok {
 			buf := (*pool.Buffer)(tmp)
 			if n, e := f.buffile.Write(buf.Bytes()); e != nil {
 				fmt.Println("[rotatefile.run] write error: " + e.Error())

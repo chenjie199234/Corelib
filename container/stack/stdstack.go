@@ -5,7 +5,7 @@ import (
 	"unsafe"
 )
 
-//thread not safe,memory friendly,gc will reduce,but has lock
+//thread not safe
 type StdStack struct {
 	top  *node
 	pool *sync.Pool
@@ -26,10 +26,9 @@ func (s *StdStack) putnode(n *node) {
 }
 
 func NewStdStack() *StdStack {
-	temp := &node{}
 	return &StdStack{
 		pool: &sync.Pool{},
-		top:  temp,
+		top:  &node{},
 	}
 }
 func (s *StdStack) Push(data unsafe.Pointer) {
@@ -37,15 +36,19 @@ func (s *StdStack) Push(data unsafe.Pointer) {
 	n.pre = s.top
 	s.top = n
 }
-func (s *StdStack) Pop() unsafe.Pointer {
-	var temp *node
-	result := s.top.value
-	if s.top.pre != nil {
-		temp = s.top
-		s.top = s.top.pre
+
+//check func is used to check whether the next element can be popped,set nil if don't need it
+//return false - when the buf is empty,or the check failed
+func (s *StdStack) Pop(check func(d unsafe.Pointer) bool) (unsafe.Pointer, bool) {
+	oldtop := s.top
+	if oldtop.pre == nil {
+		return nil, false
 	}
-	if temp != nil {
-		s.putnode(temp)
+	if check != nil && !check(oldtop.value) {
+		return nil, false
 	}
-	return result
+	s.top = oldtop.pre
+	result := oldtop.value
+	s.putnode(oldtop)
+	return result, true
 }

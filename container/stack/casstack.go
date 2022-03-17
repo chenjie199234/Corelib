@@ -6,7 +6,7 @@ import (
 	"unsafe"
 )
 
-//thread safe,without lock,but memory not friendly,gc will increase
+//thread safe
 type CasStack struct {
 	top *node
 }
@@ -30,14 +30,20 @@ func (s *CasStack) Push(data unsafe.Pointer) {
 		n.pre = s.top
 	}
 }
-func (s *CasStack) Pop() unsafe.Pointer {
+
+//check func is used to check whether the next element can be popped,set nil if don't need it
+//return false - when the buf is empty,or the check failed
+func (s *CasStack) Pop(check func(d unsafe.Pointer) bool) (unsafe.Pointer, bool) {
 	for {
 		oldtop := s.top
 		if oldtop.pre == nil {
-			return nil
+			return nil, false
+		}
+		if check != nil && !check(oldtop.value) {
+			return nil, false
 		}
 		if atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&s.top)), unsafe.Pointer(oldtop), unsafe.Pointer(oldtop.pre)) {
-			return oldtop.value
+			return oldtop.value, true
 		}
 		runtime.Gosched()
 	}

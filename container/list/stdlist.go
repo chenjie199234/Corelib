@@ -5,7 +5,7 @@ import (
 	"unsafe"
 )
 
-//thread not safe,memory friendly,gc will reduce
+//thread not safe
 type StdList struct {
 	head *node
 	tail *node
@@ -40,18 +40,19 @@ func (l *StdList) Push(data unsafe.Pointer) {
 	l.tail.next = node
 	l.tail = node
 }
-func (l *StdList) Pop() unsafe.Pointer {
-	if l.head.next == nil {
-		return nil
+
+//check func is used to check whether the next element can be popped,set nil if don't need it
+//return false - when the buf is empty,or the check failed
+func (l *StdList) Pop(check func(d unsafe.Pointer) bool) (unsafe.Pointer, bool) {
+	oldhead := l.head
+	if oldhead.next == nil {
+		return nil, false
 	}
-	temp := l.head
-	l.head = l.head.next
-	l.putnode(temp)
-	return l.head.value
-}
-func (l *StdList) GetHead() unsafe.Pointer {
-	return l.head.value
-}
-func (l *StdList) GetTail() unsafe.Pointer {
-	return l.tail.value
+	if check != nil && !check(oldhead.value) {
+		return nil, false
+	}
+	l.head = oldhead.next
+	result := oldhead.value
+	l.putnode(oldhead)
+	return result, true
 }

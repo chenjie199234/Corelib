@@ -13,7 +13,7 @@ func init() {
 	all = make(map[string]crpc.OutsideHandler)
 	//register here
 	all["rate"] = rate
-	all["access"] = access
+	all["accesskey"] = accesskey
 }
 
 func AllMids() map[string]crpc.OutsideHandler {
@@ -30,15 +30,14 @@ func rate(ctx *crpc.Context) {
 		ctx.Abort(cerror.ErrLimit)
 	}
 }
-func access(ctx *crpc.Context) {
+func accesskey(ctx *crpc.Context) {
 	md := ctx.GetMetadata()
-	accessid := md["Access-Id"]
 	accesskey := md["Access-Key"]
-	if accessid == "" {
+	if accesskey == "" {
 		ctx.Abort(cerror.ErrAuth)
 		return
 	}
-	if !publicmids.Access(accessid, accesskey) {
+	if !publicmids.AccessKey(ctx.GetPath(), accesskey) {
 		ctx.Abort(cerror.ErrAuth)
 	}
 }

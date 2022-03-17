@@ -115,10 +115,15 @@ const textapp = `{
 	"handler_rate":[{
 		"Path":"/{{.}}.status/ping",
 		"Method":["GET","GRPC","CRPC"],
-		"MaxPerSec":100
+		"MaxPerSec":10
 	}],
-	"access_config":{
-		"testid":"testkey"
+	"access_sign_sec_keys":{
+		"default":"default_sec_key",
+		"/{{.}}.status/ping":"specific_sec_key"
+	},
+	"access_key_sec_keys":{
+		"default":"default_sec_key",
+		"/{{.}}.status/ping":"specific_sec_key"
 	}
 }`
 

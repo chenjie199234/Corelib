@@ -50,6 +50,8 @@ func (s *WebServer) putContext(ctx *Context) {
 	ctx.r = nil
 	ctx.w = nil
 	ctx.Context = nil
+	ctx.body = nil
+	ctx.bodyerr = nil
 	s.ctxpool.Put(ctx)
 }
 
@@ -61,6 +63,8 @@ type Context struct {
 	metadata map[string]string
 	handlers []OutsideHandler
 	status   int8
+	body     []byte
+	bodyerr  error
 	e        *cerror.Error
 }
 
@@ -195,7 +199,7 @@ func (c *Context) ParseForm() error {
 	return nil
 }
 
-//must call ParseForm before c
+//must call ParseForm before this
 func (c *Context) GetForm(key string) string {
 	if len(c.r.Form) == 0 {
 		return ""
@@ -203,7 +207,11 @@ func (c *Context) GetForm(key string) string {
 	return c.r.Form.Get(key)
 }
 func (c *Context) GetBody() ([]byte, error) {
-	return io.ReadAll(c.r.Body)
+	if c.body != nil || c.bodyerr != nil {
+		return c.body, c.bodyerr
+	}
+	c.body, c.bodyerr = io.ReadAll(c.r.Body)
+	return c.body, c.bodyerr
 }
 
 //param is the value in dynamic url,see httprouter's dynamic path

@@ -2,70 +2,68 @@ package mids
 
 import (
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
+
+	"github.com/chenjie199234/Corelib/container/ringbuf"
 )
 
 type rate struct {
-	grpc  map[string]*counter //key path
-	crpc  map[string]*counter //key path
-	get   map[string]*counter //key path
-	post  map[string]*counter //key path
-	put   map[string]*counter //key path
-	patch map[string]*counter //key path
-	del   map[string]*counter //key path
+	grpc  map[string]*ringbuf.CasRingBuf //key path
+	crpc  map[string]*ringbuf.CasRingBuf //key path
+	get   map[string]*ringbuf.CasRingBuf //key path
+	post  map[string]*ringbuf.CasRingBuf //key path
+	put   map[string]*ringbuf.CasRingBuf //key path
+	patch map[string]*ringbuf.CasRingBuf //key path
+	del   map[string]*ringbuf.CasRingBuf //key path
 }
 
 var rateinstance *rate
 
 func init() {
 	rateinstance = &rate{
-		grpc:  make(map[string]*counter),
-		crpc:  make(map[string]*counter),
-		get:   make(map[string]*counter),
-		post:  make(map[string]*counter),
-		put:   make(map[string]*counter),
-		patch: make(map[string]*counter),
-		del:   make(map[string]*counter),
+		grpc:  make(map[string]*ringbuf.CasRingBuf),
+		crpc:  make(map[string]*ringbuf.CasRingBuf),
+		get:   make(map[string]*ringbuf.CasRingBuf),
+		post:  make(map[string]*ringbuf.CasRingBuf),
+		put:   make(map[string]*ringbuf.CasRingBuf),
+		patch: make(map[string]*ringbuf.CasRingBuf),
+		del:   make(map[string]*ringbuf.CasRingBuf),
 	}
 }
 
 type RateConfig struct {
 	Path      string
 	Method    []string //GRPC,CRPC,GET,POST,PUT,PATCH,DELETE
-	MaxPerSec int      //0 means ban
+	MaxPerSec uint64   //0 means ban
 }
 
 func UpdateRateConfig(c []*RateConfig) {
-	grpc := make(map[string]*counter)  //key path
-	crpc := make(map[string]*counter)  //key path
-	get := make(map[string]*counter)   //key path
-	post := make(map[string]*counter)  //key path
-	put := make(map[string]*counter)   //key path
-	patch := make(map[string]*counter) //key path
-	del := make(map[string]*counter)   //key path
+	grpc := make(map[string]*ringbuf.CasRingBuf)  //key path
+	crpc := make(map[string]*ringbuf.CasRingBuf)  //key path
+	get := make(map[string]*ringbuf.CasRingBuf)   //key path
+	post := make(map[string]*ringbuf.CasRingBuf)  //key path
+	put := make(map[string]*ringbuf.CasRingBuf)   //key path
+	patch := make(map[string]*ringbuf.CasRingBuf) //key path
+	del := make(map[string]*ringbuf.CasRingBuf)   //key path
 	for _, cc := range c {
-		tmp := &counter{
-			calls: make([]int64, cc.MaxPerSec),
-		}
 		for _, m := range cc.Method {
 			switch strings.ToUpper(m) {
 			case "GRPC":
-				grpc[cc.Path] = tmp
+				grpc[cc.Path] = ringbuf.NewCasRingBuf(cc.MaxPerSec)
 			case "CRPC":
-				crpc[cc.Path] = tmp
+				crpc[cc.Path] = ringbuf.NewCasRingBuf(cc.MaxPerSec)
 			case "GET":
-				get[cc.Path] = tmp
+				get[cc.Path] = ringbuf.NewCasRingBuf(cc.MaxPerSec)
 			case "POST":
-				post[cc.Path] = tmp
+				post[cc.Path] = ringbuf.NewCasRingBuf(cc.MaxPerSec)
 			case "PUT":
-				put[cc.Path] = tmp
+				put[cc.Path] = ringbuf.NewCasRingBuf(cc.MaxPerSec)
 			case "PATCH":
-				patch[cc.Path] = tmp
+				patch[cc.Path] = ringbuf.NewCasRingBuf(cc.MaxPerSec)
 			case "DELETE":
-				del[cc.Path] = tmp
+				del[cc.Path] = ringbuf.NewCasRingBuf(cc.MaxPerSec)
 			}
 		}
 	}
@@ -78,108 +76,79 @@ func UpdateRateConfig(c []*RateConfig) {
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.del)), unsafe.Pointer(&del))
 }
 
-type counter struct {
-	sync.Mutex
-	head, tail int
-	calls      []int64
-}
-
-func (c *counter) check() (pass bool) {
-	c.Lock()
-	defer c.Unlock()
-	if len(c.calls) == 0 {
-		pass = false
-		return
-	}
-	now := time.Now()
-	newtail := c.tail + 1
-	if newtail >= len(c.calls) {
-		newtail = 0
-	}
-	if newtail == c.head {
-		//full try to pop
-		if now.UnixNano()-c.calls[c.head] >= time.Second.Nanoseconds() {
-			c.head++
-			if c.head >= len(c.calls) {
-				c.head = 0
+func check(buf *ringbuf.CasRingBuf) bool {
+	now := time.Now().UnixNano()
+	for {
+		if buf.Push(unsafe.Pointer(&now)) {
+			return true
+		}
+		//buf full,try to pop
+		if _, ok := buf.Pop(func(d unsafe.Pointer) bool {
+			if now-*(*int64)(d) >= time.Second.Nanoseconds() {
+				return true
 			}
-		} else {
-			pass = false
-			return
+			return false
+		}); !ok {
+			//can't push and can't pop,buf is still full
+			break
 		}
 	}
-	c.calls[newtail] = now.UnixNano()
-	c.tail = newtail
-	pass = true
-	return
+	return false
 }
 
-func GrpcRate(path string) (pass bool) {
-	grpc := *(*map[string]*counter)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.grpc))))
-	c, ok := grpc[path]
+func GrpcRate(path string) bool {
+	grpc := *(*map[string]*ringbuf.CasRingBuf)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.grpc))))
+	buf, ok := grpc[path]
 	if !ok {
-		pass = true
-		return
+		return true
 	}
-	return c.check()
+	return check(buf)
 }
-func CrpcRate(path string) (pass bool) {
-	crpc := *(*map[string]*counter)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.crpc))))
-	c, ok := crpc[path]
+func CrpcRate(path string) bool {
+	crpc := *(*map[string]*ringbuf.CasRingBuf)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.crpc))))
+	buf, ok := crpc[path]
 	if !ok {
-		pass = true
-		return
+		return true
 	}
-	pass = c.check()
-	return
+	return check(buf)
 }
-func HttpGetRate(path string) (pass bool) {
-	get := *(*map[string]*counter)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.get))))
-	c, ok := get[path]
+func HttpGetRate(path string) bool {
+	get := *(*map[string]*ringbuf.CasRingBuf)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.get))))
+	buf, ok := get[path]
 	if !ok {
-		pass = true
-		return
+		return true
 	}
-	pass = c.check()
-	return
+	return check(buf)
 }
-func HttpPostRate(path string) (pass bool) {
-	post := *(*map[string]*counter)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.post))))
-	c, ok := post[path]
+func HttpPostRate(path string) bool {
+	post := *(*map[string]*ringbuf.CasRingBuf)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.post))))
+	buf, ok := post[path]
 	if !ok {
-		pass = true
-		return
+		return true
 	}
-	pass = c.check()
-	return
+	return check(buf)
 }
-func HttpPutRate(path string) (pass bool) {
-	put := *(*map[string]*counter)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.put))))
-	c, ok := put[path]
+func HttpPutRate(path string) bool {
+	put := *(*map[string]*ringbuf.CasRingBuf)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.put))))
+	buf, ok := put[path]
 	if !ok {
-		pass = true
-		return
+		return true
 	}
-	pass = c.check()
-	return
+	return check(buf)
 }
-func HttpPatchRate(path string) (pass bool) {
-	patch := *(*map[string]*counter)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.patch))))
-	c, ok := patch[path]
+func HttpPatchRate(path string) bool {
+	patch := *(*map[string]*ringbuf.CasRingBuf)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.patch))))
+	buf, ok := patch[path]
 	if !ok {
-		pass = true
-		return
+		return true
 	}
-	pass = c.check()
-	return
+	return check(buf)
 }
-func HttpDelRate(path string) (pass bool) {
-	del := *(*map[string]*counter)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.del))))
-	c, ok := del[path]
+func HttpDelRate(path string) bool {
+	del := *(*map[string]*ringbuf.CasRingBuf)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.del))))
+	buf, ok := del[path]
 	if !ok {
-		pass = true
-		return
+		return true
 	}
-	pass = c.check()
-	return
+	return check(buf)
 }

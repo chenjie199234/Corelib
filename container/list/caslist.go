@@ -6,7 +6,7 @@ import (
 	"unsafe"
 )
 
-//thread safe,without lock,but memory not friendly,gc will increase
+//thread safe
 type CasList struct {
 	head *node
 	tail *node
@@ -20,7 +20,6 @@ func NewCasList() *CasList {
 	}
 }
 
-//push back
 func (l *CasList) Push(data unsafe.Pointer) {
 	n := &node{
 		value: data,
@@ -39,22 +38,20 @@ func (l *CasList) Push(data unsafe.Pointer) {
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&l.tail)), unsafe.Pointer(n))
 }
 
-//pop front
-func (l *CasList) Pop() unsafe.Pointer {
+//check func is used to check whether the next element can be popped,set nil if don't need it
+//return false - when the buf is empty,or the check failed
+func (l *CasList) Pop(check func(d unsafe.Pointer) bool) (unsafe.Pointer, bool) {
 	for {
 		oldhead := l.head
 		if oldhead.next == nil {
-			return nil
+			return nil, false
+		}
+		if check != nil && !check(oldhead.next.value) {
+			return nil, false
 		}
 		if atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&l.head)), unsafe.Pointer(oldhead), unsafe.Pointer(oldhead.next)) {
-			return oldhead.next.value
+			return oldhead.next.value, true
 		}
 		runtime.Gosched()
 	}
-}
-func (l *CasList) GetHead() unsafe.Pointer {
-	return l.head.value
-}
-func (l *CasList) GetTail() unsafe.Pointer {
-	return l.tail.value
 }

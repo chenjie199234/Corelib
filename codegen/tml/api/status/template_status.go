@@ -20,8 +20,11 @@ service status{
 	//ping check server's health
 	rpc ping(pingreq)returns(pingresp){
 		option (pbex.method)="get";
+		option (pbex.web_midwares)="accesskey";
 		option (pbex.web_midwares)="rate";
+		option (pbex.crpc_midwares)="accesskey";
 		option (pbex.crpc_midwares)="rate";
+		option (pbex.cgrpc_midwares)="accesskey";
 		option (pbex.cgrpc_midwares)="rate";
 	}
 }

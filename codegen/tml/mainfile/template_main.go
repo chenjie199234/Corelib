@@ -35,7 +35,8 @@ func main() {
 		xgrpc.UpdateHandlerTimeout(ac)
 		xweb.UpdateHandlerTimeout(ac)
 		publicmids.UpdateRateConfig(ac.HandlerRate)
-		publicmids.UpdateAccessConfig(ac.AccessConfig)
+		publicmids.UpdateAccessSignConfig(ac.AccessSignSecKeys)
+		publicmids.UpdateAccessKeyConfig(ac.AccessKeySecKeys)
 	})
 	defer config.Close()
 	//start the whole business service
