@@ -1,4 +1,4 @@
-package ringbuf
+package ring
 
 import (
 	"runtime"
@@ -7,20 +7,20 @@ import (
 )
 
 //thread safe
-type CasRingBuf struct {
+type Ring struct {
 	length, popTry, popConfirm, pushTry, pushConfirm uint64
 	data                                             []unsafe.Pointer
 }
 
-func NewCasRingBuf(length uint64) *CasRingBuf {
-	return &CasRingBuf{
+func NewRing(length uint64) *Ring {
+	return &Ring{
 		length: length,
 		data:   make([]unsafe.Pointer, length),
 	}
 }
 
 //return false - only when the buf is full
-func (b *CasRingBuf) Push(d unsafe.Pointer) bool {
+func (b *Ring) Push(d unsafe.Pointer) bool {
 	for {
 		oldPushTry := atomic.LoadUint64(&b.pushTry)
 		if oldPushTry-atomic.LoadUint64(&b.popConfirm) == atomic.LoadUint64(&b.length) {
@@ -40,7 +40,7 @@ func (b *CasRingBuf) Push(d unsafe.Pointer) bool {
 
 //check func is used to check whether the next element can be popped,set nil if don't need it
 //return false - when the buf is empty,or the check failed
-func (b *CasRingBuf) Pop(check func(d unsafe.Pointer) bool) (unsafe.Pointer, bool) {
+func (b *Ring) Pop(check func(d unsafe.Pointer) bool) (unsafe.Pointer, bool) {
 	for {
 		oldPopTry := atomic.LoadUint64(&b.popTry)
 		if oldPopTry == atomic.LoadUint64(&b.pushConfirm) {

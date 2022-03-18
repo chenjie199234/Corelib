@@ -1,4 +1,4 @@
-package ringbuf
+package ring
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 )
 
 func Test_RingBuf(t *testing.T) {
-	buf := NewCasRingBuf(1)
+	buf := NewRing(1)
 	a := 1
 	if !buf.Push(unsafe.Pointer(&a)) {
 		t.Fatal("push first failed,should success")

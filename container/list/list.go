@@ -7,20 +7,25 @@ import (
 )
 
 //thread safe
-type CasList struct {
+type List struct {
 	head *node
 	tail *node
 }
 
-func NewCasList() *CasList {
+type node struct {
+	value unsafe.Pointer
+	next  *node
+}
+
+func NewList() *List {
 	tempnode := &node{}
-	return &CasList{
+	return &List{
 		head: tempnode,
 		tail: tempnode,
 	}
 }
 
-func (l *CasList) Push(data unsafe.Pointer) {
+func (l *List) Push(data unsafe.Pointer) {
 	n := &node{
 		value: data,
 		next:  nil,
@@ -40,7 +45,7 @@ func (l *CasList) Push(data unsafe.Pointer) {
 
 //check func is used to check whether the next element can be popped,set nil if don't need it
 //return false - when the buf is empty,or the check failed
-func (l *CasList) Pop(check func(d unsafe.Pointer) bool) (unsafe.Pointer, bool) {
+func (l *List) Pop(check func(d unsafe.Pointer) bool) (unsafe.Pointer, bool) {
 	for {
 		oldhead := l.head
 		if oldhead.next == nil {

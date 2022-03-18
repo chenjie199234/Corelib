@@ -6,30 +6,30 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/container/ringbuf"
+	"github.com/chenjie199234/Corelib/container/ring"
 )
 
 type rate struct {
-	grpc  map[string]*ringbuf.CasRingBuf //key path
-	crpc  map[string]*ringbuf.CasRingBuf //key path
-	get   map[string]*ringbuf.CasRingBuf //key path
-	post  map[string]*ringbuf.CasRingBuf //key path
-	put   map[string]*ringbuf.CasRingBuf //key path
-	patch map[string]*ringbuf.CasRingBuf //key path
-	del   map[string]*ringbuf.CasRingBuf //key path
+	grpc  map[string]*ring.Ring //key path
+	crpc  map[string]*ring.Ring //key path
+	get   map[string]*ring.Ring //key path
+	post  map[string]*ring.Ring //key path
+	put   map[string]*ring.Ring //key path
+	patch map[string]*ring.Ring //key path
+	del   map[string]*ring.Ring //key path
 }
 
 var rateinstance *rate
 
 func init() {
 	rateinstance = &rate{
-		grpc:  make(map[string]*ringbuf.CasRingBuf),
-		crpc:  make(map[string]*ringbuf.CasRingBuf),
-		get:   make(map[string]*ringbuf.CasRingBuf),
-		post:  make(map[string]*ringbuf.CasRingBuf),
-		put:   make(map[string]*ringbuf.CasRingBuf),
-		patch: make(map[string]*ringbuf.CasRingBuf),
-		del:   make(map[string]*ringbuf.CasRingBuf),
+		grpc:  make(map[string]*ring.Ring),
+		crpc:  make(map[string]*ring.Ring),
+		get:   make(map[string]*ring.Ring),
+		post:  make(map[string]*ring.Ring),
+		put:   make(map[string]*ring.Ring),
+		patch: make(map[string]*ring.Ring),
+		del:   make(map[string]*ring.Ring),
 	}
 }
 
@@ -40,30 +40,30 @@ type RateConfig struct {
 }
 
 func UpdateRateConfig(c []*RateConfig) {
-	grpc := make(map[string]*ringbuf.CasRingBuf)  //key path
-	crpc := make(map[string]*ringbuf.CasRingBuf)  //key path
-	get := make(map[string]*ringbuf.CasRingBuf)   //key path
-	post := make(map[string]*ringbuf.CasRingBuf)  //key path
-	put := make(map[string]*ringbuf.CasRingBuf)   //key path
-	patch := make(map[string]*ringbuf.CasRingBuf) //key path
-	del := make(map[string]*ringbuf.CasRingBuf)   //key path
+	grpc := make(map[string]*ring.Ring)  //key path
+	crpc := make(map[string]*ring.Ring)  //key path
+	get := make(map[string]*ring.Ring)   //key path
+	post := make(map[string]*ring.Ring)  //key path
+	put := make(map[string]*ring.Ring)   //key path
+	patch := make(map[string]*ring.Ring) //key path
+	del := make(map[string]*ring.Ring)   //key path
 	for _, cc := range c {
 		for _, m := range cc.Method {
 			switch strings.ToUpper(m) {
 			case "GRPC":
-				grpc[cc.Path] = ringbuf.NewCasRingBuf(cc.MaxPerSec)
+				grpc[cc.Path] = ring.NewRing(cc.MaxPerSec)
 			case "CRPC":
-				crpc[cc.Path] = ringbuf.NewCasRingBuf(cc.MaxPerSec)
+				crpc[cc.Path] = ring.NewRing(cc.MaxPerSec)
 			case "GET":
-				get[cc.Path] = ringbuf.NewCasRingBuf(cc.MaxPerSec)
+				get[cc.Path] = ring.NewRing(cc.MaxPerSec)
 			case "POST":
-				post[cc.Path] = ringbuf.NewCasRingBuf(cc.MaxPerSec)
+				post[cc.Path] = ring.NewRing(cc.MaxPerSec)
 			case "PUT":
-				put[cc.Path] = ringbuf.NewCasRingBuf(cc.MaxPerSec)
+				put[cc.Path] = ring.NewRing(cc.MaxPerSec)
 			case "PATCH":
-				patch[cc.Path] = ringbuf.NewCasRingBuf(cc.MaxPerSec)
+				patch[cc.Path] = ring.NewRing(cc.MaxPerSec)
 			case "DELETE":
-				del[cc.Path] = ringbuf.NewCasRingBuf(cc.MaxPerSec)
+				del[cc.Path] = ring.NewRing(cc.MaxPerSec)
 			}
 		}
 	}
@@ -76,7 +76,7 @@ func UpdateRateConfig(c []*RateConfig) {
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.del)), unsafe.Pointer(&del))
 }
 
-func check(buf *ringbuf.CasRingBuf) bool {
+func check(buf *ring.Ring) bool {
 	now := time.Now().UnixNano()
 	for {
 		if buf.Push(unsafe.Pointer(&now)) {
@@ -97,7 +97,7 @@ func check(buf *ringbuf.CasRingBuf) bool {
 }
 
 func GrpcRate(path string) bool {
-	grpc := *(*map[string]*ringbuf.CasRingBuf)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.grpc))))
+	grpc := *(*map[string]*ring.Ring)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.grpc))))
 	buf, ok := grpc[path]
 	if !ok {
 		return true
@@ -105,7 +105,7 @@ func GrpcRate(path string) bool {
 	return check(buf)
 }
 func CrpcRate(path string) bool {
-	crpc := *(*map[string]*ringbuf.CasRingBuf)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.crpc))))
+	crpc := *(*map[string]*ring.Ring)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.crpc))))
 	buf, ok := crpc[path]
 	if !ok {
 		return true
@@ -113,7 +113,7 @@ func CrpcRate(path string) bool {
 	return check(buf)
 }
 func HttpGetRate(path string) bool {
-	get := *(*map[string]*ringbuf.CasRingBuf)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.get))))
+	get := *(*map[string]*ring.Ring)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.get))))
 	buf, ok := get[path]
 	if !ok {
 		return true
@@ -121,7 +121,7 @@ func HttpGetRate(path string) bool {
 	return check(buf)
 }
 func HttpPostRate(path string) bool {
-	post := *(*map[string]*ringbuf.CasRingBuf)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.post))))
+	post := *(*map[string]*ring.Ring)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.post))))
 	buf, ok := post[path]
 	if !ok {
 		return true
@@ -129,7 +129,7 @@ func HttpPostRate(path string) bool {
 	return check(buf)
 }
 func HttpPutRate(path string) bool {
-	put := *(*map[string]*ringbuf.CasRingBuf)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.put))))
+	put := *(*map[string]*ring.Ring)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.put))))
 	buf, ok := put[path]
 	if !ok {
 		return true
@@ -137,7 +137,7 @@ func HttpPutRate(path string) bool {
 	return check(buf)
 }
 func HttpPatchRate(path string) bool {
-	patch := *(*map[string]*ringbuf.CasRingBuf)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.patch))))
+	patch := *(*map[string]*ring.Ring)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.patch))))
 	buf, ok := patch[path]
 	if !ok {
 		return true
@@ -145,7 +145,7 @@ func HttpPatchRate(path string) bool {
 	return check(buf)
 }
 func HttpDelRate(path string) bool {
-	del := *(*map[string]*ringbuf.CasRingBuf)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.del))))
+	del := *(*map[string]*ring.Ring)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.del))))
 	buf, ok := del[path]
 	if !ok {
 		return true

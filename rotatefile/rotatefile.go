@@ -23,7 +23,7 @@ type RotateFile struct {
 	buffile    *bufio.Writer
 	curlen     int64
 	notice     chan struct{}
-	caslist    *list.CasList
+	caslist    *list.List
 	rotate     chan struct{}
 	rlker      *sync.Mutex
 	rotateret  map[chan error]struct{}
@@ -50,7 +50,7 @@ func NewRotateFile(path, name string) (*RotateFile, error) {
 		buffile:   bufio.NewWriterSize(tempfile, 4096),
 		curlen:    0,
 		notice:    make(chan struct{}, 1),
-		caslist:   list.NewCasList(),
+		caslist:   list.NewList(),
 		rotate:    make(chan struct{}, 1),
 		rlker:     &sync.Mutex{},
 		rotateret: make(map[chan error]struct{}),
