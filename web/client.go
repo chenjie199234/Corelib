@@ -118,6 +118,9 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername,
 	}
 	return client, nil
 }
+func (c *WebClient) GetSeverHost() string {
+	return c.serverhost
+}
 
 func forbiddenHeader(header http.Header) bool {
 	if header == nil {
