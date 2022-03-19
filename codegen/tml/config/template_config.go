@@ -308,13 +308,14 @@ type WebClientConfig struct {
 
 //RedisConfig -
 type RedisConfig struct {
-	Username    string         $json:"username"$
-	Passwd      string         $json:"passwd"$
-	Addr        string         $json:"addr"$
-	MaxOpen     int            $json:"max_open"$     //default 100
-	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 10min
-	IoTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms
-	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms
+	Username      string         $json:"username"$
+	Passwd        string         $json:"passwd"$
+	Addr          string         $json:"addr"$
+	MaxOpen       int            $json:"max_open"$     //default 100
+	MaxIdletime   ctime.Duration $json:"max_idletime"$ //default 10min
+	IoTimeout     ctime.Duration $json:"io_timeout"$   //default 500ms
+	ConnTimeout   ctime.Duration $json:"conn_timeout"$ //default 250ms
+	UseTLS        bool           $json:"use_tls"$
 }
 
 //SqlConfig -
@@ -691,6 +692,7 @@ func initsource(path string) {
 			MaxIdletime: time.Duration(redisc.MaxIdletime),
 			IOTimeout:   time.Duration(redisc.IoTimeout),
 			ConnTimeout: time.Duration(redisc.ConnTimeout),
+			UseTLS:      redisc.UseTLS,
 		})
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		if e := tempredis.Ping(ctx); e != nil {

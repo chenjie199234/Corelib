@@ -2,6 +2,10 @@ package redis
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"os"
 	"time"
 
 	"github.com/chenjie199234/Corelib/trace"
@@ -22,20 +26,50 @@ type Conn struct {
 }
 
 type Config struct {
-	RedisName   string
-	Username    string
-	Password    string
-	Addr        string
-	MaxOpen     int
-	MaxIdletime time.Duration
-	IOTimeout   time.Duration
-	ConnTimeout time.Duration
+	RedisName     string
+	Username      string
+	Password      string
+	Addr          string
+	MaxOpen       int
+	MaxIdletime   time.Duration
+	IOTimeout     time.Duration
+	ConnTimeout   time.Duration
+	UseTLS        bool
+	SkipVerifyTLS bool     //don't verify the server's cert
+	CAs           []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
 }
 
 var ErrNil = redis.ErrNil
 var ErrPoolExhausted = redis.ErrPoolExhausted
 
-func NewRedis(c *Config) *Pool {
+func NewRedis(c *Config) (*Pool, error) {
+	options := make([]redis.DialOption, 0, 10)
+	options = append(options, redis.DialReadTimeout(c.IOTimeout))
+	options = append(options, redis.DialWriteTimeout(c.IOTimeout))
+	options = append(options, redis.DialUsername(c.Username))
+	options = append(options, redis.DialPassword(c.Password))
+	if c.UseTLS {
+		options = append(options, redis.DialUseTLS(true))
+		var certpool *x509.CertPool
+		if len(c.CAs) != 0 {
+			certpool = x509.NewCertPool()
+			for _, cert := range c.CAs {
+				certPEM, e := os.ReadFile(cert)
+				if e != nil {
+					return nil, errors.New("[redis] read cert file:" + cert + " error:" + e.Error())
+				}
+				if !certpool.AppendCertsFromPEM(certPEM) {
+					return nil, errors.New("[redis] load cert file:" + cert + " error:" + e.Error())
+				}
+			}
+		}
+		if c.SkipVerifyTLS || certpool != nil {
+			options = append(options, redis.DialTLSConfig(&tls.Config{
+				InsecureSkipVerify: c.SkipVerifyTLS,
+				RootCAs:            certpool,
+			}))
+		}
+	}
 	return &Pool{
 		c: c,
 		p: &redis.Pool{
@@ -45,11 +79,7 @@ func NewRedis(c *Config) *Pool {
 					ctx, cancel = context.WithTimeout(ctx, c.ConnTimeout)
 					defer cancel()
 				}
-				conn, e := redis.DialContext(ctx, "tcp", c.Addr,
-					redis.DialReadTimeout(c.IOTimeout),
-					redis.DialWriteTimeout(c.IOTimeout),
-					redis.DialUsername(c.Username),
-					redis.DialPassword(c.Password))
+				conn, e := redis.DialContext(ctx, "tcp", c.Addr, options...)
 				if e != nil {
 					return nil, e
 				}
@@ -59,7 +89,7 @@ func NewRedis(c *Config) *Pool {
 			MaxActive:   c.MaxOpen,
 			IdleTimeout: c.MaxIdletime,
 		},
-	}
+	}, nil
 }
 
 func (p *Pool) GetContext(ctx context.Context) (*Conn, error) {

@@ -79,7 +79,8 @@ const textsource = `{
 			"max_open":100,
 			"max_idletime":"10m",
 			"io_timeout":"200ms",
-			"conn_timeout":"200ms"
+			"conn_timeout":"200ms",
+			"use_tls":false
 		}
 	},
 	"kafka_pub":[
