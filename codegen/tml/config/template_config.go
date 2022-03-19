@@ -683,7 +683,7 @@ func initsource(path string) {
 		if k == "example_redis" {
 			continue
 		}
-		tempredis := redis.NewRedis(&redis.Config{
+		tempredis, e := redis.NewRedis(&redis.Config{
 			RedisName:   k,
 			Username:    redisc.Username,
 			Password:    redisc.Passwd,
@@ -694,6 +694,11 @@ func initsource(path string) {
 			ConnTimeout: time.Duration(redisc.ConnTimeout),
 			UseTLS:      redisc.UseTLS,
 		})
+		if e != nil {
+			log.Error(nil,"[config.initsource] open redis:", k, "error:", e)
+			Close()
+			os.Exit(1)
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		if e := tempredis.Ping(ctx); e != nil {
 			cancel()
