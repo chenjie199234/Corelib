@@ -5,13 +5,14 @@ import (
 //"unsafe"
 )
 
-//thread unsafe
+// thread unsafe
 //type FlexibleHashtree struct {
 //        encoder hash.Hash
 //        root    *flexiblenode
 //        leaves  []*flexiblenode
 //        width   int
 //}
+
 //type flexiblenode struct {
 //        parent   *flexiblenode
 //        children []*flexiblenode

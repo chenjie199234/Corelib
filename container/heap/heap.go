@@ -6,375 +6,98 @@
 
 package heap
 
-import (
-	"sync"
-	"unsafe"
-)
-
 //thread unsafe
-func NewHeapMaxNum() *HeapNum {
-	return &HeapNum{
-		direction: 1,
-		data:      make([]*heapNodeNum, 0),
-		pool: &sync.Pool{
-			New: func() interface{} {
-				return &heapNodeNum{}
-			},
-		},
+type Heap struct {
+	direction func(a, b interface{}) bool
+	datas     []interface{}
+}
+
+//direction return a > b max heap
+//direction return a < b min heap
+func NewHeap(direction func(a, b interface{}) bool) *Heap {
+	if direction == nil {
+		return nil
+	}
+	return &Heap{
+		direction: direction,
+		datas:     make([]interface{}, 0, 256),
 	}
 }
 
-//thread unsafe
-func NewHeapMinNum() *HeapNum {
-	return &HeapNum{
-		direction: 0,
-		data:      make([]*heapNodeNum, 0),
-		pool: &sync.Pool{
-			New: func() interface{} {
-				return &heapNodeNum{}
-			},
-		},
-	}
-}
-
-//thread unsafe
-func NewHeapMaxStr() *HeapStr {
-	return &HeapStr{
-		direction: 1,
-		data:      make([]*heapNodeStr, 0),
-		pool: &sync.Pool{
-			New: func() interface{} {
-				return &heapNodeStr{}
-			},
-		},
-	}
-}
-
-//thread unsafe
-func NewHeapMinStr() *HeapStr {
-	return &HeapStr{
-		direction: 0,
-		data:      make([]*heapNodeStr, 0),
-		pool: &sync.Pool{
-			New: func() interface{} {
-				return &heapNodeStr{}
-			},
-		},
-	}
-}
-
-type HeapNum struct {
-	sync.RWMutex
-	//1-for max,0 for min
-	direction int64
-	curnum    int64
-	data      []*heapNodeNum
-	pool      *sync.Pool
-}
-type heapNodeNum struct {
-	key   int64
-	value unsafe.Pointer
-}
-
-func (this *HeapNum) Insert(key int64, value unsafe.Pointer) {
-	if value == nil {
-		return
-	}
-	this.Lock()
-	this.data = append(this.data, this.getnode(key, value))
-	newindex := this.curnum
-	this.curnum++
+func (this *Heap) Push(data interface{}) {
+	this.datas = append(this.datas, data)
+	newindex := len(this.datas) - 1
 	if newindex == 0 {
 		//this is root
-		this.Unlock()
 		return
 	}
 	for {
-		var parentindex int64
+		var parentindex int
 		if newindex%2 > 0 {
+			//newindex is the left node
 			parentindex = (newindex - 1) / 2
 		} else {
+			//newindex is the right node
 			parentindex = newindex/2 - 1
 		}
-		if this.direction == 1 {
-			//this is a max heap
-			if this.data[parentindex].key < key {
-				this.data[parentindex], this.data[newindex] = this.data[newindex], this.data[parentindex]
-			} else {
-				break
-			}
-		} else {
-			//this is a min heap
-			if this.data[parentindex].key > key {
-				this.data[parentindex], this.data[newindex] = this.data[newindex], this.data[parentindex]
-			} else {
-				break
-			}
+		if this.direction(this.datas[parentindex], data) {
+			break
 		}
+		this.datas[parentindex], this.datas[newindex] = this.datas[newindex], this.datas[parentindex]
 		if parentindex == 0 {
 			break
 		}
 		newindex = parentindex
 	}
-	this.Unlock()
 }
 
-//only get not delete
-func (this *HeapNum) Getroot() (key int64, value unsafe.Pointer) {
-	this.RLock()
-	if this.curnum == 0 {
-		key = 0
-		value = nil
-	} else {
-		key, value = this.data[0].key, this.data[0].value
+//only get not delete,return false means this is an empty heap
+func (this *Heap) GetRoot() (interface{}, bool) {
+	if len(this.datas) > 0 {
+		return this.datas[0], true
 	}
-	this.RUnlock()
-	return
+	return nil, false
 }
 
 //get and delete
-func (this *HeapNum) Poproot() (key int64, value unsafe.Pointer) {
-	this.Lock()
-	if this.curnum == 0 {
-		key = 0
-		value = nil
-	} else {
-		//get data
-		key, value = this.data[0].key, this.data[0].value
-		//delete node
-		this.putnode(this.data[0])
-		this.curnum--
-		if this.curnum == 0 {
-			this.data = this.data[:0]
-		} else {
-			//rebuild
-			this.data[0] = this.data[len(this.data)-1]
-			this.data = this.data[:len(this.data)-1]
-			newindex := 0
-			for {
-				leftindex := newindex*2 + 1
-				rightindex := (newindex + 1) * 2
-				if this.direction == 1 {
-					//this is a max heap
-					maxindex := -1
-					if leftindex <= len(this.data)-1 {
-						//valid index
-						if this.data[newindex].key >= this.data[leftindex].key {
-							maxindex = newindex
-						} else {
-							maxindex = leftindex
-						}
-					}
-					if rightindex <= len(this.data)-1 {
-						//valid index
-						if this.data[maxindex].key >= this.data[rightindex].key {
-							//maxindex = maxindex
-						} else {
-							maxindex = rightindex
-						}
-					}
-					if newindex == maxindex || maxindex == -1 {
-						break
-					}
-					this.data[newindex], this.data[maxindex] = this.data[maxindex], this.data[newindex]
-					newindex = maxindex
-				} else {
-					//this is a min heap
-					minindex := -1
-					if leftindex <= len(this.data)-1 {
-						//valid index
-						if this.data[newindex].key <= this.data[leftindex].key {
-							minindex = newindex
-						} else {
-							minindex = leftindex
-						}
-					}
-					if rightindex <= len(this.data)-1 {
-						//valid index
-						if this.data[minindex].key <= this.data[rightindex].key {
-							//minindex = minindex
-						} else {
-							minindex = rightindex
-						}
-					}
-					if newindex == minindex || minindex == -1 {
-						break
-					}
-					this.data[newindex], this.data[minindex] = this.data[minindex], this.data[newindex]
-					newindex = minindex
-				}
-			}
-		}
+func (this *Heap) PopRoot() (data interface{}, ok bool) {
+	if len(this.datas) == 0 {
+		return nil, false
 	}
-	this.Unlock()
-	return
-}
-func (this *HeapNum) getnode(key int64, value unsafe.Pointer) *heapNodeNum {
-	node, _ := this.pool.Get().(*heapNodeNum)
-	node.key = key
-	node.value = value
-	return node
-}
-func (this *HeapNum) putnode(node *heapNodeNum) {
-	node.key = 0
-	node.value = nil
-	this.pool.Put(node)
-}
-
-type HeapStr struct {
-	sync.RWMutex
-	//1-for max,0 for min
-	direction int64
-	curnum    int64
-	data      []*heapNodeStr
-	pool      *sync.Pool
-}
-type heapNodeStr struct {
-	key   string
-	value unsafe.Pointer
-}
-
-func (this *HeapStr) Insert(key string, value unsafe.Pointer) {
-	if value == nil {
+	data, ok = this.datas[0], true
+	if len(this.datas) <= 2 {
+		this.datas = this.datas[1:]
 		return
 	}
-	this.Lock()
-	this.data = append(this.data, this.getnode(key, value))
-	newindex := this.curnum
-	this.curnum++
-	if newindex == 0 {
-		//this is root
-		this.Unlock()
-		return
-	}
+	//rebuild
+	this.datas[0] = this.datas[len(this.datas)-1]
+	this.datas = this.datas[:len(this.datas)-1]
+	newindex := 0
 	for {
-		var parentindex int64
-		if newindex%2 > 0 {
-			parentindex = (newindex - 1) / 2
-		} else {
-			parentindex = newindex/2 - 1
-		}
-		if this.direction == 1 {
-			//this is a max heap
-			if this.data[parentindex].key < key {
-				this.data[parentindex], this.data[newindex] = this.data[newindex], this.data[parentindex]
-			} else {
-				break
-			}
-		} else {
-			//this is a min heap
-			if this.data[parentindex].key > key {
-				this.data[parentindex], this.data[newindex] = this.data[newindex], this.data[parentindex]
-			} else {
-				break
-			}
-		}
-		if parentindex == 0 {
+		leftindex := newindex*2 + 1
+		rightindex := (newindex + 1) * 2
+		if leftindex >= len(this.datas) {
+			//lleftindex and rightindex both are invalid
 			break
 		}
-		newindex = parentindex
-	}
-	this.Unlock()
-}
-
-//only get not delete
-func (this *HeapStr) Getroot() (key string, value unsafe.Pointer) {
-	this.RLock()
-	if this.curnum == 0 {
-		key = ""
-		value = nil
-	} else {
-		key, value = this.data[0].key, this.data[0].value
-	}
-	this.RUnlock()
-	return
-}
-
-//get and delete
-func (this *HeapStr) Poproot() (key string, value unsafe.Pointer) {
-	this.Lock()
-	if this.curnum == 0 {
-		key = ""
-		value = nil
-	} else {
-		//get data
-		key, value = this.data[0].key, this.data[0].value
-		//delete node
-		this.putnode(this.data[0])
-		this.curnum--
-		if this.curnum == 0 {
-			this.data = this.data[:0]
-		} else {
-			//rebuild
-			this.data[0] = this.data[len(this.data)-1]
-			this.data = this.data[:len(this.data)-1]
-			newindex := 0
-			for {
-				leftindex := newindex*2 + 1
-				rightindex := (newindex + 1) * 2
-				if this.direction == 1 {
-					//this is a max heap
-					maxindex := -1
-					if leftindex <= len(this.data)-1 {
-						//valid index
-						if this.data[newindex].key >= this.data[leftindex].key {
-							maxindex = newindex
-						} else {
-							maxindex = leftindex
-						}
-					}
-					if rightindex <= len(this.data)-1 {
-						//valid index
-						if this.data[maxindex].key >= this.data[rightindex].key {
-							//maxindex = maxindex
-						} else {
-							maxindex = rightindex
-						}
-					}
-					if newindex == maxindex || maxindex == -1 {
-						break
-					}
-					this.data[newindex], this.data[maxindex] = this.data[maxindex], this.data[newindex]
-					newindex = maxindex
-				} else {
-					//this is a min heap
-					minindex := -1
-					if leftindex <= len(this.data)-1 {
-						//valid index
-						if this.data[newindex].key <= this.data[leftindex].key {
-							minindex = newindex
-						} else {
-							minindex = leftindex
-						}
-					}
-					if rightindex <= len(this.data)-1 {
-						//valid index
-						if this.data[minindex].key <= this.data[rightindex].key {
-							//minindex = minindex
-						} else {
-							minindex = rightindex
-						}
-					}
-					if newindex == minindex || minindex == -1 {
-						break
-					}
-					this.data[newindex], this.data[minindex] = this.data[minindex], this.data[newindex]
-					newindex = minindex
-				}
+		if rightindex < len(this.datas) {
+			//leftindex and rightindex both are valid index
+			//compare left and right
+			if this.direction(this.datas[leftindex], this.datas[rightindex]) {
+				this.datas[leftindex], this.datas[newindex] = this.datas[newindex], this.datas[leftindex]
+				newindex = leftindex
+			} else {
+				this.datas[rightindex], this.datas[newindex] = this.datas[newindex], this.datas[rightindex]
+				newindex = rightindex
 			}
+		} else {
+			//leftindex is valid but rightindex is invalid index
+			//compare left and top
+			if this.direction(this.datas[leftindex], this.datas[newindex]) {
+				this.datas[leftindex], this.datas[newindex] = this.datas[newindex], this.datas[leftindex]
+			}
+			break
 		}
 	}
-	this.Unlock()
 	return
-}
-func (this *HeapStr) getnode(key string, value unsafe.Pointer) *heapNodeStr {
-	node, _ := this.pool.Get().(*heapNodeStr)
-	node.key = key
-	node.value = value
-	return node
-}
-func (this *HeapStr) putnode(node *heapNodeStr) {
-	node.key = ""
-	node.value = nil
-	this.pool.Put(node)
 }

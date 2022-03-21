@@ -1,91 +1,68 @@
 package heap
 
 import (
-	"fmt"
 	"testing"
-	"unsafe"
 )
 
 func Test_Heap(t *testing.T) {
-	maxnum := NewHeapMaxNum()
-	var data int = 11001
-	maxnum.Insert(1, unsafe.Pointer(&data))
-	maxnum.Insert(3, unsafe.Pointer(&data))
-	maxnum.Insert(4, unsafe.Pointer(&data))
-	maxnum.Insert(6, unsafe.Pointer(&data))
-	maxnum.Insert(7, unsafe.Pointer(&data))
-	maxnum.Insert(10, unsafe.Pointer(&data))
-	maxnum.Insert(9, unsafe.Pointer(&data))
-	maxnum.Insert(8, unsafe.Pointer(&data))
-	maxnum.Insert(5, unsafe.Pointer(&data))
-	maxnum.Insert(2, unsafe.Pointer(&data))
-	for i := int64(10); i >= 1; i-- {
-		k, v := maxnum.Poproot()
-		if k != i {
-			panic(fmt.Sprintf("index error require:%d get:%d", i, k))
-		}
-		if (*(*int)(v)) != 11001 {
-			panic("data error")
-		}
+	h := NewHeap(func(a, b interface{}) bool {
+		return a.(int) < b.(int)
+	})
+	h.Push(10)
+	h.Push(80)
+	h.Push(23)
+	h.Push(3)
+	h.Push(9)
+	h.Push(7)
+	if d, ok := h.PopRoot(); !ok || d.(int) != 3 {
+		t.Fatal("should get 3,but get:", d)
 	}
-	minnum := NewHeapMinNum()
-	minnum.Insert(1, unsafe.Pointer(&data))
-	minnum.Insert(3, unsafe.Pointer(&data))
-	minnum.Insert(4, unsafe.Pointer(&data))
-	minnum.Insert(6, unsafe.Pointer(&data))
-	minnum.Insert(7, unsafe.Pointer(&data))
-	minnum.Insert(10, unsafe.Pointer(&data))
-	minnum.Insert(9, unsafe.Pointer(&data))
-	minnum.Insert(8, unsafe.Pointer(&data))
-	minnum.Insert(5, unsafe.Pointer(&data))
-	minnum.Insert(2, unsafe.Pointer(&data))
-	for i := int64(1); i <= 10; i++ {
-		k, v := minnum.Poproot()
-		if k != i {
-			panic(fmt.Sprintf("index error require:%d get:%d", i, k))
-		}
-		if (*(*int)(v)) != 11001 {
-			panic("data error")
-		}
+	if d, ok := h.PopRoot(); !ok || d.(int) != 7 {
+		t.Fatal("should get 7,but get:", d)
 	}
-	maxstr := NewHeapMaxStr()
-	maxstr.Insert("b", unsafe.Pointer(&data))
-	maxstr.Insert("a", unsafe.Pointer(&data))
-	maxstr.Insert("c", unsafe.Pointer(&data))
-	maxstr.Insert("d", unsafe.Pointer(&data))
-	maxstr.Insert("i", unsafe.Pointer(&data))
-	maxstr.Insert("j", unsafe.Pointer(&data))
-	maxstr.Insert("g", unsafe.Pointer(&data))
-	maxstr.Insert("f", unsafe.Pointer(&data))
-	maxstr.Insert("e", unsafe.Pointer(&data))
-	maxstr.Insert("h", unsafe.Pointer(&data))
-	for i := 'j'; i <= 'a'; i-- {
-		k, v := maxstr.Poproot()
-		if k != string(i) {
-			panic(fmt.Sprintf("index error require:%v get:%s", i, k))
-		}
-		if (*(*int)(v)) != 11001 {
-			panic("data error")
-		}
+	if d, ok := h.PopRoot(); !ok || d.(int) != 9 {
+		t.Fatal("should get 9,but get:", d)
 	}
-	minstr := NewHeapMinStr()
-	minstr.Insert("b", unsafe.Pointer(&data))
-	minstr.Insert("a", unsafe.Pointer(&data))
-	minstr.Insert("c", unsafe.Pointer(&data))
-	minstr.Insert("d", unsafe.Pointer(&data))
-	minstr.Insert("i", unsafe.Pointer(&data))
-	minstr.Insert("j", unsafe.Pointer(&data))
-	minstr.Insert("g", unsafe.Pointer(&data))
-	minstr.Insert("f", unsafe.Pointer(&data))
-	minstr.Insert("e", unsafe.Pointer(&data))
-	minstr.Insert("h", unsafe.Pointer(&data))
-	for i := 'a'; i <= 'j'; i++ {
-		k, v := minstr.Poproot()
-		if k != string(i) {
-			panic(fmt.Sprintf("index error require:%v get:%s", i, k))
-		}
-		if (*(*int)(v)) != 11001 {
-			panic("data error")
-		}
+	if d, ok := h.PopRoot(); !ok || d.(int) != 10 {
+		t.Fatal("should get 10,but get:", d)
+	}
+	if d, ok := h.PopRoot(); !ok || d.(int) != 23 {
+		t.Fatal("should get 23,but get:", d)
+	}
+	if d, ok := h.PopRoot(); !ok || d.(int) != 80 {
+		t.Fatal("should get 80,but get:", d)
+	}
+	if _, ok := h.PopRoot(); ok {
+		t.Fatal("should get nil")
+	}
+	h = NewHeap(func(a, b interface{}) bool {
+		return a.(int) > b.(int)
+	})
+	h.Push(10)
+	h.Push(80)
+	h.Push(23)
+	h.Push(3)
+	h.Push(9)
+	h.Push(7)
+	if d, ok := h.PopRoot(); !ok || d.(int) != 80 {
+		t.Fatal("should get 80,but get:", d)
+	}
+	if d, ok := h.PopRoot(); !ok || d.(int) != 23 {
+		t.Fatal("should get 23,but get:", d)
+	}
+	if d, ok := h.PopRoot(); !ok || d.(int) != 10 {
+		t.Fatal("should get 10,but get:", d)
+	}
+	if d, ok := h.PopRoot(); !ok || d.(int) != 9 {
+		t.Fatal("should get 9,but get:", d)
+	}
+	if d, ok := h.PopRoot(); !ok || d.(int) != 7 {
+		t.Fatal("should get 7,but get:", d)
+	}
+	if d, ok := h.PopRoot(); !ok || d.(int) != 3 {
+		t.Fatal("should get 3,but get:", d)
+	}
+	if _, ok := h.PopRoot(); ok {
+		t.Fatal("should get nil")
 	}
 }

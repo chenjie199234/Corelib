@@ -1,5 +1,31 @@
 package hashtree
 
+/*
+|                        width = 3,tall = 4
+|                               N(hstr)                      |
+|                ---------------|------------------
+|                |              |                 |          t
+|                N(hstr)        N(hstr)           N(hstr)
+|       ---------|---------     |                 |          a
+|       |        |        |    ...               ...
+|       N(hstr)  N(hstr)  N(hstr)                            l
+| ------|------  |        |
+| |     |     | ...      ...                                 l
+| L     L     L
+|(hstr and data)                                             |
+|
+|
+|       >-------------------
+|       |             |  |  |
+|     >-+-----------  |  |  |
+|     | |       | | | |  |  |
+|   >-+-+-----  | | | |  |  |
+|   ↑ ↑ ↑ | | | | | | |  |  |
+| 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16......
+| ↓ | | | ↓                     |  |  |
+| >-----  >---------------------------
+*/
+
 import (
 	"bytes"
 	"crypto/md5"
@@ -31,7 +57,7 @@ func (h *FixedHashtree) caculate(pindex int) []byte {
 	childstart := h.getNodeStartIndexInChildPiece(pindex)
 	piece := make([][]byte, h.width)
 	for j := 0; j < h.width; j++ {
-		piece[j] = h.nodes[childstart+j].data.Hashstr
+		piece[j] = h.nodes[childstart+j].data.Hstr
 	}
 	h.encoder.Reset()
 	h.encoder.Write(bytes.Join(piece, nil))
@@ -80,18 +106,18 @@ func NewFixedHashtree(width, tall int) *FixedHashtree {
 func (h *FixedHashtree) UpdateAll() {
 	for i := len(h.nodes) - 1; i >= 0; i -= h.width {
 		pindex := h.getparentindex(i)
-		h.nodes[pindex].data.Hashstr = h.caculate(pindex)
+		h.nodes[pindex].data.Hstr = h.caculate(pindex)
 	}
 }
 func (h *FixedHashtree) GetLeavesNum() int {
 	return len(h.leaves)
 }
 func (h *FixedHashtree) GetRootHash() []byte {
-	return h.nodes[0].data.Hashstr
+	return h.nodes[0].data.Hstr
 }
 func (h *FixedHashtree) Reset() {
 	for i := range h.leaves {
-		h.leaves[i].data.Hashstr = nil
+		h.leaves[i].data.Hstr = nil
 		h.leaves[i].data.Value = nil
 	}
 	h.UpdateAll()
@@ -113,12 +139,12 @@ func (h *FixedHashtree) Rebuild(datas map[int]*LeafData) error {
 		}
 	}
 	for i := range h.leaves {
-		h.leaves[i].data.Hashstr = nil
+		h.leaves[i].data.Hstr = nil
 		h.leaves[i].data.Value = nil
 	}
 	for leafindex, leafdata := range datas {
 		if leafdata != nil {
-			h.leaves[leafindex].data.Hashstr = leafdata.Hashstr
+			h.leaves[leafindex].data.Hstr = leafdata.Hstr
 			h.leaves[leafindex].data.Value = leafdata.Value
 		}
 	}
@@ -130,15 +156,15 @@ func (h *FixedHashtree) SetSingleLeaf(leafindex int, data *LeafData) error {
 		return ErrLeafIndexOutOfRange
 	}
 	if data == nil {
-		h.leaves[leafindex].data.Hashstr = nil
+		h.leaves[leafindex].data.Hstr = nil
 		h.leaves[leafindex].data.Value = nil
 	} else {
-		h.leaves[leafindex].data.Hashstr = data.Hashstr
+		h.leaves[leafindex].data.Hstr = data.Hstr
 		h.leaves[leafindex].data.Value = data.Value
 	}
 	pindex := h.getparentindex(h.leaves[leafindex].nodeindex)
 	for {
-		h.nodes[pindex].data.Hashstr = h.caculate(pindex)
+		h.nodes[pindex].data.Hstr = h.caculate(pindex)
 		if pindex == 0 {
 			break
 		}
@@ -158,10 +184,10 @@ func (h *FixedHashtree) SetMultiLeaves(datas map[int]*LeafData) error {
 	pindexs := make(map[int]*struct{}, 10)
 	for leafindex, leafdata := range datas {
 		if leafdata == nil {
-			h.leaves[leafindex].data.Hashstr = nil
+			h.leaves[leafindex].data.Hstr = nil
 			h.leaves[leafindex].data.Value = nil
 		} else {
-			h.leaves[leafindex].data.Hashstr = leafdata.Hashstr
+			h.leaves[leafindex].data.Hstr = leafdata.Hstr
 			h.leaves[leafindex].data.Value = leafdata.Value
 		}
 		pindexs[h.getparentindex(h.leaves[leafindex].nodeindex)] = nil
@@ -170,7 +196,7 @@ func (h *FixedHashtree) SetMultiLeaves(datas map[int]*LeafData) error {
 	for {
 		newpindex := make(map[int]*struct{}, 0)
 		for pindex := range pindexs {
-			h.nodes[pindex].data.Hashstr = h.caculate(pindex)
+			h.nodes[pindex].data.Hstr = h.caculate(pindex)
 			if pindex == 0 {
 				finish = true
 				break
@@ -188,8 +214,8 @@ func (h *FixedHashtree) Export() map[int]*LeafData {
 	result := make(map[int]*LeafData)
 	for leafindex, leafdata := range h.leaves {
 		result[leafindex] = &LeafData{
-			Hashstr: leafdata.data.Hashstr,
-			Value:   leafdata.data.Value,
+			Hstr:  leafdata.data.Hstr,
+			Value: leafdata.data.Value,
 		}
 	}
 	return result
@@ -199,8 +225,8 @@ func (h *FixedHashtree) GetSingleLeaf(leafindex int) (*LeafData, error) {
 		return nil, ErrLeafIndexOutOfRange
 	}
 	return &LeafData{
-		Hashstr: h.leaves[leafindex].data.Hashstr,
-		Value:   h.leaves[leafindex].data.Value,
+		Hstr:  h.leaves[leafindex].data.Hstr,
+		Value: h.leaves[leafindex].data.Value,
 	}, nil
 }
 func (h *FixedHashtree) GetMultiLeaves(leafindexs []int) (map[int]*LeafData, error) {
@@ -212,8 +238,8 @@ func (h *FixedHashtree) GetMultiLeaves(leafindexs []int) (map[int]*LeafData, err
 	result := make(map[int]*LeafData)
 	for _, leafindex := range leafindexs {
 		result[leafindex] = &LeafData{
-			Hashstr: h.leaves[leafindex].data.Hashstr,
-			Value:   h.leaves[leafindex].data.Value,
+			Hstr:  h.leaves[leafindex].data.Hstr,
+			Value: h.leaves[leafindex].data.Value,
 		}
 	}
 	return result, nil
@@ -228,7 +254,7 @@ func (h *FixedHashtree) Different(other *FixedHashtree) ([]int, error) {
 	for {
 		newmaydifindexs := make(map[int]*struct{})
 		for nodeindex := range maydifindexs {
-			if !bytes.Equal(h.nodes[nodeindex].data.Hashstr, other.nodes[nodeindex].data.Hashstr) {
+			if !bytes.Equal(h.nodes[nodeindex].data.Hstr, other.nodes[nodeindex].data.Hstr) {
 				if childnodestart := h.getNodeStartIndexInChildPiece(nodeindex); childnodestart >= len(h.nodes) {
 					result = append(result, h.nodes[nodeindex].leafindex)
 				} else {

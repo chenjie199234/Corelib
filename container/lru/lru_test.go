@@ -8,7 +8,7 @@ import (
 )
 
 func Test_lru(t *testing.T) {
-	l := New(10, 1)
+	l := New(10, time.Second)
 	for i := 0; i < 20; i++ {
 		if i == 18 {
 			time.Sleep(5 * time.Second)
@@ -17,15 +17,13 @@ func Test_lru(t *testing.T) {
 		l.Set(d, unsafe.Pointer(&d))
 	}
 	debug(l)
-	data := l.Get("11")
-	if data == nil {
-		fmt.Println("nil")
+	if _, ok := l.Get("11"); !ok {
+		fmt.Println("not exist")
 	} else {
 		panic("should be bil")
 	}
 	debug(l)
-	data = l.Get("18")
-	if data == nil {
+	if data, ok := l.Get("18"); !ok {
 		panic("should not be nil")
 	} else {
 		fmt.Println(*(*string)(data))

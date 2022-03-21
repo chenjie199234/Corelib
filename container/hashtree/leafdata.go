@@ -5,6 +5,6 @@ import (
 )
 
 type LeafData struct {
-	Hashstr []byte
-	Value   unsafe.Pointer
+	Hstr  []byte
+	Value unsafe.Pointer
 }
