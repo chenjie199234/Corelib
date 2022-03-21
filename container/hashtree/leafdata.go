@@ -1,10 +1,6 @@
 package hashtree
 
-import (
-	"unsafe"
-)
-
-type LeafData struct {
+type LeafData[T any] struct {
 	Hstr  []byte
-	Value unsafe.Pointer
+	Value T
 }

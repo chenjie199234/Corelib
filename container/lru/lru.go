@@ -3,44 +3,43 @@ package lru
 import (
 	"sync"
 	"time"
-	"unsafe"
 )
 
 //thread unsafe
-type LruCache struct {
+type LruCache[T any] struct {
 	maxcap int64
 	curcap int64
 	ttl    time.Duration
-	buf    map[interface{}]*node
-	head   *node
-	tail   *node
+	buf    map[interface{}]*node[T]
+	head   *node[T]
+	tail   *node[T]
 	pool   *sync.Pool
 }
-type kv struct {
+type kv[T any] struct {
 	ttl   int64 //unixnano
 	key   interface{}
-	value unsafe.Pointer
+	value T
 }
 
-type node struct {
-	data *kv
-	next *node
-	prev *node
+type node[T any] struct {
+	data *kv[T]
+	next *node[T]
+	prev *node[T]
 }
 
 //ttl == 0 means not using expire time
-func New(maxcap int64, ttl time.Duration) *LruCache {
+func New[T any](maxcap int64, ttl time.Duration) *LruCache[T] {
 	if maxcap <= 0 || ttl < 0 {
 		return nil
 	}
-	return &LruCache{
+	return &LruCache[T]{
 		maxcap: maxcap,
 		ttl:    ttl,
-		buf:    make(map[interface{}]*node, int(float64(maxcap)*float64(1.3))),
+		buf:    make(map[interface{}]*node[T], int(float64(maxcap)*float64(1.3))),
 		pool:   &sync.Pool{},
 	}
 }
-func (l *LruCache) refresh(v *node) {
+func (l *LruCache[T]) refresh(v *node[T]) {
 	if l.head == l.tail || v.prev == nil {
 		//this is the only one element in this lru
 		//or this element is the head
@@ -64,7 +63,7 @@ func (l *LruCache) refresh(v *node) {
 	l.head.prev = v
 	l.head = v
 }
-func (l *LruCache) insert(v *node) {
+func (l *LruCache[T]) insert(v *node[T]) {
 	//new node always put at the head
 	v.next = l.head
 	if l.head == nil {
@@ -89,23 +88,23 @@ func (l *LruCache) insert(v *node) {
 		l.curcap++
 	}
 }
-func (l *LruCache) Get(key interface{}) (unsafe.Pointer, bool) {
+func (l *LruCache[T]) Get(key interface{}) (data T, ok bool) {
 	v, ok := l.buf[key]
 	if !ok {
-		return nil, false
+		return
 	}
 	if l.ttl != 0 {
 		now := time.Now()
 		if v.data.ttl <= now.UnixNano() {
 			//timeout
-			return nil, false
+			return
 		}
 		v.data.ttl = now.Add(l.ttl).UnixNano()
 	}
 	l.refresh(v)
 	return v.data.value, true
 }
-func (l *LruCache) Set(key interface{}, value unsafe.Pointer) {
+func (l *LruCache[T]) Set(key interface{}, value T) {
 	if v, ok := l.buf[key]; ok {
 		v.data.value = value
 		if l.ttl > 0 {
@@ -123,19 +122,20 @@ func (l *LruCache) Set(key interface{}, value unsafe.Pointer) {
 		l.insert(v)
 	}
 }
-func (l *LruCache) getPool() *node {
-	n, ok := l.pool.Get().(*node)
+func (l *LruCache[T]) getPool() *node[T] {
+	n, ok := l.pool.Get().(*node[T])
 	if !ok {
-		n = &node{
-			data: &kv{},
+		n = &node[T]{
+			data: &kv[T]{},
 		}
 	}
 	return n
 }
-func (l *LruCache) putPool(n *node) {
+func (l *LruCache[T]) putPool(n *node[T]) {
 	n.data.ttl = 0
 	n.data.key = ""
-	n.data.value = nil
+	var tmp T
+	n.data.value = tmp
 	n.next = nil
 	n.prev = nil
 	l.pool.Put(n)

@@ -10,7 +10,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/container/list"
 	"github.com/chenjie199234/Corelib/pool"
@@ -23,7 +22,7 @@ type RotateFile struct {
 	buffile    *bufio.Writer
 	curlen     int64
 	notice     chan struct{}
-	caslist    *list.List
+	caslist    *list.List[*pool.Buffer]
 	rotate     chan struct{}
 	rlker      *sync.Mutex
 	rotateret  map[chan error]struct{}
@@ -50,7 +49,7 @@ func NewRotateFile(path, name string) (*RotateFile, error) {
 		buffile:   bufio.NewWriterSize(tempfile, 4096),
 		curlen:    0,
 		notice:    make(chan struct{}, 1),
-		caslist:   list.NewList(),
+		caslist:   list.NewList[*pool.Buffer](),
 		rotate:    make(chan struct{}, 1),
 		rlker:     &sync.Mutex{},
 		rotateret: make(map[chan error]struct{}),
@@ -222,7 +221,7 @@ func (f *RotateFile) Write(data []byte) (int, error) {
 	}
 	buf := pool.GetBuffer()
 	buf.AppendByteSlice(data)
-	f.caslist.Push(unsafe.Pointer(buf))
+	f.caslist.Push(buf)
 	select {
 	case f.notice <- struct{}{}:
 	default:
@@ -236,7 +235,7 @@ func (f *RotateFile) WriteBuf(data *pool.Buffer) (int, error) {
 	if atomic.LoadInt32(&f.status) == 0 {
 		return 0, fmt.Errorf("[rotatefile.WriteBuf] rotate file closed")
 	}
-	f.caslist.Push(unsafe.Pointer(data))
+	f.caslist.Push(data)
 	select {
 	case f.notice <- struct{}{}:
 	default:
