@@ -7,24 +7,24 @@
 package heap
 
 //thread unsafe
-type Heap struct {
-	direction func(a, b interface{}) bool
-	datas     []interface{}
+type Heap[T any] struct {
+	direction func(a, b T) bool
+	datas     []T
 }
 
 //direction return a > b max heap
 //direction return a < b min heap
-func NewHeap(direction func(a, b interface{}) bool) *Heap {
+func NewHeap[T any](direction func(a, b T) bool) *Heap[T] {
 	if direction == nil {
 		return nil
 	}
-	return &Heap{
+	return &Heap[T]{
 		direction: direction,
-		datas:     make([]interface{}, 0, 256),
+		datas:     make([]T, 0, 256),
 	}
 }
 
-func (this *Heap) Push(data interface{}) {
+func (this *Heap[T]) Push(data T) {
 	this.datas = append(this.datas, data)
 	newindex := len(this.datas) - 1
 	if newindex == 0 {
@@ -52,17 +52,17 @@ func (this *Heap) Push(data interface{}) {
 }
 
 //only get not delete,return false means this is an empty heap
-func (this *Heap) GetRoot() (interface{}, bool) {
+func (this *Heap[T]) GetRoot() (data T, ok bool) {
 	if len(this.datas) > 0 {
 		return this.datas[0], true
 	}
-	return nil, false
+	return
 }
 
 //get and delete
-func (this *Heap) PopRoot() (data interface{}, ok bool) {
+func (this *Heap[T]) PopRoot() (data T, ok bool) {
 	if len(this.datas) == 0 {
-		return nil, false
+		return
 	}
 	data, ok = this.datas[0], true
 	if len(this.datas) <= 2 {
