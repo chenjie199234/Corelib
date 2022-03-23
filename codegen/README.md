@@ -15,16 +15,13 @@
 ### 2.查看帮助:
 	linux/mac: 	终端切换工作目录到项目目录,执行 ./cmd.sh
 	windows: 	终端切换工作目录到项目目录,执行 ./cmd.bat
-### 3.解析proto文件生成打桩文件:
+### 3.解析proto文件生成桩文件:
 	linux/max: 	终端切换工作目录到项目目录,执行 ./cmd.sh pb
 	windows: 	终端切换工作目录到项目目录,执行 ./cmd.bat pb
-### 4.运行项目:
-	linux/mac: 	终端切换工作目录到项目目录,执行 ./cmd.sh run
-	windows: 	终端切换工作目录到项目目录,执行 ./cmd.bat run
-### 5.创建子服务
+### 4.创建子服务
 	linux/mac: 	终端切换工作目录到项目目录,执行 ./cmd.sh new "sub service name"
 	windows: 	终端切换工作目录到项目目录,执行 ./cmd.bat new "sub service name"
-### 6.更新kuberneters配置
+### 5.更新kuberneters配置
 	linux/mac: 	终端切换工作目录到项目目录,执行 ./cmd.sh kube
 	windows: 	终端切换工作目录到项目目录,执行 ./cmd.bat kube
 
