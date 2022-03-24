@@ -25,7 +25,7 @@ func main() {
 				continue
 			}
 			if *f.Proto.Syntax != "proto3" {
-				panic("don't use proto2 syntax in proto,this plugin can't support!")
+				panic("this plugin only support proto3 syntax!")
 			}
 			for _, s := range f.Services {
 				if s.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {

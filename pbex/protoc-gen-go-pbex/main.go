@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/chenjie199234/Corelib/pbex"
-
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
@@ -26,7 +25,7 @@ func main() {
 				continue
 			}
 			if *f.Proto.Syntax != "proto3" {
-				panic("don't use proto2 syntax in proto,this plugin can't support!")
+				panic("this plugin only support proto3 syntax!")
 			}
 			for _, m := range f.Messages {
 				if m.Desc.Options().(*descriptorpb.MessageOptions).GetDeprecated() {

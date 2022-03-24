@@ -125,7 +125,6 @@ func genMessage(g *protogen.GeneratedFile, m *protogen.Message) {
 			if field.Desc.IsMap() || field.Desc.IsList() {
 				elementnumcheck(field, fop, g)
 			}
-			isbyteslice := false
 			switch field.Desc.Kind() {
 			case protoreflect.BoolKind:
 				//bool or []bool
@@ -165,11 +164,10 @@ func genMessage(g *protogen.GeneratedFile, m *protogen.Message) {
 				floatcheck(field, fop, g)
 			case protoreflect.BytesKind:
 				//[]bytes or [][]bytes
-				isbyteslice = true
 				fallthrough
 			case protoreflect.StringKind:
 				//string or []string
-				strcheck(field, isbyteslice, fop, g)
+				strcheck(field, fop, g)
 			case protoreflect.MessageKind:
 				//message or []message or map
 				if field.Desc.IsMap() {
@@ -193,37 +191,37 @@ func genMessage(g *protogen.GeneratedFile, m *protogen.Message) {
 func elementnumcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenEq) {
 		leneq := proto.GetExtension(fop, pbex.E_MapRepeatedLenEq).(uint64)
-		g.P("if len(m.", field.GoName, ")!=", leneq, "{")
+		g.P("if len(m.Get", field.GoName, "())!=", leneq, "{")
 		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len eq failed\"")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenNotEq) {
 		lennoteq := proto.GetExtension(fop, pbex.E_MapRepeatedLenNotEq).(uint64)
-		g.P("if len(m.", field.GoName, ")==", lennoteq, "{")
+		g.P("if len(m.Get", field.GoName, "())==", lennoteq, "{")
 		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len not eq failed\"")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenGt) {
 		lengt := proto.GetExtension(fop, pbex.E_MapRepeatedLenGt).(uint64)
-		g.P("if len(m.", field.GoName, ")<=", lengt, "{")
+		g.P("if len(m.Get", field.GoName, "())<=", lengt, "{")
 		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len gt failed\"")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenGte) {
 		lengte := proto.GetExtension(fop, pbex.E_MapRepeatedLenGte).(uint64)
-		g.P("if len(m.", field.GoName, ")<", lengte, "{")
+		g.P("if len(m.Get", field.GoName, "())<", lengte, "{")
 		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len gte failed\"")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenLt) {
 		lenlt := proto.GetExtension(fop, pbex.E_MapRepeatedLenLt).(uint64)
-		g.P("if len(m.", field.GoName, ")>=", lenlt, "{")
+		g.P("if len(m.Get", field.GoName, "())>=", lenlt, "{")
 		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len lt failed\"")
 		g.P("}")
 	}
 	if proto.HasExtension(fop, pbex.E_MapRepeatedLenLte) {
 		lenlte := proto.GetExtension(fop, pbex.E_MapRepeatedLenLte).(uint64)
-		g.P("if len(m.", field.GoName, ")>", lenlte, "{")
+		g.P("if len(m.Get", field.GoName, "())>", lenlte, "{")
 		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check len lte failed\"")
 		g.P("}")
 	}
@@ -232,13 +230,13 @@ func boolcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 	if proto.HasExtension(fop, pbex.E_BoolEq) {
 		booleq := proto.GetExtension(fop, pbex.E_BoolEq).(bool)
 		if field.Desc.IsList() {
-			g.P("for _,v:= range m.", field.GoName, "{")
+			g.P("for _,v:= range m.Get", field.GoName, "(){")
 			g.P("if v!=", booleq, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value bool eq failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if m.", field.GoName, "!=", booleq, "{")
+			g.P("if m.Get", field.GoName, "()!=", booleq, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value bool eq failed\"")
 			g.P("}")
 		}
@@ -246,13 +244,13 @@ func boolcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 }
 func enumcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if field.Desc.IsList() {
-		g.P("for _,v:=range m.", field.GoName, "{")
+		g.P("for _,v:=range m.Get", field.GoName, "(){")
 		g.P("if _,ok:=", g.QualifiedGoIdent(field.Enum.GoIdent), "_name[int32(v)];!ok{")
 		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum exist failed\"")
 		g.P("}")
 		g.P("}")
 	} else {
-		g.P("if _,ok:=", g.QualifiedGoIdent(field.Enum.GoIdent), "_name[int32(m.", field.GoName, ")];!ok{")
+		g.P("if _,ok:=", g.QualifiedGoIdent(field.Enum.GoIdent), "_name[int32(m.Get", field.GoName, "())];!ok{")
 		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum exist failed\"")
 		g.P("}")
 	}
@@ -261,7 +259,7 @@ func intcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 	if proto.HasExtension(fop, pbex.E_IntIn) {
 		in := proto.GetExtension(fop, pbex.E_IntIn).([]int64)
 		if field.Desc.IsList() {
-			g.P("for _,v:= range m.", field.GoName, "{")
+			g.P("for _,v:= range m.Get", field.GoName, "(){")
 			all := make([]string, 0, 10)
 			for _, v := range in {
 				all = append(all, "v!="+strconv.FormatInt(v, 10))
@@ -273,7 +271,7 @@ func intcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 		} else {
 			all := make([]string, 0, 10)
 			for _, v := range in {
-				all = append(all, "m."+field.GoName+"!="+strconv.FormatInt(v, 10))
+				all = append(all, "m.Get"+field.GoName+"()!="+strconv.FormatInt(v, 10))
 			}
 			g.P("if ", strings.Join(all, "&&"), "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int in failed\"")
@@ -283,7 +281,7 @@ func intcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 	if proto.HasExtension(fop, pbex.E_IntNotIn) {
 		notin := proto.GetExtension(fop, pbex.E_IntNotIn).([]int64)
 		if field.Desc.IsList() {
-			g.P("for _,v:= range m.", field.GoName, "{")
+			g.P("for _,v:= range m.Get", field.GoName, "(){")
 			all := make([]string, 0, 10)
 			for _, v := range notin {
 				all = append(all, "v=="+strconv.FormatInt(v, 10))
@@ -295,7 +293,7 @@ func intcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 		} else {
 			all := make([]string, 0, 10)
 			for _, v := range notin {
-				all = append(all, "m."+field.GoName+"=="+strconv.FormatInt(v, 10))
+				all = append(all, "m.Get"+field.GoName+"()=="+strconv.FormatInt(v, 10))
 			}
 			g.P("if ", strings.Join(all, "||"), "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int not in failed\"")
@@ -305,13 +303,13 @@ func intcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 	if proto.HasExtension(fop, pbex.E_IntGt) {
 		gt := proto.GetExtension(fop, pbex.E_IntGt).(int64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if v<=", gt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int gt failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if m.", field.GoName, "<=", gt, "{")
+			g.P("if m.Get", field.GoName, "()<=", gt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int gt failed\"")
 			g.P("}")
 		}
@@ -319,13 +317,13 @@ func intcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 	if proto.HasExtension(fop, pbex.E_IntGte) {
 		gte := proto.GetExtension(fop, pbex.E_IntGte).(int64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if v<", gte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int gte failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if m.", field.GoName, "<", gte, "{")
+			g.P("if m.Get", field.GoName, "()<", gte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int gte failed\"")
 			g.P("}")
 		}
@@ -333,13 +331,13 @@ func intcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 	if proto.HasExtension(fop, pbex.E_IntLt) {
 		lt := proto.GetExtension(fop, pbex.E_IntLt).(int64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if v>=", lt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int lt failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if m.", field.GoName, ">=", lt, "{")
+			g.P("if m.Get", field.GoName, "()>=", lt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int lt failed\"")
 			g.P("}")
 		}
@@ -347,13 +345,13 @@ func intcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 	if proto.HasExtension(fop, pbex.E_IntLte) {
 		lte := proto.GetExtension(fop, pbex.E_IntLte).(int64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if v>", lte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int lte failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if m.", field.GoName, ">", lte, "{")
+			g.P("if m.Get", field.GoName, "()>", lte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value int lte failed\"")
 			g.P("}")
 		}
@@ -363,7 +361,7 @@ func uintcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 	if proto.HasExtension(fop, pbex.E_UintIn) {
 		in := proto.GetExtension(fop, pbex.E_UintIn).([]uint64)
 		if field.Desc.IsList() {
-			g.P("for _,v:= range m.", field.GoName, "{")
+			g.P("for _,v:= range m.Get", field.GoName, "(){")
 			all := make([]string, 0, 10)
 			for _, v := range in {
 				all = append(all, "v!="+strconv.FormatUint(v, 10))
@@ -375,7 +373,7 @@ func uintcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 		} else {
 			all := make([]string, 0, 10)
 			for _, v := range in {
-				all = append(all, "m."+field.GoName+"!="+strconv.FormatUint(v, 10))
+				all = append(all, "m.Get"+field.GoName+"()!="+strconv.FormatUint(v, 10))
 			}
 			g.P("if ", strings.Join(all, "&&"), "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint in failed\"")
@@ -385,7 +383,7 @@ func uintcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 	if proto.HasExtension(fop, pbex.E_UintNotIn) {
 		notin := proto.GetExtension(fop, pbex.E_UintNotIn).([]uint64)
 		if field.Desc.IsList() {
-			g.P("for _,v:= range m.", field.GoName, "{")
+			g.P("for _,v:= range m.Get", field.GoName, "(){")
 			all := make([]string, 0, 10)
 			for _, v := range notin {
 				all = append(all, "v=="+strconv.FormatUint(v, 10))
@@ -397,7 +395,7 @@ func uintcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 		} else {
 			all := make([]string, 0, 10)
 			for _, v := range notin {
-				all = append(all, "m."+field.GoName+"=="+strconv.FormatUint(v, 10))
+				all = append(all, "m.Get"+field.GoName+"()=="+strconv.FormatUint(v, 10))
 			}
 			g.P("if ", strings.Join(all, "||"), "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint not in failed\"")
@@ -407,13 +405,13 @@ func uintcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 	if proto.HasExtension(fop, pbex.E_UintGt) {
 		gt := proto.GetExtension(fop, pbex.E_UintGt).(uint64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if v<=", gt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint gt failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if m.", field.GoName, "<=", gt, "{")
+			g.P("if m.Get", field.GoName, "()<=", gt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint gt failed\"")
 			g.P("}")
 		}
@@ -421,13 +419,13 @@ func uintcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 	if proto.HasExtension(fop, pbex.E_UintGte) {
 		gte := proto.GetExtension(fop, pbex.E_UintGte).(uint64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if v<", gte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint gte failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if m.", field.GoName, "<", gte, "{")
+			g.P("if m.Get", field.GoName, "()<", gte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint gte failed\"")
 			g.P("}")
 		}
@@ -435,13 +433,13 @@ func uintcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 	if proto.HasExtension(fop, pbex.E_UintLt) {
 		lt := proto.GetExtension(fop, pbex.E_UintLt).(uint64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if v>=", lt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint lt failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if m.", field.GoName, ">=", lt, "{")
+			g.P("if m.Get", field.GoName, "()>=", lt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint lt failed\"")
 			g.P("}")
 		}
@@ -449,13 +447,13 @@ func uintcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 	if proto.HasExtension(fop, pbex.E_UintLte) {
 		lte := proto.GetExtension(fop, pbex.E_UintLte).(uint64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if v>", lte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint lte failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if m.", field.GoName, ">", lte, "{")
+			g.P("if m.Get", field.GoName, "()>", lte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value uint lte failed\"")
 			g.P("}")
 		}
@@ -465,7 +463,7 @@ func floatcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protog
 	if proto.HasExtension(fop, pbex.E_FloatIn) {
 		in := proto.GetExtension(fop, pbex.E_FloatIn).([]float64)
 		if field.Desc.IsList() {
-			g.P("for _,v:= range m.", field.GoName, "{")
+			g.P("for _,v:= range m.Get", field.GoName, "(){")
 			all := make([]string, 0, 10)
 			for _, v := range in {
 				all = append(all, "v!="+strconv.FormatFloat(v, 'f', -1, 64))
@@ -477,7 +475,7 @@ func floatcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protog
 		} else {
 			all := make([]string, 0, 10)
 			for _, v := range in {
-				all = append(all, "m."+field.GoName+"!="+strconv.FormatFloat(v, 'f', -1, 64))
+				all = append(all, "m.Get"+field.GoName+"()!="+strconv.FormatFloat(v, 'f', -1, 64))
 			}
 			g.P("if ", strings.Join(all, "&&"), "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float in failed\"")
@@ -487,7 +485,7 @@ func floatcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protog
 	if proto.HasExtension(fop, pbex.E_FloatNotIn) {
 		notin := proto.GetExtension(fop, pbex.E_FloatNotIn).([]float64)
 		if field.Desc.IsList() {
-			g.P("for _,v:= range m.", field.GoName, "{")
+			g.P("for _,v:= range m.Get", field.GoName, "(){")
 			all := make([]string, 0, 10)
 			for _, v := range notin {
 				all = append(all, "v=="+strconv.FormatFloat(v, 'f', -1, 64))
@@ -499,7 +497,7 @@ func floatcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protog
 		} else {
 			all := make([]string, 0, 10)
 			for _, v := range notin {
-				all = append(all, "m."+field.GoName+"=="+strconv.FormatFloat(v, 'f', -1, 64))
+				all = append(all, "m.Get"+field.GoName+"()=="+strconv.FormatFloat(v, 'f', -1, 64))
 			}
 			g.P("if ", strings.Join(all, "||"), "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float not in failed\"")
@@ -509,13 +507,13 @@ func floatcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protog
 	if proto.HasExtension(fop, pbex.E_FloatGt) {
 		gt := proto.GetExtension(fop, pbex.E_FloatGt).(float64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if v<=", gt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float gt failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if m.", field.GoName, "<=", gt, "{")
+			g.P("if m.Get", field.GoName, "()<=", gt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float gt failed\"")
 			g.P("}")
 		}
@@ -523,13 +521,13 @@ func floatcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protog
 	if proto.HasExtension(fop, pbex.E_FloatGte) {
 		gte := proto.GetExtension(fop, pbex.E_FloatGte).(float64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if v<", gte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float gte failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if m.", field.GoName, "<", gte, "{")
+			g.P("if m.Get", field.GoName, "()<", gte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float gte failed\"")
 			g.P("}")
 		}
@@ -537,13 +535,13 @@ func floatcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protog
 	if proto.HasExtension(fop, pbex.E_FloatLt) {
 		lt := proto.GetExtension(fop, pbex.E_FloatLt).(float64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if v>=", lt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float lt failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if m.", field.GoName, ">=", lt, "{")
+			g.P("if m.Get", field.GoName, "()>=", lt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float lt failed\"")
 			g.P("}")
 		}
@@ -551,29 +549,29 @@ func floatcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protog
 	if proto.HasExtension(fop, pbex.E_FloatLte) {
 		lte := proto.GetExtension(fop, pbex.E_FloatLte).(float64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if v>", lte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float lte failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if m.", field.GoName, ">", lte, "{")
+			g.P("if m.Get", field.GoName, "()>", lte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value float lte failed\"")
 			g.P("}")
 		}
 	}
 }
-func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+func strcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_StringBytesLenEq) {
 		leneq := proto.GetExtension(fop, pbex.E_StringBytesLenEq).(uint64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if len(v)!=", leneq, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len eq failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if len(m.", field.GoName, ")!=", leneq, "{")
+			g.P("if len(m.Get", field.GoName, "())!=", leneq, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len eq failed\"")
 			g.P("}")
 		}
@@ -581,13 +579,13 @@ func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOption
 	if proto.HasExtension(fop, pbex.E_StringBytesLenNotEq) {
 		lennoteq := proto.GetExtension(fop, pbex.E_StringBytesLenNotEq).(uint64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if len(v)==", lennoteq, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len not eq failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if len(m.", field.GoName, ")==", lennoteq, "{")
+			g.P("if len(m.Get", field.GoName, "())==", lennoteq, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len not eq failed\"")
 			g.P("}")
 		}
@@ -595,13 +593,13 @@ func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOption
 	if proto.HasExtension(fop, pbex.E_StringBytesLenGt) {
 		lengt := proto.GetExtension(fop, pbex.E_StringBytesLenGt).(uint64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if len(v)<=", lengt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len gt failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if len(m.", field.GoName, ")<=", lengt, "{")
+			g.P("if len(m.Get", field.GoName, "())<=", lengt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len gt failed\"")
 			g.P("}")
 		}
@@ -609,13 +607,13 @@ func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOption
 	if proto.HasExtension(fop, pbex.E_StringBytesLenGte) {
 		lengte := proto.GetExtension(fop, pbex.E_StringBytesLenGte).(uint64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if len(v)<", lengte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len gte failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if len(m.", field.GoName, ")<", lengte, "{")
+			g.P("if len(m.Get", field.GoName, "())<", lengte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len gte failed\"")
 			g.P("}")
 		}
@@ -623,13 +621,13 @@ func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOption
 	if proto.HasExtension(fop, pbex.E_StringBytesLenLt) {
 		lenlt := proto.GetExtension(fop, pbex.E_StringBytesLenLt).(uint64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if len(v)>=", lenlt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len lt failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if len(m.", field.GoName, ")>=", lenlt, "{")
+			g.P("if len(m.Get", field.GoName, "())>=", lenlt, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len lt failed\"")
 			g.P("}")
 		}
@@ -637,13 +635,13 @@ func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOption
 	if proto.HasExtension(fop, pbex.E_StringBytesLenLte) {
 		lenlte := proto.GetExtension(fop, pbex.E_StringBytesLenLte).(uint64)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			g.P("if len(v)>", lenlte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len lte failed\"")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if len(m.", field.GoName, ")>", lenlte, "{")
+			g.P("if len(m.Get", field.GoName, "())>", lenlte, "{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value str len lte failed\"")
 			g.P("}")
 		}
@@ -651,10 +649,10 @@ func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOption
 	if proto.HasExtension(fop, pbex.E_StringBytesIn) {
 		in := proto.GetExtension(fop, pbex.E_StringBytesIn).([]string)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			all := make([]string, 0, 10)
 			for _, v := range in {
-				if isslice {
+				if field.Desc.Kind() == protoreflect.BytesKind {
 					all = append(all, g.QualifiedGoIdent(commonPackage.Ident("Byte2str"))+"(v)!=", strconv.Quote(v))
 				} else {
 					all = append(all, "v!="+strconv.Quote(v))
@@ -667,10 +665,10 @@ func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOption
 		} else {
 			all := make([]string, 0, 10)
 			for _, v := range in {
-				if isslice {
-					all = append(all, g.QualifiedGoIdent(commonPackage.Ident("Byte2str"))+"(m."+field.GoName+")!="+strconv.Quote(v))
+				if field.Desc.Kind() == protoreflect.BytesKind {
+					all = append(all, g.QualifiedGoIdent(commonPackage.Ident("Byte2str"))+"(m.Get"+field.GoName+"())!="+strconv.Quote(v))
 				} else {
-					all = append(all, "m."+field.GoName+"!="+strconv.Quote(v))
+					all = append(all, "m.Get"+field.GoName+"()!="+strconv.Quote(v))
 				}
 			}
 			g.P("if ", strings.Join(all, "&&"), "{")
@@ -681,10 +679,10 @@ func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOption
 	if proto.HasExtension(fop, pbex.E_StringBytesNotIn) {
 		notin := proto.GetExtension(fop, pbex.E_StringBytesNotIn).([]string)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			all := make([]string, 0, 10)
 			for _, v := range notin {
-				if isslice {
+				if field.Desc.Kind() == protoreflect.BytesKind {
 					all = append(all, g.QualifiedGoIdent(commonPackage.Ident("Byte2str"))+"(v)==", strconv.Quote(v))
 				} else {
 					all = append(all, "v=="+strconv.Quote(v))
@@ -697,10 +695,10 @@ func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOption
 		} else {
 			all := make([]string, 0, 10)
 			for _, v := range notin {
-				if isslice {
-					all = append(all, g.QualifiedGoIdent(commonPackage.Ident("Byte2str"))+"(m."+field.GoName+")=="+strconv.Quote(v))
+				if field.Desc.Kind() == protoreflect.BytesKind {
+					all = append(all, g.QualifiedGoIdent(commonPackage.Ident("Byte2str"))+"(m.Get"+field.GoName+"())=="+strconv.Quote(v))
 				} else {
-					all = append(all, "m."+field.GoName+"=="+strconv.Quote(v))
+					all = append(all, "m.Get"+field.GoName+"()=="+strconv.Quote(v))
 				}
 			}
 			g.P("if ", strings.Join(all, "||"), "{")
@@ -711,10 +709,10 @@ func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOption
 	if proto.HasExtension(fop, pbex.E_StringBytesRegMatch) {
 		match := proto.GetExtension(fop, pbex.E_StringBytesRegMatch).([]string)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			all := make([]string, 0, 10)
 			for i := range match {
-				if isslice {
+				if field.Desc.Kind() == protoreflect.BytesKind {
 					all = append(all, "!_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".Match(v)")
 				} else {
 					all = append(all, "!_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".MatchString(v)")
@@ -727,10 +725,10 @@ func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOption
 		} else {
 			all := make([]string, 0, 10)
 			for i := range match {
-				if isslice {
-					all = append(all, "!_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".Match(m."+field.GoName+")")
+				if field.Desc.Kind() == protoreflect.BytesKind {
+					all = append(all, "!_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".Match(m.Get"+field.GoName+"())")
 				} else {
-					all = append(all, "!_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".MatchString(m."+field.GoName+")")
+					all = append(all, "!_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".MatchString(m.Get"+field.GoName+"())")
 				}
 			}
 			g.P("if ", strings.Join(all, "||"), "{")
@@ -741,10 +739,10 @@ func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOption
 	if proto.HasExtension(fop, pbex.E_StringBytesRegNotMatch) {
 		notmatch := proto.GetExtension(fop, pbex.E_StringBytesRegNotMatch).([]string)
 		if field.Desc.IsList() {
-			g.P("for _,v:=range m.", field.GoName, "{")
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
 			all := make([]string, 0, 10)
 			for i := range notmatch {
-				if isslice {
+				if field.Desc.Kind() == protoreflect.BytesKind {
 					all = append(all, "_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".Match(v)")
 				} else {
 					all = append(all, "_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".MatchString(v)")
@@ -757,10 +755,10 @@ func strcheck(field *protogen.Field, isslice bool, fop *descriptorpb.FieldOption
 		} else {
 			all := make([]string, 0, 10)
 			for i := range notmatch {
-				if isslice {
-					all = append(all, "_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".Match(m."+field.GoName+")")
+				if field.Desc.Kind() == protoreflect.BytesKind {
+					all = append(all, "_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".Match(m.Get"+field.GoName+"())")
 				} else {
-					all = append(all, "_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".MatchString(m."+field.GoName+")")
+					all = append(all, "_"+field.Parent.GoIdent.GoName+field.GoName+"Regexp"+strconv.Itoa(i)+".MatchString(m.Get"+field.GoName+"())")
 				}
 			}
 			g.P("if ", strings.Join(all, "||"), "{")
@@ -780,7 +778,7 @@ func messagecheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *prot
 		return
 	}
 	if field.Desc.IsList() {
-		g.P("for _,v:=range m.", field.GoName, "{")
+		g.P("for _,v:=range m.Get", field.GoName, "(){")
 		g.P("if v==nil{")
 		if notnil {
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value object not nil failed\"")
@@ -796,19 +794,19 @@ func messagecheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *prot
 		g.P("}")
 	} else {
 		if needcheck && notnil {
-			g.P("if m.", field.GoName, " == nil {")
+			g.P("if m.Get", field.GoName, "() == nil {")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value object not nil failed\"")
-			g.P("}else if errstr = m.", field.GoName, ".Validate();errstr!=\"\"{")
+			g.P("}else if errstr = m.Get", field.GoName, "().Validate();errstr!=\"\"{")
 			g.P("return")
 			g.P("}")
 		} else if needcheck {
-			g.P("if m.", field.GoName, "!=nil{")
-			g.P("if errstr = m.", field.GoName, ".Validate();errstr!=\"\"{")
+			g.P("if m.Get", field.GoName, "()!=nil{")
+			g.P("if errstr = m.Get", field.GoName, "().Validate();errstr!=\"\"{")
 			g.P("return")
 			g.P("}")
 			g.P("}")
 		} else {
-			g.P("if m.", field.GoName, "==nil{")
+			g.P("if m.Get", field.GoName, "()==nil{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value object not nil failed\"")
 			g.P("}")
 		}
@@ -942,11 +940,11 @@ func mapcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 		}
 	}
 	if keycheck && valuecheck {
-		g.P("for k,v :=range m.", field.GoName, "{")
+		g.P("for k,v :=range m.Get", field.GoName, "(){")
 	} else if keycheck {
-		g.P("for k :=range m.", field.GoName, "{")
+		g.P("for k :=range m.Get", field.GoName, "(){")
 	} else if valuecheck {
-		g.P("for _,v :=range m.", field.GoName, "{")
+		g.P("for _,v :=range m.Get", field.GoName, "(){")
 	} else {
 		return
 	}

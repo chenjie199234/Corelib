@@ -428,33 +428,33 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				switch field.Desc.Kind() {
 				case protoreflect.BoolKind:
 					if field.Desc.IsList() {
-						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("if len(req.Get", field.GoName, "())!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendBools(req.", field.GoName, ")")
+						g.P("query.AppendBools(req.Get", field.GoName, "())")
 					} else {
-						g.P("if req.", field.GoName, "{")
+						g.P("if req.Get", field.GoName, "(){")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendBool(req.", field.GoName, ")")
+						g.P("query.AppendBool(req.Get", field.GoName, "())")
 					}
 					g.P("query.AppendByte('&')")
 					g.P("}")
 				case protoreflect.EnumKind:
 					if field.Desc.IsList() {
-						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("if len(req.Get", field.GoName, "())!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
 						g.P("query.AppendByte('[')")
-						g.P("for i,e:=range req.", field.GoName, "{")
+						g.P("for i,e:=range req.Get", field.GoName, "(){")
 						g.P("query.AppendInt32(int32(e))")
-						g.P("if i == len(req.", field.GoName, ")-1{")
+						g.P("if i == len(req.()", field.GoName, "())-1{")
 						g.P("query.AppendByte(']')")
 						g.P("}else{")
 						g.P("query.AppendByte(',')")
 						g.P("}")
 						g.P("}")
 					} else {
-						g.P("if req.", field.GoName, "!=0{")
+						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendInt32(int32(req.", field.GoName, "))")
+						g.P("query.AppendInt32(int32(req.Get", field.GoName, "()))")
 					}
 					g.P("query.AppendByte('&')")
 					g.P("}")
@@ -464,13 +464,13 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					fallthrough
 				case protoreflect.Int32Kind:
 					if field.Desc.IsList() {
-						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("if len(req.Get", field.GoName, "())!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendInt32s(req.", field.GoName, ")")
+						g.P("query.AppendInt32s(req.Get", field.GoName, "())")
 					} else {
-						g.P("if req.", field.GoName, "!=0{")
+						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendInt32(req.", field.GoName, ")")
+						g.P("query.AppendInt32(req.Get", field.GoName, "())")
 					}
 					g.P("query.AppendByte('&')")
 					g.P("}")
@@ -482,25 +482,25 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					fallthrough
 				case protoreflect.Int64Kind:
 					if field.Desc.IsList() {
-						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("if len(req.Get", field.GoName, "())!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendInt64s(req.", field.GoName, ")")
+						g.P("query.AppendInt64s(req.Get", field.GoName, "())")
 					} else {
-						g.P("if req.", field.GoName, "!=0{")
+						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendInt64(req.", field.GoName, ")")
+						g.P("query.AppendInt64(req.Get", field.GoName, "())")
 					}
 					g.P("query.AppendByte('&')")
 					g.P("}")
 				case protoreflect.Uint32Kind:
 					if field.Desc.IsList() {
-						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("if len(req.Get", field.GoName, "())!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendUint32s(req.", field.GoName, ")")
+						g.P("query.AppendUint32s(req.Get", field.GoName, "())")
 					} else {
-						g.P("if req.", field.GoName, "!=0{")
+						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendUint32(req.", field.GoName, ")")
+						g.P("query.AppendUint32(req.Get", field.GoName, "())")
 					}
 					g.P("query.AppendByte('&')")
 					g.P("}")
@@ -508,67 +508,67 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					fallthrough
 				case protoreflect.Uint64Kind:
 					if field.Desc.IsList() {
-						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("if len(req.Get", field.GoName, "())!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendUint64s(req.", field.GoName, ")")
+						g.P("query.AppendUint64s(req.Get", field.GoName, "())")
 					} else {
-						g.P("if req.", field.GoName, "!=0{")
+						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendUint64(req.", field.GoName, ")")
+						g.P("query.AppendUint64(req.Get", field.GoName, "())")
 					}
 					g.P("query.AppendByte('&')")
 					g.P("}")
 				case protoreflect.FloatKind:
 					if field.Desc.IsList() {
-						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("if len(req.Get", field.GoName, "())!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendFloat32s(req.", field.GoName, ")")
+						g.P("query.AppendFloat32s(req.Get", field.GoName, "())")
 					} else {
-						g.P("if req.", field.GoName, "!=0{")
+						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendFloat32(req.", field.GoName, ")")
+						g.P("query.AppendFloat32(req.Get", field.GoName, "())")
 					}
 					g.P("query.AppendByte('&')")
 					g.P("}")
 				case protoreflect.DoubleKind:
 					if field.Desc.IsList() {
-						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("if len(req.Get", field.GoName, "())!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendFloat64s(req.", field.GoName, ")")
+						g.P("query.AppendFloat64s(req.Get", field.GoName, "())")
 					} else {
-						g.P("if req.", field.GoName, "!=0{")
+						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendFloat64(req.", field.GoName, ")")
+						g.P("query.AppendFloat64(req.Get", field.GoName, "())")
 					}
 					g.P("query.AppendByte('&')")
 					g.P("}")
 				case protoreflect.StringKind:
 					if field.Desc.IsList() {
-						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("if len(req.Get", field.GoName, "())!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendStrings(req.", field.GoName, ")")
+						g.P("query.AppendStrings(req.Get", field.GoName, "())")
 					} else {
-						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("if len(req.Get", field.GoName, "())!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendString(req.", field.GoName, ")")
+						g.P("query.AppendString(req.Get", field.GoName, "())")
 					}
 					g.P("query.AppendByte('&')")
 					g.P("}")
 				case protoreflect.BytesKind:
-					g.P("if len(req.", field.GoName, ")!=0{")
+					g.P("if len(req.Get", field.GoName, "())!=0{")
 					g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-					g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.", field.GoName, ")")
+					g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.Get", field.GoName, "())")
 					g.P("query.AppendByteSlice(temp)")
 					g.P("query.AppendByte('&')")
 					g.P("}")
 				case protoreflect.MessageKind:
 					if field.Desc.IsMap() || field.Desc.IsList() {
-						g.P("if len(req.", field.GoName, ")!=0{")
+						g.P("if len(req.Get", field.GoName, "())!=0{")
 					} else {
-						g.P("if req.", field.GoName, "!=nil{")
+						g.P("if req.Get", field.GoName, "()!=nil{")
 					}
 					g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-					g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.", field.GoName, ")")
+					g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.Get", field.GoName, "())")
 					g.P("query.AppendByteSlice(temp)")
 					g.P("query.AppendByte('&')")
 					g.P("}")
