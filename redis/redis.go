@@ -44,10 +44,9 @@ func NewRedis(c *Config) (*Pool, error) {
 				}
 				return conn, nil
 			},
-			MaxIdle:         c.MaxOpen,
-			MaxActive:       c.MaxOpen,
-			IdleTimeout:     c.MaxIdletime,
-			MaxConnLifetime: c.MaxConnLife,
+			MaxIdle:     c.MaxOpen,
+			MaxActive:   c.MaxOpen,
+			IdleTimeout: c.MaxIdletime,
 		},
 	}, nil
 }

@@ -47,10 +47,7 @@ const textsource = `{
 	},
 	"mongo":{
 		"example_mongo":{
-			"username":"",
-			"passwd":"",
-			"addrs":[],
-			"replica_set_name":"",
+			"url":"[mongodb/mongodb+srv]://[username:password@]host1,...,hostN/[dbname][?param1=value1&...&paramN=valueN]",
 			"max_open":100,
 			"max_idletime":"10m",
 			"io_timeout":"500ms",
@@ -59,11 +56,7 @@ const textsource = `{
 	},
 	"sql":{
 		"example_sql":{
-			"username":"root",
-			"passwd":"",
-			"net":"tcp",
-			"addr":"127.0.0.1:3306",
-			"collation":"utf8mb4",
+			"url":"[username:password@][protocol(address)]/[dbname][?param1=value1&...&paramN=valueN]",
 			"max_open":100,
 			"max_idletime":"10m",
 			"io_timeout":"200ms",
@@ -72,35 +65,35 @@ const textsource = `{
 	},
 	"redis":{
 		"example_redis":{
-			"username":"",
-			"passwd":"",
-			"net":"tcp",
-			"addr":"127.0.0.1:6379",
+			"url":"[redis/rediss]://[[username:]password@]host/[dbindex]",
 			"max_open":100,
 			"max_idletime":"10m",
 			"io_timeout":"200ms",
 			"conn_timeout":"200ms",
-			"use_tls":false
 		}
 	},
 	"kafka_pub":[
 		{
-			"addr":"127.0.0.1:12345",
+			"addrs":["127.0.0.1:12345"],
 			"username":"example",
 			"password":"example",
 			"auth_method":3,
-			"topic_name":"example_topic"
+			"compress_method":2,
+			"topic_name":"example_topic",
+			"io_timeout":"500ms",
+			"conn_timeout":"200ms"
 		}
 	],
 	"kafka_sub":[
 		{
-			"addr":"127.0.0.1:12345",
+			"addrs":["127.0.0.1:12345"],
 			"username":"example",
 			"password":"example",
 			"auth_method":3,
 			"topic_name":"example_topic",
 			"group_name":"example_group",
-			"start_offset":-1,
+			"conn_timeout":"200ms",
+			"start_offset":-2,
 			"commit_interval":"0s"
 		}
 	]

@@ -305,7 +305,7 @@ type WebClientConfig struct {
 
 //RedisConfig -
 type RedisConfig struct {
-	URL         string         $json:"url"$           //[redis/rediss]://[username:]password@host/[0]
+	URL         string         $json:"url"$           //[redis/rediss]://[[username:]password@]host/[dbindex]
 	MaxOpen     int            $json:"max_open"$      //default 100   //this will overwrite the param in url
 	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
 	IoTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
@@ -314,7 +314,7 @@ type RedisConfig struct {
 
 //SqlConfig -
 type SqlConfig struct {
-	URL         string         $json:"url"$           //[username[:password]@][protocol[(address)]]/[dbname][?param1=value1&...&paramN=valueN]
+	URL         string         $json:"url"$           //[username:password@][protocol(address)]/[dbname][?param1=value1&...&paramN=valueN]
 	MaxOpen     int            $json:"max_open"$      //default 100   //this will overwrite the param in url
 	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
 	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
@@ -323,7 +323,7 @@ type SqlConfig struct {
 
 //MongoConfig -
 type MongoConfig struct {
-	URL         string         $json:"url"$
+	URL         string         $json:"url"$           //[mongodb/mongodb+srv]://[username:password@]host1,...,hostN/[dbname][?param1=value1&...&paramN=valueN]
 	MaxOpen     uint64         $json:"max_open"$      //default 100   //this will overwrite the param in url
 	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
 	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
@@ -335,7 +335,7 @@ type KafkaPubConfig struct {
 	Addrs          []string       $json:"addrs"$
 	Username       string         $json:"username"$
 	Passwd         string         $json:"password"$
-	AuthMethod     int            $json:"auth_method"$ //1-plain,2-scram sha256,3-scram sha512
+	AuthMethod     int            $json:"auth_method"$     //1-plain,2-scram sha256,3-scram sha512
 	CompressMethod int            $json:"compress_method"$ //0-none,1-gzip,2-snappy,3-lz4,4-zstd
 	TopicName      string         $json:"topic_name"$
 	IOTimeout      ctime.Duration $json:"io_timeout"$   //default 500ms

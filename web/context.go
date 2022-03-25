@@ -49,7 +49,6 @@ func (s *WebServer) putContext(ctx *Context) {
 	}
 	ctx.r = nil
 	ctx.w = nil
-	ctx.Context = nil
 	ctx.body = nil
 	ctx.bodyerr = nil
 	s.ctxpool.Put(ctx)
