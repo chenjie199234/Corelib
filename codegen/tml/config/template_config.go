@@ -226,15 +226,12 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
 	ctime "github.com/chenjie199234/Corelib/util/time"
-	"github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/plain"
 	"github.com/segmentio/kafka-go/sasl/scram"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
-	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
 
 //sourceConfig can't hot update
@@ -308,58 +305,53 @@ type WebClientConfig struct {
 
 //RedisConfig -
 type RedisConfig struct {
-	Username      string         $json:"username"$
-	Passwd        string         $json:"passwd"$
-	Addr          string         $json:"addr"$
-	MaxOpen       int            $json:"max_open"$     //default 100
-	MaxIdletime   ctime.Duration $json:"max_idletime"$ //default 10min
-	IoTimeout     ctime.Duration $json:"io_timeout"$   //default 500ms
-	ConnTimeout   ctime.Duration $json:"conn_timeout"$ //default 250ms
-	UseTLS        bool           $json:"use_tls"$
+	URL         string         $json:"url"$           //[redis/rediss]://[username:]password@host/[0]
+	MaxOpen     int            $json:"max_open"$      //default 100   //this will overwrite the param in url
+	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
+	IoTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
+	ConnTimeout ctime.Duration $json:"conn_timeout"$  //default 250ms //this will overwrite the param in url
 }
 
 //SqlConfig -
 type SqlConfig struct {
-	Username    string         $json:"username"$
-	Passwd      string         $json:"passwd"$
-	Net         string         $json:"net"$
-	Addr        string         $json:"addr"$
-	Collation   string         $json:"collation"$
-	MaxOpen     int            $json:"max_open"$     //default 100
-	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 10min
-	IoTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms
-	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms
+	URL         string         $json:"url"$           //[username[:password]@][protocol[(address)]]/[dbname][?param1=value1&...&paramN=valueN]
+	MaxOpen     int            $json:"max_open"$      //default 100   //this will overwrite the param in url
+	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
+	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
+	ConnTimeout ctime.Duration $json:"conn_timeout"$  //default 250ms //this will overwrite the param in url
 }
 
 //MongoConfig -
 type MongoConfig struct {
-	Username       string         $json:"username"$
-	Passwd         string         $json:"passwd"$
-	Addrs          []string       $json:"addrs"$
-	ReplicaSetName string         $json:"replica_set_name"$
-	MaxOpen        uint64         $json:"max_open"$     //default 100
-	MaxIdletime    ctime.Duration $json:"max_idletime"$ //default 10min
-	IoTimeout      ctime.Duration $json:"io_timeout"$   //default 500ms
-	ConnTimeout    ctime.Duration $json:"conn_timeout"$ //default 250ms
+	URL         string         $json:"url"$
+	MaxOpen     uint64         $json:"max_open"$      //default 100   //this will overwrite the param in url
+	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
+	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
+	ConnTimeout ctime.Duration $json:"conn_timeout"$  //default 250ms //this will overwrite the param in url
 }
 
 //KafkaPubConfig -
 type KafkaPubConfig struct {
-	Addr       string $json:"addr"$
-	Username   string $json:"username"$
-	Passwd     string $json:"password"$
-	AuthMethod int    $json:"auth_method"$ //1-plain,2-scram sha256,3-scram sha512
-	TopicName  string $json:"topic_name"$
+	Addrs          []string       $json:"addrs"$
+	Username       string         $json:"username"$
+	Passwd         string         $json:"password"$
+	AuthMethod     int            $json:"auth_method"$ //1-plain,2-scram sha256,3-scram sha512
+	CompressMethod int            $json:"compress_method"$ //0-none,1-gzip,2-snappy,3-lz4,4-zstd
+	TopicName      string         $json:"topic_name"$
+	IOTimeout      ctime.Duration $json:"io_timeout"$   //default 500ms
+	ConnTimeout    ctime.Duration $json:"conn_timeout"$ //default 250ms
 }
 
 //KafkaSubConfig -
 type KafkaSubConfig struct {
-	Addr       string $json:"addr"$
-	Username   string $json:"username"$
-	Passwd     string $json:"password"$
-	AuthMethod int    $json:"auth_method"$ //1-plain,2-scram sha256,3-scram sha512
-	TopicName  string $json:"topic_name"$
-	GroupName  string $json:"group_name"$
+	Addrs       []string       $json:"addrs"$
+	Username    string         $json:"username"$
+	Passwd      string         $json:"password"$
+	AuthMethod  int            $json:"auth_method"$ //1-plain,2-scram sha256,3-scram sha512
+	TopicName   string         $json:"topic_name"$
+	GroupName   string         $json:"group_name"$
+	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms
+	//when there is no offset in a partition(add partition or first time to use the topic)
 	//-1 will sub from the newest
 	//-2 will sub from the firt
 	//if this is 0,default -2 will be used
@@ -395,11 +387,25 @@ func initsource(path string) {
 		Close()
 		os.Exit(1)
 	}
+
+	initgrpcserver()
+	initgrpcclient()
+	initcrpcserver()
+	initcrpcclient()
+	initwebserver()
+	initwebclient()
+	initredis()
+	initmongo()
+	initsql()
+	initkafkapub()
+	initkafkasub()
+}
+func initgrpcserver() {
 	if sc.CGrpcServer == nil {
 		sc.CGrpcServer = &CGrpcServerConfig{
-			ConnectTimeout:ctime.Duration(time.Millisecond * 500),
-			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
-			HeartProbe:    ctime.Duration(1500 * time.Millisecond),
+			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
+			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
+			HeartProbe:     ctime.Duration(1500 * time.Millisecond),
 		}
 	} else {
 		if sc.CGrpcServer.ConnectTimeout <= 0 {
@@ -412,6 +418,8 @@ func initsource(path string) {
 			sc.CGrpcServer.HeartProbe = ctime.Duration(1500 * time.Millisecond)
 		}
 	}
+}
+func initgrpcclient() {
 	if sc.CGrpcClient == nil {
 		sc.CGrpcClient = &CGrpcClientConfig{
 			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
@@ -429,6 +437,8 @@ func initsource(path string) {
 			sc.CGrpcClient.HeartProbe = ctime.Duration(time.Millisecond * 1500)
 		}
 	}
+}
+func initcrpcserver() {
 	if sc.CrpcServer == nil {
 		sc.CrpcServer = &CrpcServerConfig{
 			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
@@ -446,11 +456,13 @@ func initsource(path string) {
 			sc.CrpcServer.HeartProbe = ctime.Duration(1500 * time.Millisecond)
 		}
 	}
+}
+func initcrpcclient() {
 	if sc.CrpcClient == nil {
 		sc.CrpcClient = &CrpcClientConfig{
-			ConnectTimeout:   ctime.Duration(time.Millisecond * 500),
-			GlobalTimeout: ctime.Duration(time.Millisecond * 500),
-			HeartProbe:    ctime.Duration(time.Millisecond * 1500),
+			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
+			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
+			HeartProbe:     ctime.Duration(time.Millisecond * 1500),
 		}
 	} else {
 		if sc.CrpcClient.ConnectTimeout <= 0 {
@@ -463,6 +475,9 @@ func initsource(path string) {
 			sc.CrpcClient.HeartProbe = ctime.Duration(time.Millisecond * 1500)
 		}
 	}
+
+}
+func initwebserver() {
 	if sc.WebServer == nil {
 		sc.WebServer = &WebServerConfig{
 			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
@@ -497,6 +512,8 @@ func initsource(path string) {
 			}
 		}
 	}
+}
+func initwebclient() {
 	if sc.WebClient == nil {
 		sc.WebClient = &WebClientConfig{
 			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
@@ -518,52 +535,11 @@ func initsource(path string) {
 			sc.WebClient.HeartProbe = ctime.Duration(time.Millisecond * 1500)
 		}
 	}
-	for _, mongoc := range sc.Mongo {
-		if mongoc.Username == "" {
-			mongoc.Username = ""
-			mongoc.Passwd = ""
-		}
-		if len(mongoc.Addrs) == 0 {
-			mongoc.Addrs = []string{"127.0.0.1:27017"}
-		}
-		if mongoc.MaxOpen == 0 {
-			mongoc.MaxOpen = 100
-		}
-		if mongoc.MaxIdletime == 0 {
-			mongoc.MaxIdletime = ctime.Duration(time.Minute * 10)
-		}
-		if mongoc.IoTimeout == 0 {
-			mongoc.IoTimeout = ctime.Duration(time.Millisecond * 500)
-		}
-		if mongoc.ConnTimeout == 0 {
-			mongoc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
-		}
-	}
-	for _, sqlc := range sc.Sql {
-		if sqlc.Username == "" {
-			sqlc.Username = "root"
-			sqlc.Passwd = ""
-		}
-		if sqlc.Addr == "" || sqlc.Net == "" {
-			sqlc.Addr = "127.0.0.1:3306"
-			sqlc.Net = "tcp"
-		}
-		if sqlc.MaxOpen == 0 {
-			sqlc.MaxOpen = 100
-		}
-		if sqlc.MaxIdletime == 0 {
-			sqlc.MaxIdletime = ctime.Duration(time.Minute * 10)
-		}
-		if sqlc.IoTimeout == 0 {
-			sqlc.IoTimeout = ctime.Duration(time.Millisecond * 500)
-		}
-		if sqlc.ConnTimeout == 0 {
-			sqlc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
-		}
-	}
-	for _, redisc := range sc.Redis {
-		if redisc.Addr == "" {
-			redisc.Addr = "127.0.0.1:6379"
+}
+func initredis(){
+	for k, redisc := range sc.Redis {
+		if k == "example_redis" {
+			continue
 		}
 		if redisc.MaxOpen == 0 {
 			redisc.MaxOpen = 100
@@ -578,29 +554,51 @@ func initsource(path string) {
 			redisc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
 		}
 	}
-	for _, pubc := range sc.KafkaPub {
-		if pubc.Addr == "" {
-			pubc.Addr = "127.0.0.1:9092"
+	rediss = make(map[string]*redis.Pool, len(sc.Redis))
+	for k, redisc := range sc.Redis {
+		if k == "example_redis" {
+			continue
 		}
-		if (pubc.AuthMethod == 1 || pubc.AuthMethod == 2 || pubc.AuthMethod == 3) && (pubc.Username == "" || pubc.Passwd == "") {
-			log.Error(nil, "[config.initsource] pub topic:", pubc.TopicName, "username or password missing")
+		tempredis, e := redis.NewRedis(&redis.Config{
+			RedisName:   k,
+			URL:         redisc.URL,
+			MaxOpen:     redisc.MaxOpen,
+			MaxIdletime: redisc.MaxIdletime.StdDuration(),
+			ConnTimeout: redisc.ConnTimeout.StdDuration(),
+			IOTimeout:   redisc.IoTimeout.StdDuration(),
+		})
+		if e != nil {
+			log.Error(nil,"[config.initsource] open redis:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		if e := tempredis.Ping(ctx); e != nil {
+			cancel()
+			log.Error(nil, "[config.initsource] ping redis:", k, "error:", e)
+			Close()
+			os.Exit(1)
+		}
+		cancel()
+		rediss[k] = tempredis
 	}
-	for _, subc := range sc.KafkaSub {
-		if subc.Addr == "" {
-			subc.Addr = "127.0.0.1:9092"
+}
+func initmongo(){
+	for k, mongoc := range sc.Mongo {
+		if k == "example_mongo" {
+			continue
 		}
-		if (subc.AuthMethod == 1 || subc.AuthMethod == 2 || subc.AuthMethod == 3) && (subc.Username == "" || subc.Passwd == "") {
-			log.Error(nil, "[config.initsource] sub topic:", subc.TopicName, "username or password missing")
-			Close()
-			os.Exit(1)
+		if mongoc.MaxOpen == 0 {
+			mongoc.MaxOpen = 100
 		}
-		if subc.GroupName == "" {
-			log.Error(nil, "[config.initsource] sub topic:", subc.TopicName, "groupname missing")
-			Close()
-			os.Exit(1)
+		if mongoc.MaxIdletime == 0 {
+			mongoc.MaxIdletime = ctime.Duration(time.Minute * 10)
+		}
+		if mongoc.IOTimeout == 0 {
+			mongoc.IOTimeout = ctime.Duration(time.Millisecond * 500)
+		}
+		if mongoc.ConnTimeout == 0 {
+			mongoc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
 		}
 	}
 	mongos = make(map[string]*mongo.Client, len(sc.Mongo))
@@ -608,25 +606,11 @@ func initsource(path string) {
 		if k == "example_mongo" {
 			continue
 		}
-		op := &options.ClientOptions{}
-		if mongoc.Username != "" && mongoc.Passwd != "" {
-			op = op.SetAuth(options.Credential{Username: mongoc.Username, Password: mongoc.Passwd})
-		}
-		if mongoc.ReplicaSetName != "" {
-			op.SetReplicaSet(mongoc.ReplicaSetName)
-		}
-		op = op.SetHosts(mongoc.Addrs)
-		op = op.SetConnectTimeout(time.Duration(mongoc.ConnTimeout))
-		op = op.SetMaxConnIdleTime(time.Duration(mongoc.MaxIdletime))
+		op := options.Client().ApplyURI(mongoc.URL)
+		op = op.SetConnectTimeout(mongoc.ConnTimeout.StdDuration())
+		op = op.SetMaxConnIdleTime(mongoc.MaxIdletime.StdDuration())
 		op = op.SetMaxPoolSize(mongoc.MaxOpen)
-		op = op.SetSocketTimeout(time.Duration(mongoc.IoTimeout))
-		op = op.SetHeartbeatInterval(time.Second)
-		//default:secondary is preferred to be selected,if there is no secondary,primary will be selected
-		op = op.SetReadPreference(readpref.SecondaryPreferred())
-		//default:only read the selected server's data
-		op = op.SetReadConcern(readconcern.Local())
-		//default:data will be writeen to promary node's journal then return success
-		op = op.SetWriteConcern(writeconcern.New(writeconcern.W(1), writeconcern.J(true)))
+		op = op.SetSocketTimeout(mongoc.IOTimeout.StdDuration())
 		tempdb, e := mongo.Connect(nil, op)
 		if e != nil {
 			log.Error(nil, "[config.initsource] open mongodb:", k, "error:", e)
@@ -644,29 +628,36 @@ func initsource(path string) {
 		cancel()
 		mongos[k] = tempdb
 	}
+}
+func initsql(){
+	for _, sqlc := range sc.Sql {
+		if sqlc.MaxOpen == 0 {
+			sqlc.MaxOpen = 100
+		}
+		if sqlc.MaxIdletime == 0 {
+			sqlc.MaxIdletime = ctime.Duration(time.Minute * 10)
+		}
+		if sqlc.IOTimeout == 0 {
+			sqlc.IOTimeout = ctime.Duration(time.Millisecond * 500)
+		}
+		if sqlc.ConnTimeout == 0 {
+			sqlc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
+		}
+	}
 	sqls = make(map[string]*sql.DB, len(sc.Sql))
 	for k, sqlc := range sc.Sql {
 		if k == "example_sql" {
 			continue
 		}
-		tempdb, e := sql.Open("mysql", (&mysql.Config{
-			User:                 sqlc.Username,
-			Passwd:               sqlc.Passwd,
-			Net:                  "tcp",
-			Addr:                 sqlc.Addr,
-			Timeout:              time.Duration(sqlc.ConnTimeout),
-			WriteTimeout:         time.Duration(sqlc.IoTimeout),
-			ReadTimeout:          time.Duration(sqlc.IoTimeout),
-			AllowNativePasswords: true,
-			Collation:            sqlc.Collation,
-		}).FormatDSN())
+		tempdb, e := sql.Open("mysql", sqlc.URL)
 		if e != nil {
 			log.Error(nil, "[config.initsource] open mysql:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
 		tempdb.SetMaxOpenConns(sqlc.MaxOpen)
-		tempdb.SetConnMaxIdleTime(time.Duration(sqlc.MaxIdletime))
+		tempdb.SetMaxIdleConns(sqlc.MaxOpen)
+		tempdb.SetConnMaxIdleTime(sqlc.MaxIdletime.StdDuration())
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		e = tempdb.PingContext(ctx)
 		if e != nil {
@@ -678,36 +669,97 @@ func initsource(path string) {
 		cancel()
 		sqls[k] = tempdb
 	}
-	rediss = make(map[string]*redis.Pool, len(sc.Redis))
-	for k, redisc := range sc.Redis {
-		if k == "example_redis" {
+}
+func initkafkapub(){
+	for _, pubc := range sc.KafkaPub {
+		if pubc.TopicName == "example_topic" || pubc.TopicName == "" {
 			continue
 		}
-		tempredis, e := redis.NewRedis(&redis.Config{
-			RedisName:   k,
-			Username:    redisc.Username,
-			Password:    redisc.Passwd,
-			Addr:        redisc.Addr,
-			MaxOpen:     redisc.MaxOpen,
-			MaxIdletime: time.Duration(redisc.MaxIdletime),
-			IOTimeout:   time.Duration(redisc.IoTimeout),
-			ConnTimeout: time.Duration(redisc.ConnTimeout),
-			UseTLS:      redisc.UseTLS,
-		})
+		if len(pubc.Addrs) == 0 {
+			pubc.Addrs = []string{"127.0.0.1:9092"}
+		}
+		if (pubc.AuthMethod == 1 || pubc.AuthMethod == 2 || pubc.AuthMethod == 3) && (pubc.Username == "" || pubc.Passwd == "") {
+			log.Error(nil, "[config.initsource] pub topic:", pubc.TopicName, "username or password missing")
+			Close()
+			os.Exit(1)
+		}
+		if pubc.IOTimeout == 0 {
+			pubc.IOTimeout = ctime.Duration(time.Millisecond * 500)
+		}
+		if pubc.ConnTimeout == 0 {
+			pubc.IOTimeout = ctime.Duration(time.Millisecond * 250)
+		}
+	}
+	kafkaPubers = make(map[string]*kafka.Writer, len(sc.KafkaPub))
+	for _, pubc := range sc.KafkaPub {
+		if pubc.TopicName == "example_topic" || pubc.TopicName == "" {
+			continue
+		}
+		dialer := &kafka.Dialer{
+			Timeout:   pubc.ConnTimeout.StdDuration(),
+			DualStack: true,
+		}
+		var e error
+		switch pubc.AuthMethod {
+		case 1:
+			dialer.SASLMechanism = plain.Mechanism{Username: pubc.Username, Password: pubc.Passwd}
+		case 2:
+			dialer.SASLMechanism, e = scram.Mechanism(scram.SHA256, pubc.Username, pubc.Passwd)
+		case 3:
+			dialer.SASLMechanism, e = scram.Mechanism(scram.SHA512, pubc.Username, pubc.Passwd)
+		}
 		if e != nil {
-			log.Error(nil,"[config.initsource] open redis:", k, "error:", e)
+			log.Error(nil, "[config.initsource] kafka topic:", pubc.TopicName, "pub username and password parse error:", e)
 			Close()
 			os.Exit(1)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		if e := tempredis.Ping(ctx); e != nil {
-			cancel()
-			log.Error(nil, "[config.initsource] ping redis:", k, "error:", e)
+		var compressor kafka.CompressionCodec
+		switch pubc.CompressMethod {
+		case 1:
+			compressor = kafka.Gzip.Codec()
+		case 2:
+			compressor = kafka.Snappy.Codec()
+		case 3:
+			compressor = kafka.Lz4.Codec()
+		case 4:
+			compressor = kafka.Zstd.Codec()
+		}
+		writer := kafka.NewWriter(kafka.WriterConfig{
+			Brokers:          pubc.Addrs,
+			Topic:            pubc.TopicName,
+			Dialer:           dialer,
+			ReadTimeout:      pubc.IOTimeout.StdDuration(),
+			WriteTimeout:     pubc.IOTimeout.StdDuration(),
+			Balancer:         &kafka.Hash{},
+			MaxAttempts:      3,
+			RequiredAcks:     int(kafka.RequireAll),
+			Async:            false,
+			CompressionCodec: compressor,
+		})
+		kafkaPubers[pubc.TopicName] = writer
+	}
+}
+func initkafkasub(){
+	for _, subc := range sc.KafkaSub {
+		if subc.TopicName == "example_topic" || subc.TopicName == "" {
+			continue
+		}
+		if len(subc.Addrs) == 0 {
+			subc.Addrs = []string{"127.0.0.1:9092"}
+		}
+		if (subc.AuthMethod == 1 || subc.AuthMethod == 2 || subc.AuthMethod == 3) && (subc.Username == "" || subc.Passwd == "") {
+			log.Error(nil, "[config.initsource] sub topic:", subc.TopicName, "username or password missing")
 			Close()
 			os.Exit(1)
 		}
-		cancel()
-		rediss[k] = tempredis
+		if subc.GroupName == "" {
+			log.Error(nil, "[config.initsource] sub topic:", subc.TopicName, "groupname missing")
+			Close()
+			os.Exit(1)
+		}
+		if subc.ConnTimeout == 0 {
+			subc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
+		}
 	}
 	kafkaSubers = make(map[string]*kafka.Reader, len(sc.KafkaSub))
 	for _, subc := range sc.KafkaSub {
@@ -715,7 +767,7 @@ func initsource(path string) {
 			continue
 		}
 		dialer := &kafka.Dialer{
-			Timeout:   time.Second,
+			Timeout:   subc.ConnTimeout.StdDuration(),
 			DualStack: true,
 		}
 		var e error
@@ -733,7 +785,7 @@ func initsource(path string) {
 			os.Exit(1)
 		}
 		reader := kafka.NewReader(kafka.ReaderConfig{
-			Brokers:                []string{subc.Addr},
+			Brokers:                subc.Addrs,
 			Dialer:                 dialer,
 			Topic:                  subc.TopicName,
 			GroupID:                subc.GroupName,
@@ -742,48 +794,11 @@ func initsource(path string) {
 			MaxBytes:               1024 * 1024 * 10,
 			CommitInterval:         time.Duration(subc.CommitInterval),
 			IsolationLevel:         kafka.ReadCommitted,
-			HeartbeatInterval:      time.Second,
 			PartitionWatchInterval: time.Second,
 			WatchPartitionChanges:  true,
+			MaxAttempts:            3,
 		})
 		kafkaSubers[subc.TopicName+subc.GroupName] = reader
-	}
-	kafkaPubers = make(map[string]*kafka.Writer, len(sc.KafkaPub))
-	for _, pubc := range sc.KafkaPub {
-		if pubc.TopicName == "example_topic" || pubc.TopicName == "" {
-			continue
-		}
-		dialer := &kafka.Dialer{
-			Timeout:   time.Second,
-			DualStack: true,
-		}
-		var e error
-		switch pubc.AuthMethod {
-		case 1:
-			dialer.SASLMechanism = plain.Mechanism{Username: pubc.Username, Password: pubc.Passwd}
-		case 2:
-			dialer.SASLMechanism, e = scram.Mechanism(scram.SHA256, pubc.Username, pubc.Passwd)
-		case 3:
-			dialer.SASLMechanism, e = scram.Mechanism(scram.SHA512, pubc.Username, pubc.Passwd)
-		}
-		if e != nil {
-			log.Error(nil, "[config.initsource] kafka topic:", pubc.TopicName, "pub username and password parse error:", e)
-			Close()
-			os.Exit(1)
-		}
-		writer := kafka.NewWriter(kafka.WriterConfig{
-			Brokers:          []string{pubc.Addr},
-			Topic:            pubc.TopicName,
-			Dialer:           dialer,
-			ReadTimeout:      time.Second,
-			WriteTimeout:     time.Second,
-			Balancer:         &kafka.Hash{},
-			MaxAttempts:      3,
-			RequiredAcks:     int(kafka.RequireAll),
-			Async:            false,
-			CompressionCodec: kafka.Snappy.Codec(),
-		})
-		kafkaPubers[pubc.TopicName] = writer
 	}
 }
 

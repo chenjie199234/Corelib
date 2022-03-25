@@ -2,13 +2,9 @@ package redis
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"errors"
-	"os"
 	"time"
 
-	"github.com/chenjie199234/Corelib/trace"
+	// "github.com/chenjie199234/Corelib/trace"
 
 	"github.com/gomodule/redigo/redis"
 )
@@ -26,68 +22,32 @@ type Conn struct {
 }
 
 type Config struct {
-	RedisName     string
-	Username      string
-	Password      string
-	Addr          string
-	MaxOpen       int
-	MaxIdletime   time.Duration
-	IOTimeout     time.Duration
-	ConnTimeout   time.Duration
-	UseTLS        bool
-	SkipVerifyTLS bool     //don't verify the server's cert
-	CAs           []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
+	RedisName   string
+	URL         string        //[redis/rediss]://[username:]password@host/0
+	MaxOpen     int           //this will overwrite the param in url
+	MaxIdletime time.Duration //this will overwrite the param in url
+	ConnTimeout time.Duration //this will overwrite the param in url
+	IOTimeout   time.Duration //this will overwrite the param in url
 }
 
 var ErrNil = redis.ErrNil
 var ErrPoolExhausted = redis.ErrPoolExhausted
 
 func NewRedis(c *Config) (*Pool, error) {
-	options := make([]redis.DialOption, 0, 10)
-	options = append(options, redis.DialReadTimeout(c.IOTimeout))
-	options = append(options, redis.DialWriteTimeout(c.IOTimeout))
-	options = append(options, redis.DialUsername(c.Username))
-	options = append(options, redis.DialPassword(c.Password))
-	if c.UseTLS {
-		options = append(options, redis.DialUseTLS(true))
-		var certpool *x509.CertPool
-		if len(c.CAs) != 0 {
-			certpool = x509.NewCertPool()
-			for _, cert := range c.CAs {
-				certPEM, e := os.ReadFile(cert)
-				if e != nil {
-					return nil, errors.New("[redis] read cert file:" + cert + " error:" + e.Error())
-				}
-				if !certpool.AppendCertsFromPEM(certPEM) {
-					return nil, errors.New("[redis] load cert file:" + cert + " error:" + e.Error())
-				}
-			}
-		}
-		if c.SkipVerifyTLS || certpool != nil {
-			options = append(options, redis.DialTLSConfig(&tls.Config{
-				InsecureSkipVerify: c.SkipVerifyTLS,
-				RootCAs:            certpool,
-			}))
-		}
-	}
 	return &Pool{
 		c: c,
 		p: &redis.Pool{
 			DialContext: func(ctx context.Context) (redis.Conn, error) {
-				if c.ConnTimeout > 0 {
-					var cancel context.CancelFunc
-					ctx, cancel = context.WithTimeout(ctx, c.ConnTimeout)
-					defer cancel()
-				}
-				conn, e := redis.DialContext(ctx, "tcp", c.Addr, options...)
+				conn, e := redis.DialURL(c.URL, redis.DialConnectTimeout(c.ConnTimeout), redis.DialReadTimeout(c.IOTimeout), redis.DialWriteTimeout(c.IOTimeout))
 				if e != nil {
 					return nil, e
 				}
 				return conn, nil
 			},
-			MaxIdle:     c.MaxOpen,
-			MaxActive:   c.MaxOpen,
-			IdleTimeout: c.MaxIdletime,
+			MaxIdle:         c.MaxOpen,
+			MaxActive:       c.MaxOpen,
+			IdleTimeout:     c.MaxIdletime,
+			MaxConnLifetime: c.MaxConnLife,
 		},
 	}, nil
 }
@@ -144,8 +104,8 @@ func (c *Conn) Err() error {
 	return c.c.Err()
 }
 func (c *Conn) Close() {
-	end := time.Now()
-	trace.Trace(c.ctx, trace.CLIENT, c.p.c.RedisName, c.p.c.Addr, "REDIS", "connect", c.start, &end, c.c.Err())
+	// end := time.Now()
+	// trace.Trace(c.ctx, trace.CLIENT, c.p.c.RedisName, c.p.c.Addr, "REDIS", "connect", c.start, &end, c.c.Err())
 	c.c.Close()
 }
 func Int(reply interface{}, e error) (int, error) {
