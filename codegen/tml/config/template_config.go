@@ -559,7 +559,7 @@ func initredis(){
 		if k == "example_redis" {
 			continue
 		}
-		tempredis, e := redis.NewRedis(&redis.Config{
+		tempredis := redis.NewRedis(&redis.Config{
 			RedisName:   k,
 			URL:         redisc.URL,
 			MaxOpen:     redisc.MaxOpen,
@@ -567,11 +567,6 @@ func initredis(){
 			ConnTimeout: redisc.ConnTimeout.StdDuration(),
 			IOTimeout:   redisc.IoTimeout.StdDuration(),
 		})
-		if e != nil {
-			log.Error(nil,"[config.initsource] open redis:", k, "error:", e)
-			Close()
-			os.Exit(1)
-		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		if e := tempredis.Ping(ctx); e != nil {
 			cancel()
