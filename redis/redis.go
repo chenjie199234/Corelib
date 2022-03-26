@@ -33,7 +33,7 @@ type Config struct {
 var ErrNil = redis.ErrNil
 var ErrPoolExhausted = redis.ErrPoolExhausted
 
-func NewRedis(c *Config) (*Pool, error) {
+func NewRedis(c *Config) *Pool {
 	return &Pool{
 		c: c,
 		p: &redis.Pool{
@@ -48,7 +48,7 @@ func NewRedis(c *Config) (*Pool, error) {
 			MaxActive:   c.MaxOpen,
 			IdleTimeout: c.MaxIdletime,
 		},
-	}, nil
+	}
 }
 
 func (p *Pool) GetContext(ctx context.Context) (*Conn, error) {
