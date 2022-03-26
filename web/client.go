@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	cerror "github.com/chenjie199234/Corelib/error"
@@ -141,16 +142,19 @@ func forbiddenHeader(header http.Header) bool {
 	return false
 }
 
+//if path has scheme://host,the serverhost setted when this client is create will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil)
 }
 
+//if path has scheme://host,the serverhost setted when this client is create will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
 }
 
+//if path has scheme://host,the serverhost setted when this client is create will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if len(body) != 0 {
@@ -159,6 +163,7 @@ func (c *WebClient) Post(ctx context.Context, path, query string, header http.He
 	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil)
 }
 
+//if path has scheme://host,the serverhost setted when this client is create will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if len(body) != 0 {
@@ -167,6 +172,7 @@ func (c *WebClient) Put(ctx context.Context, path, query string, header http.Hea
 	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil)
 }
 
+//if path has scheme://host,the serverhost setted when this client is create will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if len(body) != 0 {
@@ -178,8 +184,16 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	if forbiddenHeader(header) {
 		return nil, cerror.MakeError(-1, 400, "forbidden header")
 	}
+	var u *url.URL
 	if path == "" {
 		path = "/"
+	} else if strings.HasPrefix(path, "http") || strings.HasPrefix(path, "https") {
+		var e error
+		u, e = url.Parse(path)
+		if e != nil {
+			e = cerror.ConvertStdError(e)
+			return nil, e
+		}
 	} else if path[0] != '/' {
 		path = "/" + path
 	}
@@ -217,21 +231,39 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		if ok && dl.UnixNano() < start.UnixNano()+int64(5*time.Millisecond) {
 			//at least 5ms for net lag and server logic
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.selfappname, c.serverhost, method, path, &start, &end, cerror.ErrDeadlineExceeded)
+			if u != nil {
+				trace.Trace(ctx, trace.CLIENT, c.selfappname, u.Scheme+"://"+u.Host, method, path, &start, &end, cerror.ErrDeadlineExceeded)
+			} else {
+				trace.Trace(ctx, trace.CLIENT, c.selfappname, c.serverhost, method, path, &start, &end, cerror.ErrDeadlineExceeded)
+			}
 			monitor.WebClientMonitor(c.serverappname, method, path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, cerror.ErrDeadlineExceeded
 		}
 		var req *http.Request
 		var e error
-		if body == nil {
-			req, e = http.NewRequestWithContext(ctx, method, path+query, nil)
+		if u != nil {
+			if body == nil {
+				//io.Reader is an interface,body is *bytes.Buffer,direct pass will make the interface's value is nil but type is not nil
+				req, e = http.NewRequestWithContext(ctx, method, path+query, nil)
+			} else {
+				req, e = http.NewRequestWithContext(ctx, method, path+query, body)
+			}
 		} else {
-			req, e = http.NewRequestWithContext(ctx, method, path+query, body)
+			if body == nil {
+				//io.Reader is an interface,body is *bytes.Buffer,direct pass will make the interface's value is nil but type is not nil
+				req, e = http.NewRequestWithContext(ctx, method, c.serverhost+path+query, nil)
+			} else {
+				req, e = http.NewRequestWithContext(ctx, method, c.serverhost+path+query, body)
+			}
 		}
 		if e != nil {
 			e = cerror.ConvertStdError(e)
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.selfappname, c.serverhost, method, path, &start, &end, e)
+			if u != nil {
+				trace.Trace(ctx, trace.CLIENT, c.selfappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
+			} else {
+				trace.Trace(ctx, trace.CLIENT, c.selfappname, c.serverhost, method, path, &start, &end, e)
+			}
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
@@ -241,7 +273,11 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		end := time.Now()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, e)
+			if u != nil {
+				trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
+			} else {
+				trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, e)
+			}
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
@@ -249,12 +285,20 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		resp.Body.Close()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, e)
+			if u != nil {
+				trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
+			} else {
+				trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, e)
+			}
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 		if resp.StatusCode == int(cerror.ErrClosing.Httpcode) && cerror.Equal(cerror.ConvertErrorstr(common.Byte2str(respbody)), cerror.ErrClosing) {
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, cerror.ErrClosing)
+			if u != nil {
+				trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, cerror.ErrClosing)
+			} else {
+				trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, cerror.ErrClosing)
+			}
 			monitor.WebClientMonitor(c.serverappname, method, path, cerror.ErrClosing, uint64(end.UnixNano()-start.UnixNano()))
 			continue
 		} else if resp.StatusCode != http.StatusOK {
@@ -265,11 +309,19 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				tempe.SetHttpcode(int32(resp.StatusCode))
 				e = tempe
 			}
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, e)
+			if u != nil {
+				trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
+			} else {
+				trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, e)
+			}
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
-		trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, nil)
+		if u != nil {
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, nil)
+		} else {
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, nil)
+		}
 		monitor.WebClientMonitor(c.serverappname, method, path, nil, uint64(end.UnixNano()-start.UnixNano()))
 		return respbody, nil
 	}
