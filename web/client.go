@@ -67,9 +67,11 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername,
 	if e := name.FullCheck(selfappname); e != nil {
 		return nil, e
 	}
-	u, e := url.Parse(serverhost)
-	if e != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Path != "" {
-		return nil, errors.New("[web.client] host format wrong,should be [http/https]://the.host.name[:port]")
+	if serverhost != "" {
+		u, e := url.Parse(serverhost)
+		if e != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Path != "" {
+			return nil, errors.New("[web.client] host format wrong,should be [http/https]://the.host.name[:port]")
+		}
 	}
 	if c == nil {
 		c = &ClientConfig{}
@@ -142,19 +144,19 @@ func forbiddenHeader(header http.Header) bool {
 	return false
 }
 
-//if path has scheme://host,the serverhost setted when this client is create will be ignored
+//if path start with [http/https]://the.host.name[:port],the serverhost setted when this client was created will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil)
 }
 
-//if path has scheme://host,the serverhost setted when this client is create will be ignored
+//if path start with [http/https]://the.host.name[:port],the serverhost setted when this client was created will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
 }
 
-//if path has scheme://host,the serverhost setted when this client is create will be ignored
+//if path start with [http/https]://the.host.name[:port],the serverhost setted when this client was created will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if len(body) != 0 {
@@ -163,7 +165,7 @@ func (c *WebClient) Post(ctx context.Context, path, query string, header http.He
 	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil)
 }
 
-//if path has scheme://host,the serverhost setted when this client is create will be ignored
+//if path start with [http/https]://the.host.name[:port],the serverhost setted when this client was created will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if len(body) != 0 {
@@ -172,7 +174,7 @@ func (c *WebClient) Put(ctx context.Context, path, query string, header http.Hea
 	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil)
 }
 
-//if path has scheme://host,the serverhost setted when this client is create will be ignored
+//if path start with [http/https]://the.host.name[:port],the serverhost setted when this client was created will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if len(body) != 0 {
@@ -185,17 +187,22 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		return nil, cerror.MakeError(-1, 400, "forbidden header")
 	}
 	var u *url.URL
-	if path == "" {
-		path = "/"
-	} else if strings.HasPrefix(path, "http") || strings.HasPrefix(path, "https") {
+	if !strings.HasPrefix(path, "http") && !strings.HasPrefix(path, "https") {
+		if c.serverhost == "" {
+			return nil, cerror.ErrReq
+		}
+		if path == "" {
+			path = "/"
+		} else if path[0] != '/' {
+			path = "/" + path
+		}
+	} else {
 		var e error
 		u, e = url.Parse(path)
 		if e != nil {
 			e = cerror.ConvertStdError(e)
 			return nil, e
 		}
-	} else if path[0] != '/' {
-		path = "/" + path
 	}
 	if len(query) != 0 && query[0] != '?' {
 		query = "?" + query
