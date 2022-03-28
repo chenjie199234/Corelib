@@ -8,7 +8,7 @@ import (
 
 const text = `module {{.}}
 
-go 1.17
+go 1.18
 
 require (
 	github.com/chenjie199234/Config v0.0.37
