@@ -100,18 +100,6 @@ spec:
             periodSeconds: 1
             successThreshold: 1
             failureThreshold: 3
-          volumeMounts:
-            - name: {{.ProjectName}}-config-volume
-              mountPath: /root/app/kubeconfig
-      volumes:
-        - name: {{.ProjectName}}-config-volume
-          configMap:
-            name: {{.ProjectName}}-config
-            items:
-              - key: app-config
-                path: AppConfig.json
-              - key: source-config
-                path: SourceConfig.json
       imagePullSecrets:
         - name: <GROUP>-secret
 ---

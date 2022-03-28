@@ -30,15 +30,14 @@ $$$
 GROUP                                   该项目所属的分组(k8s的namespace名字),如果不使用k8s需要手动指定,如果使用k8s无需手动指定,请查看项目根目录的deployment.yaml
 MONITOR                                 是否开启系统监控采集,0关闭,1开启
 CONFIG_TYPE 				配置类型
-					0-使用本地配置,路径:./
-					1-使用kuberneters的configmap,路径:./kubeconfig
-					2-使用远程配置中心配置,路径:./remoteconfig
+					0-使用本地配置
+					1-使用远程配置中心配置
 RUN_ENV 				当前运行环境,如:test,pre,prod
-DEPLOY_ENV 				部署环境,如:kube,host
-REMOTE_CONFIG_USERNAME			当CONFIG_TYPE为2时,设置远程配置中心的数据库用户名(只读账号)
-REMOTE_CONFIG_PASSWORD			当CONFIG_TYPE为2时,设置远程配置中心的数据库密码(只读账号)
-REMOTE_CONFIG_REPLICASET		当CONFIG_TYPE为2时,如果远程配置中心的数据库是以副本集模式部署的,需要设置replicaset,如果是分片模式部署的,不需要设置
-REMOTE_CONFIG_ADDRS			当CONFIG_TYPE为2时,设置远程配置中心的数据库地址(ip:port),多个地址使用逗号分隔
+DEPLOY_ENV 				部署环境,如:ali-kube,ali-host
+REMOTE_CONFIG_USERNAME			当CONFIG_TYPE为1时,设置远程配置中心的数据库用户名(只读账号)
+REMOTE_CONFIG_PASSWORD			当CONFIG_TYPE为1时,设置远程配置中心的数据库密码(只读账号)
+REMOTE_CONFIG_REPLICASET		当CONFIG_TYPE为1时,如果远程配置中心的数据库是以副本集模式部署的,需要设置replicaset,如果是分片模式部署的,不需要设置
+REMOTE_CONFIG_ADDRS			当CONFIG_TYPE为1时,设置远程配置中心的数据库地址(ip:port),多个地址使用逗号分隔
 $$$
 
 ## 配置文件

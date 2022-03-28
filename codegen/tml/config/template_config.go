@@ -36,17 +36,9 @@ var EC *EnvConfig
 //don't write block logic inside it
 func Init(notice func(c *AppConfig)) {
 	initenv()
-	var path string
-	if EC.ConfigType == nil || *EC.ConfigType == 0 {
-		path = "./"
-	} else if *EC.ConfigType == 1 {
-		path = "./kubeconfig/"
-	} else {
-		path = "./remoteconfig/"
-	}
-	initremote(path)
-	initsource(path)
-	initapp(path, notice)
+	initremote()
+	initsource()
+	initapp(notice)
 }
 
 //Close -
@@ -59,8 +51,8 @@ func initenv() {
 	EC = &EnvConfig{}
 	if str, ok := os.LookupEnv("CONFIG_TYPE"); ok && str != "<CONFIG_TYPE>" && str != "" {
 		configtype, e := strconv.Atoi(str)
-		if e != nil || (configtype != 0 && configtype != 1 && configtype != 2) {
-			log.Error(nil, "[config.initenv] CONFIG_TYPE must be number in [0,1,2]")
+		if e != nil || (configtype != 0 && configtype != 1) {
+			log.Error(nil, "[config.initenv] CONFIG_TYPE must be number in [0,1]")
 			Close()
 			os.Exit(1)
 		}
@@ -80,8 +72,11 @@ func initenv() {
 	}
 }
 
-func initremote(path string) {
-	if EC.ConfigType != nil && *EC.ConfigType == 2 {
+func initremote() {
+	if EC.ConfigType == nil {
+		return
+	}
+	if *EC.ConfigType == 1 {
 		var addrs []string
 		if str, ok := os.LookupEnv("REMOTE_CONFIG_ADDRS"); ok && str != "<REMOTE_CONFIG_ADDRS>" && str != "" {
 			addrs = strings.Split(str, ",")
@@ -106,7 +101,7 @@ func initremote(path string) {
 		} else {
 			log.Warning(nil, "[config.initremote] missing REMOTE_CONFIG_REPLICASET")
 		}
-		if e := configsdk.NewDirectSdk(path, api.Group, api.Name, username, password, replicaset, addrs); e != nil {
+		if e := configsdk.NewDirectSdk(api.Group, api.Name, username, password, replicaset, addrs); e != nil {
 			log.Error(nil, "[config.initremote] new sdk error:", e)
 			Close()
 			os.Exit(1)
@@ -129,13 +124,17 @@ import (
 //AppConfig can hot update
 //this is the config used for this app
 type AppConfig struct {
-	//add your config here
 	HandlerTimeout    map[string]map[string]ctime.Duration $json:"handler_timeout"$ //first key handler path,second key method(GET,POST,PUT,PATCH,DELETE,CRPC,GRPC),value timeout
 	HandlerRate       []*publicmids.RateConfig             $json:"handler_rate"$
 	AccessSignSecKeys map[string]string                    $json:"access_sign_sec_keys"$ //key-specific path,value specific seckey,key-"default",value default seckey
 	AccessKeySecKeys  map[string]string                    $json:"access_key_sec_keys"$ //key-specific path,value specific seckey,key-"default",value default seckey
+	Service           *ServiceConfig                       $json:"service"$
+}
+type ServiceConfig struct {
+	//add your config here
 }
 
+//every time update AppConfig will call this function
 func validateAppConfig(ac *AppConfig) {
 
 }
@@ -145,8 +144,8 @@ var AC *AppConfig
 
 var watcher *fsnotify.Watcher
 
-func initapp(path string, notice func(*AppConfig)) {
-	data, e := os.ReadFile(path + "AppConfig.json")
+func initapp(notice func(*AppConfig)) {
+	data, e := os.ReadFile("./AppConfig.json")
 	if e != nil {
 		log.Error(nil, "[config.initapp] read config file error:", e)
 		Close()
@@ -168,7 +167,7 @@ func initapp(path string, notice func(*AppConfig)) {
 		Close()
 		os.Exit(1)
 	}
-	if e = watcher.Add(path); e != nil {
+	if e = watcher.Add("./"); e != nil {
 		log.Error(nil, "[config.initapp] create watcher for hot update error:", e)
 		Close()
 		os.Exit(1)
@@ -190,7 +189,7 @@ func initapp(path string, notice func(*AppConfig)) {
 						continue
 					}
 				}
-				data, e := os.ReadFile(path + "AppConfig.json")
+				data, e := os.ReadFile("./AppConfig.json")
 				if e != nil {
 					log.Error(nil, "[config.initapp] hot update read config file error:", e)
 					continue
@@ -374,8 +373,8 @@ var kafkaSubers map[string]*kafka.Reader
 
 var kafkaPubers map[string]*kafka.Writer
 
-func initsource(path string) {
-	data, e := os.ReadFile(path + "SourceConfig.json")
+func initsource() {
+	data, e := os.ReadFile("./SourceConfig.json")
 	if e != nil {
 		log.Error(nil, "[config.initsource] read config file error:", e)
 		Close()

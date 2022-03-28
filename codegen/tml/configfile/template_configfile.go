@@ -118,6 +118,9 @@ const textapp = `{
 	"access_key_sec_keys":{
 		"default":"default_sec_key",
 		"/{{.}}.status/ping":"specific_sec_key"
+	},
+	"service":{
+
 	}
 }`
 
