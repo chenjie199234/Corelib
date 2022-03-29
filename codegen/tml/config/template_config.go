@@ -73,7 +73,7 @@ func initenv() {
 }
 
 func initremote() {
-	if EC.ConfigType == nil {
+	if EC.ConfigType == nil || *EC.ConfigType == 0 {
 		return
 	}
 	if *EC.ConfigType == 1 {
