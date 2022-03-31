@@ -52,7 +52,7 @@ func (h *FlexibleHashtree[T]) Rebuild(datas []*LeafData[T]) error {
 	origin.UpdateAll()
 	return nil
 }
-func (h *FlexibleHashtree[T]) Push(data *LeafData[T]) error {
+func (h *FlexibleHashtree[T]) PushSingle(data *LeafData[T]) error {
 	if data == nil || len(data.Hstr) == 0 {
 		return ErrMissingHstr
 	}

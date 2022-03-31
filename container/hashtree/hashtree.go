@@ -82,7 +82,7 @@ func (h *hashtree[T]) ReCaculateMulti(indexes []int) {
 	//remove too big
 	for i := 1; i <= len(indexes); i++ {
 		if indexes[len(indexes)-i] < h.NodeNum() {
-			indexes = indexes[:len(indexes)-i]
+			indexes = indexes[:len(indexes)-i+1]
 			break
 		}
 	}
@@ -103,7 +103,7 @@ func (h *hashtree[T]) ReCaculateMulti(indexes []int) {
 			break
 		}
 		curp := -1
-		for i := 1; i <= len(indexes); {
+		for i := 1; i <= len(indexes); i++ {
 			//some index may have the same parent
 			index := indexes[len(indexes)-i]
 			pindex := h.ParentIndex(index)
