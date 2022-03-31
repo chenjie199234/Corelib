@@ -1,42 +1,39 @@
 # Corelib
 ![image](Corelib.jpg)
 # Use
-	1.安装golang(1.17+)
-	2.安装git
-	3.安装protoc
-	4.安装protoc-gen-go
-	5.下载release中的二进制文件codegen
-	6.执行codegen -d path -n projectname
-	(没有-d则默认在当前目录创建)
-	(projectname格式,[a-z][A-Z][0-9][_],首字母必须是[a-z][A-Z])
+	1.install golang(1.18+)
+	2.install git
+	3.install protoc
+	4.install protoc-gen-go
+	5.[download the codegen in release] or [clone this lib and go into the codegen dir and install it by go install]
+	6.make sure the codegen's dir is in the system's or user's PATH env
+	7.codegen -d path -n projectname
+	(without -d or -d is empty the default value: current dir will be used)
+	(projectname format,character must in [a-z][A-Z][0-9][_],first character must in [a-z][A-Z])
 # Description
-## web
-	web框架,内含proto解析工具,可由proto生成web桩代码
-## cgrpc
-	grpc框架,二次封装,内含proto解析工具,可由proto生成cgrpc桩代码
-## stream
-	长连接框架,同时支持tcp以及websocket
-## crpc
-	因grpc性能较差,所以重新造了个rpc轮子,性能相较grpc有30%+的提升.基于stream的rpc框架,内含proto解析工具,可由proto生成crpc桩代码
 ## codegen
-	代码脚手架
+	generate the base code,if you want to use this lib,this is the start
+## web
+	Web framework,this contains protobuf plugin to generate code from proto file
+## cgrpc
+	grpc framework,this contains protobuf plugin to generate code from proto file
+## stream
+	stream connection framework,use websocket's frame format,so this can support rawtcp and websocket at the same time on same port
+## crpc
+	a new rpc framework(20-30% fast then grpc),this contains protobuf plugin to generate code from proto file
 ## error
-	错误格式
 ## id
-	分布式id生成器
+	snow flake
 ## log
-	日志
+	normal log
 ## trace
-	链路追踪
-## bufpool
-	共享缓存,用于缓存复用,减少gc
+	trace log
+## pool
+	sync.Pool for []byte and bufio.Reader and bufio.Writer
 ## container
-	常用的一些数据结构
+	some useful struct
 ## superd
-	守护进程引擎,类似supervisor,fork子进程执行任务,可用于构建cicd平台,或者作为子进程监控器
-## config
-	配置中心
+	fork child process to exec some other program,like supervisor
+## other
+	1.remote config center
 	https://github.com/chenjie199234/Config
-## discovery(不建议使用,目前该框架生成的代码直接使用了kuberneters的dns进行服务发现)
-	服务注册和发现
-	https://github.com/chenjie199234/Discovery

@@ -307,7 +307,7 @@ type RedisConfig struct {
 	URL         string         $json:"url"$           //[redis/rediss]://[[username:]password@]host/[dbindex]
 	MaxOpen     int            $json:"max_open"$      //default 100   //this will overwrite the param in url
 	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
-	IoTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
+	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
 	ConnTimeout ctime.Duration $json:"conn_timeout"$  //default 250ms //this will overwrite the param in url
 }
 
@@ -546,8 +546,8 @@ func initredis(){
 		if redisc.MaxIdletime == 0 {
 			redisc.MaxIdletime = ctime.Duration(time.Minute * 10)
 		}
-		if redisc.IoTimeout == 0 {
-			redisc.IoTimeout = ctime.Duration(time.Millisecond * 500)
+		if redisc.IOTimeout == 0 {
+			redisc.IOTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if redisc.ConnTimeout == 0 {
 			redisc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
@@ -564,7 +564,7 @@ func initredis(){
 			MaxOpen:     redisc.MaxOpen,
 			MaxIdletime: redisc.MaxIdletime.StdDuration(),
 			ConnTimeout: redisc.ConnTimeout.StdDuration(),
-			IOTimeout:   redisc.IoTimeout.StdDuration(),
+			IOTimeout:   redisc.IOTimeout.StdDuration(),
 		})
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		if e := tempredis.Ping(ctx); e != nil {
