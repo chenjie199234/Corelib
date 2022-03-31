@@ -21,7 +21,6 @@
 	stream connection framework,use websocket's frame format,so this can support rawtcp and websocket at the same time on same port
 ## crpc
 	a new rpc framework(20-30% fast then grpc),this contains protobuf plugin to generate code from proto file
-## error
 ## id
 	snow flake
 ## log
