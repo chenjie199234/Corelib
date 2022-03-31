@@ -144,14 +144,10 @@ func (this *CGrpcServer) GetReqNum() int32 {
 	return atomic.LoadInt32(&this.totalreqnum)
 }
 
-//map key path,map value handler timeout,0 means no handler specific timeout,but still has global timeout
+//key path,value timeout(if timeout <= 0 means no timeout)
 func (this *CGrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
 	tmp := make(map[string]time.Duration)
 	for path, timeout := range htcs {
-		if timeout <= 0 {
-			//jump,0 means no handler specific timeout
-			continue
-		}
 		if len(path) == 0 || path[0] != '/' {
 			path = "/" + path
 		}
@@ -162,7 +158,7 @@ func (this *CGrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
 
 func (this *CGrpcServer) getHandlerTimeout(path string) time.Duration {
 	handlerTimeout := *(*map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout))))
-	if t, ok := handlerTimeout[path]; ok && t != 0 {
+	if t, ok := handlerTimeout[path]; ok {
 		return t
 	}
 	return this.c.GlobalTimeout
@@ -254,7 +250,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		}
 		start := time.Now()
 		servertimeout := s.getHandlerTimeout(path)
-		if servertimeout != 0 {
+		if servertimeout > 0 {
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithDeadline(ctx, start.Add(servertimeout))
 			defer cancel()

@@ -329,7 +329,7 @@ func (s *WebServer) StopWebServer() {
 	}
 }
 
-//first key method,second key path,value timeout
+//first key method,second key path,value timeout(if timeout <= 0 means no timeout)
 func (s *WebServer) UpdateHandlerTimeout(htcs map[string]map[string]time.Duration) {
 	tmp := make(map[string]map[string]time.Duration)
 	for method, paths := range htcs {
@@ -337,9 +337,6 @@ func (s *WebServer) UpdateHandlerTimeout(htcs map[string]map[string]time.Duratio
 			continue
 		}
 		for path, timeout := range paths {
-			if timeout <= 0 {
-				continue
-			}
 			if _, ok := tmp[method]; !ok {
 				tmp[method] = make(map[string]time.Duration)
 			}
@@ -355,7 +352,7 @@ func (s *WebServer) UpdateHandlerTimeout(htcs map[string]map[string]time.Duratio
 func (s *WebServer) getHandlerTimeout(method, path string) time.Duration {
 	handlerTimeout := *(*map[string]map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.handlerTimeout))))
 	if m, ok := handlerTimeout[method]; ok {
-		if t, ok := m[path]; ok && t != 0 {
+		if t, ok := m[path]; ok {
 			return t
 		}
 	}
@@ -528,17 +525,25 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 		start := time.Now()
 		var min int64
 		servertimeout := int64(s.getHandlerTimeout(method, path))
-		if clientdl != 0 && servertimeout != 0 {
+		if servertimeout > 0 {
 			serverdl := start.UnixNano() + servertimeout
-			if clientdl <= serverdl {
-				min = clientdl
+			if clientdl != 0 {
+				//compare use the small one
+				if clientdl < serverdl {
+					min = clientdl
+				} else {
+					min = serverdl
+				}
 			} else {
+				//use serverdl
 				min = serverdl
 			}
 		} else if clientdl != 0 {
+			//use client timeout
 			min = clientdl
-		} else if servertimeout != 0 {
-			min = start.UnixNano() + servertimeout
+		} else {
+			//no timeout
+			min = 0
 		}
 		if min != 0 {
 			if min < start.UnixNano()+int64(time.Millisecond) {

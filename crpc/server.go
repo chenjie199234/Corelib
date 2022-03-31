@@ -162,13 +162,10 @@ func (s *CrpcServer) GetReqNum() int32 {
 	}
 }
 
+//key path,value timeout(if timeout <= 0 means no timeout)
 func (this *CrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
 	tmp := make(map[string]time.Duration)
 	for path, timeout := range htcs {
-		if timeout <= 0 {
-			//jump,0 means no handler specific timeout
-			continue
-		}
 		if len(path) == 0 || path[0] != '/' {
 			path = "/" + path
 		}
@@ -179,7 +176,7 @@ func (this *CrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
 
 func (this *CrpcServer) getHandlerTimeout(path string) time.Duration {
 	handlerTimeout := *(*map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout))))
-	if t, ok := handlerTimeout[path]; ok && t != 0 {
+	if t, ok := handlerTimeout[path]; ok {
 		return t
 	}
 	return this.c.GlobalTimeout
@@ -219,19 +216,27 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 		}
 		//var globaldl int64
 		start := time.Now()
-		servertimeout := int64(s.getHandlerTimeout(path))
 		var min int64
-		if msg.Deadline != 0 && servertimeout != 0 {
-			serverdl := start.UnixNano() + servertimeout
-			if msg.Deadline <= serverdl {
-				min = msg.Deadline
+		servertimeout := int64(s.getHandlerTimeout(path))
+		if servertimeout > 0 {
+			serverdl := time.Now().UnixNano() + servertimeout
+			if msg.Deadline != 0 {
+				//compare use the small one
+				if msg.Deadline < serverdl {
+					min = msg.Deadline
+				} else {
+					min = serverdl
+				}
 			} else {
+				//use server timeout
 				min = serverdl
 			}
 		} else if msg.Deadline != 0 {
+			//use client timeout
 			min = msg.Deadline
-		} else if servertimeout != 0 {
-			min = start.UnixNano() + servertimeout
+		} else {
+			//no timeout
+			min = 0
 		}
 		if min != 0 {
 			if min < start.UnixNano()+int64(time.Millisecond) {
