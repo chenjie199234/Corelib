@@ -104,6 +104,7 @@ func (p *Pool) ListMQSub(name string, num uint64, subhandler func([]byte)) (canc
 					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 					if conn, e := p.GetContext(ctx); e != nil {
 						log.Error(nil, "[Redis.ListMQ.Sub.stop] index:", index, "connect to redis error:", e)
+						time.Sleep(5 * time.Millisecond)
 					} else if _, e = conn.DoContext(ctx, "DEL", listnameexist); e != nil && e != redis.ErrNil {
 						log.Error(nil, "[Redis.ListMQ.Sub.stop] index:", index, "exec error:", e)
 						conn.Close()
@@ -141,6 +142,7 @@ func (p *Pool) ListMQPub(ctx context.Context, name string, num uint64, key strin
 	if e != nil {
 		return e
 	}
+	defer c.Close()
 	listname := name + "_" + strconv.FormatUint(common.BkdrhashString(key, num), 10)
 	listnameexist := "{" + listname + "}_exist"
 	args := make([]interface{}, 0, 4+len(values))

@@ -100,16 +100,15 @@ func (p *Pool) NewBloom(ctx context.Context, c *BloomConfig) (*Bloom, error) {
 	if e != nil {
 		return nil, e
 	}
+	defer conn.Close()
 	cstr, e := redis.String(conn.DoContext(ctx, "EVAL", existlua, 1, c.BloomName, d, int64(c.Expire.Seconds())))
 	if e != nil {
 		if e == redis.ErrNil {
 			exist = false
 		} else {
-			conn.Close()
 			return nil, e
 		}
 	}
-	conn.Close()
 	if exist {
 		//if exist,use exist's config to replace this config
 		c = &BloomConfig{}

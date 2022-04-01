@@ -103,6 +103,9 @@ func (c *Conn) Err() error {
 	return c.c.Err()
 }
 func (c *Conn) Close() {
+	if c == nil {
+		return
+	}
 	// end := time.Now()
 	// trace.Trace(c.ctx, trace.CLIENT, c.p.c.RedisName, c.p.c.Addr, "REDIS", "connect", c.start, &end, c.c.Err())
 	c.c.Close()
