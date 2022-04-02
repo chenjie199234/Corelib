@@ -15,16 +15,20 @@ func init() {
 	hsecondmax = hex.EncodeToString(h[:])
 }
 
-const secondmax = `if(tonumber(redis.call("ZCARD",KEYS[1]))<tonumber(ARGV[1]))
+const secondmax = `local first=redis.call("LINDEX",KEYS[1],0)
+if(first=="null")
 then
-	redis.call("ZADD",KEYS[1],ARGV[2]+1000000000,ARGV[2]+1000000000)
+	redis.call("RPUSH",KEYS[1],ARGV[2]+1000000000)
 	redis.call("EXPIRE",KEYS[1],1)
 	return 1
 end
-redis.call("ZREMRANGEBYSCORE",KEYS[1],0,tonumber(ARGV[2]))
-if(tonumber(redis.call("ZCARD",KEYS[1]))<tonumber(ARGV[1]))
+if(tonumber(first)<=tonumber(ARGV[2]))
 then
-	redis.call("ZADD",KEYS[1],ARGV[2]+1000000000,ARGV[2]+1000000000)
+	redis.call("LPOP",KEYS[1])
+end
+if(tonumber(redis.call("LLEN",KEYS[1]))<tonumber(ARGV[1]))
+then
+	redis.call("RPUSH",KEYS[1],ARGV[2]+1000000000)
 	redis.call("EXPIRE",KEYS[1],1)
 	return 1
 end
@@ -34,6 +38,9 @@ var hsecondmax = ""
 
 //return true-pass,false-busy
 func (p *Pool) RateLimitSecondMax(ctx context.Context, key string, max uint64) (bool, error) {
+	if max == 0 {
+		return false, nil
+	}
 	c, e := p.GetContext(ctx)
 	if e != nil {
 		return false, e
