@@ -16,19 +16,22 @@ func init() {
 }
 
 const secondmax = `local first=redis.call("LINDEX",KEYS[1],0)
-if(first=="null")
+if(first==nil or first==false)
 then
-	redis.call("RPUSH",KEYS[1],ARGV[2]+1000000000)
+	local time=redis.call("TIME")
+	redis.call("RPUSH",KEYS[1],time[1]*1000000+time[2])
 	redis.call("EXPIRE",KEYS[1],1)
 	return 1
 end
-if(tonumber(first)<=tonumber(ARGV[2]))
+local time=redis.call("TIME")
+local micro=time[1]*1000000+time[2]
+if(tonumber(first)<=micro)
 then
 	redis.call("LPOP",KEYS[1])
 end
 if(tonumber(redis.call("LLEN",KEYS[1]))<tonumber(ARGV[1]))
 then
-	redis.call("RPUSH",KEYS[1],ARGV[2]+1000000000)
+	redis.call("RPUSH",KEYS[1],micro)
 	redis.call("EXPIRE",KEYS[1],1)
 	return 1
 end
@@ -46,10 +49,9 @@ func (p *Pool) RateLimitSecondMax(ctx context.Context, key string, max uint64) (
 		return false, e
 	}
 	defer c.Close()
-	now := time.Now().UnixNano()
-	r, e := redis.Int(c.DoContext(ctx, "EVALSHA", hsecondmax, 1, key, max, now))
+	r, e := redis.Int(c.DoContext(ctx, "EVALSHA", hsecondmax, 1, key, max))
 	if e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
-		r, e = redis.Int(c.DoContext(ctx, "EVAL", secondmax, 1, key, max, now))
+		r, e = redis.Int(c.DoContext(ctx, "EVAL", secondmax, 1, key, max))
 	}
 	if e != nil {
 		return false, e
