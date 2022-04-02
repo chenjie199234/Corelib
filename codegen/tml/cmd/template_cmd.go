@@ -10,6 +10,8 @@ import (
 const textbash = `#!/bin/bash
 #      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
 
+cd $(dirname $0)
+
 help() {
 	echo "cmd.sh — every thing you need"
 	echo "         please install git"
@@ -100,6 +102,8 @@ echo "option unsupport"
 help`
 const textbat = `@echo off
 REM      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
+
+cd %~dp0
 
 where /q git.exe
 if %errorlevel% == 1 (
