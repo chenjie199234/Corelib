@@ -47,9 +47,9 @@ func (p *Pool) RateLimitSecondMax(ctx context.Context, key string, max uint64) (
 	}
 	defer c.Close()
 	now := time.Now().UnixNano()
-	r, e := redis.Int(c.DoContext(ctx, "EVALSHA", hsecondmax, key, max, now))
+	r, e := redis.Int(c.DoContext(ctx, "EVALSHA", hsecondmax, 1, key, max, now))
 	if e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
-		r, e = redis.Int(c.DoContext(ctx, "EVAL", secondmax, key, max, now))
+		r, e = redis.Int(c.DoContext(ctx, "EVAL", secondmax, 1, key, max, now))
 	}
 	if e != nil {
 		return false, e
