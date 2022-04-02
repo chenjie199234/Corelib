@@ -18,12 +18,14 @@ func init() {
 const secondmax = `if(tonumber(redis.call("ZCARD",KEYS[1]))<tonumber(ARGV[1]))
 then
 	redis.call("ZADD",KEYS[1],ARGV[2]+1000000000,ARGV[2]+1000000000)
+	redis.call("EXPIRE",KEYS[1],1)
 	return 1
 end
-redis.call("ZREMRANGEBYSCORE",KEYS[1],0,ARGV[2])
+redis.call("ZREMRANGEBYSCORE",KEYS[1],0,tonumber(ARGV[2]))
 if(tonumber(redis.call("ZCARD",KEYS[1]))<tonumber(ARGV[1]))
 then
 	redis.call("ZADD",KEYS[1],ARGV[2]+1000000000,ARGV[2]+1000000000)
+	redis.call("EXPIRE",KEYS[1],1)
 	return 1
 end
 return 0`
