@@ -124,11 +124,10 @@ import (
 //AppConfig can hot update
 //this is the config used for this app
 type AppConfig struct {
-	HandlerTimeout    map[string]map[string]ctime.Duration $json:"handler_timeout"$ //first key handler path,second key method(GET,POST,PUT,PATCH,DELETE,CRPC,GRPC),value timeout
-	HandlerRate       []*publicmids.RateConfig             $json:"handler_rate"$
-	AccessSignSecKeys map[string]string                    $json:"access_sign_sec_keys"$ //key-specific path,value specific seckey,key-"default",value default seckey
-	AccessKeySecKeys  map[string]string                    $json:"access_key_sec_keys"$ //key-specific path,value specific seckey,key-"default",value default seckey
-	Service           *ServiceConfig                       $json:"service"$
+	HandlerTimeout map[string]map[string]ctime.Duration $json:"handler_timeout"$ //first key handler path,second key method(GET,POST,PUT,PATCH,DELETE,CRPC,GRPC),value timeout
+	HandlerRate    []*publicmids.RateConfig             $json:"handler_rate"$
+	AccessKeys     map[string]string                    $json:"access_keys"$ //key-specific path,value specific seckey,key-"default",value default seckey
+	Service        *ServiceConfig                       $json:"service"$
 }
 type ServiceConfig struct {
 	//add your config here

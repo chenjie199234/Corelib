@@ -31,6 +31,7 @@ help() {
 }
 
 pb() {
+	rm ./api/*.pb.go
 	go mod tidy
 	corelib=$(go list -m -f {{.GoListFormat}} github.com/chenjie199234/Corelib)
 	workdir=$(pwd)
@@ -197,6 +198,7 @@ if "%1" == "new" (
 )
 
 :pb
+	del ./api/*.pb.go
 	go mod tidy
 	for /F %%i in ('go list -m -f {{.GoListFormat}} github.com/chenjie199234/Corelib') do ( set corelib=%%i )
 	set workdir=%cd%

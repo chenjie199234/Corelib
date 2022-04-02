@@ -5,7 +5,6 @@ import (
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	publicmids "github.com/chenjie199234/Corelib/mids"
-	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/web"
 )
 
@@ -17,7 +16,6 @@ func init() {
 	//register here
 	all["rate"] = rate
 	all["accesskey"] = accesskey
-	all["accesssign"] = accesssign
 }
 
 func AllMids() map[string]web.OutsideHandler {
@@ -68,26 +66,6 @@ func accesskey(ctx *web.Context) {
 		return
 	}
 	if !publicmids.AccessKey(ctx.GetPath(), accesskey) {
-		ctx.Abort(cerror.ErrAuth)
-	}
-}
-func accesssign(ctx *web.Context) {
-	accesssign := ctx.GetHeader("Access-Sign")
-	if accesssign == "" {
-		md := ctx.GetMetadata()
-		accesssign = md["Access-Sign"]
-	}
-	if accesssign == "" {
-		ctx.Abort(cerror.ErrAuth)
-		return
-	}
-	body, e := ctx.GetBody()
-	if e != nil {
-		ctx.Abort(cerror.ErrReq)
-		return
-	}
-	signdata := ctx.GetRequest().URL.RawQuery + common.Byte2str(body)
-	if !publicmids.AccessSign(ctx.GetPath(), signdata, accesssign) {
 		ctx.Abort(cerror.ErrAuth)
 	}
 }

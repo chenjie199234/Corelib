@@ -111,11 +111,7 @@ const textapp = `{
 		"Method":["GET","GRPC","CRPC"],
 		"MaxPerSec":10
 	}],
-	"access_sign_sec_keys":{
-		"default":"default_sec_key",
-		"/{{.}}.status/ping":"specific_sec_key"
-	},
-	"access_key_sec_keys":{
+	"access_keys":{
 		"default":"default_sec_key",
 		"/{{.}}.status/ping":"specific_sec_key"
 	},
