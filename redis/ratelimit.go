@@ -1,0 +1,49 @@
+package redis
+
+import (
+	"context"
+	"crypto/sha1"
+	"encoding/hex"
+	"strings"
+	"time"
+
+	"github.com/gomodule/redigo/redis"
+)
+
+func init() {
+	h := sha1.Sum([]byte(secondmax))
+	hsecondmax = hex.EncodeToString(h[:])
+}
+
+const secondmax = `if(tonumber(redis.call("ZCARD",KEYS[1]))<tonumber(ARGV[1]))
+then
+	redis.call("ZADD",KEYS[1],ARGV[2]+1000000000,ARGV[2]+1000000000)
+	return 1
+end
+redis.call("ZREMRANGEBYSCORE",KEYS[1],0,ARGV[2])
+if(tonumber(redis.call("ZCARD",KEYS[1]))<tonumber(ARGV[1]))
+then
+	redis.call("ZADD",KEYS[1],ARGV[2]+1000000000,ARGV[2]+1000000000)
+	return 1
+end
+return 0`
+
+var hsecondmax = ""
+
+//return true-pass,false-busy
+func (p *Pool) RateLimitSecondMax(ctx context.Context, key string, max uint64) (bool, error) {
+	c, e := p.GetContext(ctx)
+	if e != nil {
+		return false, e
+	}
+	defer c.Close()
+	now := time.Now().UnixNano()
+	r, e := redis.Int(c.DoContext(ctx, "EVALSHA", hsecondmax, key, max, now))
+	if e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
+		r, e = redis.Int(c.DoContext(ctx, "EVAL", secondmax, key, max, now))
+	}
+	if e != nil {
+		return false, e
+	}
+	return r == 1, nil
+}
