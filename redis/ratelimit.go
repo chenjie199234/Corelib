@@ -5,7 +5,6 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"strings"
-	"time"
 
 	"github.com/gomodule/redigo/redis"
 )
@@ -19,19 +18,18 @@ const secondmax = `local first=redis.call("LINDEX",KEYS[1],0)
 if(first==nil or first==false)
 then
 	local time=redis.call("TIME")
-	redis.call("RPUSH",KEYS[1],time[1]*1000000+time[2])
+	redis.call("RPUSH",KEYS[1],(time[1]+1)*1000000+time[2])
 	redis.call("EXPIRE",KEYS[1],1)
 	return 1
 end
 local time=redis.call("TIME")
-local micro=time[1]*1000000+time[2]
-if(tonumber(first)<=micro)
+if(tonumber(first)<=time[1]*1000000+time[2])
 then
 	redis.call("LPOP",KEYS[1])
 end
 if(tonumber(redis.call("LLEN",KEYS[1]))<tonumber(ARGV[1]))
 then
-	redis.call("RPUSH",KEYS[1],micro)
+	redis.call("RPUSH",KEYS[1],(time[1]+1)*1000000+time[2])
 	redis.call("EXPIRE",KEYS[1],1)
 	return 1
 end
