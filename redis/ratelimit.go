@@ -18,6 +18,7 @@ const secondmax = `local first=redis.call("LINDEX",KEYS[1],0)
 if(first==nil or first==false)
 then
 	local time=redis.call("TIME")
+	redis.call("EXPIRE",KEYS[1],1)
 	redis.call("RPUSH",KEYS[1],(time[1]+1)*1000000+time[2])
 	redis.call("EXPIRE",KEYS[1],1)
 	return 1
@@ -29,6 +30,7 @@ then
 end
 if(tonumber(redis.call("LLEN",KEYS[1]))<tonumber(ARGV[1]))
 then
+	redis.call("EXPIRE",KEYS[1],1)
 	redis.call("RPUSH",KEYS[1],(time[1]+1)*1000000+time[2])
 	redis.call("EXPIRE",KEYS[1],1)
 	return 1
