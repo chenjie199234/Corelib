@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -14,68 +15,83 @@ import (
 )
 
 func init() {
-	expiresha1 := sha1.Sum(common.Str2byte(expire))
-	hexpire = hex.EncodeToString(expiresha1[:])
+	expiresha1 := sha1.Sum(common.Str2byte(expirelistmq))
+	hexpirelistmq = hex.EncodeToString(expiresha1[:])
 
-	pubsha1 := sha1.Sum(common.Str2byte(pub))
-	hpub = hex.EncodeToString(pubsha1[:])
+	pubsha1 := sha1.Sum(common.Str2byte(publistmq))
+	hpublistmq = hex.EncodeToString(pubsha1[:])
 }
 
-const expire = `redis.call("SETEX",KEYS[2],11,1)
+var ErrListMQMissingName = errors.New("list mq missing name")
+var ErrListMQMissingGroup = errors.New("list mq missing group")
+
+const expirelistmq = `redis.call("SETEX",KEYS[2],11,1)
 redis.call("EXPIRE",KEYS[1],11)`
 
-var hexpire = ""
+var hexpirelistmq = ""
 
-//num decide there are how many lists will be used in redis for this mq
-//this is useful to balance all redis nodes' request
-//every special list will have a name like name_[0,num)
-func (p *Pool) ListMQSub(name string, num uint64, subhandler func([]byte)) (cancel func()) {
+//groupnum decide there are how many lists will be used in redis for this mq
+//	every special list will have a name like mqname_[0,groupnum)
+//	in cluster mode:this is useful to balance all redis nodes' request
+//	in slave mode:set it to 1
+//	pub's groupnum must same as the sub's groupnum
+func (p *Pool) ListMQSub(mqname string, groupnum uint64, subhandler func([]byte)) (func(), error) {
+	if mqname == "" {
+		return nil, ErrListMQMissingName
+	}
+	if groupnum == 0 {
+		return nil, ErrListMQMissingGroup
+	}
 	stop := make(chan *struct{})
-	cancel = func() {
+	cancel := func() {
 		close(stop)
 	}
-	for i := uint64(0); i < num; i++ {
+	for i := uint64(0); i < groupnum; i++ {
 		index := i
-		listname := name + "_" + strconv.FormatUint(index, 10)
+		listname := mqname + "_" + strconv.FormatUint(index, 10)
 		listnameexist := "{" + listname + "}_exist"
 		go func() {
-			var conn *Conn
+			var c redis.Conn
 			var e error
 			for {
-				for conn == nil {
+				for c == nil {
 					//init
 					if e != nil {
 						//reconnect
 						time.Sleep(time.Millisecond)
 					}
 					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-					conn, e = p.GetContext(ctx)
+					c, e = p.p.GetContext(ctx)
 					if e != nil {
 						log.Error(nil, "[Redis.ListMQ.Sub.init] index:", index, "connect to redis error:", e)
-						conn = nil
+						c = nil
 						cancel()
 						continue
 					}
-					if _, e = conn.DoContext(ctx, "EVALSHA", hexpire, 2, listname, listnameexist); e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
-						_, e = conn.DoContext(ctx, "EVAL", expire, 2, listname, listnameexist)
+					cctx := c.(redis.ConnWithContext)
+					if _, e = cctx.DoContext(ctx, "EVALSHA", hexpirelistmq, 2, listname, listnameexist); e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
+						_, e = cctx.DoContext(ctx, "EVAL", expirelistmq, 2, listname, listnameexist)
 					}
 					if e != nil {
 						log.Error(nil, "[Redis.ListMQ.Sub.init] index:", index, "exec error:", e)
-						conn.Close()
-						conn = nil
+						c.Close()
+						c = nil
 					}
 					cancel()
 				}
+				cc := c.(redis.ConnWithTimeout)
 				for {
 					//sub
 					var data [][]byte
-					if data, e = redis.ByteSlices(conn.c.(redis.ConnWithTimeout).DoWithTimeout(0, "BLPOP", listname, 0)); e != nil {
+					if data, e = redis.ByteSlices(cc.DoWithTimeout(0, "BLPOP", listname, 0)); e != nil {
 						log.Error(nil, "[Redis.ListMQ.Sub.sub] index:", index, "exec error:", e)
-						conn.Close()
-						conn = nil
+						c.Close()
+						c = nil
 						break
 					}
-					subhandler(data[1])
+					if subhandler != nil {
+						subhandler(data[1])
+					}
 				}
 			}
 		}()
@@ -86,31 +102,32 @@ func (p *Pool) ListMQSub(name string, num uint64, subhandler func([]byte)) (canc
 				select {
 				case <-tker.C:
 					ctx, cancel := context.WithTimeout(context.Background(), time.Second*4)
-					conn, e := p.GetContext(ctx)
+					c, e := p.p.GetContext(ctx)
 					if e != nil {
 						log.Error(nil, "[Redis.ListMQ.Sub.update] index:", index, "connect to redis error:", e)
 						cancel()
 						continue
 					}
-					if _, e = conn.DoContext(ctx, "EVALSHA", hexpire, 2, listname, listnameexist); e != nil && strings.Contains(e.Error(), "NOSCRIPT") {
-						_, e = conn.DoContext(ctx, "EVAL", expire, 2, listname, listnameexist)
+					cctx := c.(redis.ConnWithContext)
+					if _, e = cctx.DoContext(ctx, "EVALSHA", hexpirelistmq, 2, listname, listnameexist); e != nil && strings.Contains(e.Error(), "NOSCRIPT") {
+						_, e = cctx.DoContext(ctx, "EVAL", expirelistmq, 2, listname, listnameexist)
 					}
 					if e != nil {
 						log.Error(nil, "[Redis.ListMQ.Sub.update] index:", index, "exec error:", e)
 					}
-					conn.Close()
+					c.Close()
 					cancel()
 				case <-stop:
 					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-					if conn, e := p.GetContext(ctx); e != nil {
+					if c, e := p.p.GetContext(ctx); e != nil {
 						log.Error(nil, "[Redis.ListMQ.Sub.stop] index:", index, "connect to redis error:", e)
 						time.Sleep(5 * time.Millisecond)
-					} else if _, e = conn.DoContext(ctx, "DEL", listnameexist); e != nil && e != redis.ErrNil {
+					} else if _, e = c.(redis.ConnWithContext).DoContext(ctx, "DEL", listnameexist); e != nil && e != redis.ErrNil {
 						log.Error(nil, "[Redis.ListMQ.Sub.stop] index:", index, "exec error:", e)
-						conn.Close()
+						c.Close()
 						time.Sleep(5 * time.Millisecond)
 					} else {
-						conn.Close()
+						c.Close()
 						cancel()
 						return
 					}
@@ -119,10 +136,10 @@ func (p *Pool) ListMQSub(name string, num uint64, subhandler func([]byte)) (canc
 			}
 		}()
 	}
-	return
+	return cancel, nil
 }
 
-const pub = `if(redis.call("EXISTS",KEYS[2])~=0 and redis.call("EXPIRE",KEYS[1],11)~=0)
+const publistmq = `if(redis.call("EXISTS",KEYS[2])~=0 and redis.call("EXPIRE",KEYS[1],11)~=0)
 then
 	for i=1,#ARGV,1 do
 		redis.call("rpush",KEYS[1],ARGV[i])
@@ -131,22 +148,27 @@ then
 end
 return 0`
 
-var hpub = ""
+var hpublistmq = ""
 
+//groupnum decide there are how many lists will be used in redis for this mq
+//	every special list will have a name like mqname_[0,groupnum)
+//	in cluster mode:this is useful to balance all redis nodes' request
+//	in slave mode:set it to 1
+//	pub's groupnum must same as the sub's groupnum
 //key is used to decide which list will the value send to
-func (p *Pool) ListMQPub(ctx context.Context, name string, num uint64, key string, values ...[]byte) error {
-	if num == 0 {
-		num = 10
+func (p *Pool) ListMQPub(ctx context.Context, mqname string, groupnum uint64, key string, values ...[]byte) error {
+	if groupnum == 0 {
+		return redis.ErrNil
 	}
-	c, e := p.GetContext(ctx)
+	c, e := p.p.GetContext(ctx)
 	if e != nil {
 		return e
 	}
 	defer c.Close()
-	listname := name + "_" + strconv.FormatUint(common.BkdrhashString(key, num), 10)
+	listname := mqname + "_" + strconv.FormatUint(common.BkdrhashString(key, groupnum), 10)
 	listnameexist := "{" + listname + "}_exist"
 	args := make([]interface{}, 0, 4+len(values))
-	args = append(args, hpub)
+	args = append(args, hpublistmq)
 	args = append(args, 2)
 	args = append(args, listname)
 	args = append(args, listnameexist)
@@ -154,9 +176,10 @@ func (p *Pool) ListMQPub(ctx context.Context, name string, num uint64, key strin
 		args = append(args, value)
 	}
 	var r int
-	if r, e = redis.Int(c.DoContext(ctx, "EVALSHA", args...)); e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
-		args[0] = pub
-		r, e = redis.Int(c.DoContext(ctx, "EVAL", args...))
+	cctx := c.(redis.ConnWithContext)
+	if r, e = redis.Int(cctx.DoContext(ctx, "EVALSHA", args...)); e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
+		args[0] = publistmq
+		r, e = redis.Int(cctx.DoContext(ctx, "EVAL", args...))
 	}
 	if e == nil && r == 0 {
 		e = redis.ErrNil

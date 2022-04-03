@@ -15,10 +15,8 @@ type Pool struct {
 }
 
 type Conn struct {
-	p     *Pool
-	c     redis.Conn
-	start *time.Time
-	ctx   context.Context
+	c   redis.Conn
+	ctx context.Context //this can be used with trace log
 }
 
 type Config struct {
@@ -35,7 +33,14 @@ var ErrPoolExhausted = redis.ErrPoolExhausted
 
 func NewRedis(c *Config) *Pool {
 	return &Pool{
-		c: c,
+		c: &Config{
+			RedisName:   c.RedisName,
+			URL:         c.URL,
+			MaxOpen:     c.MaxOpen,
+			MaxIdletime: c.MaxIdletime,
+			ConnTimeout: c.ConnTimeout,
+			IOTimeout:   c.IOTimeout,
+		},
 		p: &redis.Pool{
 			DialContext: func(ctx context.Context) (redis.Conn, error) {
 				conn, e := redis.DialURL(c.URL, redis.DialConnectTimeout(c.ConnTimeout), redis.DialReadTimeout(c.IOTimeout), redis.DialWriteTimeout(c.IOTimeout))
@@ -56,30 +61,19 @@ func (p *Pool) GetContext(ctx context.Context) (*Conn, error) {
 	if e != nil {
 		return nil, e
 	}
-	//traceend := trace.TraceStart(ctx, trace.CLIENT, p.c.RedisName, p.c.Addr, "REDIS", "connect")
-	start := time.Now()
-	return &Conn{p: p, c: c, start: &start, ctx: ctx}, nil
+	return &Conn{ctx: ctx, c: c}, nil
 }
 func (p *Pool) Ping(ctx context.Context) error {
-	c, e := p.GetContext(ctx)
+	c, e := p.p.GetContext(ctx)
 	if e != nil {
 		return e
 	}
-	_, e = c.DoContext(ctx, "PING")
+	_, e = c.(redis.ConnWithContext).DoContext(ctx, "PING")
 	return e
 }
 
 func (c *Conn) DoContext(ctx context.Context, cmd string, args ...interface{}) (interface{}, error) {
-	dl, ok := ctx.Deadline()
-	if ok {
-		timeout := time.Until(dl)
-		if timeout <= 0 {
-			return nil, context.DeadlineExceeded
-		}
-		return c.c.(redis.ConnWithTimeout).DoWithTimeout(timeout, cmd, args...)
-	} else {
-		return c.c.Do(cmd, args...)
-	}
+	return c.c.(redis.ConnWithContext).DoContext(ctx, cmd, args...)
 }
 func (c *Conn) Send(ctx context.Context, cmd string, args ...interface{}) error {
 	return c.c.Send(cmd, args...)
@@ -88,16 +82,7 @@ func (c *Conn) Flush(ctx context.Context) error {
 	return c.c.Flush()
 }
 func (c *Conn) ReceiveContext(ctx context.Context) (interface{}, error) {
-	dl, ok := ctx.Deadline()
-	if ok {
-		timeout := time.Until(dl)
-		if timeout <= 0 {
-			return nil, context.DeadlineExceeded
-		}
-		return c.c.(redis.ConnWithTimeout).ReceiveWithTimeout(timeout)
-	} else {
-		return c.c.Receive()
-	}
+	return c.c.(redis.ConnWithContext).ReceiveContext(ctx)
 }
 func (c *Conn) Err() error {
 	return c.c.Err()
@@ -106,8 +91,6 @@ func (c *Conn) Close() {
 	if c == nil {
 		return
 	}
-	// end := time.Now()
-	// trace.Trace(c.ctx, trace.CLIENT, c.p.c.RedisName, c.p.c.Addr, "REDIS", "connect", c.start, &end, c.c.Err())
 	c.c.Close()
 }
 func Int(reply interface{}, e error) (int, error) {
