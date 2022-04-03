@@ -11,7 +11,6 @@ const text = `package config
 
 import (
 	"os"
-	"strings"
 	"strconv"
 
 	"{{.}}/api"
@@ -51,24 +50,24 @@ func initenv() {
 	EC = &EnvConfig{}
 	if str, ok := os.LookupEnv("CONFIG_TYPE"); ok && str != "<CONFIG_TYPE>" && str != "" {
 		configtype, e := strconv.Atoi(str)
-		if e != nil || (configtype != 0 && configtype != 1) {
-			log.Error(nil, "[config.initenv] CONFIG_TYPE must be number in [0,1]")
+		if e != nil || (configtype != 0 && configtype != 1 && configtype != 2) {
+			log.Error(nil, "[config.initenv] env CONFIG_TYPE must be number in [0,1,2]")
 			Close()
 			os.Exit(1)
 		}
 		EC.ConfigType = &configtype
 	} else {
-		log.Warning(nil, "[config.initenv] missing CONFIG_TYPE")
+		log.Warning(nil, "[config.initenv] missing env CONFIG_TYPE")
 	}
 	if str, ok := os.LookupEnv("RUN_ENV"); ok && str != "<RUN_ENV>" && str != "" {
 		EC.RunEnv = &str
 	} else {
-		log.Warning(nil, "[config.initenv] missing RUN_ENV")
+		log.Warning(nil, "[config.initenv] missing env RUN_ENV")
 	}
 	if str, ok := os.LookupEnv("DEPLOY_ENV"); ok && str != "<DEPLOY_ENV>" && str != "" {
 		EC.DeployEnv = &str
 	} else {
-		log.Warning(nil, "[config.initenv] missing DEPLOY_ENV")
+		log.Warning(nil, "[config.initenv] missing env DEPLOY_ENV")
 	}
 }
 
@@ -77,34 +76,23 @@ func initremote() {
 		return
 	}
 	if *EC.ConfigType == 1 {
-		var addrs []string
-		if str, ok := os.LookupEnv("REMOTE_CONFIG_ADDRS"); ok && str != "<REMOTE_CONFIG_ADDRS>" && str != "" {
-			addrs = strings.Split(str, ",")
+		var mongourl string
+		if str, ok := os.LookupEnv("REMOTE_CONFIG_MONGO_URL"); ok && str != "<REMOTE_CONFIG_MONGO_URL>" && str != "" {
+			mongourl = str
 		} else {
-			panic("[config.initremote] missing REMOTE_CONFIG_ADDRS")
+			panic("[config.initremote] missing env REMOTE_CONFIG_MONGO_URL")
 		}
-		var username string
-		if str, ok := os.LookupEnv("REMOTE_CONFIG_USERNAME"); ok && str != "<REMOTE_CONFIG_USERNAME>" && str != "" {
-			username = str
-		} else {
-			log.Warning(nil, "[config.initremote] missing REMOTE_CONFIG_USERNAME")
-		}
-		var password string
-		if str, ok := os.LookupEnv("REMOTE_CONFIG_PASSWORD"); ok && str != "<REMOTE_CONFIG_PASSWORD>" && str != "" {
-			password = str
-		} else {
-			log.Warning(nil, "[config.initremote] missing REMOTE_CONFIG_USERNAME")
-		}
-		var replicaset string
-		if str, ok := os.LookupEnv("REMOTE_CONFIG_REPLICASET"); ok && str != "<REMOTE_CONFIG_REPLICASET>" && str != "" {
-			replicaset = str
-		} else {
-			log.Warning(nil, "[config.initremote] missing REMOTE_CONFIG_REPLICASET")
-		}
-		if e := configsdk.NewDirectSdk(api.Group, api.Name, username, password, replicaset, addrs); e != nil {
+		if e := configsdk.NewDirectSdk(api.Group, api.Name, mongourl); e != nil {
 			log.Error(nil, "[config.initremote] new sdk error:", e)
 			Close()
 			os.Exit(1)
+		}
+	} else if *EC.ConfigType == 2 {
+		var configservicegroup string
+		if str, ok := os.LookupEnv("REMOTE_CONFIG_SERVICE_GROUP"); ok && str != "<REMOTE_CONFIG_SERVICE_GROUP>" && str != "" {
+			configservicegroup = str
+		} else {
+			panic("[config.initremote] missing env REMOTE_CONFIG_SERVICE_GROUP")
 		}
 	}
 }`
@@ -178,15 +166,8 @@ func initapp(notice func(*AppConfig)) {
 				if !ok {
 					return
 				}
-				if EC.ConfigType == nil || *EC.ConfigType == 0 || *EC.ConfigType == 2 {
-					if filepath.Base(event.Name) != "AppConfig.json" || (event.Op&fsnotify.Create == 0 && event.Op&fsnotify.Write == 0) {
-						continue
-					}
-				} else {
-					//k8s mount volume is different
-					if filepath.Base(event.Name) != "..data" || event.Op&fsnotify.Create == 0 {
-						continue
-					}
+				if filepath.Base(event.Name) != "AppConfig.json" || (event.Op&fsnotify.Create == 0 && event.Op&fsnotify.Write == 0) {
+					continue
 				}
 				data, e := os.ReadFile("./AppConfig.json")
 				if e != nil {

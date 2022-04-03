@@ -76,14 +76,10 @@ spec:
               value: <RUN_ENV>
             - name: CONFIG_TYPE
               value: <CONFIG_TYPE>
-            - name: REMOTE_CONFIG_ADDRS
-              value: <REMOTE_CONFIG_ADDRS>
-            - name: REMOTE_CONFIG_USERNAME
-              value: <REMOTE_CONFIG_USERNAME>
-            - name: REMOTE_CONFIG_PASSWORD
-              value: <REMOTE_CONFIG_PASSWORD>
-            - name: REMOTE_CONFIG_REPLICASET
-              value: <REMOTE_CONFIG_REPLICASET>
+            - name: REMOTE_CONFIG_MONGO_URL
+              value: <REMOTE_CONFIG_MONGO_URL>
+            - name: REMOTE_CONFIG_SERVICE_GROUP
+              value: <REMOTE_CONFIG_SERVICE_GROUP>
           livenessProbe:
             tcpSocket:
               port: 8000
