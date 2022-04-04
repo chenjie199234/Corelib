@@ -173,7 +173,7 @@ func createBaseProject() {
 	//pre check success
 	fmt.Println("start create base project.")
 
-	statusapi.CreatePathAndFile(*name)
+	statusapi.CreatePathAndFile()
 	statusapi.Execute(*name)
 
 	ecode.CreatePathAndFile()

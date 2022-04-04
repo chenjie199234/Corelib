@@ -83,16 +83,27 @@ func initremote() {
 			panic("[config.initremote] missing env REMOTE_CONFIG_MONGO_URL")
 		}
 		if e := configsdk.NewDirectSdk(api.Group, api.Name, mongourl); e != nil {
-			log.Error(nil, "[config.initremote] new sdk error:", e)
+			log.Error(nil, "[config.initremote] new direct sdk error:", e)
 			Close()
 			os.Exit(1)
 		}
 	} else if *EC.ConfigType == 2 {
-		var configservicegroup string
+		var group string
 		if str, ok := os.LookupEnv("REMOTE_CONFIG_SERVICE_GROUP"); ok && str != "<REMOTE_CONFIG_SERVICE_GROUP>" && str != "" {
-			configservicegroup = str
+			group = str
 		} else {
 			panic("[config.initremote] missing env REMOTE_CONFIG_SERVICE_GROUP")
+		}
+		var host string
+		if str, ok := os.LookupEnv("REMOTE_CONFIG_SERVICE_HOST"); ok && str != "<REMOTE_CONFIG_SERVICE_HOST>" && str != "" {
+			host = str
+		} else {
+			panic("[config.initremote] missing env REMOTE_CONFIG_SERVICE_HOST")
+		}
+		if e := configsdk.NewServiceSdk(api.Group, api.Name, group, host); e != nil {
+			log.Error(nil, "[config.initremote] new service sdk error:", e)
+			Close()
+			os.Exit(1)
 		}
 	}
 }`

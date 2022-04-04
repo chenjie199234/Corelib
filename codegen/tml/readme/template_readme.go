@@ -27,21 +27,21 @@ $$$
 
 ## 环境变量
 $$$
-GROUP                                   该项目所属的group(k8s的namespace),如果不使用k8s需要手动指定,如果使用k8s无需手动指定,请查看项目根目录的deployment.yaml
+GROUP                                   该项目所属的group(k8s的namespace),如果不使用k8s需要手动指定,如果使用k8s,需修改项目根目录的deployment.yaml中的<GROUP>
 RUN_ENV                                 当前运行环境,如:test,pre,prod
-DEPLOY_ENV                              部署环境,如:ali-kube,ali-host
+DEPLOY_ENV                              部署环境,如:ali-kube-shanghai-1,ali-host-hangzhou-1
 MONITOR                                 是否开启系统监控采集,0关闭,1开启
 CONFIG_TYPE                             配置类型
                                         0-使用本地配置
                                         1-监听config数据库
                                         2-监听config服务
-REMOTE_CONFIG_MONGO_URL                 当CONFIG_TYPE为1时,设置远程配置中心数据库mongodb的链接url
-REMOTE_CONFIG_SERVICE_GROUP             当CONFIG_TYPE为2时,设置远程配置中心服务的group(k8s的namespace)
+REMOTE_CONFIG_MONGO_URL                 当CONFIG_TYPE为1时,配置中心mongodb的url,[mongodb/mongodb+srv]://[username:password@]host1,...,hostN[/dbname][?param1=value1&...&paramN=valueN]
+REMOTE_CONFIG_SERVICE_GROUP             当CONFIG_TYPE为2时,配置中心服务的group(k8s的namespace)
+REMOTE_CONFIG_SERVICE_HOST              当CONFIG_TYPE为2时,配置中心服务的host地址,[http://https]://the.host.name[:port]
 $$$
 
 ## 配置文件
 $$$
-根据环境变量CONFIG_TYPE的不同,配置文件的路径也不同,详情见环境变量CONFIG_TYPE
 AppConfig.json该文件配置了该服务需要使用的业务配置,可热更新
 SourceConfig.json该文件配置了该服务需要使用的资源配置,不热更新
 $$$`

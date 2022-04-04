@@ -35,4 +35,4 @@
 	fork child process to exec some other program,like supervisor
 ## other
 	1.remote config center
-	https://github.com/chenjie199234/Config
+	https://github.com/chenjie199234/config
