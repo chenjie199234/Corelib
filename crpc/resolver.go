@@ -47,6 +47,7 @@ func newCorelibResolver(group, name string, c *CrpcClient) *corelibResolver {
 	}()
 	return r
 }
+
 func (c *corelibResolver) manual(notice chan *struct{}) {
 	c.lker.Lock()
 	if notice != nil {
@@ -76,10 +77,8 @@ func (c *corelibResolver) wakemanual() {
 	if c.mstatus {
 		c.mstatus = false
 		for notice := range c.manualNotice {
-			if notice != nil {
-				notice <- nil
-			}
 			delete(c.manualNotice, notice)
+			notice <- nil
 		}
 	}
 	c.lker.Unlock()

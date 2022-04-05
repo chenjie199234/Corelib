@@ -105,10 +105,8 @@ func (r *corelibResolver) wakemanual() {
 	if r.mstatus {
 		r.mstatus = false
 		for notice := range r.manualNotice {
-			if notice != nil {
-				notice <- nil
-			}
 			delete(r.manualNotice, notice)
+			notice <- nil
 		}
 	}
 	r.lker.Unlock()

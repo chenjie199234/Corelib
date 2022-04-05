@@ -243,6 +243,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 						server.Pickinfo.LastFailTime = time.Now().UnixNano()
 						if cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrClosing) {
 							b.cc.RemoveSubConn(server.subconn)
+							b.c.resolver.manual(nil)
 						}
 					}
 				},
