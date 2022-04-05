@@ -18,7 +18,6 @@ import (
 
 	"github.com/chenjie199234/Corelib/cgrpc"
 	"github.com/chenjie199234/Corelib/crpc"
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/web"
 )
 
