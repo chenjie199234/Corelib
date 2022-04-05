@@ -15,7 +15,7 @@ import (
 
 	"{{.}}/api"
 
-	configsdk "github.com/chenjie199234/Config/sdk"
+	configsdk "github.com/chenjie199234/config/sdk"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/trace"
 )
