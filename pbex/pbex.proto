@@ -38,81 +38,95 @@ extend google.protobuf.FieldOptions {
 	uint64 uint_gte=160021;
 	uint64 uint_lt=160022;
 	uint64 uint_lte=160023;
+	//enum or []enum
+	repeated int64 enum_in=160024;
+	repeated int64 enum_not_in=160025;
+	int64 enum_gt=160026;
+	int64 enum_gte=160027;
+	int64 enum_lt=160028;
+	int64 enum_lte=160029;
 	//int or []int
-	repeated int64 int_in=160024;
-	repeated int64 int_not_in=160025;
-	int64 int_gt=160026;
-	int64 int_gte=160027;
-	int64 int_lt=160028;
-	int64 int_lte=160029;
+	repeated int64 int_in=160030;
+	repeated int64 int_not_in=160031;
+	int64 int_gt=160032;
+	int64 int_gte=160033;
+	int64 int_lt=160034;
+	int64 int_lte=160035;
 	//float or []float
-	repeated double float_in=160030;
-	repeated double float_not_in=160031;
-	double float_gt=160032;
-	double float_gte=160033;
-	double float_lt=160034;
-	double float_lte=160035;
+	repeated double float_in=160036;
+	repeated double float_not_in=160037;
+	double float_gt=160038;
+	double float_gte=160039;
+	double float_lt=1600340;
+	double float_lte=160041;
 
 	//map key string
-	repeated string map_key_string_reg_match=160036;
-	repeated string map_key_string_reg_not_match=160037;
-	repeated string map_key_string_in=160038;
-	repeated string map_key_string_not_in=160039;
-	uint64 map_key_string_len_eq=160040;
-	uint64 map_key_string_len_not_eq=160041;
-	uint64 map_key_string_len_gt=160042;
-	uint64 map_key_string_len_gte=160043;
-	uint64 map_key_string_len_lt=160044;
-	uint64 map_key_string_len_lte=1600045;
+	repeated string map_key_string_reg_match=160042;
+	repeated string map_key_string_reg_not_match=160043;
+	repeated string map_key_string_in=160044;
+	repeated string map_key_string_not_in=160045;
+	uint64 map_key_string_len_eq=160046;
+	uint64 map_key_string_len_not_eq=160047;
+	uint64 map_key_string_len_gt=160048;
+	uint64 map_key_string_len_gte=160049;
+	uint64 map_key_string_len_lt=160050;
+	uint64 map_key_string_len_lte=1600051;
 	//map key uint
-	repeated uint64 map_key_uint_in=160046;
-	repeated uint64 map_key_uint_not_in=160047;
-	uint64 map_key_uint_gt=160048;
-	uint64 map_key_uint_gte=160049;
-	uint64 map_key_uint_lt=160050;
-	uint64 map_key_uint_lte=160051;
+	repeated uint64 map_key_uint_in=160052;
+	repeated uint64 map_key_uint_not_in=160053;
+	uint64 map_key_uint_gt=160054;
+	uint64 map_key_uint_gte=160055;
+	uint64 map_key_uint_lt=160056;
+	uint64 map_key_uint_lte=160057;
 	//map key int
-	repeated uint64 map_key_int_in=160052;
-	repeated uint64 map_key_int_not_in=160053;
-	uint64 map_key_int_gt=160054;
-	uint64 map_key_int_gte=160055;
-	uint64 map_key_int_lt=160056;
-	uint64 map_key_int_lte=160057;
+	repeated uint64 map_key_int_in=160058;
+	repeated uint64 map_key_int_not_in=160059;
+	uint64 map_key_int_gt=160060;
+	uint64 map_key_int_gte=160061;
+	uint64 map_key_int_lt=160062;
+	uint64 map_key_int_lte=160063;
 
 	//map value bool
-	bool map_value_bool_eq=160058;
+	bool map_value_bool_eq=160064;
 	//map value string
-	repeated string map_value_string_bytes_reg_match=160059;
-	repeated string map_value_string_bytes_reg_not_match=160060;
-	repeated string map_value_string_bytes_in=160061;
-	repeated string map_value_string_bytes_not_in=160062;
-	uint64 map_value_string_bytes_len_eq=160063;
-	uint64 map_value_string_bytes_len_not_eq=160064;
-	uint64 map_value_string_bytes_len_gt=160065;
-	uint64 map_value_string_bytes_len_gte=160066;
-	uint64 map_value_string_bytes_len_lt=160067;
-	uint64 map_value_string_bytes_len_lte=1600068;
+	repeated string map_value_string_bytes_reg_match=160065;
+	repeated string map_value_string_bytes_reg_not_match=160066;
+	repeated string map_value_string_bytes_in=160067;
+	repeated string map_value_string_bytes_not_in=160068;
+	uint64 map_value_string_bytes_len_eq=160069;
+	uint64 map_value_string_bytes_len_not_eq=160070;
+	uint64 map_value_string_bytes_len_gt=160071;
+	uint64 map_value_string_bytes_len_gte=160072;
+	uint64 map_value_string_bytes_len_lt=160073;
+	uint64 map_value_string_bytes_len_lte=160074;
 	//map value uint
-	repeated uint64 map_value_uint_in=160069;
-	repeated uint64 map_value_uint_not_in=160070;
-	uint64 map_value_uint_gt=160071;
-	uint64 map_value_uint_gte=160072;
-	uint64 map_value_uint_lt=160073;
-	uint64 map_value_uint_lte=160074;
+	repeated uint64 map_value_uint_in=160075;
+	repeated uint64 map_value_uint_not_in=160076;
+	uint64 map_value_uint_gt=160077;
+	uint64 map_value_uint_gte=160078;
+	uint64 map_value_uint_lt=160079;
+	uint64 map_value_uint_lte=160080;
+	//map value enum
+	repeated int64 map_value_enum_in=160081;
+	repeated int64 map_value_enum_not_in=160082;
+	int64 map_value_enum_gt=160083;
+	int64 map_value_enum_gte=160084;
+	int64 map_value_enum_lt=160085;
+	int64 map_value_enum_lte=160086;
 	//map value int
-	repeated int64 map_value_int_in=160075;
-	repeated int64 map_value_int_not_in=160076;
-	int64 map_value_int_gt=160077;
-	int64 map_value_int_gte=160078;
-	int64 map_value_int_lt=160079;
-	int64 map_value_int_lte=160080;
+	repeated int64 map_value_int_in=160087;
+	repeated int64 map_value_int_not_in=160088;
+	int64 map_value_int_gt=160089;
+	int64 map_value_int_gte=160090;
+	int64 map_value_int_lt=160091;
+	int64 map_value_int_lte=160092;
 	//map value float
-	repeated double map_value_float_in=160081;
-	repeated double map_value_float_not_in=160082;
-	double map_value_float_gt=160083;
-	double map_value_float_gte=160084;
-	double map_value_float_lt=160085;
-	double map_value_float_lte=160086;
+	repeated double map_value_float_in=160093;
+	repeated double map_value_float_not_in=160094;
+	double map_value_float_gt=160095;
+	double map_value_float_gte=160096;
+	double map_value_float_lt=160097;
+	double map_value_float_lte=160098;
 	//map value message
-	bool map_value_message_not_nil=160087;
+	bool map_value_message_not_nil=160099;
 }

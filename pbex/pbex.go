@@ -18,7 +18,7 @@ func hasoneof(message *protogen.Message, checked map[string]*struct{}) bool {
 	checked[message.GoIdent.String()] = nil
 	for _, field := range message.Fields {
 		if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-			//this oneof is not created by optional key word,this is not supported now
+			//this oneof is not created by optional keyword,this is not supported now
 			return true
 		}
 		if field.Desc.Kind() == protoreflect.MessageKind {

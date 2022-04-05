@@ -254,6 +254,106 @@ func enumcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 		g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum exist failed\"")
 		g.P("}")
 	}
+	if proto.HasExtension(fop, pbex.E_EnumIn) {
+		in := proto.GetExtension(fop, pbex.E_EnumIn).([]int64)
+		if field.Desc.IsList() {
+			g.P("for _,v:= range m.Get", field.GoName, "(){")
+			all := make([]string, 0, 10)
+			for _, v := range in {
+				all = append(all, "int64(v)!="+strconv.FormatInt(v, 10))
+			}
+			g.P("if ", strings.Join(all, "&&"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum in failed\"")
+			g.P("}")
+			g.P("}")
+		} else {
+			all := make([]string, 0, 10)
+			for _, v := range in {
+				all = append(all, "int64(m.Get"+field.GoName+"())!="+strconv.FormatInt(v, 10))
+			}
+			g.P("if ", strings.Join(all, "&&"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum in failed\"")
+			g.P("}")
+		}
+	}
+	if proto.HasExtension(fop, pbex.E_EnumNotIn) {
+		notin := proto.GetExtension(fop, pbex.E_EnumNotIn).([]int64)
+		if field.Desc.IsList() {
+			g.P("for _,v:= range m.Get", field.GoName, "(){")
+			all := make([]string, 0, 10)
+			for _, v := range notin {
+				all = append(all, "int64(v)=="+strconv.FormatInt(v, 10))
+			}
+			g.P("if ", strings.Join(all, "||"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum not in failed\"")
+			g.P("}")
+			g.P("}")
+		} else {
+			all := make([]string, 0, 10)
+			for _, v := range notin {
+				all = append(all, "int64(m.Get"+field.GoName+"())=="+strconv.FormatInt(v, 10))
+			}
+			g.P("if ", strings.Join(all, "||"), "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum not in failed\"")
+			g.P("}")
+		}
+	}
+	if proto.HasExtension(fop, pbex.E_EnumGt) {
+		gt := proto.GetExtension(fop, pbex.E_EnumGt).(int64)
+		if field.Desc.IsList() {
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
+			g.P("if int64(v)<=", gt, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum gt failed\"")
+			g.P("}")
+			g.P("}")
+		} else {
+			g.P("if int64(m.Get", field.GoName, "())<=", gt, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum gt failed\"")
+			g.P("}")
+		}
+	}
+	if proto.HasExtension(fop, pbex.E_EnumGte) {
+		gte := proto.GetExtension(fop, pbex.E_EnumGte).(int64)
+		if field.Desc.IsList() {
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
+			g.P("if int64(v)<", gte, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum gte failed\"")
+			g.P("}")
+			g.P("}")
+		} else {
+			g.P("if int64(m.Get", field.GoName, "())<", gte, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum gte failed\"")
+			g.P("}")
+		}
+	}
+	if proto.HasExtension(fop, pbex.E_EnumLt) {
+		lt := proto.GetExtension(fop, pbex.E_EnumLt).(int64)
+		if field.Desc.IsList() {
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
+			g.P("if int64(v)>=", lt, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum lt failed\"")
+			g.P("}")
+			g.P("}")
+		} else {
+			g.P("if int64(m.Get", field.GoName, "())>=", lt, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum lt failed\"")
+			g.P("}")
+		}
+	}
+	if proto.HasExtension(fop, pbex.E_EnumLte) {
+		lte := proto.GetExtension(fop, pbex.E_EnumLte).(int64)
+		if field.Desc.IsList() {
+			g.P("for _,v:=range m.Get", field.GoName, "(){")
+			g.P("if int64(v)>", lte, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum lte failed\"")
+			g.P("}")
+			g.P("}")
+		} else {
+			g.P("if int64(m.Get", field.GoName, "())>", lte, "{")
+			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check value enum lte failed\"")
+			g.P("}")
+		}
+	}
 }
 func intcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	if proto.HasExtension(fop, pbex.E_IntIn) {
@@ -1141,6 +1241,50 @@ func mapcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 			g.P("if _,ok:=", g.QualifiedGoIdent(val.Enum.GoIdent), "_name[int32(v)];!ok{")
 			g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value enum exist failed\"")
 			g.P("}")
+			if proto.HasExtension(fop, pbex.E_MapValueEnumIn) {
+				valin := proto.GetExtension(fop, pbex.E_MapValueEnumIn).([]int64)
+				all := make([]string, 0, 10)
+				for _, v := range valin {
+					all = append(all, "int64(v)!="+strconv.FormatInt(v, 10))
+				}
+				g.P("if ", strings.Join(all, "&&"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value enum in failed\"")
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueEnumNotIn) {
+				valnotin := proto.GetExtension(fop, pbex.E_MapValueEnumNotIn).([]int64)
+				all := make([]string, 0, 10)
+				for _, v := range valnotin {
+					all = append(all, "int64(v)=="+strconv.FormatInt(v, 10))
+				}
+				g.P("if ", strings.Join(all, "||"), "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value enum not in failed\"")
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueEnumGt) {
+				valgt := proto.GetExtension(fop, pbex.E_MapValueEnumGt).(int64)
+				g.P("if int64(v)<=", valgt, "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value enum gt failed\"")
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueEnumGte) {
+				valgte := proto.GetExtension(fop, pbex.E_MapValueEnumGte).(int64)
+				g.P("if int64(v)<", valgte, "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value enum gte failed\"")
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueEnumLt) {
+				vallt := proto.GetExtension(fop, pbex.E_MapValueEnumLt).(int64)
+				g.P("if int64(v)>=", vallt, "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value enum lt failed\"")
+				g.P("}")
+			}
+			if proto.HasExtension(fop, pbex.E_MapValueEnumLte) {
+				vallte := proto.GetExtension(fop, pbex.E_MapValueEnumLte).(int64)
+				g.P("if int64(v)>", vallte, "{")
+				g.P("return \"field: ", string(field.Desc.Name()), " in object: ", string(field.Parent.Desc.Name()), " check map value enum lte failed\"")
+				g.P("}")
+			}
 		case protoreflect.BoolKind:
 			if proto.HasExtension(fop, pbex.E_MapValueBoolEq) {
 				valeq := proto.GetExtension(fop, pbex.E_MapValueBoolEq).(bool)
