@@ -15,16 +15,17 @@ import (
 )
 
 type corelibBalancer struct {
-	c          *CrpcClient
-	lker       *sync.RWMutex
-	serversRaw []byte
-	servers    map[string]*ServerForPick //key server addr
-	pservers   []*ServerForPick
+	c                *CrpcClient
+	lker             *sync.RWMutex
+	serversRaw       []byte
+	servers          map[string]*ServerForPick //key server addr
+	pservers         []*ServerForPick
+	lastResolveError error
 }
 type ServerForPick struct {
 	callid   uint64 //start from 100
 	addr     string
-	dservers map[string]struct{} //this app registered on which discovery server
+	dservers map[string]*struct{} //this app registered on which discovery server
 	peer     *stream.Peer
 
 	//active calls
@@ -112,7 +113,11 @@ func (b *corelibBalancer) getPickServers() []*ServerForPick {
 	}
 	return *(*[]*ServerForPick)(tmp)
 }
+func (b *corelibBalancer) ResolverError(e error) {
+	b.lastResolveError = e
+}
 func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
+	b.lastResolveError = nil
 	d, _ := json.Marshal(all)
 	b.lker.Lock()
 	defer func() {
@@ -139,6 +144,9 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 		server, ok := b.servers[addr]
 		if !ok {
 			//this is a new register
+			if registerdata == nil || len(registerdata.DServers) == 0 {
+				continue
+			}
 			server := &ServerForPick{
 				callid:   100, //start from 100
 				addr:     addr,
@@ -156,6 +164,11 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 			}
 			b.servers[addr] = server
 			go b.c.start(server, false)
+		} else if registerdata == nil || len(registerdata.DServers) == 0 {
+			//this is now a new register and this register is offline
+			server.dservers = nil
+			server.Pickinfo.DServerNum = 0
+			server.Pickinfo.DServerOffline = time.Now().UnixNano()
 		} else {
 			//this is not a new register
 			//unregister on which discovery server
@@ -214,7 +227,10 @@ func (b *corelibBalancer) ReconnectCheck(server *ServerForPick) bool {
 	b.lker.Unlock()
 	return true
 }
-func (b *corelibBalancer) RebuildPicker() {
+
+//reason - true,online
+//reason - false,offline
+func (b *corelibBalancer) RebuildPicker(reason bool) {
 	b.lker.Lock()
 	tmp := make([]*ServerForPick, 0, len(b.servers))
 	for _, server := range b.servers {
@@ -223,6 +239,9 @@ func (b *corelibBalancer) RebuildPicker() {
 		}
 	}
 	b.setPickerServers(tmp)
+	if reason {
+		b.c.resolver.wakemanual()
+	}
 	b.lker.Unlock()
 }
 func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
@@ -233,6 +252,9 @@ func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 			return server, nil
 		}
 		if refresh {
+			if b.lastResolveError != nil {
+				return nil, b.lastResolveError
+			}
 			return nil, cerror.ErrNoserver
 		}
 		if e := b.c.resolver.waitmanual(ctx); e != nil {

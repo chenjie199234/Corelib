@@ -3,13 +3,16 @@ package cgrpc
 import (
 	"context"
 	"sync"
+	"time"
 
+	"github.com/chenjie199234/Corelib/log"
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 )
 
 type resolverBuilder struct {
-	servergroup, servername string
-	c                       *CGrpcClient
+	group, name string
+	c           *CGrpcClient
 }
 
 func (b *resolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
@@ -21,7 +24,38 @@ func (b *resolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, 
 		cc:           cc,
 	}
 	b.c.resolver.manually <- nil
-	go b.c.c.Discover(b.servergroup, b.servername, b.c.resolver.manually, b.c)
+	go func() {
+		tker := time.NewTicker(b.c.c.DiscoverInterval)
+		for {
+			select {
+			case <-tker.C:
+			case <-b.c.resolver.manually:
+			}
+			all, e := b.c.c.Discover(b.group, b.name)
+			if e != nil {
+				cc.ReportError(e)
+				log.Error(nil, "[cgrpc.client.resolver] discover servername:", b.name, "servergroup:", b.group, "error:", e)
+				b.c.resolver.wakemanual()
+				continue
+			}
+			s := resolver.State{
+				Addresses: make([]resolver.Address, 0, len(all)),
+			}
+			for addr, info := range all {
+				if info == nil || len(info.DServers) == 0 {
+					continue
+				}
+				attr := &attributes.Attributes{}
+				attr = attr.WithValue("addition", info.Addition)
+				attr = attr.WithValue("dservers", info.DServers)
+				s.Addresses = append(s.Addresses, resolver.Address{
+					Addr:               addr,
+					BalancerAttributes: attr,
+				})
+			}
+			cc.UpdateState(s)
+		}
+	}()
 	return b.c.resolver, nil
 }
 
@@ -68,11 +102,15 @@ func (r *corelibResolver) waitmanual(ctx context.Context) error {
 }
 func (r *corelibResolver) wakemanual() {
 	r.lker.Lock()
-	for notice := range r.manualNotice {
-		notice <- nil
-		delete(r.manualNotice, notice)
+	if r.mstatus {
+		r.mstatus = false
+		for notice := range r.manualNotice {
+			if notice != nil {
+				notice <- nil
+			}
+			delete(r.manualNotice, notice)
+		}
 	}
-	r.mstatus = false
 	r.lker.Unlock()
 }
 

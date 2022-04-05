@@ -24,24 +24,52 @@ import (
 
 type PickHandler func(servers []*ServerForPick) *ServerForPick
 
-type DiscoveryHandler func(servergroup, servername string, manually <-chan *struct{}, client *CrpcClient)
+//key server's addr,format: ip:port
+//if the value is nil means this server node is offline
+type DiscoveryHandler func(servergroup, servername string) (map[string]*RegisterData, error)
+type RegisterData struct {
+	//server register on which discovery server
+	//if this is empty means this server node is offline
+	DServers map[string]*struct{}
+	Addition []byte
+}
 
 type ClientConfig struct {
-	GlobalTimeout  time.Duration //global timeout for every rpc call
-	ConnectTimeout time.Duration //default 500ms
-	HeartPorbe     time.Duration //default 1s,3 probe missing means disconnect
-	MaxMsgLen      uint32        //default 64M,min 64k
-	UseTLS         bool          //crpc or crpcs
-	SkipVerifyTLS  bool          //don't verify the server's cert
-	CAs            []string      //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
-	Picker         PickHandler
-	Discover       DiscoveryHandler //this function will be called in goroutine in NewCrpcClient
+	GlobalTimeout    time.Duration //global timeout for every rpc call
+	ConnectTimeout   time.Duration //default 500ms
+	HeartPorbe       time.Duration //default 1s,3 probe missing means disconnect
+	MaxMsgLen        uint32        //default 64M,min 64k
+	UseTLS           bool          //crpc or crpcs
+	SkipVerifyTLS    bool          //don't verify the server's cert
+	CAs              []string      //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
+	Picker           PickHandler
+	Discover         DiscoveryHandler //this function is used to resolve server addrs
+	DiscoverInterval time.Duration    //the frequency call Discover to resolve the server addrs,default 10s,min 1s
 }
 
 func (c *ClientConfig) validate() {
+	//this is checked by stream,don't need to check here
+	// if c.ConnectTimeout <= 0 {
+	// c.ConnectTimeout = time.Millisecond * 500
+	// }
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
 	}
+	//this is checked by stream,don't need to check here
+	// if c.HeartPorbe < time.Second {
+	// c.HeartPorbe = time.Second
+	// }
+	if c.DiscoverInterval <= 0 {
+		c.DiscoverInterval = time.Second * 10
+	} else if c.DiscoverInterval < time.Second {
+		c.DiscoverInterval = time.Second
+	}
+	//this is checked by stream,don't need to check here
+	// if c.MaxMsgLen == 0 {
+	// c.MaxMsgLen = 1024 * 1024 * 64
+	// } else if c.MaxMsgLen < 65535 {
+	// c.MaxMsgLen = 65535
+	// }
 }
 
 type CrpcClient struct {
@@ -117,16 +145,6 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername
 	return client, nil
 }
 
-type RegisterData struct {
-	DServers map[string]struct{} //server register on which discovery server
-	Addition []byte
-}
-
-//all: key server's addr,format: ip:port
-func (c *CrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
-	c.balancer.UpdateDiscovery(all)
-}
-
 func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 	if reconnect && !c.balancer.ReconnectCheck(server) {
 		//can't reconnect to server
@@ -157,8 +175,7 @@ func (c *CrpcClient) onlinefunc(p *stream.Peer) bool {
 	}
 	p.SetData(unsafe.Pointer(server))
 	server.setpeer(p)
-	c.balancer.RebuildPicker()
-	c.resolver.wakemanual()
+	c.balancer.RebuildPicker(true)
 	log.Info(nil, "[crpc.client.onlinefunc] server RemoteAddr:", p.GetRemoteAddr(), "online")
 	return true
 }
@@ -197,7 +214,7 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
 	log.Info(nil, "[crpc.client.offlinefunc] server RemoteAddr:", p.GetRemoteAddr(), "offline")
 	server.setpeer(nil)
-	c.balancer.RebuildPicker()
+	c.balancer.RebuildPicker(false)
 	server.lker.Lock()
 	for callid, req := range server.reqs {
 		req.respdata = nil

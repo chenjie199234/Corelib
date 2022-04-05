@@ -32,16 +32,17 @@ func (b *balancerBuilder) Name() string {
 }
 
 type corelibBalancer struct {
-	c        *CGrpcClient
-	cc       balancer.ClientConn
-	servers  map[balancer.SubConn]*ServerForPick
-	pservers []*ServerForPick
+	c                *CGrpcClient
+	cc               balancer.ClientConn
+	servers          map[balancer.SubConn]*ServerForPick
+	pservers         []*ServerForPick
+	lastResolveError error
 }
 
 type ServerForPick struct {
 	addr     string
 	subconn  balancer.SubConn
-	dservers map[string]struct{} //this app registered on which discovery server
+	dservers map[string]*struct{} //this app registered on which discovery server
 	status   int32
 
 	Pickinfo *pickinfo
@@ -71,43 +72,46 @@ func (b *corelibBalancer) getPickServers() []*ServerForPick {
 }
 
 func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) error {
+	b.lastResolveError = nil
 	defer func() {
-		if len(b.pservers) > 0 || len(b.servers) == 0 {
+		if len(b.servers) == 0 || len(b.pservers) > 0 {
 			b.c.resolver.wakemanual()
 		}
 	}()
 	//offline
-	for _, exist := range b.servers {
+	for _, server := range b.servers {
 		find := false
 		for _, addr := range ss.ResolverState.Addresses {
-			if addr.Addr == exist.addr {
+			if addr.Addr == server.addr {
 				find = true
 				break
 			}
 		}
 		if !find {
-			exist.dservers = nil
-			exist.Pickinfo.DServerNum = 0
-			exist.Pickinfo.DServerOffline = time.Now().UnixNano()
+			server.dservers = nil
+			server.Pickinfo.DServerNum = 0
+			server.Pickinfo.DServerOffline = time.Now().UnixNano()
 		}
 	}
 	//online or update
 	for _, addr := range ss.ResolverState.Addresses {
-		dservers, _ := addr.BalancerAttributes.Value("dservers").(map[string]struct{})
+		dservers, _ := addr.BalancerAttributes.Value("dservers").(map[string]*struct{})
 		addition, _ := addr.BalancerAttributes.Value("addition").([]byte)
-		var exist *ServerForPick
+		var server *ServerForPick
 		for _, v := range b.servers {
 			if v.addr == addr.Addr {
-				exist = v
+				server = v
 				break
 			}
 		}
-		if exist == nil {
+		if server == nil {
 			//this is a new register
+			if len(dservers) == 0 {
+				continue
+			}
 			sc, e := b.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{HealthCheckEnabled: true})
 			if e != nil {
 				//this can only happened on client is closing
-				//but in corelib this will not be closed
 				continue
 			}
 			b.servers[sc] = &ServerForPick{
@@ -124,72 +128,87 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 				},
 			}
 			go sc.Connect()
+		} else if len(dservers) == 0 {
+			//this is not a new register and this register is offline
+			server.dservers = nil
+			server.Pickinfo.DServerNum = 0
+			server.Pickinfo.DServerOffline = time.Now().UnixNano()
 		} else {
 			//this is not a new register
 			//unregister on which discovery server
-			for dserver := range exist.dservers {
+			for dserver := range server.dservers {
 				if _, ok := dservers[dserver]; !ok {
-					exist.Pickinfo.DServerOffline = time.Now().UnixNano()
+					server.Pickinfo.DServerOffline = time.Now().UnixNano()
 					break
 				}
 			}
 			//register on which new discovery server
 			for dserver := range dservers {
-				if _, ok := exist.dservers[dserver]; !ok {
-					exist.Pickinfo.DServerOffline = 0
+				if _, ok := server.dservers[dserver]; !ok {
+					server.Pickinfo.DServerOffline = 0
 					break
 				}
 			}
-			exist.dservers = dservers
-			exist.Pickinfo.Addition = addition
-			exist.Pickinfo.DServerNum = int32(len(dservers))
+			server.dservers = dservers
+			server.Pickinfo.Addition = addition
+			server.Pickinfo.DServerNum = int32(len(dservers))
 		}
 	}
 	return nil
 }
 
-func (b *corelibBalancer) ResolverError(error) {
-
+func (b *corelibBalancer) ResolverError(e error) {
+	b.lastResolveError = e
 }
 
 func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
-	exist, ok := b.servers[sc]
+	server, ok := b.servers[sc]
 	if !ok {
 		return
 	}
 	if s.ConnectivityState == connectivity.Shutdown {
-		olds := atomic.LoadInt32(&exist.status)
-		atomic.StoreInt32(&exist.status, int32(connectivity.Shutdown))
-		delete(b.servers, sc)
-		if olds == int32(connectivity.Ready) {
-			b.rebuildpicker()
+		if atomic.LoadInt32(&server.status) == int32(connectivity.Ready) {
+			//offline
+			log.Info(nil, "[cgrpc.client] server:", b.c.serverappname+":"+server.addr, "offline")
+			atomic.StoreInt32(&server.status, int32(connectivity.Shutdown))
+			b.rebuildpicker(false)
+		} else {
+			atomic.StoreInt32(&server.status, int32(connectivity.Shutdown))
 		}
+		delete(b.servers, sc)
 		return
 	}
-	if s.ConnectivityState == connectivity.Idle && atomic.LoadInt32(&exist.status) == int32(connectivity.Ready) {
-		log.Info(nil, "[cgrpc.client] server:", b.c.serverappname+":"+exist.addr, "offline")
-	} else if s.ConnectivityState == connectivity.Ready {
-		b.c.resolver.wakemanual()
-		log.Info(nil, "[cgrpc.client] server:", b.c.serverappname+":"+exist.addr, "online")
-	} else if s.ConnectivityState == connectivity.TransientFailure {
-		log.Error(nil, "[cgrpc.client] connect to server:", b.c.serverappname+":"+exist.addr, "error:", s.ConnectionError)
-	}
-	olds := atomic.LoadInt32(&exist.status)
-	atomic.StoreInt32(&exist.status, int32(s.ConnectivityState))
-	if (olds == int32(connectivity.Ready) && s.ConnectivityState == connectivity.Idle) || s.ConnectivityState == connectivity.Ready {
-		b.rebuildpicker()
-	}
 	if s.ConnectivityState == connectivity.Idle {
-		if len(exist.dservers) == 0 {
-			atomic.StoreInt32(&exist.status, int32(connectivity.Shutdown))
+		if atomic.LoadInt32(&server.status) == int32(connectivity.Ready) {
+			//offline
+			log.Info(nil, "[cgrpc.client] server:", b.c.serverappname+":"+server.addr, "offline")
+			atomic.StoreInt32(&server.status, int32(s.ConnectivityState))
+			b.rebuildpicker(false)
+		} else {
+			atomic.StoreInt32(&server.status, int32(s.ConnectivityState))
+		}
+		if len(server.dservers) == 0 {
+			atomic.StoreInt32(&server.status, int32(connectivity.Shutdown))
 			delete(b.servers, sc)
 			b.cc.RemoveSubConn(sc)
 		} else {
 			go sc.Connect()
 		}
+	} else if s.ConnectivityState == connectivity.Ready {
+		//online
+		log.Info(nil, "[cgrpc.client] server:", b.c.serverappname+":"+server.addr, "online")
+		atomic.StoreInt32(&server.status, int32(s.ConnectivityState))
+		b.rebuildpicker(true)
+	} else if s.ConnectivityState == connectivity.TransientFailure {
+		//connect failed
+		log.Error(nil, "[cgrpc.client] connect to server:", b.c.serverappname+":"+server.addr, "error:", s.ConnectionError)
+		atomic.StoreInt32(&server.status, int32(s.ConnectivityState))
 	}
 }
-func (b *corelibBalancer) rebuildpicker() {
+
+//reason - true,online
+//reason - false,offline
+func (b *corelibBalancer) rebuildpicker(reason bool) {
 	tmp := make([]*ServerForPick, 0, len(b.servers))
 	for _, server := range b.servers {
 		if atomic.LoadInt32(&server.status) == int32(connectivity.Ready) {
@@ -197,6 +216,9 @@ func (b *corelibBalancer) rebuildpicker() {
 		}
 	}
 	b.setPickerServers(tmp)
+	if reason {
+		b.c.resolver.wakemanual()
+	}
 	return
 }
 
@@ -220,13 +242,16 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 					if doneinfo.Err != nil {
 						server.Pickinfo.LastFailTime = time.Now().UnixNano()
 						if cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrClosing) {
-							atomic.StoreInt32(&server.status, int32(connectivity.Shutdown))
+							b.cc.RemoveSubConn(server.subconn)
 						}
 					}
 				},
 			}, nil
 		}
 		if refresh {
+			if b.lastResolveError != nil {
+				return balancer.PickResult{}, b.lastResolveError
+			}
 			return balancer.PickResult{}, cerror.ErrNoserver
 		}
 		if e := b.c.resolver.waitmanual(info.Ctx); e != nil {

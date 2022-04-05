@@ -67,79 +67,57 @@ func NewApi() error {
 func getCGrpcClientConfig() *cgrpc.ClientConfig {
 	gc := config.GetCGrpcClientConfig()
 	return &cgrpc.ClientConfig{
-		ConnectTimeout: time.Duration(gc.ConnectTimeout),
-		GlobalTimeout:  time.Duration(gc.GlobalTimeout),
-		HeartPorbe:     time.Duration(gc.HeartProbe),
-		Discover:       cgrpcDNS,
+		ConnectTimeout:   time.Duration(gc.ConnectTimeout),
+		GlobalTimeout:    time.Duration(gc.GlobalTimeout),
+		HeartPorbe:       time.Duration(gc.HeartProbe),
+		Discover:         cgrpcDNS,
+		DiscoverInterval: time.Second * 10,
 	}
 }
 
-func cgrpcDNS(group, name string, manually <-chan *struct{}, client *cgrpc.CGrpcClient) {
-	tker := time.NewTicker(time.Second * 10)
-	for {
-		select {
-		case <-tker.C:
-		case <-manually:
-			tker.Reset(time.Second * 10)
-		}
-		result := make(map[string]*cgrpc.RegisterData)
-		addrs, e := net.LookupHost(name + "-service-headless" + "." + group)
-		if e != nil {
-			log.Error(nil, "[cgrpc.dns] get:", name+"-service-headless", "addrs error:", e)
-			continue
-		}
-		for i := range addrs {
-			addrs[i] = addrs[i] + ":10000"
-		}
-		dserver := make(map[string]struct{})
-		dserver["dns"] = struct{}{}
-		for _, addr := range addrs {
-			result[addr] = &cgrpc.RegisterData{DServers: dserver}
-		}
-		for len(tker.C) > 0 {
-			<-tker.C
-		}
-		client.UpdateDiscovery(result)
+func cgrpcDNS(group, name string) (map[string]*cgrpc.RegisterData, error) {
+	result := make(map[string]*cgrpc.RegisterData)
+	addrs, e := net.LookupHost(name + "-service-headless." + group)
+	if e != nil {
+		return nil, e
 	}
+	for i := range addrs {
+		addrs[i] = addrs[i] + ":10000"
+	}
+	dserver := make(map[string]*struct{})
+	dserver["dns"] = nil
+	for _, addr := range addrs {
+		result[addr] = &cgrpc.RegisterData{DServers: dserver}
+	}
+	return result,nil
 }
 
 func getCrpcClientConfig() *crpc.ClientConfig {
 	rc := config.GetCrpcClientConfig()
 	return &crpc.ClientConfig{
-		ConnectTimeout: time.Duration(rc.ConnectTimeout),
-		GlobalTimeout:  time.Duration(rc.GlobalTimeout),
-		HeartPorbe:     time.Duration(rc.HeartProbe),
-		Discover:       crpcDNS,
+		ConnectTimeout:   time.Duration(rc.ConnectTimeout),
+		GlobalTimeout:    time.Duration(rc.GlobalTimeout),
+		HeartPorbe:       time.Duration(rc.HeartProbe),
+		Discover:         crpcDNS,
+		DiscoverInterval: time.Second * 10,
 	}
 }
 
-func crpcDNS(group, name string, manually <-chan *struct{}, client *crpc.CrpcClient) {
-	tker := time.NewTicker(time.Second * 10)
-	for{
-		select {
-		case <-tker.C:
-		case <-manually:
-			tker.Reset(time.Second * 10)
-		}
-		result := make(map[string]*crpc.RegisterData)
-		addrs, e := net.LookupHost(name + "-service-headless" + "." + group)
-		if e != nil {
-			log.Error(nil,"[crpc.dns] get:", name+"-service-headless", "addrs error:", e)
-			continue
-		}
-		for i := range addrs {
-			addrs[i] = addrs[i] + ":9000"
-		}
-		dserver := make(map[string]struct{})
-		dserver["dns"] = struct{}{}
-		for _, addr := range addrs {
-			result[addr] = &crpc.RegisterData{DServers: dserver}
-		}
-		for len(tker.C) > 0 {
-			<-tker.C
-		}
-		client.UpdateDiscovery(result)
+func crpcDNS(group, name string) (map[string]*crpc.RegisterData, error) {
+	result := make(map[string]*crpc.RegisterData)
+	addrs, e := net.LookupHost(name + "-service-headless." + group)
+	if e != nil {
+		return nil, e
 	}
+	for i := range addrs {
+		addrs[i] = addrs[i] + ":9000"
+	}
+	dserver := make(map[string]*struct{})
+	dserver["dns"] = nil
+	for _, addr := range addrs {
+		result[addr] = &crpc.RegisterData{DServers: dserver}
+	}
+	return result, nil
 }
 
 func getWebClientConfig() *web.ClientConfig {

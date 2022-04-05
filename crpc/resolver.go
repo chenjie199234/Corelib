@@ -3,10 +3,12 @@ package crpc
 import (
 	"context"
 	"sync"
+	"time"
+
+	"github.com/chenjie199234/Corelib/log"
 )
 
 type corelibResolver struct {
-	c            *CrpcClient
 	lker         *sync.Mutex
 	mstatus      bool
 	manually     chan *struct{}
@@ -15,14 +17,34 @@ type corelibResolver struct {
 
 func newCorelibResolver(group, name string, c *CrpcClient) *corelibResolver {
 	r := &corelibResolver{
-		c:            c,
 		lker:         &sync.Mutex{},
 		mstatus:      true,
 		manually:     make(chan *struct{}, 1),
 		manualNotice: make(map[chan *struct{}]*struct{}),
 	}
 	r.manually <- nil
-	go r.c.c.Discover(group, name, r.manually, c)
+	go func() {
+		tker := time.NewTicker(c.c.DiscoverInterval)
+		for {
+			select {
+			case <-tker.C:
+			case <-r.manually:
+			}
+			all, e := c.c.Discover(group, name)
+			if e != nil {
+				c.balancer.ResolverError(e)
+				log.Error(nil, "[crpc.client.resolver] discover servername:", name, "servergroup:", group, "error:", e)
+				r.wakemanual()
+				continue
+			}
+			for k, v := range all {
+				if v == nil || len(v.DServers) == 0 {
+					delete(all, k)
+				}
+			}
+			c.balancer.UpdateDiscovery(all)
+		}
+	}()
 	return r
 }
 func (c *corelibResolver) manual(notice chan *struct{}) {
@@ -51,12 +73,14 @@ func (c *corelibResolver) waitmanual(ctx context.Context) error {
 }
 func (c *corelibResolver) wakemanual() {
 	c.lker.Lock()
-	for notice := range c.manualNotice {
-		if notice != nil {
-			notice <- nil
+	if c.mstatus {
+		c.mstatus = false
+		for notice := range c.manualNotice {
+			if notice != nil {
+				notice <- nil
+			}
+			delete(c.manualNotice, notice)
 		}
-		delete(c.manualNotice, notice)
 	}
-	c.mstatus = false
 	c.lker.Unlock()
 }

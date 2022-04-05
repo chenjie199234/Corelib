@@ -18,7 +18,7 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/name"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/attributes"
+	// "google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
@@ -26,24 +26,33 @@ import (
 	"google.golang.org/grpc/keepalive"
 	gmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/resolver"
+	// "google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 )
 
 type PickHandler func(servers []*ServerForPick) *ServerForPick
 
-type DiscoveryHandler func(servergroup, servername string, manually <-chan *struct{}, client *CGrpcClient)
+//key server's addr "ip:port"
+//if the value is nil means this server node is offline
+type DiscoveryHandler func(servergroup, servername string) (map[string]*RegisterData, error)
+type RegisterData struct {
+	//server register on which discovery server
+	//if this is empty means this server node is offline
+	DServers map[string]*struct{}
+	Addition []byte
+}
 
 type ClientConfig struct {
-	GlobalTimeout  time.Duration    //global timeout for every rpc call
-	ConnectTimeout time.Duration    //default 500ms
-	HeartPorbe     time.Duration    //default 1s
-	MaxMsgLen      uint32           //default 64M,min 64k
-	UseTLS         bool             //grpc or grpcs
-	SkipVerifyTLS  bool             //don't verify the server's cert
-	CAs            []string         //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
-	Discover       DiscoveryHandler //this function will be called in goroutine in NewGrpcClient
-	Picker         PickHandler
+	GlobalTimeout    time.Duration //global timeout for every rpc call
+	ConnectTimeout   time.Duration //default 500ms
+	HeartPorbe       time.Duration //default 1s
+	MaxMsgLen        uint32        //default 64M,min 64k
+	UseTLS           bool          //grpc or grpcs
+	SkipVerifyTLS    bool          //don't verify the server's cert
+	CAs              []string      //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
+	Picker           PickHandler
+	Discover         DiscoveryHandler //this function is used to resolve server addrs
+	DiscoverInterval time.Duration    //the frequency call Discover to resolve the server addrs,default 10s,min 1s
 }
 
 func (c *ClientConfig) validate() {
@@ -56,8 +65,13 @@ func (c *ClientConfig) validate() {
 	if c.HeartPorbe < time.Second {
 		c.HeartPorbe = time.Second
 	}
+	if c.DiscoverInterval <= 0 {
+		c.DiscoverInterval = time.Second * 10
+	} else if c.DiscoverInterval < time.Second {
+		c.DiscoverInterval = time.Second
+	}
 	if c.MaxMsgLen == 0 {
-		c.MaxMsgLen = 1024 * 1025 * 64
+		c.MaxMsgLen = 1024 * 1024 * 64
 	} else if c.MaxMsgLen < 65535 {
 		c.MaxMsgLen = 65535
 	}
@@ -131,7 +145,7 @@ func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servernam
 	opts = append(opts, grpc.WithDisableServiceConfig())
 	opts = append(opts, grpc.WithDefaultServiceConfig("{\"loadBalancingConfig\":[{\"corelib\":{}}]}"))
 	//resolver
-	opts = append(opts, grpc.WithResolvers(&resolverBuilder{servergroup: servergroup, servername: servername, c: clientinstance}))
+	opts = append(opts, grpc.WithResolvers(&resolverBuilder{group: servergroup, name: servername, c: clientinstance}))
 	conn, e := grpc.Dial("corelib:///"+serverappname, opts...)
 	if e != nil {
 		return nil, e
@@ -140,30 +154,25 @@ func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servernam
 	return clientinstance, nil
 }
 
-type RegisterData struct {
-	DServers map[string]struct{} //server register on which discovery server
-	Addition []byte
-}
-
 //all: key server's addr "ip:port"
-func (c *CGrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
-	s := resolver.State{
-		Addresses: make([]resolver.Address, 0, len(all)),
-	}
-	for addr, info := range all {
-		if len(info.DServers) == 0 {
-			continue
-		}
-		attr := &attributes.Attributes{}
-		attr = attr.WithValue("addition", info.Addition)
-		attr = attr.WithValue("dservers", info.DServers)
-		s.Addresses = append(s.Addresses, resolver.Address{
-			Addr:               addr,
-			BalancerAttributes: attr,
-		})
-	}
-	c.resolver.cc.UpdateState(s)
-}
+// func (c *CGrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
+// 	s := resolver.State{
+// 		Addresses: make([]resolver.Address, 0, len(all)),
+// 	}
+// 	for addr, info := range all {
+// 		if len(info.DServers) == 0 {
+// 			continue
+// 		}
+// 		attr := &attributes.Attributes{}
+// 		attr = attr.WithValue("addition", info.Addition)
+// 		attr = attr.WithValue("dservers", info.DServers)
+// 		s.Addresses = append(s.Addresses, resolver.Address{
+// 			Addr:               addr,
+// 			BalancerAttributes: attr,
+// 		})
+// 	}
+// 	c.resolver.cc.UpdateState(s)
+// }
 func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, resp interface{}, metadata map[string]string) error {
 	if c.c.GlobalTimeout != 0 {
 		var cancel context.CancelFunc
