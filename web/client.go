@@ -56,21 +56,33 @@ type WebClient struct {
 	selfappname   string
 	serverappname string
 	serverhost    string
+	u             *url.URL
 	c             *ClientConfig
 	httpclient    *http.Client
 }
 
-//serverhost format [http/https]://the.host.name[:port]
+//serverhost format [http/https]://[username[:password]@]the.host.name[:port]
 func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername, serverhost string) (*WebClient, error) {
 	serverappname := servergroup + "." + servername
 	selfappname := selfgroup + "." + selfname
 	if e := name.FullCheck(selfappname); e != nil {
 		return nil, e
 	}
+	var u *url.URL
 	if serverhost != "" {
-		u, e := url.Parse(serverhost)
-		if e != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Path != "" {
-			return nil, errors.New("[web.client] host format wrong,should be [http/https]://the.host.name[:port]")
+		var e error
+		u, e = url.Parse(serverhost)
+		if e != nil ||
+			(u.Scheme != "http" && u.Scheme != "https") ||
+			u.Host == "" ||
+			u.Path != "" ||
+			u.RawPath != "" ||
+			u.Opaque != "" ||
+			u.ForceQuery ||
+			u.RawQuery != "" ||
+			u.Fragment != "" ||
+			u.RawFragment != "" {
+			return nil, errors.New("[web.client] host format wrong,should be [http/https]://[username[:password]@]the.host.name[:port]")
 		}
 	}
 	if c == nil {
@@ -113,6 +125,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername,
 		selfappname:   selfappname,
 		serverappname: serverappname,
 		serverhost:    serverhost,
+		u:             u,
 		c:             c,
 		httpclient: &http.Client{
 			Transport: transport,
@@ -122,7 +135,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername,
 	return client, nil
 }
 func (c *WebClient) GetSeverHost() string {
-	return c.serverhost
+	return c.u.Scheme + "://" + c.u.Host
 }
 
 func forbiddenHeader(header http.Header) bool {
@@ -144,19 +157,19 @@ func forbiddenHeader(header http.Header) bool {
 	return false
 }
 
-//if path start with [http/https]://the.host.name[:port],the serverhost setted when this client was created will be ignored
+//if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil)
 }
 
-//if path start with [http/https]://the.host.name[:port],the serverhost setted when this client was created will be ignored
+//if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
 }
 
-//if path start with [http/https]://the.host.name[:port],the serverhost setted when this client was created will be ignored
+//if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if len(body) != 0 {
@@ -165,7 +178,7 @@ func (c *WebClient) Post(ctx context.Context, path, query string, header http.He
 	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil)
 }
 
-//if path start with [http/https]://the.host.name[:port],the serverhost setted when this client was created will be ignored
+//if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if len(body) != 0 {
@@ -174,7 +187,7 @@ func (c *WebClient) Put(ctx context.Context, path, query string, header http.Hea
 	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil)
 }
 
-//if path start with [http/https]://the.host.name[:port],the serverhost setted when this client was created will be ignored
+//if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
 //"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if len(body) != 0 {
@@ -187,10 +200,11 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		return nil, cerror.MakeError(-1, 400, "forbidden header")
 	}
 	var u *url.URL
-	if !strings.HasPrefix(path, "http") && !strings.HasPrefix(path, "https") {
+	if !strings.HasPrefix(path, "https") && !strings.HasPrefix(path, "http") {
 		if c.serverhost == "" {
 			return nil, cerror.ErrReq
 		}
+		u = c.u
 		if path == "" {
 			path = "/"
 		} else if path[0] != '/' {
@@ -238,17 +252,13 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		if ok && dl.UnixNano() < start.UnixNano()+int64(5*time.Millisecond) {
 			//at least 5ms for net lag and server logic
 			end := time.Now()
-			if u != nil {
-				trace.Trace(ctx, trace.CLIENT, c.selfappname, u.Scheme+"://"+u.Host, method, path, &start, &end, cerror.ErrDeadlineExceeded)
-			} else {
-				trace.Trace(ctx, trace.CLIENT, c.selfappname, c.serverhost, method, path, &start, &end, cerror.ErrDeadlineExceeded)
-			}
+			trace.Trace(ctx, trace.CLIENT, c.selfappname, u.Scheme+"://"+u.Host, method, path, &start, &end, cerror.ErrDeadlineExceeded)
 			monitor.WebClientMonitor(c.serverappname, method, path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, cerror.ErrDeadlineExceeded
 		}
 		var req *http.Request
 		var e error
-		if u != nil {
+		if strings.HasPrefix(path, "https") || strings.HasPrefix(path, "http") {
 			if body == nil {
 				//io.Reader is an interface,body is *bytes.Buffer,direct pass will make the interface's value is nil but type is not nil
 				req, e = http.NewRequestWithContext(ctx, method, path+query, nil)
@@ -258,19 +268,15 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		} else {
 			if body == nil {
 				//io.Reader is an interface,body is *bytes.Buffer,direct pass will make the interface's value is nil but type is not nil
-				req, e = http.NewRequestWithContext(ctx, method, c.serverhost+path+query, nil)
+				req, e = http.NewRequestWithContext(ctx, method, c.serverhost+query, nil)
 			} else {
-				req, e = http.NewRequestWithContext(ctx, method, c.serverhost+path+query, body)
+				req, e = http.NewRequestWithContext(ctx, method, c.serverhost+query, body)
 			}
 		}
 		if e != nil {
 			e = cerror.ConvertStdError(e)
 			end := time.Now()
-			if u != nil {
-				trace.Trace(ctx, trace.CLIENT, c.selfappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
-			} else {
-				trace.Trace(ctx, trace.CLIENT, c.selfappname, c.serverhost, method, path, &start, &end, e)
-			}
+			trace.Trace(ctx, trace.CLIENT, c.selfappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
@@ -280,11 +286,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		end := time.Now()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			if u != nil {
-				trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
-			} else {
-				trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, e)
-			}
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
@@ -292,20 +294,12 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		resp.Body.Close()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			if u != nil {
-				trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
-			} else {
-				trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, e)
-			}
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 		if resp.StatusCode == int(cerror.ErrClosing.Httpcode) && cerror.Equal(cerror.ConvertErrorstr(common.Byte2str(respbody)), cerror.ErrClosing) {
-			if u != nil {
-				trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, cerror.ErrClosing)
-			} else {
-				trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, cerror.ErrClosing)
-			}
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, cerror.ErrClosing)
 			monitor.WebClientMonitor(c.serverappname, method, path, cerror.ErrClosing, uint64(end.UnixNano()-start.UnixNano()))
 			continue
 		} else if resp.StatusCode != http.StatusOK {
@@ -316,19 +310,11 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				tempe.SetHttpcode(int32(resp.StatusCode))
 				e = tempe
 			}
-			if u != nil {
-				trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
-			} else {
-				trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, e)
-			}
+			trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
-		if u != nil {
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, nil)
-		} else {
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, c.serverhost, method, path, &start, &end, nil)
-		}
+		trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, nil)
 		monitor.WebClientMonitor(c.serverappname, method, path, nil, uint64(end.UnixNano()-start.UnixNano()))
 		return respbody, nil
 	}

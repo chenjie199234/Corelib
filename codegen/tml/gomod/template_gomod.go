@@ -12,7 +12,7 @@ go 1.18
 
 require (
 	github.com/chenjie199234/config v0.0.1
-	github.com/chenjie199234/Corelib v0.0.54
+	github.com/chenjie199234/Corelib v0.0.55
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/segmentio/kafka-go v0.4.31
