@@ -37,7 +37,7 @@ CONFIG_TYPE                             配置类型
                                         2-监听config服务
 REMOTE_CONFIG_MONGO_URL                 当CONFIG_TYPE为1时,配置中心mongodb的url,[mongodb/mongodb+srv]://[username:password@]host1,...,hostN[/dbname][?param1=value1&...&paramN=valueN]
 REMOTE_CONFIG_SERVICE_GROUP             当CONFIG_TYPE为2时,配置中心服务的group(k8s的namespace)
-REMOTE_CONFIG_SERVICE_HOST              当CONFIG_TYPE为2时,配置中心服务的host地址,[http://https]://the.host.name[:port]
+REMOTE_CONFIG_SERVICE_HOST              当CONFIG_TYPE为2时,配置中心服务的host地址,[http://https]://[username[:password]@]the.host.name[:port]
 $$$
 
 ## 配置文件
