@@ -123,6 +123,9 @@ func (c *Context) GetPath() string {
 func (c *Context) GetMethod() string {
 	return c.r.Method
 }
+func (c *Context) GetBasicAuth() (string, string, bool) {
+	return c.r.BasicAuth()
+}
 func (c *Context) GetMetadata() map[string]string {
 	return c.metadata
 }
