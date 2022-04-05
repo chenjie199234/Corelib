@@ -18,7 +18,6 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/name"
 	"google.golang.org/grpc"
-	// "google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
@@ -26,7 +25,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	gmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
-	// "google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 )
 
@@ -154,25 +153,10 @@ func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servernam
 	return clientinstance, nil
 }
 
-//all: key server's addr "ip:port"
-// func (c *CGrpcClient) UpdateDiscovery(all map[string]*RegisterData) {
-// 	s := resolver.State{
-// 		Addresses: make([]resolver.Address, 0, len(all)),
-// 	}
-// 	for addr, info := range all {
-// 		if len(info.DServers) == 0 {
-// 			continue
-// 		}
-// 		attr := &attributes.Attributes{}
-// 		attr = attr.WithValue("addition", info.Addition)
-// 		attr = attr.WithValue("dservers", info.DServers)
-// 		s.Addresses = append(s.Addresses, resolver.Address{
-// 			Addr:               addr,
-// 			BalancerAttributes: attr,
-// 		})
-// 	}
-// 	c.resolver.cc.UpdateState(s)
-// }
+func (c *CGrpcClient) ResolveNow() {
+	c.resolver.ResolveNow(resolver.ResolveNowOptions{})
+}
+
 func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, resp interface{}, metadata map[string]string) error {
 	if c.c.GlobalTimeout != 0 {
 		var cancel context.CancelFunc

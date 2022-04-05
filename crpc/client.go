@@ -145,6 +145,10 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername
 	return client, nil
 }
 
+func (c *CrpcClient) ResolveNow() {
+	c.resolver.manual(nil)
+}
+
 func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 	if reconnect && !c.balancer.ReconnectCheck(server) {
 		//can't reconnect to server
