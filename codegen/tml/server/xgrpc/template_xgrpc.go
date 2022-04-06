@@ -19,6 +19,7 @@ import (
 	"github.com/chenjie199234/Corelib/cgrpc"
 	"github.com/chenjie199234/Corelib/cgrpc/mids"
 	"github.com/chenjie199234/Corelib/log"
+	ctime "github.com/chenjie199234/Corelib/util/time"
 )
 
 var s *cgrpc.CGrpcServer
@@ -36,7 +37,7 @@ func StartCGrpcServer() {
 		log.Error(nil,"[xgrpc] new error:", e)
 		return
 	}
-	UpdateHandlerTimeout(config.AC)
+	UpdateHandlerTimeout(config.AC.HandlerTimeout)
 
 	//this place can register global midwares
 	//s.Use(globalmidwares)
@@ -54,22 +55,21 @@ func StartCGrpcServer() {
 }
 
 //UpdateHandlerTimeout -
-func UpdateHandlerTimeout(c *config.AppConfig) {
-	if s != nil {
-		cc := make(map[string]time.Duration)
-		for path, methods := range c.HandlerTimeout {
-			for method, timeout := range methods {
-				if timeout == 0 {
-					continue
-				}
-				method = strings.ToUpper(method)
-				if method == "GRPC" {
-					cc[path] = timeout.StdDuration()
-				}
+//first key path,second key method,value timeout duration
+func UpdateHandlerTimeout(hts map[string]map[string]ctime.Duration) {
+	if s == nil {
+		return
+	}
+	cc := make(map[string]time.Duration)
+	for path, methods := range hts {
+		for method, timeout := range methods {
+			method = strings.ToUpper(method)
+			if method == "GRPC" {
+				cc[path] = timeout.StdDuration()
 			}
 		}
-		s.UpdateHandlerTimeout(cc)
 	}
+	s.UpdateHandlerTimeout(cc)
 }
 
 //StopCGrpcServer -

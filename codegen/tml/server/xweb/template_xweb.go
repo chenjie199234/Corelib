@@ -18,6 +18,7 @@ import (
 	"{{.}}/service"
 
 	"github.com/chenjie199234/Corelib/log"
+	ctime "github.com/chenjie199234/Corelib/util/time"
 	"github.com/chenjie199234/Corelib/web"
 	"github.com/chenjie199234/Corelib/web/mids"
 )
@@ -49,7 +50,7 @@ func StartWebServer() {
 		log.Error(nil,"[xweb] new error:", e)
 		return
 	}
-	UpdateHandlerTimeout(config.AC)
+	UpdateHandlerTimeout(config.AC.HandlerTimeout)
 
 	//this place can register global midwares
 	//s.Use(globalmidwares)
@@ -67,26 +68,25 @@ func StartWebServer() {
 }
 
 //UpdateHandlerTimeout -
-func UpdateHandlerTimeout(c *config.AppConfig) {
-	if s != nil {
-		cc := make(map[string]map[string]time.Duration)
-		for path, methods := range c.HandlerTimeout {
-			for method, timeout := range methods {
-				if timeout == 0 {
-					continue
-				}
-				method = strings.ToUpper(method)
-				if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
-					continue
-				}
-				if _, ok := cc[method]; !ok {
-					cc[method] = make(map[string]time.Duration)
-				}
-				cc[method][path] = timeout.StdDuration()
-			}
-		}
-		s.UpdateHandlerTimeout(cc)
+//first key path,second key method,value timeout duration
+func UpdateHandlerTimeout(hts map[string]map[string]ctime.Duration) {
+	if s == nil {
+		return
 	}
+	cc := make(map[string]map[string]time.Duration)
+	for path, methods := range hts {
+		for method, timeout := range methods {
+			method = strings.ToUpper(method)
+			if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
+				continue
+			}
+			if _, ok := cc[method]; !ok {
+				cc[method] = make(map[string]time.Duration)
+			}
+			cc[method][path] = timeout.StdDuration()
+		}
+	}
+	s.UpdateHandlerTimeout(cc)
 }
 
 //StopWebServer -
