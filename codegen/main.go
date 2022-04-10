@@ -92,7 +92,7 @@ func checkBaseProjectName() {
 			}
 			tmpproject = tmpproject[1 : len(tmpproject)-1]
 		}
-		if strings.HasPrefix(str, "const Package = ") {
+		if strings.HasPrefix(str, "const package = ") {
 			tmppackage = str[16:]
 			if len(tmppackage) <= 2 || tmppackage[0] != '"' || tmppackage[len(tmppackage)-1] != '"' {
 				panic("api/client.go broken!")
