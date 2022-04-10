@@ -268,9 +268,9 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		} else {
 			if body == nil {
 				//io.Reader is an interface,body is *bytes.Buffer,direct pass will make the interface's value is nil but type is not nil
-				req, e = http.NewRequestWithContext(ctx, method, c.serverhost+query, nil)
+				req, e = http.NewRequestWithContext(ctx, method, c.serverhost+path+query, nil)
 			} else {
-				req, e = http.NewRequestWithContext(ctx, method, c.serverhost+query, body)
+				req, e = http.NewRequestWithContext(ctx, method, c.serverhost+path+query, body)
 			}
 		}
 		if e != nil {
