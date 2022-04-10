@@ -35,9 +35,10 @@ import (
 )
 
 var name = flag.String("n", "", "project's name\ncharacter:[a-z][A-Z][0-9][_]\nfirst character must in [a-z][A-Z]")
+var packagename = flag.String("p", "", "project's package name\npackage name must end with project's name\nif this is empty the project's name will be used as the package name\nthis is useful when your project will be uploaded to github or gitlab\ne.g. github.com/path_to_the_repo/project_name")
 var dir = flag.String("d", "", "project's create dir")
-var sub = flag.String("s", "", "create subservice's name in project\ncharacter:[a-z][A-Z][0-9][_]\nfirst character must in [a-z][A-Z]")
-var kub = flag.Bool("k", false, "update exist project's kubernetes config file")
+var sub = flag.String("s", "", "create subservice's name in project\ncharacter:[a-z][A-Z][0-9][_]\nfirst character must in [a-z][A-Z]\ndon't use this direct by codegen,use the cmd.sh/cmd.bat in your project instead")
+var kub = flag.Bool("k", false, "update exist project's kubernetes config file\ndon't use this direct by codegen,use the cmd.sh/cmd.bat in your project instead")
 var needkubernetes bool
 var needkubernetesservice bool
 var needkubernetesingress bool
@@ -48,18 +49,24 @@ func main() {
 	if e := cname.NameCheck(*name); e != nil {
 		panic(e)
 	}
-	if len(*sub) == 0 {
-		if *kub {
-			checkBaseProjectName()
-			createkubernetes()
-		} else {
-			createBaseProject()
+	if *packagename == "" {
+		packagename = name
+	} else if *packagename != *name && !strings.HasSuffix(*packagename, "/"+*name) {
+		panic("package name must end with project name,e.g. github.com/path_to_the_repo/project_name")
+	}
+	if len(*sub) != 0 {
+		if e := cname.NameCheck(*sub); e != nil {
+			panic(e)
 		}
-	} else if e := cname.NameCheck(*sub); e != nil {
-		panic(e)
-	} else {
 		checkBaseProjectName()
 		createSubProject()
+		return
+	}
+	if *kub {
+		checkBaseProjectName()
+		createkubernetes()
+	} else {
+		createBaseProject()
 	}
 }
 func checkBaseProjectName() {
@@ -68,7 +75,7 @@ func checkBaseProjectName() {
 		panic("please change dir to project's root dir,then run this manually or run the cmd script")
 	}
 	bio := bufio.NewReader(bytes.NewBuffer(data))
-	var tempname string
+	var tmppackage, tmpproject string
 	for {
 		line, _, e := bio.ReadLine()
 		if e != nil {
@@ -79,18 +86,28 @@ func checkBaseProjectName() {
 		}
 		str := strings.TrimSpace(string(line))
 		if strings.HasPrefix(str, "const Name = ") {
-			tempname = str[13:]
-			if len(tempname) <= 2 || tempname[0] != '"' || tempname[len(tempname)-1] != '"' {
+			tmpproject = str[13:]
+			if len(tmpproject) <= 2 || tmpproject[0] != '"' || tmpproject[len(tmpproject)-1] != '"' {
 				panic("api/client.go broken!")
 			}
-			tempname = tempname[1 : len(tempname)-1]
+			tmpproject = tmpproject[1 : len(tmpproject)-1]
 		}
-		if tempname != "" {
+		if strings.HasPrefix(str, "const Package = ") {
+			tmppackage = str[16:]
+			if len(tmppackage) <= 2 || tmppackage[0] != '"' || tmppackage[len(tmppackage)-1] != '"' {
+				panic("api/client.go broken!")
+			}
+			tmppackage = tmppackage[1 : len(tmppackage)-1]
+		}
+		if tmppackage != "" && tmpproject != "" {
 			break
 		}
 	}
-	if tempname != *name {
-		panic("please change dir to project's root dir,then run this manually or run the cmd script")
+	if tmppackage == "" || tmpproject == "" {
+		panic("api/client.go broken!")
+	}
+	if tmppackage != *packagename || tmpproject != *name {
+		panic("please change dir to project's root dir first")
 	}
 }
 func createSubProject() {
@@ -118,13 +135,13 @@ func createSubProject() {
 	}
 	//sub api
 	subapi.CreatePathAndFile(*sub)
-	subapi.Execute(*name, *sub)
+	subapi.Execute(*packagename, *name, *sub)
 	//sub dao
 	subdao.CreatePathAndFile(*sub)
 	subdao.Execute(*sub)
 	//sub service
 	subservice.CreatePathAndFile(*sub)
-	subservice.Execute(*name, *sub)
+	subservice.Execute(*packagename, *name, *sub)
 	//sub model
 	submodel.CreatePathAndFile(*sub)
 	submodel.Execute(*sub)
@@ -174,58 +191,58 @@ func createBaseProject() {
 	fmt.Println("start create base project.")
 
 	statusapi.CreatePathAndFile()
-	statusapi.Execute(*name)
+	statusapi.Execute(*packagename, *name)
 
 	ecode.CreatePathAndFile()
 	ecode.Execute()
 
 	config.CreatePathAndFile()
-	config.Execute(*name)
+	config.Execute(*packagename)
 
 	configfile.CreatePathAndFile()
 	configfile.Execute(*name)
 
 	dao.CreatePathAndFile()
-	dao.Execute(*name)
+	dao.Execute(*packagename)
 
 	subdao.CreatePathAndFile("status")
 	subdao.Execute("status")
 
 	mainfile.CreatePathAndFile()
-	mainfile.Execute(*name)
+	mainfile.Execute(*packagename)
 
 	gomod.CreatePathAndFile()
-	gomod.Execute(*name)
+	gomod.Execute(*packagename)
 
 	model.CreatePathAndFile()
-	model.Execute(*name)
+	model.Execute()
 
 	xcrpc.CreatePathAndFile()
-	xcrpc.Execute(*name)
+	xcrpc.Execute(*packagename)
 
 	xgrpc.CreatePathAndFile()
-	xgrpc.Execute(*name)
+	xgrpc.Execute(*packagename)
 
 	xweb.CreatePathAndFile()
-	xweb.Execute(*name)
+	xweb.Execute(*packagename)
 
 	service.CreatePathAndFile()
-	service.Execute(*name)
+	service.Execute(*packagename)
 
 	servicestatus.CreatePathAndFile()
-	servicestatus.Execute(*name)
+	servicestatus.Execute(*packagename)
 
 	cmd.CreatePathAndFile()
-	cmd.Execute(*name)
+	cmd.Execute(*packagename, *name)
 
 	readme.CreatePathAndFile()
 	readme.Execute(*name)
 
 	git.CreatePathAndFile()
-	git.Execute(*name)
+	git.Execute()
 
 	clientapi.CreatePathAndFile()
-	clientapi.Execute(*name)
+	clientapi.Execute(*packagename, *name)
 
 	fmt.Println("base project create success!")
 	createkubernetes()

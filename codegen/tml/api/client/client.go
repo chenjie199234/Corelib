@@ -12,7 +12,8 @@ import "os"
 
 //      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
 
-const Name = "{{.}}"
+const Package = "{{.PackageName}}"
+const Name = "{{.ProjectName}}"
 var Group = os.Getenv("GROUP")
 
 func init() {
@@ -23,6 +24,11 @@ func init() {
 
 const path = "./api/"
 const filename = "client.go"
+
+type data struct {
+	PackageName string
+	ProjectName string
+}
 
 var tml *template.Template
 var file *os.File
@@ -44,8 +50,8 @@ func CreatePathAndFile() {
 		panic(fmt.Sprintf("make file:%s error:%s", path+filename, e))
 	}
 }
-func Execute(pname string) {
-	if e := tml.Execute(file, pname); e != nil {
+func Execute(PackageName, ProjectName string) {
+	if e := tml.Execute(file, &data{PackageName: PackageName, ProjectName: ProjectName}); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+filename, e))
 	}
 }

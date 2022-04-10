@@ -11,10 +11,10 @@ const text = `package {{.Sname}}
 import (
 	"context"
 
-	"{{.Pname}}/config"
-	"{{.Pname}}/api"
-	{{.Sname}}dao "{{.Pname}}/dao/{{.Sname}}"
-	"{{.Pname}}/ecode"
+	"{{.PackageName}}/config"
+	"{{.PackageName}}/api"
+	{{.Sname}}dao "{{.PackageName}}/dao/{{.Sname}}"
+	"{{.PackageName}}/ecode"
 
 	//"github.com/chenjie199234/Corelib/cgrpc"
 	//"github.com/chenjie199234/Corelib/crpc"
@@ -45,8 +45,9 @@ var tml *template.Template
 var file *os.File
 
 type data struct {
-	Pname string
-	Sname string
+	PackageName string
+	ProjectName string
+	Sname       string
 }
 
 func init() {
@@ -66,8 +67,8 @@ func CreatePathAndFile(sname string) {
 		panic(fmt.Sprintf("make file:%s error:%s", path+sname+"/service.go", e))
 	}
 }
-func Execute(pname, sname string) {
-	if e := tml.Execute(file, &data{Pname: pname, Sname: sname}); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+sname+"/"+sname+".go", e))
+func Execute(PackageName, ProjectName, Sname string) {
+	if e := tml.Execute(file, &data{PackageName: PackageName, Sname: Sname}); e != nil {
+		panic(fmt.Sprintf("write content into file:%s error:%s", path+Sname+"/"+Sname+".go", e))
 	}
 }

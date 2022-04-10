@@ -31,8 +31,8 @@ func CreatePathAndFile() {
 		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
 	}
 }
-func Execute(projectname string) {
-	if e := tml.Execute(file, projectname); e != nil {
+func Execute() {
+	if e := tml.Execute(file, nil); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
 	}
 }

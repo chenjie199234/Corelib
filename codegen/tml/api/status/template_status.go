@@ -9,9 +9,9 @@ import (
 const text = `syntax="proto3";
 
 //this is the proto package name,all proto in this project must use this name as the proto package name
-package {{.}};
+package {{.ProjectName}};
 //this is the golang's package name,all proto in this project must use this name as the golang's package name
-option go_package="{{.}}/api;api";
+option go_package="{{.PackageName}}/api;api";
 //https://github.com/chenjie199234/Corelib/blob/main/pbex/pbex.proto
 import "pbex/pbex.proto";
 
@@ -44,6 +44,11 @@ const name = "status.proto"
 var tml *template.Template
 var file *os.File
 
+type data struct {
+	PackageName string
+	ProjectName string
+}
+
 func init() {
 	var e error
 	tml, e = template.New("api").Parse(text)
@@ -61,8 +66,8 @@ func CreatePathAndFile() {
 		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
 	}
 }
-func Execute(projectname string) {
-	if e := tml.Execute(file, projectname); e != nil {
+func Execute(PackageName, ProjectName string) {
+	if e := tml.Execute(file, &data{PackageName: PackageName, ProjectName: ProjectName}); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
 	}
 }

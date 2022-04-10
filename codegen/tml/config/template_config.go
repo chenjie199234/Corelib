@@ -891,14 +891,14 @@ func CreatePathAndFile() {
 		panic(fmt.Sprintf("make file:%s error:%s", path+source, e))
 	}
 }
-func Execute(projectname string) {
-	if e := tml.Execute(file, projectname); e != nil {
+func Execute(PackageName string) {
+	if e := tml.Execute(file, PackageName); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
 	}
-	if e := tmlapp.Execute(fileapp, projectname); e != nil {
+	if e := tmlapp.Execute(fileapp, nil); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+app, e))
 	}
-	if e := tmlsource.Execute(filesource, projectname); e != nil {
+	if e := tmlsource.Execute(filesource, nil); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+source, e))
 	}
 }
