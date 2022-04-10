@@ -12,7 +12,7 @@ import "os"
 
 //      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
 
-const package = "{{.PackageName}}"
+const pkg = "{{.PackageName}}"
 const Name = "{{.ProjectName}}"
 var Group = os.Getenv("GROUP")
 
