@@ -56,14 +56,14 @@ func init() {
 		panic(fmt.Sprintf("create template error:%s", e))
 	}
 }
-func CreatePathAndFile() {
+func CreatePathAndFile(ProjectName string) {
 	var e error
 	if e = os.MkdirAll(path, 0755); e != nil {
 		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
 	}
-	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e = os.OpenFile(path+ProjectName+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
+		panic(fmt.Sprintf("make file:%s error:%s", path+ProjectName+name, e))
 	}
 }
 func Execute(PackageName, ProjectName string) {
