@@ -32,9 +32,14 @@ import (
 type OutsideHandler func(*Context)
 
 type ServerConfig struct {
-	//when server close,server will wait at least this time before close,every request will refresh the time
+	//when server close,server will wait at least this time before close
 	//min is 1 second
-	WaitCloseTime  time.Duration
+	WaitCloseTime time.Duration
+	//mode 0:must have no active requests and must wait at lease WaitCloseTime
+	//	every new request come in when the server is closing will refresh the WaitCloseTime
+	//mode 1:must have no active requests and must wait at lease WaitCloseTime
+	//	WaitCloseTime will not be refreshed by new requests
+	WaitCloseMode  int
 	ConnectTimeout time.Duration //max time for read the whole request,including the tls handshake
 	GlobalTimeout  time.Duration //request's max handling time
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
@@ -454,8 +459,10 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 					break
 				}
 			} else {
-				//refresh close wait
-				s.closewaittimer.Reset(s.c.WaitCloseTime)
+				if s.c.WaitCloseMode == 0 {
+					//refresh close wait
+					s.closewaittimer.Reset(s.c.WaitCloseTime)
+				}
 				//tell peer self closed
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(int(cerror.ErrClosing.Httpcode))

@@ -28,6 +28,7 @@ const textsource = `{
 		"heart_probe":"1.5s"
 	},
 	"web_server":{
+		"close_mode":0,
 		"connect_timeout":"200ms",
 		"global_timeout":"200ms",
 		"idle_timeout":"5s",

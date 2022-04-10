@@ -270,6 +270,7 @@ type CrpcClientConfig struct {
 
 //WebServerConfig -
 type WebServerConfig struct {
+	CloseMode      int            $json:"close_mode"$
 	ConnectTimeout ctime.Duration $json:"connect_timeout"$ //default 500ms,max time to finish the handshake and read each whole request
 	GlobalTimeout  ctime.Duration $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
 	IdleTimeout    ctime.Duration $json:"idle_timeout"$    //default 5s
