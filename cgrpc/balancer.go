@@ -127,6 +127,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 					Addition:       addition,
 				},
 			}
+			//subconn's Connect is async inside
 			sc.Connect()
 		} else if len(dservers) == 0 {
 			//this is not a new register and this register is offline
@@ -192,6 +193,7 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 			delete(b.servers, sc)
 			b.cc.RemoveSubConn(sc)
 		} else {
+			//subconn's Connect is async inside
 			sc.Connect()
 		}
 	} else if s.ConnectivityState == connectivity.Ready {
