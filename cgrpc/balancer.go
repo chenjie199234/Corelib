@@ -127,7 +127,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 					Addition:       addition,
 				},
 			}
-			go sc.Connect()
+			sc.Connect()
 		} else if len(dservers) == 0 {
 			//this is not a new register and this register is offline
 			server.dservers = nil
@@ -192,7 +192,7 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 			delete(b.servers, sc)
 			b.cc.RemoveSubConn(sc)
 		} else {
-			go sc.Connect()
+			sc.Connect()
 		}
 	} else if s.ConnectivityState == connectivity.Ready {
 		//online
