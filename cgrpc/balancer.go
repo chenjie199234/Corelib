@@ -75,8 +75,9 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 	b.lastResolveError = nil
 	defer func() {
 		if len(b.servers) == 0 || len(b.pservers) > 0 {
-			b.c.resolver.wakemanual()
+			b.c.resolver.wake(false)
 		}
+		b.c.resolver.wake(true)
 	}()
 	//offline
 	for _, server := range b.servers {
@@ -219,7 +220,7 @@ func (b *corelibBalancer) rebuildpicker(reason bool) {
 	}
 	b.setPickerServers(tmp)
 	if reason {
-		b.c.resolver.wakemanual()
+		b.c.resolver.wake(false)
 	}
 	return
 }
@@ -245,7 +246,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 						server.Pickinfo.LastFailTime = time.Now().UnixNano()
 						if cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrClosing) {
 							b.cc.RemoveSubConn(server.subconn)
-							b.c.resolver.manual(nil)
+							b.c.ResolveNow()
 						}
 					}
 				},
@@ -257,7 +258,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 			}
 			return balancer.PickResult{}, cerror.ErrNoserver
 		}
-		if e := b.c.resolver.waitmanual(info.Ctx); e != nil {
+		if e := b.c.resolver.wait(info.Ctx, false); e != nil {
 			if e == context.DeadlineExceeded {
 				return balancer.PickResult{}, cerror.ErrDeadlineExceeded
 			} else if e == context.Canceled {

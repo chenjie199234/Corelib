@@ -146,7 +146,7 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername
 }
 
 func (c *CrpcClient) ResolveNow() {
-	c.resolver.manual(nil)
+	c.resolver.ResolveNow()
 }
 
 func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
@@ -161,7 +161,6 @@ func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 		addr = "tcp://" + server.addr
 	}
 	if !c.instance.StartClient(addr, common.Str2byte(c.serverappname), c.tlsc) {
-		time.Sleep(time.Millisecond * 100)
 		go c.start(server, true)
 	}
 }
@@ -297,8 +296,8 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 				//req error,update last fail time
 				server.Pickinfo.LastFailTime = time.Now().UnixNano()
 				if cerror.Equal(r.err, cerror.ErrClosing) {
-					//triger manually discovery
-					c.resolver.manual(nil)
+					//triger discovery
+					c.ResolveNow()
 					//server is closing,this req can be retry
 					r.respdata = nil
 					r.err = nil

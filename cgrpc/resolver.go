@@ -16,26 +16,32 @@ type resolverBuilder struct {
 }
 
 func (b *resolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
-	b.c.resolver = &corelibResolver{
+	r := &corelibResolver{
 		lker:         &sync.Mutex{},
-		mstatus:      true,
-		manually:     make(chan *struct{}, 1),
-		manualNotice: make(map[chan *struct{}]*struct{}),
+		sstatus:      true,
+		system:       make(chan *struct{}),
+		systemNotice: make(map[chan *struct{}]*struct{}),
+		cstatus:      false,
+		call:         make(chan *struct{}, 1),
+		callNotice:   make(map[chan *struct{}]*struct{}),
 		cc:           cc,
 	}
-	b.c.resolver.manually <- nil
+	b.c.resolver = r
+	r.system <- nil
 	go func() {
 		tker := time.NewTicker(b.c.c.DiscoverInterval)
 		for {
 			select {
 			case <-tker.C:
-			case <-b.c.resolver.manually:
+			case <-r.system:
+			case <-r.call:
 			}
 			all, e := b.c.c.Discover(b.group, b.name)
 			if e != nil {
 				cc.ReportError(e)
 				log.Error(nil, "[cgrpc.client.resolver] discover servername:", b.name, "servergroup:", b.group, "error:", e)
-				b.c.resolver.wakemanual()
+				b.c.resolver.wake(true)
+				b.c.resolver.wake(false)
 				continue
 			}
 			s := resolver.State{
@@ -65,47 +71,76 @@ func (b *resolverBuilder) Scheme() string {
 
 type corelibResolver struct {
 	lker         *sync.Mutex
-	mstatus      bool
-	manually     chan *struct{}
-	manualNotice map[chan *struct{}]*struct{}
+	sstatus      bool
+	system       chan *struct{}
+	systemNotice map[chan *struct{}]*struct{}
+	cstatus      bool
+	call         chan *struct{}
+	callNotice   map[chan *struct{}]*struct{}
 	cc           resolver.ClientConn
 }
 
 func (r *corelibResolver) ResolveNow(op resolver.ResolveNowOptions) {
-	r.manual(nil)
+	r.triger(nil, true)
 }
 
-func (r *corelibResolver) manual(notice chan *struct{}) {
+//systemORcall true - system,false - call
+func (r *corelibResolver) triger(notice chan *struct{}, systemORcall bool) {
 	r.lker.Lock()
-	if notice != nil {
-		r.manualNotice[notice] = nil
-	}
-	if !r.mstatus {
-		r.mstatus = true
-		r.manually <- nil
+	if systemORcall {
+		if notice != nil {
+			r.systemNotice[notice] = nil
+		}
+		if r.sstatus {
+			return
+		}
+		r.sstatus = true
+		r.system <- nil
+	} else {
+		if notice != nil {
+			r.callNotice[notice] = nil
+		}
+		if r.cstatus {
+			return
+		}
+		r.cstatus = true
+		r.call <- nil
 	}
 	r.lker.Unlock()
 }
 
-func (r *corelibResolver) waitmanual(ctx context.Context) error {
+//systemORcall true - system,false - call
+func (r *corelibResolver) wait(ctx context.Context, systemORcall bool) error {
 	notice := make(chan *struct{}, 1)
-	r.manual(notice)
+	r.triger(notice, systemORcall)
 	select {
 	case <-notice:
 		return nil
 	case <-ctx.Done():
 		r.lker.Lock()
-		delete(r.manualNotice, notice)
+		if systemORcall {
+			delete(r.systemNotice, notice)
+		} else {
+			delete(r.callNotice, notice)
+		}
 		r.lker.Unlock()
 		return ctx.Err()
 	}
 }
-func (r *corelibResolver) wakemanual() {
+
+//systemORcall true - system,false - call
+func (r *corelibResolver) wake(systemORcall bool) {
 	r.lker.Lock()
-	if r.mstatus {
-		r.mstatus = false
-		for notice := range r.manualNotice {
-			delete(r.manualNotice, notice)
+	if systemORcall {
+		r.sstatus = false
+		for notice := range r.systemNotice {
+			delete(r.systemNotice, notice)
+			notice <- nil
+		}
+	} else {
+		r.cstatus = false
+		for notice := range r.callNotice {
+			delete(r.callNotice, notice)
 			notice <- nil
 		}
 	}

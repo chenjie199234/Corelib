@@ -122,8 +122,9 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 	b.lker.Lock()
 	defer func() {
 		if len(b.servers) == 0 || len(b.pservers) > 0 {
-			b.c.resolver.wakemanual()
+			b.c.resolver.wake(false)
 		}
+		b.c.resolver.wake(true)
 		b.lker.Unlock()
 	}()
 	if bytes.Equal(b.serversRaw, d) {
@@ -215,8 +216,9 @@ func (b *corelibBalancer) ReconnectCheck(server *ServerForPick) bool {
 		return false
 	}
 	b.lker.Unlock()
+	time.Sleep(time.Millisecond * 100)
 	//need to check server register status
-	b.c.resolver.waitmanual(context.Background())
+	b.c.resolver.wait(context.Background(), true)
 	b.lker.Lock()
 	if len(server.dservers) == 0 {
 		//server already unregister,remove server
@@ -240,7 +242,7 @@ func (b *corelibBalancer) RebuildPicker(reason bool) {
 	}
 	b.setPickerServers(tmp)
 	if reason {
-		b.c.resolver.wakemanual()
+		b.c.resolver.wake(false)
 	}
 	b.lker.Unlock()
 }
@@ -257,7 +259,7 @@ func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 			}
 			return nil, cerror.ErrNoserver
 		}
-		if e := b.c.resolver.waitmanual(ctx); e != nil {
+		if e := b.c.resolver.wait(ctx, false); e != nil {
 			if e == context.DeadlineExceeded {
 				return nil, cerror.ErrDeadlineExceeded
 			} else if e == context.Canceled {
