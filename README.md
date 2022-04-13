@@ -6,11 +6,11 @@
 	3.install protoc
 	4.install protoc-gen-go
 	5.[download the codegen in release] or [clone this lib and go into the codegen dir and install it by go install]
-	6.make sure the codegen's dir is in the system's or user's PATH env
+	6.make sure the codegen's path is in the system's or user's PATH env
 	7.codegen -d path -n projectname -p packagename
-	(without -d or -d is empty the default value: current dir will be used)
+	(without -d or -d is empty the default:current dir will be used)
 	(projectname format,character must in [a-z][A-Z][0-9][_],first character must in [a-z][A-Z])
-	(packagename must end with projectname,default projectname will be used as packagename,e.g. github.com/path_to_the_repo/projectname)
+	(packagename must end with projectname,default:projectname will be used as packagename,e.g. github.com/path_to_the_repo/projectname)
 # Description
 ## codegen
 	generate the base code,if you want to use this lib,this is the start
