@@ -21,6 +21,7 @@ const (
 	ioPackage        = protogen.GoImportPath("io")
 	contextPackage   = protogen.GoImportPath("context")
 	stdjsonPackage   = protogen.GoImportPath("encoding/json")
+	base64Package    = protogen.GoImportPath("encoding/base64")
 	protoPackage     = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	protojsonPackage = protogen.GoImportPath("google.golang.org/protobuf/encoding/protojson")
 	webPackage       = protogen.GoImportPath("github.com/chenjie199234/Corelib/web")
@@ -141,7 +142,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("return")
 		g.P("}")
 		g.P("if len(data)>0{")
-		g.P("e:=", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions{DiscardUnknown: true}")), ".Unmarshal(data,req)")
+		g.P("e:=", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions{AllowPartial: true,DiscardUnknown: true}")), ".Unmarshal(data,req)")
 		g.P("if e!=nil{")
 		g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		g.P("return")
@@ -172,15 +173,28 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
 			switch field.Desc.Kind() {
 			case protoreflect.BoolKind:
-				g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
 				if field.Desc.IsList() {
+					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)==0{")
 					g.P("data.AppendString(", strconv.Quote("null"), ")")
-				} else {
+					g.P("}else{")
+					g.P("data.AppendByte('[')")
+					g.P("for i,form:=range forms{")
+					g.P("if len(form)==0{")
 					g.P("data.AppendString(", strconv.Quote("false"), ")")
+					g.P("}else{")
+					g.P("data.AppendString(form)")
+					g.P("}")
+					g.P("data.AppendByte(',')")
+					g.P("}")
+					g.P("data.Bytes()[data.Len()-1] = ']'")
+					g.P("}")
+				} else {
+					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
+					g.P("data.AppendString(", strconv.Quote("false"), ")")
+					g.P("}else{")
+					g.P("data.AppendString(form)")
+					g.P("}")
 				}
-				g.P("}else{")
-				g.P("data.AppendString(form)")
-				g.P("}")
 			case protoreflect.EnumKind:
 				fallthrough
 			case protoreflect.Int32Kind:
@@ -206,25 +220,54 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			case protoreflect.Fixed64Kind:
 				fallthrough
 			case protoreflect.DoubleKind:
-				g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
 				if field.Desc.IsList() {
+					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)==0{")
 					g.P("data.AppendString(", strconv.Quote("null"), ")")
-				} else {
+					g.P("}else{")
+					g.P("data.AppendByte('[')")
+					g.P("for _,form:=range forms{")
+					g.P("if len(form)==0{")
 					g.P("data.AppendString(", strconv.Quote("0"), ")")
-				}
-				g.P("}else{")
-				g.P("data.AppendString(form)")
-				g.P("}")
-			case protoreflect.StringKind:
-				fallthrough
-			case protoreflect.BytesKind:
-				g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
-				if field.Desc.IsList() {
-					g.P("data.AppendString(", strconv.Quote("null"), ")")
 					g.P("}else{")
 					g.P("data.AppendString(form)")
 					g.P("}")
+					g.P("data.AppendByte(',')")
+					g.P("}")
+					g.P("data.Bytes()[data.Len()-1] = ']'")
+					g.P("}")
 				} else {
+					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
+					g.P("data.AppendString(", strconv.Quote("0"), ")")
+					g.P("}else{")
+					g.P("data.AppendString(form)")
+					g.P("}")
+				}
+			case protoreflect.BytesKind:
+				g.P("//req.", field.GoName, "'s type in protobuf is bytes,value should be base64 encoded")
+				g.P("//https://developers.google.com/protocol-buffers/docs/proto3#json")
+				fallthrough
+			case protoreflect.StringKind:
+				if field.Desc.IsList() {
+					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)==0{")
+					g.P("data.AppendString(", strconv.Quote("null"), ")")
+					g.P("}else{")
+					g.P("data.AppendByte('[')")
+					g.P("for _,form:=range forms{")
+					g.P("if len(form)==0{")
+					g.P("data.AppendString(", strconv.Quote("\"\""), ")")
+					g.P("}else if len(form)<2 || form[0] !='\"' || form[len(form)-1]!='\"'{")
+					g.P("data.AppendByte('\"')")
+					g.P("data.AppendString(form)")
+					g.P("data.AppendByte('\"')")
+					g.P("}else{")
+					g.P("data.AppendString(form)")
+					g.P("}")
+					g.P("data.AppendByte(',')")
+					g.P("}")
+					g.P("data.Bytes()[data.Len()-1] = ']'")
+					g.P("}")
+				} else {
+					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
 					g.P("data.AppendString(", strconv.Quote("\"\""), ")")
 					g.P("}else if len(form)<2 || form[0] !='\"' || form[len(form)-1]!='\"'{")
 					g.P("data.AppendByte('\"')")
@@ -235,11 +278,28 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					g.P("}")
 				}
 			case protoreflect.MessageKind:
-				g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
-				g.P("data.AppendString(", strconv.Quote("null"), ")")
-				g.P("}else{")
-				g.P("data.AppendString(form)")
-				g.P("}")
+				if field.Desc.IsList() {
+					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)==0{")
+					g.P("data.AppendString(", strconv.Quote("null"), ")")
+					g.P("}else{")
+					g.P("data.AppendByte('[')")
+					g.P("for _,form:=range forms{")
+					g.P("if len(form)==0{")
+					g.P("data.AppendString(", strconv.Quote("null"), ")")
+					g.P("}else{")
+					g.P("data.AppendString(form)")
+					g.P("}")
+					g.P("data.AppendByte(',')")
+					g.P("}")
+					g.P("data.Bytes()[data.Len()-1] = ']'")
+					g.P("}")
+				} else {
+					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
+					g.P("data.AppendString(", strconv.Quote("null"), ")")
+					g.P("}else{")
+					g.P("data.AppendString(form)")
+					g.P("}")
+				}
 			}
 			if i != len(method.Input.Fields)-1 {
 				g.P("data.AppendByte(',')")
@@ -247,7 +307,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		}
 		g.P("data.AppendByte('}')")
 		g.P("if data.Len()>2{")
-		g.P("e:=", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions{DiscardUnknown: true}")), ".Unmarshal(data.Bytes(),req)")
+		g.P("e:=", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions{AllowPartial: true,DiscardUnknown: true}")), ".Unmarshal(data.Bytes(),req)")
 		g.P("if e!=nil{")
 		g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
 		g.P("return")
@@ -278,7 +338,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("respd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
 		g.P("ctx.Write(\"application/x-protobuf\",respd)")
 		g.P("}else{")
-		g.P("respd,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true}.Marshal(resp)")
+		g.P("respd,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{AllowPartial: true,UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true}.Marshal(resp)")
 		g.P("ctx.Write(\"application/json\",respd)")
 		g.P("}")
 		g.P("}")
@@ -423,184 +483,203 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("application/x-protobuf"), ")")
 			g.P("query :=", g.QualifiedGoIdent(bufpoolPackage.Ident("GetBuffer")), "()")
 			g.P("defer ", g.QualifiedGoIdent(bufpoolPackage.Ident("PutBuffer")), "(query)")
-			for i, field := range method.Input.Fields {
+			for _, field := range method.Input.Fields {
 				fname := string(field.Desc.Name())
 				switch field.Desc.Kind() {
 				case protoreflect.BoolKind:
 					if field.Desc.IsList() {
-						g.P("if len(req.Get", field.GoName, "())!=0{")
+						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendBools(req.Get", field.GoName, "())")
+						g.P("query.AppendBool(v)")
+						g.P("query.AppendByte('&')")
+						g.P("}")
 					} else {
 						g.P("if req.Get", field.GoName, "(){")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
 						g.P("query.AppendBool(req.Get", field.GoName, "())")
-					}
-					if i != len(method.Input.Fields)-1 {
 						g.P("query.AppendByte('&')")
+						g.P("}")
 					}
-					g.P("}")
 				case protoreflect.EnumKind:
 					if field.Desc.IsList() {
-						g.P("if len(req.Get", field.GoName, "())!=0{")
+						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendByte('[')")
-						g.P("for i,e:=range req.Get", field.GoName, "(){")
-						g.P("query.AppendInt32(int32(e))")
-						g.P("if i == len(req.()", field.GoName, "())-1{")
-						g.P("query.AppendByte(']')")
-						g.P("}else{")
-						g.P("query.AppendByte(',')")
-						g.P("}")
+						g.P("query.AppendInt32(int32(v))")
+						g.P("query.AppendByte('&')")
 						g.P("}")
 					} else {
 						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
 						g.P("query.AppendInt32(int32(req.Get", field.GoName, "()))")
-					}
-					if i != len(method.Input.Fields)-1 {
 						g.P("query.AppendByte('&')")
+						g.P("}")
 					}
-					g.P("}")
 				case protoreflect.Sfixed32Kind:
 					fallthrough
 				case protoreflect.Sint32Kind:
 					fallthrough
 				case protoreflect.Int32Kind:
 					if field.Desc.IsList() {
-						g.P("if len(req.Get", field.GoName, "())!=0{")
+						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendInt32s(req.Get", field.GoName, "())")
+						g.P("query.AppendInt32(v)")
+						g.P("query.AppendByte('&')")
+						g.P("}")
 					} else {
 						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
 						g.P("query.AppendInt32(req.Get", field.GoName, "())")
-					}
-					if i != len(method.Input.Fields)-1 {
 						g.P("query.AppendByte('&')")
+						g.P("}")
 					}
-					g.P("}")
 				case protoreflect.Sfixed64Kind:
 					fallthrough
 				case protoreflect.Sint64Kind:
 					fallthrough
 				case protoreflect.Int64Kind:
 					if field.Desc.IsList() {
-						g.P("if len(req.Get", field.GoName, "())!=0{")
+						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendInt64s(req.Get", field.GoName, "())")
+						g.P("query.AppendInt64(v)")
+						g.P("query.AppendByte('&')")
+						g.P("}")
 					} else {
 						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
 						g.P("query.AppendInt64(req.Get", field.GoName, "())")
+						g.P("}")
 					}
-					if i != len(method.Input.Fields)-1 {
-						g.P("query.AppendByte('&')")
-					}
-					g.P("}")
 				case protoreflect.Fixed32Kind:
 					fallthrough
 				case protoreflect.Uint32Kind:
 					if field.Desc.IsList() {
-						g.P("if len(req.Get", field.GoName, "())!=0{")
+						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendUint32s(req.Get", field.GoName, "())")
+						g.P("query.AppendUint32(v)")
+						g.P("query.AppendByte('&')")
+						g.P("}")
 					} else {
 						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
 						g.P("query.AppendUint32(req.Get", field.GoName, "())")
-					}
-					if i != len(method.Input.Fields)-1 {
 						g.P("query.AppendByte('&')")
+						g.P("}")
 					}
-					g.P("}")
 				case protoreflect.Fixed64Kind:
 					fallthrough
 				case protoreflect.Uint64Kind:
 					if field.Desc.IsList() {
-						g.P("if len(req.Get", field.GoName, "())!=0{")
+						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendUint64s(req.Get", field.GoName, "())")
+						g.P("query.AppendUint64(v)")
+						g.P("query.AppendByte('&')")
+						g.P("}")
 					} else {
 						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
 						g.P("query.AppendUint64(req.Get", field.GoName, "())")
-					}
-					if i != len(method.Input.Fields)-1 {
 						g.P("query.AppendByte('&')")
+						g.P("}")
 					}
-					g.P("}")
 				case protoreflect.FloatKind:
 					if field.Desc.IsList() {
-						g.P("if len(req.Get", field.GoName, "())!=0{")
+						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendFloat32s(req.Get", field.GoName, "())")
+						g.P("query.AppendFloat32(v)")
+						g.P("query.AppendByte('&')")
+						g.P("}")
 					} else {
 						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
 						g.P("query.AppendFloat32(req.Get", field.GoName, "())")
-					}
-					if i != len(method.Input.Fields)-1 {
 						g.P("query.AppendByte('&')")
+						g.P("}")
 					}
-					g.P("}")
 				case protoreflect.DoubleKind:
 					if field.Desc.IsList() {
-						g.P("if len(req.Get", field.GoName, "())!=0{")
+						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendFloat64s(req.Get", field.GoName, "())")
+						g.P("query.AppendFloat64(v)")
+						g.P("query.AppendByte('&')")
+						g.P("}")
 					} else {
 						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
 						g.P("query.AppendFloat64(req.Get", field.GoName, "())")
-					}
-					if i != len(method.Input.Fields)-1 {
 						g.P("query.AppendByte('&')")
+						g.P("}")
 					}
-					g.P("}")
 				case protoreflect.StringKind:
 					if field.Desc.IsList() {
-						g.P("if len(req.Get", field.GoName, "())!=0{")
+						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("query.AppendStrings(req.Get", field.GoName, "())")
+						g.P("if len(v)!=0{")
+						g.P("query.AppendString(v)")
+						g.P("}")
+						g.P("query.AppendByte('&')")
+						g.P("}")
 					} else {
 						g.P("if len(req.Get", field.GoName, "())!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
 						g.P("query.AppendString(req.Get", field.GoName, "())")
-					}
-					if i != len(method.Input.Fields)-1 {
 						g.P("query.AppendByte('&')")
+						g.P("}")
 					}
-					g.P("}")
 				case protoreflect.BytesKind:
-					g.P("if len(req.Get", field.GoName, "())!=0{")
-					g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-					g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.Get", field.GoName, "())")
-					g.P("query.AppendByteSlice(temp)")
-					if i != len(method.Input.Fields)-1 {
+					g.P("//req.", field.GoName, "'s type in protobuf is bytes,value should be base64 encoded")
+					g.P("//https://developers.google.com/protocol-buffers/docs/proto3#json")
+					if field.Desc.IsList() {
+						g.P("for _,v:=range req.Get", field.GoName, "(){")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("if len(v)!=0{")
+						g.P("query.AppendString(", g.QualifiedGoIdent(base64Package.Ident("StdEncoding.EncodeToString")), "(v))")
+						g.P("}")
 						g.P("query.AppendByte('&')")
-					}
-					g.P("}")
-				case protoreflect.MessageKind:
-					if field.Desc.IsMap() || field.Desc.IsList() {
+						g.P("}")
+					} else {
 						g.P("if len(req.Get", field.GoName, "())!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("query.AppendString(", g.QualifiedGoIdent(base64Package.Ident("StdEncoding.EncodeToString")), "(req.Get", field.GoName, "()))")
+						g.P("query.AppendByte('&')")
+						g.P("}")
+					}
+				case protoreflect.MessageKind:
+					if field.Desc.IsList() {
+						g.P("for _,v:=range req.Get", field.GoName, "(){")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("if v!=nil{")
+						g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(v)")
+						g.P("query.AppendByteSlice(temp)")
+						g.P("}")
+						g.P("query.AppendByte('&')")
+						g.P("}")
+					} else if field.Desc.IsMap() {
+						g.P("if len(req.Get", field.GoName, "())!=0{")
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.Get", field.GoName, "())")
+						g.P("query.AppendByteSlice(temp)")
+						g.P("query.AppendByte('&')")
+						g.P("}")
 					} else {
 						g.P("if req.Get", field.GoName, "()!=nil{")
-					}
-					g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-					g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.Get", field.GoName, "())")
-					g.P("query.AppendByteSlice(temp)")
-					if i != len(method.Input.Fields)-1 {
+						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.Get", field.GoName, "())")
+						g.P("query.AppendByteSlice(temp)")
 						g.P("query.AppendByte('&')")
+						g.P("}")
 					}
-					g.P("}")
 				}
 			}
+			g.P("querystr :=query.String()")
+			g.P("if len(querystr)>0{")
+			g.P("//drop last &")
+			g.P("querystr=querystr[:len(querystr)-1]")
+			g.P("}")
 			switch httpmetohd {
 			case http.MethodGet:
-				g.P("data,e:=c.cc.Get(ctx,", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
+				g.P("data,e:=c.cc.Get(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			case http.MethodDelete:
-				g.P("data,e:=c.cc.Delete(ctx,", pathname, ",query.String(),header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
+				g.P("data,e:=c.cc.Delete(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			}
 		} else {
 			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")

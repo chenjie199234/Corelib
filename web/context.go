@@ -208,6 +208,18 @@ func (c *Context) GetForm(key string) string {
 	}
 	return c.r.Form.Get(key)
 }
+
+//must call ParseForm before this
+func (c *Context) GetForms(key string) []string {
+	if len(c.r.Form) == 0 {
+		return nil
+	}
+	values := c.r.Form[key]
+	if len(values) == 0 {
+		return nil
+	}
+	return values
+}
 func (c *Context) GetBody() ([]byte, error) {
 	if c.body != nil || c.bodyerr != nil {
 		return c.body, c.bodyerr
