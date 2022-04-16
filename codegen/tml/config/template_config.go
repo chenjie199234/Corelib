@@ -76,18 +76,6 @@ func initremote() {
 		return
 	}
 	if *EC.ConfigType == 1 {
-		var mongourl string
-		if str, ok := os.LookupEnv("REMOTE_CONFIG_MONGO_URL"); ok && str != "<REMOTE_CONFIG_MONGO_URL>" && str != "" {
-			mongourl = str
-		} else {
-			panic("[config.initremote] missing env REMOTE_CONFIG_MONGO_URL")
-		}
-		if e := configsdk.NewDirectSdk(api.Group, api.Name, mongourl); e != nil {
-			log.Error(nil, "[config.initremote] new direct sdk error:", e)
-			Close()
-			os.Exit(1)
-		}
-	} else if *EC.ConfigType == 2 {
 		var group string
 		if str, ok := os.LookupEnv("REMOTE_CONFIG_SERVICE_GROUP"); ok && str != "<REMOTE_CONFIG_SERVICE_GROUP>" && str != "" {
 			group = str

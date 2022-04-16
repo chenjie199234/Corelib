@@ -60,26 +60,26 @@ spec:
               memory: 256Mi
               cpu: 250m
           env:
-            - name: MONITOR
-              value: <MONITOR>
             - name: HOSTIP
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-            - name: DEPLOY_ENV
-              value: kube
             - name: GROUP
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: DEPLOY_ENV
+              value: <DEPLOY_ENV>
             - name: RUN_ENV
               value: <RUN_ENV>
+            - name: MONITOR
+              value: <MONITOR>
             - name: CONFIG_TYPE
               value: <CONFIG_TYPE>
-            - name: REMOTE_CONFIG_MONGO_URL
-              value: <REMOTE_CONFIG_MONGO_URL>
             - name: REMOTE_CONFIG_SERVICE_GROUP
               value: <REMOTE_CONFIG_SERVICE_GROUP>
+            - name: REMOTE_CONFIG_SERVICE_HOST
+              value: <REMOTE_CONFIG_SERVICE_HOST>
           livenessProbe:
             tcpSocket:
               port: 8000
