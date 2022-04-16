@@ -547,6 +547,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("if req.Get", field.GoName, "()!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
 						g.P("query.AppendInt64(req.Get", field.GoName, "())")
+						g.P("query.AppendByte('&')")
 						g.P("}")
 					}
 				case protoreflect.Fixed32Kind:
