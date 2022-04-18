@@ -63,6 +63,7 @@ func (r *corelibResolver) ResolveNow() {
 //systemORcall true - system,false - call
 func (r *corelibResolver) triger(notice chan *struct{}, systemORcall bool) {
 	r.lker.Lock()
+	defer r.lker.Unlock()
 	if systemORcall {
 		if notice != nil {
 			r.systemNotice[notice] = nil
@@ -82,7 +83,6 @@ func (r *corelibResolver) triger(notice chan *struct{}, systemORcall bool) {
 		r.cstatus = true
 		r.call <- nil
 	}
-	r.lker.Unlock()
 }
 
 //systemORcall true - system,false - call
