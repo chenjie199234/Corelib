@@ -33,7 +33,7 @@ const textsource = `{
 		"global_timeout":"200ms",
 		"idle_timeout":"5s",
 		"heart_probe":"1.5s",
-		"static_file":"./src",
+		"static_file_path":"./src",
 		"web_cors":{
 			"cors_origin":["*"],
 			"cors_header":["*"],
