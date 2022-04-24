@@ -24,7 +24,7 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
-	"github.com/julienschmidt/httprouter"
+	"github.com/chenjie199234/httprouter"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
@@ -153,6 +153,7 @@ func (c *ServerConfig) getCorsExpose() string {
 
 type WebServer struct {
 	handlerTimeout map[string]map[string]time.Duration //first key method,second key path,value timeout
+	handlerRewrite map[string]string                   //key origin url,value new url
 	selfappname    string
 	c              *ServerConfig
 	ctxpool        *sync.Pool
@@ -216,6 +217,11 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		instance.s.TLSConfig = &tls.Config{Certificates: certificates}
 	}
 	instance.closewait.Add(1)
+	instance.router.RewriteHandler = func(originurl string) (newurl string, ok bool) {
+		handlerRewrite := *(*map[string]string)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&instance.handlerRewrite))))
+		newurl, ok = handlerRewrite[originurl]
+		return
+	}
 	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotImplemented)
@@ -332,6 +338,16 @@ func (s *WebServer) StopWebServer() {
 			return
 		}
 	}
+}
+
+//key origin url,value new url
+func (s *WebServer) UpdateHandlerRewrite(rewrite map[string]string) {
+	//copy
+	tmp := make(map[string]string)
+	for k, v := range rewrite {
+		tmp[k] = v
+	}
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s.handlerRewrite)), unsafe.Pointer(&tmp))
 }
 
 //first key method,second key path,value timeout(if timeout <= 0 means no timeout)
