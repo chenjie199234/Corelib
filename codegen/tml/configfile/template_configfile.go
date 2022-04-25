@@ -112,6 +112,9 @@ const textapp = `{
 		"Method":["GET","GRPC","CRPC"],
 		"MaxPerSec":10
 	}],
+	"web_path_rewrite":{
+		"/example/origin/url":"/example/new/url"
+	},
 	"access_keys":{
 		"default":"default_sec_key",
 		"/{{.}}.status/ping":"specific_sec_key"

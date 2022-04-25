@@ -52,6 +52,7 @@ func StartWebServer() {
 		return
 	}
 	UpdateHandlerTimeout(config.AC.HandlerTimeout)
+	UpdateWebPathRewrite(config.AC.WebPathRewrite)
 
 	//this place can register global midwares
 	//s.Use(globalmidwares)
@@ -88,6 +89,14 @@ func UpdateHandlerTimeout(hts map[string]map[string]ctime.Duration) {
 		}
 	}
 	s.UpdateHandlerTimeout(cc)
+}
+
+//UpdateWebPathRewrite -
+//key origin url,value rewrite url
+func UpdateWebPathRewrite(rewrite map[string]string) {
+	if s != nil {
+		s.UpdateHandlerRewrite(rewrite)
+	}
 }
 
 //StopWebServer -

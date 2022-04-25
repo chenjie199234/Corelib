@@ -34,6 +34,7 @@ func main() {
 		xcrpc.UpdateHandlerTimeout(ac.HandlerTimeout)
 		xgrpc.UpdateHandlerTimeout(ac.HandlerTimeout)
 		xweb.UpdateHandlerTimeout(ac.HandlerTimeout)
+		xweb.UpdateWebPathRewrite(ac.WebPathRewrite)
 		publicmids.UpdateRateConfig(ac.HandlerRate)
 		publicmids.UpdateAccessKeyConfig(ac.AccessKeys)
 	})

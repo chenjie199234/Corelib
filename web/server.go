@@ -178,6 +178,7 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	//new server
 	instance := &WebServer{
 		handlerTimeout: make(map[string]map[string]time.Duration),
+		handlerRewrite: make(map[string]string),
 		selfappname:    selfappname,
 		c:              c,
 		ctxpool:        &sync.Pool{},
