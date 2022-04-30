@@ -465,7 +465,7 @@ func initwebserver() {
 			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
 			IdleTimeout:    ctime.Duration(time.Second * 5),
 			HeartProbe:     ctime.Duration(time.Millisecond * 1500),
-			StaticFilePath: "./src",
+			SrcRoot:        "./src",
 			Cors: &WebCorsConfig{
 				CorsOrigin: []string{"*"},
 				CorsHeader: []string{"*"},
