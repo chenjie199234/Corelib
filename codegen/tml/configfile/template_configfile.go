@@ -33,7 +33,7 @@ const textsource = `{
 		"global_timeout":"200ms",
 		"idle_timeout":"5s",
 		"heart_probe":"1.5s",
-		"static_file_path":"./src",
+		"src_root":"./src",
 		"web_cors":{
 			"cors_origin":["*"],
 			"cors_header":["*"],
@@ -113,7 +113,9 @@ const textapp = `{
 		"MaxPerSec":10
 	}],
 	"web_path_rewrite":{
-		"/example/origin/url":"/example/new/url"
+		"GET":{
+			"/example/origin/url":"/example/new/url"
+		}
 	},
 	"access_keys":{
 		"default":"default_sec_key",

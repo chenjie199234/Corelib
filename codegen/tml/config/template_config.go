@@ -111,10 +111,10 @@ import (
 //AppConfig can hot update
 //this is the config used for this app
 type AppConfig struct {
-	HandlerTimeout map[string]map[string]ctime.Duration $json:"handler_timeout"$ //first key handler path,second key method(GET,POST,PUT,PATCH,DELETE,CRPC,GRPC),value timeout
+	HandlerTimeout map[string]map[string]ctime.Duration $json:"handler_timeout"$ //first key handler path,second key method(GET,POST,PUT,PATCH,DELETE),value timeout
 	HandlerRate    []*publicmids.RateConfig             $json:"handler_rate"$
-	WebPathRewrite map[string]string                    $json:"web_path_rewrite"$
-	AccessKeys     map[string]string                    $json:"access_keys"$ //key-specific path,value specific seckey,key-"default",value default seckey
+	WebPathRewrite map[string]map[string]string         $json:"web_path_rewrite"$ //first key method(GET,POST,PUT,PATCH,DELETE),second key origin url,value new url
+	AccessKeys     map[string]string                    $json:"access_keys"$      //key-specific path,value specific seckey,key-"default",value default seckey
 	Service        *ServiceConfig                       $json:"service"$
 }
 type ServiceConfig struct {
@@ -264,7 +264,7 @@ type WebServerConfig struct {
 	GlobalTimeout  ctime.Duration $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
 	IdleTimeout    ctime.Duration $json:"idle_timeout"$    //default 5s
 	HeartProbe     ctime.Duration $json:"heart_probe"$     //default 1.5s
-	StaticFilePath string         $json:"static_file_path"$
+	SrcRoot        string         $json:"src_root"$
 	//cors
 	Cors *WebCorsConfig $json:"cors"$
 }

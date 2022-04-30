@@ -9,7 +9,6 @@ import (
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/util/common"
-	"github.com/chenjie199234/httprouter"
 )
 
 func (s *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context.Context, peername string, metadata map[string]string, handlers []OutsideHandler) *Context {
@@ -226,16 +225,4 @@ func (c *Context) GetBody() ([]byte, error) {
 	}
 	c.body, c.bodyerr = io.ReadAll(c.r.Body)
 	return c.body, c.bodyerr
-}
-
-//param is the value in dynamic url,see httprouter's dynamic path
-//https://github.com/julienschmidt/httprouter
-func (c *Context) GetParams() httprouter.Params {
-	return httprouter.ParamsFromContext(c.Context)
-}
-
-//param is the value in dynamic url,see httprouter's dynamic path
-//https://github.com/julienschmidt/httprouter
-func (c *Context) GetParam(key string) string {
-	return httprouter.ParamsFromContext(c.Context).ByName(key)
 }

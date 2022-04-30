@@ -29,13 +29,13 @@ var s *web.WebServer
 func StartWebServer() {
 	c := config.GetWebServerConfig()
 	webc := &web.ServerConfig{
-		WaitCloseMode:      c.CloseMode,
-		ConnectTimeout:     time.Duration(c.ConnectTimeout),
-		GlobalTimeout:      time.Duration(c.GlobalTimeout),
-		IdleTimeout:        time.Duration(c.IdleTimeout),
-		HeartProbe:         time.Duration(c.HeartProbe),
-		StaticFileRootPath: c.StaticFilePath,
-		MaxHeader:          1024,
+		WaitCloseMode:  c.CloseMode,
+		ConnectTimeout: time.Duration(c.ConnectTimeout),
+		GlobalTimeout:  time.Duration(c.GlobalTimeout),
+		IdleTimeout:    time.Duration(c.IdleTimeout),
+		HeartProbe:     time.Duration(c.HeartProbe),
+		SrcRoot:        c.SrcRoot,
+		MaxHeader:      1024,
 	}
 	if c.Cors != nil {
 		webc.Cors = &web.CorsConfig{
@@ -93,7 +93,7 @@ func UpdateHandlerTimeout(hts map[string]map[string]ctime.Duration) {
 
 //UpdateWebPathRewrite -
 //key origin url,value rewrite url
-func UpdateWebPathRewrite(rewrite map[string]string) {
+func UpdateWebPathRewrite(rewrite map[string]map[string]string) {
 	if s != nil {
 		s.UpdateHandlerRewrite(rewrite)
 	}

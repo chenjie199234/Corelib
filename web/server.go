@@ -24,7 +24,6 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
-	"github.com/chenjie199234/httprouter"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
@@ -44,12 +43,12 @@ type ServerConfig struct {
 	GlobalTimeout  time.Duration //request's max handling time
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
 	//if this is 0,ConnectTimeout will be used as IdleTimeout
-	IdleTimeout        time.Duration
-	HeartProbe         time.Duration //system's tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
-	StaticFileRootPath string
-	MaxHeader          uint
-	CertKeys           map[string]string //mapkey: cert path,mapvalue: key path
-	Cors               *CorsConfig
+	IdleTimeout time.Duration
+	HeartProbe  time.Duration //system's tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
+	SrcRoot     string        //use /src/relative_path_in_src_root to get the resource in SrcRoot
+	MaxHeader   uint
+	CertKeys    map[string]string //mapkey: cert path,mapvalue: key path
+	Cors        *CorsConfig
 }
 
 type CorsConfig struct {
@@ -153,12 +152,12 @@ func (c *ServerConfig) getCorsExpose() string {
 
 type WebServer struct {
 	handlerTimeout map[string]map[string]time.Duration //first key method,second key path,value timeout
-	handlerRewrite map[string]string                   //key origin url,value new url
+	handlerRewrite map[string]map[string]string        //first key method,second key origin url,value new url
 	selfappname    string
 	c              *ServerConfig
 	ctxpool        *sync.Pool
 	global         []OutsideHandler
-	router         *httprouter.Router
+	r              *router
 	s              *http.Server
 	closewait      *sync.WaitGroup
 	closewaittimer *time.Timer
@@ -178,12 +177,12 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	//new server
 	instance := &WebServer{
 		handlerTimeout: make(map[string]map[string]time.Duration),
-		handlerRewrite: make(map[string]string),
+		handlerRewrite: make(map[string]map[string]string),
 		selfappname:    selfappname,
 		c:              c,
 		ctxpool:        &sync.Pool{},
 		global:         make([]OutsideHandler, 0, 10),
-		router:         httprouter.New(),
+		r:              newRouter(c.SrcRoot),
 		s: &http.Server{
 			ReadTimeout:    c.ConnectTimeout,
 			IdleTimeout:    c.IdleTimeout,
@@ -218,24 +217,22 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		instance.s.TLSConfig = &tls.Config{Certificates: certificates}
 	}
 	instance.closewait.Add(1)
-	instance.router.RewriteHandler = func(originurl string) (newurl string, ok bool) {
-		handlerRewrite := *(*map[string]string)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&instance.handlerRewrite))))
-		newurl, ok = handlerRewrite[originurl]
+	instance.r.rewriteHandler = func(originurl, method string) (newurl string, ok bool) {
+		handlerRewrite := *(*map[string]map[string]string)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&instance.handlerRewrite))))
+		paths, ok := handlerRewrite[method]
+		if !ok {
+			return
+		}
+		newurl, ok = paths[originurl]
 		return
 	}
-	instance.router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	instance.r.notFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotImplemented)
 		w.Write(common.Str2byte(cerror.ErrNoapi.Error()))
 		log.Error(nil, "[web.server] client ip:", getclientip(r), "call path:", r.URL.Path, "method:", r.Method, "error: unknown path")
 	})
-	instance.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotImplemented)
-		w.Write(common.Str2byte(cerror.ErrNoapi.Error()))
-		log.Error(nil, "[web.server] client ip:", getclientip(r), "call path:", r.URL.Path, "method:", r.Method, "error: unknown method")
-	})
-	instance.router.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	instance.r.optionsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//for OPTIONS preflight
 		defer w.WriteHeader(http.StatusNoContent)
 		origin := strings.TrimSpace(r.Header.Get("Origin"))
@@ -249,8 +246,7 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		headers.Add("Vary", "Origin")
 		headers.Add("Vary", "Access-Control-Request-Method")
 		headers.Add("Vary", "Access-Control-Request-Headers")
-		headers.Set("Access-Control-Allow-Methods", headers.Get("Allow"))
-		headers.Del("Allow")
+		headers.Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
 		if c.Cors.allorigin {
 			headers.Set("Access-Control-Allow-Origin", "*")
 		} else {
@@ -273,15 +269,27 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 			headers.Set("Access-Control-Max-Age", strconv.FormatInt(int64(c.Cors.MaxAge)/int64(time.Second), 10))
 		}
 	})
-	if c.StaticFileRootPath != "" {
-		instance.router.ServeFiles("/src/*filepath", http.Dir(c.StaticFileRootPath))
-	}
 	return instance, nil
 }
 
 var ErrServerClosed = errors.New("[web.server] closed")
 
 func (s *WebServer) StartWebServer(listenaddr string) error {
+	for path := range s.r.getTree.GetAll() {
+		log.Info(nil, "[web.server] GET:", path)
+	}
+	for path := range s.r.postTree.GetAll() {
+		log.Info(nil, "[web.server] POST:", path)
+	}
+	for path := range s.r.putTree.GetAll() {
+		log.Info(nil, "[web.server] PUT:", path)
+	}
+	for path := range s.r.patchTree.GetAll() {
+		log.Info(nil, "[web.server] PATCH:", path)
+	}
+	for path := range s.r.deleteTree.GetAll() {
+		log.Info(nil, "[web.server] DELETE:", path)
+	}
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
 		return errors.New("[web.server] resolve addr:" + listenaddr + " error:" + e.Error())
@@ -292,11 +300,11 @@ func (s *WebServer) StartWebServer(listenaddr string) error {
 	}
 	if len(s.c.CertKeys) > 0 {
 		//enable h2
-		s.s.Handler = s.router
+		s.s.Handler = s.r
 		e = s.s.ServeTLS(l, "", "")
 	} else {
 		//enable h2c
-		s.s.Handler = h2c.NewHandler(s.router, &http2.Server{})
+		s.s.Handler = h2c.NewHandler(s.r, &http2.Server{})
 		e = s.s.Serve(l)
 	}
 	if e != nil {
@@ -309,10 +317,10 @@ func (s *WebServer) StartWebServer(listenaddr string) error {
 func (s *WebServer) ReplaceAllPath(newserver *WebServer) {
 	if len(s.c.CertKeys) > 0 {
 		//enable h2
-		s.s.Handler = newserver.router
+		s.s.Handler = newserver.r
 	} else {
 		//enable h2c
-		s.s.Handler = h2c.NewHandler(newserver.router, &http2.Server{})
+		s.s.Handler = h2c.NewHandler(newserver.r, &http2.Server{})
 	}
 }
 func (s *WebServer) StopWebServer() {
@@ -342,11 +350,17 @@ func (s *WebServer) StopWebServer() {
 }
 
 //key origin url,value new url
-func (s *WebServer) UpdateHandlerRewrite(rewrite map[string]string) {
+func (s *WebServer) UpdateHandlerRewrite(rewrite map[string]map[string]string) {
 	//copy
-	tmp := make(map[string]string)
-	for k, v := range rewrite {
-		tmp[k] = v
+	tmp := make(map[string]map[string]string)
+	for method, paths := range rewrite {
+		method = strings.ToUpper(method)
+		for originurl, newurl := range paths {
+			if _, ok := tmp[method]; !ok {
+				tmp[method] = make(map[string]string)
+			}
+			tmp[method][originurl] = cleanPath(newurl)
+		}
 	}
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s.handlerRewrite)), unsafe.Pointer(&tmp))
 }
@@ -355,6 +369,7 @@ func (s *WebServer) UpdateHandlerRewrite(rewrite map[string]string) {
 func (s *WebServer) UpdateHandlerTimeout(htcs map[string]map[string]time.Duration) {
 	tmp := make(map[string]map[string]time.Duration)
 	for method, paths := range htcs {
+		method = strings.ToUpper(method)
 		if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
 			continue
 		}
@@ -387,43 +402,37 @@ func (s *WebServer) Use(globalMids ...OutsideHandler) {
 }
 
 //thread unsafe
+//path can't start with /src,/src is for static resource
 func (s *WebServer) Get(path string, handlers ...OutsideHandler) {
-	if len(path) == 0 || path[0] != '/' {
-		panic("[web.server] path must start with /")
+	path = cleanPath(path)
+	if strings.HasPrefix(path, "/src") {
+		panic("[web.server] path can't start with /src,/src is for static resource")
 	}
-	s.router.Handler(http.MethodGet, path, s.insideHandler(http.MethodGet, path, handlers))
+	s.r.Get(path, s.insideHandler(http.MethodGet, path, handlers))
 }
 
 //thread unsafe
 func (s *WebServer) Delete(path string, handlers ...OutsideHandler) {
-	if len(path) == 0 || path[0] != '/' {
-		panic("[web.server] path must start with /")
-	}
-	s.router.Handler(http.MethodDelete, path, s.insideHandler(http.MethodDelete, path, handlers))
+	path = cleanPath(path)
+	s.r.Delete(path, s.insideHandler(http.MethodDelete, path, handlers))
 }
 
 //thread unsafe
 func (s *WebServer) Post(path string, handlers ...OutsideHandler) {
-	if len(path) == 0 || path[0] != '/' {
-		panic("[web.server] path must start with /")
-	}
-	s.router.Handler(http.MethodPost, path, s.insideHandler(http.MethodPost, path, handlers))
+	path = cleanPath(path)
+	s.r.Post(path, s.insideHandler(http.MethodPost, path, handlers))
 }
 
 //thread unsafe
 func (s *WebServer) Put(path string, handlers ...OutsideHandler) {
-	if len(path) == 0 || path[0] != '/' {
-		panic("[web.server] path must start with /")
-	}
-	s.router.Handler(http.MethodPut, path, s.insideHandler(http.MethodPut, path, handlers))
+	path = cleanPath(path)
+	s.r.Put(path, s.insideHandler(http.MethodPut, path, handlers))
 }
 
 //thread unsafe
 func (s *WebServer) Patch(path string, handlers ...OutsideHandler) {
-	if len(path) == 0 || path[0] != '/' {
-		panic("[web.server] path must start with /")
-	}
-	s.router.Handler(http.MethodPatch, path, s.insideHandler(http.MethodPatch, path, handlers))
+	path = cleanPath(path)
+	s.r.Patch(path, s.insideHandler(http.MethodPatch, path, handlers))
 }
 
 func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler) http.HandlerFunc {

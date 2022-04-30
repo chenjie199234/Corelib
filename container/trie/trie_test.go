@@ -12,6 +12,7 @@ func Test_Trie(t *testing.T) {
 	tree.Set("/api/v2/ping", 4)
 	tree.Set("/api/v1/pong", 5)
 	tree.Set("/api/v1/login", 6)
+	t.Log(tree.GetAll())
 
 	data, ok := tree.Get("login")
 	if !ok {

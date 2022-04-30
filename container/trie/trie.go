@@ -1,5 +1,6 @@
 package trie
 
+//thread unsafe
 type Trie[T any] []*node[T]
 
 type node[T any] struct {
@@ -88,6 +89,18 @@ func (n *node[T]) Get(str string) (value T, ok bool) {
 	}
 	return
 }
+func (n *node[T]) GetAll(prefix string, result map[string]T) {
+	if result == nil {
+		return
+	}
+	prefix += n.str
+	if n.exist {
+		result[prefix] = n.value
+	}
+	for _, child := range n.children {
+		child.GetAll(prefix, result)
+	}
+}
 
 func NewTrie[T any]() *Trie[T] {
 	trie := make(Trie[T], 0, 3)
@@ -123,4 +136,11 @@ func (t *Trie[T]) Get(str string) (value T, ok bool) {
 }
 func (t *Trie[T]) Reset() {
 	*t = make(Trie[T], 0, 3)
+}
+func (t *Trie[T]) GetAll() map[string]T {
+	result := make(map[string]T)
+	for _, child := range *t {
+		child.GetAll("", result)
+	}
+	return result
 }
