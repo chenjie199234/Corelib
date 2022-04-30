@@ -111,7 +111,7 @@ import (
 //AppConfig can hot update
 //this is the config used for this app
 type AppConfig struct {
-	HandlerTimeout map[string]map[string]ctime.Duration $json:"handler_timeout"$ //first key handler path,second key method(GET,POST,PUT,PATCH,DELETE),value timeout
+	HandlerTimeout map[string]map[string]ctime.Duration $json:"handler_timeout"$ //first key handler path,second key method(GET,POST,PUT,PATCH,DELETE,CRPC,GRPC),value timeout
 	HandlerRate    []*publicmids.RateConfig             $json:"handler_rate"$
 	WebPathRewrite map[string]map[string]string         $json:"web_path_rewrite"$ //first key method(GET,POST,PUT,PATCH,DELETE),second key origin url,value new url
 	AccessKeys     map[string]string                    $json:"access_keys"$      //key-specific path,value specific seckey,key-"default",value default seckey

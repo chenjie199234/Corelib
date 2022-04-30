@@ -372,6 +372,9 @@ func (s *WebServer) UpdateHandlerRewrite(rewrite map[string]map[string]string) {
 	tmp := make(map[string]map[string]string)
 	for method, paths := range rewrite {
 		method = strings.ToUpper(method)
+		if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
+			continue
+		}
 		for originurl, newurl := range paths {
 			if _, ok := tmp[method]; !ok {
 				tmp[method] = make(map[string]string)
