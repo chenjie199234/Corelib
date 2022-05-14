@@ -98,15 +98,17 @@ func (c *Context) GetPath() string {
 func (c *Context) GetBody() []byte {
 	return c.msg.Body
 }
+
+//get the direct peer's addr(maybe a proxy)
 func (c *Context) GetRemoteAddr() string {
 	return c.peer.GetRemoteAddr()
 }
 
-//this is only useful for crpc server
-//when the client connection is based on websocket and there is a load balancer before it like nginx
-//then the realPeerIP may different from the remoteaddr
-func (c *Context) GetRealPeerIP() string {
-	return c.peer.GetRealPeerIp()
+//this function try to return the first caller's ip(mostly time it will be the user's ip)
+//if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
+//if failed,the direct peer's ip will be returned(maybe a proxy)
+func (c *Context) GetClientIp() string {
+	return c.metadata["Client-IP"]
 }
 func (c *Context) GetPeerMaxMsgLen() uint32 {
 	return c.peer.GetPeerMaxMsgLen()

@@ -31,6 +31,7 @@ import (
 	"github.com/chenjie199234/Corelib/codegen/tml/service"
 	servicestatus "github.com/chenjie199234/Corelib/codegen/tml/service/status"
 	subservice "github.com/chenjie199234/Corelib/codegen/tml/service/sub"
+	"github.com/chenjie199234/Corelib/codegen/tml/util"
 	cname "github.com/chenjie199234/Corelib/util/name"
 )
 
@@ -216,6 +217,9 @@ func createBaseProject() {
 
 	model.CreatePathAndFile()
 	model.Execute()
+
+	util.CreatePathAndFile()
+	util.Execute()
 
 	xcrpc.CreatePathAndFile()
 	xcrpc.Execute(*packagename)

@@ -137,12 +137,19 @@ func (c *Context) GetHeader(key string) string {
 func (c *Context) GetPeerName() string {
 	return c.peername
 }
-func (c *Context) GetPeerAddr() string {
+
+//get the direct peer's addr(maybe a proxy)
+func (c *Context) GetRemoteAddr() string {
 	return c.r.RemoteAddr
 }
+
+//this function try to return the first caller's ip(mostly time it will be the user's ip)
+//if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
+//if failed,the direct peer's ip will be returned(maybe a proxy)
 func (c *Context) GetClientIp() string {
-	return getclientip(c.r)
+	return c.metadata["Client-IP"]
 }
+
 func getclientip(r *http.Request) string {
 	ip := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
 	if ip != "" {

@@ -257,6 +257,9 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 		}
 		//logic
 		workctx := s.getContext(ctx, p, msg, totalhandlers)
+		if _, ok := workctx.metadata["Client-IP"]; !ok {
+			workctx.metadata["Client-IP"] = sourceip
+		}
 		defer func() {
 			if e := recover(); e != nil {
 				stack := make([]byte, 1024)

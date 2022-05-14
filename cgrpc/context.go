@@ -7,7 +7,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-func (s *CGrpcServer) getcontext(c context.Context, path string, peername string, peeraddr string, metadata map[string]string, handlers []OutsideHandler, d func(interface{}) error) *Context {
+func (s *CGrpcServer) getcontext(c context.Context, path string, peername string, remoteaddr string, metadata map[string]string, handlers []OutsideHandler, d func(interface{}) error) *Context {
 	ctx, ok := s.ctxpool.Get().(*Context)
 	if !ok {
 		ctx = &Context{
@@ -16,7 +16,7 @@ func (s *CGrpcServer) getcontext(c context.Context, path string, peername string
 			handlers:   handlers,
 			path:       path,
 			peername:   peername,
-			peeraddr:   peeraddr,
+			remoteaddr: remoteaddr,
 			metadata:   metadata,
 			resp:       nil,
 			e:          nil,
@@ -32,7 +32,7 @@ func (s *CGrpcServer) getcontext(c context.Context, path string, peername string
 	ctx.handlers = handlers
 	ctx.path = path
 	ctx.peername = peername
-	ctx.peeraddr = peeraddr
+	ctx.remoteaddr = remoteaddr
 	if metadata != nil {
 		ctx.metadata = metadata
 	}
@@ -54,7 +54,7 @@ type Context struct {
 	handlers   []OutsideHandler
 	path       string
 	peername   string
-	peeraddr   string
+	remoteaddr string
 	metadata   map[string]string
 	resp       interface{}
 	e          *cerror.Error
@@ -96,8 +96,17 @@ func (c *Context) GetPath() string {
 func (c *Context) GetPeerName() string {
 	return c.peername
 }
-func (c *Context) GetPeerAddr() string {
-	return c.peeraddr
+
+//get the direct peer's addr(maybe a proxy)
+func (c *Context) GetRemoteAddr() string {
+	return c.remoteaddr
+}
+
+//this function try to return the first caller's ip(mostly time it will be the user's ip)
+//if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
+//if failed,the direct peer's ip will be returned(maybe a proxy)
+func (c *Context) GetClientIp() string {
+	return c.metadata["Client-IP"]
 }
 func (c *Context) GetMetadata() map[string]string {
 	return c.metadata

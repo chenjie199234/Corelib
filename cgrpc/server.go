@@ -202,6 +202,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		atomic.AddInt32(&s.totalreqnum, 1)
 		defer atomic.AddInt32(&s.totalreqnum, -1)
 		conninfo := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)
+		remoteaddr := conninfo.RemoteAddr.String()
 		localaddr := conninfo.LocalAddr.String()
 		traceid := ""
 		sourceip := ""
@@ -213,7 +214,6 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			}
 		}
 		if sourceip == "" {
-			remoteaddr := conninfo.RemoteAddr.String()
 			sourceip = remoteaddr[:strings.LastIndex(remoteaddr, ":")]
 		}
 		sourceapp := "unknown"
@@ -263,7 +263,10 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			monitor.GrpcServerMonitor(sourceapp, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return
 		}
-		workctx := s.getcontext(ctx, path, sourceapp, sourceip, mdata, totalhandlers, decode)
+		workctx := s.getcontext(ctx, path, sourceapp, remoteaddr, mdata, totalhandlers, decode)
+		if _, ok := workctx.metadata["Client-IP"]; !ok {
+			workctx.metadata["Client-IP"] = sourceip
+		}
 		defer func() {
 			if e := recover(); e != nil {
 				stack := make([]byte, 1024)
