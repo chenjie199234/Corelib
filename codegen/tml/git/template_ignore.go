@@ -28,6 +28,10 @@ const text = `*
 !/model/*
 !/model/**/
 !/model/**/*
+!/util/
+!/util/*
+!/util/**/
+!/util/**/*
 !/server/
 !/server/*
 !/server/**/
