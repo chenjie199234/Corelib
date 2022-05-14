@@ -101,6 +101,14 @@ func (c *Context) WriteString(contenttype, msg string) {
 	c.Write(contenttype, common.Str2byte(msg))
 }
 
+func (c *Context) Redirect(code int, url string) {
+	c.status = 1
+	if code != 301 && code != 302 && code != 307 && code != 308 {
+		panic("[web.Context.Direct] httpcode must be 301/302/307/308")
+	}
+	http.Redirect(c.w, c.r, url, code)
+}
+
 func (c *Context) SetHeader(k, v string) {
 	c.w.Header().Set(k, v)
 }
