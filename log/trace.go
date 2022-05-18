@@ -99,7 +99,7 @@ func maketraceid() string {
 }
 
 func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string, start, end *time.Time, e error) {
-	if target == 0 {
+	if !trace {
 		return
 	}
 	traceid, fromapp, fromip, frommethod, frompath, deep := GetTrace(ctx)
