@@ -4,8 +4,8 @@ go 1.18
 
 require (
 	github.com/gomodule/redigo v1.8.8
-	golang.org/x/net v0.0.0-20201021035429-f5854403a974
-	google.golang.org/grpc v1.46.0
+	golang.org/x/net v0.0.0-20220517181318-183a9ca12b87
+	google.golang.org/grpc v1.46.2
 	google.golang.org/protobuf v1.28.0
 )
 
