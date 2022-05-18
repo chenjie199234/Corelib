@@ -25,9 +25,7 @@
 ## id
 	snow flake
 ## log
-	normal log
-## trace
-	trace log
+	log and trace log
 ## pool
 	sync.Pool for []byte and bufio.Reader and bufio.Writer
 ## container
