@@ -72,8 +72,11 @@ func genService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedF
 		g.P("Method:       ", httpmetohd)
 		if httpmetohd == "POST" || httpmetohd == "PUT" || httpmetohd == "PATCH" {
 			g.P("Content-Type: application/json")
+			checked := make(map[string]*struct{})
+			jsondoc(g, m.Input, false, false, checked)
 		} else {
 			g.P("Content-Type: application/x-www-form-urlencoded")
+			formdoc(g, m.Input)
 		}
 		g.P("```")
 		g.P("#### Resp:")
@@ -81,12 +84,19 @@ func genService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedF
 		g.P("Fail:    httpcode:4xx/5xx")
 		g.P("{\"code\":123,\"msg\":\"error message\"}")
 		g.P("Success: httpcode:200")
-		jsondoc(g, m.Input, false)
+		checked := make(map[string]*struct{})
+		jsondoc(g, m.Output, false, true, checked)
 		g.P("```")
 	}
 }
-func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, skipoptions bool) map[string]*protogen.Message {
-	g.P("{")
+func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions bool, checked map[string]*struct{}) {
+	checked[string(m.Desc.FullName())] = nil
+	newmessage := make(map[string]*protogen.Message)
+	if nest {
+		g.P(m.Desc.Name(), ": {")
+	} else {
+		g.P("{")
+	}
 	for i, f := range m.Fields {
 		fop := f.Desc.Options().(*descriptorpb.FieldOptions)
 		comments := strings.TrimSuffix(f.Comments.Leading.String()+f.Comments.Trailing.String(), "\n")
@@ -104,7 +114,1091 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, skipoptions bool) m
 			if i != len(m.Fields)-1 {
 				line += ","
 			}
+			//tail comments
 			line += "//bool"
+			//leading comments
+			if !skipoptions {
+				if proto.HasExtension(fop, pbex.E_BoolEq) {
+					eq := proto.GetExtension(fop, pbex.E_BoolEq).(bool)
+					if f.Desc.IsList() {
+						g.P("\telement value must be ", eq)
+					} else {
+						g.P("\tvalue must be ", eq)
+					}
+				}
+			}
+		case protoreflect.EnumKind:
+			if f.Desc.IsList() {
+				line += "[1,2]"
+			} else {
+				line += "0"
+			}
+			if i != len(m.Fields)-1 {
+				line += ","
+			}
+			//tail comments
+			line += "//int32"
+			//leading comments
+			if !skipoptions {
+				origin := make([]int32, 0, len(f.Enum.Values))
+				for _, v := range f.Enum.Values {
+					origin = append(origin, int32(v.Desc.Number()))
+				}
+				d, _ := json.Marshal(origin)
+				if f.Desc.IsList() {
+					g.P("//element value must in ", string(d))
+				} else {
+					g.P("//value must in ", string(d))
+				}
+				if proto.HasExtension(fop, pbex.E_EnumIn) {
+					ins := proto.GetExtension(fop, pbex.E_EnumIn).([]int64)
+					d, _ := json.Marshal(ins)
+					if f.Desc.IsList() {
+						g.P("//element value must in ", string(d))
+					} else {
+						g.P("//value must in ", string(d))
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_EnumNotIn) {
+					notins := proto.GetExtension(fop, pbex.E_EnumNotIn).([]int64)
+					d, _ := json.Marshal(notins)
+					if f.Desc.IsList() {
+						g.P("//element value must not in ", string(d))
+					} else {
+						g.P("//value must not in ", string(d))
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_EnumGt) {
+					gt := proto.GetExtension(fop, pbex.E_EnumGt).(int64)
+					if f.Desc.IsList() {
+						g.P("//element value must > ", gt)
+					} else {
+						g.P("//value must > ", gt)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_EnumGte) {
+					gte := proto.GetExtension(fop, pbex.E_EnumGte).(int64)
+					if f.Desc.IsList() {
+						g.P("//element value must >= ", gte)
+					} else {
+						g.P("//value must >= ", gte)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_EnumLt) {
+					lt := proto.GetExtension(fop, pbex.E_EnumLt).(int64)
+					if f.Desc.IsList() {
+						g.P("//element value must < ", lt)
+					} else {
+						g.P("//value must < ", lt)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_EnumLte) {
+					lte := proto.GetExtension(fop, pbex.E_EnumLte).(int64)
+					if f.Desc.IsList() {
+						g.P("//element value must <= ", lte)
+					} else {
+						g.P("//value must <= ", lte)
+					}
+				}
+			}
+		case protoreflect.Int32Kind:
+			fallthrough
+		case protoreflect.Sint32Kind:
+			fallthrough
+		case protoreflect.Sfixed32Kind:
+			//int32
+			fallthrough
+		case protoreflect.Int64Kind:
+			fallthrough
+		case protoreflect.Sint64Kind:
+			fallthrough
+		case protoreflect.Sfixed64Kind:
+			//int64
+			if f.Desc.IsList() {
+				if f.Desc.Kind() == protoreflect.Int32Kind ||
+					f.Desc.Kind() == protoreflect.Sint32Kind ||
+					f.Desc.Kind() == protoreflect.Sfixed32Kind {
+					line += "[1,2]"
+				} else {
+					line += "[\"1\",\"2\"]"
+				}
+			} else {
+				if f.Desc.Kind() == protoreflect.Int32Kind ||
+					f.Desc.Kind() == protoreflect.Sint32Kind ||
+					f.Desc.Kind() == protoreflect.Sfixed32Kind {
+					line += "0"
+				} else {
+					line += "\"0\""
+				}
+			}
+			if i != len(m.Fields)-1 {
+				line += ","
+			}
+			//tail comments
+			if f.Desc.Kind() == protoreflect.Int64Kind ||
+				f.Desc.Kind() == protoreflect.Sint64Kind ||
+				f.Desc.Kind() == protoreflect.Sfixed64Kind {
+				line += "//int64 use string to avoid overflow"
+			} else {
+				line += "//int32"
+			}
+			//leading comments
+			if !skipoptions {
+				if proto.HasExtension(fop, pbex.E_IntIn) {
+					ins := proto.GetExtension(fop, pbex.E_IntIn).([]int64)
+					d, _ := json.Marshal(ins)
+					if f.Desc.IsList() {
+						g.P("//element value must in ", string(d))
+					} else {
+						g.P("//value must in ", string(d))
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_IntNotIn) {
+					notins := proto.GetExtension(fop, pbex.E_IntNotIn).([]int64)
+					d, _ := json.Marshal(notins)
+					if f.Desc.IsList() {
+						g.P("//element value must not in ", string(d))
+					} else {
+						g.P("//value must not in ", string(d))
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_IntGt) {
+					gt := proto.GetExtension(fop, pbex.E_IntGt).(int64)
+					if f.Desc.IsList() {
+						g.P("//element value must > ", gt)
+					} else {
+						g.P("//value must > ", gt)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_IntGte) {
+					gte := proto.GetExtension(fop, pbex.E_IntGte).(int64)
+					if f.Desc.IsList() {
+						g.P("//element value must >= ", gte)
+					} else {
+						g.P("//value must >= ", gte)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_IntLt) {
+					lt := proto.GetExtension(fop, pbex.E_IntLt).(int64)
+					if f.Desc.IsList() {
+						g.P("//element value must < ", lt)
+					} else {
+						g.P("//value must < ", lt)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_IntLte) {
+					lte := proto.GetExtension(fop, pbex.E_IntLte).(int64)
+					if f.Desc.IsList() {
+						g.P("//element value must <= ", lte)
+					} else {
+						g.P("//value must <= ", lte)
+					}
+				}
+			}
+		case protoreflect.Uint32Kind:
+			fallthrough
+		case protoreflect.Fixed32Kind:
+			//uint32
+			fallthrough
+		case protoreflect.Uint64Kind:
+			fallthrough
+		case protoreflect.Fixed64Kind:
+			//uint64
+			if f.Desc.IsList() {
+				if f.Desc.Kind() == protoreflect.Uint32Kind ||
+					f.Desc.Kind() == protoreflect.Fixed32Kind {
+					line += "[1,2]"
+				} else {
+					line += "[\"1\",\"2\"]"
+				}
+			} else {
+				if f.Desc.Kind() == protoreflect.Uint32Kind ||
+					f.Desc.Kind() == protoreflect.Fixed32Kind {
+					line += "0"
+				} else {
+					line += "\"0\""
+				}
+			}
+			if i != len(m.Fields)-1 {
+				line += ","
+			}
+			//tail comments
+			if f.Desc.Kind() == protoreflect.Uint64Kind ||
+				f.Desc.Kind() == protoreflect.Fixed64Kind {
+				line += "//uint64 use string to avoid overflow"
+			} else {
+				line += "//uint32"
+			}
+			//leading comments
+			if !skipoptions {
+				if proto.HasExtension(fop, pbex.E_UintIn) {
+					ins := proto.GetExtension(fop, pbex.E_UintIn).([]uint64)
+					d, _ := json.Marshal(ins)
+					if f.Desc.IsList() {
+						g.P("//element value must in ", string(d))
+					} else {
+						g.P("//value must in ", string(d))
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_UintNotIn) {
+					notins := proto.GetExtension(fop, pbex.E_UintNotIn).([]uint64)
+					d, _ := json.Marshal(notins)
+					if f.Desc.IsList() {
+						g.P("//element value must not in ", string(d))
+					} else {
+						g.P("//value must not in ", string(d))
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_UintGt) {
+					gt := proto.GetExtension(fop, pbex.E_UintGt).(uint64)
+					if f.Desc.IsList() {
+						g.P("//element value must > ", gt)
+					} else {
+						g.P("//value must > ", gt)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_UintGte) {
+					gte := proto.GetExtension(fop, pbex.E_UintGte).(uint64)
+					if f.Desc.IsList() {
+						g.P("//element value must >= ", gte)
+					} else {
+						g.P("//value must >= ", gte)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_UintLt) {
+					lt := proto.GetExtension(fop, pbex.E_UintLt).(uint64)
+					if f.Desc.IsList() {
+						g.P("element value must < ", lt)
+					} else {
+						g.P("value must < ", lt)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_UintLte) {
+					lte := proto.GetExtension(fop, pbex.E_UintLte).(uint64)
+					if f.Desc.IsList() {
+						g.P("element value must <= ", lte)
+					} else {
+						g.P("value must <= ", lte)
+					}
+				}
+			}
+		case protoreflect.FloatKind:
+			//float32
+			fallthrough
+		case protoreflect.DoubleKind:
+			//float64
+			if f.Desc.IsList() {
+				line += "[0.1,0.2]"
+			} else {
+				line += "0.1"
+
+			}
+			if i != len(m.Fields)-1 {
+				line += ","
+			}
+			//tail comments
+			if f.Desc.Kind() == protoreflect.FloatKind {
+				line += "//float32"
+			} else {
+				line += "//float64"
+			}
+			//leading comments
+			if !skipoptions {
+				if proto.HasExtension(fop, pbex.E_FloatIn) {
+					ins := proto.GetExtension(fop, pbex.E_FloatIn).([]float64)
+					d, _ := json.Marshal(ins)
+					if f.Desc.IsList() {
+						g.P("//element value must in ", string(d))
+					} else {
+						g.P("//value must in ", string(d))
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_FloatNotIn) {
+					notins := proto.GetExtension(fop, pbex.E_FloatNotIn).([]float64)
+					d, _ := json.Marshal(notins)
+					if f.Desc.IsList() {
+						g.P("//element value must not in ", string(d))
+					} else {
+						g.P("//value must not in ", string(d))
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_FloatGt) {
+					gt := proto.GetExtension(fop, pbex.E_FloatGt).(float64)
+					if f.Desc.IsList() {
+						g.P("//element value must > ", gt)
+					} else {
+						g.P("//value must > ", gt)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_FloatGte) {
+					gte := proto.GetExtension(fop, pbex.E_FloatGte).(float64)
+					if f.Desc.IsList() {
+						g.P("//element value must >= ", gte)
+					} else {
+						g.P("//value must >= ", gte)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_FloatLt) {
+					lt := proto.GetExtension(fop, pbex.E_FloatLt).(float64)
+					if f.Desc.IsList() {
+						g.P("element value must < ", lt)
+					} else {
+						g.P("value must < ", lt)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_FloatLte) {
+					lte := proto.GetExtension(fop, pbex.E_FloatLte).(float64)
+					if f.Desc.IsList() {
+						g.P("element value must <= ", lte)
+					} else {
+						g.P("value must <= ", lte)
+					}
+				}
+			}
+		case protoreflect.BytesKind:
+			fallthrough
+		case protoreflect.StringKind:
+			if f.Desc.IsList() {
+				if f.Desc.Kind() == protoreflect.BytesKind {
+					line += "[\"base64 str\",\"base64 str\"]"
+				} else {
+					line += "[\"str\",\"str\"]"
+				}
+			} else {
+				if f.Desc.Kind() == protoreflect.BytesKind {
+					line += "\"base64 str\""
+				} else {
+					line += "\"str\""
+				}
+			}
+			if i != len(m.Fields)-1 {
+				line += ","
+			}
+			//leading comments
+			if !skipoptions {
+				if proto.HasExtension(fop, pbex.E_StringBytesIn) {
+					ins := proto.GetExtension(fop, pbex.E_StringBytesIn).([]string)
+					d, _ := json.Marshal(ins)
+					if f.Desc.IsList() {
+						g.P("//element value must in ", string(d))
+					} else {
+						g.P("//value must in ", string(d))
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_StringBytesNotIn) {
+					notins := proto.GetExtension(fop, pbex.E_StringBytesNotIn).([]string)
+					d, _ := json.Marshal(notins)
+					if f.Desc.IsList() {
+						g.P("//element value must not in ", string(d))
+					} else {
+						g.P("//value must not in ", string(d))
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_StringBytesRegMatch) {
+					match := proto.GetExtension(fop, pbex.E_StringBytesRegMatch).([]string)
+					d := strings.Join(match, " and ")
+					if f.Desc.IsList() {
+						g.P("//element value must match regexp ", d)
+					} else {
+						g.P("//value must match regexp ", d)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_StringBytesRegNotMatch) {
+					notmatch := proto.GetExtension(fop, pbex.E_StringBytesRegNotMatch).([]string)
+					d := strings.Join(notmatch, " and ")
+					if f.Desc.IsList() {
+						g.P("//element value must not match regexp ", d)
+					} else {
+						g.P("//value must not match regexp ", d)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_StringBytesLenEq) {
+					eq := proto.GetExtension(fop, pbex.E_StringBytesLenEq).(uint64)
+					if f.Desc.IsList() {
+						g.P("//element value length must == ", eq)
+					} else {
+						g.P("//value length must == ", eq)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_StringBytesLenNotEq) {
+					noteq := proto.GetExtension(fop, pbex.E_StringBytesLenNotEq).(uint64)
+					if f.Desc.IsList() {
+						g.P("//element value length must != ", noteq)
+					} else {
+						g.P("//value length must != ", noteq)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_StringBytesLenGt) {
+					gt := proto.GetExtension(fop, pbex.E_StringBytesLenGt).(uint64)
+					if f.Desc.IsList() {
+						g.P("//element value length must > ", gt)
+					} else {
+						g.P("//value length must > ", gt)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_StringBytesLenGte) {
+					gte := proto.GetExtension(fop, pbex.E_StringBytesLenGte).(uint64)
+					if f.Desc.IsList() {
+						g.P("//element value length must >= ", gte)
+					} else {
+						g.P("//value length must >= ", gte)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_StringBytesLenLt) {
+					lt := proto.GetExtension(fop, pbex.E_StringBytesLenLt).(uint64)
+					if f.Desc.IsList() {
+						g.P("//element value length must < ", lt)
+					} else {
+						g.P("//value length must < ", lt)
+					}
+				}
+				if proto.HasExtension(fop, pbex.E_StringBytesLenLte) {
+					lte := proto.GetExtension(fop, pbex.E_StringBytesLenLte).(uint64)
+					if f.Desc.IsList() {
+						g.P("//element value length must <= ", lte)
+					} else {
+						g.P("//value length must <= ", lte)
+					}
+				}
+			}
+		case protoreflect.MessageKind:
+			if f.Desc.IsMap() {
+				line += "{"
+				tmp := ""
+				key := f.Desc.MapKey()
+				value := f.Desc.MapValue()
+				switch key.Kind() {
+				case protoreflect.BoolKind:
+					//bool
+					tmp += strconv.Quote("true")
+				case protoreflect.Int32Kind:
+					fallthrough
+				case protoreflect.Sint32Kind:
+					fallthrough
+				case protoreflect.Sfixed32Kind:
+					//int32
+					fallthrough
+				case protoreflect.Int64Kind:
+					fallthrough
+				case protoreflect.Sint64Kind:
+					fallthrough
+				case protoreflect.Sfixed64Kind:
+					//int64
+					fallthrough
+				case protoreflect.Uint32Kind:
+					fallthrough
+				case protoreflect.Fixed32Kind:
+					//uint32
+					fallthrough
+				case protoreflect.Uint64Kind:
+					fallthrough
+				case protoreflect.Fixed64Kind:
+					//uint64
+					tmp += strconv.Quote("0")
+				case protoreflect.StringKind:
+					tmp += strconv.Quote("str")
+				}
+				tmp += ":"
+				switch value.Kind() {
+				case protoreflect.BoolKind:
+					//bool
+					tmp += strconv.Quote("true")
+				case protoreflect.EnumKind:
+					fallthrough
+				case protoreflect.Int32Kind:
+					fallthrough
+				case protoreflect.Sint32Kind:
+					fallthrough
+				case protoreflect.Sfixed32Kind:
+					//int32
+					fallthrough
+				case protoreflect.Uint32Kind:
+					fallthrough
+				case protoreflect.Fixed32Kind:
+					//uint32
+					tmp += "0"
+				case protoreflect.Int64Kind:
+					fallthrough
+				case protoreflect.Sint64Kind:
+					fallthrough
+				case protoreflect.Sfixed64Kind:
+					//int64
+					fallthrough
+				case protoreflect.Uint64Kind:
+					fallthrough
+				case protoreflect.Fixed64Kind:
+					//uint64
+					tmp += strconv.Quote("0")
+				case protoreflect.FloatKind:
+					//float32
+					fallthrough
+				case protoreflect.DoubleKind:
+					//float64
+					tmp += "0.1"
+				case protoreflect.BytesKind:
+					//bytes
+					tmp += strconv.Quote("base64 str")
+				case protoreflect.StringKind:
+					//string
+					tmp += strconv.Quote("str")
+				case protoreflect.MessageKind:
+					//message
+					tmp += "{}"
+				}
+				line += tmp
+				line += ","
+				line += tmp
+				line += "}"
+			} else if f.Desc.IsList() {
+				line += "[{},{}]"
+			} else {
+				line += "{}"
+			}
+			if i != len(m.Fields)-1 {
+				line += ","
+			}
+			//tail comments
+			if f.Desc.IsMap() {
+				key := f.Desc.MapKey()
+				value := f.Desc.MapValue()
+				switch key.Kind() {
+				case protoreflect.BoolKind:
+					//bool
+					line += "//key-bool "
+				case protoreflect.Int32Kind:
+					fallthrough
+				case protoreflect.Sint32Kind:
+					fallthrough
+				case protoreflect.Sfixed32Kind:
+					//int32
+					line += "//key-int32 "
+				case protoreflect.Int64Kind:
+					fallthrough
+				case protoreflect.Sint64Kind:
+					fallthrough
+				case protoreflect.Sfixed64Kind:
+					//int64
+					line += "//key-int64 "
+				case protoreflect.Uint32Kind:
+					fallthrough
+				case protoreflect.Fixed32Kind:
+					//uint32
+					line += "//key-uint32 "
+				case protoreflect.Uint64Kind:
+					fallthrough
+				case protoreflect.Fixed64Kind:
+					//uint64
+					line += "//key-uint64 "
+				case protoreflect.StringKind:
+					line += "//key-string "
+				}
+				switch value.Kind() {
+				case protoreflect.BoolKind:
+					//bool
+					line += strconv.Quote("value-bool")
+				case protoreflect.EnumKind:
+					fallthrough
+				case protoreflect.Int32Kind:
+					fallthrough
+				case protoreflect.Sint32Kind:
+					fallthrough
+				case protoreflect.Sfixed32Kind:
+					//int32
+					line += "value-int32"
+				case protoreflect.Uint32Kind:
+					fallthrough
+				case protoreflect.Fixed32Kind:
+					//uint32
+					line += "value-uint32"
+				case protoreflect.Int64Kind:
+					fallthrough
+				case protoreflect.Sint64Kind:
+					fallthrough
+				case protoreflect.Sfixed64Kind:
+					//int64
+					line += "value-int64 use string to avoid overflow"
+				case protoreflect.Uint64Kind:
+					fallthrough
+				case protoreflect.Fixed64Kind:
+					//uint64
+					line += "value-uint64 use string to avoid overflow"
+				case protoreflect.FloatKind:
+					//float32
+					line += "value-float32"
+				case protoreflect.DoubleKind:
+					//float64
+					line += "value-float64"
+				case protoreflect.BytesKind:
+					//bytes
+					break
+				case protoreflect.StringKind:
+					//string
+					break
+				case protoreflect.MessageKind:
+					//message
+					line += "value-object " + string(value.Message().Name())
+				}
+			} else {
+				newmessage[string(f.Message.Desc.FullName())] = f.Message
+				line += "//object " + string(f.Message.Desc.Name())
+			}
+			//leading comments
+			if !skipoptions {
+				if f.Desc.IsMap() {
+					key := f.Desc.MapKey()
+					value := f.Desc.MapValue()
+					switch key.Kind() {
+					case protoreflect.Int32Kind:
+						fallthrough
+					case protoreflect.Sint32Kind:
+						fallthrough
+					case protoreflect.Sfixed32Kind:
+						//int32
+						fallthrough
+					case protoreflect.Int64Kind:
+						fallthrough
+					case protoreflect.Sint64Kind:
+						fallthrough
+					case protoreflect.Sfixed64Kind:
+						//int64
+						if proto.HasExtension(fop, pbex.E_MapKeyIntIn) {
+							ins := proto.GetExtension(fop, pbex.E_MapKeyIntIn).([]int64)
+							d, _ := json.Marshal(ins)
+							g.P("//key must in ", string(d))
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyIntIn) {
+							notins := proto.GetExtension(fop, pbex.E_MapKeyIntNotIn).([]int64)
+							d, _ := json.Marshal(notins)
+							g.P("//key must not in ", string(d))
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyIntGt) {
+							gt := proto.GetExtension(fop, pbex.E_MapKeyIntGt).(int64)
+							g.P("//key must > ", gt)
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyIntGte) {
+							gte := proto.GetExtension(fop, pbex.E_MapKeyIntGte).(int64)
+							g.P("//key must >= ", gte)
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyIntLt) {
+							lt := proto.GetExtension(fop, pbex.E_MapKeyIntLt).(int64)
+							g.P("//key must < ", lt)
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyIntLte) {
+							lte := proto.GetExtension(fop, pbex.E_MapKeyIntLte).(int64)
+							g.P("//key must <= ", lte)
+						}
+					case protoreflect.Uint32Kind:
+						fallthrough
+					case protoreflect.Fixed32Kind:
+						//uint32
+						fallthrough
+					case protoreflect.Uint64Kind:
+						fallthrough
+					case protoreflect.Fixed64Kind:
+						//uint64
+						if proto.HasExtension(fop, pbex.E_MapKeyUintIn) {
+							ins := proto.GetExtension(fop, pbex.E_MapKeyUintIn).([]uint64)
+							d, _ := json.Marshal(ins)
+							g.P("//key must in ", string(d))
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyUintNotIn) {
+							notins := proto.GetExtension(fop, pbex.E_MapKeyUintNotIn).([]uint64)
+							d, _ := json.Marshal(notins)
+							g.P("//key must not in ", string(d))
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyUintGt) {
+							gt := proto.GetExtension(fop, pbex.E_MapKeyUintGt).(uint64)
+							g.P("//key must > ", gt)
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyUintGte) {
+							gte := proto.GetExtension(fop, pbex.E_MapKeyUintGte).(uint64)
+							g.P("//key must >= ", gte)
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyUintLt) {
+							lt := proto.GetExtension(fop, pbex.E_MapKeyUintLt).(uint64)
+							g.P("//key must < ", lt)
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyUintLte) {
+							lte := proto.GetExtension(fop, pbex.E_MapKeyUintLte).(uint64)
+							g.P("//key must <= ", lte)
+						}
+					case protoreflect.StringKind:
+						if proto.HasExtension(fop, pbex.E_MapKeyStringIn) {
+							ins := proto.GetExtension(fop, pbex.E_MapKeyStringIn).([]string)
+							d, _ := json.Marshal(ins)
+							g.P("//key must in ", string(d))
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyStringNotIn) {
+							notins := proto.GetExtension(fop, pbex.E_MapKeyStringNotIn).([]string)
+							d, _ := json.Marshal(notins)
+							g.P("//key must not in ", string(d))
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyStringRegMatch) {
+							match := proto.GetExtension(fop, pbex.E_MapKeyStringRegMatch).([]string)
+							d := strings.Join(match, " and ")
+							g.P("//key must match regexp ", d)
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyStringRegNotMatch) {
+							notmatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegNotMatch).([]string)
+							d := strings.Join(notmatch, " and ")
+							g.P("//key must not match regexp ", d)
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyStringLenEq) {
+							eq := proto.GetExtension(fop, pbex.E_MapKeyStringLenEq).(uint64)
+							g.P("//key length must == ", eq)
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyStringLenNotEq) {
+							noteq := proto.GetExtension(fop, pbex.E_MapKeyStringLenNotEq).(uint64)
+							g.P("//key length must != ", noteq)
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyStringLenGt) {
+							gt := proto.GetExtension(fop, pbex.E_MapKeyStringLenGt).(uint64)
+							g.P("//key length must > ", gt)
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyStringLenGte) {
+							gte := proto.GetExtension(fop, pbex.E_MapKeyStringLenGte).(uint64)
+							g.P("//key length must >= ", gte)
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyStringLenLt) {
+							lt := proto.GetExtension(fop, pbex.E_MapKeyStringLenLt).(uint64)
+							g.P("//key length must < ", lt)
+						}
+						if proto.HasExtension(fop, pbex.E_MapKeyStringLenLte) {
+							lte := proto.GetExtension(fop, pbex.E_MapKeyStringLenLte).(uint64)
+							g.P("//key length must <= ", lte)
+						}
+					}
+					switch value.Kind() {
+					case protoreflect.BoolKind:
+						//bool
+						if proto.HasExtension(fop, pbex.E_MapValueBoolEq) {
+							eq := proto.GetExtension(fop, pbex.E_MapValueBoolEq).(bool)
+							g.P("//value must be ", eq)
+						}
+					case protoreflect.EnumKind:
+						//int32
+						if proto.HasExtension(fop, pbex.E_MapValueEnumIn) {
+							ins := proto.GetExtension(fop, pbex.E_MapValueEnumIn).([]int64)
+							d, _ := json.Marshal(ins)
+							g.P("//value must in ", string(d))
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueEnumNotIn) {
+							notins := proto.GetExtension(fop, pbex.E_MapValueEnumNotIn).([]int64)
+							d, _ := json.Marshal(notins)
+							g.P("//value must not in ", string(d))
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueEnumGt) {
+							gt := proto.GetExtension(fop, pbex.E_MapValueEnumGt).(int64)
+							g.P("//value must > ", gt)
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueEnumGte) {
+							gte := proto.GetExtension(fop, pbex.E_MapValueEnumGte).(int64)
+							g.P("//value must >= ", gte)
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueEnumLt) {
+							lt := proto.GetExtension(fop, pbex.E_MapValueEnumLt).(int64)
+							g.P("//value must < ", lt)
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueEnumLte) {
+							lte := proto.GetExtension(fop, pbex.E_MapValueEnumLte).(int64)
+							g.P("//value must <= ", lte)
+						}
+					case protoreflect.Int32Kind:
+						fallthrough
+					case protoreflect.Sint32Kind:
+						fallthrough
+					case protoreflect.Sfixed32Kind:
+						//int32
+						fallthrough
+					case protoreflect.Int64Kind:
+						fallthrough
+					case protoreflect.Sint64Kind:
+						fallthrough
+					case protoreflect.Sfixed64Kind:
+						//int64
+						if proto.HasExtension(fop, pbex.E_MapValueIntIn) {
+							ins := proto.GetExtension(fop, pbex.E_MapValueIntIn).([]int64)
+							d, _ := json.Marshal(ins)
+							g.P("//value must in ", string(d))
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueIntNotIn) {
+							notins := proto.GetExtension(fop, pbex.E_MapValueIntNotIn).([]int64)
+							d, _ := json.Marshal(notins)
+							g.P("//value must not in ", string(d))
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueIntGt) {
+							gt := proto.GetExtension(fop, pbex.E_MapValueIntGt).(int64)
+							g.P("//value must > ", gt)
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueIntGte) {
+							gte := proto.GetExtension(fop, pbex.E_MapValueIntGte).(int64)
+							g.P("//value must >= ", gte)
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueIntLt) {
+							lt := proto.GetExtension(fop, pbex.E_MapValueIntLt).(int64)
+							g.P("//value must < ", lt)
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueIntLte) {
+							lte := proto.GetExtension(fop, pbex.E_MapValueIntLte).(int64)
+							g.P("//value must <= ", lte)
+						}
+					case protoreflect.Uint32Kind:
+						fallthrough
+					case protoreflect.Fixed32Kind:
+						//uint32
+						fallthrough
+					case protoreflect.Uint64Kind:
+						fallthrough
+					case protoreflect.Fixed64Kind:
+						//uint64
+						if proto.HasExtension(fop, pbex.E_MapValueUintIn) {
+							ins := proto.GetExtension(fop, pbex.E_MapValueUintIn).([]uint64)
+							d, _ := json.Marshal(ins)
+							g.P("//value must in ", string(d))
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueUintNotIn) {
+							notins := proto.GetExtension(fop, pbex.E_MapValueUintNotIn).([]uint64)
+							d, _ := json.Marshal(notins)
+							g.P("//value must not in ", string(d))
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueUintGt) {
+							gt := proto.GetExtension(fop, pbex.E_MapValueUintGt).(uint64)
+							g.P("//value must > ", gt)
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueUintGte) {
+							gte := proto.GetExtension(fop, pbex.E_MapValueUintGte).(uint64)
+							g.P("//value must >= ", gte)
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueUintLt) {
+							lt := proto.GetExtension(fop, pbex.E_MapValueUintLt).(uint64)
+							g.P("//value must < ", lt)
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueUintLte) {
+							lte := proto.GetExtension(fop, pbex.E_MapValueUintLte).(uint64)
+							g.P("//value must <= ", lte)
+						}
+					case protoreflect.FloatKind:
+						//float32
+						fallthrough
+					case protoreflect.DoubleKind:
+						//float64
+						if proto.HasExtension(fop, pbex.E_MapValueFloatIn) {
+							ins := proto.GetExtension(fop, pbex.E_MapValueFloatIn).([]float64)
+							d, _ := json.Marshal(ins)
+							g.P("//value must in ", string(d))
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueFloatNotIn) {
+							notins := proto.GetExtension(fop, pbex.E_MapValueFloatNotIn).([]float64)
+							d, _ := json.Marshal(notins)
+							g.P("//value must not in ", string(d))
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueFloatGt) {
+							gt := proto.GetExtension(fop, pbex.E_MapValueFloatGt).(float64)
+							g.P("//value must > ", gt)
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueFloatGte) {
+							gte := proto.GetExtension(fop, pbex.E_MapValueFloatGte).(float64)
+							g.P("//value must >= ", gte)
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueFloatLt) {
+							lt := proto.GetExtension(fop, pbex.E_MapValueFloatLt).(float64)
+							g.P("//value must < ", lt)
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueFloatLte) {
+							lte := proto.GetExtension(fop, pbex.E_MapValueFloatLte).(float64)
+							g.P("//value must <= ", lte)
+						}
+					case protoreflect.BytesKind:
+						//bytes
+						fallthrough
+					case protoreflect.StringKind:
+						//string
+						if proto.HasExtension(fop, pbex.E_MapValueStringBytesIn) {
+							ins := proto.GetExtension(fop, pbex.E_MapValueStringBytesIn).([]string)
+							d, _ := json.Marshal(ins)
+							if f.Desc.Kind() == protoreflect.BytesKind {
+								g.P("//value after decode base64 must in ", string(d))
+							} else {
+								g.P("//value must in ", string(d))
+							}
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueStringBytesNotIn) {
+							notins := proto.GetExtension(fop, pbex.E_MapValueStringBytesNotIn).([]string)
+							d, _ := json.Marshal(notins)
+							if f.Desc.Kind() == protoreflect.BytesKind {
+								g.P("//value after decode base64 must not in ", string(d))
+							} else {
+								g.P("//value must not in ", string(d))
+							}
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueStringBytesRegMatch) {
+							match := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegMatch).([]string)
+							d := strings.Join(match, " and ")
+							if f.Desc.Kind() == protoreflect.BytesKind {
+								g.P("//value after decode base64 must match regexp ", d)
+							} else {
+								g.P("//value must match regexp ", d)
+							}
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueStringBytesRegNotMatch) {
+							notmatch := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegNotMatch).([]string)
+							d := strings.Join(notmatch, " and ")
+							if f.Desc.Kind() == protoreflect.BytesKind {
+								g.P("//value after decode base64 must not match regexp ", d)
+							} else {
+								g.P("//value must not match regexp ", d)
+							}
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenEq) {
+							eq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenEq).(uint64)
+							if f.Desc.Kind() == protoreflect.BytesKind {
+								g.P("//value after decode base64 length must == ", eq)
+							} else {
+								g.P("//value length must == ", eq)
+							}
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenNotEq) {
+							noteq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenNotEq).(uint64)
+							if f.Desc.Kind() == protoreflect.BytesKind {
+								g.P("//value after decode base64 length must != ", noteq)
+							} else {
+								g.P("//value length must != ", noteq)
+							}
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGt) {
+							gt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGt).(uint64)
+							if f.Desc.Kind() == protoreflect.BytesKind {
+								g.P("//value after decode base64 length must > ", gt)
+							} else {
+								g.P("//value length must > ", gt)
+							}
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGte) {
+							gte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGte).(uint64)
+							if f.Desc.Kind() == protoreflect.BytesKind {
+								g.P("//value after decode base64 length must >= ", gte)
+							} else {
+								g.P("//value length must >= ", gte)
+							}
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLt) {
+							lt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLt).(uint64)
+							if f.Desc.Kind() == protoreflect.BytesKind {
+								g.P("//value after decode base64 length must < ", lt)
+							} else {
+								g.P("//value length must < ", lt)
+							}
+						}
+						if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLte) {
+							lte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLte).(uint64)
+							if f.Desc.Kind() == protoreflect.BytesKind {
+								g.P("//value after decode base64 length must <= ", lte)
+							} else {
+								g.P("//value length must <= ", lte)
+							}
+						}
+					case protoreflect.MessageKind:
+						//message
+						if proto.HasExtension(fop, pbex.E_MapValueMessageNotNil) {
+							notnil := proto.GetExtension(fop, pbex.E_MapValueMessageNotNil).(bool)
+							if notnil {
+								g.P("//value must not be nil")
+							}
+						}
+					}
+				} else {
+					if proto.HasExtension(fop, pbex.E_MessageNotNil) {
+						if notnil := proto.GetExtension(fop, pbex.E_MessageNotNil).(bool); notnil {
+							if f.Desc.IsList() {
+								g.P("//element value must not be null")
+							} else {
+								g.P("//value must not be null")
+							}
+						}
+					}
+				}
+			}
+		}
+		if (f.Desc.IsMap() || f.Desc.IsList()) && !skipoptions {
+			if proto.HasExtension(fop, pbex.E_MapRepeatedLenEq) {
+				eq := proto.GetExtension(fop, pbex.E_MapRepeatedLenEq).(uint64)
+				if f.Desc.IsMap() {
+					g.P("//field num must == ", eq)
+				} else {
+					g.P("//element num must == ", eq)
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapRepeatedLenNotEq) {
+				noteq := proto.GetExtension(fop, pbex.E_MapRepeatedLenNotEq).(uint64)
+				if f.Desc.IsMap() {
+					g.P("//field num must != ", noteq)
+				} else {
+					g.P("//element num must != ", noteq)
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapRepeatedLenGt) {
+				gt := proto.GetExtension(fop, pbex.E_MapRepeatedLenGt).(uint64)
+				if f.Desc.IsMap() {
+					g.P("//field num must > ", gt)
+				} else {
+					g.P("//element num must > ", gt)
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapRepeatedLenGte) {
+				gte := proto.GetExtension(fop, pbex.E_MapRepeatedLenGte).(uint64)
+				if f.Desc.IsMap() {
+					g.P("//field num must >= ", gte)
+				} else {
+					g.P("//element num must >= ", gte)
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapRepeatedLenLt) {
+				lt := proto.GetExtension(fop, pbex.E_MapRepeatedLenLt).(uint64)
+				if f.Desc.IsMap() {
+					g.P("//field num must < ", lt)
+				} else {
+					g.P("//element num must < ", lt)
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapRepeatedLenLte) {
+				lte := proto.GetExtension(fop, pbex.E_MapRepeatedLenLte).(uint64)
+				if f.Desc.IsMap() {
+					g.P("//field num must <= ", lte)
+				} else {
+					g.P("//element num must <= ", lte)
+				}
+			}
+		}
+		g.P(line)
+	}
+	g.P("}")
+	for k, v := range newmessage {
+		if _, ok := checked[k]; ok {
+			continue
+		}
+		jsondoc(g, v, true, skipoptions, checked)
+	}
+	return
+}
+func formdoc(g *protogen.GeneratedFile, m *protogen.Message) {
+	newmessage := make(map[string]*protogen.Message)
+	for _, f := range m.Fields {
+		fop := f.Desc.Options().(*descriptorpb.FieldOptions)
+		comments := strings.TrimSuffix(f.Comments.Leading.String()+f.Comments.Trailing.String(), "\n")
+		if comments != "" {
+			g.P(comments)
+		}
+		line := strconv.Quote(string(f.Desc.Name())) + "="
+		switch f.Desc.Kind() {
+		case protoreflect.BoolKind:
+			if f.Desc.IsList() {
+				line += "[true,true]"
+			} else {
+				line += "true"
+			}
+			//tail comments
+			line += "//bool"
+			//leading comments
 			if proto.HasExtension(fop, pbex.E_BoolEq) {
 				eq := proto.GetExtension(fop, pbex.E_BoolEq).(bool)
 				if f.Desc.IsList() {
@@ -119,10 +1213,9 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, skipoptions bool) m
 			} else {
 				line += "0"
 			}
-			if i != len(m.Fields)-1 {
-				line += ","
-			}
+			//tail comments
 			line += "//int32"
+			//leading comments
 			origin := make([]int32, 0, len(f.Enum.Values))
 			for _, v := range f.Enum.Values {
 				origin = append(origin, int32(v.Desc.Number()))
@@ -213,9 +1306,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, skipoptions bool) m
 					line += "\"0\""
 				}
 			}
-			if i != len(m.Fields)-1 {
-				line += ","
-			}
+			//tail comments
 			if f.Desc.Kind() == protoreflect.Int64Kind ||
 				f.Desc.Kind() == protoreflect.Sint64Kind ||
 				f.Desc.Kind() == protoreflect.Sfixed64Kind {
@@ -223,6 +1314,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, skipoptions bool) m
 			} else {
 				line += "//int32"
 			}
+			//leading comments
 			if proto.HasExtension(fop, pbex.E_IntIn) {
 				ins := proto.GetExtension(fop, pbex.E_IntIn).([]int64)
 				d, _ := json.Marshal(ins)
@@ -297,15 +1389,14 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, skipoptions bool) m
 					line += "\"0\""
 				}
 			}
-			if i != len(m.Fields)-1 {
-				line += ","
-			}
+			//tail comments
 			if f.Desc.Kind() == protoreflect.Uint64Kind ||
 				f.Desc.Kind() == protoreflect.Fixed64Kind {
 				line += "//uint64 use string to avoid overflow"
 			} else {
 				line += "//uint32"
 			}
+			//leading comments
 			if proto.HasExtension(fop, pbex.E_UintIn) {
 				ins := proto.GetExtension(fop, pbex.E_UintIn).([]uint64)
 				d, _ := json.Marshal(ins)
@@ -367,14 +1458,13 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, skipoptions bool) m
 				line += "0.1"
 
 			}
-			if i != len(m.Fields)-1 {
-				line += ","
-			}
+			//tail comments
 			if f.Desc.Kind() == protoreflect.FloatKind {
 				line += "//float32"
 			} else {
 				line += "//float64"
 			}
+			//leading comments
 			if proto.HasExtension(fop, pbex.E_FloatIn) {
 				ins := proto.GetExtension(fop, pbex.E_FloatIn).([]float64)
 				d, _ := json.Marshal(ins)
@@ -441,9 +1531,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, skipoptions bool) m
 					line += "\"str\""
 				}
 			}
-			if i != len(m.Fields)-1 {
-				line += ","
-			}
+			//leading comments
 			if proto.HasExtension(fop, pbex.E_StringBytesIn) {
 				ins := proto.GetExtension(fop, pbex.E_StringBytesIn).([]string)
 				d, _ := json.Marshal(ins)
@@ -464,20 +1552,20 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, skipoptions bool) m
 			}
 			if proto.HasExtension(fop, pbex.E_StringBytesRegMatch) {
 				match := proto.GetExtension(fop, pbex.E_StringBytesRegMatch).([]string)
-				d, _ := json.Marshal(match)
+				d := strings.Join(match, " and ")
 				if f.Desc.IsList() {
-					g.P("//element value must match regexp ", string(d))
+					g.P("//element value must match regexp ", d)
 				} else {
-					g.P("//value must match regexp ", string(d))
+					g.P("//value must match regexp ", d)
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_StringBytesRegNotMatch) {
 				notmatch := proto.GetExtension(fop, pbex.E_StringBytesRegNotMatch).([]string)
-				d, _ := json.Marshal(notmatch)
+				d := strings.Join(notmatch, " and ")
 				if f.Desc.IsList() {
-					g.P("//element value must not match regexp ", string(d))
+					g.P("//element value must not match regexp ", d)
 				} else {
-					g.P("//value must not match regexp ", string(d))
+					g.P("//value must not match regexp ", d)
 				}
 			}
 			if proto.HasExtension(fop, pbex.E_StringBytesLenEq) {
@@ -621,9 +1709,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, skipoptions bool) m
 			} else {
 				line += "{}"
 			}
-			if i != len(m.Fields)-1 {
-				line += ","
-			}
+			//tail comments
 			if f.Desc.IsMap() {
 				key := f.Desc.MapKey()
 				value := f.Desc.MapValue()
@@ -705,7 +1791,373 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, skipoptions bool) m
 					line += "value-object " + string(value.Message().Name())
 				}
 			} else {
+				newmessage[string(f.Message.Desc.FullName())] = f.Message
 				line += "//object " + string(f.Message.Desc.Name())
+			}
+			//leading comments
+			if f.Desc.IsMap() {
+				key := f.Desc.MapKey()
+				value := f.Desc.MapValue()
+				switch key.Kind() {
+				case protoreflect.Int32Kind:
+					fallthrough
+				case protoreflect.Sint32Kind:
+					fallthrough
+				case protoreflect.Sfixed32Kind:
+					//int32
+					fallthrough
+				case protoreflect.Int64Kind:
+					fallthrough
+				case protoreflect.Sint64Kind:
+					fallthrough
+				case protoreflect.Sfixed64Kind:
+					//int64
+					if proto.HasExtension(fop, pbex.E_MapKeyIntIn) {
+						ins := proto.GetExtension(fop, pbex.E_MapKeyIntIn).([]int64)
+						d, _ := json.Marshal(ins)
+						g.P("//key must in ", string(d))
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyIntIn) {
+						notins := proto.GetExtension(fop, pbex.E_MapKeyIntNotIn).([]int64)
+						d, _ := json.Marshal(notins)
+						g.P("//key must not in ", string(d))
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyIntGt) {
+						gt := proto.GetExtension(fop, pbex.E_MapKeyIntGt).(int64)
+						g.P("//key must > ", gt)
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyIntGte) {
+						gte := proto.GetExtension(fop, pbex.E_MapKeyIntGte).(int64)
+						g.P("//key must >= ", gte)
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyIntLt) {
+						lt := proto.GetExtension(fop, pbex.E_MapKeyIntLt).(int64)
+						g.P("//key must < ", lt)
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyIntLte) {
+						lte := proto.GetExtension(fop, pbex.E_MapKeyIntLte).(int64)
+						g.P("//key must <= ", lte)
+					}
+				case protoreflect.Uint32Kind:
+					fallthrough
+				case protoreflect.Fixed32Kind:
+					//uint32
+					fallthrough
+				case protoreflect.Uint64Kind:
+					fallthrough
+				case protoreflect.Fixed64Kind:
+					//uint64
+					if proto.HasExtension(fop, pbex.E_MapKeyUintIn) {
+						ins := proto.GetExtension(fop, pbex.E_MapKeyUintIn).([]uint64)
+						d, _ := json.Marshal(ins)
+						g.P("//key must in ", string(d))
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyUintNotIn) {
+						notins := proto.GetExtension(fop, pbex.E_MapKeyUintNotIn).([]uint64)
+						d, _ := json.Marshal(notins)
+						g.P("//key must not in ", string(d))
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyUintGt) {
+						gt := proto.GetExtension(fop, pbex.E_MapKeyUintGt).(uint64)
+						g.P("//key must > ", gt)
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyUintGte) {
+						gte := proto.GetExtension(fop, pbex.E_MapKeyUintGte).(uint64)
+						g.P("//key must >= ", gte)
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyUintLt) {
+						lt := proto.GetExtension(fop, pbex.E_MapKeyUintLt).(uint64)
+						g.P("//key must < ", lt)
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyUintLte) {
+						lte := proto.GetExtension(fop, pbex.E_MapKeyUintLte).(uint64)
+						g.P("//key must <= ", lte)
+					}
+				case protoreflect.StringKind:
+					if proto.HasExtension(fop, pbex.E_MapKeyStringIn) {
+						ins := proto.GetExtension(fop, pbex.E_MapKeyStringIn).([]string)
+						d, _ := json.Marshal(ins)
+						g.P("//key must in ", string(d))
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyStringNotIn) {
+						notins := proto.GetExtension(fop, pbex.E_MapKeyStringNotIn).([]string)
+						d, _ := json.Marshal(notins)
+						g.P("//key must not in ", string(d))
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyStringRegMatch) {
+						match := proto.GetExtension(fop, pbex.E_MapKeyStringRegMatch).([]string)
+						d := strings.Join(match, " and ")
+						g.P("//key must match regexp ", d)
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyStringRegNotMatch) {
+						notmatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegNotMatch).([]string)
+						d := strings.Join(notmatch, " and ")
+						g.P("//key must not match regexp ", d)
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyStringLenEq) {
+						eq := proto.GetExtension(fop, pbex.E_MapKeyStringLenEq).(uint64)
+						g.P("//key length must == ", eq)
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyStringLenNotEq) {
+						noteq := proto.GetExtension(fop, pbex.E_MapKeyStringLenNotEq).(uint64)
+						g.P("//key length must != ", noteq)
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyStringLenGt) {
+						gt := proto.GetExtension(fop, pbex.E_MapKeyStringLenGt).(uint64)
+						g.P("//key length must > ", gt)
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyStringLenGte) {
+						gte := proto.GetExtension(fop, pbex.E_MapKeyStringLenGte).(uint64)
+						g.P("//key length must >= ", gte)
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyStringLenLt) {
+						lt := proto.GetExtension(fop, pbex.E_MapKeyStringLenLt).(uint64)
+						g.P("//key length must < ", lt)
+					}
+					if proto.HasExtension(fop, pbex.E_MapKeyStringLenLte) {
+						lte := proto.GetExtension(fop, pbex.E_MapKeyStringLenLte).(uint64)
+						g.P("//key length must <= ", lte)
+					}
+				}
+				switch value.Kind() {
+				case protoreflect.BoolKind:
+					//bool
+					if proto.HasExtension(fop, pbex.E_MapValueBoolEq) {
+						eq := proto.GetExtension(fop, pbex.E_MapValueBoolEq).(bool)
+						g.P("//value must be ", eq)
+					}
+				case protoreflect.EnumKind:
+					//int32
+					if proto.HasExtension(fop, pbex.E_MapValueEnumIn) {
+						ins := proto.GetExtension(fop, pbex.E_MapValueEnumIn).([]int64)
+						d, _ := json.Marshal(ins)
+						g.P("//value must in ", string(d))
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueEnumNotIn) {
+						notins := proto.GetExtension(fop, pbex.E_MapValueEnumNotIn).([]int64)
+						d, _ := json.Marshal(notins)
+						g.P("//value must not in ", string(d))
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueEnumGt) {
+						gt := proto.GetExtension(fop, pbex.E_MapValueEnumGt).(int64)
+						g.P("//value must > ", gt)
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueEnumGte) {
+						gte := proto.GetExtension(fop, pbex.E_MapValueEnumGte).(int64)
+						g.P("//value must >= ", gte)
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueEnumLt) {
+						lt := proto.GetExtension(fop, pbex.E_MapValueEnumLt).(int64)
+						g.P("//value must < ", lt)
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueEnumLte) {
+						lte := proto.GetExtension(fop, pbex.E_MapValueEnumLte).(int64)
+						g.P("//value must <= ", lte)
+					}
+				case protoreflect.Int32Kind:
+					fallthrough
+				case protoreflect.Sint32Kind:
+					fallthrough
+				case protoreflect.Sfixed32Kind:
+					//int32
+					fallthrough
+				case protoreflect.Int64Kind:
+					fallthrough
+				case protoreflect.Sint64Kind:
+					fallthrough
+				case protoreflect.Sfixed64Kind:
+					//int64
+					if proto.HasExtension(fop, pbex.E_MapValueIntIn) {
+						ins := proto.GetExtension(fop, pbex.E_MapValueIntIn).([]int64)
+						d, _ := json.Marshal(ins)
+						g.P("//value must in ", string(d))
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueIntNotIn) {
+						notins := proto.GetExtension(fop, pbex.E_MapValueIntNotIn).([]int64)
+						d, _ := json.Marshal(notins)
+						g.P("//value must not in ", string(d))
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueIntGt) {
+						gt := proto.GetExtension(fop, pbex.E_MapValueIntGt).(int64)
+						g.P("//value must > ", gt)
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueIntGte) {
+						gte := proto.GetExtension(fop, pbex.E_MapValueIntGte).(int64)
+						g.P("//value must >= ", gte)
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueIntLt) {
+						lt := proto.GetExtension(fop, pbex.E_MapValueIntLt).(int64)
+						g.P("//value must < ", lt)
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueIntLte) {
+						lte := proto.GetExtension(fop, pbex.E_MapValueIntLte).(int64)
+						g.P("//value must <= ", lte)
+					}
+				case protoreflect.Uint32Kind:
+					fallthrough
+				case protoreflect.Fixed32Kind:
+					//uint32
+					fallthrough
+				case protoreflect.Uint64Kind:
+					fallthrough
+				case protoreflect.Fixed64Kind:
+					//uint64
+					if proto.HasExtension(fop, pbex.E_MapValueUintIn) {
+						ins := proto.GetExtension(fop, pbex.E_MapValueUintIn).([]uint64)
+						d, _ := json.Marshal(ins)
+						g.P("//value must in ", string(d))
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueUintNotIn) {
+						notins := proto.GetExtension(fop, pbex.E_MapValueUintNotIn).([]uint64)
+						d, _ := json.Marshal(notins)
+						g.P("//value must not in ", string(d))
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueUintGt) {
+						gt := proto.GetExtension(fop, pbex.E_MapValueUintGt).(uint64)
+						g.P("//value must > ", gt)
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueUintGte) {
+						gte := proto.GetExtension(fop, pbex.E_MapValueUintGte).(uint64)
+						g.P("//value must >= ", gte)
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueUintLt) {
+						lt := proto.GetExtension(fop, pbex.E_MapValueUintLt).(uint64)
+						g.P("//value must < ", lt)
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueUintLte) {
+						lte := proto.GetExtension(fop, pbex.E_MapValueUintLte).(uint64)
+						g.P("//value must <= ", lte)
+					}
+				case protoreflect.FloatKind:
+					//float32
+					fallthrough
+				case protoreflect.DoubleKind:
+					//float64
+					if proto.HasExtension(fop, pbex.E_MapValueFloatIn) {
+						ins := proto.GetExtension(fop, pbex.E_MapValueFloatIn).([]float64)
+						d, _ := json.Marshal(ins)
+						g.P("//value must in ", string(d))
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueFloatNotIn) {
+						notins := proto.GetExtension(fop, pbex.E_MapValueFloatNotIn).([]float64)
+						d, _ := json.Marshal(notins)
+						g.P("//value must not in ", string(d))
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueFloatGt) {
+						gt := proto.GetExtension(fop, pbex.E_MapValueFloatGt).(float64)
+						g.P("//value must > ", gt)
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueFloatGte) {
+						gte := proto.GetExtension(fop, pbex.E_MapValueFloatGte).(float64)
+						g.P("//value must >= ", gte)
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueFloatLt) {
+						lt := proto.GetExtension(fop, pbex.E_MapValueFloatLt).(float64)
+						g.P("//value must < ", lt)
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueFloatLte) {
+						lte := proto.GetExtension(fop, pbex.E_MapValueFloatLte).(float64)
+						g.P("//value must <= ", lte)
+					}
+				case protoreflect.BytesKind:
+					//bytes
+					fallthrough
+				case protoreflect.StringKind:
+					//string
+					if proto.HasExtension(fop, pbex.E_MapValueStringBytesIn) {
+						ins := proto.GetExtension(fop, pbex.E_MapValueStringBytesIn).([]string)
+						d, _ := json.Marshal(ins)
+						if f.Desc.Kind() == protoreflect.BytesKind {
+							g.P("//value after decode base64 must in ", string(d))
+						} else {
+							g.P("//value must in ", string(d))
+						}
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueStringBytesNotIn) {
+						notins := proto.GetExtension(fop, pbex.E_MapValueStringBytesNotIn).([]string)
+						d, _ := json.Marshal(notins)
+						if f.Desc.Kind() == protoreflect.BytesKind {
+							g.P("//value after decode base64 must not in ", string(d))
+						} else {
+							g.P("//value must not in ", string(d))
+						}
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueStringBytesRegMatch) {
+						match := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegMatch).([]string)
+						d := strings.Join(match, " and ")
+						if f.Desc.Kind() == protoreflect.BytesKind {
+							g.P("//value after decode base64 must match regexp ", d)
+						} else {
+							g.P("//value must match regexp ", d)
+						}
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueStringBytesRegNotMatch) {
+						notmatch := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegNotMatch).([]string)
+						d := strings.Join(notmatch, " and ")
+						if f.Desc.Kind() == protoreflect.BytesKind {
+							g.P("//value after decode base64 must not match regexp ", d)
+						} else {
+							g.P("//value must not match regexp ", d)
+						}
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenEq) {
+						eq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenEq).(uint64)
+						if f.Desc.Kind() == protoreflect.BytesKind {
+							g.P("//value after decode base64 length must == ", eq)
+						} else {
+							g.P("//value length must == ", eq)
+						}
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenNotEq) {
+						noteq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenNotEq).(uint64)
+						if f.Desc.Kind() == protoreflect.BytesKind {
+							g.P("//value after decode base64 length must != ", noteq)
+						} else {
+							g.P("//value length must != ", noteq)
+						}
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGt) {
+						gt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGt).(uint64)
+						if f.Desc.Kind() == protoreflect.BytesKind {
+							g.P("//value after decode base64 length must > ", gt)
+						} else {
+							g.P("//value length must > ", gt)
+						}
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGte) {
+						gte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGte).(uint64)
+						if f.Desc.Kind() == protoreflect.BytesKind {
+							g.P("//value after decode base64 length must >= ", gte)
+						} else {
+							g.P("//value length must >= ", gte)
+						}
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLt) {
+						lt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLt).(uint64)
+						if f.Desc.Kind() == protoreflect.BytesKind {
+							g.P("//value after decode base64 length must < ", lt)
+						} else {
+							g.P("//value length must < ", lt)
+						}
+					}
+					if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLte) {
+						lte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLte).(uint64)
+						if f.Desc.Kind() == protoreflect.BytesKind {
+							g.P("//value after decode base64 length must <= ", lte)
+						} else {
+							g.P("//value length must <= ", lte)
+						}
+					}
+				case protoreflect.MessageKind:
+					//message
+					if proto.HasExtension(fop, pbex.E_MapValueMessageNotNil) {
+						notnil := proto.GetExtension(fop, pbex.E_MapValueMessageNotNil).(bool)
+						if notnil {
+							g.P("//value must not be nil")
+						}
+					}
+				}
+			} else {
 				if proto.HasExtension(fop, pbex.E_MessageNotNil) {
 					if notnil := proto.GetExtension(fop, pbex.E_MessageNotNil).(bool); notnil {
 						if f.Desc.IsList() {
@@ -717,8 +2169,60 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, skipoptions bool) m
 				}
 			}
 		}
+		if f.Desc.IsMap() || f.Desc.IsList() {
+			if proto.HasExtension(fop, pbex.E_MapRepeatedLenEq) {
+				eq := proto.GetExtension(fop, pbex.E_MapRepeatedLenEq).(uint64)
+				if f.Desc.IsMap() {
+					g.P("//field num must == ", eq)
+				} else {
+					g.P("//element num must == ", eq)
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapRepeatedLenNotEq) {
+				noteq := proto.GetExtension(fop, pbex.E_MapRepeatedLenNotEq).(uint64)
+				if f.Desc.IsMap() {
+					g.P("//field num must != ", noteq)
+				} else {
+					g.P("//element num must != ", noteq)
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapRepeatedLenGt) {
+				gt := proto.GetExtension(fop, pbex.E_MapRepeatedLenGt).(uint64)
+				if f.Desc.IsMap() {
+					g.P("//field num must > ", gt)
+				} else {
+					g.P("//element num must > ", gt)
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapRepeatedLenGte) {
+				gte := proto.GetExtension(fop, pbex.E_MapRepeatedLenGte).(uint64)
+				if f.Desc.IsMap() {
+					g.P("//field num must >= ", gte)
+				} else {
+					g.P("//element num must >= ", gte)
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapRepeatedLenLt) {
+				lt := proto.GetExtension(fop, pbex.E_MapRepeatedLenLt).(uint64)
+				if f.Desc.IsMap() {
+					g.P("//field num must < ", lt)
+				} else {
+					g.P("//element num must < ", lt)
+				}
+			}
+			if proto.HasExtension(fop, pbex.E_MapRepeatedLenLte) {
+				lte := proto.GetExtension(fop, pbex.E_MapRepeatedLenLte).(uint64)
+				if f.Desc.IsMap() {
+					g.P("//field num must <= ", lte)
+				} else {
+					g.P("//element num must <= ", lte)
+				}
+			}
+		}
 		g.P(line)
 	}
-	g.P("}")
-	return nil
+	checked := make(map[string]*struct{})
+	for _, v := range newmessage {
+		jsondoc(g, v, true, false, checked)
+	}
 }
