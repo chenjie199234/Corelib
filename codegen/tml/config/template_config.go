@@ -17,7 +17,6 @@ import (
 
 	configsdk "github.com/chenjie199234/config/sdk"
 	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/trace"
 )
 
 //EnvConfig can't hot update,all these data is from system env setting
@@ -43,7 +42,6 @@ func Init(notice func(c *AppConfig)) {
 //Close -
 func Close() {
 	log.Close()
-	trace.Close()
 }
 
 func initenv() {
