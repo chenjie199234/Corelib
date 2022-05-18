@@ -17,8 +17,8 @@ import (
 	"time"
 
 	cerror "github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/name"
 )
@@ -229,7 +229,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		d, _ := json.Marshal(metadata)
 		header.Set("Core_metadata", common.Byte2str(d))
 	}
-	traceid, _, _, selfmethod, selfpath, selfdeep := trace.GetTrace(ctx)
+	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
 	if traceid != "" {
 		header.Set("Core_tracedata", traceid)
 		header.Add("Core_tracedata", c.selfappname)
@@ -252,7 +252,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		if ok && dl.UnixNano() < start.UnixNano()+int64(5*time.Millisecond) {
 			//at least 5ms for net lag and server logic
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.selfappname, u.Scheme+"://"+u.Host, method, path, &start, &end, cerror.ErrDeadlineExceeded)
+			log.Trace(ctx, log.CLIENT, c.selfappname, u.Scheme+"://"+u.Host, method, path, &start, &end, cerror.ErrDeadlineExceeded)
 			monitor.WebClientMonitor(c.serverappname, method, path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, cerror.ErrDeadlineExceeded
 		}
@@ -276,7 +276,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		if e != nil {
 			e = cerror.ConvertStdError(e)
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.selfappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
+			log.Trace(ctx, log.CLIENT, c.selfappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
@@ -286,7 +286,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		end := time.Now()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
+			log.Trace(ctx, log.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
@@ -294,12 +294,12 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		resp.Body.Close()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
+			log.Trace(ctx, log.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 		if resp.StatusCode == int(cerror.ErrClosing.Httpcode) && cerror.Equal(cerror.ConvertErrorstr(common.Byte2str(respbody)), cerror.ErrClosing) {
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, cerror.ErrClosing)
+			log.Trace(ctx, log.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, cerror.ErrClosing)
 			monitor.WebClientMonitor(c.serverappname, method, path, cerror.ErrClosing, uint64(end.UnixNano()-start.UnixNano()))
 			continue
 		} else if resp.StatusCode != http.StatusOK {
@@ -310,11 +310,11 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				tempe.SetHttpcode(int32(resp.StatusCode))
 				e = tempe
 			}
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
+			log.Trace(ctx, log.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
-		trace.Trace(ctx, trace.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, nil)
+		log.Trace(ctx, log.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, nil)
 		monitor.WebClientMonitor(c.serverappname, method, path, nil, uint64(end.UnixNano()-start.UnixNano()))
 		return respbody, nil
 	}

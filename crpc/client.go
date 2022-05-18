@@ -16,7 +16,6 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/name"
 	"google.golang.org/protobuf/proto"
@@ -238,7 +237,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		Body:     in,
 		Metadata: metadata,
 	}
-	traceid, selfappname, _, selfmethod, selfpath, selfdeep := trace.GetTrace(ctx)
+	traceid, selfappname, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
 	if traceid != "" {
 		msg.Tracedata = map[string]string{
 			"Traceid":      traceid,
@@ -263,14 +262,14 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		server, e := c.balancer.Pick(ctx)
 		if e != nil {
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, "pick failed,no server addr", "CRPC", path, &start, &end, e)
+			log.Trace(ctx, log.CLIENT, c.serverappname, "pick failed,no server addr", "CRPC", path, &start, &end, e)
 			monitor.CrpcClientMonitor(c.serverappname, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 		if ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 			//at least 5ms for net lag and server logic
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, server.addr, "CRPC", path, &start, &end, cerror.ErrDeadlineExceeded)
+			log.Trace(ctx, log.CLIENT, c.serverappname, server.addr, "CRPC", path, &start, &end, cerror.ErrDeadlineExceeded)
 			monitor.CrpcClientMonitor(c.serverappname, "CRPC", path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, cerror.ErrDeadlineExceeded
 		}
@@ -282,7 +281,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 				continue
 			}
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, server.addr, "CRPC", path, &start, &end, e)
+			log.Trace(ctx, log.CLIENT, c.serverappname, server.addr, "CRPC", path, &start, &end, e)
 			monitor.CrpcClientMonitor(c.serverappname, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
@@ -290,7 +289,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		case <-r.finish:
 			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, server.addr, "CRPC", path, &start, &end, r.err)
+			log.Trace(ctx, log.CLIENT, c.serverappname, server.addr, "CRPC", path, &start, &end, r.err)
 			monitor.CrpcClientMonitor(c.serverappname, "CRPC", path, r.err, uint64(end.UnixNano()-start.UnixNano()))
 			if r.err != nil {
 				//req error,update last fail time
@@ -331,7 +330,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 				e = cerror.ConvertStdError(ctx.Err())
 			}
 			end := time.Now()
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, server.addr, "CRPC", path, &start, &end, e)
+			log.Trace(ctx, log.CLIENT, c.serverappname, server.addr, "CRPC", path, &start, &end, e)
 			monitor.CrpcClientMonitor(c.serverappname, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}

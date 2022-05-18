@@ -1,4 +1,4 @@
-package trace
+package log
 
 import (
 	"context"
@@ -10,41 +10,8 @@ import (
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/pool"
-	"github.com/chenjie199234/Corelib/rotatefile"
 	"github.com/chenjie199234/Corelib/util/host"
 )
-
-var target int //1-std,2-file,3-both
-var rf *rotatefile.RotateFile
-
-func getenv() {
-	temp := os.Getenv("TRACE_TARGET")
-	if temp != "std" && temp != "file" && temp != "both" && temp != "" {
-		panic("[trace] os env TRACE_TARGET error,must in [std(default),file,both]")
-	}
-	switch temp {
-	case "":
-		//default std
-		fallthrough
-	case "std":
-		target = 1
-	case "file":
-		target = 2
-	case "both":
-		target = 3
-	}
-}
-func init() {
-	rand.Seed(time.Now().UnixNano())
-	getenv()
-	if target&2 > 0 {
-		var e error
-		rf, e = rotatefile.NewRotateFile("./log", "trace")
-		if e != nil {
-			panic("[trace] create rotate trace file error:" + e.Error())
-		}
-	}
-}
 
 type ROLE string
 
@@ -132,6 +99,9 @@ func maketraceid() string {
 }
 
 func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string, start, end *time.Time, e error) {
+	if target == 0 {
+		return
+	}
 	traceid, fromapp, fromip, frommethod, frompath, deep := GetTrace(ctx)
 	if traceid == "" {
 		return
@@ -143,8 +113,7 @@ func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string,
 		emsg = ee.Msg
 	}
 	buf := pool.GetBuffer()
-	buf.AppendString("[TRACE] {")
-	buf.AppendString("\"trace_id\":\"")
+	buf.AppendString("[TRC] {\"trace_id\":\"")
 	buf.AppendString(traceid)
 	buf.AppendString("\",\"deep\":")
 	buf.AppendInt(deep)
@@ -187,28 +156,5 @@ func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string,
 		}
 	} else {
 		pool.PutBuffer(buf)
-	}
-}
-
-func LogFileSize() int64 {
-	return rf.GetCurFileLen()
-}
-func RotateLogFile() {
-	if target&2 > 0 && rf != nil {
-		if e := rf.RotateNow(); e != nil {
-			fmt.Printf("[trace] rotate trace file error:%s\n", e)
-		}
-	}
-}
-func CleanLogFile(lastModTimestampBeforeThisNS int64) {
-	if target&2 > 0 && rf != nil {
-		if e := rf.CleanNow(lastModTimestampBeforeThisNS); e != nil {
-			fmt.Printf("[trace] clean trace file before timestamp:%dns error:%s\n", lastModTimestampBeforeThisNS, e)
-		}
-	}
-}
-func Close() {
-	if target&2 > 0 && rf != nil {
-		rf.Close()
 	}
 }

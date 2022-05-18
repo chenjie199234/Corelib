@@ -14,7 +14,6 @@ import (
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/name"
 	"google.golang.org/grpc"
@@ -168,7 +167,7 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 		d, _ := json.Marshal(metadata)
 		md.Set("core_metadata", common.Byte2str(d))
 	}
-	traceid, _, _, selfmethod, selfpath, selfdeep := trace.GetTrace(ctx)
+	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
 	if traceid != "" {
 		md.Set("core_tracedata", traceid, c.selfappname, selfmethod, selfpath, strconv.Itoa(selfdeep))
 	}
@@ -183,7 +182,7 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 			//pick error or create stream unretryable error,req doesn't send
 		} else {
 			//req send,recv error
-			trace.Trace(ctx, trace.CLIENT, c.serverappname, p.Addr.String(), "GRPC", path, &start, &end, e)
+			log.Trace(ctx, log.CLIENT, c.serverappname, p.Addr.String(), "GRPC", path, &start, &end, e)
 			monitor.GrpcClientMonitor(c.serverappname, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 		}
 		if cerror.Equal(e, cerror.ErrClosing) {

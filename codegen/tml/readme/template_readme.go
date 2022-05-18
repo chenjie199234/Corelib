@@ -27,6 +27,9 @@ $$$
 
 ## 环境变量
 $$$
+LOG_TARGET                              日志等级,debug,info(default),warning,error
+LOG_TRACE                               是否开启链路追踪,1-开启,非1-关闭
+LOG_TARGET                              日志输出目标,std-输出到标准输出,file-输出到文件(可执行文件相同目录),both-两者都输出
 GROUP                                   该项目所属的group(k8s的namespace),如果不使用k8s需要手动指定,如果使用k8s,需修改项目根目录的deployment.yaml中的<GROUP>
 RUN_ENV                                 当前运行环境,如:test,pre,prod
 DEPLOY_ENV                              部署环境,如:ali-kube-shanghai-1,ali-host-hangzhou-1

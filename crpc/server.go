@@ -17,7 +17,6 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
@@ -197,7 +196,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 	copy(totalhandlers, s.global)
 	copy(totalhandlers[len(s.global):], handlers)
 	return func(ctx context.Context, p *stream.Peer, msg *Msg) {
-		traceid, _, _, _, _, selfdeep := trace.GetTrace(ctx)
+		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
 		var sourceapp, sourceip, sourcemethod, sourcepath string
 		if msg.Tracedata != nil {
 			sourceapp = msg.Tracedata["SourceApp"]
@@ -247,7 +246,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 				msg.Metadata = nil
 				msg.Tracedata = nil
 				end := time.Now()
-				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip+":"+p.GetLocalPort(), "CRPC", path, &start, &end, msg.Error)
+				log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+p.GetLocalPort(), "CRPC", path, &start, &end, msg.Error)
 				monitor.CrpcServerMonitor(sourceapp, "CRPC", path, msg.Error, uint64(end.UnixNano()-start.UnixNano()))
 				return
 			}
@@ -273,7 +272,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 				msg.Tracedata = nil
 			}
 			end := time.Now()
-			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip+":"+p.GetLocalPort(), "CRPC", path, &start, &end, msg.Error)
+			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+p.GetLocalPort(), "CRPC", path, &start, &end, msg.Error)
 			monitor.CrpcServerMonitor(sourceapp, "CRPC", path, msg.Error, uint64(end.UnixNano()-start.UnixNano()))
 			s.putContext(workctx)
 		}()
@@ -344,7 +343,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	}
 	var tracectx context.Context
 	if len(msg.Tracedata) == 0 || msg.Tracedata["Traceid"] == "" {
-		tracectx = trace.InitTrace(p, "", s.selfappname, host.Hostip, "CRPC", msg.Path, 0)
+		tracectx = log.InitTrace(p, "", s.selfappname, host.Hostip, "CRPC", msg.Path, 0)
 	} else if len(msg.Tracedata) != 4 || msg.Tracedata["Deep"] == "" {
 		log.Error(nil, "[crpc.server.userfunc] client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "path:", msg.Path, "method: CRPC error: tracedata:", msg.Tracedata, "format error")
 		p.Close()
@@ -354,7 +353,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		p.Close()
 		return
 	} else {
-		tracectx = trace.InitTrace(p, msg.Tracedata["Traceid"], s.selfappname, host.Hostip, "CRPC", msg.Path, clientdeep)
+		tracectx = log.InitTrace(p, msg.Tracedata["Traceid"], s.selfappname, host.Hostip, "CRPC", msg.Path, clientdeep)
 	}
 	for {
 		old := atomic.LoadInt32(&s.totalreqnum)

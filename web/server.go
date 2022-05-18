@@ -20,7 +20,6 @@ import (
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
@@ -531,7 +530,7 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 		sourcepath := "unknown"
 		selfdeep := 0
 		if tracedata := r.Header.Values("Core_tracedata"); len(tracedata) == 0 || tracedata[0] == "" {
-			ctx = trace.InitTrace(r.Context(), "", s.selfappname, host.Hostip, method, path, 0)
+			ctx = log.InitTrace(r.Context(), "", s.selfappname, host.Hostip, method, path, 0)
 		} else if len(tracedata) != 5 || tracedata[4] == "" {
 			log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: tracedata:", tracedata, "format error")
 			w.Header().Set("Content-Type", "application/json")
@@ -545,12 +544,12 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 			w.Write(common.Str2byte(cerror.ErrReq.Error()))
 			return
 		} else {
-			ctx = trace.InitTrace(r.Context(), tracedata[0], s.selfappname, host.Hostip, method, path, clientdeep)
+			ctx = log.InitTrace(r.Context(), tracedata[0], s.selfappname, host.Hostip, method, path, clientdeep)
 			sourceapp = tracedata[1]
 			sourcemethod = tracedata[2]
 			sourcepath = tracedata[3]
 		}
-		traceid, _, _, _, _, selfdeep = trace.GetTrace(ctx)
+		traceid, _, _, _, _, selfdeep = log.GetTrace(ctx)
 		var mdata map[string]string
 		if mdstr := r.Header.Get("Core_metadata"); mdstr != "" {
 			mdata = make(map[string]string)
@@ -605,7 +604,7 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 				w.Write(common.Str2byte(cerror.ErrDeadlineExceeded.Error()))
 				end := time.Now()
 
-				trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip+":"+r.Context().Value(localport{}).(string), method, path, &start, &end, cerror.ErrDeadlineExceeded)
+				log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+r.Context().Value(localport{}).(string), method, path, &start, &end, cerror.ErrDeadlineExceeded)
 				monitor.WebServerMonitor(sourceapp, method, path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
 				return
 			}
@@ -629,7 +628,7 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 				workctx.e = cerror.ErrPanic
 			}
 			end := time.Now()
-			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip+":"+r.Context().Value(localport{}).(string), method, path, &start, &end, workctx.e)
+			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+r.Context().Value(localport{}).(string), method, path, &start, &end, workctx.e)
 			monitor.WebServerMonitor(sourceapp, method, path, workctx.e, uint64(end.UnixNano()-start.UnixNano()))
 			s.putContext(workctx)
 		}()

@@ -11,46 +11,53 @@ import (
 
 	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/rotatefile"
-	"github.com/chenjie199234/Corelib/trace"
 	ctime "github.com/chenjie199234/Corelib/util/time"
 )
 
+var trace bool
 var target int //1-std(default),2-file,3-both
 var level int  //0-debug,1-info(default),2-warning,3-error
 var rf *rotatefile.RotateFile
 
 func getenv() {
-	temp := strings.ToLower(os.Getenv("LOG_TARGET"))
-	if temp != "std" && temp != "file" && temp != "both" && temp != "" {
+	trace = os.Getenv("LOG_TRACE") == "1"
+	if str := strings.ToLower(os.Getenv("LOG_TARGET")); str != "std" && str != "file" && str != "both" && str != "" && str != "<LOG_TARGET>" {
 		panic("[log] os env LOG_TARGET error,must in [std(default),file,both]")
+	} else {
+		switch str {
+		case "<LOG_TARGET>":
+			//default std
+			fallthrough
+		case "":
+			//default std
+			fallthrough
+		case "std":
+			target = 1
+		case "file":
+			target = 2
+		case "both":
+			target = 3
+		}
 	}
-	switch temp {
-	case "":
-		//default std
-		fallthrough
-	case "std":
-		target = 1
-	case "file":
-		target = 2
-	case "both":
-		target = 3
-	}
-	temp = strings.ToLower(os.Getenv("LOG_LEVEL"))
-	if temp != "debug" && temp != "info" && temp != "warning" && temp != "error" && temp != "" {
+	if str := strings.ToLower(os.Getenv("LOG_LEVEL")); str != "debug" && str != "info" && str != "warning" && str != "error" && str != "" && str != "<LOG_LEVEL>" {
 		panic("[log] os env LOG_LEVEL error,must in [debug,info(default),warning,error]")
-	}
-	switch temp {
-	case "debug":
-		level = 0
-	case "":
-		//default info
-		fallthrough
-	case "info":
-		level = 1
-	case "warning":
-		level = 2
-	case "error":
-		level = 3
+	} else {
+		switch str {
+		case "debug":
+			level = 0
+		case "<LOG_LEVEL>":
+			//default info
+			fallthrough
+		case "":
+			//default info
+			fallthrough
+		case "info":
+			level = 1
+		case "warning":
+			level = 2
+		case "error":
+			level = 3
+		}
 	}
 }
 
@@ -58,7 +65,22 @@ func init() {
 	getenv()
 	if target&2 > 0 {
 		var e error
-		rf, e = rotatefile.NewRotateFile("./log", "log")
+		path, e := os.Executable()
+		if e != nil {
+			panic("[log] get current exec file's path error:" + e.Error())
+		}
+		logdir := ""
+		if index := strings.LastIndex(path, "/"); index == -1 {
+			index = strings.LastIndex(path, "\\")
+			if index != -1 {
+				logdir = path[:index] + "\\log"
+			} else {
+				panic("[log] can't get log dir path")
+			}
+		} else {
+			logdir = path[:index] + "/log"
+		}
+		rf, e = rotatefile.NewRotateFile(logdir, "log")
 		if e != nil {
 			panic("[log] create rotate file error:" + e.Error())
 		}
@@ -100,14 +122,16 @@ func write(ctx context.Context, buf *pool.Buffer, datas ...interface{}) {
 	buf.AppendString(file)
 	buf.AppendByte(':')
 	buf.AppendInt(line)
-	traceid, _, _, _, _, deep := trace.GetTrace(ctx)
-	if traceid != "" {
-		buf.AppendByte(' ')
-		buf.AppendString("Traceid: ")
-		buf.AppendString(traceid)
-		buf.AppendByte(' ')
-		buf.AppendString("Tracedeep: ")
-		buf.AppendInt(deep)
+	if trace {
+		traceid, _, _, _, _, deep := GetTrace(ctx)
+		if traceid != "" {
+			buf.AppendByte(' ')
+			buf.AppendString("Traceid: ")
+			buf.AppendString(traceid)
+			buf.AppendByte(' ')
+			buf.AppendString("Tracedeep: ")
+			buf.AppendInt(deep)
+		}
 	}
 	for _, data := range datas {
 		buf.AppendByte(' ')

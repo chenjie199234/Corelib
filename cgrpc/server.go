@@ -18,7 +18,6 @@ import (
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
@@ -222,7 +221,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		selfdeep := 0
 		if ok {
 			if data := grpcmetadata.Get("core_tracedata"); len(data) == 0 || data[0] == "" {
-				ctx = trace.InitTrace(ctx, "", s.selfappname, host.Hostip, "GRPC", path, 0)
+				ctx = log.InitTrace(ctx, "", s.selfappname, host.Hostip, "GRPC", path, 0)
 			} else if len(data) != 5 || data[4] == "" {
 				log.Error(nil, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format error")
 				return nil, cerror.ErrReq
@@ -230,13 +229,13 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				log.Error(nil, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format error")
 				return nil, cerror.ErrReq
 			} else {
-				ctx = trace.InitTrace(ctx, data[0], s.selfappname, host.Hostip, "GRPC", path, clientdeep)
+				ctx = log.InitTrace(ctx, data[0], s.selfappname, host.Hostip, "GRPC", path, clientdeep)
 				sourceapp = data[1]
 				sourcemethod = data[2]
 				sourcepath = data[3]
 			}
 		}
-		traceid, _, _, _, _, selfdeep = trace.GetTrace(ctx)
+		traceid, _, _, _, _, selfdeep = log.GetTrace(ctx)
 		var mdata map[string]string
 		if ok {
 			data := grpcmetadata.Get("core_metadata")
@@ -259,7 +258,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			resp = nil
 			e = cerror.ErrDeadlineExceeded
 			end := time.Now()
-			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip+":"+localaddr[strings.LastIndex(localaddr, ":")+1:], "GRPC", path, &start, &end, e)
+			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+localaddr[strings.LastIndex(localaddr, ":")+1:], "GRPC", path, &start, &end, e)
 			monitor.GrpcServerMonitor(sourceapp, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return
 		}
@@ -276,7 +275,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				workctx.resp = nil
 			}
 			end := time.Now()
-			trace.Trace(trace.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), trace.SERVER, s.selfappname, host.Hostip+":"+localaddr[strings.LastIndex(localaddr, ":")+1:], "GRPC", path, &start, &end, workctx.e)
+			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+localaddr[strings.LastIndex(localaddr, ":")+1:], "GRPC", path, &start, &end, workctx.e)
 			monitor.GrpcServerMonitor(sourceapp, "GRPC", path, workctx.e, uint64(end.UnixNano()-start.UnixNano()))
 			resp = workctx.resp
 			if workctx.e != nil {
