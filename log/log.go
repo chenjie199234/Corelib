@@ -20,7 +20,11 @@ var level int  //0-debug,1-info(default),2-warning,3-error
 var rf *rotatefile.RotateFile
 
 func getenv() {
-	trace = os.Getenv("LOG_TRACE") == "1"
+	if str := os.Getenv("LOG_TRACE"); str != "" && str != "<LOG_TRACE>" && str != "0" && str != "1" {
+		panic("[log] os env LOG_TRACE error,must in [0,1]")
+	} else {
+		trace = str == "1"
+	}
 	if str := strings.ToLower(os.Getenv("LOG_TARGET")); str != "std" && str != "file" && str != "both" && str != "" && str != "<LOG_TARGET>" {
 		panic("[log] os env LOG_TARGET error,must in [std(default),file,both]")
 	} else {
