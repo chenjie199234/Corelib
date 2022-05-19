@@ -9,7 +9,7 @@ service test {
 	//aaa,a
 	//bbb,b
 	rpc hello(helloreq)returns(helloresp){//ccc,ddd,1
-		option (pbex.method)="get";
+		option (pbex.method)="post";
 		option (pbex.web_midwares)="user";
 		option (pbex.web_midwares)="limit";
 	}//ccc,ddd,2
