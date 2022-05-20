@@ -52,7 +52,7 @@ func main() {
 				}
 			}
 			//delete old file
-			oldfile := f.GeneratedFilenamePrefix + "_markdown.md"
+			oldfile := f.GeneratedFilenamePrefix + ".md"
 			if e := os.RemoveAll(oldfile); e != nil {
 				panic("remove old file " + oldfile + " error:" + e.Error())
 			}

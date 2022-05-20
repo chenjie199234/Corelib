@@ -44,7 +44,7 @@ pb() {
 	protoc -I ./ -I $corelib --go-cgrpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --go-crpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --go-web_out=paths=source_relative:. ./api/*.proto
-	protoc -I ./ -I $corelib --go-markdown_out=paths=source_relative:. ./api/*.proto
+	protoc -I ./ -I $corelib --markdown_out=paths=source_relative:. ./api/*.proto
 	go mod tidy
 }
 
@@ -213,7 +213,7 @@ if "%1" == "new" (
 	protoc -I ./ -I %corelib% --go-cgrpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-crpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-web_out=paths=source_relative:. ./api/*.proto
-	protoc -I ./ -I %corelib% --go-markdown_out=paths=source_relative:. ./api/*.proto
+	protoc -I ./ -I %corelib% --markdown_out=paths=source_relative:. ./api/*.proto
 	go mod tidy
 goto :end
 

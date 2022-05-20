@@ -1,7 +1,7 @@
 //protoc -I ../../../pbex -I . --go_out=paths=source_relative:. *.proto
 syntax="proto3";
 package test;
-option go_package="github.com/chenjie199234/Corelib/web/protoc-gen-go-markdown/test;test";
+option go_package="github.com/chenjie199234/Corelib/web/protoc-gen-markdown/test;test";
 import "pbex.proto";
 service test {
 	//123

@@ -1,12 +1,12 @@
-# protoc-gen-go-markdown
+# protoc-gen-markdown
 
 ## Description
-	protoc-gen-go-markdown是一个基于proto文件生成web框架接口文档的工具
+	protoc-gen-markdown是一个基于proto文件生成web框架接口文档的工具
 
 ## Installation
 	请确认已经设置了Go环境变量GOBIN,并将此环境变量加入到了PATH中
 	go get -u github.com/chenjie199234/Corelib
-	cd web/protoc-gen-go-markdown
+	cd web/protoc-gen-markdown
 	go install
 
 ## 使用
