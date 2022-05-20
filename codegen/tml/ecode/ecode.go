@@ -21,6 +21,7 @@ var (
 	ErrSystem   = cerror.ErrSystem   //10003 // http code 500
 	ErrAuth     = cerror.ErrAuth     //10004 // http code 401
 	ErrLimit    = cerror.ErrLimit    //10005 // http code 503
+	ErrBusy     = cerror.ErrBusy     //10005 // http code 503
 	ErrBan      = cerror.ErrBan      //10006 // http code 403
 	ErrNotExist = cerror.ErrNotExist //10007 // http code 404
 

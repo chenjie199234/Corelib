@@ -26,6 +26,7 @@ var (
 	ErrLimit    = &Error{Code: 10005, Httpcode: http.StatusServiceUnavailable, Msg: "limit"}
 	ErrBan      = &Error{Code: 10006, Httpcode: http.StatusForbidden, Msg: "ban"}
 	ErrNotExist = &Error{Code: 10007, Httpcode: http.StatusNotFound, Msg: "not exist"}
+	ErrBusy     = &Error{Code: 10008, Httpcode: http.StatusServiceUnavailable, Msg: "busy"}
 )
 
 //convert std error,always -1
