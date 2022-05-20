@@ -41,7 +41,7 @@ func genFileComment(gen *protogen.Plugin, file *protogen.File, g *protogen.Gener
 		}
 	}
 	g.P("// \tprotoc-gen-markdown ", version)
-	g.P("// \tprotoc                 ", protocVersion)
+	g.P("// \tprotoc              ", protocVersion)
 	g.P("// source: ", file.Desc.Path())
 	g.P()
 }
