@@ -285,7 +285,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		resp, e := c.httpclient.Do(req)
 		end := time.Now()
 		if e != nil {
-			e = cerror.ConvertStdError(e)
+			e = cerror.ConvertStdError(e.(*url.Error).Unwrap())
 			log.Trace(ctx, log.CLIENT, c.serverappname, u.Scheme+"://"+u.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
