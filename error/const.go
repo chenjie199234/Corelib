@@ -18,15 +18,16 @@ var (
 
 //business,start from 10000
 var (
-	ErrUnknown  = &Error{Code: 10000, Httpcode: http.StatusInternalServerError, Msg: "unknown"}
-	ErrReq      = &Error{Code: 10001, Httpcode: http.StatusBadRequest, Msg: "request error"}
-	ErrResp     = &Error{Code: 10002, Httpcode: http.StatusInternalServerError, Msg: "response error"}
-	ErrSystem   = &Error{Code: 10003, Httpcode: http.StatusInternalServerError, Msg: "system error"}
-	ErrAuth     = &Error{Code: 10004, Httpcode: http.StatusUnauthorized, Msg: "auth error"}
-	ErrLimit    = &Error{Code: 10005, Httpcode: http.StatusServiceUnavailable, Msg: "limit"}
-	ErrBan      = &Error{Code: 10006, Httpcode: http.StatusForbidden, Msg: "ban"}
-	ErrNotExist = &Error{Code: 10007, Httpcode: http.StatusNotFound, Msg: "not exist"}
-	ErrBusy     = &Error{Code: 10008, Httpcode: http.StatusServiceUnavailable, Msg: "busy"}
+	ErrUnknown    = &Error{Code: 10000, Httpcode: http.StatusInternalServerError, Msg: "unknown"}
+	ErrReq        = &Error{Code: 10001, Httpcode: http.StatusBadRequest, Msg: "request error"}
+	ErrResp       = &Error{Code: 10002, Httpcode: http.StatusInternalServerError, Msg: "response error"}
+	ErrSystem     = &Error{Code: 10003, Httpcode: http.StatusInternalServerError, Msg: "system error"}
+	ErrAuth       = &Error{Code: 10004, Httpcode: http.StatusUnauthorized, Msg: "auth error"}
+	ErrPermission = &Error{Code: 10005, Httpcode: http.StatusForbidden, Msg: "permission"}
+	ErrTooFast    = &Error{Code: 10006, Httpcode: http.StatusForbidden, Msg: "too fast"}
+	ErrBan        = &Error{Code: 10007, Httpcode: http.StatusForbidden, Msg: "ban"}
+	ErrBusy       = &Error{Code: 10008, Httpcode: http.StatusServiceUnavailable, Msg: "busy"}
+	ErrNotExist   = &Error{Code: 10009, Httpcode: http.StatusNotFound, Msg: "not exist"}
 )
 
 //convert std error,always -1

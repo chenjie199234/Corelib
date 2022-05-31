@@ -1,6 +1,8 @@
 package mids
 
 import (
+	"os"
+
 	"github.com/chenjie199234/Corelib/cgrpc"
 	cerror "github.com/chenjie199234/Corelib/error"
 	publicmids "github.com/chenjie199234/Corelib/mids"
@@ -14,6 +16,7 @@ func init() {
 	//register here
 	all["rate"] = rate
 	all["accesskey"] = accesskey
+	all["token"] = token
 }
 
 func AllMids() map[string]cgrpc.OutsideHandler {
@@ -26,7 +29,7 @@ func RegMid(name string, handler cgrpc.OutsideHandler) {
 }
 func rate(ctx *cgrpc.Context) {
 	if !publicmids.GrpcRate(ctx.GetPath()) {
-		ctx.Abort(cerror.ErrLimit)
+		ctx.Abort(cerror.ErrBusy)
 	}
 }
 func accesskey(ctx *cgrpc.Context) {
@@ -39,4 +42,18 @@ func accesskey(ctx *cgrpc.Context) {
 	if !publicmids.AccessKey(ctx.GetPath(), accesskey) {
 		ctx.Abort(cerror.ErrAuth)
 	}
+}
+func token(ctx *cgrpc.Context) {
+	md := ctx.GetMetadata()
+	tokenstr := md["Authorization"]
+	secret := os.Getenv("TOKEN_SECRET")
+	t, e := publicmids.VerifyToken(secret, tokenstr)
+	if e != nil {
+		ctx.Abort(e)
+		return
+	}
+	md["Token-DeployEnv"] = t.DeployEnv
+	md["Token-RunEnv"] = t.RunEnv
+	md["Token-Puber"] = t.Puber
+	md["Token-Data"] = t.Data
 }

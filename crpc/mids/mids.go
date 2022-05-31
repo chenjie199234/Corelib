@@ -1,6 +1,8 @@
 package mids
 
 import (
+	"os"
+
 	"github.com/chenjie199234/Corelib/crpc"
 	cerror "github.com/chenjie199234/Corelib/error"
 	publicmids "github.com/chenjie199234/Corelib/mids"
@@ -14,6 +16,7 @@ func init() {
 	//register here
 	all["rate"] = rate
 	all["accesskey"] = accesskey
+	all["token"] = token
 }
 
 func AllMids() map[string]crpc.OutsideHandler {
@@ -27,7 +30,7 @@ func RegMid(name string, handler crpc.OutsideHandler) {
 
 func rate(ctx *crpc.Context) {
 	if !publicmids.CrpcRate(ctx.GetPath()) {
-		ctx.Abort(cerror.ErrLimit)
+		ctx.Abort(cerror.ErrBusy)
 	}
 }
 func accesskey(ctx *crpc.Context) {
@@ -40,4 +43,18 @@ func accesskey(ctx *crpc.Context) {
 	if !publicmids.AccessKey(ctx.GetPath(), accesskey) {
 		ctx.Abort(cerror.ErrAuth)
 	}
+}
+func token(ctx *crpc.Context) {
+	md := ctx.GetMetadata()
+	tokenstr := md["Authorization"]
+	secret := os.Getenv("TOKEN_SECRET")
+	t, e := publicmids.VerifyToken(secret, tokenstr)
+	if e != nil {
+		ctx.Abort(e)
+		return
+	}
+	md["Token-DeployEnv"] = t.DeployEnv
+	md["Token-RunEnv"] = t.RunEnv
+	md["Token-Puber"] = t.Puber
+	md["Token-Data"] = t.Data
 }

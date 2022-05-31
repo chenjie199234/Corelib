@@ -121,6 +121,7 @@ const textapp = `{
 		"default":"default_sec_key",
 		"/{{.}}.status/ping":"specific_sec_key"
 	},
+	"token_secret":"test",
 	"service":{
 
 	}

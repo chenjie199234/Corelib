@@ -113,6 +113,7 @@ type AppConfig struct {
 	HandlerRate    []*publicmids.RateConfig             $json:"handler_rate"$
 	WebPathRewrite map[string]map[string]string         $json:"web_path_rewrite"$ //first key method(GET,POST,PUT,PATCH,DELETE),second key origin url,value new url
 	AccessKeys     map[string]string                    $json:"access_keys"$      //key-specific path,value specific seckey,key-"default",value default seckey
+	TokenSecret    string                               $json:"token_secret"$
 	Service        *ServiceConfig                       $json:"service"$
 }
 type ServiceConfig struct {
@@ -121,7 +122,7 @@ type ServiceConfig struct {
 
 //every time update AppConfig will call this function
 func validateAppConfig(ac *AppConfig) {
-
+	os.Setenv("TOKEN_SECRET", ac.Service.TokenSecret)
 }
 
 //AC -
