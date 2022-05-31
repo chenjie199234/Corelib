@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	ErrUnknown    = cerror.ErrUnknown    //10000
+	ErrUnknown    = cerror.ErrUnknown    //10000 // http code 500
 	ErrReq        = cerror.ErrReq        //10001 // http code 400
 	ErrResp       = cerror.ErrResp       //10002 // http code 500
 	ErrSystem     = cerror.ErrSystem     //10003 // http code 500
