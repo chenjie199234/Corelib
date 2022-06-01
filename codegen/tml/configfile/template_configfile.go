@@ -122,6 +122,7 @@ const textapp = `{
 		"/{{.}}.status/ping":"specific_sec_key"
 	},
 	"token_secret":"test",
+	"token_expire":"24h",
 	"service":{
 
 	}
