@@ -122,7 +122,7 @@ type ServiceConfig struct {
 
 //every time update AppConfig will call this function
 func validateAppConfig(ac *AppConfig) {
-	os.Setenv("TOKEN_SECRET", ac.Service.TokenSecret)
+	os.Setenv("TOKEN_SECRET", ac.TokenSecret)
 }
 
 //AC -
