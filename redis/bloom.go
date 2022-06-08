@@ -47,7 +47,7 @@ then
 end`
 
 // NewBloom -
-//groupnum decide there are how many bitset key will be used in redis for this bloom
+//groupnum: how many bitset key will be used in redis for this bloom
 //	every special bitset will have a name like bloomname_[0,groupnum)
 //	in cluster mode:this is useful to balance all redis nodes' request
 //	in slave mode:set it to 1

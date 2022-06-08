@@ -134,7 +134,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{.ProjectName}}-service-headless
+  name: {{.ProjectName}}-headless
   namespace: <GROUP>
   labels:
     app: {{.ProjectName}}
@@ -147,7 +147,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{.ProjectName}}-service
+  name: {{.ProjectName}}
   namespace: <GROUP>
   labels:
     app: {{.ProjectName}}
@@ -165,14 +165,16 @@ kind: Ingress
 metadata:
   name: {{.ProjectName}}-ingress
   namespace: <GROUP>
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: 'true'
 spec:
   rules: 
   - host: <HOST>
     http:
       paths:
-      - path: /{{.ProjectName}}
+      - path: /{{.ProjectName}}.*
         backend:
-          serviceName: {{.ProjectName}}-service
+          serviceName: {{.ProjectName}}
           servicePort: 8000{{ end }}`
 
 const path = "./"
