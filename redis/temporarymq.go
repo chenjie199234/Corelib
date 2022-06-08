@@ -27,8 +27,8 @@ func init() {
 	hexpireTemporaryMQ = hex.EncodeToString(expiresha1[:])
 }
 
-const expireTemporaryMQ = `redis.call("SETEX",KEYS[2],11,1)
-redis.call("EXPIRE",KEYS[1],11)`
+const expireTemporaryMQ = `redis.call("SETEX",KEYS[2],16,1)
+redis.call("EXPIRE",KEYS[1],16)`
 
 var hexpireTemporaryMQ = ""
 
