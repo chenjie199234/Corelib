@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,8 +19,22 @@ import (
 var ErrTemporaryMQMissingName = errors.New("temporary mq missing name")
 var ErrTemporaryMQMissingGroup = errors.New("temporary mq missing group")
 
+func init() {
+	pubsha1 := sha1.Sum(common.Str2byte(pubTemporaryMQ))
+	hpubTemporaryMQ = hex.EncodeToString(pubsha1[:])
+
+	expiresha1 := sha1.Sum(common.Str2byte(expireTemporaryMQ))
+	hexpireTemporaryMQ = hex.EncodeToString(expiresha1[:])
+}
+
+const expireTemporaryMQ = `redis.call("SETEX",KEYS[2],11,1)
+redis.call("EXPIRE",KEYS[1],11)`
+
+var hexpireTemporaryMQ = ""
+
 //in redis cluster mode,group is used to shard data into different redis node
 //in redis slave master mode,group is better to be 1
+//sub and pub's group should be same
 //cancel will stop the sub immediately,the mq's empty or not will not effect the cancel
 // 	so there maybe data left in the mq,and it will be expired within 16s
 func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)) (cancel func(), e error) {
@@ -32,26 +47,12 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 	update := func(ctx context.Context) error {
 		var err error
 		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			c, e := p.p.GetContext(ctx)
-			if e != nil {
-				log.Error(nil, "[redis.ListMQ.update] get connection error:", e)
-				err = e
-				return
-			}
-			defer c.Close()
-			if _, e = c.(redis.ConnWithContext).DoContext(ctx, "SETEX", name, 16, group); e != nil {
-				log.Error(nil, "[redis.ListMQ.update] error:", e)
-				err = e
-			}
-		}()
 		for i := uint64(0); i < group; i++ {
 			wg.Add(1)
 			go func(index uint64) {
 				defer wg.Done()
 				listname := name + "_" + strconv.FormatUint(index, 10)
+				listexist := "{" + listname + "}_exist"
 				c, e := p.p.GetContext(context.Background())
 				if e != nil {
 					err = e
@@ -59,7 +60,10 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 					return
 				}
 				defer c.Close()
-				if _, e = c.(redis.ConnWithContext).DoContext(ctx, "EXPIRE", listname, 16); e != nil {
+				if _, e = c.(redis.ConnWithContext).DoContext(ctx, "EVALSHA", hexpireTemporaryMQ, 2, listname, listexist); e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
+					_, e = c.(redis.ConnWithContext).DoContext(ctx, "EVAL", expireTemporaryMQ, 2, listname, listexist)
+				}
+				if e != nil {
 					err = e
 					log.Error(nil, "[redis.ListMQ.update] index:", index, "error:", e)
 				}
@@ -158,6 +162,9 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 				for {
 					data, e = redis.ByteSlices(c.(redis.ConnWithTimeout).DoWithTimeout(0, "BLPOP", listname, 0))
 					if e != nil {
+						if ee := errors.Unwrap(e); ee != nil && ee == net.ErrClosed && status == 1 {
+							break
+						}
 						log.Error(nil, "[redis.ListMQ.sub] index:", index, "exec error:", e)
 						break
 					}
@@ -175,21 +182,23 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 	return
 }
 
-func init() {
-	pubsha1 := sha1.Sum(common.Str2byte(pubListMQ))
-	hpubListMQ = hex.EncodeToString(pubsha1[:])
-}
-
-const pubListMQ = `redis.call("EXPIRE",KEYS[1],16)
+const pubTemporaryMQ = `if(redis.call("EXISTS",KEYS[2])==0)
+then
+	return
+end
+redis.call("EXPIRE",KEYS[1],16)
 for i=1,#ARGV,1 do
 	redis.call("rpush",KEYS[1],ARGV[i])
 end
 redis.call("EXPIRE",KEYS[1],16)
 return #ARGV`
 
-var hpubListMQ = ""
+var hpubTemporaryMQ = ""
 
-func (p *Pool) TemporaryMQPub(ctx context.Context, name, key string, value ...[]byte) error {
+//in redis cluster mode,group is used to shard data into different redis node
+//in redis slave master mode,group is better to be 1
+//sub and pub's group should be same
+func (p *Pool) TemporaryMQPub(ctx context.Context, name string, group uint64, key string, value ...[]byte) error {
 	if len(value) == 0 {
 		return nil
 	}
@@ -198,22 +207,16 @@ func (p *Pool) TemporaryMQPub(ctx context.Context, name, key string, value ...[]
 		return e
 	}
 	defer c.Close()
-	group, e := redis.Uint64(c.(redis.ConnWithContext).DoContext(ctx, "GET", name))
-	if e != nil {
-		return e
-	}
-	if group == 0 {
-		return ErrTemporaryMQMissingGroup
-	}
 	listname := name + "_" + strconv.FormatUint(common.BkdrhashString(key, group), 10)
-	args := make([]interface{}, 0, 3+len(value))
-	args = append(args, hpubListMQ, 1, listname)
+	listexist := "{" + listname + "}_exist"
+	args := make([]interface{}, 0, 4+len(value))
+	args = append(args, hpubTemporaryMQ, 2, listname, listexist)
 	for _, v := range value {
 		args = append(args, v)
 	}
 	if _, e = c.(redis.ConnWithContext).DoContext(ctx, "EVALSHA", args...); e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
-		args[0] = pubListMQ
-		_, e = c.(redis.ConnWithContext).DoContext(ctx, "EVAL", args...)
+		args[0] = pubTemporaryMQ
+		_, e = redis.Int(c.(redis.ConnWithContext).DoContext(ctx, "EVAL", args...))
 	}
 	return e
 }

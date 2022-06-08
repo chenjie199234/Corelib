@@ -161,10 +161,10 @@ func (p *Pool) PriorityMQSub(group, topicname string, subhandler func(taskname, 
 		return nil, ErrPriorityMQMissingTopic
 	}
 	var c redis.Conn
-	stop := false
+	status := 0 //0-working,1-cancel
 	finish := make(chan *struct{})
 	cancel = func() {
-		stop = true
+		status = 1
 		<-finish
 	}
 	go func() {
@@ -172,13 +172,13 @@ func (p *Pool) PriorityMQSub(group, topicname string, subhandler func(taskname, 
 		var e error
 		for {
 			if e != nil {
-				if stop {
+				if status == 1 {
 					break
 				}
 				//reconnect
 				time.Sleep(time.Millisecond * 10)
 			}
-			if stop {
+			if status == 1 {
 				break
 			}
 			c, e = p.p.GetContext(context.Background())
@@ -187,7 +187,7 @@ func (p *Pool) PriorityMQSub(group, topicname string, subhandler func(taskname, 
 				continue
 			}
 			for {
-				if stop {
+				if status == 1 {
 					break
 				}
 				var datas []string
@@ -201,7 +201,7 @@ func (p *Pool) PriorityMQSub(group, topicname string, subhandler func(taskname, 
 					time.Sleep(time.Second)
 					continue
 				}
-				if stop {
+				if status == 1 {
 					break
 				}
 				args := make([]interface{}, 0, len(datas)+1)

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func Test_ListMQ(t *testing.T) {
+func Test_TemporaryMQ(t *testing.T) {
 	pool := NewRedis(&Config{
 		RedisName:   "test",
 		URL:         "redis://127.0.0.1:6379",
@@ -23,7 +23,7 @@ func Test_ListMQ(t *testing.T) {
 		t.Fatal(e)
 	}
 	for i := 0; i < 100; i++ {
-		e := pool.TemporaryMQPub(context.Background(), "test", strconv.Itoa(i), strconv.AppendInt(nil, int64(i), 10))
+		e := pool.TemporaryMQPub(context.Background(), "test", 31, strconv.Itoa(i), strconv.AppendInt(nil, int64(i), 10))
 		if e != nil {
 			t.Fatal(e)
 		}
