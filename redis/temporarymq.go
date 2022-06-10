@@ -35,9 +35,9 @@ var hexpireTemporaryMQ = ""
 //in redis cluster mode,group is used to shard data into different redis node
 //in redis slave master mode,group is better to be 1
 //sub and pub's group should be same
-//cancel will stop the sub immediately,the mq's empty or not will not effect the cancel
-// 	so there maybe data left in the mq,and it will be expired within 16s
-func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)) (cancel func(), e error) {
+//stop will stop the sub immediately,the mq's empty or not will not effect the stop
+//so there maybe data left in the mq,and it will be expired within 16s
+func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)) (stop func(), e error) {
 	if name == "" {
 		return nil, ErrTemporaryMQMissingName
 	}
@@ -56,7 +56,7 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 				c, e := p.p.GetContext(context.Background())
 				if e != nil {
 					err = e
-					log.Error(nil, "[redis.ListMQ.update] index:", index, "get connection error:", e)
+					log.Error(nil, "[redis.TemporaryMQ.update] index:", index, "get connection error:", e)
 					return
 				}
 				defer c.Close()
@@ -65,7 +65,7 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 				}
 				if e != nil {
 					err = e
-					log.Error(nil, "[redis.ListMQ.update] index:", index, "error:", e)
+					log.Error(nil, "[redis.TemporaryMQ.update] index:", index, "error:", e)
 				}
 			}(i)
 			if i%20 == 19 {
@@ -78,53 +78,72 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 	if e := update(context.Background()); e != nil {
 		return nil, e
 	}
+	clean := func(ctx context.Context) error {
+		var err error
+		wg := sync.WaitGroup{}
+		for i := uint64(0); i < group; i++ {
+			wg.Add(1)
+			go func(index uint64) {
+				defer wg.Done()
+				listname := name + "_" + strconv.FormatUint(index, 10)
+				listexist := "{" + listname + "}_exist"
+				c, e := p.p.GetContext(context.Background())
+				if e != nil {
+					err = e
+					log.Error(nil, "[redis.TemporaryMQ.stop] index:", index, "get connection error:", e)
+					return
+				}
+				defer c.Close()
+				if _, e = c.(redis.ConnWithContext).DoContext(ctx, "DEL", listexist); e != nil {
+					err = e
+					log.Error(nil, "[redis.TemporaryMQ.stop] index:", index, "error:", e)
+				}
+			}(i)
+			if i%20 == 19 {
+				wg.Wait()
+			}
+		}
+		wg.Wait()
+		return err
+	}
+	cleanch := make(chan *struct{})
 	wg := &sync.WaitGroup{}
-	status := 0 //0-working,1-cancel
-	tker := time.NewTicker(time.Second * 5)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer tker.Stop()
-		for {
-			<-tker.C
-			if status != 0 {
-				break
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*4)
-			if e := update(ctx); e != nil {
-				tker.Reset(time.Millisecond * 500)
-			} else {
-				tker.Reset(time.Second * 5)
-			}
-			cancel()
-			if len(tker.C) > 0 {
-				<-tker.C
-			}
-			cancel()
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		c, e := p.p.GetContext(ctx)
-		if e != nil {
-			log.Error(nil, "[redis.ListMQ.stop] get connection error:", e)
-			return
-		}
-		defer c.Close()
-		if _, e = c.(redis.ConnWithContext).DoContext(ctx, "DEL", name); e != nil {
-			log.Error(nil, "[redis.ListMQ.stop] error:", e)
-		}
-		return
-	}()
 	lker := &sync.Mutex{}
 	conns := make(map[redis.Conn]*struct{}, group)
-	cancel = func() {
-		status = 1
-		tker.Reset(1)
-		lker.Lock()
-		for conn := range conns {
-			conn.Close()
+	wg.Add(1)
+	go func() {
+		tmer := time.NewTimer(time.Second * 5)
+		for {
+			select {
+			case <-cleanch:
+				//stop the pub
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				clean(ctx)
+				cancel()
+				//stop the timer
+				tmer.Stop()
+				//stop the sub
+				lker.Lock()
+				for conn := range conns {
+					conn.Close()
+				}
+				lker.Unlock()
+				wg.Done()
+				return
+			case <-tmer.C:
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second*4)
+				e := update(ctx)
+				cancel()
+				if e != nil {
+					tmer.Reset(time.Millisecond * 500)
+				} else {
+					tmer.Reset(time.Second * 5)
+				}
+			}
 		}
-		lker.Unlock()
+	}()
+	stop = func() {
+		close(cleanch)
 		wg.Wait()
 	}
 	for i := uint64(0); i < group; i++ {
@@ -136,25 +155,31 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 			var e error
 			for {
 				if e != nil {
-					if status != 0 {
-						break
+					select {
+					case <-cleanch:
+						return
+					default:
 					}
 					//reconnect
 					time.Sleep(time.Millisecond * 10)
 				}
-				if status != 0 {
-					break
+				select {
+				case <-cleanch:
+					return
+				default:
 				}
 				c, e = redis.DialURL(p.c.URL, redis.DialConnectTimeout(p.c.ConnTimeout), redis.DialReadTimeout(p.c.IOTimeout), redis.DialWriteTimeout(p.c.IOTimeout))
 				if e != nil {
-					log.Error(nil, "[redis.ListMQ.sub] get connection error:", e)
+					log.Error(nil, "[redis.TemporaryMQ.sub] dial error:", e)
 					continue
 				}
 				lker.Lock()
-				if status != 0 {
-					c.Close()
+				select {
+				case <-cleanch:
 					lker.Unlock()
-					break
+					c.Close()
+					return
+				default:
 				}
 				conns[c] = nil
 				lker.Unlock()
@@ -162,10 +187,14 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 				for {
 					data, e = redis.ByteSlices(c.(redis.ConnWithTimeout).DoWithTimeout(0, "BLPOP", listname, 0))
 					if e != nil {
-						if ee := errors.Unwrap(e); ee != nil && ee == net.ErrClosed && status == 1 {
-							break
+						select {
+						case <-cleanch:
+							if ee := errors.Unwrap(e); ee == nil || ee != net.ErrClosed {
+								log.Error(nil, "[redis.TemporaryMQ.sub] index:", index, "error:", e)
+							}
+						default:
+							log.Error(nil, "[redis.TemporaryMQ.sub] index:", index, "error:", e)
 						}
-						log.Error(nil, "[redis.ListMQ.sub] index:", index, "exec error:", e)
 						break
 					}
 					if subhandler != nil {
@@ -174,8 +203,8 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 				}
 				lker.Lock()
 				delete(conns, c)
-				c.Close()
 				lker.Unlock()
+				c.Close()
 			}
 		}(i)
 	}
