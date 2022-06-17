@@ -18,6 +18,8 @@ func init() {
 	all["rate"] = rate
 	all["accesskey"] = accesskey
 	all["token"] = token
+	all["whiteip"] = whiteip
+	all["blackip"] = blackip
 }
 
 func AllMids() map[string]web.OutsideHandler {
@@ -89,4 +91,16 @@ func token(ctx *web.Context) {
 	md["Token-RunEnv"] = t.RunEnv
 	md["Token-Puber"] = t.Puber
 	md["Token-Data"] = t.Data
+}
+func whiteip(ctx *web.Context) {
+	if !publicmids.WhiteIP(ctx.GetClientIp()) {
+		ctx.Abort(cerror.ErrBan)
+		return
+	}
+}
+func blackip(ctx *web.Context) {
+	if publicmids.BlackIP(ctx.GetClientIp()) {
+		ctx.Abort(cerror.ErrBan)
+		return
+	}
 }
