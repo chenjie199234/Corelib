@@ -112,14 +112,16 @@ const textapp = `{
 		"Method":["GET","GRPC","CRPC"],
 		"MaxPerSec":10
 	}],
+	"white_ip":[],
+	"black_ip":[],
 	"web_path_rewrite":{
 		"GET":{
 			"/example/origin/url":"/example/new/url"
 		}
 	},
 	"access_keys":{
-		"default":"default_sec_key",
-		"/{{.}}.status/ping":"specific_sec_key"
+		"default":["default_sec_key"],
+		"/{{.}}.status/ping":["specific_sec_key"]
 	},
 	"token_secret":"test",
 	"token_expire":"24h",

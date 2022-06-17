@@ -48,22 +48,23 @@ func UpdateRateConfig(c []*RateConfig) {
 	patch := make(map[string]*ring.Ring[int64]) //key path
 	del := make(map[string]*ring.Ring[int64])   //key path
 	for _, cc := range c {
+		r := ring.NewRing[int64](cc.MaxPerSec)
 		for _, m := range cc.Method {
 			switch strings.ToUpper(m) {
 			case "GRPC":
-				grpc[cc.Path] = ring.NewRing[int64](cc.MaxPerSec)
+				grpc[cc.Path] = r
 			case "CRPC":
-				crpc[cc.Path] = ring.NewRing[int64](cc.MaxPerSec)
+				crpc[cc.Path] = r
 			case "GET":
-				get[cc.Path] = ring.NewRing[int64](cc.MaxPerSec)
+				get[cc.Path] = r
 			case "POST":
-				post[cc.Path] = ring.NewRing[int64](cc.MaxPerSec)
+				post[cc.Path] = r
 			case "PUT":
-				put[cc.Path] = ring.NewRing[int64](cc.MaxPerSec)
+				put[cc.Path] = r
 			case "PATCH":
-				patch[cc.Path] = ring.NewRing[int64](cc.MaxPerSec)
+				patch[cc.Path] = r
 			case "DELETE":
-				del[cc.Path] = ring.NewRing[int64](cc.MaxPerSec)
+				del[cc.Path] = r
 			}
 		}
 	}
@@ -76,7 +77,7 @@ func UpdateRateConfig(c []*RateConfig) {
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.del)), unsafe.Pointer(&del))
 }
 
-func check(buf *ring.Ring[int64]) bool {
+func checkrate(buf *ring.Ring[int64]) bool {
 	now := time.Now().UnixNano()
 	for {
 		if buf.Push(now) {
@@ -102,7 +103,7 @@ func GrpcRate(path string) bool {
 	if !ok {
 		return true
 	}
-	return check(buf)
+	return checkrate(buf)
 }
 func CrpcRate(path string) bool {
 	crpc := *(*map[string]*ring.Ring[int64])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.crpc))))
@@ -110,7 +111,7 @@ func CrpcRate(path string) bool {
 	if !ok {
 		return true
 	}
-	return check(buf)
+	return checkrate(buf)
 }
 func HttpGetRate(path string) bool {
 	get := *(*map[string]*ring.Ring[int64])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.get))))
@@ -118,7 +119,7 @@ func HttpGetRate(path string) bool {
 	if !ok {
 		return true
 	}
-	return check(buf)
+	return checkrate(buf)
 }
 func HttpPostRate(path string) bool {
 	post := *(*map[string]*ring.Ring[int64])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.post))))
@@ -126,7 +127,7 @@ func HttpPostRate(path string) bool {
 	if !ok {
 		return true
 	}
-	return check(buf)
+	return checkrate(buf)
 }
 func HttpPutRate(path string) bool {
 	put := *(*map[string]*ring.Ring[int64])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.put))))
@@ -134,7 +135,7 @@ func HttpPutRate(path string) bool {
 	if !ok {
 		return true
 	}
-	return check(buf)
+	return checkrate(buf)
 }
 func HttpPatchRate(path string) bool {
 	patch := *(*map[string]*ring.Ring[int64])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.patch))))
@@ -142,7 +143,7 @@ func HttpPatchRate(path string) bool {
 	if !ok {
 		return true
 	}
-	return check(buf)
+	return checkrate(buf)
 }
 func HttpDelRate(path string) bool {
 	del := *(*map[string]*ring.Ring[int64])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.del))))
@@ -150,5 +151,5 @@ func HttpDelRate(path string) bool {
 	if !ok {
 		return true
 	}
-	return check(buf)
+	return checkrate(buf)
 }

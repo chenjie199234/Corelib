@@ -111,8 +111,10 @@ import (
 type AppConfig struct {
 	HandlerTimeout map[string]map[string]ctime.Duration $json:"handler_timeout"$ //first key handler path,second key method(GET,POST,PUT,PATCH,DELETE,CRPC,GRPC),value timeout
 	HandlerRate    []*publicmids.RateConfig             $json:"handler_rate"$
+	WhiteIP        []string                             $json:"white_ip"$
+	BlackIP        []string                             $json:"black_ip"$
 	WebPathRewrite map[string]map[string]string         $json:"web_path_rewrite"$ //first key method(GET,POST,PUT,PATCH,DELETE),second key origin url,value new url
-	AccessKeys     map[string]string                    $json:"access_keys"$      //key-specific path,value specific seckey,key-"default",value default seckey
+	AccessKeys     map[string][]string                  $json:"access_keys"$      //key-specific path,value specific seckey,key-"default",value default seckey
 	TokenSecret    string                               $json:"token_secret"$
 	TokenExpire    ctime.Duration                       $json:"token_expire"$
 	Service        *ServiceConfig                       $json:"service"$

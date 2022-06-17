@@ -37,6 +37,7 @@ func main() {
 		xweb.UpdateWebPathRewrite(ac.WebPathRewrite)
 		publicmids.UpdateRateConfig(ac.HandlerRate)
 		publicmids.UpdateAccessKeyConfig(ac.AccessKeys)
+		publicmids.UpdateIpConfig(ac.WhiteIP, ac.BlackIP)
 	})
 	defer config.Close()
 	//start the whole business service
