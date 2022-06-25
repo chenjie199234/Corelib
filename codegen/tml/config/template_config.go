@@ -12,6 +12,7 @@ const text = `package config
 import (
 	"os"
 	"strconv"
+	"time"
 
 	"{{.}}/api"
 
@@ -102,7 +103,8 @@ func initenv() {
 			Close()
 			os.Exit(1)
 		}
-		if e := configsdk.NewConfigSdk(api.Group, api.Name, group, host); e != nil {
+		var e error
+		if RemoteConfigSdk, e = configsdk.NewConfigSdk(api.Group, api.Name, group, host); e != nil {
 			log.Error(nil, "[config.initenv] new remote config sdk error:", e)
 			Close()
 			os.Exit(1)
@@ -118,31 +120,6 @@ func initenv() {
 	} else {
 		log.Warning(nil, "[config.initenv] missing env DEPLOY_ENV")
 	}
-}
-
-func initremote() {
-	if EC.ConfigType == nil || *EC.ConfigType == 0 {
-		return
-	}
-	if *EC.ConfigType == 1 {
-		var group string
-		if str, ok := os.LookupEnv("REMOTE_CONFIG_SERVICE_GROUP"); ok && str != "<REMOTE_CONFIG_SERVICE_GROUP>" && str != "" {
-			group = str
-		} else {
-			panic("[config.initremote] missing env REMOTE_CONFIG_SERVICE_GROUP")
-		}
-		var host string
-		if str, ok := os.LookupEnv("REMOTE_CONFIG_SERVICE_HOST"); ok && str != "<REMOTE_CONFIG_SERVICE_HOST>" && str != "" {
-			host = str
-		} else {
-			panic("[config.initremote] missing env REMOTE_CONFIG_SERVICE_HOST")
-		}
-		if e := configsdk.NewServiceSdk(api.Group, api.Name, group, host); e != nil {
-			log.Error(nil, "[config.initremote] new service sdk error:", e)
-			Close()
-			os.Exit(1)
-		}
-	}
 }`
 const apptext = `package config
 
@@ -153,6 +130,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/log"
 	publicmids "github.com/chenjie199234/Corelib/mids"
+	"github.com/chenjie199234/Corelib/util/common"
 	ctime "github.com/chenjie199234/Corelib/util/time"
 	"github.com/fsnotify/fsnotify"
 )
@@ -276,6 +254,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
+	"github.com/chenjie199234/Corelib/util/common"
 	ctime "github.com/chenjie199234/Corelib/util/time"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
