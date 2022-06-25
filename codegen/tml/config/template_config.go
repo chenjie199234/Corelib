@@ -15,7 +15,7 @@ import (
 
 	"{{.}}/api"
 
-	configsdk "github.com/chenjie199234/config/sdk"
+	configsdk "github.com/chenjie199234/admin/sdk/config"
 	"github.com/chenjie199234/Corelib/log"
 )
 
@@ -30,13 +30,41 @@ type EnvConfig struct {
 //EC -
 var EC *EnvConfig
 
+//RemoteConfigSdk -
+var RemoteConfigSdk *configsdk.Sdk
+
 //notice is a sync function
 //don't write block logic inside it
 func Init(notice func(c *AppConfig)) {
 	initenv()
-	initremote()
-	initsource()
-	initapp(notice)
+	if EC.ConfigType != nil && *EC.ConfigType == 1 {
+		tmer := time.NewTimer(time.Second * 2)
+		waitapp := make(chan *struct{})
+		waitsource := make(chan *struct{})
+		initremoteapp(notice, waitapp)
+		stopwatchsource := initremotesource(waitsource)
+		appinit := false
+		sourceinit := false
+		for {
+			select {
+			case <-waitapp:
+				appinit = true
+			case <-waitsource:
+				sourceinit = true
+				stopwatchsource()
+			case <-tmer.C:
+				log.Error(nil, "[config.initremote] timeout")
+				Close()
+				os.Exit(1)
+			}
+			if appinit && sourceinit {
+				break
+			}
+		}
+	} else {
+		initlocalapp(notice)
+		initlocalsource()
+	}
 }
 
 //Close -
@@ -56,6 +84,29 @@ func initenv() {
 		EC.ConfigType = &configtype
 	} else {
 		log.Warning(nil, "[config.initenv] missing env CONFIG_TYPE")
+	}
+	if EC.ConfigType != nil && *EC.ConfigType == 1 {
+		var group string
+		if str, ok := os.LookupEnv("REMOTE_CONFIG_SERVICE_GROUP"); ok && str != "<REMOTE_CONFIG_SERVICE_GROUP>" && str != "" {
+			group = str
+		} else {
+			log.Error(nil, "[config.initenv] missing env REMOTE_CONFIG_SERVICE_GROUP")
+			Close()
+			os.Exit(1)
+		}
+		var host string
+		if str, ok := os.LookupEnv("REMOTE_CONFIG_SERVICE_HOST"); ok && str != "<REMOTE_CONFIG_SERVICE_HOST>" && str != "" {
+			host = str
+		} else {
+			log.Error(nil, "[config.initenv] missing env REMOTE_CONFIG_SERVICE_HOST")
+			Close()
+			os.Exit(1)
+		}
+		if e := configsdk.NewConfigSdk(api.Group, api.Name, group, host); e != nil {
+			log.Error(nil, "[config.initenv] new remote config sdk error:", e)
+			Close()
+			os.Exit(1)
+		}
 	}
 	if str, ok := os.LookupEnv("RUN_ENV"); ok && str != "<RUN_ENV>" && str != "" {
 		EC.RunEnv = &str
@@ -133,16 +184,16 @@ var AC *AppConfig
 
 var watcher *fsnotify.Watcher
 
-func initapp(notice func(*AppConfig)) {
+func initlocalapp(notice func(*AppConfig)) {
 	data, e := os.ReadFile("./AppConfig.json")
 	if e != nil {
-		log.Error(nil, "[config.initapp] read config file error:", e)
+		log.Error(nil, "[config.initlocalapp] read config file error:", e)
 		Close()
 		os.Exit(1)
 	}
 	AC = &AppConfig{}
 	if e = json.Unmarshal(data, AC); e != nil {
-		log.Error(nil, "[config.initapp] config file format error:", e)
+		log.Error(nil, "[config.initlocalapp] config file format error:", e)
 		Close()
 		os.Exit(1)
 	}
@@ -152,12 +203,12 @@ func initapp(notice func(*AppConfig)) {
 	}
 	watcher, e = fsnotify.NewWatcher()
 	if e != nil {
-		log.Error(nil, "[config.initapp] create watcher for hot update error:", e)
+		log.Error(nil, "[config.initlocalapp] create watcher for hot update error:", e)
 		Close()
 		os.Exit(1)
 	}
 	if e = watcher.Add("./"); e != nil {
-		log.Error(nil, "[config.initapp] create watcher for hot update error:", e)
+		log.Error(nil, "[config.initlocalapp] create watcher for hot update error:", e)
 		Close()
 		os.Exit(1)
 	}
@@ -173,12 +224,12 @@ func initapp(notice func(*AppConfig)) {
 				}
 				data, e := os.ReadFile("./AppConfig.json")
 				if e != nil {
-					log.Error(nil, "[config.initapp] hot update read config file error:", e)
+					log.Error(nil, "[config.initlocalapp] hot update read config file error:", e)
 					continue
 				}
 				c := &AppConfig{}
 				if e = json.Unmarshal(data, c); e != nil {
-					log.Error(nil, "[config.initapp] hot update config file format error:", e)
+					log.Error(nil, "[config.initlocalapp] hot update config file format error:", e)
 					continue
 				}
 				validateAppConfig(c)
@@ -190,10 +241,29 @@ func initapp(notice func(*AppConfig)) {
 				if !ok {
 					return
 				}
-				log.Error(nil, "[config.initapp] hot update watcher error:", err)
+				log.Error(nil, "[config.initlocalapp] hot update watcher error:", err)
 			}
 		}
 	}()
+}
+func initremoteapp(notice func(*AppConfig), wait chan *struct{}) (stopwatch func()) {
+	return RemoteConfigSdk.Watch("AppConfig", func(key, keyvalue, keytype string) {
+		//only support json now,so keytype will be ignore
+		c := &AppConfig{}
+		if e := json.Unmarshal(common.Str2byte(keyvalue), c); e != nil {
+			log.Error(nil, "[config.initremoteapp] config data format error:", e)
+			return
+		}
+		validateAppConfig(c)
+		if notice != nil {
+			notice(c)
+		}
+		AC = c
+		select {
+		case wait <- nil:
+		default:
+		}
+	})
 }`
 const sourcetext = `package config
 
@@ -357,16 +427,16 @@ var kafkaSubers map[string]*kafka.Reader
 
 var kafkaPubers map[string]*kafka.Writer
 
-func initsource() {
+func initlocalsource() {
 	data, e := os.ReadFile("./SourceConfig.json")
 	if e != nil {
-		log.Error(nil, "[config.initsource] read config file error:", e)
+		log.Error(nil, "[config.initlocalsource] read config file error:", e)
 		Close()
 		os.Exit(1)
 	}
 	sc = &sourceConfig{}
 	if e = json.Unmarshal(data, sc); e != nil {
-		log.Error(nil, "[config.initsource] config file format error:", e)
+		log.Error(nil, "[config.initlocalsource] config file format error:", e)
 		Close()
 		os.Exit(1)
 	}
@@ -382,6 +452,36 @@ func initsource() {
 	initsql()
 	initkafkapub()
 	initkafkasub()
+}
+func initremotesource(wait chan *struct{}) (stopwatch func()) {
+	return RemoteConfigSdk.Watch("SourceConfig", func(key, keyvalue, keytype string) {
+		//source config only init once
+		if sc != nil {
+			return
+		}
+		//only support json now,so keytype will be ignore
+		c := &sourceConfig{}
+		if e := json.Unmarshal(common.Str2byte(keyvalue), c); e != nil {
+			log.Error(nil, "[config.initremotesource] config data format error:", e)
+			return
+		}
+		sc = c
+		initgrpcserver()
+		initgrpcclient()
+		initcrpcserver()
+		initcrpcclient()
+		initwebserver()
+		initwebclient()
+		initredis()
+		initmongo()
+		initsql()
+		initkafkapub()
+		initkafkasub()
+		select {
+		case wait <- nil:
+		default:
+		}
+	})
 }
 func initgrpcserver() {
 	if sc.CGrpcServer == nil {
