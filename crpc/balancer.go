@@ -166,7 +166,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 			b.servers[addr] = server
 			go b.c.start(server, false)
 		} else if registerdata == nil || len(registerdata.DServers) == 0 {
-			//this is now a new register and this register is offline
+			//this is not a new register and this register is offline
 			server.dservers = nil
 			server.Pickinfo.DServerNum = 0
 			server.Pickinfo.DServerOffline = time.Now().UnixNano()

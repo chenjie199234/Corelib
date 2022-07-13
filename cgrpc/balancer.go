@@ -214,7 +214,7 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 func (b *corelibBalancer) rebuildpicker(reason bool) {
 	tmp := make([]*ServerForPick, 0, len(b.servers))
 	for _, server := range b.servers {
-		if atomic.LoadInt32(&server.status) == int32(connectivity.Ready) {
+		if server.Pickable() {
 			tmp = append(tmp, server)
 		}
 	}
