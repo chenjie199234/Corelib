@@ -44,6 +44,7 @@ type ServerForPick struct {
 	subconn  balancer.SubConn
 	dservers map[string]*struct{} //this app registered on which discovery server
 	status   int32
+	closing  bool
 
 	Pickinfo *pickinfo
 }
@@ -57,7 +58,7 @@ type pickinfo struct {
 }
 
 func (s *ServerForPick) Pickable() bool {
-	return atomic.LoadInt32(&s.status) == int32(connectivity.Ready)
+	return atomic.LoadInt32(&s.status) == int32(connectivity.Ready) && !s.closing
 }
 
 func (b *corelibBalancer) setPickerServers(servers []*ServerForPick) {
@@ -245,7 +246,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 					if doneinfo.Err != nil {
 						server.Pickinfo.LastFailTime = time.Now().UnixNano()
 						if cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrClosing) {
-							b.cc.RemoveSubConn(server.subconn)
+							server.closing = true
 							b.c.ResolveNow()
 						}
 					}

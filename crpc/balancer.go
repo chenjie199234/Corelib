@@ -27,6 +27,7 @@ type ServerForPick struct {
 	addr     string
 	dservers map[string]*struct{} //this app registered on which discovery server
 	peer     *stream.Peer
+	closing  bool
 
 	//active calls
 	lker *sync.Mutex
@@ -52,7 +53,7 @@ func (s *ServerForPick) caspeer(oldpeer, newpeer *stream.Peer) bool {
 	return atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&s.peer)), unsafe.Pointer(&oldpeer), unsafe.Pointer(newpeer))
 }
 func (s *ServerForPick) Pickable() bool {
-	return s.getpeer() != nil
+	return s.getpeer() != nil && !s.closing
 }
 
 func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
