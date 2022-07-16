@@ -65,10 +65,11 @@ func genService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedF
 			g.P("## ", s.Desc.Name())
 		}
 		path := "/" + *file.Proto.Package + "." + string(s.Desc.Name()) + "/" + string(m.Desc.Name())
-		g.P("### ", path)
+		g.P("### ", m.Desc.Name())
 		g.P(strings.TrimSuffix(m.Comments.Leading.String()+m.Comments.Trailing.String(), "\n"))
 		g.P("#### Req:")
 		g.P("```")
+		g.P("Path:         ", path)
 		g.P("Method:       ", httpmetohd)
 		if httpmetohd == "POST" || httpmetohd == "PUT" || httpmetohd == "PATCH" {
 			g.P("Content-Type: application/json")
