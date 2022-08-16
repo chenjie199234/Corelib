@@ -15,9 +15,9 @@ require (
 	github.com/chenjie199234/Corelib v0.0.73
 	github.com/fsnotify/fsnotify v1.5.4
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/segmentio/kafka-go v0.4.32
-	go.mongodb.org/mongo-driver v1.10.0
-	google.golang.org/protobuf v1.28.0
+	github.com/segmentio/kafka-go v0.4.33
+	go.mongodb.org/mongo-driver v1.10.1
+	google.golang.org/protobuf v1.28.1
 )`
 
 const path = "./"
