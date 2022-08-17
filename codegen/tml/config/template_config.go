@@ -54,7 +54,7 @@ func Init(notice func(c *AppConfig)) {
 				sourceinit = true
 				stopwatchsource()
 			case <-tmer.C:
-				log.Error(nil, "[config.initremote] timeout")
+				log.Error(nil, "[config.Init] timeout")
 				Close()
 				os.Exit(1)
 			}
