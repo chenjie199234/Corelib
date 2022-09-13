@@ -55,6 +55,10 @@ func (p *Pool) PriorityMQGetCurTasks(ctx context.Context, group string) (map[str
 var finishprioritymq = `local exist=redis.call("ZSCORE",KEYS[1],ARGV[1])
 if(exist==nil)
 then
+	redis.call("DEL",KEYS[2])
+	for i=3,#KEYS,1 do
+		redis.call("DEL",KEYS[i])
+	end
 	return 1
 end
 redis.call("SET",KEYS[2],1)
@@ -99,15 +103,10 @@ func (p *Pool) PriorityMQFinishTask(ctx context.Context, group, taskname string,
 	return r, e
 }
 
-var pubprioritymq = `local exist=redis.call("ZSCORE",KEYS[1],ARGV[1])
-if(exist==nil)
-then
-	return -1
-end
-local exist=redis.call("EXISTS",KEYS[2])
+var pubprioritymq = `local exist=redis.call("EXISTS",KEYS[2])
 if(exist==1)
 then
-	return -2
+	return -1
 end
 for i=2,#ARGV,1 do
 	redis.call("RPUSH",KEYS[3],ARGV[i])
@@ -115,16 +114,15 @@ end
 return 0`
 var hpubprioritymq = ""
 
-var ErrPriorityMQTaskNotExist = errors.New("task doesn't exist")
 var ErrPriorityMQTaskFinished = errors.New("task finished")
 
-func (p *Pool) PriorityMQPub(ctx context.Context, group, taskname, topicname string, datas ...[]byte) (int64, error) {
+func (p *Pool) PriorityMQPub(ctx context.Context, group, taskname, topicname string, datas ...[]byte) error {
 	if len(datas) == 0 {
-		return 0, nil
+		return nil
 	}
 	c, e := p.p.GetContext(ctx)
 	if e != nil {
-		return 0, e
+		return e
 	}
 	defer c.Close()
 	taskkey := "{" + group + "}_" + taskname
@@ -140,15 +138,12 @@ func (p *Pool) PriorityMQPub(ctx context.Context, group, taskname, topicname str
 		r, e = redis.Int64(c.(redis.ConnWithContext).DoContext(ctx, "EVAL", args...))
 	}
 	if e != nil {
-		return 0, e
+		return e
 	}
 	if r == -1 {
-		return 0, ErrPriorityMQTaskNotExist
+		return ErrPriorityMQTaskFinished
 	}
-	if r == -2 {
-		return 0, ErrPriorityMQTaskFinished
-	}
-	return int64(len(datas)), nil
+	return nil
 }
 
 var ErrPriorityMQMissingTopic = errors.New("priority mq missing topic")
