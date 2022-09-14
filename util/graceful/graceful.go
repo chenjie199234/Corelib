@@ -10,7 +10,7 @@ type Graceful struct {
 	stop     chan *struct{}
 }
 
-func NewGraceful() *Graceful {
+func New() *Graceful {
 	return &Graceful{
 		progress: 0,
 		stop:     make(chan *struct{}),

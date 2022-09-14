@@ -20,23 +20,28 @@ import (
 	//"github.com/chenjie199234/Corelib/crpc"
 	//"github.com/chenjie199234/Corelib/log"
 	//"github.com/chenjie199234/Corelib/web"
+	"github.com/chenjie199234/Corelib/util/graceful"
 )
 
 //Service subservice for {{.Sname}} business
 type Service struct {
+	stop *graceful.Graceful
+
 	{{.Sname}}Dao *{{.Sname}}dao.Dao
 }
 
 //Start -
 func Start() *Service {
 	return &Service{
+		stop: graceful.New(),
+
 		{{.Sname}}Dao: {{.Sname}}dao.NewDao(config.GetSql("{{.Sname}}_sql"), config.GetRedis("{{.Sname}}_redis"), config.GetMongo("{{.Sname}}_mongo")),
 	}
 }
 
 //Stop -
 func (s *Service) Stop() {
-
+	s.stop.Close()
 }`
 
 const path = "./service/"

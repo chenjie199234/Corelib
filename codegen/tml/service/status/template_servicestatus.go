@@ -21,16 +21,21 @@ import (
 	//"github.com/chenjie199234/Corelib/crpc"
 	//"github.com/chenjie199234/Corelib/log"
 	//"github.com/chenjie199234/Corelib/web"
+	"github.com/chenjie199234/Corelib/util/graceful"
 )
 
 //Service subservice for status business
 type Service struct {
+	stop      *graceful.Graceful
+
 	statusDao *statusdao.Dao
 }
 
 //Start -
 func Start() *Service {
 	return &Service{
+		stop: graceful.New(),
+
 		//statusDao: statusdao.NewDao(config.GetSql("status_sql"), config.GetRedis("status_redis"), config.GetMongo("status_mongo")),
 		statusDao: statusdao.NewDao(nil, nil, nil),
 	}
@@ -51,7 +56,7 @@ func (s *Service) Ping(ctx context.Context,in *api.Pingreq) (*api.Pingresp, erro
 
 //Stop -
 func (s *Service) Stop() {
-
+	s.stop.Close()
 }`
 
 const path = "./service/status/"

@@ -8,7 +8,7 @@ import (
 )
 
 func Test_Graceful(t *testing.T) {
-	g := NewGraceful()
+	g := New()
 	g.AddOne()
 	start := time.Now().Unix()
 	go func() {
