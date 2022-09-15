@@ -194,6 +194,11 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 		return e
 	}
 }
+
+func (c *CGrpcClient) Close() {
+	c.conn.Close()
+}
+
 func transGrpcError(e error) *cerror.Error {
 	if e == nil {
 		return nil
