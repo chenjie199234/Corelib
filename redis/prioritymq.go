@@ -42,6 +42,19 @@ func (p *Pool) PriorityMQSetTask(ctx context.Context, group, taskname string, pr
 	return e
 }
 
+func (p *Pool) PriorityMQInterrupt(ctx context.Context, group, taskname string) error {
+	if group == "" {
+		return ErrPriorityMQMissingGroup
+	}
+	c, e := p.p.GetContext(ctx)
+	if e != nil {
+		return e
+	}
+	defer c.Close()
+	_, e = c.(redis.ConnWithContext).DoContext(ctx, "ZREM", group, taskname)
+	return e
+}
+
 //return key - taskname,value - priority
 func (p *Pool) PriorityMQGetCurTasks(ctx context.Context, group string) (map[string]uint64, error) {
 	c, e := p.p.GetContext(ctx)
