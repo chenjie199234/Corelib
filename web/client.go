@@ -134,7 +134,13 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername,
 	}
 	return client, nil
 }
+
+//this will return the host in NewWebClient function
+//if in NewWebClient function the host is empty,this will return empty
 func (c *WebClient) GetSeverHost() string {
+	if c.u == nil {
+		return ""
+	}
 	return c.u.Scheme + "://" + c.u.Host
 }
 
