@@ -207,7 +207,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	}
 	var u *url.URL
 	if !strings.HasPrefix(path, "https") && !strings.HasPrefix(path, "http") {
-		if c.serverhost == "" {
+		if c.u == nil {
 			return nil, cerror.ErrReq
 		}
 		u = c.u
