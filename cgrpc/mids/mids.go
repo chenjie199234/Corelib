@@ -8,7 +8,7 @@ import (
 	publicmids "github.com/chenjie199234/Corelib/mids"
 )
 
-//dosn't include global mids in here
+// dosn't include global mids in here
 var all map[string]cgrpc.OutsideHandler
 
 func init() {
@@ -23,7 +23,7 @@ func AllMids() map[string]cgrpc.OutsideHandler {
 	return all
 }
 
-//thread unsafe
+// thread unsafe
 func RegMid(name string, handler cgrpc.OutsideHandler) {
 	all[name] = handler
 }

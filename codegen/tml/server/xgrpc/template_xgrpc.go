@@ -14,6 +14,7 @@ import (
 
 	"{{.}}/api"
 	"{{.}}/config"
+	"{{.}}/model"
 	"{{.}}/service"
 
 	"github.com/chenjie199234/Corelib/cgrpc"
@@ -24,7 +25,7 @@ import (
 
 var s *cgrpc.CGrpcServer
 
-//StartCGrpcServer -
+// StartCGrpcServer -
 func StartCGrpcServer() {
 	c := config.GetCGrpcServerConfig()
 	cgrpcc := &cgrpc.ServerConfig{
@@ -33,7 +34,7 @@ func StartCGrpcServer() {
 		HeartPorbe:     time.Duration(c.HeartProbe),
 	}
 	var e error
-	if s, e = cgrpc.NewCGrpcServer(cgrpcc, api.Group, api.Name); e != nil {
+	if s, e = cgrpc.NewCGrpcServer(cgrpcc, model.Group, model.Name); e != nil {
 		log.Error(nil,"[xgrpc] new error:", e)
 		return
 	}
@@ -54,8 +55,8 @@ func StartCGrpcServer() {
 	log.Info(nil,"[xgrpc] server closed")
 }
 
-//UpdateHandlerTimeout -
-//first key path,second key method,value timeout duration
+// UpdateHandlerTimeout -
+// first key path,second key method,value timeout duration
 func UpdateHandlerTimeout(hts map[string]map[string]ctime.Duration) {
 	if s == nil {
 		return
@@ -72,7 +73,7 @@ func UpdateHandlerTimeout(hts map[string]map[string]ctime.Duration) {
 	s.UpdateHandlerTimeout(cc)
 }
 
-//StopCGrpcServer -
+// StopCGrpcServer -
 func StopCGrpcServer() {
 	if s != nil {
 		s.StopCGrpcServer()

@@ -24,14 +24,14 @@ import (
 	"github.com/chenjie199234/Corelib/util/graceful"
 )
 
-//Service subservice for status business
+// Service subservice for status business
 type Service struct {
 	stop      *graceful.Graceful
 
 	statusDao *statusdao.Dao
 }
 
-//Start -
+// Start -
 func Start() *Service {
 	return &Service{
 		stop: graceful.New(),
@@ -41,6 +41,7 @@ func Start() *Service {
 	}
 }
 
+// Ping -
 func (s *Service) Ping(ctx context.Context,in *api.Pingreq) (*api.Pingresp, error) {
 	//if _, ok := ctx.(*crpc.Context); ok {
 	//        log.Info("this is a crpc call")
@@ -54,7 +55,7 @@ func (s *Service) Ping(ctx context.Context,in *api.Pingreq) (*api.Pingresp, erro
 	return &api.Pingresp{ClientTimestamp: in.Timestamp, ServerTimestamp: time.Now().UnixNano()}, nil
 }
 
-//Stop -
+// Stop -
 func (s *Service) Stop() {
 	s.stop.Close()
 }`

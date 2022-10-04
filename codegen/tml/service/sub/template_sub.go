@@ -23,14 +23,14 @@ import (
 	"github.com/chenjie199234/Corelib/util/graceful"
 )
 
-//Service subservice for {{.Sname}} business
+// Service subservice for {{.Sname}} business
 type Service struct {
 	stop *graceful.Graceful
 
 	{{.Sname}}Dao *{{.Sname}}dao.Dao
 }
 
-//Start -
+// Start -
 func Start() *Service {
 	return &Service{
 		stop: graceful.New(),
@@ -39,7 +39,7 @@ func Start() *Service {
 	}
 }
 
-//Stop -
+// Stop -
 func (s *Service) Stop() {
 	s.stop.Close()
 }`

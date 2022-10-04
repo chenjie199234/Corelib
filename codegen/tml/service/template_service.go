@@ -13,10 +13,10 @@ import (
 	"{{.}}/service/status"
 )
 
-//SvcStatus one specify sub service
+// SvcStatus one specify sub service
 var SvcStatus *status.Service
 
-//StartService start the whole service
+// StartService start the whole service
 func StartService() error {
 	if e := dao.NewApi(); e != nil {
 		return e
@@ -26,7 +26,7 @@ func StartService() error {
 	return nil
 }
 
-//StopService stop the whole service
+// StopService stop the whole service
 func StopService() {
 	//stop sub service
 	SvcStatus.Stop()

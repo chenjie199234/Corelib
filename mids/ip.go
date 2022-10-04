@@ -27,8 +27,8 @@ func init() {
 	}
 }
 
-//can only support ipv4
-//can support ipv4 mask
+// can only support ipv4
+// can support ipv4 mask
 func UpdateIpConfig(white []string, black []string) {
 	w := make(map[string]*struct{})
 	wm := make(map[uint64]int)
@@ -92,24 +92,24 @@ func CheckIpAndMask(ip string) bool {
 	return true
 }
 
-//true - in white ip list
-//false - not in white ip list
+// true - in white ip list
+// false - not in white ip list
 func WhiteIP(ip string) bool {
 	white := *(*map[string]*struct{})(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&ipInstance.white))))
 	whitemask := *(*map[uint64]int)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&ipInstance.whitemask))))
 	return checkip(white, whitemask, ip)
 }
 
-//true - in black ip list
-//false - not in black ip list
+// true - in black ip list
+// false - not in black ip list
 func BlackIP(ip string) bool {
 	black := *(*map[string]*struct{})(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&ipInstance.black))))
 	blackmask := *(*map[uint64]int)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&ipInstance.blackmask))))
 	return checkip(black, blackmask, ip)
 }
 
-//true - in
-//false - not in
+// true - in
+// false - not in
 func checkip(nomask map[string]*struct{}, mask map[uint64]int, ip string) bool {
 	if _, ok := nomask[ip]; ok {
 		return true

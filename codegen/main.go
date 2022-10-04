@@ -9,7 +9,6 @@ import (
 	"os"
 	"strings"
 
-	clientapi "github.com/chenjie199234/Corelib/codegen/tml/api/client"
 	statusapi "github.com/chenjie199234/Corelib/codegen/tml/api/status"
 	subapi "github.com/chenjie199234/Corelib/codegen/tml/api/sub"
 	"github.com/chenjie199234/Corelib/codegen/tml/cmd"
@@ -71,7 +70,7 @@ func main() {
 	}
 }
 func checkBaseProjectName() {
-	data, e := os.ReadFile("./api/client.go")
+	data, e := os.ReadFile("./model/model.go")
 	if e != nil {
 		panic("please change dir to project's root dir,then run this manually or run the cmd script")
 	}
@@ -81,7 +80,7 @@ func checkBaseProjectName() {
 		line, _, e := bio.ReadLine()
 		if e != nil {
 			if e != io.EOF {
-				panic("read api/client.go error:" + e.Error())
+				panic("read model/model.go error:" + e.Error())
 			}
 			break
 		}
@@ -89,14 +88,14 @@ func checkBaseProjectName() {
 		if strings.HasPrefix(str, "const Name = ") {
 			tmpproject = str[13:]
 			if len(tmpproject) <= 2 || tmpproject[0] != '"' || tmpproject[len(tmpproject)-1] != '"' {
-				panic("api/client.go broken!")
+				panic("model/model.go broken!")
 			}
 			tmpproject = tmpproject[1 : len(tmpproject)-1]
 		}
 		if strings.HasPrefix(str, "const pkg = ") {
 			tmppackage = str[12:]
 			if len(tmppackage) <= 2 || tmppackage[0] != '"' || tmppackage[len(tmppackage)-1] != '"' {
-				panic("api/client.go broken!")
+				panic("model/model.go broken!")
 			}
 			tmppackage = tmppackage[1 : len(tmppackage)-1]
 		}
@@ -105,7 +104,7 @@ func checkBaseProjectName() {
 		}
 	}
 	if tmppackage == "" || tmpproject == "" {
-		panic("api/client.go broken!")
+		panic("model/model.go broken!")
 	}
 	if tmppackage != *packagename || tmpproject != *name {
 		panic("please change dir to project's root dir first")
@@ -216,7 +215,7 @@ func createBaseProject() {
 	gomod.Execute(*packagename)
 
 	model.CreatePathAndFile()
-	model.Execute()
+	model.Execute(*packagename, *name)
 
 	util.CreatePathAndFile()
 	util.Execute()
@@ -244,9 +243,6 @@ func createBaseProject() {
 
 	git.CreatePathAndFile()
 	git.Execute()
-
-	clientapi.CreatePathAndFile()
-	clientapi.Execute(*packagename, *name)
 
 	fmt.Println("base project create success!")
 	createkubernetes()

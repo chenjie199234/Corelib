@@ -12,8 +12,7 @@ import (
 	"net"
 	"time"
 
-	//"{{.}}/api"
-	//example "{{.}}/api/deps/example"
+	//"{{.}}/model"
 	"{{.}}/config"
 
 	"github.com/chenjie199234/Corelib/cgrpc"
@@ -34,7 +33,7 @@ func NewApi() error {
 	_ = cgrpcc //avoid unuse
 
 	//init cgrpc client below
-	//examplecgrpc e = cgrpc.NewCGrpcClient(cgrpcc, api.Group, api.Name, "examplegroup", "examplename")
+	//examplecgrpc e = cgrpc.NewCGrpcClient(cgrpcc, model.Group, model.Name, "examplegroup", "examplename")
 	//if e != nil {
 	//         return e
 	//}
@@ -44,7 +43,7 @@ func NewApi() error {
 	_ = crpcc //avoid unuse
 
 	//init crpc client below
-	//examplecrpc, e = crpc.NewCrpcClient(crpcc, api.Group, api.Name, "examplegroup", "examplename")
+	//examplecrpc, e = crpc.NewCrpcClient(crpcc, model.Group, model.Name, "examplegroup", "examplename")
 	//if e != nil {
 	// 	return e
 	//}
@@ -54,7 +53,7 @@ func NewApi() error {
 	_ = webc //avoid unuse
 
 	//init web client below
-	//exampleweb, e = web.NewWebClient(webc, api.Group, api.Name, "examplegroup", "examplename", "http://examplehost:exampleport")
+	//exampleweb, e = web.NewWebClient(webc, model.Group, model.Name, "examplegroup", "examplename", "http://examplehost:exampleport")
 	//if e != nil {
 	// 	return e
 	//}

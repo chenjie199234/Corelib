@@ -6,10 +6,32 @@ import (
 	"text/template"
 )
 
-const text = `package model`
+const text = `package model
+
+import "os"
+
+// Warning!!!!!!!!!!!
+// This file is readonly!
+// Don't modify this file!
+
+const pkg = "{{.PackageName}}"
+const Name = "{{.ProjectName}}"
+
+var Group = os.Getenv("GROUP")
+
+func init() {
+	if Group == "" || Group == "<GROUP>" {
+		panic("missing GROUP env")
+	}
+}`
 
 const path = "./model/"
 const name = "model.go"
+
+type data struct {
+	PackageName string
+	ProjectName string
+}
 
 var tml *template.Template
 var file *os.File
@@ -31,8 +53,8 @@ func CreatePathAndFile() {
 		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
 	}
 }
-func Execute() {
-	if e := tml.Execute(file, nil); e != nil {
+func Execute(PackageName, ProjectName string) {
+	if e := tml.Execute(file, &data{PackageName: PackageName, ProjectName: ProjectName}); e != nil {
 		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
 	}
 }

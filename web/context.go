@@ -75,7 +75,7 @@ func (c *Context) run() {
 	}
 }
 
-//has race
+// has race
 func (c *Context) Abort(e error) {
 	c.status = -1
 	c.e = cerror.ConvertStdError(e)
@@ -89,7 +89,7 @@ func (c *Context) Abort(e error) {
 	}
 }
 
-//has race
+// has race
 func (c *Context) Write(contenttype string, msg []byte) {
 	c.status = 1
 	c.w.Header().Set("Content-Type", contenttype)
@@ -146,14 +146,14 @@ func (c *Context) GetPeerName() string {
 	return c.peername
 }
 
-//get the direct peer's addr(maybe a proxy)
+// get the direct peer's addr(maybe a proxy)
 func (c *Context) GetRemoteAddr() string {
 	return c.r.RemoteAddr
 }
 
-//this function try to return the first caller's ip(mostly time it will be the user's ip)
-//if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
-//if failed,the direct peer's ip will be returned(maybe a proxy)
+// this function try to return the first caller's ip(mostly time it will be the user's ip)
+// if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
+// if failed,the direct peer's ip will be returned(maybe a proxy)
 func (c *Context) GetClientIp() string {
 	return c.metadata["Client-IP"]
 }
@@ -215,7 +215,7 @@ func (c *Context) ParseForm() error {
 	return nil
 }
 
-//must call ParseForm before this
+// must call ParseForm before this
 func (c *Context) GetForm(key string) string {
 	if len(c.r.Form) == 0 {
 		return ""
@@ -223,7 +223,7 @@ func (c *Context) GetForm(key string) string {
 	return c.r.Form.Get(key)
 }
 
-//must call ParseForm before this
+// must call ParseForm before this
 func (c *Context) GetForms(key string) []string {
 	if len(c.r.Form) == 0 {
 		return nil

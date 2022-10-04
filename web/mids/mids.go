@@ -9,7 +9,7 @@ import (
 	"github.com/chenjie199234/Corelib/web"
 )
 
-//dosn't include global mids in here
+// dosn't include global mids in here
 var all map[string]web.OutsideHandler
 
 func init() {
@@ -18,15 +18,13 @@ func init() {
 	all["rate"] = rate
 	all["accesskey"] = accesskey
 	all["token"] = token
-	all["whiteip"] = whiteip
-	all["blackip"] = blackip
 }
 
 func AllMids() map[string]web.OutsideHandler {
 	return all
 }
 
-//thread unsafe
+// thread unsafe
 func RegMid(name string, handler web.OutsideHandler) {
 	all[name] = handler
 }
@@ -91,16 +89,4 @@ func token(ctx *web.Context) {
 	md["Token-RunEnv"] = t.RunEnv
 	md["Token-Puber"] = t.Puber
 	md["Token-Data"] = t.Data
-}
-func whiteip(ctx *web.Context) {
-	if !publicmids.WhiteIP(ctx.GetClientIp()) {
-		ctx.Abort(cerror.ErrBan)
-		return
-	}
-}
-func blackip(ctx *web.Context) {
-	if publicmids.BlackIP(ctx.GetClientIp()) {
-		ctx.Abort(cerror.ErrBan)
-		return
-	}
 }

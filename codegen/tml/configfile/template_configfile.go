@@ -112,8 +112,6 @@ const textapp = `{
 		"Method":["GET","GRPC","CRPC"],
 		"MaxPerSec":10
 	}],
-	"white_ip":[],
-	"black_ip":[],
 	"web_path_rewrite":{
 		"GET":{
 			"/example/origin/url":"/example/new/url"
