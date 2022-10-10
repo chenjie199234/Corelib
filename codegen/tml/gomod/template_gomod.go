@@ -16,7 +16,7 @@ require (
 	github.com/fsnotify/fsnotify v1.5.4
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/segmentio/kafka-go v0.4.35
-	go.mongodb.org/mongo-driver v1.10.2
+	go.mongodb.org/mongo-driver v1.10.3
 	google.golang.org/protobuf v1.28.1
 )`
 
