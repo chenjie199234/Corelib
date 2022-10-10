@@ -154,12 +154,12 @@ func (p *Pool) SetBloom(ctx context.Context, bloomname string, groupnum uint64, 
 	keyrs := "{" + key + "}_rs"
 	keysdbm := "{" + key + "}_sdbm"
 	keyexist := "{" + key + "}_exist"
-	bit1 := common.BkdrhashString(key, bitnum)
-	bit2 := common.DjbhashString(key, bitnum)
-	bit3 := common.FnvhashString(key, bitnum)
-	bit4 := common.DekhashString(key, bitnum)
-	bit5 := common.RshashString(key, bitnum)
-	bit6 := common.SdbmhashString(key, bitnum)
+	bit1 := common.BkdrhashString(userkey, bitnum)
+	bit2 := common.DjbhashString(userkey, bitnum)
+	bit3 := common.FnvhashString(userkey, bitnum)
+	bit4 := common.DekhashString(userkey, bitnum)
+	bit5 := common.RshashString(userkey, bitnum)
+	bit6 := common.SdbmhashString(userkey, bitnum)
 	c, e := p.p.GetContext(ctx)
 	if e != nil {
 		return false, e
@@ -228,12 +228,12 @@ func (p *Pool) CheckBloom(ctx context.Context, bloomname string, groupnum uint64
 	keyrs := "{" + key + "}_rs"
 	keysdbm := "{" + key + "}_sdbm"
 	keyexist := "{" + key + "}_exist"
-	bit1 := common.BkdrhashString(key, bitnum)
-	bit2 := common.DjbhashString(key, bitnum)
-	bit3 := common.FnvhashString(key, bitnum)
-	bit4 := common.DekhashString(key, bitnum)
-	bit5 := common.RshashString(key, bitnum)
-	bit6 := common.SdbmhashString(key, bitnum)
+	bit1 := common.BkdrhashString(userkey, bitnum)
+	bit2 := common.DjbhashString(userkey, bitnum)
+	bit3 := common.FnvhashString(userkey, bitnum)
+	bit4 := common.DekhashString(userkey, bitnum)
+	bit5 := common.RshashString(userkey, bitnum)
+	bit6 := common.SdbmhashString(userkey, bitnum)
 	c, e := p.p.GetContext(ctx)
 	if e != nil {
 		return false, e
