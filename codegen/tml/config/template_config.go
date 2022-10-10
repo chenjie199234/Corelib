@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"time"
 
-	"{{.}}/api"
+	"{{.}}/model"
 
 	configsdk "github.com/chenjie199234/admin/sdk/config"
 	"github.com/chenjie199234/Corelib/log"
@@ -104,7 +104,7 @@ func initenv() {
 			os.Exit(1)
 		}
 		var e error
-		if RemoteConfigSdk, e = configsdk.NewConfigSdk(api.Group, api.Name, group, host); e != nil {
+		if RemoteConfigSdk, e = configsdk.NewConfigSdk(model.Group, model.Name, group, host); e != nil {
 			log.Error(nil, "[config.initenv] new remote config sdk error:", e)
 			Close()
 			os.Exit(1)
