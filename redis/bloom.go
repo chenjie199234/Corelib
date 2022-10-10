@@ -27,11 +27,11 @@ var ErrBloomMissingGroup = errors.New("bloom missing group")
 var initbloom = `if(redis.call("EXISTS",KEYS[7])==0)
 then
 	redis.call("SETBIT",KEYS[1],ARGV[1],1)
-	redis.call("SETBIT",KEYS[2],ARGV[1],1)
-	redis.call("SETBIT",KEYS[3],ARGV[1],1)
-	redis.call("SETBIT",KEYS[4],ARGV[1],1)
-	redis.call("SETBIT",KEYS[5],ARGV[1],1)
-	redis.call("SETBIT",KEYS[6],ARGV[1],1)
+	redis.call("SETBIT",KEYS[2],ARGV[2],1)
+	redis.call("SETBIT",KEYS[3],ARGV[3],1)
+	redis.call("SETBIT",KEYS[4],ARGV[4],1)
+	redis.call("SETBIT",KEYS[5],ARGV[5],1)
+	redis.call("SETBIT",KEYS[6],ARGV[6],1)
 	redis.call("SET",KEYS[7],1)
 	local ex=tonumber(ARGV[2])
 	if(ex>0)
@@ -47,13 +47,18 @@ then
 end`
 
 // NewBloom -
-//groupnum: how many bitset key will be used in redis for this bloom
+// groupnum: how many bitset key will be used in redis for this bloom
+//
 //	every special bitset will have a name like bloomname_[0,groupnum)
 //	in cluster mode:this is useful to balance all redis nodes' request
 //	in slave mode:set it to 1
-//bitnum decide the capacity of this bloom's each bitset key
+//
+// bitnum decide the capacity of this bloom's each bitset key
+//
 //	min is 1024
-//expire decide how long will this bloom exist
+//
+// expire decide how long will this bloom exist
+//
 //	<=0 means no expire
 func (p *Pool) NewBloom(ctx context.Context, bloomname string, groupnum uint64, bitnum uint64, expire time.Duration) error {
 	if bloomname == "" {
@@ -105,11 +110,11 @@ then
 	return -1
 end
 local r1=redis.call("SETBIT",KEYS[1],ARGV[1],1)
-local r2=redis.call("SETBIT",KEYS[2],ARGV[1],1)
-local r3=redis.call("SETBIT",KEYS[3],ARGV[1],1)
-local r4=redis.call("SETBIT",KEYS[4],ARGV[1],1)
-local r5=redis.call("SETBIT",KEYS[5],ARGV[1],1)
-local r6=redis.call("SETBIT",KEYS[6],ARGV[1],1)
+local r2=redis.call("SETBIT",KEYS[2],ARGV[2],1)
+local r3=redis.call("SETBIT",KEYS[3],ARGV[3],1)
+local r4=redis.call("SETBIT",KEYS[4],ARGV[4],1)
+local r5=redis.call("SETBIT",KEYS[5],ARGV[5],1)
+local r6=redis.call("SETBIT",KEYS[6],ARGV[6],1)
 if(redis.call("EXISTS",KEYS[7])==0)
 then
 	redis.call("DEL",KEYS[1])
@@ -129,8 +134,8 @@ return 1`
 var hsetbloom string
 
 // SetBloom add key into the bloom
-//true,this key is not in this bloom and add success
-//false,this key maybe already in this bloom,can't 100% confirm
+// true,this key is not in this bloom and add success
+// false,this key maybe already in this bloom,can't 100% confirm
 func (p *Pool) SetBloom(ctx context.Context, bloomname string, groupnum uint64, bitnum uint64, userkey string) (bool, error) {
 	if bloomname == "" {
 		return false, ErrBloomMissingName
@@ -203,8 +208,8 @@ return 1`
 var hcheckbloom string
 
 // Check -
-//true,this key 100% not in this bloom
-//false,this key maybe in this bloom,can't 100% confirm
+// true,this key 100% not in this bloom
+// false,this key maybe in this bloom,can't 100% confirm
 func (p *Pool) CheckBloom(ctx context.Context, bloomname string, groupnum uint64, bitnum uint64, userkey string) (bool, error) {
 	if bloomname == "" {
 		return false, ErrBloomMissingName
