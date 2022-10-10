@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/chenjie199234/Corelib/codegen/tml/api"
 	statusapi "github.com/chenjie199234/Corelib/codegen/tml/api/status"
 	subapi "github.com/chenjie199234/Corelib/codegen/tml/api/sub"
 	"github.com/chenjie199234/Corelib/codegen/tml/cmd"
@@ -189,6 +190,9 @@ func createBaseProject() {
 	}
 	//pre check success
 	fmt.Println("start create base project.")
+
+	api.CreatePathAndFile()
+	api.Execute()
 
 	statusapi.CreatePathAndFile(*name)
 	statusapi.Execute(*packagename, *name)
