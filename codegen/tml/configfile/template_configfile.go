@@ -48,7 +48,7 @@ const textsource = `{
 	},
 	"mongo":{
 		"example_mongo":{
-			"url":"[mongodb/mongodb+srv]://[username:password@]host1,...,hostN/[dbname][?param1=value1&...&paramN=valueN]",
+			"url":"[mongodb/mongodb+srv]://[username:password@]host1,...,hostN[/dbname][?param1=value1&...&paramN=valueN]",
 			"max_open":100,
 			"max_idletime":"10m",
 			"io_timeout":"500ms",
@@ -57,7 +57,7 @@ const textsource = `{
 	},
 	"sql":{
 		"example_sql":{
-			"url":"[username:password@][protocol(address)][/dbname][?param1=value1&...&paramN=valueN]",
+			"url":"[username:password@][protocol(address)]/[dbname][?param1=value1&...&paramN=valueN]",
 			"max_open":100,
 			"max_idletime":"10m",
 			"io_timeout":"200ms",
