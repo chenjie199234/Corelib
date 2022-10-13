@@ -34,6 +34,8 @@ const textsource = `{
 		"idle_timeout":"5s",
 		"heart_probe":"1.5s",
 		"src_root":"./src",
+		"certs":{
+		},
 		"web_cors":{
 			"cors_origin":["*"],
 			"cors_header":["*"],

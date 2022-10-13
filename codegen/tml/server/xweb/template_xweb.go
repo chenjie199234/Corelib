@@ -36,6 +36,7 @@ func StartWebServer() {
 		IdleTimeout:    time.Duration(c.IdleTimeout),
 		HeartProbe:     time.Duration(c.HeartProbe),
 		SrcRoot:        c.SrcRoot,
+		Certs:          c.certs,
 		MaxHeader:      1024,
 	}
 	if c.Cors != nil {

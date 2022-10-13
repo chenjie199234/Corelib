@@ -46,7 +46,7 @@ type ServerConfig struct {
 	HeartProbe  time.Duration //system's tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
 	SrcRoot     string        //use /src/relative_path_in_src_root to get the resource in SrcRoot
 	MaxHeader   uint
-	CertKeys    map[string]string //mapkey: cert path,mapvalue: key path
+	Certs       map[string]string //mapkey: cert path,mapvalue: private key path
 	Cors        *CorsConfig
 }
 
@@ -188,8 +188,13 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 			MaxHeaderBytes: int(c.MaxHeader),
 			ConnContext: func(ctx context.Context, conn net.Conn) context.Context {
 				if c.HeartProbe > 0 {
-					(conn.(*net.TCPConn)).SetKeepAlive(true)
-					(conn.(*net.TCPConn)).SetKeepAlivePeriod(c.HeartProbe)
+					if len(c.Certs) > 0 {
+						((conn.(*tls.Conn)).NetConn().(*net.TCPConn)).SetKeepAlive(true)
+						((conn.(*tls.Conn)).NetConn().(*net.TCPConn)).SetKeepAlivePeriod(c.HeartProbe)
+					} else {
+						(conn.(*net.TCPConn)).SetKeepAlive(true)
+						(conn.(*net.TCPConn)).SetKeepAlivePeriod(c.HeartProbe)
+					}
 				}
 				localaddr := conn.LocalAddr().String()
 				return context.WithValue(ctx, localport{}, localaddr[strings.LastIndex(localaddr, ":")+1:])
@@ -204,9 +209,9 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	} else {
 		instance.s.SetKeepAlivesEnabled(true)
 	}
-	if len(c.CertKeys) > 0 {
-		certificates := make([]tls.Certificate, 0, len(c.CertKeys))
-		for cert, key := range c.CertKeys {
+	if len(c.Certs) > 0 {
+		certificates := make([]tls.Certificate, 0, len(c.Certs))
+		for cert, key := range c.Certs {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
 				return nil, errors.New("[web.server] load cert:" + cert + " key:" + key + " error:" + e.Error())
@@ -297,7 +302,7 @@ func (s *WebServer) StartWebServer(listenaddr string) error {
 	if e != nil {
 		return errors.New("[web.server] listen addr:" + listenaddr + " error:" + e.Error())
 	}
-	if len(s.c.CertKeys) > 0 {
+	if len(s.c.Certs) > 0 {
 		//enable h2
 		s.s.Handler = s.r
 		e = s.s.ServeTLS(l, "", "")
@@ -314,7 +319,7 @@ func (s *WebServer) StartWebServer(listenaddr string) error {
 	return nil
 }
 
-//thread unsafe
+// thread unsafe
 func (s *WebServer) ReplaceAllPath(newserver *WebServer) {
 	for path := range newserver.r.getTree.GetAll() {
 		log.Info(nil, "[web.server] GET:", path)
@@ -331,7 +336,7 @@ func (s *WebServer) ReplaceAllPath(newserver *WebServer) {
 	for path := range newserver.r.deleteTree.GetAll() {
 		log.Info(nil, "[web.server] DELETE:", path)
 	}
-	if len(s.c.CertKeys) > 0 {
+	if len(s.c.Certs) > 0 {
 		//enable h2
 		s.s.Handler = newserver.r
 	} else {
@@ -365,7 +370,7 @@ func (s *WebServer) StopWebServer() {
 	}
 }
 
-//key origin url,value new url
+// key origin url,value new url
 func (s *WebServer) UpdateHandlerRewrite(rewrite map[string]map[string]string) {
 	//copy
 	tmp := make(map[string]map[string]string)
@@ -384,7 +389,7 @@ func (s *WebServer) UpdateHandlerRewrite(rewrite map[string]map[string]string) {
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s.handlerRewrite)), unsafe.Pointer(&tmp))
 }
 
-//first key method,second key path,value timeout(if timeout <= 0 means no timeout)
+// first key method,second key path,value timeout(if timeout <= 0 means no timeout)
 func (s *WebServer) UpdateHandlerTimeout(htcs map[string]map[string]time.Duration) {
 	tmp := make(map[string]map[string]time.Duration)
 	for method, paths := range htcs {
@@ -415,13 +420,13 @@ func (s *WebServer) getHandlerTimeout(method, path string) time.Duration {
 	return s.c.GlobalTimeout
 }
 
-//thread unsafe
+// thread unsafe
 func (s *WebServer) Use(globalMids ...OutsideHandler) {
 	s.global = append(s.global, globalMids...)
 }
 
-//thread unsafe
-//path can't start with /src,/src is for static resource
+// thread unsafe
+// path can't start with /src,/src is for static resource
 func (s *WebServer) Get(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
 	if strings.HasPrefix(path, "/src") {
@@ -430,25 +435,25 @@ func (s *WebServer) Get(path string, handlers ...OutsideHandler) {
 	s.r.Get(path, s.insideHandler(http.MethodGet, path, handlers))
 }
 
-//thread unsafe
+// thread unsafe
 func (s *WebServer) Delete(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
 	s.r.Delete(path, s.insideHandler(http.MethodDelete, path, handlers))
 }
 
-//thread unsafe
+// thread unsafe
 func (s *WebServer) Post(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
 	s.r.Post(path, s.insideHandler(http.MethodPost, path, handlers))
 }
 
-//thread unsafe
+// thread unsafe
 func (s *WebServer) Put(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
 	s.r.Put(path, s.insideHandler(http.MethodPut, path, handlers))
 }
 
-//thread unsafe
+// thread unsafe
 func (s *WebServer) Patch(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
 	s.r.Patch(path, s.insideHandler(http.MethodPatch, path, handlers))
