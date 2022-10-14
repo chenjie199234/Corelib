@@ -8,8 +8,8 @@ import (
 
 const text = `package api
 
-//Don't delete!
-//This file is a placeholder for the package name!`
+// Don't delete!
+// This file is a placeholder for the package name!`
 const path = "./api/"
 const name = "api.go"
 

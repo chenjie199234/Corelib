@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-//[a-z][A-Z][0-9][_],first character must in [a-z][A-Z]
+// [a-z][A-Z][0-9][_],first character must in [a-z][A-Z]
 func NameCheck(name string) error {
 	if len(name) == 0 {
 		return errors.New("[name.NameCheck] empty")
@@ -21,7 +21,7 @@ func NameCheck(name string) error {
 	return nil
 }
 
-//[a-z][A-Z][0-9][-_|()[]{}<>],first character must in [a-z][A-Z]
+// [a-z][A-Z][0-9][-_|()[]{}<>],first character must in [a-z][A-Z]
 func GroupCheck(group string) error {
 	if len(group) == 0 {
 		return errors.New("[name.GroupCheck] empty")
@@ -40,7 +40,7 @@ func GroupCheck(group string) error {
 	return nil
 }
 
-//full = group.name
+// full = group.name
 func FullCheck(full string) error {
 	if len(full) == 0 {
 		return errors.New("[name.FullCheck] empty")

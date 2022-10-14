@@ -24,7 +24,7 @@ import (
 //var ExampleCrpcApi example.ExampleCrpcClient
 //var ExampleWebApi  example.ExampleWebClient
 
-//NewApi create all dependent service's api we need in this program
+// NewApi create all dependent service's api we need in this program
 func NewApi() error {
 	var e error
 	_ = e //avoid unuse
