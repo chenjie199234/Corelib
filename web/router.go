@@ -3,6 +3,8 @@ package web
 import (
 	"net/http"
 	"strings"
+	"sync/atomic"
+	"unsafe"
 
 	"github.com/chenjie199234/Corelib/container/trie"
 	"github.com/chenjie199234/Corelib/pool"
@@ -15,7 +17,7 @@ type router struct {
 	putTree         *trie.Trie[http.HandlerFunc]
 	patchTree       *trie.Trie[http.HandlerFunc]
 	deleteTree      *trie.Trie[http.HandlerFunc]
-	rewriteHandler  func(originurl, method string) (newurl string, ok bool)
+	rewrite         map[string]map[string]string //first key method,second key old path,value new path
 	notFoundHandler http.HandlerFunc
 	optionsHandler  http.HandlerFunc
 	srcHandler      http.HandlerFunc
@@ -28,6 +30,7 @@ func newRouter(srcroot string) *router {
 		putTree:    trie.NewTrie[http.HandlerFunc](),
 		patchTree:  trie.NewTrie[http.HandlerFunc](),
 		deleteTree: trie.NewTrie[http.HandlerFunc](),
+		rewrite:    make(map[string]map[string]string),
 	}
 	if srcroot != "" {
 		r.srcHandler = http.StripPrefix("/src", http.FileServer(http.Dir(srcroot))).ServeHTTP
@@ -36,22 +39,31 @@ func newRouter(srcroot string) *router {
 }
 
 // the first character must be slash(/)
-//      api/abc -> /api/abc
+//
+//	api/abc -> /api/abc
+//
 // remove tail slash(/)
-//      /api/abc/ -> /api/abc
+//
+//	/api/abc/ -> /api/abc
+//
 // multi series slash(///) -> single slash(/)
-//      /api//abc -> /api/abc
+//
+//	/api//abc -> /api/abc
+//
 // . -> current dir
-//      /api/abc/. -> /api/abc                   (match)
-//      /api/./abc -> /api/abc                   (match)
-//      /api./abc  -> /api./abc                  (not match)
-//      /api/.abc  -> /api/.abc                  (not match)
+//
+//	/api/abc/. -> /api/abc                   (match)
+//	/api/./abc -> /api/abc                   (match)
+//	/api./abc  -> /api./abc                  (not match)
+//	/api/.abc  -> /api/.abc                  (not match)
+//
 // .. -> parent dir
-//      /api/abc/xyz/.. -> /api/abc              (match)
-//      /api/abc/../xyz -> /api/xyz              (match)
-//      /api/abc/.../xyz -> /api/abc/.../xyz     (not match)
-//      /api/abc../xyz -> /api/abc../xyz         (not match)
-//      /api/abc/..xyz -> /api/abc/..xyz         (not match)
+//
+//	/api/abc/xyz/.. -> /api/abc              (match)
+//	/api/abc/../xyz -> /api/xyz              (match)
+//	/api/abc/.../xyz -> /api/abc/.../xyz     (not match)
+//	/api/abc../xyz -> /api/abc../xyz         (not match)
+//	/api/abc/..xyz -> /api/abc/..xyz         (not match)
 func cleanPath(origin string) string {
 	if origin == "" {
 		return "/"
@@ -141,12 +153,21 @@ func (r *router) Put(path string, handler http.HandlerFunc) {
 func (r *router) Delete(path string, handler http.HandlerFunc) {
 	r.putTree.Set(cleanPath(path), handler)
 }
+func (r *router) updaterewrite(rewrite map[string]map[string]string) {
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&r.rewrite)), unsafe.Pointer(&rewrite))
+}
+func (r *router) checkrewrite(originurl, method string) (newurl string, ok bool) {
+	rewrite := *(*map[string]map[string]string)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&r.rewrite))))
+	paths, ok := rewrite[method]
+	if !ok {
+		return
+	}
+	newurl, ok = paths[originurl]
+	return
+}
 func (r *router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
-	if r.rewriteHandler != nil {
-		newurl, ok := r.rewriteHandler(req.URL.Path, req.Method)
-		if ok {
-			req.URL.Path = newurl
-		}
+	if url, ok := r.checkrewrite(req.URL.Path, req.Method); ok {
+		req.URL.Path = url
 	}
 	var handler http.HandlerFunc
 	if req.Method == http.MethodGet && strings.HasPrefix(req.URL.Path, "/src") {

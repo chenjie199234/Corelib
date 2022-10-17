@@ -151,7 +151,6 @@ func (c *ServerConfig) getCorsExpose() string {
 
 type WebServer struct {
 	handlerTimeout map[string]map[string]time.Duration //first key method,second key path,value timeout
-	handlerRewrite map[string]map[string]string        //first key method,second key origin url,value new url
 	selfappname    string
 	c              *ServerConfig
 	ctxpool        *sync.Pool
@@ -176,7 +175,6 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	//new server
 	instance := &WebServer{
 		handlerTimeout: make(map[string]map[string]time.Duration),
-		handlerRewrite: make(map[string]map[string]string),
 		selfappname:    selfappname,
 		c:              c,
 		ctxpool:        &sync.Pool{},
@@ -221,15 +219,6 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		instance.s.TLSConfig = &tls.Config{Certificates: certificates}
 	}
 	instance.closewait.Add(1)
-	instance.r.rewriteHandler = func(originurl, method string) (newurl string, ok bool) {
-		handlerRewrite := *(*map[string]map[string]string)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&instance.handlerRewrite))))
-		paths, ok := handlerRewrite[method]
-		if !ok {
-			return
-		}
-		newurl, ok = paths[originurl]
-		return
-	}
 	instance.r.notFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotImplemented)
@@ -386,7 +375,7 @@ func (s *WebServer) UpdateHandlerRewrite(rewrite map[string]map[string]string) {
 			tmp[method][originurl] = cleanPath(newurl)
 		}
 	}
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s.handlerRewrite)), unsafe.Pointer(&tmp))
+	s.r.updaterewrite(tmp)
 }
 
 // first key method,second key path,value timeout(if timeout <= 0 means no timeout)
