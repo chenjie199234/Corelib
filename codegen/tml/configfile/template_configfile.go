@@ -10,7 +10,9 @@ const textsource = `{
 	"cgrpc_server":{
 		"connect_timeout":"200ms",
 		"global_timeout":"200ms",
-		"heart_probe":"1.5s"
+		"heart_probe":"1.5s",
+		"certs":{
+		}
 	},
 	"cgrpc_client":{
 		"connect_timeout":"200ms",
@@ -20,7 +22,9 @@ const textsource = `{
 	"crpc_server":{
 		"connect_timeout":"200ms",
 		"global_timeout":"200ms",
-		"heart_probe":"1.5s"
+		"heart_probe":"1.5s",
+		"certs":{
+		}
 	},
 	"crpc_client":{
 		"connect_timeout":"200ms",

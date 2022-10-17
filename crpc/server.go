@@ -31,7 +31,7 @@ type ServerConfig struct {
 	ConnectTimeout time.Duration     //default 500ms
 	HeartPorbe     time.Duration     //default 1s,3 probe missing means disconnect
 	MaxMsgLen      uint32            //default 64M,min 64k
-	CertKeys       map[string]string //mapkey: cert path,mapvalue: key path
+	Certs          map[string]string //mapkey: cert path,mapvalue: key path
 }
 
 func (c *ServerConfig) validate() {
@@ -76,9 +76,9 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 		handlerTimeout: make(map[string]time.Duration),
 		closewait:      &sync.WaitGroup{},
 	}
-	if len(c.CertKeys) != 0 {
-		certificates := make([]tls.Certificate, 0, len(c.CertKeys))
-		for cert, key := range c.CertKeys {
+	if len(c.Certs) != 0 {
+		certificates := make([]tls.Certificate, 0, len(c.Certs))
+		for cert, key := range c.Certs {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
 				return nil, errors.New("[crpc.server] load cert:" + cert + " key:" + key + " error:" + e.Error())
@@ -161,7 +161,7 @@ func (s *CrpcServer) GetReqNum() int32 {
 	}
 }
 
-//key path,value timeout(if timeout <= 0 means no timeout)
+// key path,value timeout(if timeout <= 0 means no timeout)
 func (this *CrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
 	tmp := make(map[string]time.Duration)
 	for path, timeout := range htcs {
@@ -181,12 +181,12 @@ func (this *CrpcServer) getHandlerTimeout(path string) time.Duration {
 	return this.c.GlobalTimeout
 }
 
-//thread unsafe
+// thread unsafe
 func (s *CrpcServer) Use(globalMids ...OutsideHandler) {
 	s.global = append(s.global, globalMids...)
 }
 
-//thread unsafe
+// thread unsafe
 func (s *CrpcServer) RegisterHandler(path string, handlers ...OutsideHandler) {
 	s.handler[path] = s.insidehandler(path, handlers...)
 }
@@ -280,7 +280,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 	}
 }
 
-//return false will close the connection
+// return false will close the connection
 func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]byte, bool) {
 	if atomic.LoadInt32(&s.totalreqnum) < 0 {
 		//self closed
@@ -292,7 +292,7 @@ func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]b
 	return nil, true
 }
 
-//return false will close the connection
+// return false will close the connection
 func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 	if atomic.LoadInt32(&s.totalreqnum) < 0 {
 		//tel all peers self closed

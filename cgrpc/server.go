@@ -35,7 +35,7 @@ type ServerConfig struct {
 	ConnectTimeout time.Duration     //default 500ms
 	HeartPorbe     time.Duration     //default 1s
 	MaxMsgLen      uint32            //default 64M,min 64k
-	CertKeys       map[string]string //mapkey: cert path,mapvalue: key path
+	Certs          map[string]string //mapkey: cert path,mapvalue: key path
 }
 
 func (c *ServerConfig) validate() {
@@ -99,9 +99,9 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 		opts = append(opts, grpc.ConnectionTimeout(c.ConnectTimeout))
 	}
 	opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{Time: c.HeartPorbe, Timeout: c.HeartPorbe*3 + c.HeartPorbe/3}))
-	if len(c.CertKeys) > 0 {
-		certificates := make([]tls.Certificate, 0, len(c.CertKeys))
-		for cert, key := range c.CertKeys {
+	if len(c.Certs) > 0 {
+		certificates := make([]tls.Certificate, 0, len(c.Certs))
+		for cert, key := range c.Certs {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
 				return nil, errors.New("[cgrpc.server] load cert:" + cert + " key:" + key + " error:" + e.Error())
@@ -143,7 +143,7 @@ func (this *CGrpcServer) GetReqNum() int32 {
 	return atomic.LoadInt32(&this.totalreqnum)
 }
 
-//key path,value timeout(if timeout <= 0 means no timeout)
+// key path,value timeout(if timeout <= 0 means no timeout)
 func (this *CGrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
 	tmp := make(map[string]time.Duration)
 	for path, timeout := range htcs {
@@ -163,12 +163,12 @@ func (this *CGrpcServer) getHandlerTimeout(path string) time.Duration {
 	return this.c.GlobalTimeout
 }
 
-//thread unsafe
+// thread unsafe
 func (s *CGrpcServer) Use(globalMids ...OutsideHandler) {
 	s.global = append(s.global, globalMids...)
 }
 
-//thread unsafe
+// thread unsafe
 func (s *CGrpcServer) RegisterHandler(sname, mname string, handlers ...OutsideHandler) {
 	service, ok := s.services[sname]
 	if !ok {

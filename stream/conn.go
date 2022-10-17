@@ -18,8 +18,8 @@ import (
 
 var ErrServerClosed = errors.New("[Stream.server] closed")
 
-//listenaddr is ip:port
-//if tlsc not nil,tcp connection will be used with tls
+// listenaddr is ip:port
+// if tlsc not nil,tcp connection will be used with tls
 func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 	if tlsc != nil && len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
 		return errors.New("[Stream.StartServer] tls certificate setting missing")
@@ -145,8 +145,8 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 	return
 }
 
-//if rawtcp client,serveraddr is [tcp/tcps]://ip:port
-//if websocket client,serveraddr is [ws/wss]://host:port/path
+// if rawtcp client,serveraddr is [tcp/tcps]://ip:port
+// if websocket client,serveraddr is [ws/wss]://host:port/path
 func (this *Instance) StartClient(serveraddr string, verifydata []byte, tlsc *tls.Config) bool {
 	if 4+uint64(len(verifydata)) > uint64(math.MaxUint32) {
 		log.Error(nil, "[Stream.StartClient] client verify data too large")
