@@ -283,7 +283,7 @@ type CGrpcServerConfig struct {
 	ConnectTimeout ctime.Duration    $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
 	GlobalTimeout  ctime.Duration    $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
 	HeartProbe     ctime.Duration    $json:"heart_probe"$     //default 1.5s
-	Certs          map[string]string $json:"certs"$           //key cert path,value private key path
+	Certs          map[string]string $json:"certs"$           //key cert path,value private key path,if this is not empty,tls will be used
 }
 
 // CGrpcClientConfig
@@ -298,7 +298,7 @@ type CrpcServerConfig struct {
 	ConnectTimeout ctime.Duration    $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
 	GlobalTimeout  ctime.Duration    $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
 	HeartProbe     ctime.Duration    $json:"heart_probe"$     //default 1.5s
-	Certs          map[string]string $json:"certs"$           //key cert path,value private key path
+	Certs          map[string]string $json:"certs"$           //key cert path,value private key path,if this is not empty,tls will be used
 }
 
 // CrpcClientConfig -
@@ -316,7 +316,7 @@ type WebServerConfig struct {
 	IdleTimeout    ctime.Duration    $json:"idle_timeout"$    //default 5s
 	HeartProbe     ctime.Duration    $json:"heart_probe"$     //default 1.5s
 	SrcRoot        string            $json:"src_root"$
-	Certs          map[string]string $json:"certs"$ //map key: cert path,map value: private key path
+	Certs          map[string]string $json:"certs"$ //key cert path,value private key path,if this is not empty,tls will be used
 	//cors
 	Cors *WebCorsConfig $json:"cors"$
 }
