@@ -268,21 +268,6 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 var ErrServerClosed = errors.New("[web.server] closed")
 
 func (s *WebServer) StartWebServer(listenaddr string) error {
-	for path := range s.r.getTree.GetAll() {
-		log.Info(nil, "[web.server] GET:", path)
-	}
-	for path := range s.r.postTree.GetAll() {
-		log.Info(nil, "[web.server] POST:", path)
-	}
-	for path := range s.r.putTree.GetAll() {
-		log.Info(nil, "[web.server] PUT:", path)
-	}
-	for path := range s.r.patchTree.GetAll() {
-		log.Info(nil, "[web.server] PATCH:", path)
-	}
-	for path := range s.r.deleteTree.GetAll() {
-		log.Info(nil, "[web.server] DELETE:", path)
-	}
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
 		return errors.New("[web.server] resolve addr:" + listenaddr + " error:" + e.Error())
@@ -291,6 +276,7 @@ func (s *WebServer) StartWebServer(listenaddr string) error {
 	if e != nil {
 		return errors.New("[web.server] listen addr:" + listenaddr + " error:" + e.Error())
 	}
+	s.r.printPath()
 	if len(s.c.Certs) > 0 {
 		//enable h2
 		s.s.Handler = s.r
@@ -310,27 +296,14 @@ func (s *WebServer) StartWebServer(listenaddr string) error {
 
 // thread unsafe
 func (s *WebServer) ReplaceAllPath(newserver *WebServer) {
-	for path := range newserver.r.getTree.GetAll() {
-		log.Info(nil, "[web.server] GET:", path)
-	}
-	for path := range newserver.r.postTree.GetAll() {
-		log.Info(nil, "[web.server] POST:", path)
-	}
-	for path := range newserver.r.putTree.GetAll() {
-		log.Info(nil, "[web.server] PUT:", path)
-	}
-	for path := range newserver.r.patchTree.GetAll() {
-		log.Info(nil, "[web.server] PATCH:", path)
-	}
-	for path := range newserver.r.deleteTree.GetAll() {
-		log.Info(nil, "[web.server] DELETE:", path)
-	}
+	s.r = newserver.r
+	s.r.printPath()
 	if len(s.c.Certs) > 0 {
 		//enable h2
-		s.s.Handler = newserver.r
+		s.s.Handler = s.r
 	} else {
 		//enable h2c
-		s.s.Handler = h2c.NewHandler(newserver.r, &http2.Server{})
+		s.s.Handler = h2c.NewHandler(s.r, &http2.Server{})
 	}
 }
 func (s *WebServer) StopWebServer() {

@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/container/trie"
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/util/common"
 )
@@ -212,5 +213,47 @@ func (r *router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		}
 	} else {
 		handler(resp, req)
+	}
+}
+func (r *router) printPath() {
+	for path := range r.getTree.GetAll() {
+		log.Info(nil, "[web.server] GET:", path)
+	}
+	if rewrite, ok := r.rewrite["GET"]; ok {
+		for ourl, nurl := range rewrite {
+			log.Info(nil, "[web.server] GET:", ourl, "=>", nurl)
+		}
+	}
+	for path := range r.postTree.GetAll() {
+		log.Info(nil, "[web.server] POST:", path)
+	}
+	if rewrite, ok := r.rewrite["POST"]; ok {
+		for ourl, nurl := range rewrite {
+			log.Info(nil, "[web.server] POST:", ourl, "=>", nurl)
+		}
+	}
+	for path := range r.putTree.GetAll() {
+		log.Info(nil, "[web.server] PUT:", path)
+	}
+	if rewrite, ok := r.rewrite["PUT"]; ok {
+		for ourl, nurl := range rewrite {
+			log.Info(nil, "[web.server] PUT:", ourl, "=>", nurl)
+		}
+	}
+	for path := range r.patchTree.GetAll() {
+		log.Info(nil, "[web.server] PATCH:", path)
+	}
+	if rewrite, ok := r.rewrite["PATCH"]; ok {
+		for ourl, nurl := range rewrite {
+			log.Info(nil, "[web.server] PATCH:", ourl, "=>", nurl)
+		}
+	}
+	for path := range r.deleteTree.GetAll() {
+		log.Info(nil, "[web.server] DELETE:", path)
+	}
+	if rewrite, ok := r.rewrite["DELETE"]; ok {
+		for ourl, nurl := range rewrite {
+			log.Info(nil, "[web.server] DELETE:", ourl, "=>", nurl)
+		}
 	}
 }
