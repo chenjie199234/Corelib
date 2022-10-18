@@ -1,10 +1,5 @@
 package mids
 
-import (
-	"sync/atomic"
-	"unsafe"
-)
-
 type accesskey struct {
 	seckeys map[string][]string //key path,value seckey
 }
@@ -17,16 +12,15 @@ func init() {
 	}
 }
 
-//seckeys's map key is path
-//seckeys's map value is the seckey
+// seckeys's map key is path
+// seckeys's map value is the seckey
 func UpdateAccessKeyConfig(seckeys map[string][]string) {
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&accesskeyInstance.seckeys)), unsafe.Pointer(&seckeys))
+	accesskeyInstance.seckeys = seckeys
 }
 func AccessKey(path string, key string) bool {
-	seckeys := *(*map[string][]string)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&accesskeyInstance.seckeys))))
-	seckey, ok := seckeys[path]
+	seckey, ok := accesskeyInstance.seckeys[path]
 	if !ok {
-		seckey, ok = seckeys["default"]
+		seckey, ok = accesskeyInstance.seckeys["default"]
 		if !ok {
 			return false
 		}

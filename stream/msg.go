@@ -136,7 +136,7 @@ func makePongMsg(pongdata []byte, mask bool) *pool.Buffer {
 	return buf
 }
 
-//length is always <= math.MaxUint32
+// length is always <= math.MaxUint32
 func makeheader(buf *pool.Buffer, fin bool, piece int, mask bool, length uint64) (maskkey []byte) {
 	if fin && piece == 0 {
 		buf.AppendByte(_FIN_MASK | _BINARY)
@@ -182,14 +182,17 @@ func domask(data []byte, maskkey []byte) {
 	}
 }
 
-//Payload Data
-//  0 1 2 3 4 5 6 7 8
-//0 |---------------|
-//1 |---------------|
-//2 |---------------|
-//3 |------maxmsglen|//big endian
-//  ...
-//  :-----verifydata|
+// Payload Data
+//
+//	0 1 2 3 4 5 6 7 8
+//
+// 0 |---------------|
+// 1 |---------------|
+// 2 |---------------|
+// 3 |------maxmsglen|//big endian
+//
+//	...
+//	:-----verifydata|
 func makeVerifyMsg(maxmsglen uint32, verifydata []byte, mask bool) *pool.Buffer {
 	payloadlen := 4 + len(verifydata)
 	buf := pool.GetBuffer()
@@ -204,8 +207,8 @@ func makeVerifyMsg(maxmsglen uint32, verifydata []byte, mask bool) *pool.Buffer 
 	return buf
 }
 
-//return verifydata == nil --> format wrong
-//return len(verifydata) == 0 --> no verifydata
+// return verifydata == nil --> format wrong
+// return len(verifydata) == 0 --> no verifydata
 func getVerifyMsg(data []byte) (maxmsglen uint32, verifydata []byte) {
 	if len(data) < 4 {
 		return
@@ -215,11 +218,14 @@ func getVerifyMsg(data []byte) (maxmsglen uint32, verifydata []byte) {
 	return
 }
 
-//Payload Data
-//  0 1 2 3 4 5 6 7 8
-//0 |---------------|
-//  ...
-//  :-----------data|
+// Payload Data
+//
+//	0 1 2 3 4 5 6 7 8
+//
+// 0 |---------------|
+//
+//	...
+//	:-----------data|
 func makeCommonMsg(data []byte, fin bool, piece int, mask bool) *pool.Buffer {
 	payloadlen := len(data)
 	buf := pool.GetBuffer()

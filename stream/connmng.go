@@ -115,8 +115,8 @@ func (m *connmng) DelPeer(p *Peer) {
 	}
 }
 
-//new connections failed
-//old connections working
+// new connections failed
+// old connections working
 func (m *connmng) PreStop() {
 	for {
 		old := atomic.LoadInt32(&m.peernum)
@@ -129,8 +129,8 @@ func (m *connmng) PreStop() {
 	}
 }
 
-//new connections failed
-//old connections closed
+// new connections failed
+// old connections closed
 func (m *connmng) Stop() {
 	defer m.closewait.Wait()
 	for {

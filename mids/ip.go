@@ -5,8 +5,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"sync/atomic"
-	"unsafe"
 )
 
 type ip struct {
@@ -62,10 +60,10 @@ func UpdateIpConfig(white []string, black []string) {
 			bm[self] = mask
 		}
 	}
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&ipInstance.white)), unsafe.Pointer(&w))
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&ipInstance.whitemask)), unsafe.Pointer(&wm))
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&ipInstance.black)), unsafe.Pointer(&b))
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&ipInstance.blackmask)), unsafe.Pointer(&bm))
+	ipInstance.white = w
+	ipInstance.whitemask = wm
+	ipInstance.black = b
+	ipInstance.blackmask = bm
 }
 
 func CheckIpAndMask(ip string) bool {
@@ -95,17 +93,13 @@ func CheckIpAndMask(ip string) bool {
 // true - in white ip list
 // false - not in white ip list
 func WhiteIP(ip string) bool {
-	white := *(*map[string]*struct{})(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&ipInstance.white))))
-	whitemask := *(*map[uint64]int)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&ipInstance.whitemask))))
-	return checkip(white, whitemask, ip)
+	return checkip(ipInstance.white, ipInstance.whitemask, ip)
 }
 
 // true - in black ip list
 // false - not in black ip list
 func BlackIP(ip string) bool {
-	black := *(*map[string]*struct{})(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&ipInstance.black))))
-	blackmask := *(*map[uint64]int)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&ipInstance.blackmask))))
-	return checkip(black, blackmask, ip)
+	return checkip(ipInstance.black, ipInstance.blackmask, ip)
 }
 
 // true - in

@@ -60,7 +60,7 @@ func (c *Context) run() {
 	}
 }
 
-//has race
+// has race
 func (c *Context) Abort(e error) {
 	c.msg.Error = cerror.ConvertStdError(e)
 	if c.msg.Error != nil && (c.msg.Error.Httpcode < 400 || c.msg.Error.Httpcode > 999) {
@@ -74,7 +74,7 @@ func (c *Context) Abort(e error) {
 	c.status = -1
 }
 
-//has race
+// has race
 func (c *Context) Write(resp []byte) {
 	c.msg.Path = ""
 	c.msg.Deadline = 0
@@ -99,14 +99,14 @@ func (c *Context) GetBody() []byte {
 	return c.msg.Body
 }
 
-//get the direct peer's addr(maybe a proxy)
+// get the direct peer's addr(maybe a proxy)
 func (c *Context) GetRemoteAddr() string {
 	return c.peer.GetRemoteAddr()
 }
 
-//this function try to return the first caller's ip(mostly time it will be the user's ip)
-//if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
-//if failed,the direct peer's ip will be returned(maybe a proxy)
+// this function try to return the first caller's ip(mostly time it will be the user's ip)
+// if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
+// if failed,the direct peer's ip will be returned(maybe a proxy)
 func (c *Context) GetClientIp() string {
 	return c.metadata["Client-IP"]
 }

@@ -23,8 +23,8 @@ import (
 
 type PickHandler func(servers []*ServerForPick) *ServerForPick
 
-//key server's addr,format: ip:port
-//if the value is nil means this server node is offline
+// key server's addr,format: ip:port
+// if the value is nil means this server node is offline
 type DiscoveryHandler func(servergroup, servername string) (map[string]*RegisterData, error)
 type RegisterData struct {
 	//server register on which discovery server

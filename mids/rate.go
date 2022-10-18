@@ -2,9 +2,7 @@ package mids
 
 import (
 	"strings"
-	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/container/ring"
 )
@@ -68,13 +66,13 @@ func UpdateRateConfig(c []*RateConfig) {
 			}
 		}
 	}
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.grpc)), unsafe.Pointer(&grpc))
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.crpc)), unsafe.Pointer(&crpc))
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.get)), unsafe.Pointer(&get))
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.post)), unsafe.Pointer(&post))
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.put)), unsafe.Pointer(&put))
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.patch)), unsafe.Pointer(&patch))
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.del)), unsafe.Pointer(&del))
+	rateinstance.grpc = grpc
+	rateinstance.crpc = crpc
+	rateinstance.get = get
+	rateinstance.post = post
+	rateinstance.put = put
+	rateinstance.patch = patch
+	rateinstance.del = del
 }
 
 func checkrate(buf *ring.Ring[int64]) bool {
@@ -98,56 +96,49 @@ func checkrate(buf *ring.Ring[int64]) bool {
 }
 
 func GrpcRate(path string) bool {
-	grpc := *(*map[string]*ring.Ring[int64])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.grpc))))
-	buf, ok := grpc[path]
+	buf, ok := rateinstance.grpc[path]
 	if !ok {
 		return true
 	}
 	return checkrate(buf)
 }
 func CrpcRate(path string) bool {
-	crpc := *(*map[string]*ring.Ring[int64])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.crpc))))
-	buf, ok := crpc[path]
+	buf, ok := rateinstance.crpc[path]
 	if !ok {
 		return true
 	}
 	return checkrate(buf)
 }
 func HttpGetRate(path string) bool {
-	get := *(*map[string]*ring.Ring[int64])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.get))))
-	buf, ok := get[path]
+	buf, ok := rateinstance.get[path]
 	if !ok {
 		return true
 	}
 	return checkrate(buf)
 }
 func HttpPostRate(path string) bool {
-	post := *(*map[string]*ring.Ring[int64])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.post))))
-	buf, ok := post[path]
+	buf, ok := rateinstance.post[path]
 	if !ok {
 		return true
 	}
 	return checkrate(buf)
 }
 func HttpPutRate(path string) bool {
-	put := *(*map[string]*ring.Ring[int64])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.put))))
-	buf, ok := put[path]
+	buf, ok := rateinstance.put[path]
 	if !ok {
 		return true
 	}
 	return checkrate(buf)
 }
 func HttpPatchRate(path string) bool {
-	patch := *(*map[string]*ring.Ring[int64])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.patch))))
-	buf, ok := patch[path]
+	buf, ok := rateinstance.patch[path]
 	if !ok {
 		return true
 	}
 	return checkrate(buf)
 }
 func HttpDelRate(path string) bool {
-	del := *(*map[string]*ring.Ring[int64])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.del))))
-	buf, ok := del[path]
+	buf, ok := rateinstance.del[path]
 	if !ok {
 		return true
 	}

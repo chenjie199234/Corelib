@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
@@ -59,17 +58,6 @@ type pickinfo struct {
 
 func (s *ServerForPick) Pickable() bool {
 	return atomic.LoadInt32(&s.status) == int32(connectivity.Ready) && !s.closing
-}
-
-func (b *corelibBalancer) setPickerServers(servers []*ServerForPick) {
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&b.pservers)), unsafe.Pointer(&servers))
-}
-func (b *corelibBalancer) getPickServers() []*ServerForPick {
-	tmp := atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&b.pservers)))
-	if tmp == nil {
-		return nil
-	}
-	return *(*[]*ServerForPick)(tmp)
 }
 
 func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) error {
@@ -210,8 +198,8 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 	}
 }
 
-//reason - true,online
-//reason - false,offline
+// reason - true,online
+// reason - false,offline
 func (b *corelibBalancer) rebuildpicker(reason bool) {
 	tmp := make([]*ServerForPick, 0, len(b.servers))
 	for _, server := range b.servers {
@@ -219,7 +207,7 @@ func (b *corelibBalancer) rebuildpicker(reason bool) {
 			tmp = append(tmp, server)
 		}
 	}
-	b.setPickerServers(tmp)
+	b.pservers = tmp
 	if reason {
 		b.c.resolver.wake(false)
 	}
@@ -232,7 +220,7 @@ func (b *corelibBalancer) Close() {
 func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	refresh := false
 	for {
-		server := b.c.c.Picker(b.getPickServers())
+		server := b.c.c.Picker(b.pservers)
 		if server != nil {
 			if dl, ok := info.Ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic

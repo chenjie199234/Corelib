@@ -9,35 +9,35 @@ import (
 
 //peeruniquename = peername:peeraddr,e.g. "gamegate:127.0.0.1:1234"
 
-//HandleVerifyFunc has a timeout context,timeout depend on the ConnectTimeout in config
-//Before two peers can communicate,they need to verify each other first
-//server's response will write back to the client for client to verify the server
-//client's response is useless and it will be dropped,you can just return nil
-//Warning!!!Don't reuse the data in 'peerVerifyData',it will change when this function return,if you want to use it,copy it first
+// HandleVerifyFunc has a timeout context,timeout depend on the ConnectTimeout in config
+// Before two peers can communicate,they need to verify each other first
+// server's response will write back to the client for client to verify the server
+// client's response is useless and it will be dropped,you can just return nil
+// Warning!!!Don't reuse the data in 'peerVerifyData',it will change when this function return,if you want to use it,copy it first
 type HandleVerifyFunc func(ctx context.Context, peerVerifyData []byte) (response []byte, success bool)
 
-//This is a notice func after verify each other success
-//success = true means online success
-//success = false means online failed,connection will be closed
-//Peer is a cancel context,it will be canceled when the connection closed
-//You can control the timeout by yourself through context.WithTimeout(p,time.Second)
+// This is a notice func after verify each other success
+// success = true means online success
+// success = false means online failed,connection will be closed
+// Peer is a cancel context,it will be canceled when the connection closed
+// You can control the timeout by yourself through context.WithTimeout(p,time.Second)
 type HandleOnlineFunc func(p *Peer) (success bool)
 
-//This is a notice func about which peer is alive
-//Peer is a cancel context,it will be canceled when the connection closed
-//You can control the timeout by yourself through context.WithTimeout(p,time.Second)
+// This is a notice func about which peer is alive
+// Peer is a cancel context,it will be canceled when the connection closed
+// You can control the timeout by yourself through context.WithTimeout(p,time.Second)
 type HandlePingPongFunc func(p *Peer)
 
-//This is a func to deal the user message
-//Peer is a cancel context,it will be canceled when the connection closed
-//You can control the timeout by yourself through context.WithTimeout(p,time.Second)
-//Warning!!!Don't reuse the data in 'userdata',it will change when this function return,if you want to use it,copy it first
+// This is a func to deal the user message
+// Peer is a cancel context,it will be canceled when the connection closed
+// You can control the timeout by yourself through context.WithTimeout(p,time.Second)
+// Warning!!!Don't reuse the data in 'userdata',it will change when this function return,if you want to use it,copy it first
 type HandleUserdataFunc func(p *Peer, userdata []byte)
 
-//This is a notice func after two peers disconnect with each other
-//Peer is a cancel context,it will be canceled after this function return
-//You can control the timeout by yourself through context.WithTimeout(p,time.Second)
-//After this notice the peer is unknown,dont't use it anymore
+// This is a notice func after two peers disconnect with each other
+// Peer is a cancel context,it will be canceled after this function return
+// You can control the timeout by yourself through context.WithTimeout(p,time.Second)
+// After this notice the peer is unknown,dont't use it anymore
 type HandleOfflineFunc func(p *Peer)
 
 type TcpConfig struct {

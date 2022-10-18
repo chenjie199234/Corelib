@@ -13,7 +13,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
@@ -152,12 +151,11 @@ func (this *CGrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
 		}
 		tmp[path] = timeout
 	}
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout)), unsafe.Pointer(&tmp))
+	this.handlerTimeout = tmp
 }
 
 func (this *CGrpcServer) getHandlerTimeout(path string) time.Duration {
-	handlerTimeout := *(*map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.handlerTimeout))))
-	if t, ok := handlerTimeout[path]; ok {
+	if t, ok := this.handlerTimeout[path]; ok {
 		return t
 	}
 	return this.c.GlobalTimeout

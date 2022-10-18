@@ -15,7 +15,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	cerror "github.com/chenjie199234/Corelib/error"
 	"github.com/chenjie199234/Corelib/log"
@@ -369,12 +368,11 @@ func (s *WebServer) UpdateHandlerTimeout(htcs map[string]map[string]time.Duratio
 			tmp[method][path] = timeout
 		}
 	}
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s.handlerTimeout)), unsafe.Pointer(&tmp))
+	s.handlerTimeout = tmp
 }
 
 func (s *WebServer) getHandlerTimeout(method, path string) time.Duration {
-	handlerTimeout := *(*map[string]map[string]time.Duration)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.handlerTimeout))))
-	if m, ok := handlerTimeout[method]; ok {
+	if m, ok := s.handlerTimeout[method]; ok {
 		if t, ok := m[path]; ok {
 			return t
 		}

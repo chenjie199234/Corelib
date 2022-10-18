@@ -84,7 +84,7 @@ func (r *corelibResolver) ResolveNow(op resolver.ResolveNowOptions) {
 	r.triger(nil, true)
 }
 
-//systemORcall true - system,false - call
+// systemORcall true - system,false - call
 func (r *corelibResolver) triger(notice chan *struct{}, systemORcall bool) {
 	r.lker.Lock()
 	defer r.lker.Unlock()
@@ -109,7 +109,7 @@ func (r *corelibResolver) triger(notice chan *struct{}, systemORcall bool) {
 	}
 }
 
-//systemORcall true - system,false - call
+// systemORcall true - system,false - call
 func (r *corelibResolver) wait(ctx context.Context, systemORcall bool) error {
 	notice := make(chan *struct{}, 1)
 	r.triger(notice, systemORcall)
@@ -128,7 +128,7 @@ func (r *corelibResolver) wait(ctx context.Context, systemORcall bool) error {
 	}
 }
 
-//systemORcall true - system,false - call
+// systemORcall true - system,false - call
 func (r *corelibResolver) wake(systemORcall bool) {
 	r.lker.Lock()
 	if systemORcall {

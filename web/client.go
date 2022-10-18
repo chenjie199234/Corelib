@@ -61,7 +61,7 @@ type WebClient struct {
 	httpclient    *http.Client
 }
 
-//serverhost format [http/https]://[username[:password]@]the.host.name[:port]
+// serverhost format [http/https]://[username[:password]@]the.host.name[:port]
 func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername, serverhost string) (*WebClient, error) {
 	serverappname := servergroup + "." + servername
 	selfappname := selfgroup + "." + selfname
@@ -135,8 +135,8 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername,
 	return client, nil
 }
 
-//this will return the host in NewWebClient function
-//if in NewWebClient function the host is empty,this will return empty
+// this will return the host in NewWebClient function
+// if in NewWebClient function the host is empty,this will return empty
 func (c *WebClient) GetSeverHost() string {
 	if c.u == nil {
 		return ""
@@ -163,20 +163,20 @@ func forbiddenHeader(header http.Header) bool {
 	return false
 }
 
-//if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
-//"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
+// if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
+// "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil)
 }
 
-//if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
-//"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
+// if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
+// "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
 	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
 }
 
-//if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
-//"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
+// if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
+// "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewBuffer(body))
@@ -184,8 +184,8 @@ func (c *WebClient) Post(ctx context.Context, path, query string, header http.He
 	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil)
 }
 
-//if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
-//"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
+// if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
+// "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewBuffer(body))
@@ -193,8 +193,8 @@ func (c *WebClient) Put(ctx context.Context, path, query string, header http.Hea
 	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil)
 }
 
-//if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
-//"Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
+// if path start with [http/https]://[username[:password]@]the.host.name[:port],the serverhost setted when this client was created will be ignored
+// "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
 func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewBuffer(body))

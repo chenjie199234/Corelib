@@ -280,8 +280,8 @@ func (p *Peer) GetRemoteAddr() string {
 	return p.c.RemoteAddr().String()
 }
 
-//when the connection is based on websocket and there is a load balancer before it
-//then the realPeerIP may different from the remoteaddr
+// when the connection is based on websocket and there is a load balancer before it
+// then the realPeerIP may different from the remoteaddr
 func (p *Peer) GetRealPeerIp() string {
 	return p.realPeerIP
 }

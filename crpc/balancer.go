@@ -104,16 +104,7 @@ func newCorelibBalancer(c *CrpcClient) *corelibBalancer {
 		servers:    make(map[string]*ServerForPick),
 	}
 }
-func (b *corelibBalancer) setPickerServers(servers []*ServerForPick) {
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&b.pservers)), unsafe.Pointer(&servers))
-}
-func (b *corelibBalancer) getPickServers() []*ServerForPick {
-	tmp := atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&b.pservers)))
-	if tmp == nil {
-		return nil
-	}
-	return *(*[]*ServerForPick)(tmp)
-}
+
 func (b *corelibBalancer) ResolverError(e error) {
 	b.lastResolveError = e
 }
@@ -231,8 +222,8 @@ func (b *corelibBalancer) ReconnectCheck(server *ServerForPick) bool {
 	return true
 }
 
-//reason - true,online
-//reason - false,offline
+// reason - true,online
+// reason - false,offline
 func (b *corelibBalancer) RebuildPicker(reason bool) {
 	b.lker.Lock()
 	tmp := make([]*ServerForPick, 0, len(b.servers))
@@ -241,7 +232,7 @@ func (b *corelibBalancer) RebuildPicker(reason bool) {
 			tmp = append(tmp, server)
 		}
 	}
-	b.setPickerServers(tmp)
+	b.pservers = tmp
 	if reason {
 		b.c.resolver.wake(false)
 	}
@@ -250,7 +241,7 @@ func (b *corelibBalancer) RebuildPicker(reason bool) {
 func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 	refresh := false
 	for {
-		server := b.c.c.Picker(b.getPickServers())
+		server := b.c.c.Picker(b.pservers)
 		if server != nil {
 			return server, nil
 		}
