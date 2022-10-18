@@ -3,8 +3,6 @@ package web
 import (
 	"net/http"
 	"strings"
-	"sync/atomic"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/container/trie"
 	"github.com/chenjie199234/Corelib/log"
@@ -155,10 +153,10 @@ func (r *router) Delete(path string, handler http.HandlerFunc) {
 	r.putTree.Set(cleanPath(path), handler)
 }
 func (r *router) updaterewrite(rewrite map[string]map[string]string) {
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&r.rewrite)), unsafe.Pointer(&rewrite))
+	r.rewrite = rewrite
 }
 func (r *router) checkrewrite(originurl, method string) (newurl string, ok bool) {
-	rewrite := *(*map[string]map[string]string)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&r.rewrite))))
+	rewrite := r.rewrite
 	paths, ok := rewrite[method]
 	if !ok {
 		return
