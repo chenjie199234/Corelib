@@ -67,7 +67,7 @@ func accesskey(ctx *web.Context) {
 		ctx.Abort(cerror.ErrAuth)
 		return
 	}
-	if !publicmids.AccessKey(ctx.GetPath(), accesskey) {
+	if !publicmids.AccessKeyCheck(ctx.GetPath(), accesskey) {
 		ctx.Abort(cerror.ErrAuth)
 	}
 }

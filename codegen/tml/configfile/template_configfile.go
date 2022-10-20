@@ -123,9 +123,13 @@ const textapp = `{
 			"/example/origin/url":"/example/new/url"
 		}
 	},
-	"access_keys":{
-		"default":["default_sec_key"],
-		"/{{.}}.status/ping":["specific_sec_key"]
+	"accesses":{
+		"default":{
+			"default_access_id":"default_access_key"
+		},
+		"/{{.}}.status/ping":{
+			"specific_access_id":"specific_access_key"
+		}
 	},
 	"token_secret":"test",
 	"token_expire":"24h",

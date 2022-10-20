@@ -36,7 +36,7 @@ func main() {
 		xweb.UpdateHandlerTimeout(ac.HandlerTimeout)
 		xweb.UpdateWebPathRewrite(ac.WebPathRewrite)
 		publicmids.UpdateRateConfig(ac.HandlerRate)
-		publicmids.UpdateAccessKeyConfig(ac.AccessKeys)
+		publicmids.UpdateAccessKeyConfig(ac.Accesses)
 	})
 	defer config.Close()
 	//start the whole business service
