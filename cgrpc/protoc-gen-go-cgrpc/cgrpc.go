@@ -20,7 +20,7 @@ const (
 	logPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/log")
 	commonPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
 	metadataPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/metadata")
-	errorPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/error")
+	cerrorPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/cerror")
 )
 
 func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
@@ -101,7 +101,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("return func(ctx *", g.QualifiedGoIdent(cgrpcPackage.Ident("Context")), "){")
 		g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
 		g.P("if ctx.DecodeReq(req)!=nil{")
-		g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+		g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 		g.P("return")
 		g.P("}")
 
@@ -109,7 +109,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if pbex.NeedCheck(method.Input) {
 			g.P("if errstr := req.Validate(); errstr != \"\" {")
 			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\",errstr)")
-			g.P("ctx.Abort(", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")), ")")
+			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 			g.P("return")
 			g.P("}")
 		}
@@ -202,7 +202,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		freturn := "(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
 		g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ")", freturn, "{")
 		g.P("if req == nil {")
-		g.P("return nil,", g.QualifiedGoIdent(errorPackage.Ident("ErrReq")))
+		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
 		g.P("}")
 
 		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
