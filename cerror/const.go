@@ -1,11 +1,11 @@
-package error
+package cerror
 
 import (
 	"context"
 	"net/http"
 )
 
-//system,start from 1000
+// system,start from 1000
 var (
 	ErrClosing    = &Error{Code: 1000, Httpcode: 449, Msg: "server is closing,retry this request"}
 	ErrNoapi      = &Error{Code: 1001, Httpcode: http.StatusNotImplemented, Msg: "api not implement"}
@@ -16,7 +16,7 @@ var (
 	ErrRespmsgLen = &Error{Code: 1006, Httpcode: http.StatusInternalServerError, Msg: "resp msg too large"}
 )
 
-//business,start from 10000
+// business,start from 10000
 var (
 	ErrUnknown    = &Error{Code: 10000, Httpcode: http.StatusInternalServerError, Msg: "unknown"}
 	ErrReq        = &Error{Code: 10001, Httpcode: http.StatusBadRequest, Msg: "request error"}
@@ -30,7 +30,7 @@ var (
 	ErrNotExist   = &Error{Code: 10009, Httpcode: http.StatusNotFound, Msg: "not exist"}
 )
 
-//convert std error,always -1
+// convert std error,always -1
 var (
 	ErrDeadlineExceeded = &Error{Code: -1, Httpcode: http.StatusGatewayTimeout, Msg: context.DeadlineExceeded.Error()}
 	ErrCanceled         = &Error{Code: -1, Httpcode: http.StatusRequestTimeout, Msg: context.Canceled.Error()}

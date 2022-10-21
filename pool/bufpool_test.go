@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	cerror "github.com/chenjie199234/Corelib/error"
-	ctime "github.com/chenjie199234/Corelib/util/time"
+	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/util/ctime"
 )
 
 func Test_Pool(t *testing.T) {

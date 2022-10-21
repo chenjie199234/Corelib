@@ -11,7 +11,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/rotatefile"
-	ctime "github.com/chenjie199234/Corelib/util/time"
+	"github.com/chenjie199234/Corelib/util/ctime"
 )
 
 var trace bool

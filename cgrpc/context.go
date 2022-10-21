@@ -3,7 +3,7 @@ package cgrpc
 import (
 	"context"
 
-	cerror "github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/cerror"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 

@@ -6,9 +6,9 @@ import (
 	"time"
 	"unsafe"
 
-	cerror "github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/util/common"
-	ctime "github.com/chenjie199234/Corelib/util/time"
+	"github.com/chenjie199234/Corelib/util/ctime"
 )
 
 var bufpool *sync.Pool
@@ -60,7 +60,7 @@ func nextcap(reqsize, nowcap uint64) uint64 {
 	return nowcap
 }
 
-//old data unsafe
+// old data unsafe
 func (b *Buffer) Resize(n uint32) {
 	nowcap := uint32(cap(*b))
 	if nowcap >= n {
@@ -72,7 +72,7 @@ func (b *Buffer) Resize(n uint32) {
 	}
 }
 
-//old data safe
+// old data safe
 func (b *Buffer) Growth(n uint32) {
 	nowcap := uint32(cap(*b))
 	if nowcap >= n {
@@ -85,24 +85,24 @@ func (b *Buffer) Growth(n uint32) {
 	}
 }
 
-//return data is unsafe
+// return data is unsafe
 func (b *Buffer) Bytes() []byte {
 	return *b
 }
 
-//return data is safe
+// return data is safe
 func (b *Buffer) CopyBytes() []byte {
 	r := make([]byte, len(*b))
 	copy(r, *b)
 	return r
 }
 
-//return data is unsafe
+// return data is unsafe
 func (b *Buffer) String() string {
 	return common.Byte2str(*b)
 }
 
-//return data is safe
+// return data is safe
 func (b *Buffer) CopyString() string {
 	r := make([]byte, len(*b))
 	copy(r, *b)

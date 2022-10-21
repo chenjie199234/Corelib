@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"time"
 
-	cerror "github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/cerror"
 )
 
 type Token struct {

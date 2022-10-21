@@ -3,7 +3,7 @@ package crpc
 import (
 	"context"
 
-	cerror "github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
 )

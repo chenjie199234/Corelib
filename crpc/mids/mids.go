@@ -3,8 +3,8 @@ package mids
 import (
 	"os"
 
+	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/crpc"
-	cerror "github.com/chenjie199234/Corelib/error"
 	publicmids "github.com/chenjie199234/Corelib/mids"
 )
 

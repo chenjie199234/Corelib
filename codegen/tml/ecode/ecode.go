@@ -11,7 +11,7 @@ const text = `package ecode
 import (
 	"net/http"
 
-	cerror "github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/cerror"
 )
 
 var (
@@ -27,7 +27,14 @@ var (
 	ErrNotExist   = cerror.ErrNotExist   //10009 // http code 404
 
 	ErrBusiness1 = cerror.MakeError(20001,http.StatusBadRequest, "business error 1")
-)`
+)
+
+func ReturnEcode(originerror error, defaulterror *cerror.Error) error {
+	if _, ok := originerror.(*cerror.Error); ok {
+		return originerror
+	}
+	return defaulterror
+}`
 
 const path = "./ecode/"
 const filename = "ecode.go"

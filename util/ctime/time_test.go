@@ -1,4 +1,4 @@
-package time
+package ctime
 
 import (
 	"encoding/json"

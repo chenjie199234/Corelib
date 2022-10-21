@@ -1,0 +1,8 @@
+syntax="proto3";
+package cerror;
+option go_package="github.com/chenjie199234/Corelib/cerror;cerror";
+message Error{
+	int32 code=1;
+	int32 httpcode=2;
+	string msg=3;
+}

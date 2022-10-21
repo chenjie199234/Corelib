@@ -20,7 +20,7 @@ import (
 	"github.com/chenjie199234/Corelib/crpc"
 	"github.com/chenjie199234/Corelib/crpc/mids"
 	"github.com/chenjie199234/Corelib/log"
-	ctime "github.com/chenjie199234/Corelib/util/time"
+	"github.com/chenjie199234/Corelib/util/ctime"
 )
 
 var s *crpc.CrpcServer

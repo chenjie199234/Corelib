@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/pool"
-	ctime "github.com/chenjie199234/Corelib/util/time"
+	"github.com/chenjie199234/Corelib/util/ctime"
 )
 
 func writeany(buf *pool.Buffer, data interface{}) {

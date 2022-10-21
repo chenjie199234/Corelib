@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	cerror "github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/util/host"
 )
@@ -77,7 +77,7 @@ func GetTrace(ctx context.Context) (traceid, curapp, curip, curmethod, curpath s
 	return
 }
 
-//this will overwrite dst's tracedata
+// this will overwrite dst's tracedata
 func CopyTrace(src, dst context.Context) (context.Context, bool) {
 	if dst == nil {
 		dst = context.Background()

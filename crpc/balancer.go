@@ -9,7 +9,7 @@ import (
 	"time"
 	"unsafe"
 
-	cerror "github.com/chenjie199234/Corelib/error"
+	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/stream"
 	"google.golang.org/protobuf/proto"
 )
