@@ -195,7 +195,7 @@ func initlocalapp(notice func(*AppConfig)) {
 				if !ok {
 					return
 				}
-				if filepath.Base(event.Name) != "AppConfig.json" || (event.Op&fsnotify.Create == 0 && event.Op&fsnotify.Write == 0) {
+				if filepath.Base(event.Name) != "AppConfig.json" || (!event.Has(fsnotify.Create) && !event.Has(fsnotify.Write)) {
 					continue
 				}
 				data, e := os.ReadFile("./AppConfig.json")
