@@ -76,19 +76,89 @@ func UpdateRateConfig(c []*RateConfig) {
 		for _, m := range cc.Method {
 			switch strings.ToUpper(m) {
 			case "GRPC":
-				grpc[cc.Path] = info
+				exist, ok := grpc[cc.Path]
+				if !ok {
+					grpc[cc.Path] = info
+				} else {
+					if info.single != nil {
+						exist.single = info.single
+					}
+					if info.global != nil {
+						exist.global = info.global
+					}
+				}
 			case "CRPC":
-				crpc[cc.Path] = info
+				exist, ok := crpc[cc.Path]
+				if !ok {
+					crpc[cc.Path] = info
+				} else {
+					if info.single != nil {
+						exist.single = info.single
+					}
+					if info.global != nil {
+						exist.global = info.global
+					}
+				}
 			case "GET":
-				get[cc.Path] = info
+				exist, ok := get[cc.Path]
+				if !ok {
+					get[cc.Path] = info
+				} else {
+					if info.single != nil {
+						exist.single = info.single
+					}
+					if info.global != nil {
+						exist.global = info.global
+					}
+				}
 			case "POST":
-				post[cc.Path] = info
+				exist, ok := post[cc.Path]
+				if !ok {
+					post[cc.Path] = info
+				} else {
+					if info.single != nil {
+						exist.single = info.single
+					}
+					if info.global != nil {
+						exist.global = info.global
+					}
+				}
 			case "PUT":
-				put[cc.Path] = info
+				exist, ok := put[cc.Path]
+				if !ok {
+					put[cc.Path] = info
+				} else {
+					if info.single != nil {
+						exist.single = info.single
+					}
+					if info.global != nil {
+						exist.global = info.global
+					}
+				}
 			case "PATCH":
-				patch[cc.Path] = info
+				exist, ok := patch[cc.Path]
+				if !ok {
+					patch[cc.Path] = info
+				} else {
+					if info.single != nil {
+						exist.single = info.single
+					}
+					if info.global != nil {
+						exist.global = info.global
+					}
+				}
 			case "DELETE":
-				del[cc.Path] = info
+				exist, ok := del[cc.Path]
+				if !ok {
+					del[cc.Path] = info
+				} else {
+					if info.single != nil {
+						exist.single = info.single
+					}
+					if info.global != nil {
+						exist.global = info.global
+					}
+				}
 			}
 		}
 	}
