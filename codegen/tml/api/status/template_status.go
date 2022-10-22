@@ -21,11 +21,11 @@ service status{
 	rpc ping(pingreq)returns(pingresp){
 		option (pbex.method)="get";
 		option (pbex.web_midwares)="accesskey";
-		option (pbex.web_midwares)="rate";
+		option (pbex.web_midwares)="selfrate";
 		option (pbex.crpc_midwares)="accesskey";
-		option (pbex.crpc_midwares)="rate";
+		option (pbex.crpc_midwares)="globalrate";
 		option (pbex.cgrpc_midwares)="accesskey";
-		option (pbex.cgrpc_midwares)="rate";
+		option (pbex.cgrpc_midwares)="globalrate";
 	}
 }
 //req can be set with pbex extentions
