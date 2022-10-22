@@ -71,14 +71,17 @@ func (p *Pool) Ping(ctx context.Context) error {
 	_, e = c.(redis.ConnWithContext).DoContext(ctx, "PING")
 	return e
 }
+func (p *Pool) Close() {
+	p.p.Close()
+}
 
-//if ctx has a timeout,ctx's deadline will be used
-//if ctx doesn't have a timeout,the client's iotimeout will be used
+// if ctx has a timeout,ctx's deadline will be used
+// if ctx doesn't have a timeout,the client's iotimeout will be used
 func (c *Conn) DoContext(ctx context.Context, cmd string, args ...interface{}) (interface{}, error) {
 	return c.c.(redis.ConnWithContext).DoContext(ctx, cmd, args...)
 }
 
-//both ctx's and client's timeout will be ignored
+// both ctx's and client's timeout will be ignored
 func (c *Conn) DoNoTimeout(ctx context.Context, cmd string, args ...interface{}) (interface{}, error) {
 	return c.c.(redis.ConnWithTimeout).DoWithTimeout(0, cmd, args...)
 }
@@ -90,13 +93,13 @@ func (c *Conn) Flush(ctx context.Context) error {
 	return c.c.Flush()
 }
 
-//if ctx has a timeout,ctx's deadline will be used
-//if ctx doesn't have a timeout,the client's iotimeout will be used
+// if ctx has a timeout,ctx's deadline will be used
+// if ctx doesn't have a timeout,the client's iotimeout will be used
 func (c *Conn) ReceiveContext(ctx context.Context) (interface{}, error) {
 	return c.c.(redis.ConnWithContext).ReceiveContext(ctx)
 }
 
-//both ctx's and client's timeout will be ignored
+// both ctx's and client's timeout will be ignored
 func (c *Conn) ReceiveNoTimeout(ctx context.Context) (interface{}, error) {
 	return c.c.(redis.ConnWithTimeout).ReceiveWithTimeout(0)
 }

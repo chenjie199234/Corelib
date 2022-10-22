@@ -220,7 +220,7 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	instance.closewait.Add(1)
 	instance.r.notFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotImplemented)
+		w.WriteHeader(http.StatusNotFound)
 		w.Write(common.Str2byte(cerror.ErrNoapi.Error()))
 		log.Error(nil, "[web.server] client ip:", getclientip(r), "call path:", r.URL.Path, "method:", r.Method, "error: unknown path")
 	})

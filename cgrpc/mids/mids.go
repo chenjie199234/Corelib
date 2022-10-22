@@ -5,6 +5,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/cgrpc"
+	"github.com/chenjie199234/Corelib/log"
 	publicmids "github.com/chenjie199234/Corelib/mids"
 )
 
@@ -14,7 +15,8 @@ var all map[string]cgrpc.OutsideHandler
 func init() {
 	all = make(map[string]cgrpc.OutsideHandler)
 	//register here
-	all["rate"] = rate
+	all["selfrate"] = selfrate
+	all["globalrate"] = globalrate
 	all["accesskey"] = accesskey
 	all["token"] = token
 }
@@ -27,8 +29,17 @@ func AllMids() map[string]cgrpc.OutsideHandler {
 func RegMid(name string, handler cgrpc.OutsideHandler) {
 	all[name] = handler
 }
-func rate(ctx *cgrpc.Context) {
-	if !publicmids.GrpcRate(ctx.GetPath()) {
+func selfrate(ctx *cgrpc.Context) {
+	if pass, _ := publicmids.GrpcRate(ctx, ctx.GetPath(), false); !pass {
+		ctx.Abort(cerror.ErrBusy)
+	}
+}
+func globalrate(ctx *cgrpc.Context) {
+	pass, e := publicmids.GrpcRate(ctx, ctx.GetPath(), true)
+	if e != nil {
+		log.Error(ctx, "[rate.global] path:", ctx.GetPath(), "method: GRPC", e)
+		ctx.Abort(cerror.ErrBusy)
+	} else if !pass {
 		ctx.Abort(cerror.ErrBusy)
 	}
 }
