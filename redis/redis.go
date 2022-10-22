@@ -25,8 +25,8 @@ type Config struct {
 	//this is the pool's buf
 	//if this is 0,no connections will be reused
 	//because the pool's buf is 0,no connections can be buffed
-	MaxIdle     int           //this will overwrite the param in url
-	MaxOpen     int           //this will overwrite the param in url
+	MaxIdle     uint16        //this will overwrite the param in url
+	MaxOpen     uint16        //this will overwrite the param in url
 	MaxIdletime time.Duration //this will overwrite the param in url
 	ConnTimeout time.Duration //this will overwrite the param in url
 	IOTimeout   time.Duration //this will overwrite the param in url
@@ -53,8 +53,8 @@ func NewRedis(c *Config) *Pool {
 				}
 				return conn, nil
 			},
-			MaxIdle:     c.MaxIdle,
-			MaxActive:   c.MaxOpen,
+			MaxIdle:     int(c.MaxIdle),
+			MaxActive:   int(c.MaxOpen),
 			IdleTimeout: c.MaxIdletime,
 		},
 	}

@@ -9,7 +9,7 @@ import (
 const textsource = `{
 	"cgrpc_server":{
 		"connect_timeout":"200ms",
-		"global_timeout":"200ms",
+		"global_timeout":"500ms",
 		"heart_probe":"1.5s",
 		"certs":{
 		}
@@ -21,7 +21,7 @@ const textsource = `{
 	},
 	"crpc_server":{
 		"connect_timeout":"200ms",
-		"global_timeout":"200ms",
+		"global_timeout":"500ms",
 		"heart_probe":"1.5s",
 		"certs":{
 		}
@@ -34,7 +34,7 @@ const textsource = `{
 	"web_server":{
 		"close_mode":0,
 		"connect_timeout":"200ms",
-		"global_timeout":"200ms",
+		"global_timeout":"500ms",
 		"idle_timeout":"5s",
 		"heart_probe":"1.5s",
 		"src_root":"./src",
@@ -73,7 +73,8 @@ const textsource = `{
 	"redis":{
 		"example_redis":{
 			"url":"[redis/rediss]://[[username:]password@]host[/dbindex]",
-			"max_open":100,
+			"max_open":256,
+			"max_idle":100,
 			"max_idletime":"10m",
 			"io_timeout":"200ms",
 			"conn_timeout":"200ms"
@@ -116,7 +117,7 @@ const textapp = `{
 	"handler_rate":[{
 		"Path":"/{{.}}.status/ping",
 		"Method":["GET","GRPC","CRPC"],
-		"SingleMaxPerSec":1,
+		"SingleMaxPerSec":10,
 		"GlobalMaxPerSec":0
 	}],
 	"web_path_rewrite":{

@@ -339,8 +339,8 @@ type WebClientConfig struct {
 // RedisConfig -
 type RedisConfig struct {
 	URL         string         $json:"url"$           //[redis/rediss]://[[username:]password@]host/[dbindex]
-	MaxOpen     int            $json:"max_open"$      //if this is 0,means no limit
-	MaxIdle     int            $json:"max_idle"$      //defaule 100   //this will overwrite the param in url
+	MaxOpen     uint16         $json:"max_open"$      //if this is 0,means no limit
+	MaxIdle     uint16         $json:"max_idle"$      //defaule 100   //this will overwrite the param in url
 	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
 	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
 	ConnTimeout ctime.Duration $json:"conn_timeout"$  //default 250ms //this will overwrite the param in url
@@ -349,7 +349,8 @@ type RedisConfig struct {
 // SqlConfig -
 type SqlConfig struct {
 	URL         string         $json:"url"$           //[username:password@][protocol(address)]/[dbname][?param1=value1&...&paramN=valueN]
-	MaxOpen     int            $json:"max_open"$      //default 100   //this will overwrite the param in url
+	MaxOpen     uint16         $json:"max_open"$      //if this is 0,means no limit //this will overwrite the param in url
+	MaxIdle     uint16         $json:"max_idle"$      //default 100   //this will overwrite the param in url
 	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
 	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
 	ConnTimeout ctime.Duration $json:"conn_timeout"$  //default 250ms //this will overwrite the param in url
@@ -358,7 +359,7 @@ type SqlConfig struct {
 // MongoConfig -
 type MongoConfig struct {
 	URL         string         $json:"url"$           //[mongodb/mongodb+srv]://[username:password@]host1,...,hostN/[dbname][?param1=value1&...&paramN=valueN]
-	MaxOpen     uint64         $json:"max_open"$      //default 100   //this will overwrite the param in url
+	MaxOpen     uint64         $json:"max_open"$      //if this is 0,means no limit //this will overwrite the param in url
 	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
 	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
 	ConnTimeout ctime.Duration $json:"conn_timeout"$  //default 250ms //this will overwrite the param in url
@@ -648,9 +649,6 @@ func initmongo(){
 		if k == "example_mongo" {
 			continue
 		}
-		if mongoc.MaxOpen == 0 {
-			mongoc.MaxOpen = 100
-		}
 		if mongoc.MaxIdletime == 0 {
 			mongoc.MaxIdletime = ctime.Duration(time.Minute * 10)
 		}
@@ -691,8 +689,8 @@ func initmongo(){
 }
 func initsql(){
 	for _, sqlc := range sc.Sql {
-		if sqlc.MaxOpen == 0 {
-			sqlc.MaxOpen = 100
+		if sqlc.MaxIdle == 0 {
+			sqlc.MaxIdle = 100
 		}
 		if sqlc.MaxIdletime == 0 {
 			sqlc.MaxIdletime = ctime.Duration(time.Minute * 10)
@@ -715,8 +713,8 @@ func initsql(){
 			Close()
 			os.Exit(1)
 		}
-		tempdb.SetMaxOpenConns(sqlc.MaxOpen)
-		tempdb.SetMaxIdleConns(sqlc.MaxOpen)
+		tempdb.SetMaxOpenConns(int(sqlc.MaxOpen))
+		tempdb.SetMaxIdleConns(int(sqlc.MaxIdle))
 		tempdb.SetConnMaxIdleTime(sqlc.MaxIdletime.StdDuration())
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		e = tempdb.PingContext(ctx)
