@@ -339,7 +339,7 @@ type WebClientConfig struct {
 // RedisConfig -
 type RedisConfig struct {
 	URL         string         $json:"url"$           //[redis/rediss]://[[username:]password@]host/[dbindex]
-	MaxOpen     uint16         $json:"max_open"$      //if this is 0,means no limit
+	MaxOpen     uint16         $json:"max_open"$      //if this is 0,means no limit //this will overwrite the param in url
 	MaxIdle     uint16         $json:"max_idle"$      //defaule 100   //this will overwrite the param in url
 	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
 	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
