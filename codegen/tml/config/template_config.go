@@ -339,7 +339,8 @@ type WebClientConfig struct {
 // RedisConfig -
 type RedisConfig struct {
 	URL         string         $json:"url"$           //[redis/rediss]://[[username:]password@]host/[dbindex]
-	MaxOpen     int            $json:"max_open"$      //default 100   //this will overwrite the param in url
+	MaxOpen     int            $json:"max_open"$      //if this is 0,means no limit
+	MaxIdle     int            $json:"max_idle"$      //defaule 100   //this will overwrite the param in url
 	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
 	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
 	ConnTimeout ctime.Duration $json:"conn_timeout"$  //default 250ms //this will overwrite the param in url
@@ -604,8 +605,8 @@ func initredis(){
 		if k == "example_redis" {
 			continue
 		}
-		if redisc.MaxOpen == 0 {
-			redisc.MaxOpen = 100
+		if redisc.MaxIdle == 0 {
+			redisc.MaxIdle = 100
 		}
 		if redisc.MaxIdletime == 0 {
 			redisc.MaxIdletime = ctime.Duration(time.Minute * 10)
@@ -625,6 +626,7 @@ func initredis(){
 		tempredis := redis.NewRedis(&redis.Config{
 			RedisName:   k,
 			URL:         redisc.URL,
+			MaxIdle:     redisc.MaxIdle,
 			MaxOpen:     redisc.MaxOpen,
 			MaxIdletime: redisc.MaxIdletime.StdDuration(),
 			ConnTimeout: redisc.ConnTimeout.StdDuration(),

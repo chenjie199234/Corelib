@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 )
 
-//thread safe
+// thread safe
 type Ring[T any] struct {
 	length, popTry, popConfirm, pushTry, pushConfirm uint64
 	data                                             []T
@@ -18,7 +18,7 @@ func NewRing[T any](length uint64) *Ring[T] {
 	}
 }
 
-//return false - only when the buf is full
+// return false - only when the buf is full
 func (b *Ring[T]) Push(d T) bool {
 	for {
 		oldPushTry := atomic.LoadUint64(&b.pushTry)
@@ -37,8 +37,8 @@ func (b *Ring[T]) Push(d T) bool {
 	}
 }
 
-//check func is used to check whether the next element can be popped,set nil if don't need it
-//return false - when the buf is empty,or the check failed
+// check func is used to check whether the next element can be popped,set nil if don't need it
+// return false - when the buf is empty,or the check failed
 func (b *Ring[T]) Pop(check func(d T) bool) (data T, ok bool) {
 	for {
 		oldPopTry := atomic.LoadUint64(&b.popTry)

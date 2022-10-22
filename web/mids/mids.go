@@ -16,8 +16,7 @@ var all map[string]web.OutsideHandler
 func init() {
 	all = make(map[string]web.OutsideHandler)
 	//register here
-	all["selfrate"] = selfrate
-	all["globalrate"] = globalrate
+	all["rate"] = rate
 	all["accesskey"] = accesskey
 	all["token"] = token
 }
@@ -30,65 +29,39 @@ func AllMids() map[string]web.OutsideHandler {
 func RegMid(name string, handler web.OutsideHandler) {
 	all[name] = handler
 }
-func selfrate(ctx *web.Context) {
+func rate(ctx *web.Context) {
 	switch ctx.GetMethod() {
 	case http.MethodGet:
-		if pass, _ := publicmids.HttpGetRate(ctx, ctx.GetPath(), false); !pass {
-			ctx.Abort(cerror.ErrBusy)
-		}
-	case http.MethodPost:
-		if pass, _ := publicmids.HttpPostRate(ctx, ctx.GetPath(), false); !pass {
-			ctx.Abort(cerror.ErrBusy)
-		}
-	case http.MethodPut:
-		if pass, _ := publicmids.HttpPutRate(ctx, ctx.GetPath(), false); !pass {
-			ctx.Abort(cerror.ErrBusy)
-		}
-	case http.MethodPatch:
-		if pass, _ := publicmids.HttpPatchRate(ctx, ctx.GetPath(), false); !pass {
-			ctx.Abort(cerror.ErrBusy)
-		}
-	case http.MethodDelete:
-		if pass, _ := publicmids.HttpDelRate(ctx, ctx.GetPath(), false); !pass {
-			ctx.Abort(cerror.ErrBusy)
-		}
-	default:
-		ctx.Abort(cerror.ErrNotExist)
-	}
-}
-func globalrate(ctx *web.Context) {
-	switch ctx.GetMethod() {
-	case http.MethodGet:
-		if pass, e := publicmids.HttpGetRate(ctx, ctx.GetPath(), true); e != nil {
-			log.Error(ctx, "[rate.global] path:", ctx.GetPath(), "method: GET", e)
+		if pass, e := publicmids.HttpGetRate(ctx, ctx.GetPath()); e != nil {
+			log.Error(ctx, "[mids.rate] path:", ctx.GetPath(), "method: GET", e)
 			ctx.Abort(cerror.ErrBusy)
 		} else if !pass {
 			ctx.Abort(cerror.ErrBusy)
 		}
 	case http.MethodPost:
-		if pass, e := publicmids.HttpPostRate(ctx, ctx.GetPath(), true); e != nil {
-			log.Error(ctx, "[rate.global] path:", ctx.GetPath(), "method: POST", e)
+		if pass, e := publicmids.HttpPostRate(ctx, ctx.GetPath()); e != nil {
+			log.Error(ctx, "[mids.rate] path:", ctx.GetPath(), "method: POST", e)
 			ctx.Abort(cerror.ErrBusy)
 		} else if !pass {
 			ctx.Abort(cerror.ErrBusy)
 		}
 	case http.MethodPut:
-		if pass, e := publicmids.HttpPutRate(ctx, ctx.GetPath(), true); e != nil {
-			log.Error(ctx, "[rate.global] path:", ctx.GetPath(), "method: PUT", e)
+		if pass, e := publicmids.HttpPutRate(ctx, ctx.GetPath()); e != nil {
+			log.Error(ctx, "[mids.rate] path:", ctx.GetPath(), "method: PUT", e)
 			ctx.Abort(cerror.ErrBusy)
 		} else if !pass {
 			ctx.Abort(cerror.ErrBusy)
 		}
 	case http.MethodPatch:
-		if pass, e := publicmids.HttpPatchRate(ctx, ctx.GetPath(), true); e != nil {
-			log.Error(ctx, "[rate.global] path:", ctx.GetPath(), "method: PATCH", e)
+		if pass, e := publicmids.HttpPatchRate(ctx, ctx.GetPath()); e != nil {
+			log.Error(ctx, "[mids.rate] path:", ctx.GetPath(), "method: PATCH", e)
 			ctx.Abort(cerror.ErrBusy)
 		} else if !pass {
 			ctx.Abort(cerror.ErrBusy)
 		}
 	case http.MethodDelete:
-		if pass, e := publicmids.HttpDelRate(ctx, ctx.GetPath(), true); e != nil {
-			log.Error(ctx, "[rate.global] path:", ctx.GetPath(), "method: DELETE", e)
+		if pass, e := publicmids.HttpDelRate(ctx, ctx.GetPath()); e != nil {
+			log.Error(ctx, "[mids.rate] path:", ctx.GetPath(), "method: DELETE", e)
 			ctx.Abort(cerror.ErrBusy)
 		} else if !pass {
 			ctx.Abort(cerror.ErrBusy)

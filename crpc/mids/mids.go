@@ -15,8 +15,7 @@ var all map[string]crpc.OutsideHandler
 func init() {
 	all = make(map[string]crpc.OutsideHandler)
 	//register here
-	all["selfrate"] = selfrate
-	all["globalrate"] = globalrate
+	all["rate"] = rate
 	all["accesskey"] = accesskey
 	all["token"] = token
 }
@@ -29,15 +28,10 @@ func AllMids() map[string]crpc.OutsideHandler {
 func RegMid(name string, handler crpc.OutsideHandler) {
 	all[name] = handler
 }
-func selfrate(ctx *crpc.Context) {
-	if pass, _ := publicmids.CrpcRate(ctx, ctx.GetPath(), false); !pass {
-		ctx.Abort(cerror.ErrBusy)
-	}
-}
-func globalrate(ctx *crpc.Context) {
-	pass, e := publicmids.CrpcRate(ctx, ctx.GetPath(), true)
+func rate(ctx *crpc.Context) {
+	pass, e := publicmids.CrpcRate(ctx, ctx.GetPath())
 	if e != nil {
-		log.Error(ctx, "[rate.global] path:", ctx.GetPath(), "method: CRPC", e)
+		log.Error(ctx, "[mids.rate] path:", ctx.GetPath(), "method: CRPC", e)
 		ctx.Abort(cerror.ErrBusy)
 	} else if !pass {
 		ctx.Abort(cerror.ErrBusy)

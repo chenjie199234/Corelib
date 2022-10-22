@@ -116,7 +116,8 @@ const textapp = `{
 	"handler_rate":[{
 		"Path":"/{{.}}.status/ping",
 		"Method":["GET","GRPC","CRPC"],
-		"MaxPerSec":10
+		"SingleMaxPerSec":1,
+		"GlobalMaxPerSec":0
 	}],
 	"web_path_rewrite":{
 		"GET":{

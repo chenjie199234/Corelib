@@ -2,292 +2,226 @@ package mids
 
 import (
 	"context"
+	"os"
 	"strings"
-	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/container/ring"
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
 )
 
-type selfrate struct {
-	grpc  map[string]*ring.Ring[int64] //key path
-	crpc  map[string]*ring.Ring[int64] //key path
-	get   map[string]*ring.Ring[int64] //key path
-	post  map[string]*ring.Ring[int64] //key path
-	put   map[string]*ring.Ring[int64] //key path
-	patch map[string]*ring.Ring[int64] //key path
-	del   map[string]*ring.Ring[int64] //key path
-}
-type globalrate struct {
+type rate struct {
 	p     *redis.Pool
-	grpc  map[string][]interface{} //key path,value has 2 elements,first is the redis key,second is the max rate per second
-	crpc  map[string][]interface{}
-	get   map[string][]interface{}
-	post  map[string][]interface{}
-	put   map[string][]interface{}
-	patch map[string][]interface{}
-	del   map[string][]interface{}
+	grpc  map[string]*rateinfo //key path
+	crpc  map[string]*rateinfo //key path
+	get   map[string]*rateinfo //key path
+	post  map[string]*rateinfo //key path
+	put   map[string]*rateinfo //key path
+	patch map[string]*rateinfo //key path
+	del   map[string]*rateinfo //key path
+}
+type rateinfo struct {
+	single *ring.Ring[int64]
+	global []interface{} //if this is not nil,this has 2 elements,first is the redis key,second is the rate
 }
 
-var selfrateinstance *selfrate
-var globalrateinstance *globalrate
+var rateinstance *rate
 
 func init() {
-	selfrateinstance = &selfrate{}
-	globalrateinstance = &globalrate{}
+	rateinstance = &rate{}
+	str := os.Getenv("RATE_REDIS_URL")
+	if str == "" {
+		log.Warning(nil, "[rate] env RATE_REDIS_URL missing,all global rate check will be failed")
+		return
+	}
+	rateinstance.p = redis.NewRedis(&redis.Config{
+		RedisName:   "rate_redis",
+		URL:         str,
+		MaxOpen:     0,    //means no limit
+		MaxIdle:     1024, //the pool's buf
+		MaxIdletime: time.Minute,
+		ConnTimeout: time.Second * 5,
+		IOTimeout:   time.Second * 5,
+	})
 }
 
 type RateConfig struct {
-	Path      string
-	Method    []string //GRPC,CRPC,GET,POST,PUT,PATCH,DELETE
-	MaxPerSec uint64   //0 means ban
+	Path   string
+	Method []string //GRPC,CRPC,GET,POST,PUT,PATCH,DELETE
+	//single and global are both 0,means ban
+	//single and global are both not 0,means both single and global will be checked
+	//single is 0,global not 0,means only global will be checked
+	//single it not 0,global is 0,means only single will be checked
+	SingleMaxPerSec uint64 //single instance's rate
+	GlobalMaxPerSec uint64 //all instances' rate
 }
 
-func UpdateSelfRateConfig(c []*RateConfig) {
-	grpc := make(map[string]*ring.Ring[int64])  //key path
-	crpc := make(map[string]*ring.Ring[int64])  //key path
-	get := make(map[string]*ring.Ring[int64])   //key path
-	post := make(map[string]*ring.Ring[int64])  //key path
-	put := make(map[string]*ring.Ring[int64])   //key path
-	patch := make(map[string]*ring.Ring[int64]) //key path
-	del := make(map[string]*ring.Ring[int64])   //key path
+func UpdateRateConfig(c []*RateConfig) {
+	grpc := make(map[string]*rateinfo)  //key path
+	crpc := make(map[string]*rateinfo)  //key path
+	get := make(map[string]*rateinfo)   //key path
+	post := make(map[string]*rateinfo)  //key path
+	put := make(map[string]*rateinfo)   //key path
+	patch := make(map[string]*rateinfo) //key path
+	del := make(map[string]*rateinfo)   //key path
 	for _, cc := range c {
-		r := ring.NewRing[int64](cc.MaxPerSec)
+		info := &rateinfo{}
+		if cc.SingleMaxPerSec != 0 {
+			info.single = ring.NewRing[int64](cc.SingleMaxPerSec)
+		}
+		if cc.GlobalMaxPerSec != 0 {
+			info.global = []interface{}{cc.Path + "_" + strings.Join(cc.Method, "_"), cc.GlobalMaxPerSec}
+		}
 		for _, m := range cc.Method {
 			switch strings.ToUpper(m) {
 			case "GRPC":
-				grpc[cc.Path] = r
+				grpc[cc.Path] = info
 			case "CRPC":
-				crpc[cc.Path] = r
+				crpc[cc.Path] = info
 			case "GET":
-				get[cc.Path] = r
+				get[cc.Path] = info
 			case "POST":
-				post[cc.Path] = r
+				post[cc.Path] = info
 			case "PUT":
-				put[cc.Path] = r
+				put[cc.Path] = info
 			case "PATCH":
-				patch[cc.Path] = r
+				patch[cc.Path] = info
 			case "DELETE":
-				del[cc.Path] = r
+				del[cc.Path] = info
 			}
 		}
 	}
-	selfrateinstance.grpc = grpc
-	selfrateinstance.crpc = crpc
-	selfrateinstance.get = get
-	selfrateinstance.post = post
-	selfrateinstance.put = put
-	selfrateinstance.patch = patch
-	selfrateinstance.del = del
-}
-func UpdateGlobalRateConfig(redisc *redis.Config, ratec []*RateConfig) {
-	p := redis.NewRedis(redisc)
-	grpc := make(map[string][]interface{})
-	crpc := make(map[string][]interface{})
-	get := make(map[string][]interface{})
-	post := make(map[string][]interface{})
-	put := make(map[string][]interface{})
-	patch := make(map[string][]interface{})
-	del := make(map[string][]interface{})
-	for _, c := range ratec {
-		rediskey := c.Path + "_" + strings.Join(c.Method, "_")
-		for _, m := range c.Method {
-			switch strings.ToUpper(m) {
-			case "GRPC":
-				grpc[c.Path] = []interface{}{rediskey, c.MaxPerSec}
-			case "CRPC":
-				crpc[c.Path] = []interface{}{rediskey, c.MaxPerSec}
-			case "GET":
-				get[c.Path] = []interface{}{rediskey, c.MaxPerSec}
-			case "POST":
-				post[c.Path] = []interface{}{rediskey, c.MaxPerSec}
-			case "PUT":
-				put[c.Path] = []interface{}{rediskey, c.MaxPerSec}
-			case "PATCH":
-				patch[c.Path] = []interface{}{rediskey, c.MaxPerSec}
-			case "DELETE":
-				del[c.Path] = []interface{}{rediskey, c.MaxPerSec}
-			}
-		}
-	}
-	if old := atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&globalrateinstance.p)), unsafe.Pointer(p)); old != nil && (*redis.Pool)(old) != nil {
-		(*redis.Pool)(old).Close()
-	}
-	globalrateinstance.grpc = grpc
-	globalrateinstance.crpc = crpc
-	globalrateinstance.get = get
-	globalrateinstance.post = post
-	globalrateinstance.put = put
-	globalrateinstance.patch = patch
-	globalrateinstance.del = del
+	rateinstance.grpc = grpc
+	rateinstance.crpc = crpc
+	rateinstance.get = get
+	rateinstance.post = post
+	rateinstance.put = put
+	rateinstance.patch = patch
+	rateinstance.del = del
 }
 
-func checkrate(buf *ring.Ring[int64]) bool {
-	now := time.Now().UnixNano()
-	for {
-		if buf.Push(now) {
-			return true
-		}
-		//buf full,try to pop
-		if _, ok := buf.Pop(func(d int64) bool {
-			if now-d >= time.Second.Nanoseconds() {
-				return true
+func checkrate(ctx context.Context, info *rateinfo) (bool, error) {
+	if info.global == nil && info.single == nil {
+		//both single and global's config rate is 0
+		return false, nil
+	}
+	if info.global != nil && rateinstance.p == nil {
+		//didn't set the rate redis
+		return false, nil
+	}
+	//single first
+	if info.single != nil {
+		now := time.Now().UnixNano()
+		for {
+			if info.single.Push(now) {
+				break
 			}
-			return false
-		}); !ok {
-			//can't push and can't pop,buf is still full
-			break
+			//buf list full,try to pop
+			if _, ok := info.single.Pop(func(d int64) bool {
+				return now-d >= time.Second.Nanoseconds()
+			}); !ok {
+				//can't push and can't pop,buf list is still full
+				return false, nil
+			}
 		}
 	}
-	return false
+	//then global
+	if info.global == nil {
+		return true, nil
+	}
+	pass, e := rateinstance.p.RateLimitSecondMax(ctx, info.global[0].(string), info.global[1].(uint64))
+	if !pass && info.single != nil {
+		//when pass the single check,current time will be pushed into the buf list
+		//now the global check didn't pass,we need to return back the consumed rate
+		//but when return back the consumed rate,the oldest try will be poped
+		//so this is not fair,only the num can be returned,better then do nothing
+		info.single.Pop(nil)
+	}
+	return pass, e
 }
 
-func GrpcRate(ctx context.Context, path string, global bool) (bool, error) {
-	if global {
-		if globalrateinstance.p == nil || globalrateinstance.grpc == nil {
-			return false, nil
-		}
-		params, ok := globalrateinstance.grpc[path]
-		if !ok {
-			return false, nil
-		}
-		return globalrateinstance.p.RateLimitSecondMax(ctx, params[0].(string), params[1].(uint64))
-	} else {
-		if selfrateinstance.grpc == nil {
-			return false, nil
-		}
-		buf, ok := selfrateinstance.grpc[path]
-		if !ok {
-			return true, nil
-		}
-		return checkrate(buf), nil
+func GrpcRate(ctx context.Context, path string) (bool, error) {
+	if rateinstance.grpc == nil {
+		//didn't update the config
+		return false, nil
 	}
+	info, ok := rateinstance.grpc[path]
+	if !ok {
+		//missing config
+		return false, nil
+	}
+	return checkrate(ctx, info)
 }
-func CrpcRate(ctx context.Context, path string, global bool) (bool, error) {
-	if global {
-		if globalrateinstance.p == nil || globalrateinstance.crpc == nil {
-			return false, nil
-		}
-		params, ok := globalrateinstance.crpc[path]
-		if !ok {
-			return false, nil
-		}
-		return globalrateinstance.p.RateLimitSecondMax(ctx, params[0].(string), params[1].(uint64))
-	} else {
-		if selfrateinstance.crpc == nil {
-			return false, nil
-		}
-		buf, ok := selfrateinstance.crpc[path]
-		if !ok {
-			return true, nil
-		}
-		return checkrate(buf), nil
+func CrpcRate(ctx context.Context, path string) (bool, error) {
+	if rateinstance.crpc == nil {
+		//didn't update the config
+		return false, nil
 	}
+	info, ok := rateinstance.crpc[path]
+	if !ok {
+		//missing config
+		return false, nil
+	}
+	return checkrate(ctx, info)
 }
-func HttpGetRate(ctx context.Context, path string, global bool) (bool, error) {
-	if global {
-		if globalrateinstance.p == nil || globalrateinstance.get == nil {
-			return false, nil
-		}
-		params, ok := globalrateinstance.get[path]
-		if !ok {
-			return false, nil
-		}
-		return globalrateinstance.p.RateLimitSecondMax(ctx, params[0].(string), params[1].(uint64))
-	} else {
-		if selfrateinstance.get == nil {
-			return false, nil
-		}
-		buf, ok := selfrateinstance.get[path]
-		if !ok {
-			return true, nil
-		}
-		return checkrate(buf), nil
+func HttpGetRate(ctx context.Context, path string) (bool, error) {
+	if rateinstance.get == nil {
+		//didn't update the config
+		return false, nil
 	}
+	info, ok := rateinstance.get[path]
+	if !ok {
+		//missing config
+		return false, nil
+	}
+	return checkrate(ctx, info)
 }
-func HttpPostRate(ctx context.Context, path string, global bool) (bool, error) {
-	if global {
-		if globalrateinstance.p == nil || globalrateinstance.post == nil {
-			return false, nil
-		}
-		params, ok := globalrateinstance.post[path]
-		if !ok {
-			return false, nil
-		}
-		return globalrateinstance.p.RateLimitSecondMax(ctx, params[0].(string), params[1].(uint64))
-	} else {
-		if selfrateinstance.post == nil {
-			return false, nil
-		}
-		buf, ok := selfrateinstance.post[path]
-		if !ok {
-			return true, nil
-		}
-		return checkrate(buf), nil
+func HttpPostRate(ctx context.Context, path string) (bool, error) {
+	if rateinstance.post == nil {
+		//didn't update the config
+		return false, nil
 	}
+	info, ok := rateinstance.post[path]
+	if !ok {
+		//missing config
+		return false, nil
+	}
+	return checkrate(ctx, info)
 }
-func HttpPutRate(ctx context.Context, path string, global bool) (bool, error) {
-	if global {
-		if globalrateinstance.p == nil || globalrateinstance.put == nil {
-			return false, nil
-		}
-		params, ok := globalrateinstance.put[path]
-		if !ok {
-			return false, nil
-		}
-		return globalrateinstance.p.RateLimitSecondMax(ctx, params[0].(string), params[1].(uint64))
-	} else {
-		if selfrateinstance.put == nil {
-			return false, nil
-		}
-		buf, ok := selfrateinstance.put[path]
-		if !ok {
-			return true, nil
-		}
-		return checkrate(buf), nil
+func HttpPutRate(ctx context.Context, path string) (bool, error) {
+	if rateinstance.put == nil {
+		//didn't update the config
+		return false, nil
 	}
+	info, ok := rateinstance.put[path]
+	if !ok {
+		//missing config
+		return false, nil
+	}
+	return checkrate(ctx, info)
 }
-func HttpPatchRate(ctx context.Context, path string, global bool) (bool, error) {
-	if global {
-		if globalrateinstance.p == nil || globalrateinstance.patch == nil {
-			return false, nil
-		}
-		params, ok := globalrateinstance.patch[path]
-		if !ok {
-			return false, nil
-		}
-		return globalrateinstance.p.RateLimitSecondMax(ctx, params[0].(string), params[1].(uint64))
-	} else {
-		if selfrateinstance.patch == nil {
-			return false, nil
-		}
-		buf, ok := selfrateinstance.patch[path]
-		if !ok {
-			return true, nil
-		}
-		return checkrate(buf), nil
+func HttpPatchRate(ctx context.Context, path string) (bool, error) {
+	if rateinstance.patch == nil {
+		//didn't update the config
+		return false, nil
 	}
+	info, ok := rateinstance.patch[path]
+	if !ok {
+		//missing config
+		return false, nil
+	}
+	return checkrate(ctx, info)
 }
-func HttpDelRate(ctx context.Context, path string, global bool) (bool, error) {
-	if global {
-		if globalrateinstance.p == nil || globalrateinstance.del == nil {
-			return false, nil
-		}
-		params, ok := globalrateinstance.del[path]
-		if !ok {
-			return false, nil
-		}
-		return globalrateinstance.p.RateLimitSecondMax(ctx, params[0].(string), params[1].(uint64))
-	} else {
-		if selfrateinstance.del == nil {
-			return false, nil
-		}
-		buf, ok := selfrateinstance.del[path]
-		if !ok {
-			return true, nil
-		}
-		return checkrate(buf), nil
+func HttpDelRate(ctx context.Context, path string) (bool, error) {
+	if rateinstance.del == nil {
+		//didn't update the config
+		return false, nil
 	}
+	info, ok := rateinstance.del[path]
+	if !ok {
+		//missing config
+		return false, nil
+	}
+	return checkrate(ctx, info)
 }
