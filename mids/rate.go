@@ -2,9 +2,10 @@ package mids
 
 import (
 	"context"
-	"os"
 	"strings"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/chenjie199234/Corelib/container/ring"
 	"github.com/chenjie199234/Corelib/log"
@@ -30,20 +31,6 @@ var rateinstance *rate
 
 func init() {
 	rateinstance = &rate{}
-	str := os.Getenv("RATE_REDIS_URL")
-	if str == "" {
-		log.Warning(nil, "[rate] env RATE_REDIS_URL missing,all global rate check will be failed")
-		return
-	}
-	rateinstance.p = redis.NewRedis(&redis.Config{
-		RedisName:   "rate_redis",
-		URL:         str,
-		MaxOpen:     0,    //means no limit
-		MaxIdle:     1024, //the pool's buf
-		MaxIdletime: time.Minute,
-		ConnTimeout: time.Second * 5,
-		IOTimeout:   time.Second * 5,
-	})
 }
 
 type RateConfig struct {
@@ -57,7 +44,21 @@ type RateConfig struct {
 	GlobalMaxPerSec uint64 //all instances' rate
 }
 
-func UpdateRateConfig(c []*RateConfig) {
+func UpdateRateConfig(redisurl string, c []*RateConfig) {
+	var newp *redis.Pool
+	if redisurl != "" {
+		newp = redis.NewRedis(&redis.Config{
+			RedisName:   "rate_redis",
+			URL:         redisurl,
+			MaxOpen:     0,    //means no limit
+			MaxIdle:     1024, //the pool's buf
+			MaxIdletime: time.Minute,
+			ConnTimeout: time.Second * 5,
+			IOTimeout:   time.Second * 5,
+		})
+	} else {
+		log.Warning(nil, "[rate] redis url missing,all global rate check will be failed")
+	}
 	grpc := make(map[string]*rateinfo)  //key path
 	crpc := make(map[string]*rateinfo)  //key path
 	get := make(map[string]*rateinfo)   //key path
@@ -162,6 +163,10 @@ func UpdateRateConfig(c []*RateConfig) {
 			}
 		}
 	}
+	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.p)), unsafe.Pointer(newp)))
+	if oldp != nil {
+		oldp.Close()
+	}
 	rateinstance.grpc = grpc
 	rateinstance.crpc = crpc
 	rateinstance.get = get
@@ -171,14 +176,14 @@ func UpdateRateConfig(c []*RateConfig) {
 	rateinstance.del = del
 }
 
-func checkrate(ctx context.Context, info *rateinfo) (bool, error) {
+func checkrate(ctx context.Context, info *rateinfo) bool {
 	if info.global == nil && info.single == nil {
 		//both single and global's config rate is 0
-		return false, nil
+		return false
 	}
 	if info.global != nil && rateinstance.p == nil {
-		//didn't set the rate redis
-		return false, nil
+		log.Error(ctx, "[rate] config missing redis url,all global rate check will be failed")
+		return false
 	}
 	//single first
 	if info.single != nil {
@@ -192,15 +197,18 @@ func checkrate(ctx context.Context, info *rateinfo) (bool, error) {
 				return now-d >= time.Second.Nanoseconds()
 			}); !ok {
 				//can't push and can't pop,buf list is still full
-				return false, nil
+				return false
 			}
 		}
 	}
 	//then global
 	if info.global == nil {
-		return true, nil
+		return true
 	}
 	pass, e := rateinstance.p.RateLimitSecondMax(ctx, info.global[0].(string), info.global[1].(uint64))
+	if e != nil {
+		log.Error(ctx, "[rate] update redis global check data:", e)
+	}
 	if !pass && info.single != nil {
 		//when pass the single check,current time will be pushed into the buf list
 		//now the global check didn't pass,we need to return back the consumed rate
@@ -208,90 +216,97 @@ func checkrate(ctx context.Context, info *rateinfo) (bool, error) {
 		//so this is not fair,only the num can be returned,better then do nothing
 		info.single.Pop(nil)
 	}
-	return pass, e
+	return pass
 }
 
-func GrpcRate(ctx context.Context, path string) (bool, error) {
+func GrpcRate(ctx context.Context, path string) bool {
 	if rateinstance.grpc == nil {
+		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
-		return false, nil
+		return false
 	}
 	info, ok := rateinstance.grpc[path]
 	if !ok {
 		//missing config
-		return false, nil
+		return false
 	}
 	return checkrate(ctx, info)
 }
-func CrpcRate(ctx context.Context, path string) (bool, error) {
+func CrpcRate(ctx context.Context, path string) bool {
 	if rateinstance.crpc == nil {
+		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
-		return false, nil
+		return false
 	}
 	info, ok := rateinstance.crpc[path]
 	if !ok {
 		//missing config
-		return false, nil
+		return false
 	}
 	return checkrate(ctx, info)
 }
-func HttpGetRate(ctx context.Context, path string) (bool, error) {
+func HttpGetRate(ctx context.Context, path string) bool {
 	if rateinstance.get == nil {
+		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
-		return false, nil
+		return false
 	}
 	info, ok := rateinstance.get[path]
 	if !ok {
 		//missing config
-		return false, nil
+		return false
 	}
 	return checkrate(ctx, info)
 }
-func HttpPostRate(ctx context.Context, path string) (bool, error) {
+func HttpPostRate(ctx context.Context, path string) bool {
 	if rateinstance.post == nil {
+		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
-		return false, nil
+		return false
 	}
 	info, ok := rateinstance.post[path]
 	if !ok {
 		//missing config
-		return false, nil
+		return false
 	}
 	return checkrate(ctx, info)
 }
-func HttpPutRate(ctx context.Context, path string) (bool, error) {
+func HttpPutRate(ctx context.Context, path string) bool {
 	if rateinstance.put == nil {
+		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
-		return false, nil
+		return false
 	}
 	info, ok := rateinstance.put[path]
 	if !ok {
 		//missing config
-		return false, nil
+		return false
 	}
 	return checkrate(ctx, info)
 }
-func HttpPatchRate(ctx context.Context, path string) (bool, error) {
+func HttpPatchRate(ctx context.Context, path string) bool {
 	if rateinstance.patch == nil {
+		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
-		return false, nil
+		return false
 	}
 	info, ok := rateinstance.patch[path]
 	if !ok {
 		//missing config
-		return false, nil
+		return false
 	}
 	return checkrate(ctx, info)
 }
-func HttpDelRate(ctx context.Context, path string) (bool, error) {
+func HttpDelRate(ctx context.Context, path string) bool {
 	if rateinstance.del == nil {
+		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
-		return false, nil
+		return false
 	}
 	info, ok := rateinstance.del[path]
 	if !ok {
 		//missing config
-		return false, nil
+		return false
 	}
 	return checkrate(ctx, info)
 }

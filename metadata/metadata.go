@@ -29,7 +29,7 @@ func SetMetadata(ctx context.Context, metadata map[string]string) context.Contex
 	return context.WithValue(ctx, metadatakey{}, metadata)
 }
 
-//this will overwrite dst's metadata
+// this will overwrite dst's metadata
 func CopyMetadata(src, dst context.Context) (context.Context, bool) {
 	if dst == nil {
 		dst = context.Background()

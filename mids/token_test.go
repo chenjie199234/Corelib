@@ -1,24 +1,27 @@
 package mids
 
 import (
+	"context"
 	"testing"
 	"time"
 )
 
 func Test_Token(t *testing.T) {
-	now := time.Now()
-	tokenstr := MakeToken("sec", "corelib", "ali", "test", "data", uint64(now.Unix()), uint64(now.Add(time.Second).Unix()))
-	_, e := VerifyToken("sec1", tokenstr)
-	if e == nil {
-		panic("should not verify token success")
+	UpdateTokenConfig("123", time.Second)
+	tokenstr := MakeToken(context.Background(), "corelib", "ali", "test", "data")
+	token := VerifyToken(context.Background(), tokenstr)
+	if token == nil {
+		t.Fatal("should verify token success")
 	}
-	_, e = VerifyToken("sec", tokenstr)
-	if e != nil {
-		panic("should verify token success")
+	UpdateTokenConfig("abc", time.Second)
+	token = VerifyToken(context.Background(), tokenstr)
+	if token != nil {
+		t.Fatal("should not verify token success")
 	}
+	UpdateTokenConfig("123", time.Second)
 	time.Sleep(time.Second * 2)
-	_, e = VerifyToken("sec", tokenstr)
-	if e == nil {
-		panic("should not verify token success")
+	token = VerifyToken(context.Background(), tokenstr)
+	if token != nil {
+		t.Fatal("should not verify token success")
 	}
 }

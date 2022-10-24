@@ -121,6 +121,7 @@ const textapp = `{
 		"SingleMaxPerSec":10,
 		"GlobalMaxPerSec":0
 	}],
+	"rate_redis_url":"[redis/rediss]://[[username:]password@]host[/dbindex]",
 	"web_path_rewrite":{
 		"GET":{
 			"/example/origin/url":"/example/new/url"
@@ -134,8 +135,9 @@ const textapp = `{
 			"specific_access_id":"specific_access_key"
 		}
 	},
+	"session_redis_url":"[redis/rediss]://[[username:]password@]host[/dbindex]"
 	"token_secret":"test",
-	"token_expire":"24h",
+	"session_token_expire":"24h",
 	"service":{
 
 	}

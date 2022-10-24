@@ -1,11 +1,8 @@
 package mids
 
 import (
-	"os"
-
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/cgrpc"
-	"github.com/chenjie199234/Corelib/log"
 	publicmids "github.com/chenjie199234/Corelib/mids"
 )
 
@@ -18,6 +15,7 @@ func init() {
 	all["rate"] = rate
 	all["accesskey"] = accesskey
 	all["token"] = token
+	all["session"] = session
 }
 
 func AllMids() map[string]cgrpc.OutsideHandler {
@@ -29,10 +27,7 @@ func RegMid(name string, handler cgrpc.OutsideHandler) {
 	all[name] = handler
 }
 func rate(ctx *cgrpc.Context) {
-	if pass, e := publicmids.GrpcRate(ctx, ctx.GetPath()); e != nil {
-		log.Error(ctx, "[mids.rate] path:", ctx.GetPath(), "method: GRPC", e)
-		ctx.Abort(cerror.ErrBusy)
-	} else if !pass {
+	if pass := publicmids.GrpcRate(ctx, ctx.GetPath()); !pass {
 		ctx.Abort(cerror.ErrBusy)
 	}
 }
@@ -50,14 +45,32 @@ func accesskey(ctx *cgrpc.Context) {
 func token(ctx *cgrpc.Context) {
 	md := ctx.GetMetadata()
 	tokenstr := md["Authorization"]
-	secret := os.Getenv("TOKEN_SECRET")
-	t, e := publicmids.VerifyToken(secret, tokenstr)
-	if e != nil {
-		ctx.Abort(e)
+	if tokenstr == "" {
+		ctx.Abort(cerror.ErrAuth)
+		return
+	}
+	t := publicmids.VerifyToken(ctx, tokenstr)
+	if t == nil {
+		ctx.Abort(cerror.ErrAuth)
 		return
 	}
 	md["Token-DeployEnv"] = t.DeployEnv
 	md["Token-RunEnv"] = t.RunEnv
 	md["Token-Puber"] = t.Puber
 	md["Token-Data"] = t.Data
+}
+func session(ctx *cgrpc.Context) {
+	md := ctx.GetMetadata()
+	userid := md["Session-UID"]
+	sessionid := md["Session-SID"]
+	if userid == "" || sessionid == "" {
+		ctx.Abort(cerror.ErrAuth)
+		return
+	}
+	pass, sessiondata := publicmids.VerifySession(ctx, userid, sessionid)
+	if !pass {
+		ctx.Abort(cerror.ErrAuth)
+		return
+	}
+	md["Session-Data"] = sessiondata
 }

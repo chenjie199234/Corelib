@@ -35,8 +35,10 @@ func main() {
 		xgrpc.UpdateHandlerTimeout(ac.HandlerTimeout)
 		xweb.UpdateHandlerTimeout(ac.HandlerTimeout)
 		xweb.UpdateWebPathRewrite(ac.WebPathRewrite)
-		publicmids.UpdateRateConfig(ac.HandlerRate)
+		publicmids.UpdateRateConfig(ac.RateRedisUrl, ac.HandlerRate)
 		publicmids.UpdateAccessKeyConfig(ac.Accesses)
+		publicmids.UpdateTokenConfig(ac.Token, ac.SessionTokenExpire.StdDuration())
+		publicmids.UpdateSessionConfig(ac.SessionRedisUrl, ac.SessionTokenExpire.StdDuration())
 	})
 	defer config.Close()
 	//start the whole business service

@@ -2,10 +2,8 @@ package mids
 
 import (
 	"net/http"
-	"os"
 
 	"github.com/chenjie199234/Corelib/cerror"
-	"github.com/chenjie199234/Corelib/log"
 	publicmids "github.com/chenjie199234/Corelib/mids"
 	"github.com/chenjie199234/Corelib/web"
 )
@@ -19,6 +17,7 @@ func init() {
 	all["rate"] = rate
 	all["accesskey"] = accesskey
 	all["token"] = token
+	all["session"] = session
 }
 
 func AllMids() map[string]web.OutsideHandler {
@@ -32,38 +31,23 @@ func RegMid(name string, handler web.OutsideHandler) {
 func rate(ctx *web.Context) {
 	switch ctx.GetMethod() {
 	case http.MethodGet:
-		if pass, e := publicmids.HttpGetRate(ctx, ctx.GetPath()); e != nil {
-			log.Error(ctx, "[mids.rate] path:", ctx.GetPath(), "method: GET", e)
-			ctx.Abort(cerror.ErrBusy)
-		} else if !pass {
+		if pass := publicmids.HttpGetRate(ctx, ctx.GetPath()); !pass {
 			ctx.Abort(cerror.ErrBusy)
 		}
 	case http.MethodPost:
-		if pass, e := publicmids.HttpPostRate(ctx, ctx.GetPath()); e != nil {
-			log.Error(ctx, "[mids.rate] path:", ctx.GetPath(), "method: POST", e)
-			ctx.Abort(cerror.ErrBusy)
-		} else if !pass {
+		if pass := publicmids.HttpPostRate(ctx, ctx.GetPath()); !pass {
 			ctx.Abort(cerror.ErrBusy)
 		}
 	case http.MethodPut:
-		if pass, e := publicmids.HttpPutRate(ctx, ctx.GetPath()); e != nil {
-			log.Error(ctx, "[mids.rate] path:", ctx.GetPath(), "method: PUT", e)
-			ctx.Abort(cerror.ErrBusy)
-		} else if !pass {
+		if pass := publicmids.HttpPutRate(ctx, ctx.GetPath()); !pass {
 			ctx.Abort(cerror.ErrBusy)
 		}
 	case http.MethodPatch:
-		if pass, e := publicmids.HttpPatchRate(ctx, ctx.GetPath()); e != nil {
-			log.Error(ctx, "[mids.rate] path:", ctx.GetPath(), "method: PATCH", e)
-			ctx.Abort(cerror.ErrBusy)
-		} else if !pass {
+		if pass := publicmids.HttpPatchRate(ctx, ctx.GetPath()); !pass {
 			ctx.Abort(cerror.ErrBusy)
 		}
 	case http.MethodDelete:
-		if pass, e := publicmids.HttpDelRate(ctx, ctx.GetPath()); e != nil {
-			log.Error(ctx, "[mids.rate] path:", ctx.GetPath(), "method: DELETE", e)
-			ctx.Abort(cerror.ErrBusy)
-		} else if !pass {
+		if pass := publicmids.HttpDelRate(ctx, ctx.GetPath()); !pass {
 			ctx.Abort(cerror.ErrBusy)
 		}
 	default:
@@ -87,21 +71,53 @@ func accesskey(ctx *web.Context) {
 	}
 }
 func token(ctx *web.Context) {
-	tokenstr := ctx.GetHeader("Authorization")
-	secret := os.Getenv("TOKEN_SECRET")
 	md := ctx.GetMetadata()
+	tokenstr := ctx.GetHeader("Authorization")
 	if tokenstr == "" {
 		tokenstr = md["Authorization"]
 	} else {
 		md["Authorization"] = tokenstr
 	}
-	t, e := publicmids.VerifyToken(secret, tokenstr)
-	if e != nil {
-		ctx.Abort(e)
+	if tokenstr == "" {
+		ctx.Abort(cerror.ErrAuth)
+		return
+	}
+	t := publicmids.VerifyToken(ctx, tokenstr)
+	if t == nil {
+		ctx.Abort(cerror.ErrAuth)
 		return
 	}
 	md["Token-DeployEnv"] = t.DeployEnv
 	md["Token-RunEnv"] = t.RunEnv
 	md["Token-Puber"] = t.Puber
 	md["Token-Data"] = t.Data
+}
+func session(ctx *web.Context) {
+	md := ctx.GetMetadata()
+	userid := ctx.GetHeader("Session-UID")
+	if userid == "" {
+		userid = md["Session-UID"]
+	} else {
+		md["Session-UID"] = userid
+	}
+	if userid == "" {
+		ctx.Abort(cerror.ErrAuth)
+		return
+	}
+	sessionid := ctx.GetHeader("Session-SID")
+	if sessionid == "" {
+		sessionid = md["Session-SID"]
+	} else {
+		md["Session-SID"] = sessionid
+	}
+	if sessionid == "" {
+		ctx.Abort(cerror.ErrAuth)
+		return
+	}
+	pass, sessiondata := publicmids.VerifySession(ctx, userid, sessionid)
+	if !pass {
+		ctx.Abort(cerror.ErrAuth)
+		return
+	}
+	md["Session-Data"] = sessiondata
 }
