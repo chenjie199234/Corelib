@@ -135,7 +135,7 @@ const textapp = `{
 			"specific_access_id":"specific_access_key"
 		}
 	},
-	"session_redis_url":"[redis/rediss]://[[username:]password@]host[/dbindex]"
+	"session_redis_url":"[redis/rediss]://[[username:]password@]host[/dbindex]",
 	"token_secret":"test",
 	"session_token_expire":"24h",
 	"service":{
