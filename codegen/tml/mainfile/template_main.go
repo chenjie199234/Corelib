@@ -37,7 +37,7 @@ func main() {
 		xweb.UpdateWebPathRewrite(ac.WebPathRewrite)
 		publicmids.UpdateRateConfig(ac.RateRedisUrl, ac.HandlerRate)
 		publicmids.UpdateAccessKeyConfig(ac.Accesses)
-		publicmids.UpdateTokenConfig(ac.Token, ac.SessionTokenExpire.StdDuration())
+		publicmids.UpdateTokenConfig(ac.TokenSecret, ac.SessionTokenExpire.StdDuration())
 		publicmids.UpdateSessionConfig(ac.SessionRedisUrl, ac.SessionTokenExpire.StdDuration())
 	})
 	defer config.Close()
