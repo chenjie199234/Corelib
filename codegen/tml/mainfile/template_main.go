@@ -36,7 +36,7 @@ func main() {
 		xweb.UpdateHandlerTimeout(ac.HandlerTimeout)
 		xweb.UpdateWebPathRewrite(ac.WebPathRewrite)
 		publicmids.UpdateRateConfig(ac.RateRedisUrl, ac.HandlerRate)
-		publicmids.UpdateAccessKeyConfig(ac.Accesses)
+		publicmids.UpdateAccessConfig(ac.Accesses)
 		publicmids.UpdateTokenConfig(ac.TokenSecret, ac.SessionTokenExpire.StdDuration())
 		publicmids.UpdateSessionConfig(ac.SessionRedisUrl, ac.SessionTokenExpire.StdDuration())
 	})

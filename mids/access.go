@@ -8,26 +8,26 @@ import (
 )
 
 type access struct {
-	seckeys map[string]map[string]string //first key path,second key accessid,value accesskey
+	accesses map[string]map[string]string //first key path,second key accessid,value accesskey
 }
 
 var accessInstance *access
 
 func init() {
 	accessInstance = &access{
-		seckeys: make(map[string]map[string]string),
+		accesses: make(map[string]map[string]string),
 	}
 }
 
 // first key path,second key secid,value seckey
-func UpdateAccessKeyConfig(seckeys map[string]map[string]string) {
-	accessInstance.seckeys = seckeys
+func UpdateAccessConfig(accesses map[string]map[string]string) {
+	accessInstance.accesses = accesses
 }
 
 func AccessKeyCheck(path string, accesskey string) bool {
-	sec, ok := accessInstance.seckeys[path]
+	sec, ok := accessInstance.accesses[path]
 	if !ok {
-		sec, ok = accessInstance.seckeys["default"]
+		sec, ok = accessInstance.accesses["default"]
 		if !ok {
 			return false
 		}
@@ -40,9 +40,9 @@ func AccessKeyCheck(path string, accesskey string) bool {
 	return false
 }
 func AccessSignCheck(path, accessid, data, sign string, hs []hash.Hash) bool {
-	sec, ok := accessInstance.seckeys[path]
+	sec, ok := accessInstance.accesses[path]
 	if !ok {
-		sec, ok = accessInstance.seckeys["default"]
+		sec, ok = accessInstance.accesses["default"]
 		if !ok {
 			return false
 		}

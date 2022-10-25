@@ -6,7 +6,7 @@ import "crypto/sha256"
 import "hash"
 
 func Test_Accesskey(t *testing.T) {
-	UpdateAccessKeyConfig(map[string]map[string]string{"/abc": {"1": "1", "2": "2"}})
+	UpdateAccessConfig(map[string]map[string]string{"/abc": {"1": "1", "2": "2"}})
 	if AccessKeyCheck("/a", "abc") {
 		panic("should not pass the access key check")
 	}
@@ -21,7 +21,7 @@ func Test_Accesskey(t *testing.T) {
 	}
 }
 func Test_Accesssign(t *testing.T) {
-	UpdateAccessKeyConfig(map[string]map[string]string{"/abc": {"1": "1", "2": "2"}})
+	UpdateAccessConfig(map[string]map[string]string{"/abc": {"1": "1", "2": "2"}})
 	s := AccessSignMake("/abc", "1", "test", []hash.Hash{md5.New(), sha256.New()})
 	if !AccessSignCheck("/abc", "1", "test", s, []hash.Hash{md5.New(), sha256.New()}) {
 		panic("should pass the access sign check")
