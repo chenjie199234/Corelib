@@ -32,11 +32,11 @@ redis.call("EXPIRE",KEYS[1],16)`
 
 var hexpireTemporaryMQ = ""
 
-//in redis cluster mode,group is used to shard data into different redis node
-//in redis slave master mode,group is better to be 1
-//sub and pub's group should be same
-//stop will stop the sub immediately,the mq's empty or not will not effect the stop
-//so there maybe data left in the mq,and it will be expired within 16s
+// in redis cluster mode,group is used to shard data into different redis node
+// in redis slave master mode,group is better to be 1
+// sub and pub's group should be same
+// stop will stop the sub immediately,the mq's empty or not will not effect the stop
+// so there maybe data left in the mq,and it will be expired within 16s
 func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)) (stop func(), e error) {
 	if name == "" {
 		return nil, ErrTemporaryMQMissingName
@@ -56,7 +56,7 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 				c, e := p.p.GetContext(context.Background())
 				if e != nil {
 					err = e
-					log.Error(nil, "[redis.TemporaryMQ.update] index:", index, "get connection error:", e)
+					log.Error(nil, "[redis.TemporaryMQ.update] index:", index, "get connection:", e)
 					return
 				}
 				defer c.Close()
@@ -65,7 +65,7 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 				}
 				if e != nil {
 					err = e
-					log.Error(nil, "[redis.TemporaryMQ.update] index:", index, "error:", e)
+					log.Error(nil, "[redis.TemporaryMQ.update] index:", index, e)
 				}
 			}(i)
 			if i%20 == 19 {
@@ -90,13 +90,13 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 				c, e := p.p.GetContext(context.Background())
 				if e != nil {
 					err = e
-					log.Error(nil, "[redis.TemporaryMQ.stop] index:", index, "get connection error:", e)
+					log.Error(nil, "[redis.TemporaryMQ.stop] index:", index, "get connection:", e)
 					return
 				}
 				defer c.Close()
 				if _, e = c.(redis.ConnWithContext).DoContext(ctx, "DEL", listexist); e != nil {
 					err = e
-					log.Error(nil, "[redis.TemporaryMQ.stop] index:", index, "error:", e)
+					log.Error(nil, "[redis.TemporaryMQ.stop] index:", index, e)
 				}
 			}(i)
 			if i%20 == 19 {
@@ -168,9 +168,8 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 					return
 				default:
 				}
-				c, e = redis.DialURL(p.c.URL, redis.DialConnectTimeout(p.c.ConnTimeout), redis.DialReadTimeout(p.c.IOTimeout), redis.DialWriteTimeout(p.c.IOTimeout))
-				if e != nil {
-					log.Error(nil, "[redis.TemporaryMQ.sub] dial error:", e)
+				if c, e = p.p.GetContext(context.Background()); e != nil {
+					log.Error(nil, "[redis.TemporaryMQ.sub] get redis connection:", e)
 					continue
 				}
 				lker.Lock()
@@ -190,10 +189,10 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 						select {
 						case <-cleanch:
 							if ee := errors.Unwrap(e); ee == nil || ee != net.ErrClosed {
-								log.Error(nil, "[redis.TemporaryMQ.sub] index:", index, "error:", e)
+								log.Error(nil, "[redis.TemporaryMQ.sub] index:", index, e)
 							}
 						default:
-							log.Error(nil, "[redis.TemporaryMQ.sub] index:", index, "error:", e)
+							log.Error(nil, "[redis.TemporaryMQ.sub] index:", index, e)
 						}
 						break
 					}
@@ -224,9 +223,9 @@ return #ARGV`
 
 var hpubTemporaryMQ = ""
 
-//in redis cluster mode,group is used to shard data into different redis node
-//in redis slave master mode,group is better to be 1
-//sub and pub's group should be same
+// in redis cluster mode,group is used to shard data into different redis node
+// in redis slave master mode,group is better to be 1
+// sub and pub's group should be same
 func (p *Pool) TemporaryMQPub(ctx context.Context, name string, group uint64, key string, value ...[]byte) error {
 	if len(value) == 0 {
 		return nil

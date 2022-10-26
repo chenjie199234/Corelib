@@ -40,6 +40,7 @@ func NewRedis(c *Config) *Pool {
 		c: &Config{
 			RedisName:   c.RedisName,
 			URL:         c.URL,
+			MaxIdle:     c.MaxIdle,
 			MaxOpen:     c.MaxOpen,
 			MaxIdletime: c.MaxIdletime,
 			ConnTimeout: c.ConnTimeout,
