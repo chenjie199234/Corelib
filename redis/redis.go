@@ -4,14 +4,12 @@ import (
 	"context"
 	"time"
 
-	// "github.com/chenjie199234/Corelib/trace"
-
 	"github.com/gomodule/redigo/redis"
 )
 
 type Pool struct {
-	c *Config
-	p *redis.Pool
+	redisname string
+	p         *redis.Pool
 }
 
 type Conn struct {
@@ -37,15 +35,7 @@ var ErrPoolExhausted = redis.ErrPoolExhausted
 
 func NewRedis(c *Config) *Pool {
 	return &Pool{
-		c: &Config{
-			RedisName:   c.RedisName,
-			URL:         c.URL,
-			MaxIdle:     c.MaxIdle,
-			MaxOpen:     c.MaxOpen,
-			MaxIdletime: c.MaxIdletime,
-			ConnTimeout: c.ConnTimeout,
-			IOTimeout:   c.IOTimeout,
-		},
+		redisname: c.RedisName,
 		p: &redis.Pool{
 			DialContext: func(ctx context.Context) (redis.Conn, error) {
 				conn, e := redis.DialURL(c.URL, redis.DialConnectTimeout(c.ConnTimeout), redis.DialReadTimeout(c.IOTimeout), redis.DialWriteTimeout(c.IOTimeout))

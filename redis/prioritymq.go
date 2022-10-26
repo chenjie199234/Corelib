@@ -28,7 +28,7 @@ func init() {
 
 var ErrPriorityMQMissingGroup = errors.New("priority mq missing group")
 
-//priority - the bigger the number is ranked previous
+// priority - the bigger the number is ranked previous
 func (p *Pool) PriorityMQSetTask(ctx context.Context, group, taskname string, priority uint64) error {
 	if group == "" {
 		return ErrPriorityMQMissingGroup
@@ -55,7 +55,7 @@ func (p *Pool) PriorityMQInterrupt(ctx context.Context, group, taskname string) 
 	return e
 }
 
-//return key - taskname,value - priority
+// return key - taskname,value - priority
 func (p *Pool) PriorityMQGetCurTasks(ctx context.Context, group string) (map[string]uint64, error) {
 	c, e := p.p.GetContext(ctx)
 	if e != nil {
@@ -87,9 +87,9 @@ redis.call("DEL",KEYS[2])
 return 1`
 var hfinishprioritymq = ""
 
-//this function should be call by the puber
-//return 1 means task finished
-//return 0 means task still working
+// this function should be call by the puber
+// return 1 means task finished
+// return 0 means task still working
 func (p *Pool) PriorityMQFinishTask(ctx context.Context, group, taskname string, topicnames ...string) (int, error) {
 	if len(topicnames) == 0 {
 		return 0, nil
