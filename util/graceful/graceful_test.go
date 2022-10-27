@@ -20,12 +20,12 @@ func Test_Graceful(t *testing.T) {
 	closenum := int32(0)
 	go func() {
 		defer wg.Done()
-		g.Close()
+		g.Close(nil, nil)
 		atomic.AddInt32(&closenum, 1)
 	}()
 	go func() {
 		defer wg.Done()
-		g.Close()
+		g.Close(nil, nil)
 		atomic.AddInt32(&closenum, 1)
 	}()
 	wg.Wait()

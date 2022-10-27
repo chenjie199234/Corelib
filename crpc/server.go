@@ -5,11 +5,9 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"errors"
-	"math"
 	"runtime"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -18,9 +16,9 @@ import (
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
-
 	"google.golang.org/protobuf/proto"
 )
 
@@ -49,8 +47,7 @@ type CrpcServer struct {
 	handler        map[string]func(context.Context, *stream.Peer, *Msg)
 	handlerTimeout map[string]time.Duration
 	instance       *stream.Instance
-	closewait      *sync.WaitGroup
-	totalreqnum    int32
+	stop           *graceful.Graceful
 }
 type client struct {
 	sync.RWMutex
@@ -74,7 +71,7 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 		ctxpool:        &sync.Pool{},
 		handler:        make(map[string]func(context.Context, *stream.Peer, *Msg), 10),
 		handlerTimeout: make(map[string]time.Duration),
-		closewait:      &sync.WaitGroup{},
+		stop:           graceful.New(),
 	}
 	if len(c.Certs) != 0 {
 		certificates := make([]tls.Certificate, 0, len(c.Certs))
@@ -87,7 +84,6 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 		}
 		serverinstance.tlsc = &tls.Config{Certificates: certificates}
 	}
-	serverinstance.closewait.Add(1)
 	instancec := &stream.InstanceConfig{
 		HeartprobeInterval: c.HeartPorbe,
 		TcpC: &stream.TcpConfig{
@@ -112,53 +108,30 @@ func (s *CrpcServer) StartCrpcServer(listenaddr string) error {
 	}
 	return e
 }
-func (s *CrpcServer) StopCrpcServer() {
-	defer func() {
-		s.closewait.Wait()
-		s.instance.Stop()
-	}()
-	s.instance.PreStop()
-	var old int32
-	for {
-		old = atomic.LoadInt32(&s.totalreqnum)
-		if old >= 0 {
-			if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old-math.MaxInt32) {
-				break
-			}
-		} else {
-			return
-		}
-	}
-	//tel all peers self closed
-	s.instance.RangePeers(func(p *stream.Peer) {
-		if tmpdata := p.GetData(); tmpdata != nil {
-			c := (*client)(tmpdata)
-			c.RLock()
-			d, _ := proto.Marshal(&Msg{
-				Callid: c.maxcallid + 1,
-				Error:  cerror.ErrClosing,
-			})
-			c.maxcallid = 0
-			p.SendMessage(nil, d, nil, nil)
-			c.RUnlock()
-		}
-	})
-	//if there are calls,done status will be checked when each call finishes
-	//this is used to prevent there are no calls
-	if old == 0 {
-		s.closewait.Done()
-	}
-}
 func (s *CrpcServer) GetClientNum() int32 {
 	return s.instance.GetPeerNum()
 }
-func (s *CrpcServer) GetReqNum() int32 {
-	totalreqnum := atomic.LoadInt32(&s.totalreqnum)
-	if totalreqnum < 0 {
-		return totalreqnum + math.MaxInt32
-	} else {
-		return totalreqnum
-	}
+func (s *CrpcServer) GetReqNum() int64 {
+	return s.stop.GetNum()
+}
+func (s *CrpcServer) StopCrpcServer() {
+	s.instance.PreStop()
+	s.stop.Close(func() {
+		//tel all peers self closed
+		s.instance.RangePeers(func(p *stream.Peer) {
+			if tmpdata := p.GetData(); tmpdata != nil {
+				c := (*client)(tmpdata)
+				c.RLock()
+				d, _ := proto.Marshal(&Msg{
+					Callid: c.maxcallid + 1,
+					Error:  cerror.ErrClosing,
+				})
+				c.maxcallid = 0
+				p.SendMessage(nil, d, nil, nil)
+				c.RUnlock()
+			}
+		})
+	}, s.instance.Stop)
 }
 
 // key path,value timeout(if timeout <= 0 means no timeout)
@@ -281,8 +254,8 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 
 // return false will close the connection
 func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]byte, bool) {
-	if atomic.LoadInt32(&s.totalreqnum) < 0 {
-		//self closed
+	if s.stop.Closing() {
+		//self closing
 		return nil, false
 	}
 	if common.Byte2str(peerVerifyData) != s.selfappname {
@@ -293,7 +266,7 @@ func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]b
 
 // return false will close the connection
 func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
-	if atomic.LoadInt32(&s.totalreqnum) < 0 {
+	if s.stop.Closing() {
 		//tel all peers self closed
 		d, _ := proto.Marshal(&Msg{
 			Callid: 0,
@@ -354,27 +327,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	} else {
 		tracectx = log.InitTrace(p, msg.Tracedata["Traceid"], s.selfappname, host.Hostip, "CRPC", msg.Path, clientdeep)
 	}
-	for {
-		old := atomic.LoadInt32(&s.totalreqnum)
-		if old < 0 {
-			//tell peer self closed
-			msg.Path = ""
-			msg.Deadline = 0
-			msg.Body = nil
-			msg.Error = cerror.ErrClosing
-			msg.Metadata = nil
-			msg.Tracedata = nil
-			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(tracectx, d, nil, nil); e != nil {
-				log.Error(tracectx, "[crpc.server.userfunc] send message to client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "error:", e)
-			}
-			return
-		}
-		//add req num
-		if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old+1) {
-			break
-		}
-	}
+
 	c.Lock()
 	if c.maxcallid == 0 {
 		c.Unlock()
@@ -389,8 +342,20 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		if e := p.SendMessage(tracectx, d, nil, nil); e != nil {
 			log.Error(tracectx, "[crpc.server.userfunc] send messge to client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "error:", e)
 		}
-		if atomic.AddInt32(&s.totalreqnum, -1) == -math.MaxInt32 {
-			s.closewait.Done()
+		return
+	}
+	if !s.stop.AddOne() {
+		c.Unlock()
+		//tell peer self closed
+		msg.Path = ""
+		msg.Deadline = 0
+		msg.Body = nil
+		msg.Error = cerror.ErrClosing
+		msg.Metadata = nil
+		msg.Tracedata = nil
+		d, _ := proto.Marshal(msg)
+		if e := p.SendMessage(tracectx, d, nil, nil); e != nil {
+			log.Error(tracectx, "[crpc.server.userfunc] send message to client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "error:", e)
 		}
 		return
 	}
@@ -425,9 +390,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			delete(c.calls, msg.Callid)
 		}
 		c.Unlock()
-		if atomic.AddInt32(&s.totalreqnum, -1) == -math.MaxInt32 {
-			s.closewait.Done()
-		}
+		s.stop.DoneOne()
 	}()
 }
 func (s *CrpcServer) offlinefunc(p *stream.Peer) {

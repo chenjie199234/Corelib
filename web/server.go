@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"math"
 	"net"
 	"net/http"
 	"runtime"
@@ -20,6 +19,7 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
 	"golang.org/x/net/http2"
@@ -156,9 +156,9 @@ type WebServer struct {
 	global         []OutsideHandler
 	r              *router
 	s              *http.Server
-	closewait      *sync.WaitGroup
-	closewaittimer *time.Timer
-	totalreqnum    int32
+	clientnum      int32
+	stop           *graceful.Graceful
+	closetimer     *time.Timer
 }
 
 func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, error) {
@@ -179,28 +179,35 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		ctxpool:        &sync.Pool{},
 		global:         make([]OutsideHandler, 0, 10),
 		r:              newRouter(c.SrcRoot),
-		s: &http.Server{
-			ReadTimeout:    c.ConnectTimeout,
-			IdleTimeout:    c.IdleTimeout,
-			MaxHeaderBytes: int(c.MaxHeader),
-			ConnContext: func(ctx context.Context, conn net.Conn) context.Context {
-				if c.HeartProbe > 0 {
-					if len(c.Certs) > 0 {
-						((conn.(*tls.Conn)).NetConn().(*net.TCPConn)).SetKeepAlive(true)
-						((conn.(*tls.Conn)).NetConn().(*net.TCPConn)).SetKeepAlivePeriod(c.HeartProbe)
-					} else {
-						(conn.(*net.TCPConn)).SetKeepAlive(true)
-						(conn.(*net.TCPConn)).SetKeepAlivePeriod(c.HeartProbe)
-					}
-				}
-				localaddr := conn.LocalAddr().String()
-				return context.WithValue(ctx, localport{}, localaddr[strings.LastIndex(localaddr, ":")+1:])
-			},
-		},
-		closewait:      &sync.WaitGroup{},
-		closewaittimer: time.NewTimer(0),
+		stop:           graceful.New(),
+		closetimer:     time.NewTimer(0),
 	}
-	<-instance.closewaittimer.C
+	<-instance.closetimer.C
+	instance.s = &http.Server{
+		ReadTimeout:    c.ConnectTimeout,
+		IdleTimeout:    c.IdleTimeout,
+		MaxHeaderBytes: int(c.MaxHeader),
+		ConnState: func(c net.Conn, s http.ConnState) {
+			if s == http.StateNew {
+				atomic.AddInt32(&instance.clientnum, 1)
+			} else if s == http.StateHijacked || s == http.StateClosed {
+				atomic.AddInt32(&instance.clientnum, -1)
+			}
+		},
+		ConnContext: func(ctx context.Context, conn net.Conn) context.Context {
+			if c.HeartProbe > 0 {
+				if len(c.Certs) > 0 {
+					((conn.(*tls.Conn)).NetConn().(*net.TCPConn)).SetKeepAlive(true)
+					((conn.(*tls.Conn)).NetConn().(*net.TCPConn)).SetKeepAlivePeriod(c.HeartProbe)
+				} else {
+					(conn.(*net.TCPConn)).SetKeepAlive(true)
+					(conn.(*net.TCPConn)).SetKeepAlivePeriod(c.HeartProbe)
+				}
+			}
+			localaddr := conn.LocalAddr().String()
+			return context.WithValue(ctx, localport{}, localaddr[strings.LastIndex(localaddr, ":")+1:])
+		},
+	}
 	if c.HeartProbe < 0 {
 		instance.s.SetKeepAlivesEnabled(false)
 	} else {
@@ -217,7 +224,6 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		}
 		instance.s.TLSConfig = &tls.Config{Certificates: certificates}
 	}
-	instance.closewait.Add(1)
 	instance.r.notFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
@@ -292,6 +298,12 @@ func (s *WebServer) StartWebServer(listenaddr string) error {
 	}
 	return nil
 }
+func (s *WebServer) GetClientNum() int32 {
+	return s.clientnum
+}
+func (s *WebServer) GetReqNum() int64 {
+	return s.stop.GetNum()
+}
 
 // thread unsafe
 func (s *WebServer) ReplaceAllPath(newserver *WebServer) {
@@ -306,29 +318,11 @@ func (s *WebServer) ReplaceAllPath(newserver *WebServer) {
 	}
 }
 func (s *WebServer) StopWebServer() {
-	defer s.closewait.Wait()
-	for {
-		old := atomic.LoadInt32(&s.totalreqnum)
-		if old >= 0 {
-			if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old-math.MaxInt32) {
-				break
-			}
-		} else {
-			return
-		}
-	}
+	s.stop.Close(nil, nil)
 	//wait at least this.c.WaitCloseTime before stop the under layer socket
-	s.closewaittimer.Reset(s.c.WaitCloseTime)
-	for {
-		<-s.closewaittimer.C
-		if atomic.LoadInt32(&s.totalreqnum) != -math.MaxInt32 {
-			s.closewaittimer.Reset(s.c.WaitCloseTime)
-		} else {
-			s.s.Shutdown(context.Background())
-			s.closewait.Done()
-			return
-		}
-	}
+	s.closetimer.Reset(s.c.WaitCloseTime)
+	<-s.closetimer.C
+	s.s.Shutdown(context.Background())
 }
 
 // key origin url,value new url
@@ -460,32 +454,6 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 				headers.Set("Access-Control-Expose-Headers", s.c.Cors.exposestr)
 			}
 		}
-		//check server status
-		for {
-			old := atomic.LoadInt32(&s.totalreqnum)
-			if old >= 0 {
-				//add req num
-				if atomic.CompareAndSwapInt32(&s.totalreqnum, old, old+1) {
-					break
-				}
-			} else {
-				if s.c.WaitCloseMode == 0 {
-					//refresh close wait
-					s.closewaittimer.Reset(s.c.WaitCloseTime)
-				}
-				//tell peer self closed
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(int(cerror.ErrClosing.Httpcode))
-				w.Write(common.Str2byte(cerror.ErrClosing.Error()))
-				return
-			}
-		}
-		defer func() {
-			if atomic.LoadInt32(&s.totalreqnum) < 0 {
-				s.closewaittimer.Reset(s.c.WaitCloseTime)
-			}
-			atomic.AddInt32(&s.totalreqnum, -1)
-		}()
 		//trace
 		var ctx context.Context
 		traceid := ""
@@ -577,6 +545,19 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, min))
 			defer cancel()
 		}
+		//check server status
+		if !s.stop.AddOne() {
+			if s.c.WaitCloseMode == 0 {
+				//refresh close wait
+				s.closetimer.Reset(s.c.WaitCloseTime)
+			}
+			//tell peer self closed
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(int(cerror.ErrClosing.Httpcode))
+			w.Write(common.Str2byte(cerror.ErrClosing.Error()))
+			return
+		}
+		defer s.stop.DoneOne()
 		//logic
 		workctx := s.getContext(w, r, ctx, sourceapp, mdata, totalhandlers)
 		if _, ok := workctx.metadata["Client-IP"]; !ok {

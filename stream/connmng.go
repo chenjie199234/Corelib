@@ -66,6 +66,10 @@ func newconnmng(groupnum int, heartprobe, sendidletimeout, recvidletimeout time.
 			tker := time.NewTicker(mng.heartprobe / 20)
 			for {
 				t := <-tker.C
+				if mng.Finished() {
+					tker.Stop()
+					return
+				}
 				newindex := atomic.AddUint64(&tw.index, 1)
 				//give 1/3 heartprobe for net lag
 				g := tw.wheel[newindex%20]

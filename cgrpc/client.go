@@ -15,6 +15,7 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/name"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -82,6 +83,7 @@ type CGrpcClient struct {
 	conn          *grpc.ClientConn
 	resolver      *corelibResolver
 	balancer      *corelibBalancer
+	stop          *graceful.Graceful
 }
 
 func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername string) (*CGrpcClient, error) {
@@ -105,6 +107,7 @@ func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servernam
 		c:             c,
 		selfappname:   selfappname,
 		serverappname: serverappname,
+		stop:          graceful.New(),
 	}
 	opts := make([]grpc.DialOption, 0)
 	opts = append(opts, grpc.WithDisableRetry())
@@ -155,8 +158,17 @@ func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servernam
 func (c *CGrpcClient) ResolveNow() {
 	c.resolver.ResolveNow(resolver.ResolveNowOptions{})
 }
+func (c *CGrpcClient) Close() {
+	c.stop.Close(c.resolver.Close, func() { c.conn.Close() })
+}
+
+var ClientClosed = errors.New("[cgrpc.client] closed")
 
 func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, resp interface{}, metadata map[string]string) error {
+	if !c.stop.AddOne() {
+		return ClientClosed
+	}
+	defer c.stop.DoneOne()
 	if c.c.GlobalTimeout != 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout))

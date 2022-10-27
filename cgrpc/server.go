@@ -63,8 +63,7 @@ type CGrpcServer struct {
 	clientnum      int32
 	services       map[string]*grpc.ServiceDesc
 	handlerTimeout map[string]time.Duration
-
-	totalreqnum int32
+	totalreqnum    int64
 }
 
 func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, error) {
@@ -131,15 +130,14 @@ func (s *CGrpcServer) StartCGrpcServer(listenaddr string) error {
 	}
 	return nil
 }
-func (s *CGrpcServer) StopCGrpcServer() {
-	s.server.GracefulStop()
-}
-
 func (this *CGrpcServer) GetClientNum() int32 {
 	return atomic.LoadInt32(&this.clientnum)
 }
-func (this *CGrpcServer) GetReqNum() int32 {
-	return atomic.LoadInt32(&this.totalreqnum)
+func (this *CGrpcServer) GetReqNum() int64 {
+	return atomic.LoadInt64(&this.totalreqnum)
+}
+func (s *CGrpcServer) StopCGrpcServer() {
+	s.server.GracefulStop()
 }
 
 // key path,value timeout(if timeout <= 0 means no timeout)
@@ -196,8 +194,8 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				return nil, cerror.ErrClosing
 			}
 		}
-		atomic.AddInt32(&s.totalreqnum, 1)
-		defer atomic.AddInt32(&s.totalreqnum, -1)
+		atomic.AddInt64(&s.totalreqnum, 1)
+		defer atomic.AddInt64(&s.totalreqnum, -1)
 		conninfo := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)
 		remoteaddr := conninfo.RemoteAddr.String()
 		localaddr := conninfo.LocalAddr.String()

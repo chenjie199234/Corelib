@@ -17,6 +17,7 @@ import (
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/name"
 	"google.golang.org/protobuf/proto"
 )
@@ -81,6 +82,7 @@ type CrpcClient struct {
 	resolver *corelibResolver
 	balancer *corelibBalancer
 
+	stop    *graceful.Graceful
 	reqpool *sync.Pool
 }
 
@@ -124,6 +126,7 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername
 		},
 
 		reqpool: &sync.Pool{},
+		stop:    graceful.New(),
 	}
 	client.balancer = newCorelibBalancer(client)
 	instancec := &stream.InstanceConfig{
@@ -146,6 +149,9 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername
 
 func (c *CrpcClient) ResolveNow() {
 	c.resolver.ResolveNow()
+}
+func (c *CrpcClient) Close() {
+	c.stop.Close(c.resolver.Close, c.instance.Stop)
 }
 
 func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
@@ -230,7 +236,13 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 
 var errPickAgain = errors.New("[crpc.client] picked server closed")
 
+var ClientClosed = errors.New("[crpc.client] closed")
+
 func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata map[string]string) ([]byte, error) {
+	if !c.stop.AddOne() {
+		return nil, ClientClosed
+	}
+	defer c.stop.DoneOne()
 	msg := &Msg{
 		Type:     MsgType_CALL,
 		Path:     path,

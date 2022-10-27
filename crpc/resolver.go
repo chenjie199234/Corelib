@@ -16,6 +16,7 @@ type corelibResolver struct {
 	cstatus      bool
 	call         chan *struct{}
 	callNotice   map[chan *struct{}]*struct{}
+	stop         chan *struct{}
 }
 
 func newCorelibResolver(group, name string, c *CrpcClient) *corelibResolver {
@@ -27,6 +28,7 @@ func newCorelibResolver(group, name string, c *CrpcClient) *corelibResolver {
 		cstatus:      false,
 		call:         make(chan *struct{}, 1),
 		callNotice:   make(map[chan *struct{}]*struct{}),
+		stop:         make(chan *struct{}),
 	}
 	r.system <- nil
 	go func() {
@@ -36,6 +38,9 @@ func newCorelibResolver(group, name string, c *CrpcClient) *corelibResolver {
 			case <-tker.C:
 			case <-r.system:
 			case <-r.call:
+			case <-r.stop:
+				tker.Stop()
+				return
 			}
 			all, e := c.c.Discover(group, name)
 			if e != nil {
@@ -58,6 +63,9 @@ func newCorelibResolver(group, name string, c *CrpcClient) *corelibResolver {
 
 func (r *corelibResolver) ResolveNow() {
 	r.triger(nil, true)
+}
+func (r *corelibResolver) Close() {
+	close(r.stop)
 }
 
 // systemORcall true - system,false - call

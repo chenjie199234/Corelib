@@ -25,6 +25,7 @@ func (b *resolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, 
 		call:         make(chan *struct{}, 1),
 		callNotice:   make(map[chan *struct{}]*struct{}),
 		cc:           cc,
+		stop:         make(chan *struct{}),
 	}
 	b.c.resolver = r
 	r.system <- nil
@@ -35,6 +36,9 @@ func (b *resolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, 
 			case <-tker.C:
 			case <-r.system:
 			case <-r.call:
+			case <-r.stop:
+				tker.Stop()
+				return
 			}
 			all, e := b.c.c.Discover(b.group, b.name)
 			if e != nil {
@@ -78,6 +82,7 @@ type corelibResolver struct {
 	call         chan *struct{}
 	callNotice   map[chan *struct{}]*struct{}
 	cc           resolver.ClientConn
+	stop         chan *struct{}
 }
 
 func (r *corelibResolver) ResolveNow(op resolver.ResolveNowOptions) {
@@ -148,4 +153,5 @@ func (r *corelibResolver) wake(systemORcall bool) {
 }
 
 func (r *corelibResolver) Close() {
+	close(r.stop)
 }
