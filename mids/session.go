@@ -24,33 +24,28 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 	sessioninstance = &session{}
 }
-func makesessionid() string {
-	result := make([]byte, 8)
-	rand.Read(result)
-	return hex.EncodeToString(result)
-}
 
 func UpdateSessionConfig(redisurl string, expire time.Duration) {
-	if expire.Seconds() < 1 {
-		log.Error(nil, "[session] expire can't less then 1s")
-		return
+	var newp *redis.Pool
+	if redisurl != "" {
+		newp = redis.NewRedis(&redis.Config{
+			RedisName:   "session_redis",
+			URL:         redisurl,
+			MaxOpen:     0,    //means no limit
+			MaxIdle:     1024, //the pool's buf
+			MaxIdletime: time.Minute,
+			ConnTimeout: time.Second,
+			IOTimeout:   time.Second,
+		})
+	} else {
+		log.Warning(nil, "[session] config missing redis url,all session event will be failed")
 	}
-	if redisurl == "" {
-		log.Error(nil, "[session] config missing redis url,all session event will be failed")
-		return
-	}
-	newp := redis.NewRedis(&redis.Config{
-		RedisName:   "session_redis",
-		URL:         redisurl,
-		MaxOpen:     0,    //means no limit
-		MaxIdle:     1024, //the pool's buf
-		MaxIdletime: time.Minute,
-		ConnTimeout: time.Second,
-		IOTimeout:   time.Second,
-	})
 	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&sessioninstance.p)), unsafe.Pointer(newp)))
 	if oldp != nil {
 		oldp.Close()
+	}
+	if expire.Seconds() < 1 {
+		log.Warning(nil, "[session] expire too small")
 	}
 	sessioninstance.expire = int64(expire.Seconds())
 }
@@ -58,10 +53,16 @@ func UpdateSessionConfig(redisurl string, expire time.Duration) {
 // return empty means make session failed
 func MakeSession(ctx context.Context, userid, data string) string {
 	if sessioninstance.p == nil {
-		log.Error(ctx, "[session.make] config missing redis url,all session event will be failed")
+		log.Error(ctx, "[session.make] config missing redis url")
 		return ""
 	}
-	sessionid := makesessionid()
+	if sessioninstance.expire < 1 {
+		log.Error(ctx, "[session.make] expire too small")
+		return ""
+	}
+	result := make([]byte, 8)
+	rand.Read(result)
+	sessionid := hex.EncodeToString(result)
 	conn, e := sessioninstance.p.GetContext(ctx)
 	if e != nil {
 		log.Error(ctx, "[session.make] get redis conn:", e)
@@ -77,7 +78,7 @@ func MakeSession(ctx context.Context, userid, data string) string {
 
 func CleanSession(ctx context.Context, userid string) bool {
 	if sessioninstance.p == nil {
-		log.Error(ctx, "[session.clean] config missing redis url,all session event will be failed")
+		log.Error(ctx, "[session.clean] config missing redis url")
 		return false
 	}
 	conn, e := sessioninstance.p.GetContext(ctx)
@@ -95,7 +96,11 @@ func CleanSession(ctx context.Context, userid string) bool {
 
 func ExtendSession(ctx context.Context, userid string) bool {
 	if sessioninstance.p == nil {
-		log.Error(ctx, "[session.extend] config missing redis url,all session event will be failed")
+		log.Error(ctx, "[session.extend] config missing redis url")
+		return false
+	}
+	if sessioninstance.expire < 1 {
+		log.Error(ctx, "[session.make] expire too small")
 		return false
 	}
 	conn, e := sessioninstance.p.GetContext(ctx)
@@ -113,7 +118,7 @@ func ExtendSession(ctx context.Context, userid string) bool {
 
 func VerifySession(ctx context.Context, userid, sessionid string) (bool, string) {
 	if sessioninstance.p == nil {
-		log.Error(ctx, "[session.verify] config missing redis url,all session event will be failed")
+		log.Error(ctx, "[session.verify] config missing redis url")
 		return false, ""
 	}
 	conn, e := sessioninstance.p.GetContext(ctx)

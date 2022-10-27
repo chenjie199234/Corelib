@@ -31,13 +31,8 @@ func init() {
 	tokeninstance = &token{}
 }
 func UpdateTokenConfig(secret string, expire time.Duration) {
-	if expire < 0 {
-		log.Error(nil, "[token] expire can't be negitive number")
-		return
-	}
-	if secret == "" {
-		log.Error(nil, "[token] secret can't be empty")
-		return
+	if expire <= 0 {
+		log.Warning(nil, "[token] expire too small")
 	}
 	tokeninstance.secret = secret
 	tokeninstance.expire = expire
@@ -45,8 +40,8 @@ func UpdateTokenConfig(secret string, expire time.Duration) {
 
 // return empty means make token failed
 func MakeToken(ctx context.Context, puber, deployenv, runenv, data string) string {
-	if tokeninstance.secret == "" || tokeninstance.expire == 0 {
-		log.Error(ctx, "[token.make] missing init,please use UpdateTokenConfig first")
+	if tokeninstance.expire <= 0 {
+		log.Error(ctx, "[token.make] expire too small")
 		return ""
 	}
 	start := time.Now().UnixNano()
@@ -67,10 +62,6 @@ func MakeToken(ctx context.Context, puber, deployenv, runenv, data string) strin
 	return base64.RawStdEncoding.EncodeToString(d)
 }
 func VerifyToken(ctx context.Context, tokenstr string) *Token {
-	if tokeninstance.secret == "" || tokeninstance.expire == 0 {
-		log.Error(ctx, "[token.verify] missing init,please use UpdateTokenConfig first")
-		return nil
-	}
 	tokenbytes, e := base64.RawStdEncoding.DecodeString(tokenstr)
 	if e != nil {
 		return nil

@@ -38,7 +38,7 @@ func NewInstance(c *InstanceConfig) (*Instance, error) {
 
 // new connections failed
 // old connections working
-// WARN: this will cause StartxxxServer return
+// WARN: this will cause StartServer return
 func (this *Instance) PreStop() {
 	this.mng.PreStop()
 	this.Lock()
@@ -50,7 +50,7 @@ func (this *Instance) PreStop() {
 
 // new connections failed
 // old connections closed
-// WARN: this will cause StartxxxServer return
+// WARN: this will cause StartServer return
 func (this *Instance) Stop() {
 	this.mng.Stop()
 	this.Lock()

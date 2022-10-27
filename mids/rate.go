@@ -182,7 +182,7 @@ func checkrate(ctx context.Context, info *rateinfo) bool {
 		return false
 	}
 	if info.global != nil && rateinstance.p == nil {
-		log.Error(ctx, "[rate] config missing redis url,all global rate check will be failed")
+		log.Error(ctx, "[rate] config missing redis url")
 		return false
 	}
 	//single first
