@@ -131,10 +131,10 @@ func (s *CGrpcServer) StartCGrpcServer(listenaddr string) error {
 	return nil
 }
 func (this *CGrpcServer) GetClientNum() int32 {
-	return atomic.LoadInt32(&this.clientnum)
+	return this.clientnum
 }
 func (this *CGrpcServer) GetReqNum() int64 {
-	return atomic.LoadInt64(&this.totalreqnum)
+	return this.totalreqnum
 }
 func (s *CGrpcServer) StopCGrpcServer() {
 	s.server.GracefulStop()
