@@ -3,6 +3,7 @@ package crpc
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
@@ -17,6 +18,7 @@ type corelibResolver struct {
 	call         chan *struct{}
 	callNotice   map[chan *struct{}]*struct{}
 	stop         chan *struct{}
+	stopstatus   int32
 }
 
 func newCorelibResolver(group, name string, c *CrpcClient) *corelibResolver {
@@ -65,6 +67,9 @@ func (r *corelibResolver) ResolveNow() {
 	r.triger(nil, true)
 }
 func (r *corelibResolver) Close() {
+	if atomic.SwapInt32(&r.stopstatus, 1) == 1 {
+		return
+	}
 	close(r.stop)
 }
 

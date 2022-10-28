@@ -3,6 +3,7 @@ package cgrpc
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
@@ -83,6 +84,7 @@ type corelibResolver struct {
 	callNotice   map[chan *struct{}]*struct{}
 	cc           resolver.ClientConn
 	stop         chan *struct{}
+	stopstatus   int32
 }
 
 func (r *corelibResolver) ResolveNow(op resolver.ResolveNowOptions) {
@@ -153,5 +155,8 @@ func (r *corelibResolver) wake(systemORcall bool) {
 }
 
 func (r *corelibResolver) Close() {
+	if atomic.SwapInt32(&r.stopstatus, 1) == 1 {
+		return
+	}
 	close(r.stop)
 }
