@@ -12,7 +12,7 @@ func Test_Session(t *testing.T) {
 	if sessionid == "" {
 		t.Fatal("should make session success")
 	}
-	status, data := VerifySession(context.Background(), "1", sessionid)
+	data, status := VerifySession(context.Background(), "1", sessionid)
 	if !status {
 		t.Fatal("should verify session success")
 	}
@@ -20,7 +20,7 @@ func Test_Session(t *testing.T) {
 		t.Fatal("session data broken")
 	}
 	time.Sleep(time.Second)
-	status, data = VerifySession(context.Background(), "1", sessionid)
+	data, status = VerifySession(context.Background(), "1", sessionid)
 	if status {
 		t.Fatal("should not verify success")
 	}
@@ -33,7 +33,7 @@ func Test_Session(t *testing.T) {
 		t.Fatal("should extend session success")
 	}
 	time.Sleep(time.Millisecond * 500)
-	status, data = VerifySession(context.Background(), "1", sessionid)
+	data, status = VerifySession(context.Background(), "1", sessionid)
 	if !status {
 		t.Fatal("should verify success")
 	}
@@ -43,7 +43,7 @@ func Test_Session(t *testing.T) {
 	if !CleanSession(context.Background(), "1") {
 		t.Fatal("should clean success")
 	}
-	status, data = VerifySession(context.Background(), "1", sessionid)
+	data, status = VerifySession(context.Background(), "1", sessionid)
 	if status {
 		t.Fatal("should not verify success")
 	}

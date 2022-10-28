@@ -63,11 +63,11 @@ func accesskey(ctx *web.Context) {
 		md["Access-Key"] = accesskey
 	}
 	if accesskey == "" {
-		ctx.Abort(cerror.ErrAuth)
+		ctx.Abort(cerror.ErrAccessKey)
 		return
 	}
 	if !publicmids.AccessKeyCheck(ctx.GetPath(), accesskey) {
-		ctx.Abort(cerror.ErrAuth)
+		ctx.Abort(cerror.ErrAccessKey)
 	}
 }
 func token(ctx *web.Context) {
@@ -79,12 +79,12 @@ func token(ctx *web.Context) {
 		md["Authorization"] = tokenstr
 	}
 	if tokenstr == "" {
-		ctx.Abort(cerror.ErrAuth)
+		ctx.Abort(cerror.ErrToken)
 		return
 	}
 	t := publicmids.VerifyToken(ctx, tokenstr)
 	if t == nil {
-		ctx.Abort(cerror.ErrAuth)
+		ctx.Abort(cerror.ErrToken)
 		return
 	}
 	md["Token-DeployEnv"] = t.DeployEnv
@@ -101,7 +101,7 @@ func session(ctx *web.Context) {
 		md["Session-UID"] = userid
 	}
 	if userid == "" {
-		ctx.Abort(cerror.ErrAuth)
+		ctx.Abort(cerror.ErrSession)
 		return
 	}
 	sessionid := ctx.GetHeader("Session-SID")
@@ -111,12 +111,12 @@ func session(ctx *web.Context) {
 		md["Session-SID"] = sessionid
 	}
 	if sessionid == "" {
-		ctx.Abort(cerror.ErrAuth)
+		ctx.Abort(cerror.ErrSession)
 		return
 	}
-	pass, sessiondata := publicmids.VerifySession(ctx, userid, sessionid)
+	sessiondata, pass := publicmids.VerifySession(ctx, userid, sessionid)
 	if !pass {
-		ctx.Abort(cerror.ErrAuth)
+		ctx.Abort(cerror.ErrSession)
 		return
 	}
 	md["Session-Data"] = sessiondata

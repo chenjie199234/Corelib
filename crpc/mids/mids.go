@@ -35,23 +35,23 @@ func accesskey(ctx *crpc.Context) {
 	md := ctx.GetMetadata()
 	accesskey := md["Access-Key"]
 	if accesskey == "" {
-		ctx.Abort(cerror.ErrAuth)
+		ctx.Abort(cerror.ErrAccessKey)
 		return
 	}
 	if !publicmids.AccessKeyCheck(ctx.GetPath(), accesskey) {
-		ctx.Abort(cerror.ErrAuth)
+		ctx.Abort(cerror.ErrAccessKey)
 	}
 }
 func token(ctx *crpc.Context) {
 	md := ctx.GetMetadata()
 	tokenstr := md["Authorization"]
 	if tokenstr == "" {
-		ctx.Abort(cerror.ErrAuth)
+		ctx.Abort(cerror.ErrToken)
 		return
 	}
 	t := publicmids.VerifyToken(ctx, tokenstr)
 	if t == nil {
-		ctx.Abort(cerror.ErrAuth)
+		ctx.Abort(cerror.ErrToken)
 		return
 	}
 	md["Token-DeployEnv"] = t.DeployEnv
@@ -64,12 +64,12 @@ func session(ctx *crpc.Context) {
 	userid := md["Session-UID"]
 	sessionid := md["Session-SID"]
 	if userid == "" || sessionid == "" {
-		ctx.Abort(cerror.ErrAuth)
+		ctx.Abort(cerror.ErrSession)
 		return
 	}
-	pass, sessiondata := publicmids.VerifySession(ctx, userid, sessionid)
+	sessiondata, pass := publicmids.VerifySession(ctx, userid, sessionid)
 	if !pass {
-		ctx.Abort(cerror.ErrAuth)
+		ctx.Abort(cerror.ErrSession)
 		return
 	}
 	md["Session-Data"] = sessiondata

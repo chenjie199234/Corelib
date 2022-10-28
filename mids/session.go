@@ -116,15 +116,15 @@ func ExtendSession(ctx context.Context, userid string) bool {
 	return true
 }
 
-func VerifySession(ctx context.Context, userid, sessionid string) (bool, string) {
+func VerifySession(ctx context.Context, userid, sessionid string) (string, bool) {
 	if sessioninstance.p == nil {
 		log.Error(ctx, "[session.verify] config missing redis url")
-		return false, ""
+		return "", false
 	}
 	conn, e := sessioninstance.p.GetContext(ctx)
 	if e != nil {
 		log.Error(ctx, "[session.verify] get redis conn:", e)
-		return false, ""
+		return "", false
 	}
 	defer conn.Close()
 	str, e := redis.String(conn.DoContext(ctx, "GET", "session_"+userid))
@@ -132,10 +132,13 @@ func VerifySession(ctx context.Context, userid, sessionid string) (bool, string)
 		if e != redis.ErrNil {
 			log.Error(ctx, "[session.verify] read redis session data:", e)
 		}
-		return false, ""
+		return "", false
 	}
 	if !strings.HasPrefix(str, sessionid) {
-		return false, ""
+		return "", false
 	}
-	return true, str[17:]
+	if len(str) < 17 {
+		return "", false
+	}
+	return str[17:], true
 }
