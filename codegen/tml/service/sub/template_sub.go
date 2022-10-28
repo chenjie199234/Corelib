@@ -41,7 +41,7 @@ func Start() *Service {
 
 // Stop -
 func (s *Service) Stop() {
-	s.stop.Close()
+	s.stop.Close(nil, nil)
 }`
 
 const path = "./service/"

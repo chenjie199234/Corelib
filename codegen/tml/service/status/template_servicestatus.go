@@ -57,7 +57,7 @@ func (s *Service) Ping(ctx context.Context,in *api.Pingreq) (*api.Pingresp, erro
 
 // Stop -
 func (s *Service) Stop() {
-	s.stop.Close()
+	s.stop.Close(nil, nil)
 }`
 
 const path = "./service/status/"
