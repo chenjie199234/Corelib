@@ -23,11 +23,12 @@ var (
 	ErrResp       = &Error{Code: 10002, Httpcode: http.StatusInternalServerError, Msg: "response error"}
 	ErrSystem     = &Error{Code: 10003, Httpcode: http.StatusInternalServerError, Msg: "system error"}
 	ErrAuth       = &Error{Code: 10004, Httpcode: http.StatusUnauthorized, Msg: "auth error"}
-	ErrPermission = &Error{Code: 10005, Httpcode: http.StatusForbidden, Msg: "permission"}
-	ErrTooFast    = &Error{Code: 10006, Httpcode: http.StatusForbidden, Msg: "too fast"}
-	ErrBan        = &Error{Code: 10007, Httpcode: http.StatusForbidden, Msg: "ban"}
-	ErrBusy       = &Error{Code: 10008, Httpcode: http.StatusServiceUnavailable, Msg: "busy"}
-	ErrNotExist   = &Error{Code: 10009, Httpcode: http.StatusNotFound, Msg: "not exist"}
+	ErrSign       = &Error{Code: 10005, Httpcode: http.StatusForbidden, Msg: "sign"}
+	ErrPermission = &Error{Code: 10006, Httpcode: http.StatusForbidden, Msg: "permission"}
+	ErrTooFast    = &Error{Code: 10007, Httpcode: http.StatusForbidden, Msg: "too fast"}
+	ErrBan        = &Error{Code: 10008, Httpcode: http.StatusForbidden, Msg: "ban"}
+	ErrBusy       = &Error{Code: 10009, Httpcode: http.StatusServiceUnavailable, Msg: "busy"}
+	ErrNotExist   = &Error{Code: 100010, Httpcode: http.StatusNotFound, Msg: "not exist"}
 )
 
 // convert std error,always -1
