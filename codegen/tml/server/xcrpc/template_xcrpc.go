@@ -32,6 +32,7 @@ func StartCrpcServer() {
 		ConnectTimeout: time.Duration(c.ConnectTimeout),
 		GlobalTimeout:  time.Duration(c.GlobalTimeout),
 		HeartPorbe:     time.Duration(c.HeartProbe),
+		Certs:          c.Certs,
 	}
 	var e error
 	if s, e = crpc.NewCrpcServer(crpcc, model.Group, model.Name); e != nil {

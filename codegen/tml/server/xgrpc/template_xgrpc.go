@@ -32,6 +32,7 @@ func StartCGrpcServer() {
 		ConnectTimeout: time.Duration(c.ConnectTimeout),
 		GlobalTimeout:  time.Duration(c.GlobalTimeout),
 		HeartPorbe:     time.Duration(c.HeartProbe),
+		Certs:          c.Certs,
 	}
 	var e error
 	if s, e = cgrpc.NewCGrpcServer(cgrpcc, model.Group, model.Name); e != nil {
