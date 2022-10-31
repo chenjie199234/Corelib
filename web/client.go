@@ -139,8 +139,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername,
 
 // serverhost format [http/https]://[username[:password]@]the.host.name[:port]
 func (c *WebClient) UpdateServerHost(serverhost string) error {
-	u, e := url.Parse(serverhost)
-	if e != nil ||
+	if u, e := url.Parse(serverhost); e != nil ||
 		(u.Scheme != "http" && u.Scheme != "https") ||
 		u.Host == "" ||
 		u.Path != "" ||
