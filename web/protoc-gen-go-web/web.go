@@ -702,7 +702,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("if len(data)==0{")
 		g.P("return resp,nil")
 		g.P("}")
-		g.P("if ct == \"application/x-protobuf\"")
+		g.P("if ct == \"application/x-protobuf\"{")
 		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(data,resp);e!=nil{")
 		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrResp")))
 		g.P("}")
