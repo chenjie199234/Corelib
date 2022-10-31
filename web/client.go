@@ -55,11 +55,14 @@ func (c *ClientConfig) validate() {
 type WebClient struct {
 	selfappname   string
 	serverappname string
-	serverhost    string
+	host          *hostinfo
 	globaltimeout time.Duration
-	u             *url.URL
 	httpclient    *http.Client
 	stop          *graceful.Graceful
+}
+type hostinfo struct {
+	serverhost string
+	u          *url.URL
 }
 
 // serverhost format [http/https]://[username[:password]@]the.host.name[:port]
@@ -80,7 +83,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername,
 		u.RawQuery != "" ||
 		u.Fragment != "" ||
 		u.RawFragment != "" {
-		return nil, errors.New("[web.client] host format wrong,should be [http/https]://[username[:password]@]the.host.name[:port]")
+		return nil, errors.New("host format wrong,should be [http/https]://[username[:password]@]the.host.name[:port]")
 	}
 	if c == nil {
 		c = &ClientConfig{}
@@ -121,9 +124,11 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername,
 	client := &WebClient{
 		selfappname:   selfappname,
 		serverappname: serverappname,
-		serverhost:    serverhost,
+		host: &hostinfo{
+			serverhost: serverhost,
+			u:          u,
+		},
 		globaltimeout: c.GlobalTimeout,
-		u:             u,
 		httpclient: &http.Client{
 			Transport: transport,
 			Timeout:   c.GlobalTimeout,
@@ -133,10 +138,32 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername,
 	return client, nil
 }
 
+// serverhost format [http/https]://[username[:password]@]the.host.name[:port]
+func (c *WebClient) UpdateServerHost(serverhost string) error {
+	u, e := url.Parse(serverhost)
+	if e != nil ||
+		(u.Scheme != "http" && u.Scheme != "https") ||
+		u.Host == "" ||
+		u.Path != "" ||
+		u.RawPath != "" ||
+		u.Opaque != "" ||
+		u.ForceQuery ||
+		u.RawQuery != "" ||
+		u.Fragment != "" ||
+		u.RawFragment != "" {
+		return errors.New("host format wrong,should be [http/https]://[username[:password]@]the.host.name[:port]")
+	}
+	c.host = &hostinfo{
+		serverhost: serverhost,
+		u:          u,
+	}
+	return nil
+}
+
 // this will return the host in NewWebClient function
 // if in NewWebClient function the host is empty,this will return empty
 func (c *WebClient) GetSeverHost() string {
-	return c.u.Scheme + "://" + c.u.Host
+	return c.host.u.Scheme + "://" + c.host.u.Host
 }
 func (c *WebClient) Close() {
 	c.stop.Close(nil, c.httpclient.CloseIdleConnections)
@@ -241,11 +268,12 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	}
 	header.Del("Origin")
 	for {
+		h := c.host
 		start := time.Now()
 		if ok && dl.UnixNano() < start.UnixNano()+int64(5*time.Millisecond) {
 			//at least 5ms for net lag and server logic
 			end := time.Now()
-			log.Trace(ctx, log.CLIENT, c.selfappname, c.u.Scheme+"://"+c.u.Host, method, path, &start, &end, cerror.ErrDeadlineExceeded)
+			log.Trace(ctx, log.CLIENT, c.selfappname, h.u.Scheme+"://"+h.u.Host, method, path, &start, &end, cerror.ErrDeadlineExceeded)
 			monitor.WebClientMonitor(c.serverappname, method, path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, cerror.ErrDeadlineExceeded
 		}
@@ -253,14 +281,14 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		var e error
 		if body == nil {
 			//io.Reader is an interface,body is *bytes.Buffer,direct pass will make the interface's value is nil but type is not nil
-			req, e = http.NewRequestWithContext(ctx, method, c.serverhost+path+query, nil)
+			req, e = http.NewRequestWithContext(ctx, method, h.serverhost+path+query, nil)
 		} else {
-			req, e = http.NewRequestWithContext(ctx, method, c.serverhost+path+query, body)
+			req, e = http.NewRequestWithContext(ctx, method, h.serverhost+path+query, body)
 		}
 		if e != nil {
 			e = cerror.ConvertStdError(e)
 			end := time.Now()
-			log.Trace(ctx, log.CLIENT, c.selfappname, c.u.Scheme+"://"+c.u.Host, method, path, &start, &end, e)
+			log.Trace(ctx, log.CLIENT, c.selfappname, h.u.Scheme+"://"+h.u.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
@@ -270,7 +298,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		end := time.Now()
 		if e != nil {
 			e = cerror.ConvertStdError(e.(*url.Error).Unwrap())
-			log.Trace(ctx, log.CLIENT, c.serverappname, c.u.Scheme+"://"+c.u.Host, method, path, &start, &end, e)
+			log.Trace(ctx, log.CLIENT, c.serverappname, h.u.Scheme+"://"+h.u.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
@@ -278,12 +306,12 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		resp.Body.Close()
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			log.Trace(ctx, log.CLIENT, c.serverappname, c.u.Scheme+"://"+c.u.Host, method, path, &start, &end, e)
+			log.Trace(ctx, log.CLIENT, c.serverappname, h.u.Scheme+"://"+h.u.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 		if resp.StatusCode == int(cerror.ErrClosing.Httpcode) && cerror.Equal(cerror.ConvertErrorstr(common.Byte2str(respbody)), cerror.ErrClosing) {
-			log.Trace(ctx, log.CLIENT, c.serverappname, c.u.Scheme+"://"+c.u.Host, method, path, &start, &end, cerror.ErrClosing)
+			log.Trace(ctx, log.CLIENT, c.serverappname, h.u.Scheme+"://"+h.u.Host, method, path, &start, &end, cerror.ErrClosing)
 			monitor.WebClientMonitor(c.serverappname, method, path, cerror.ErrClosing, uint64(end.UnixNano()-start.UnixNano()))
 			continue
 		} else if resp.StatusCode != http.StatusOK {
@@ -294,11 +322,11 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				tempe.SetHttpcode(int32(resp.StatusCode))
 				e = tempe
 			}
-			log.Trace(ctx, log.CLIENT, c.serverappname, c.u.Scheme+"://"+c.u.Host, method, path, &start, &end, e)
+			log.Trace(ctx, log.CLIENT, c.serverappname, h.u.Scheme+"://"+h.u.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
-		log.Trace(ctx, log.CLIENT, c.serverappname, c.u.Scheme+"://"+c.u.Host, method, path, &start, &end, nil)
+		log.Trace(ctx, log.CLIENT, c.serverappname, h.u.Scheme+"://"+h.u.Host, method, path, &start, &end, nil)
 		monitor.WebClientMonitor(c.serverappname, method, path, nil, uint64(end.UnixNano()-start.UnixNano()))
 		return respbody, nil
 	}
