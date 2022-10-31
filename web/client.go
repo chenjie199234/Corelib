@@ -224,8 +224,9 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	if forbiddenHeader(header) {
 		return nil, cerror.MakeError(-1, 400, "forbidden header")
 	}
+	hostaddr := c.host
 	if !strings.HasPrefix(path, "http://") && !strings.HasPrefix(path, "https://") {
-		if c.host == "" {
+		if hostaddr == "" {
 			return nil, cerror.ErrReq
 		}
 		if path == "" {
@@ -279,9 +280,9 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		if !strings.HasPrefix(path, "http://") && !strings.HasPrefix(path, "https://") {
 			if body == nil {
 				//io.Reader is an interface,body is *bytes.Buffer,direct pass will make the interface's value is nil but type is not nil
-				req, e = http.NewRequestWithContext(ctx, method, c.host+path+query, nil)
+				req, e = http.NewRequestWithContext(ctx, method, hostaddr+path+query, nil)
 			} else {
-				req, e = http.NewRequestWithContext(ctx, method, c.host+path+query, body)
+				req, e = http.NewRequestWithContext(ctx, method, hostaddr+path+query, body)
 			}
 		} else {
 			if body == nil {
