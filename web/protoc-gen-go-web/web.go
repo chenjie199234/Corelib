@@ -678,9 +678,9 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("}")
 			switch httpmetohd {
 			case http.MethodGet:
-				g.P("data,e:=c.cc.Get(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
+				g.P("ct,data,e:=c.cc.Get(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			case http.MethodDelete:
-				g.P("data,e:=c.cc.Delete(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
+				g.P("ct,data,e:=c.cc.Delete(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			}
 		} else {
 			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")
@@ -688,11 +688,11 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
 			switch httpmetohd {
 			case http.MethodPost:
-				g.P("data,e:=c.cc.Post(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("ct,data,e:=c.cc.Post(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			case http.MethodPut:
-				g.P("data,e:=c.cc.Put(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("ct,data,e:=c.cc.Put(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			case http.MethodPatch:
-				g.P("data,e:=c.cc.Patch(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("ct,data,e:=c.cc.Patch(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			}
 		}
 		g.P("if e != nil {")
@@ -702,8 +702,14 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("if len(data)==0{")
 		g.P("return resp,nil")
 		g.P("}")
+		g.P("if ct == \"application/x-protobuf\"")
 		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(data,resp);e!=nil{")
 		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrResp")))
+		g.P("}")
+		g.P("}else{")
+		g.P("if e:=", g.QualifiedGoIdent(protojsonPackage.Ident("Unmarshal")), "(data,resp);e!=nil{")
+		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrResp")))
+		g.P("}")
 		g.P("}")
 		g.P("return resp, nil")
 		g.P("}")

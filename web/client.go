@@ -185,17 +185,17 @@ func forbiddenHeader(header http.Header) bool {
 }
 
 // "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
+func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (string, []byte, error) {
 	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil)
 }
 
 // "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) ([]byte, error) {
+func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (string, []byte, error) {
 	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
 }
 
 // "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
+func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (string, []byte, error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
@@ -203,7 +203,7 @@ func (c *WebClient) Post(ctx context.Context, path, query string, header http.He
 }
 
 // "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
+func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (string, []byte, error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
@@ -211,7 +211,7 @@ func (c *WebClient) Put(ctx context.Context, path, query string, header http.Hea
 }
 
 // "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) ([]byte, error) {
+func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (string, []byte, error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
@@ -220,14 +220,14 @@ func (c *WebClient) Patch(ctx context.Context, path, query string, header http.H
 
 var ClientClosed = errors.New("[web.client] closed")
 
-func (c *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body *bytes.Buffer) ([]byte, error) {
+func (c *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body *bytes.Buffer) (string, []byte, error) {
 	if forbiddenHeader(header) {
-		return nil, cerror.MakeError(-1, 400, "forbidden header")
+		return "", nil, cerror.MakeError(-1, 400, "forbidden header")
 	}
 	hostaddr := c.host
 	if !strings.HasPrefix(path, "http://") && !strings.HasPrefix(path, "https://") {
 		if hostaddr == "" {
-			return nil, cerror.ErrReq
+			return "", nil, cerror.ErrReq
 		}
 		if path == "" {
 			path = "/"
@@ -266,14 +266,14 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	}
 	header.Del("Origin")
 	if !c.stop.AddOne() {
-		return nil, ClientClosed
+		return "", nil, ClientClosed
 	}
 	defer c.stop.DoneOne()
 	for {
 		start := time.Now()
 		if ok && dl.UnixNano() < start.UnixNano()+int64(5*time.Millisecond) {
 			//at least 5ms for net lag and server logic
-			return nil, cerror.ErrDeadlineExceeded
+			return "", nil, cerror.ErrDeadlineExceeded
 		}
 		var req *http.Request
 		var e error
@@ -294,7 +294,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		}
 		if e != nil {
 			e = cerror.ConvertStdError(e)
-			return nil, e
+			return "", nil, e
 		}
 		req.Header = header
 		//start call
@@ -304,7 +304,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			e = cerror.ConvertStdError(e.(*url.Error).Unwrap())
 			log.Trace(ctx, log.CLIENT, c.serverappname, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
-			return nil, e
+			return "", nil, e
 		}
 		respbody, e := io.ReadAll(resp.Body)
 		resp.Body.Close()
@@ -312,7 +312,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			e = cerror.ConvertStdError(e)
 			log.Trace(ctx, log.CLIENT, c.serverappname, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
-			return nil, e
+			return "", nil, e
 		}
 		if resp.StatusCode == int(cerror.ErrClosing.Httpcode) && cerror.Equal(cerror.ConvertErrorstr(common.Byte2str(respbody)), cerror.ErrClosing) {
 			log.Trace(ctx, log.CLIENT, c.serverappname, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, cerror.ErrClosing)
@@ -328,10 +328,10 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			}
 			log.Trace(ctx, log.CLIENT, c.serverappname, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.serverappname, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
-			return nil, e
+			return "", nil, e
 		}
 		log.Trace(ctx, log.CLIENT, c.serverappname, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, nil)
 		monitor.WebClientMonitor(c.serverappname, method, path, nil, uint64(end.UnixNano()-start.UnixNano()))
-		return respbody, nil
+		return resp.Header.Get("Content-Type"), respbody, nil
 	}
 }
