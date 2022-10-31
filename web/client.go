@@ -155,7 +155,7 @@ func (c *WebClient) UpdateServerHost(serverhost string) error {
 	return nil
 }
 
-// this will return the host in NewWebClient function
+// this will return the host in NewWebClient/UpdateServerHost function
 func (c *WebClient) GetSeverHost() string {
 	return c.host
 }
