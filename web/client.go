@@ -161,9 +161,9 @@ func (c *WebClient) UpdateServerHost(serverhost string) error {
 }
 
 // this will return the host in NewWebClient function
-// if in NewWebClient function the host is empty,this will return empty
 func (c *WebClient) GetSeverHost() string {
-	return c.host.u.Scheme + "://" + c.host.u.Host
+	h := c.host
+	return h.u.Scheme + "://" + h.u.Host
 }
 func (c *WebClient) Close() {
 	c.stop.Close(nil, c.httpclient.CloseIdleConnections)
