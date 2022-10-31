@@ -185,17 +185,17 @@ func forbiddenHeader(header http.Header) bool {
 }
 
 // "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (string, []byte, error) {
+func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (contenttype string, respbody []byte, e error) {
 	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil)
 }
 
 // "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (string, []byte, error) {
+func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (contenttype string, respbody []byte, e error) {
 	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
 }
 
 // "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (string, []byte, error) {
+func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (contenttype string, respbody []byte, e error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
@@ -203,7 +203,7 @@ func (c *WebClient) Post(ctx context.Context, path, query string, header http.He
 }
 
 // "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (string, []byte, error) {
+func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (contenttype string, respbody []byte, e error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
@@ -211,7 +211,7 @@ func (c *WebClient) Put(ctx context.Context, path, query string, header http.Hea
 }
 
 // "Core_deadline" "Core_target" "Core_metadata" "Core_tracedata" are forbidden in header
-func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (string, []byte, error) {
+func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (contenttype string, respbody []byte, e error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewBuffer(body))
 	}
