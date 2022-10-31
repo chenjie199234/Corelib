@@ -139,17 +139,19 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername,
 
 // serverhost format [http/https]://[username[:password]@]the.host.name[:port]
 func (c *WebClient) UpdateServerHost(serverhost string) error {
-	if u, e := url.Parse(serverhost); e != nil ||
-		(u.Scheme != "http" && u.Scheme != "https") ||
-		u.Host == "" ||
-		u.Path != "" ||
-		u.RawPath != "" ||
-		u.Opaque != "" ||
-		u.ForceQuery ||
-		u.RawQuery != "" ||
-		u.Fragment != "" ||
-		u.RawFragment != "" {
-		return errors.New("[web.client] host format wrong,should be [http/https]://[username[:password]@]the.host.name[:port]")
+	if serverhost != "" {
+		if u, e := url.Parse(serverhost); e != nil ||
+			(u.Scheme != "http" && u.Scheme != "https") ||
+			u.Host == "" ||
+			u.Path != "" ||
+			u.RawPath != "" ||
+			u.Opaque != "" ||
+			u.ForceQuery ||
+			u.RawQuery != "" ||
+			u.Fragment != "" ||
+			u.RawFragment != "" {
+			return errors.New("[web.client] host format wrong,should be [http/https]://[username[:password]@]the.host.name[:port]")
+		}
 	}
 	c.host = serverhost
 	return nil
