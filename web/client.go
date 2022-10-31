@@ -83,7 +83,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername,
 		u.RawQuery != "" ||
 		u.Fragment != "" ||
 		u.RawFragment != "" {
-		return nil, errors.New("host format wrong,should be [http/https]://[username[:password]@]the.host.name[:port]")
+		return nil, errors.New("[web.client] host format wrong,should be [http/https]://[username[:password]@]the.host.name[:port]")
 	}
 	if c == nil {
 		c = &ClientConfig{}
@@ -151,7 +151,7 @@ func (c *WebClient) UpdateServerHost(serverhost string) error {
 		u.RawQuery != "" ||
 		u.Fragment != "" ||
 		u.RawFragment != "" {
-		return errors.New("host format wrong,should be [http/https]://[username[:password]@]the.host.name[:port]")
+		return errors.New("[web.client] host format wrong,should be [http/https]://[username[:password]@]the.host.name[:port]")
 	}
 	c.host = &hostinfo{
 		serverhost: serverhost,
