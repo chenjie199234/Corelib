@@ -116,7 +116,7 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername,
 		},
 		TLSHandshakeTimeout:    c.ConnectTimeout,
 		ForceAttemptHTTP2:      true,
-		MaxIdleConnsPerHost:    50,
+		MaxIdleConnsPerHost:    128,
 		IdleConnTimeout:        c.IdleTimeout,
 		MaxResponseHeaderBytes: int64(c.MaxHeader),
 	}
