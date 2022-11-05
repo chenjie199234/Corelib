@@ -22,6 +22,7 @@ func (b *balancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptio
 		cc:      cc,
 		servers: make(map[balancer.SubConn]*ServerForPick),
 	}
+	cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: b.c.balancer})
 	return b.c.balancer
 }
 
