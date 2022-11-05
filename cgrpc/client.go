@@ -159,7 +159,7 @@ func (c *CGrpcClient) ResolveNow() {
 	c.resolver.ResolveNow(resolver.ResolveNowOptions{})
 }
 func (c *CGrpcClient) Close() {
-	c.stop.Close(c.resolver.Close, func() { c.conn.Close() })
+	c.stop.Close(func() { c.conn.Close() }, nil)
 }
 
 var ClientClosed = errors.New("[cgrpc.client] closed")
