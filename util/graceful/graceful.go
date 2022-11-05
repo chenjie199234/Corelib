@@ -46,7 +46,7 @@ func (g *Graceful) Close(cleanOnceNow func(), cleanOnceAfter func()) {
 			if cleanOnceNow != nil {
 				cleanOnceNow()
 			}
-			if g.progress == math.MinInt64 {
+			if old == 0 {
 				close(g.stop)
 			}
 			break
