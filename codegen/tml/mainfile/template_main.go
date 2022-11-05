@@ -35,12 +35,14 @@ func main() {
 		xgrpc.UpdateHandlerTimeout(ac.HandlerTimeout)
 		xweb.UpdateHandlerTimeout(ac.HandlerTimeout)
 		xweb.UpdateWebPathRewrite(ac.WebPathRewrite)
-		publicmids.UpdateRateConfig(ac.RateRedisUrl, ac.HandlerRate)
-		publicmids.UpdateAccessConfig(ac.Accesses)
+		publicmids.UpdateRateConfig(ac.HandlerRate)
 		publicmids.UpdateTokenConfig(ac.TokenSecret, ac.SessionTokenExpire.StdDuration())
-		publicmids.UpdateSessionConfig(ac.SessionRedisUrl, ac.SessionTokenExpire.StdDuration())
+		publicmids.UpdateSessionConfig(ac.SessionTokenExpire.StdDuration())
 	})
 	defer config.Close()
+	publicmids.UpdateReplayDefendRedisInstance(config.GetRedis("sign_replay_defend_redis"))
+	publicmids.UpdateRateRedisInstance(config.GetRedis("rate_redis"))
+	publicmids.UpdateSessionRedisInstance(config.GetRedis("session_redis"))
 	//start the whole business service
 	if e := service.StartService(); e != nil {
 		log.Error(nil,e)

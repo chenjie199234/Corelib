@@ -115,13 +115,12 @@ const textapp = `{
 			"GRPC":"200ms"
 		}
 	},
-	"handler_rate":[{
-		"Path":"/{{.}}.status/ping",
-		"Method":["GET","GRPC","CRPC"],
-		"SingleMaxPerSec":10,
-		"GlobalMaxPerSec":0
-	}],
-	"rate_redis_url":"[redis/rediss]://[[username:]password@]host[/dbindex]",
+	"handler_rate":{
+		"/{{.}}.status/ping":[{
+			"Method":["GET","GRPC","CRPC"],
+			"MaxPerSec":10,
+		}]
+	],
 	"web_path_rewrite":{
 		"GET":{
 			"/example/origin/url":"/example/new/url"
@@ -135,7 +134,6 @@ const textapp = `{
 			"specific_access_id":"specific_access_key"
 		}
 	},
-	"session_redis_url":"[redis/rediss]://[[username:]password@]host[/dbindex]",
 	"token_secret":"test",
 	"session_token_expire":"24h",
 	"service":{

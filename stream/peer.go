@@ -188,6 +188,7 @@ func (p *Peer) putDispatcher() {
 type BeforeSend func(*Peer)
 type AfterSend func(*Peer, error)
 
+// SendMessage will return ErrMsgLarge/ErrConnClosed/context.Canceled/context.DeadlineExceeded
 func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, as AfterSend) error {
 	if len(userdata) == 0 {
 		return nil
@@ -208,18 +209,16 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 	piece := 0
 	for len(userdata) > 0 {
 		var data *pool.Buffer
-		var e error
 		if len(userdata) > maxPieceLen {
+			//this is not the end of this message
 			//send to websocket server must mask data
 			data = makeCommonMsg(userdata[:maxPieceLen], false, piece, p.peertype == _PEER_SERVER && p.ws)
 			userdata = userdata[maxPieceLen:]
 		} else {
+			//this is the end of this message
 			//send to websocket server must mask data
 			data = makeCommonMsg(userdata, true, piece, p.peertype == _PEER_SERVER && p.ws)
 			userdata = nil
-		}
-		if e != nil {
-			return e
 		}
 		if _, e := p.c.Write(data.Bytes()); e != nil {
 			log.Error(ctx, "[Stream.SendMessage] to:", p.c.RemoteAddr().String(), "error:", e)
@@ -276,12 +275,14 @@ func (p *Peer) GetLocalPort() string {
 func (p *Peer) GetPeerNetlag() int64 {
 	return atomic.LoadInt64(&p.netlag)
 }
+
+// get the direct peer's addr(maybe a proxy)
 func (p *Peer) GetRemoteAddr() string {
 	return p.c.RemoteAddr().String()
 }
 
-// when the connection is based on websocket and there is a load balancer before it
-// then the realPeerIP may different from the remoteaddr
+// client will get the same ip with GetRemoteAddr
+// server will try to get the real client's ip if there are proxys between client and server
 func (p *Peer) GetRealPeerIp() string {
 	return p.realPeerIP
 }

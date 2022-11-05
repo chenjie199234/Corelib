@@ -7,24 +7,19 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/container/ring"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
 )
 
 type rate struct {
 	p     *redis.Pool
-	grpc  map[string]*rateinfo //key path
-	crpc  map[string]*rateinfo //key path
-	get   map[string]*rateinfo //key path
-	post  map[string]*rateinfo //key path
-	put   map[string]*rateinfo //key path
-	patch map[string]*rateinfo //key path
-	del   map[string]*rateinfo //key path
-}
-type rateinfo struct {
-	single *ring.Ring[int64]
-	global []interface{} //if this is not nil,this has 2 elements,first is the redis key,second is the rate
+	grpc  map[string][][2]interface{} //key path
+	crpc  map[string][][2]interface{} //key path
+	get   map[string][][2]interface{} //key path
+	post  map[string][][2]interface{} //key path
+	put   map[string][][2]interface{} //key path
+	patch map[string][][2]interface{} //key path
+	del   map[string][][2]interface{} //key path
 }
 
 var rateinstance *rate
@@ -33,18 +28,12 @@ func init() {
 	rateinstance = &rate{}
 }
 
-type RateConfig struct {
-	Path   string
-	Method []string //GRPC,CRPC,GET,POST,PUT,PATCH,DELETE
-	//single and global are both 0,means ban
-	//single and global are both not 0,means both single and global will be checked
-	//single is 0,global not 0,means only global will be checked
-	//single it not 0,global is 0,means only single will be checked
-	SingleMaxPerSec uint64 //single instance's rate
-	GlobalMaxPerSec uint64 //all instances' rate
+type PathRateConfig struct {
+	Method    []string `json:"method"`      //GRPC,CRPC,GET,POST,PUT,PATCH,DELETE
+	MaxPerSec uint64   `json:"max_per_sec"` //all methods above share this rate
 }
 
-func UpdateRateConfig(redisurl string, c []*RateConfig) {
+func UpdateRateRedisUrl(redisurl string) {
 	var newp *redis.Pool
 	if redisurl != "" {
 		newp = redis.NewRedis(&redis.Config{
@@ -57,115 +46,77 @@ func UpdateRateConfig(redisurl string, c []*RateConfig) {
 			IOTimeout:   time.Second * 5,
 		})
 	} else {
-		log.Warning(nil, "[rate] redis url missing,all global rate check will be failed")
-	}
-	grpc := make(map[string]*rateinfo)  //key path
-	crpc := make(map[string]*rateinfo)  //key path
-	get := make(map[string]*rateinfo)   //key path
-	post := make(map[string]*rateinfo)  //key path
-	put := make(map[string]*rateinfo)   //key path
-	patch := make(map[string]*rateinfo) //key path
-	del := make(map[string]*rateinfo)   //key path
-	for _, cc := range c {
-		info := &rateinfo{}
-		if cc.SingleMaxPerSec != 0 {
-			info.single = ring.NewRing[int64](cc.SingleMaxPerSec)
-		}
-		if cc.GlobalMaxPerSec != 0 {
-			info.global = []interface{}{cc.Path + "_" + strings.Join(cc.Method, "_"), cc.GlobalMaxPerSec}
-		}
-		for _, m := range cc.Method {
-			switch strings.ToUpper(m) {
-			case "GRPC":
-				exist, ok := grpc[cc.Path]
-				if !ok {
-					grpc[cc.Path] = info
-				} else {
-					if info.single != nil {
-						exist.single = info.single
-					}
-					if info.global != nil {
-						exist.global = info.global
-					}
-				}
-			case "CRPC":
-				exist, ok := crpc[cc.Path]
-				if !ok {
-					crpc[cc.Path] = info
-				} else {
-					if info.single != nil {
-						exist.single = info.single
-					}
-					if info.global != nil {
-						exist.global = info.global
-					}
-				}
-			case "GET":
-				exist, ok := get[cc.Path]
-				if !ok {
-					get[cc.Path] = info
-				} else {
-					if info.single != nil {
-						exist.single = info.single
-					}
-					if info.global != nil {
-						exist.global = info.global
-					}
-				}
-			case "POST":
-				exist, ok := post[cc.Path]
-				if !ok {
-					post[cc.Path] = info
-				} else {
-					if info.single != nil {
-						exist.single = info.single
-					}
-					if info.global != nil {
-						exist.global = info.global
-					}
-				}
-			case "PUT":
-				exist, ok := put[cc.Path]
-				if !ok {
-					put[cc.Path] = info
-				} else {
-					if info.single != nil {
-						exist.single = info.single
-					}
-					if info.global != nil {
-						exist.global = info.global
-					}
-				}
-			case "PATCH":
-				exist, ok := patch[cc.Path]
-				if !ok {
-					patch[cc.Path] = info
-				} else {
-					if info.single != nil {
-						exist.single = info.single
-					}
-					if info.global != nil {
-						exist.global = info.global
-					}
-				}
-			case "DELETE":
-				exist, ok := del[cc.Path]
-				if !ok {
-					del[cc.Path] = info
-				} else {
-					if info.single != nil {
-						exist.single = info.single
-					}
-					if info.global != nil {
-						exist.global = info.global
-					}
-				}
-			}
-		}
+		log.Warning(nil, "[rate] redis missing,all rate check will be failed")
 	}
 	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.p)), unsafe.Pointer(newp)))
 	if oldp != nil {
 		oldp.Close()
+	}
+}
+func UpdateRateRedisInstance(p *redis.Pool) {
+	if p == nil {
+		log.Warning(nil, "[rate] redis missing,all rate check will be failed")
+	}
+	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.p)), unsafe.Pointer(p)))
+	if oldp != nil {
+		oldp.Close()
+	}
+}
+
+// key path
+func UpdateRateConfig(c map[string][]*PathRateConfig) {
+	grpc := make(map[string][][2]interface{})  //key path
+	crpc := make(map[string][][2]interface{})  //key path
+	get := make(map[string][][2]interface{})   //key path
+	post := make(map[string][][2]interface{})  //key path
+	put := make(map[string][][2]interface{})   //key path
+	patch := make(map[string][][2]interface{}) //key path
+	del := make(map[string][][2]interface{})   //key path
+	for path, cc := range c {
+		for _, ccc := range cc {
+			var rateinfo [2]interface{}
+			rateinfo[0] = "{" + path + "}_" + strings.Join(ccc.Method, "_")
+			rateinfo[1] = ccc.MaxPerSec
+			for _, m := range ccc.Method {
+				switch strings.ToUpper(m) {
+				case "GRPC":
+					if _, ok := grpc[path]; !ok {
+						grpc[path] = make([][2]interface{}, 0, 3)
+					}
+					grpc[path] = append(grpc[path], rateinfo)
+				case "CRPC":
+					if _, ok := crpc[path]; !ok {
+						crpc[path] = make([][2]interface{}, 0, 3)
+					}
+					crpc[path] = append(crpc[path], rateinfo)
+				case "GET":
+					if _, ok := get[path]; !ok {
+						get[path] = make([][2]interface{}, 0, 3)
+					}
+					get[path] = append(get[path], rateinfo)
+				case "POST":
+					if _, ok := post[path]; !ok {
+						post[path] = make([][2]interface{}, 0, 3)
+					}
+					post[path] = append(post[path], rateinfo)
+				case "PUT":
+					if _, ok := put[path]; !ok {
+						put[path] = make([][2]interface{}, 0, 3)
+					}
+					put[path] = append(put[path], rateinfo)
+				case "PATCH":
+					if _, ok := patch[path]; !ok {
+						patch[path] = make([][2]interface{}, 0, 3)
+					}
+					patch[path] = append(patch[path], rateinfo)
+				case "DELETE":
+					if _, ok := del[path]; !ok {
+						del[path] = make([][2]interface{}, 0, 3)
+					}
+					del[path] = append(del[path], rateinfo)
+				}
+			}
+		}
 	}
 	rateinstance.grpc = grpc
 	rateinstance.crpc = crpc
@@ -176,45 +127,14 @@ func UpdateRateConfig(redisurl string, c []*RateConfig) {
 	rateinstance.del = del
 }
 
-func checkrate(ctx context.Context, info *rateinfo) bool {
-	if info.global == nil && info.single == nil {
-		//both single and global's config rate is 0
-		return false
+func checkrate(ctx context.Context, infos [][2]interface{}) bool {
+	rates := make(map[string]uint64)
+	for _, info := range infos {
+		rates[info[0].(string)] = info[1].(uint64)
 	}
-	if info.global != nil && rateinstance.p == nil {
-		log.Error(ctx, "[rate] config missing redis url")
-		return false
-	}
-	//single first
-	if info.single != nil {
-		now := time.Now().UnixNano()
-		for {
-			if info.single.Push(now) {
-				break
-			}
-			//buf list full,try to pop
-			if _, ok := info.single.Pop(func(d int64) bool {
-				return now-d >= time.Second.Nanoseconds()
-			}); !ok {
-				//can't push and can't pop,buf list is still full
-				return false
-			}
-		}
-	}
-	//then global
-	if info.global == nil {
-		return true
-	}
-	pass, e := rateinstance.p.RateLimitSecondMax(ctx, info.global[0].(string), info.global[1].(uint64))
+	pass, e := rateinstance.p.RateLimitSecondMax(ctx, rates)
 	if e != nil {
-		log.Error(ctx, "[rate] update redis global check data:", e)
-	}
-	if !pass && info.single != nil {
-		//when pass the single check,current time will be pushed into the buf list
-		//now the global check didn't pass,we need to return back the consumed rate
-		//but when return back the consumed rate,the oldest try will be poped
-		//so this is not fair,only the num can be returned,better then do nothing
-		info.single.Pop(nil)
+		log.Error(ctx, "[rate] update redis check data:", e)
 	}
 	return pass
 }
@@ -225,12 +145,12 @@ func GrpcRate(ctx context.Context, path string) bool {
 		//didn't update the config
 		return false
 	}
-	info, ok := rateinstance.grpc[path]
+	infos, ok := rateinstance.grpc[path]
 	if !ok {
 		//missing config
 		return false
 	}
-	return checkrate(ctx, info)
+	return checkrate(ctx, infos)
 }
 func CrpcRate(ctx context.Context, path string) bool {
 	if rateinstance.crpc == nil {
@@ -238,12 +158,12 @@ func CrpcRate(ctx context.Context, path string) bool {
 		//didn't update the config
 		return false
 	}
-	info, ok := rateinstance.crpc[path]
+	infos, ok := rateinstance.crpc[path]
 	if !ok {
 		//missing config
 		return false
 	}
-	return checkrate(ctx, info)
+	return checkrate(ctx, infos)
 }
 func HttpGetRate(ctx context.Context, path string) bool {
 	if rateinstance.get == nil {
@@ -251,12 +171,12 @@ func HttpGetRate(ctx context.Context, path string) bool {
 		//didn't update the config
 		return false
 	}
-	info, ok := rateinstance.get[path]
+	infos, ok := rateinstance.get[path]
 	if !ok {
 		//missing config
 		return false
 	}
-	return checkrate(ctx, info)
+	return checkrate(ctx, infos)
 }
 func HttpPostRate(ctx context.Context, path string) bool {
 	if rateinstance.post == nil {
@@ -264,12 +184,12 @@ func HttpPostRate(ctx context.Context, path string) bool {
 		//didn't update the config
 		return false
 	}
-	info, ok := rateinstance.post[path]
+	infos, ok := rateinstance.post[path]
 	if !ok {
 		//missing config
 		return false
 	}
-	return checkrate(ctx, info)
+	return checkrate(ctx, infos)
 }
 func HttpPutRate(ctx context.Context, path string) bool {
 	if rateinstance.put == nil {
@@ -277,12 +197,12 @@ func HttpPutRate(ctx context.Context, path string) bool {
 		//didn't update the config
 		return false
 	}
-	info, ok := rateinstance.put[path]
+	infos, ok := rateinstance.put[path]
 	if !ok {
 		//missing config
 		return false
 	}
-	return checkrate(ctx, info)
+	return checkrate(ctx, infos)
 }
 func HttpPatchRate(ctx context.Context, path string) bool {
 	if rateinstance.patch == nil {
@@ -290,12 +210,12 @@ func HttpPatchRate(ctx context.Context, path string) bool {
 		//didn't update the config
 		return false
 	}
-	info, ok := rateinstance.patch[path]
+	infos, ok := rateinstance.patch[path]
 	if !ok {
 		//missing config
 		return false
 	}
-	return checkrate(ctx, info)
+	return checkrate(ctx, infos)
 }
 func HttpDelRate(ctx context.Context, path string) bool {
 	if rateinstance.del == nil {
@@ -303,10 +223,10 @@ func HttpDelRate(ctx context.Context, path string) bool {
 		//didn't update the config
 		return false
 	}
-	info, ok := rateinstance.del[path]
+	infos, ok := rateinstance.del[path]
 	if !ok {
 		//missing config
 		return false
 	}
-	return checkrate(ctx, info)
+	return checkrate(ctx, infos)
 }

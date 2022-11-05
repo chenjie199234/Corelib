@@ -37,7 +37,7 @@ type RegisterData struct {
 type ClientConfig struct {
 	GlobalTimeout    time.Duration //global timeout for every rpc call
 	ConnectTimeout   time.Duration //default 500ms
-	HeartPorbe       time.Duration //default 1s,3 probe missing means disconnect
+	HeartProbe       time.Duration //default 1s,3 probe missing means disconnect
 	MaxMsgLen        uint32        //default 64M,min 64k
 	UseTLS           bool          //crpc or crpcs
 	SkipVerifyTLS    bool          //don't verify the server's cert
@@ -130,7 +130,7 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername
 	}
 	client.balancer = newCorelibBalancer(client)
 	instancec := &stream.InstanceConfig{
-		HeartprobeInterval: c.HeartPorbe,
+		HeartprobeInterval: c.HeartProbe,
 		TcpC: &stream.TcpConfig{
 			ConnectTimeout: c.ConnectTimeout,
 			MaxMsgLen:      c.MaxMsgLen,
@@ -184,7 +184,7 @@ func (c *CrpcClient) onlinefunc(p *stream.Peer) bool {
 	p.SetData(unsafe.Pointer(server))
 	server.setpeer(p)
 	c.balancer.RebuildPicker(true)
-	log.Info(nil, "[crpc.client.onlinefunc] server RemoteAddr:", p.GetRemoteAddr(), "online")
+	log.Info(nil, "[crpc.client.onlinefunc] server:", c.serverappname+":"+p.GetRemoteAddr(), "online")
 	return true
 }
 
@@ -193,7 +193,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
-		log.Error(nil, "[crpc.client.userfunc] server RemoteAddr:", p.GetRemoteAddr(), "data format error:", e)
+		log.Error(nil, "[crpc.client.userfunc] server:", c.serverappname+":"+p.GetRemoteAddr(), "data format error:", e)
 		return
 	}
 	server.lker.Lock()
@@ -220,7 +220,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 
 func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
-	log.Info(nil, "[crpc.client.offlinefunc] server RemoteAddr:", p.GetRemoteAddr(), "offline")
+	log.Info(nil, "[crpc.client.offlinefunc] server:", c.serverappname+":"+p.GetRemoteAddr(), "offline")
 	server.setpeer(nil)
 	c.balancer.RebuildPicker(false)
 	server.lker.Lock()
@@ -252,7 +252,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 	traceid, selfappname, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
 	if traceid != "" {
 		msg.Tracedata = map[string]string{
-			"Traceid":      traceid,
+			"TraceID":      traceid,
 			"SourceApp":    selfappname,
 			"SourceMethod": selfmethod,
 			"SourcePath":   selfpath,

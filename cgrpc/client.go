@@ -44,7 +44,7 @@ type RegisterData struct {
 type ClientConfig struct {
 	GlobalTimeout    time.Duration //global timeout for every rpc call
 	ConnectTimeout   time.Duration //default 500ms
-	HeartPorbe       time.Duration //default 1s
+	HeartProbe       time.Duration //default 1s
 	MaxMsgLen        uint32        //default 64M,min 64k
 	UseTLS           bool          //grpc or grpcs
 	SkipVerifyTLS    bool          //don't verify the server's cert
@@ -61,8 +61,8 @@ func (c *ClientConfig) validate() {
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
 	}
-	if c.HeartPorbe < time.Second {
-		c.HeartPorbe = time.Second
+	if c.HeartProbe < time.Second {
+		c.HeartProbe = time.Second
 	}
 	if c.DiscoverInterval <= 0 {
 		c.DiscoverInterval = time.Second * 10
@@ -139,7 +139,7 @@ func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servernam
 			MaxDelay:  time.Millisecond * 100,
 		}, //reconnect immediately when disconnect,reconnect delay 100ms when connect failed
 	}))
-	opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{Time: c.HeartPorbe, Timeout: c.HeartPorbe*3 + c.HeartPorbe/3}))
+	opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{Time: c.HeartProbe, Timeout: c.HeartProbe*3 + c.HeartProbe/3}))
 	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(int(c.MaxMsgLen))))
 	//balancer
 	balancer.Register(&balancerBuilder{c: clientinstance})
@@ -177,13 +177,13 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 	md := gmetadata.New(nil)
 	if len(metadata) != 0 {
 		d, _ := json.Marshal(metadata)
-		md.Set("core_metadata", common.Byte2str(d))
+		md.Set("Core-Metadata", common.Byte2str(d))
 	}
 	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
 	if traceid != "" {
-		md.Set("core_tracedata", traceid, c.selfappname, selfmethod, selfpath, strconv.Itoa(selfdeep))
+		md.Set("Core-Tracedata", traceid, c.selfappname, selfmethod, selfpath, strconv.Itoa(selfdeep))
 	}
-	md.Set("core_target", c.serverappname)
+	md.Set("Core-Target", c.serverappname)
 	ctx = gmetadata.NewOutgoingContext(ctx, md)
 	for {
 		start := time.Now()

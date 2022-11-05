@@ -67,7 +67,7 @@ func getCGrpcClientConfig() *cgrpc.ClientConfig {
 	return &cgrpc.ClientConfig{
 		ConnectTimeout:   time.Duration(gc.ConnectTimeout),
 		GlobalTimeout:    time.Duration(gc.GlobalTimeout),
-		HeartPorbe:       time.Duration(gc.HeartProbe),
+		HeartProbe:       time.Duration(gc.HeartProbe),
 		Discover:         cgrpcDNS,
 		DiscoverInterval: time.Second * 10,
 	}
@@ -95,7 +95,7 @@ func getCrpcClientConfig() *crpc.ClientConfig {
 	return &crpc.ClientConfig{
 		ConnectTimeout:   time.Duration(rc.ConnectTimeout),
 		GlobalTimeout:    time.Duration(rc.GlobalTimeout),
-		HeartPorbe:       time.Duration(rc.HeartProbe),
+		HeartProbe:       time.Duration(rc.HeartProbe),
 		Discover:         crpcDNS,
 		DiscoverInterval: time.Second * 10,
 	}

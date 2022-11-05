@@ -334,7 +334,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("if resp == nil{")
 		g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 		g.P("}")
-		g.P("if ", stringsPackage.Ident("HasPrefix"), "(ctx.GetAcceptType(),", strconv.Quote("application/x-protobuf"), "){")
+		g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetAcceptType(),", strconv.Quote("application/x-protobuf"), "){")
 		g.P("respd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
 		g.P("ctx.Write(\"application/x-protobuf\",respd)")
 		g.P("}else{")
@@ -678,9 +678,9 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("}")
 			switch httpmetohd {
 			case http.MethodGet:
-				g.P("ct,data,e:=c.cc.Get(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
+				g.P("r,e:=c.cc.Get(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			case http.MethodDelete:
-				g.P("ct,data,e:=c.cc.Delete(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
+				g.P("r,e:=c.cc.Delete(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			}
 		} else {
 			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")
@@ -688,28 +688,31 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
 			switch httpmetohd {
 			case http.MethodPost:
-				g.P("ct,data,e:=c.cc.Post(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("r,e:=c.cc.Post(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			case http.MethodPut:
-				g.P("ct,data,e:=c.cc.Put(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("r,e:=c.cc.Put(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			case http.MethodPatch:
-				g.P("ct,data,e:=c.cc.Patch(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("r,e:=c.cc.Patch(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			}
 		}
 		g.P("if e != nil {")
 		g.P("return nil,e")
 		g.P("}")
+		g.P("data,e:=", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(r.Body)")
+		g.P("r.Body.Close()")
+		g.P("if e!=nil {")
+		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ConvertStdError")), "(e)")
+		g.P("}")
 		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 		g.P("if len(data)==0{")
 		g.P("return resp,nil")
 		g.P("}")
-		g.P("if ct == \"application/x-protobuf\"{")
+		g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(r.Header.Get(\"Content-Type\"), \"application/x-protobuf\"){")
 		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(data,resp);e!=nil{")
 		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrResp")))
 		g.P("}")
-		g.P("}else{")
-		g.P("if e:=", g.QualifiedGoIdent(protojsonPackage.Ident("Unmarshal")), "(data,resp);e!=nil{")
+		g.P("} else if e:=", g.QualifiedGoIdent(protojsonPackage.Ident("Unmarshal")), "(data,resp);e!=nil{")
 		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrResp")))
-		g.P("}")
 		g.P("}")
 		g.P("return resp, nil")
 		g.P("}")

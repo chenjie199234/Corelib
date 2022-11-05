@@ -13,7 +13,6 @@ func init() {
 	all = make(map[string]crpc.OutsideHandler)
 	//register here
 	all["rate"] = rate
-	all["accesskey"] = accesskey
 	all["token"] = token
 	all["session"] = session
 }
@@ -31,20 +30,9 @@ func rate(ctx *crpc.Context) {
 		ctx.Abort(cerror.ErrBusy)
 	}
 }
-func accesskey(ctx *crpc.Context) {
-	md := ctx.GetMetadata()
-	accesskey := md["Access-Key"]
-	if accesskey == "" {
-		ctx.Abort(cerror.ErrAccessKey)
-		return
-	}
-	if !publicmids.AccessKeyCheck(ctx.GetPath(), accesskey) {
-		ctx.Abort(cerror.ErrAccessKey)
-	}
-}
 func token(ctx *crpc.Context) {
 	md := ctx.GetMetadata()
-	tokenstr := md["Authorization"]
+	tokenstr := md["Token"]
 	if tokenstr == "" {
 		ctx.Abort(cerror.ErrToken)
 		return
@@ -61,13 +49,12 @@ func token(ctx *crpc.Context) {
 }
 func session(ctx *crpc.Context) {
 	md := ctx.GetMetadata()
-	userid := md["Session-UID"]
-	sessionid := md["Session-SID"]
-	if userid == "" || sessionid == "" {
+	sessionstr := md["Session"]
+	if sessionstr == "" {
 		ctx.Abort(cerror.ErrSession)
 		return
 	}
-	sessiondata, pass := publicmids.VerifySession(ctx, userid, sessionid)
+	sessiondata, pass := publicmids.VerifySession(ctx, sessionstr)
 	if !pass {
 		ctx.Abort(cerror.ErrSession)
 		return

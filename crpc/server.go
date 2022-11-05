@@ -168,23 +168,25 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 	copy(totalhandlers, s.global)
 	copy(totalhandlers[len(s.global):], handlers)
 	return func(ctx context.Context, p *stream.Peer, msg *Msg) {
-		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
-		var sourceapp, sourceip, sourcemethod, sourcepath string
-		if msg.Tracedata != nil {
+		sourceip := p.GetRealPeerIp()
+		sourceapp := "unknown"
+		sourcemethod := "unknown"
+		sourcepath := "unknown"
+		if len(msg.Tracedata) == 0 || msg.Tracedata["TraceID"] == "" {
+			ctx = log.InitTrace(ctx, "", s.selfappname, host.Hostip, "CRPC", msg.Path, 0)
+		} else {
 			sourceapp = msg.Tracedata["SourceApp"]
 			sourcemethod = msg.Tracedata["SourceMethod"]
 			sourcepath = msg.Tracedata["SourcePath"]
+			clientdeep, e := strconv.Atoi(msg.Tracedata["Deep"])
+			if e != nil || sourceapp == "" || sourcemethod == "" || sourcepath == "" || clientdeep == 0 {
+				log.Error(nil, "[crpc.server] client:", p.GetRealPeerIp(), "path:", path, "method: CRPC error: tracedata:", msg.Tracedata, "format error")
+				p.Close()
+				return
+			}
+			ctx = log.InitTrace(ctx, msg.Tracedata["TraceID"], s.selfappname, host.Hostip, "CRPC", msg.Path, clientdeep)
 		}
-		if sourceapp == "" {
-			sourceapp = "unkown"
-		}
-		sourceip = p.GetRealPeerIp()
-		if sourcemethod == "" {
-			sourcemethod = "unknown"
-		}
-		if sourcepath == "" {
-			sourcepath = "unknown"
-		}
+		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
 		//var globaldl int64
 		start := time.Now()
 		var min int64
@@ -235,13 +237,36 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 			if e := recover(); e != nil {
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[crpc.server] client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "path:", path, "method: CRPC panic:", e, "stack:", base64.StdEncoding.EncodeToString(stack[:n]))
+				log.Error(workctx, "[crpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: CRPC panic:", e, "stack:", base64.StdEncoding.EncodeToString(stack[:n]))
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
 				msg.Error = cerror.ErrPanic
 				msg.Metadata = nil
 				msg.Tracedata = nil
+			}
+			d, _ := proto.Marshal(msg)
+			if e := p.SendMessage(workctx, d, nil, nil); e != nil {
+				if e == stream.ErrMsgLarge {
+					msg.Path = ""
+					msg.Deadline = 0
+					msg.Body = nil
+					msg.Error = cerror.ErrRespmsgLen
+					msg.Metadata = nil
+					msg.Tracedata = nil
+					d, _ = proto.Marshal(msg)
+					if e = p.SendMessage(workctx, d, nil, nil); e != nil {
+						if e == stream.ErrConnClosed {
+							msg.Error = cerror.ErrClosed
+						} else {
+							msg.Error = cerror.ConvertStdError(e)
+						}
+					}
+				} else if e == stream.ErrConnClosed {
+					msg.Error = cerror.ErrClosed
+				} else {
+					msg.Error = cerror.ConvertStdError(e)
+				}
 			}
 			end := time.Now()
 			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+p.GetLocalPort(), "CRPC", path, &start, &end, msg.Error)
@@ -279,13 +304,13 @@ func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 		calls:     make(map[uint64]context.CancelFunc),
 	}
 	p.SetData(unsafe.Pointer(c))
-	log.Info(nil, "[crpc.server.onlinefunc] client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "online")
+	log.Info(nil, "[crpc.server.onlinefunc] client:", p.GetRealPeerIp(), "online")
 	return true
 }
 func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
-		log.Error(nil, "[crpc.server.userfunc] client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "data format error:", e)
+		log.Error(nil, "[crpc.server.userfunc] client:", p.GetRealPeerIp(), "data format error:", e)
 		p.Close()
 		return
 	}
@@ -300,7 +325,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	}
 	handler, ok := s.handler[msg.Path]
 	if !ok {
-		log.Error(nil, "[crpc.server.userfunc] client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "call path:", msg.Path, "error: unknown path")
+		log.Error(nil, "[crpc.server.userfunc] client:", p.GetRealPeerIp(), "call path:", msg.Path, "error: unknown path")
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
@@ -309,25 +334,10 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d, nil, nil); e != nil {
-			log.Error(nil, "[crpc.server.userfunc] send message to client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "error:", e)
+			log.Error(nil, "[crpc.server.userfunc] send message to client:", p.GetRealPeerIp(), "error:", e)
 		}
 		return
 	}
-	var tracectx context.Context
-	if len(msg.Tracedata) == 0 || msg.Tracedata["Traceid"] == "" {
-		tracectx = log.InitTrace(p, "", s.selfappname, host.Hostip, "CRPC", msg.Path, 0)
-	} else if len(msg.Tracedata) != 4 || msg.Tracedata["Deep"] == "" {
-		log.Error(nil, "[crpc.server.userfunc] client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "path:", msg.Path, "method: CRPC error: tracedata:", msg.Tracedata, "format error")
-		p.Close()
-		return
-	} else if clientdeep, e := strconv.Atoi(msg.Tracedata["Deep"]); e != nil {
-		log.Error(nil, "[crpc.server.userfunc] client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "path:", msg.Path, "method: CRPC error: tracedata:", msg.Tracedata, "format error")
-		p.Close()
-		return
-	} else {
-		tracectx = log.InitTrace(p, msg.Tracedata["Traceid"], s.selfappname, host.Hostip, "CRPC", msg.Path, clientdeep)
-	}
-
 	c.Lock()
 	if c.maxcallid == 0 {
 		c.Unlock()
@@ -339,8 +349,8 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Metadata = nil
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
-		if e := p.SendMessage(tracectx, d, nil, nil); e != nil {
-			log.Error(tracectx, "[crpc.server.userfunc] send messge to client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "error:", e)
+		if e := p.SendMessage(nil, d, nil, nil); e != nil {
+			log.Error(nil, "[crpc.server.userfunc] send messge to client:", p.GetRealPeerIp(), "error:", e)
 		}
 		return
 	}
@@ -354,45 +364,26 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Metadata = nil
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
-		if e := p.SendMessage(tracectx, d, nil, nil); e != nil {
-			log.Error(tracectx, "[crpc.server.userfunc] send message to client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "error:", e)
+		if e := p.SendMessage(nil, d, nil, nil); e != nil {
+			log.Error(nil, "[crpc.server.userfunc] send message to client:", p.GetRealPeerIp(), "error:", e)
 		}
 		return
 	}
 	c.maxcallid = msg.Callid
-	ctx, cancel := context.WithCancel(tracectx)
+	ctx, cancel := context.WithCancel(p)
 	c.calls[msg.Callid] = cancel
 	c.Unlock()
 	go func() {
+		defer s.stop.DoneOne()
 		handler(ctx, p, msg)
-		d, _ := proto.Marshal(msg)
-		if e := p.SendMessage(ctx, d, nil, nil); e != nil {
-			if e == stream.ErrMsgLarge {
-				msg.Path = ""
-				msg.Deadline = 0
-				msg.Body = nil
-				msg.Error = cerror.ErrRespmsgLen
-				msg.Metadata = nil
-				msg.Tracedata = nil
-				d, _ = proto.Marshal(msg)
-				if e = p.SendMessage(ctx, d, nil, nil); e != nil {
-					log.Error(ctx, "[crpc.server.userfunc] send message to client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "error:", e)
-				} else {
-					log.Error(ctx, "[crpc.server.userfunc] send message to client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "error:", cerror.ErrRespmsgLen)
-				}
-			} else {
-				log.Error(ctx, "[crpc.server.userfunc] send message to client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "error:", e)
-			}
-		}
 		c.Lock()
 		if cancel, ok := c.calls[msg.Callid]; ok {
 			cancel()
 			delete(c.calls, msg.Callid)
 		}
 		c.Unlock()
-		s.stop.DoneOne()
 	}()
 }
 func (s *CrpcServer) offlinefunc(p *stream.Peer) {
-	log.Info(nil, "[crpc.server.offlinefunc] client RemoteAddr:", p.GetRemoteAddr(), "RealIP:", p.GetRealPeerIp(), "offline")
+	log.Info(nil, "[crpc.server.offlinefunc] client:", p.GetRealPeerIp(), "offline")
 }

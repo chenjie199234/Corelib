@@ -88,9 +88,22 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 	opts = append(opts, grpc.StatsHandler(serverinstance))
 	opts = append(opts, grpc.UnknownServiceHandler(func(_ interface{}, stream grpc.ServerStream) error {
 		ctx := stream.Context()
-		conninfo := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)
 		rpcinfo := ctx.Value(serverrpckey{}).(*stats.RPCTagInfo)
-		log.Error(nil, "[cgrpc.server] client ip:", conninfo.RemoteAddr.String(), "call path:", rpcinfo.FullMethodName, "error: unknown path")
+		gmd, ok := metadata.FromIncomingContext(ctx)
+		peerip := ""
+		if ok {
+			if forward := gmd.Get("X-Forwarded-For"); len(forward) > 0 && len(forward[0]) > 0 {
+				peerip = strings.TrimSpace(strings.Split(forward[0], ",")[0])
+			} else if realip := gmd.Get("X-Real-Ip"); len(realip) > 0 && len(realip[0]) > 0 {
+				peerip = strings.TrimSpace(realip[0])
+			}
+		}
+		if peerip == "" {
+			conninfo := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)
+			remoteaddr := conninfo.RemoteAddr.String()
+			peerip = remoteaddr[:strings.LastIndex(remoteaddr, ":")]
+		}
+		log.Error(nil, "[cgrpc.server] client:", peerip, "call path:", rpcinfo.FullMethodName, "error: unknown path")
 		return cerror.ErrNoapi
 	}))
 	if c.ConnectTimeout != 0 {
@@ -188,9 +201,9 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 	copy(totalhandlers, s.global)
 	copy(totalhandlers[len(s.global):], handlers)
 	return func(_ interface{}, ctx context.Context, decode func(interface{}) error, _ grpc.UnaryServerInterceptor) (resp interface{}, e error) {
-		grpcmetadata, ok := metadata.FromIncomingContext(ctx)
+		gmd, ok := metadata.FromIncomingContext(ctx)
 		if ok {
-			if data := grpcmetadata.Get("core_target"); len(data) != 0 && data[0] != s.selfappname {
+			if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != s.selfappname {
 				return nil, cerror.ErrClosing
 			}
 		}
@@ -199,12 +212,11 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		conninfo := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)
 		remoteaddr := conninfo.RemoteAddr.String()
 		localaddr := conninfo.LocalAddr.String()
-		traceid := ""
 		sourceip := ""
 		if ok {
-			if forward := grpcmetadata.Get("X-Forwarded-For"); len(forward) > 0 && len(forward[0]) > 0 {
+			if forward := gmd.Get("X-Forwarded-For"); len(forward) > 0 && len(forward[0]) > 0 {
 				sourceip = strings.TrimSpace(strings.Split(forward[0], ",")[0])
-			} else if realip := grpcmetadata.Get("X-Real-Ip"); len(realip) > 0 && len(realip[0]) > 0 {
+			} else if realip := gmd.Get("X-Real-Ip"); len(realip) > 0 && len(realip[0]) > 0 {
 				sourceip = strings.TrimSpace(realip[0])
 			}
 		}
@@ -214,27 +226,28 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		sourceapp := "unknown"
 		sourcemethod := "unknown"
 		sourcepath := "unknown"
-		selfdeep := 0
 		if ok {
-			if data := grpcmetadata.Get("core_tracedata"); len(data) == 0 || data[0] == "" {
+			if data := gmd.Get("Core-Tracedata"); len(data) == 0 || data[0] == "" {
 				ctx = log.InitTrace(ctx, "", s.selfappname, host.Hostip, "GRPC", path, 0)
-			} else if len(data) != 5 || data[4] == "" {
-				log.Error(nil, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format error")
-				return nil, cerror.ErrReq
-			} else if clientdeep, e := strconv.Atoi(data[4]); e != nil {
-				log.Error(nil, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format error")
+			} else if len(data) != 5 {
+				log.Error(nil, "[cgrpc.server] client:", sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format error")
 				return nil, cerror.ErrReq
 			} else {
-				ctx = log.InitTrace(ctx, data[0], s.selfappname, host.Hostip, "GRPC", path, clientdeep)
 				sourceapp = data[1]
 				sourcemethod = data[2]
 				sourcepath = data[3]
+				clientdeep, e := strconv.Atoi(data[4])
+				if e != nil || sourceapp == "" || sourcemethod == "" || sourcepath == "" || clientdeep == 0 {
+					log.Error(nil, "[cgrpc.server] client:", sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format error")
+					return nil, cerror.ErrReq
+				}
+				ctx = log.InitTrace(ctx, data[0], s.selfappname, host.Hostip, "GRPC", path, clientdeep)
 			}
 		}
-		traceid, _, _, _, _, selfdeep = log.GetTrace(ctx)
+		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
 		var mdata map[string]string
 		if ok {
-			data := grpcmetadata.Get("core_metadata")
+			data := gmd.Get("Core-Metadata")
 			if len(data) != 0 {
 				mdata = make(map[string]string)
 				if e := json.Unmarshal(common.Str2byte(data[0]), &mdata); e != nil {
@@ -301,12 +314,25 @@ func (s *CGrpcServer) HandleConn(ctx context.Context, stat stats.ConnStats) {
 	if !ok {
 		return
 	}
+	gmd, ok := metadata.FromIncomingContext(ctx)
+	peerip := ""
+	if ok {
+		if forward := gmd.Get("X-Forwarded-For"); len(forward) > 0 && len(forward[0]) > 0 {
+			peerip = strings.TrimSpace(strings.Split(forward[0], ",")[0])
+		} else if realip := gmd.Get("X-Real-Ip"); len(realip) > 0 && len(realip[0]) > 0 {
+			peerip = strings.TrimSpace(realip[0])
+		}
+	}
+	if peerip == "" {
+		remoteaddr := info.RemoteAddr.String()
+		peerip = remoteaddr[:strings.LastIndex(remoteaddr, ":")]
+	}
 	switch stat.(type) {
 	case *stats.ConnBegin:
 		atomic.AddInt32(&s.clientnum, 1)
-		log.Info(nil, "[cgrpc.server] client:", info.RemoteAddr.String(), "online")
+		log.Info(nil, "[cgrpc.server] client:", peerip, "online")
 	case *stats.ConnEnd:
 		atomic.AddInt32(&s.clientnum, -1)
-		log.Info(nil, "[cgrpc.server] client:", info.RemoteAddr.String(), "offline")
+		log.Info(nil, "[cgrpc.server] client:", peerip, "offline")
 	}
 }

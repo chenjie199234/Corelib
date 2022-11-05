@@ -151,6 +151,11 @@ func (c *Context) GetRemoteAddr() string {
 	return c.r.RemoteAddr
 }
 
+// get the real peer's ip which will not be confused by proxy
+func (c *Context) GetRealPeerIp() string {
+	return realip(c.r)
+}
+
 // this function try to return the first caller's ip(mostly time it will be the user's ip)
 // if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
 // if failed,the direct peer's ip will be returned(maybe a proxy)
@@ -158,7 +163,7 @@ func (c *Context) GetClientIp() string {
 	return c.metadata["Client-IP"]
 }
 
-func getclientip(r *http.Request) string {
+func realip(r *http.Request) string {
 	ip := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
 	if ip != "" {
 		ip = strings.TrimSpace(strings.Split(ip, ",")[0])

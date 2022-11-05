@@ -2,85 +2,67 @@ package mids
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/secure"
 )
 
-type token struct {
-	secret string
-	expire time.Duration
-}
 type Token struct {
-	Puber     string `json:"puber"`
+	Puber     string `json:"p"`
 	DeployEnv string `json:"d_env"` //deploy location,example: ali-xxx,aws-xxx
 	RunEnv    string `json:"r_env"` //example: test,dev,prod...
-	Data      string `json:"data"`
-	Start     uint64 `json:"start"` //timestamp,unit is second
-	End       uint64 `json:"end"`   //timestamp,unit is second
-	Sig       string `json:"sig"`
+	Data      string `json:"d"`
+	Start     uint64 `json:"s"` //timestamp,unit is second
+	End       uint64 `json:"e"` //timestamp,unit is second
 }
 
-var tokeninstance *token
+var tokensecret string
+var tokenexpire time.Duration
 
-func init() {
-	tokeninstance = &token{}
-}
 func UpdateTokenConfig(secret string, expire time.Duration) {
-	if expire <= 0 {
-		log.Warning(nil, "[token] expire too small")
-	}
-	tokeninstance.secret = secret
-	tokeninstance.expire = expire
+	tokensecret = secret
+	tokenexpire = expire
 }
 
 // return empty means make token failed
+// put the return data in web's Token header or metadata's Token field
 func MakeToken(ctx context.Context, puber, deployenv, runenv, data string) string {
-	if tokeninstance.expire <= 0 {
-		log.Error(ctx, "[token.make] expire too small")
-		return ""
-	}
-	start := time.Now().UnixNano()
-	end := start + int64(tokeninstance.expire)
-	t := &Token{
+	start := time.Now()
+	end := start.Add(tokenexpire)
+	t, _ := json.Marshal(&Token{
 		Puber:     puber,
 		DeployEnv: deployenv,
 		RunEnv:    runenv,
 		Data:      data,
-		Start:     uint64(start),
-		End:       uint64(end),
-		Sig:       tokeninstance.secret,
+		Start:     uint64(start.Unix()),
+		End:       uint64(end.Unix()),
+	})
+	ciphertext, e := secure.AesEncrypt(tokensecret, t)
+	if e != nil {
+		log.Error(ctx, "[token.make]", e)
+		return ""
 	}
-	d, _ := json.Marshal(t)
-	h := sha256.Sum256(d)
-	t.Sig = hex.EncodeToString(h[:])
-	d, _ = json.Marshal(t)
-	return base64.RawStdEncoding.EncodeToString(d)
+	return base64.StdEncoding.EncodeToString(ciphertext)
 }
 func VerifyToken(ctx context.Context, tokenstr string) *Token {
-	tokenbytes, e := base64.RawStdEncoding.DecodeString(tokenstr)
+	ciphertext, e := base64.StdEncoding.DecodeString(tokenstr)
+	if e != nil {
+		return nil
+	}
+	plaintext, e := secure.AesDecrypt(tokensecret, ciphertext)
 	if e != nil {
 		return nil
 	}
 	t := &Token{}
-	if e := json.Unmarshal(tokenbytes, t); e != nil {
+	if e := json.Unmarshal(plaintext, t); e != nil {
 		return nil
 	}
-	now := uint64(time.Now().UnixNano())
+	now := uint64(time.Now().Unix())
 	if t.Start > now || t.End <= now {
 		return nil
 	}
-	sig := t.Sig
-	t.Sig = tokeninstance.secret
-	d, _ := json.Marshal(t)
-	h := sha256.Sum256(d)
-	if hex.EncodeToString(h[:]) != sig {
-		return nil
-	}
-	t.Sig = sig
 	return t
 }

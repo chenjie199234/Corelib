@@ -15,7 +15,6 @@ func init() {
 	all = make(map[string]web.OutsideHandler)
 	//register here
 	all["rate"] = rate
-	all["accesskey"] = accesskey
 	all["token"] = token
 	all["session"] = session
 }
@@ -54,29 +53,13 @@ func rate(ctx *web.Context) {
 		ctx.Abort(cerror.ErrNotExist)
 	}
 }
-func accesskey(ctx *web.Context) {
-	accesskey := ctx.GetHeader("Access-Key")
-	md := ctx.GetMetadata()
-	if accesskey == "" {
-		accesskey = md["Access-Key"]
-	} else {
-		md["Access-Key"] = accesskey
-	}
-	if accesskey == "" {
-		ctx.Abort(cerror.ErrAccessKey)
-		return
-	}
-	if !publicmids.AccessKeyCheck(ctx.GetPath(), accesskey) {
-		ctx.Abort(cerror.ErrAccessKey)
-	}
-}
 func token(ctx *web.Context) {
 	md := ctx.GetMetadata()
-	tokenstr := ctx.GetHeader("Authorization")
+	tokenstr := ctx.GetHeader("Token")
 	if tokenstr == "" {
-		tokenstr = md["Authorization"]
+		tokenstr = md["Token"]
 	} else {
-		md["Authorization"] = tokenstr
+		md["Token"] = tokenstr
 	}
 	if tokenstr == "" {
 		ctx.Abort(cerror.ErrToken)
@@ -94,27 +77,17 @@ func token(ctx *web.Context) {
 }
 func session(ctx *web.Context) {
 	md := ctx.GetMetadata()
-	userid := ctx.GetHeader("Session-UID")
-	if userid == "" {
-		userid = md["Session-UID"]
+	sessionstr := ctx.GetHeader("Session")
+	if sessionstr == "" {
+		sessionstr = md["Session"]
 	} else {
-		md["Session-UID"] = userid
+		md["Session"] = sessionstr
 	}
-	if userid == "" {
+	if sessionstr == "" {
 		ctx.Abort(cerror.ErrSession)
 		return
 	}
-	sessionid := ctx.GetHeader("Session-SID")
-	if sessionid == "" {
-		sessionid = md["Session-SID"]
-	} else {
-		md["Session-SID"] = sessionid
-	}
-	if sessionid == "" {
-		ctx.Abort(cerror.ErrSession)
-		return
-	}
-	sessiondata, pass := publicmids.VerifySession(ctx, userid, sessionid)
+	sessiondata, pass := publicmids.VerifySession(ctx, sessionstr)
 	if !pass {
 		ctx.Abort(cerror.ErrSession)
 		return

@@ -228,7 +228,7 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		w.Write(common.Str2byte(cerror.ErrNoapi.Error()))
-		log.Error(nil, "[web.server] client ip:", getclientip(r), "call path:", r.URL.Path, "method:", r.Method, "error: unknown path")
+		log.Error(nil, "[web.server] client:", realip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
 	})
 	instance.r.optionsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//for OPTIONS preflight
@@ -419,7 +419,7 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 	copy(totalhandlers[len(s.global):], handlers)
 	return func(w http.ResponseWriter, r *http.Request) {
 		//target
-		if target := r.Header.Get("Core_target"); target != "" && target != s.selfappname {
+		if target := r.Header.Get("Core-Target"); target != "" && target != s.selfappname {
 			//this is not the required server.tell peer self closed
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(int(cerror.ErrClosing.Httpcode))
@@ -456,38 +456,44 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 		}
 		//trace
 		var ctx context.Context
-		traceid := ""
-		sourceip := getclientip(r)
+		sourceip := realip(r)
 		sourceapp := "unknown"
 		sourcemethod := "unknown"
 		sourcepath := "unknown"
-		selfdeep := 0
-		if tracedata := r.Header.Values("Core_tracedata"); len(tracedata) == 0 || tracedata[0] == "" {
-			ctx = log.InitTrace(r.Context(), "", s.selfappname, host.Hostip, method, path, 0)
-		} else if len(tracedata) != 5 || tracedata[4] == "" {
-			log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: tracedata:", tracedata, "format error")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write(common.Str2byte(cerror.ErrReq.Error()))
-			return
-		} else if clientdeep, e := strconv.Atoi(tracedata[4]); e != nil {
-			log.Error(nil, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: tracedata:", tracedata, "format error")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write(common.Str2byte(cerror.ErrReq.Error()))
-			return
+		if tracestr := r.Header.Get("Core-Tracedata"); tracestr != "" {
+			tracedata := make(map[string]string)
+			if e := json.Unmarshal(common.Str2byte(tracestr), &tracedata); e != nil {
+				log.Error(nil, "[web.server] client:", sourceip, "path:", path, "method:", method, "error: tracedata:", tracestr, "format error")
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write(common.Str2byte(cerror.ErrReq.Error()))
+				return
+			}
+			if len(tracedata) == 0 || tracedata["TraceID"] == "" {
+				ctx = log.InitTrace(r.Context(), "", s.selfappname, host.Hostip, method, path, 0)
+			} else {
+				sourceapp = tracedata["SourceApp"]
+				sourcemethod = tracedata["SourceMethod"]
+				sourcepath = tracedata["SourcePath"]
+				clientdeep, e := strconv.Atoi(tracedata["Deep"])
+				if e != nil || sourceapp == "" || sourcemethod == "" || sourcepath == "" || clientdeep == 0 {
+					log.Error(nil, "[web.server] client:", sourceip, "path:", path, "method:", method, "error: tracedata:", tracestr, "format error")
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write(common.Str2byte(cerror.ErrReq.Error()))
+					return
+				}
+				ctx = log.InitTrace(r.Context(), tracedata["TraceID"], s.selfappname, host.Hostip, method, path, clientdeep)
+			}
 		} else {
-			ctx = log.InitTrace(r.Context(), tracedata[0], s.selfappname, host.Hostip, method, path, clientdeep)
-			sourceapp = tracedata[1]
-			sourcemethod = tracedata[2]
-			sourcepath = tracedata[3]
+			ctx = log.InitTrace(r.Context(), "", s.selfappname, host.Hostip, method, path, 0)
 		}
-		traceid, _, _, _, _, selfdeep = log.GetTrace(ctx)
+		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
 		var mdata map[string]string
-		if mdstr := r.Header.Get("Core_metadata"); mdstr != "" {
+		if mdstr := r.Header.Get("Core-Metadata"); mdstr != "" {
 			mdata = make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(mdstr), &mdata); e != nil {
-				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: metadata:", mdstr, "format error")
+				log.Error(ctx, "[web.server] client:", sourceapp+":"+sourceip, "path:", path, "method:", method, "error: metadata:", mdstr, "format error")
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(cerror.ErrReq.Error()))
@@ -495,11 +501,11 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 			}
 		}
 		var clientdl int64
-		if temp := r.Header.Get("Core_deadline"); temp != "" {
+		if temp := r.Header.Get("Core-Deadline"); temp != "" {
 			var e error
 			clientdl, e = strconv.ParseInt(temp, 10, 64)
 			if e != nil {
-				log.Error(ctx, "[web.server] client ip:", getclientip(r), "path:", path, "method:", method, "error: Deadline:", temp, "format error")
+				log.Error(ctx, "[web.server] client:", sourceapp+":"+sourceip, "path:", path, "method:", method, "error: Deadline:", temp, "format error")
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(cerror.ErrReq.Error()))

@@ -22,7 +22,6 @@ func (b *balancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptio
 		cc:      cc,
 		servers: make(map[balancer.SubConn]*ServerForPick),
 	}
-	cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: b.c.balancer})
 	return b.c.balancer
 }
 
@@ -57,14 +56,21 @@ type pickinfo struct {
 }
 
 func (s *ServerForPick) Pickable() bool {
-	return atomic.LoadInt32(&s.status) == int32(connectivity.Ready) && !s.closing
+	return s.status == int32(connectivity.Ready) && !s.closing
 }
 
+// UpdateClientConnState and UpdateSubConnState and Close and ResolverError are sync in grpc's ccBalancerWrapper's watcher in balancer_conn_wrappers.go
 func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) error {
 	b.lastResolveError = nil
 	defer func() {
-		if len(b.servers) == 0 || len(b.pservers) > 0 {
+		if len(b.servers) == 0 {
 			b.c.resolver.wake(false)
+			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: b})
+		} else if len(b.pservers) > 0 {
+			b.c.resolver.wake(false)
+			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: b})
+		} else {
+			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: b})
 		}
 		b.c.resolver.wake(true)
 	}()
@@ -148,38 +154,49 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 	return nil
 }
 
+// UpdateClientConnState and UpdateSubConnState and Close and ResolverError are sync in grpc's ccBalancerWrapper's watcher in balancer_conn_wrappers.go
 func (b *corelibBalancer) ResolverError(e error) {
 	b.lastResolveError = e
 }
 
+// UpdateClientConnState and UpdateSubConnState and Close and ResolverError are sync in grpc's ccBalancerWrapper's watcher in balancer_conn_wrappers.go
 func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
 	server, ok := b.servers[sc]
 	if !ok {
 		return
 	}
+	defer func() {
+		if len(b.servers) == 0 {
+			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: b})
+		} else if len(b.pservers) > 0 {
+			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: b})
+		} else {
+			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: b})
+		}
+	}()
 	if s.ConnectivityState == connectivity.Shutdown {
-		if atomic.LoadInt32(&server.status) == int32(connectivity.Ready) {
+		if server.status == int32(connectivity.Ready) {
 			//offline
 			log.Info(nil, "[cgrpc.client] server:", b.c.serverappname+":"+server.addr, "offline")
-			atomic.StoreInt32(&server.status, int32(connectivity.Shutdown))
+			server.status = int32(connectivity.Shutdown)
 			b.rebuildpicker(false)
 		} else {
-			atomic.StoreInt32(&server.status, int32(connectivity.Shutdown))
+			server.status = int32(connectivity.Shutdown)
 		}
 		delete(b.servers, sc)
 		return
 	}
 	if s.ConnectivityState == connectivity.Idle {
-		if atomic.LoadInt32(&server.status) == int32(connectivity.Ready) {
+		if server.status == int32(connectivity.Ready) {
 			//offline
 			log.Info(nil, "[cgrpc.client] server:", b.c.serverappname+":"+server.addr, "offline")
-			atomic.StoreInt32(&server.status, int32(s.ConnectivityState))
+			server.status = int32(s.ConnectivityState)
 			b.rebuildpicker(false)
 		} else {
-			atomic.StoreInt32(&server.status, int32(s.ConnectivityState))
+			server.status = int32(s.ConnectivityState)
 		}
 		if len(server.dservers) == 0 {
-			atomic.StoreInt32(&server.status, int32(connectivity.Shutdown))
+			server.status = int32(connectivity.Shutdown)
 			delete(b.servers, sc)
 			b.cc.RemoveSubConn(sc)
 		} else {
@@ -189,12 +206,12 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 	} else if s.ConnectivityState == connectivity.Ready {
 		//online
 		log.Info(nil, "[cgrpc.client] server:", b.c.serverappname+":"+server.addr, "online")
-		atomic.StoreInt32(&server.status, int32(s.ConnectivityState))
+		server.status = int32(s.ConnectivityState)
 		b.rebuildpicker(true)
 	} else if s.ConnectivityState == connectivity.TransientFailure {
 		//connect failed
 		log.Error(nil, "[cgrpc.client] connect to server:", b.c.serverappname+":"+server.addr, "error:", s.ConnectionError)
-		atomic.StoreInt32(&server.status, int32(s.ConnectivityState))
+		server.status = int32(s.ConnectivityState)
 	}
 }
 
@@ -214,7 +231,15 @@ func (b *corelibBalancer) rebuildpicker(reason bool) {
 	return
 }
 
+// UpdateClientConnState and UpdateSubConnState and Close and ResolverError are sync in grpc's ccBalancerWrapper's watcher in balancer_conn_wrappers.go
 func (b *corelibBalancer) Close() {
+	for _, server := range b.servers {
+		server.status = int32(connectivity.Shutdown)
+		b.cc.RemoveSubConn(server.subconn)
+		log.Info(nil, "[cgrpc.client] server:", b.c.serverappname+":"+server.addr, "offline")
+	}
+	b.servers = make(map[balancer.SubConn]*ServerForPick)
+	b.pservers = make([]*ServerForPick, 0)
 }
 
 func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
