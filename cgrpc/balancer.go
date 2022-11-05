@@ -235,7 +235,7 @@ func (b *corelibBalancer) rebuildpicker(reason bool) {
 func (b *corelibBalancer) Close() {
 	for _, server := range b.servers {
 		server.status = int32(connectivity.Shutdown)
-		// b.cc.RemoveSubConn(server.subconn)
+		b.cc.RemoveSubConn(server.subconn)
 		log.Info(nil, "[cgrpc.client] server:", b.c.serverappname+":"+server.addr, "offline")
 	}
 	b.servers = make(map[balancer.SubConn]*ServerForPick)
