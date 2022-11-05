@@ -25,7 +25,7 @@ func newCorelibResolver(group, name string, c *CrpcClient) *corelibResolver {
 	r := &corelibResolver{
 		lker:         &sync.Mutex{},
 		sstatus:      true,
-		system:       make(chan *struct{}),
+		system:       make(chan *struct{}, 1),
 		systemNotice: make(map[chan *struct{}]*struct{}),
 		cstatus:      false,
 		call:         make(chan *struct{}, 1),
