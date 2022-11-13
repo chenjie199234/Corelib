@@ -128,7 +128,7 @@ func UpdateReplayDefendRedisUrl(redisurl string) {
 			IOTimeout:   time.Second,
 		})
 	} else {
-		log.Warning(nil, "[access.sign] config missing redis,all sign check will be failed")
+		log.Warning(nil, "[access.sign] redis missing,replay attack may happened")
 	}
 	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&accessInstance.p)), unsafe.Pointer(newp)))
 	if oldp != nil {
@@ -137,7 +137,7 @@ func UpdateReplayDefendRedisUrl(redisurl string) {
 }
 func UpdateReplayDefendRedisInstance(p *redis.Pool) {
 	if p == nil {
-		log.Warning(nil, "[access.sign] config missing redis,all sign check will be failed")
+		log.Warning(nil, "[access.sign] redis missing,replay attack may happened")
 	}
 	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&accessInstance.p)), unsafe.Pointer(p)))
 	if oldp != nil {
@@ -364,12 +364,13 @@ func VerifyAccessSign(ctx context.Context, method, path string, querys url.Value
 	if base64.StdEncoding.EncodeToString(reqdigest[:]) != sign {
 		return false
 	}
-	//check replay attack
 	redisclient := accessInstance.p
 	if redisclient == nil {
-		log.Error(ctx, "[access.sign] config missing redis")
-		return false
+		//if there is no replay defend redis
+		//jump this check
+		return true
 	}
+	//check replay attack
 	conn, e := redisclient.GetContext(ctx)
 	if e != nil {
 		log.Error(ctx, "[access.sign] get redis conn:", e)

@@ -130,7 +130,7 @@ func UpdateRateConfig(c map[string][]*PathRateConfig) {
 func checkrate(ctx context.Context, infos [][2]interface{}) bool {
 	redisclient := rateinstance.p
 	if redisclient == nil {
-		log.Error(ctx, "[rate] config missing redis")
+		log.Error(ctx, "[rate] redis missing")
 		return false
 	}
 	rates := make(map[string]uint64)

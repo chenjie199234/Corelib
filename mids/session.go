@@ -32,7 +32,7 @@ func UpdateSessionRedisUrl(redisurl string) {
 			IOTimeout:   time.Second,
 		})
 	} else {
-		log.Warning(nil, "[session] config missing redis,all session event will be failed")
+		log.Warning(nil, "[session] redis missing,all session event will be failed")
 	}
 	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&sessionredis)), unsafe.Pointer(newp)))
 	if oldp != nil {
@@ -41,7 +41,7 @@ func UpdateSessionRedisUrl(redisurl string) {
 }
 func UpdateSessionRedisInstance(p *redis.Pool) {
 	if p == nil {
-		log.Warning(nil, "[session] config missing redis,all session event will be failed")
+		log.Warning(nil, "[session] redis missing,all session event will be failed")
 	}
 	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&sessionredis)), unsafe.Pointer(p)))
 	if oldp != nil {
@@ -54,7 +54,7 @@ func UpdateSessionRedisInstance(p *redis.Pool) {
 func MakeSession(ctx context.Context, userid, data string) string {
 	redisclient := sessionredis
 	if redisclient == nil {
-		log.Error(ctx, "[session.make] config missing redis")
+		log.Error(ctx, "[session.make] redis missing")
 		return ""
 	}
 	result := make([]byte, 8)
@@ -76,7 +76,7 @@ func MakeSession(ctx context.Context, userid, data string) string {
 func CleanSession(ctx context.Context, userid string) bool {
 	redisclient := sessionredis
 	if redisclient == nil {
-		log.Error(ctx, "[session.clean] config missing redis")
+		log.Error(ctx, "[session.clean] redis missing")
 		return false
 	}
 	conn, e := redisclient.GetContext(ctx)
@@ -95,7 +95,7 @@ func CleanSession(ctx context.Context, userid string) bool {
 func ExtendSession(ctx context.Context, userid string, expire time.Duration) bool {
 	redisclient := sessionredis
 	if redisclient == nil {
-		log.Error(ctx, "[session.extend] config missing redis")
+		log.Error(ctx, "[session.extend] redis missing")
 		return false
 	}
 	conn, e := redisclient.GetContext(ctx)
@@ -114,7 +114,7 @@ func ExtendSession(ctx context.Context, userid string, expire time.Duration) boo
 func VerifySession(ctx context.Context, sessionstr string) (string, bool) {
 	redisclient := sessionredis
 	if redisclient == nil {
-		log.Error(ctx, "[session.verify] config missing redis")
+		log.Error(ctx, "[session.verify] redis missing")
 		return "", false
 	}
 	index := strings.LastIndex(sessionstr, ",")
