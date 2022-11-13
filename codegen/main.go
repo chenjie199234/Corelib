@@ -35,10 +35,10 @@ import (
 	cname "github.com/chenjie199234/Corelib/util/name"
 )
 
-var name = flag.String("n", "", "project's name\ncharacter:[a-z][A-Z][0-9][_]\nfirst character must in [a-z][A-Z]")
+var name = flag.String("n", "", "project's name\ncharacter:[a-z][0-9]\nfirst character must in [a-z]")
 var packagename = flag.String("p", "", "project's package name\npackage name must end with project's name\nif this is empty the project's name will be used as the package name\nthis is useful when your project will be uploaded to github or gitlab\ne.g. github.com/path_to_the_repo/project_name")
 var dir = flag.String("d", "", "project's create dir")
-var sub = flag.String("s", "", "create subservice's name in project\ncharacter:[a-z][A-Z][0-9][_]\nfirst character must in [a-z][A-Z]\ndon't use this direct by codegen,use the cmd.sh/cmd.bat in your project instead")
+var sub = flag.String("s", "", "create subservice's name in project\ncharacter:[a-z][0-9]\nfirst character must in [a-z]\ndon't use this direct by codegen,use the cmd.sh/cmd.bat in your project instead")
 var kub = flag.Bool("k", false, "update exist project's kubernetes config file\ndon't use this direct by codegen,use the cmd.sh/cmd.bat in your project instead")
 var needkubernetes bool
 var needkubernetesservice bool
@@ -47,7 +47,7 @@ var needkubernetesingress bool
 func main() {
 	flag.Parse()
 	//pre check
-	if e := cname.NameCheck(*name); e != nil {
+	if e := cname.SingleCheck(*name); e != nil {
 		panic(e)
 	}
 	if *packagename == "" {
@@ -56,7 +56,7 @@ func main() {
 		panic("package name must end with project name,e.g. github.com/path_to_the_repo/project_name")
 	}
 	if len(*sub) != 0 {
-		if e := cname.NameCheck(*sub); e != nil {
+		if e := cname.SingleCheck(*sub); e != nil {
 			panic(e)
 		}
 		checkBaseProjectName()
