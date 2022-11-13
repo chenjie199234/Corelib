@@ -122,13 +122,13 @@ const textapp = `{
 	},
 	"handler_rate":{
 		"/{{.}}.status/ping":[{
-			"Method":["GET","GRPC","CRPC"],
-			"MaxPerSec":10
+			"method":["GET","GRPC","CRPC"],
+			"max_per_sec":10
 		}]
 	},
 	"accesses":{
 		"/{{.}}.status/ping":[{
-			"Method":["GET","GRPC","CRPC"],
+			"method":["GET","GRPC","CRPC"],
 			"accesses":{
 				"accessid":"accesskey"
 			}
