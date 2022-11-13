@@ -103,8 +103,17 @@ func initenv() {
 			Close()
 			os.Exit(1)
 		}
+		var secret string
+		if str, ok := os.LookupEnv("REMOTE_CONFIG_SECRET"); ok && str != "<REMOTE_CONFIG_SECRET>" && str != "" {
+			secret = str
+		}
+		if len(secret) >= 32 {
+			log.Error(nil, "[config.initenv] REMOTE_CONFIG_SECRET too long")
+			Close()
+			os.Exit(1)
+		}
 		var e error
-		if RemoteConfigSdk, e = configsdk.NewConfigSdk(model.Group, model.Name, group, host); e != nil {
+		if RemoteConfigSdk, e = configsdk.NewConfigSdk(model.Group, model.Name, group, host, secret); e != nil {
 			log.Error(nil, "[config.initenv] new remote config sdk error:", e)
 			Close()
 			os.Exit(1)
@@ -667,7 +676,7 @@ func initmongo(){
 		op = op.SetConnectTimeout(mongoc.ConnTimeout.StdDuration())
 		op = op.SetMaxConnIdleTime(mongoc.MaxIdletime.StdDuration())
 		op = op.SetMaxPoolSize(mongoc.MaxOpen)
-		op = op.SetSocketTimeout(mongoc.IOTimeout.StdDuration())
+		op = op.SetTimeout(mongoc.IOTimeout.StdDuration())
 		tempdb, e := mongo.Connect(nil, op)
 		if e != nil {
 			log.Error(nil, "[config.initsource] open mongodb:", k, "error:", e)

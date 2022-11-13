@@ -86,6 +86,8 @@ spec:
               value: <REMOTE_CONFIG_SERVICE_GROUP>
             - name: REMOTE_CONFIG_SERVICE_HOST
               value: <REMOTE_CONFIG_SERVICE_HOST>
+            - name: REMOTE_CONFIG_SECRET
+              value: <REMOTE_CONFIG_SECRET>
           livenessProbe:
             tcpSocket:
               port: 8000

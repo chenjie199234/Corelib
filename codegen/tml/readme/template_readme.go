@@ -39,6 +39,7 @@ CONFIG_TYPE                             配置类型
                                         1-使用远程配置中心config服务
 REMOTE_CONFIG_SERVICE_GROUP             当CONFIG_TYPE为1时,配置中心服务的group(k8s的namespace)
 REMOTE_CONFIG_SERVICE_HOST              当CONFIG_TYPE为1时,配置中心服务的host地址,[http://https]://[username[:password]@]the.host.name[:port]
+REMOTE_CONFIG_SECRET                    当CONFIG_TYPE为1时,配置中心配置的密钥
 $$$
 
 ## 配置文件
