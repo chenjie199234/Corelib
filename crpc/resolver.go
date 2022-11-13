@@ -47,7 +47,7 @@ func newCorelibResolver(group, name string, c *CrpcClient) *corelibResolver {
 			all, e := c.c.Discover(group, name)
 			if e != nil {
 				c.balancer.ResolverError(e)
-				log.Error(nil, "[crpc.client.resolver] discover servername:", name, "servergroup:", group, "error:", e)
+				log.Error(nil, "[crpc.client.resolver] discover servername:", name, "servergroup:", group, e)
 				r.wake(true)
 				r.wake(false)
 				continue

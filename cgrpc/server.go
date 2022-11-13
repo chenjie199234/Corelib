@@ -103,7 +103,7 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 			remoteaddr := conninfo.RemoteAddr.String()
 			peerip = remoteaddr[:strings.LastIndex(remoteaddr, ":")]
 		}
-		log.Error(nil, "[cgrpc.server] client:", peerip, "call path:", rpcinfo.FullMethodName, "error: unknown path")
+		log.Error(nil, "[cgrpc.server] client:", peerip, "call path:", rpcinfo.FullMethodName, "doesn't exist")
 		return cerror.ErrNoapi
 	}))
 	if c.ConnectTimeout != 0 {
@@ -115,7 +115,7 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 		for cert, key := range c.Certs {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
-				return nil, errors.New("[cgrpc.server] load cert:" + cert + " key:" + key + " error:" + e.Error())
+				return nil, errors.New("[cgrpc.server] load cert: " + cert + " key: " + key + " " + e.Error())
 			}
 			certificates = append(certificates, temp)
 		}
@@ -130,7 +130,7 @@ var ErrServerClosed = errors.New("[cgrpc.server] closed")
 func (s *CGrpcServer) StartCGrpcServer(listenaddr string) error {
 	l, e := net.Listen("tcp", listenaddr)
 	if e != nil {
-		return errors.New("[cgrpc.server] listen tcp addr: " + listenaddr + " error:" + e.Error())
+		return errors.New("[cgrpc.server] listen tcp addr: " + listenaddr + " " + e.Error())
 	}
 	for _, service := range s.services {
 		s.server.RegisterService(service, nil)
@@ -149,8 +149,14 @@ func (this *CGrpcServer) GetClientNum() int32 {
 func (this *CGrpcServer) GetReqNum() int64 {
 	return this.totalreqnum
 }
-func (s *CGrpcServer) StopCGrpcServer() {
-	s.server.GracefulStop()
+
+// force - false graceful,wait all requests finish,true - not graceful,close all connections immediately
+func (s *CGrpcServer) StopCGrpcServer(force bool) {
+	if force {
+		s.server.Stop()
+	} else {
+		s.server.GracefulStop()
+	}
 }
 
 // key path,value timeout(if timeout <= 0 means no timeout)
@@ -230,7 +236,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			if data := gmd.Get("Core-Tracedata"); len(data) == 0 || data[0] == "" {
 				ctx = log.InitTrace(ctx, "", s.selfappname, host.Hostip, "GRPC", path, 0)
 			} else if len(data) != 5 {
-				log.Error(nil, "[cgrpc.server] client:", sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format error")
+				log.Error(nil, "[cgrpc.server] client:", sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format wrong")
 				return nil, cerror.ErrReq
 			} else {
 				sourceapp = data[1]
@@ -238,7 +244,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				sourcepath = data[3]
 				clientdeep, e := strconv.Atoi(data[4])
 				if e != nil || sourceapp == "" || sourcemethod == "" || sourcepath == "" || clientdeep == 0 {
-					log.Error(nil, "[cgrpc.server] client:", sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format error")
+					log.Error(nil, "[cgrpc.server] client:", sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format wrong")
 					return nil, cerror.ErrReq
 				}
 				ctx = log.InitTrace(ctx, data[0], s.selfappname, host.Hostip, "GRPC", path, clientdeep)
@@ -251,7 +257,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			if len(data) != 0 {
 				mdata = make(map[string]string)
 				if e := json.Unmarshal(common.Str2byte(data[0]), &mdata); e != nil {
-					log.Error(ctx, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC metadata:", data[0], "format error:", e)
+					log.Error(ctx, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC metadata:", data[0], "format wrong:", e)
 					return nil, cerror.ErrReq
 				}
 			}

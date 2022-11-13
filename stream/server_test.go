@@ -13,7 +13,7 @@ import (
 
 var serverinstance *Instance
 
-func Test_Tcpserver(t *testing.T) {
+func Test_Server(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	serverinstance, _ = NewInstance(&InstanceConfig{
 		HeartprobeInterval: time.Second,

@@ -115,24 +115,24 @@ const textapp = `{
 			"GRPC":"200ms"
 		}
 	},
+	"web_path_rewrite":{
+		"GET":{
+			"/example/origin/url":"/example/new/url"
+		}
+	},
 	"handler_rate":{
 		"/{{.}}.status/ping":[{
 			"Method":["GET","GRPC","CRPC"],
 			"MaxPerSec":10
 		}]
 	},
-	"web_path_rewrite":{
-		"GET":{
-			"/example/origin/url":"/example/new/url"
-		}
-	},
 	"accesses":{
-		"default":{
-			"default_access_id":"default_access_key"
-		},
-		"/{{.}}.status/ping":{
-			"specific_access_id":"specific_access_key"
-		}
+		"/{{.}}.status/ping":[{
+			"Method":["GET","GRPC","CRPC"],
+			"accesses":{
+				"accessid":"accesskey"
+			}
+		}]
 	},
 	"token_secret":"test",
 	"session_token_expire":"24h",

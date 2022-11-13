@@ -56,8 +56,8 @@ func (c *TcpConfig) validate() {
 	}
 	if c.MaxMsgLen == 0 {
 		c.MaxMsgLen = 1024 * 1024 * 64
-	} else if c.MaxMsgLen < 65535 {
-		c.MaxMsgLen = 65535
+	} else if c.MaxMsgLen < 65536 {
+		c.MaxMsgLen = 65536
 	}
 }
 

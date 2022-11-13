@@ -22,7 +22,7 @@ type Buffer []byte
 func GetBuffer() *Buffer {
 	b, ok := bufpool.Get().(*Buffer)
 	if !ok {
-		temp := Buffer(make([]byte, 0, 512))
+		temp := Buffer(make([]byte, 0, 256))
 		return &temp
 	}
 	*b = (*b)[:0]

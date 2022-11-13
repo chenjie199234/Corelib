@@ -210,7 +210,7 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 		b.rebuildpicker(true)
 	} else if s.ConnectivityState == connectivity.TransientFailure {
 		//connect failed
-		log.Error(nil, "[cgrpc.client] connect to server:", b.c.serverappname+":"+server.addr, "error:", s.ConnectionError)
+		log.Error(nil, "[cgrpc.client] connect to server:", b.c.serverappname+":"+server.addr, s.ConnectionError)
 		server.status = int32(s.ConnectivityState)
 	}
 }

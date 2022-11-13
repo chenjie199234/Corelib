@@ -15,6 +15,7 @@ func init() {
 	all["rate"] = rate
 	all["token"] = token
 	all["session"] = session
+	all["accesskey"] = accesskey
 }
 
 func AllMids() map[string]crpc.OutsideHandler {
@@ -60,4 +61,16 @@ func session(ctx *crpc.Context) {
 		return
 	}
 	md["Session-Data"] = sessiondata
+}
+func accesskey(ctx *crpc.Context) {
+	md := ctx.GetMetadata()
+	accesskey := md["Access-Key"]
+	if accesskey == "" {
+		ctx.Abort(cerror.ErrKey)
+		return
+	}
+	delete(md, "Access-Key")
+	if !publicmids.VerifyAccessKey(ctx, "CRPC", ctx.GetPath(), accesskey) {
+		ctx.Abort(cerror.ErrKey)
+	}
 }

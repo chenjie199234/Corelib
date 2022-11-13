@@ -161,8 +161,12 @@ func (c *WebClient) UpdateServerHost(serverhost string) error {
 func (c *WebClient) GetSeverHost() string {
 	return c.host
 }
-func (c *WebClient) Close() {
-	c.stop.Close(nil, c.httpclient.CloseIdleConnections)
+func (c *WebClient) Close(force bool) {
+	if force {
+		c.httpclient.CloseIdleConnections()
+	} else {
+		c.stop.Close(c.httpclient.CloseIdleConnections, nil)
+	}
 }
 
 func forbiddenHeader(header http.Header) bool {

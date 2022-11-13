@@ -52,14 +52,15 @@ func UpdateSessionRedisInstance(p *redis.Pool) {
 // return empty means make session failed
 // user should put the return data in web's Session header or metadata's Session field
 func MakeSession(ctx context.Context, userid, data string) string {
-	if sessionredis == nil {
+	redisclient := sessionredis
+	if redisclient == nil {
 		log.Error(ctx, "[session.make] config missing redis")
 		return ""
 	}
 	result := make([]byte, 8)
 	rand.Read(result)
 	sessionid := hex.EncodeToString(result)
-	conn, e := sessionredis.GetContext(ctx)
+	conn, e := redisclient.GetContext(ctx)
 	if e != nil {
 		log.Error(ctx, "[session.make] get redis conn:", e)
 		return ""
@@ -73,11 +74,12 @@ func MakeSession(ctx context.Context, userid, data string) string {
 }
 
 func CleanSession(ctx context.Context, userid string) bool {
-	if sessionredis == nil {
+	redisclient := sessionredis
+	if redisclient == nil {
 		log.Error(ctx, "[session.clean] config missing redis")
 		return false
 	}
-	conn, e := sessionredis.GetContext(ctx)
+	conn, e := redisclient.GetContext(ctx)
 	if e != nil {
 		log.Error(ctx, "[session.clean] get redis conn:", e)
 		return false
@@ -91,11 +93,12 @@ func CleanSession(ctx context.Context, userid string) bool {
 }
 
 func ExtendSession(ctx context.Context, userid string, expire time.Duration) bool {
-	if sessionredis == nil {
+	redisclient := sessionredis
+	if redisclient == nil {
 		log.Error(ctx, "[session.extend] config missing redis")
 		return false
 	}
-	conn, e := sessionredis.GetContext(ctx)
+	conn, e := redisclient.GetContext(ctx)
 	if e != nil {
 		log.Error(ctx, "[session.extend] get redis conn:", e)
 		return false
@@ -109,7 +112,8 @@ func ExtendSession(ctx context.Context, userid string, expire time.Duration) boo
 }
 
 func VerifySession(ctx context.Context, sessionstr string) (string, bool) {
-	if sessionredis == nil {
+	redisclient := sessionredis
+	if redisclient == nil {
 		log.Error(ctx, "[session.verify] config missing redis")
 		return "", false
 	}
@@ -127,7 +131,7 @@ func VerifySession(ctx context.Context, sessionstr string) (string, bool) {
 	}
 	userid = userid[7:]
 	sessionid = sessionid[10:]
-	conn, e := sessionredis.GetContext(ctx)
+	conn, e := redisclient.GetContext(ctx)
 	if e != nil {
 		log.Error(ctx, "[session.verify] get redis conn:", e)
 		return "", false

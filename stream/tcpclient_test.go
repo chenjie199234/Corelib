@@ -15,7 +15,7 @@ import (
 func Test_Tcpclient(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	go func() {
-		for count := 0; count < 1; count++ {
+		for count := 0; count < 10000; count++ {
 			tcpclientinstance, _ := NewInstance(&InstanceConfig{
 				HeartprobeInterval: time.Second,
 				GroupNum:           1,
@@ -64,7 +64,7 @@ var firsttcpclientpingpong int64
 
 func tcpclientpingpong(p *Peer) {
 	if p == firsttcpclientpeer {
-		fmt.Println("ping pong:", p.GetPeerNetlag())
+		fmt.Println("ping pong:", p.GetNetlag())
 	}
 }
 func tcpclienthandleuserdata(p *Peer, data []byte) {

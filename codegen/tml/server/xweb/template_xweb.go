@@ -101,10 +101,10 @@ func UpdateWebPathRewrite(rewrite map[string]map[string]string) {
 	}
 }
 
-// StopWebServer -
-func StopWebServer() {
+// StopWebServer force - false(graceful),true(not graceful)
+func StopWebServer(force bool) {
 	if s != nil {
-		s.StopWebServer()
+		s.StopWebServer(force)
 	}
 }`
 

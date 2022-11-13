@@ -158,8 +158,15 @@ func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servernam
 func (c *CGrpcClient) ResolveNow() {
 	c.resolver.ResolveNow(resolver.ResolveNowOptions{})
 }
-func (c *CGrpcClient) Close() {
-	c.stop.Close(c.resolver.Close, func() { c.conn.Close() })
+
+// force - false graceful,wait all requests finish,true - not graceful,close all connections immediately
+func (c *CGrpcClient) Close(force bool) {
+	if force {
+		c.resolver.Close()
+		c.conn.Close()
+	} else {
+		c.stop.Close(c.resolver.Close, func() { c.conn.Close() })
+	}
 }
 
 var ClientClosed = errors.New("[cgrpc.client] closed")

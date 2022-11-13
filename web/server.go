@@ -317,12 +317,16 @@ func (s *WebServer) ReplaceAllPath(newserver *WebServer) {
 		s.s.Handler = h2c.NewHandler(s.r, &http2.Server{})
 	}
 }
-func (s *WebServer) StopWebServer() {
-	s.stop.Close(nil, nil)
-	//wait at least this.c.WaitCloseTime before stop the under layer socket
-	s.closetimer.Reset(s.c.WaitCloseTime)
-	<-s.closetimer.C
-	s.s.Shutdown(context.Background())
+func (s *WebServer) StopWebServer(force bool) {
+	if force {
+		s.s.Close()
+	} else {
+		s.stop.Close(nil, nil)
+		//wait at least this.c.WaitCloseTime before stop the under layer socket
+		s.closetimer.Reset(s.c.WaitCloseTime)
+		<-s.closetimer.C
+		s.s.Shutdown(context.Background())
+	}
 }
 
 // key origin url,value new url

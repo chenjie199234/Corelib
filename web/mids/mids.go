@@ -17,6 +17,7 @@ func init() {
 	all["rate"] = rate
 	all["token"] = token
 	all["session"] = session
+	all["accesskey"] = accesskey
 }
 
 func AllMids() map[string]web.OutsideHandler {
@@ -93,4 +94,40 @@ func session(ctx *web.Context) {
 		return
 	}
 	md["Session-Data"] = sessiondata
+}
+func accesskey(ctx *web.Context) {
+	md := ctx.GetMetadata()
+	accesskey := ctx.GetHeader("Access-Key")
+	if accesskey == "" {
+		accesskey = md["Access-Key"]
+		delete(md, "Access-Key")
+	}
+	if accesskey == "" {
+		ctx.Abort(cerror.ErrKey)
+		return
+	}
+	if !publicmids.VerifyAccessKey(ctx, ctx.GetMethod(), ctx.GetPath(), accesskey) {
+		ctx.Abort(cerror.ErrKey)
+	}
+}
+func accesssign(ctx *web.Context) {
+	md := ctx.GetMetadata()
+	signstr := ctx.GetHeader("Access-Sign")
+	if signstr == "" {
+		signstr = md["Access-Sign"]
+		delete(md, "Access-Sign")
+	}
+	if signstr == "" {
+		ctx.Abort(cerror.ErrSign)
+		return
+	}
+	r := ctx.GetRequest()
+	body, e := ctx.GetBody()
+	if e != nil {
+		ctx.Abort(cerror.ErrSystem)
+		return
+	}
+	if !publicmids.VerifyAccessSign(ctx, ctx.GetMethod(), ctx.GetPath(), r.URL.Query(), r.Header, md, body, signstr) {
+		ctx.Abort(cerror.ErrSign)
+	}
 }

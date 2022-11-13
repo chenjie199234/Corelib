@@ -150,8 +150,15 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername
 func (c *CrpcClient) ResolveNow() {
 	c.resolver.ResolveNow()
 }
-func (c *CrpcClient) Close() {
-	c.stop.Close(c.resolver.Close, c.instance.Stop)
+
+// force - false graceful,wait all requests finish,true - not graceful,close all connections immediately
+func (c *CrpcClient) Close(force bool) {
+	if force {
+		c.resolver.Close()
+		c.instance.Stop()
+	} else {
+		c.stop.Close(c.resolver.Close, c.instance.Stop)
+	}
 }
 
 func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
@@ -193,7 +200,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
-		log.Error(nil, "[crpc.client.userfunc] server:", c.serverappname+":"+p.GetRemoteAddr(), "data format error:", e)
+		log.Error(nil, "[crpc.client.userfunc] server:", c.serverappname+":"+p.GetRemoteAddr(), "data format wrong:", e)
 		return
 	}
 	server.lker.Lock()

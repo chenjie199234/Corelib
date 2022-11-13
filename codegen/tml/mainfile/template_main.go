@@ -85,17 +85,17 @@ func main() {
 	//stop low level net service
 	wg.Add(1)
 	go func() {
-		xcrpc.StopCrpcServer()
+		xcrpc.StopCrpcServer(false)
 		wg.Done()
 	}()
 	wg.Add(1)
 	go func() {
-		xweb.StopWebServer()
+		xweb.StopWebServer(false)
 		wg.Done()
 	}()
 	wg.Add(1)
 	go func() {
-		xgrpc.StopCGrpcServer()
+		xgrpc.StopCGrpcServer(false)
 		wg.Done()
 	}()
 	wg.Wait()

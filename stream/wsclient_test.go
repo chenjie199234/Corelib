@@ -15,7 +15,7 @@ import (
 func Test_Wsclient(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	go func() {
-		for count := 0; count < 1; count++ {
+		for count := 0; count < 10000; count++ {
 			tcpclientinstance, _ := NewInstance(&InstanceConfig{
 				HeartprobeInterval: time.Second,
 				GroupNum:           1,
@@ -64,7 +64,7 @@ var firstwsclientpingpong int64
 
 func wsclientpingpong(p *Peer) {
 	if p == firsttcpclientpeer {
-		fmt.Println("ping pong:", p.GetPeerNetlag())
+		fmt.Println("ping pong:", p.GetNetlag())
 	}
 }
 func wsclienthandleuserdata(p *Peer, data []byte) {

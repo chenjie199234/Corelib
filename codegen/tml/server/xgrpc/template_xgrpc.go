@@ -74,10 +74,10 @@ func UpdateHandlerTimeout(hts map[string]map[string]ctime.Duration) {
 	s.UpdateHandlerTimeout(cc)
 }
 
-// StopCGrpcServer -
-func StopCGrpcServer() {
+// StopCGrpcServer force - false(graceful),true(not graceful)
+func StopCGrpcServer(force bool) {
 	if s != nil {
-		s.StopCGrpcServer()
+		s.StopCGrpcServer(force)
 	}
 }`
 

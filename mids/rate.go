@@ -128,11 +128,16 @@ func UpdateRateConfig(c map[string][]*PathRateConfig) {
 }
 
 func checkrate(ctx context.Context, infos [][2]interface{}) bool {
+	redisclient := rateinstance.p
+	if redisclient == nil {
+		log.Error(ctx, "[rate] config missing redis")
+		return false
+	}
 	rates := make(map[string]uint64)
 	for _, info := range infos {
 		rates[info[0].(string)] = info[1].(uint64)
 	}
-	pass, e := rateinstance.p.RateLimitSecondMax(ctx, rates)
+	pass, e := redisclient.RateLimitSecondMax(ctx, rates)
 	if e != nil {
 		log.Error(ctx, "[rate] update redis check data:", e)
 	}

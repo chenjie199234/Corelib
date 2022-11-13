@@ -1,35 +1,47 @@
 package mids
 
-import "testing"
-import "crypto/md5"
-import "crypto/sha256"
-import "hash"
+import (
+	"context"
+	"net/http"
+	"net/url"
+	"testing"
+)
 
-func Test_Accesskey(t *testing.T) {
-	UpdateAccessConfig(map[string]map[string]string{"/abc": {"1": "1", "2": "2"}})
-	if AccessKeyCheck("/a", "abc") {
-		panic("should not pass the access key check")
-	}
-	if AccessKeyCheck("/abc", "123") {
-		panic("should not pass the access key check")
-	}
-	if !AccessKeyCheck("/abc", "1") {
-		panic("should pass the access key check")
-	}
-	if !AccessKeyCheck("/abc", "2") {
-		panic("should pass the access key check")
-	}
-}
 func Test_Accesssign(t *testing.T) {
-	UpdateAccessConfig(map[string]map[string]string{"/abc": {"1": "1", "2": "2"}})
-	s := AccessSignMake("/abc", "1", "test", []hash.Hash{md5.New(), sha256.New()})
-	if !AccessSignCheck("/abc", "1", "test", s, []hash.Hash{md5.New(), sha256.New()}) {
-		panic("should pass the access sign check")
+	UpdateReplayDefendRedisUrl("redis://127.0.0.1:6379")
+	c := make(map[string][]*PathAccessConfig)
+	c["/abc"] = append(c["/abc"], &PathAccessConfig{
+		Method:   []string{"GET", "GRPC", "CRPC"},
+		Accesses: map[string]string{"1": "1"},
+	})
+	UpdateAccessConfig(c)
+	querys := make(url.Values)
+	querys.Add("a", "我 = 们")
+	querys.Add("a", "ad = asd")
+	querys.Add("b", "b")
+	headers := make(http.Header)
+	headers.Add("header1", "  header1  ")
+	headers.Add("header1", "我们  ")
+	headers.Add("header2", "  你们")
+	metadata := make(map[string]string)
+	metadata["md1"] = "  md1  "
+	metadata["md2"] = "  我们 "
+	signstr := MakeAccessSign("1", "1", "GRPC", "/abc", querys, headers, metadata, nil)
+	t.Log(signstr)
+	headers = make(http.Header)
+	headers.Add("header1", "header1")
+	headers.Add("header1", "我们")
+	headers.Add("header2", "你们")
+	if !VerifyAccessSign(context.Background(), "GRPC", "/abc", querys, headers, metadata, nil, signstr) {
+		t.Fatal("should pass")
 	}
-	if AccessSignCheck("/abc", "1", "test", "asdlasdj", []hash.Hash{md5.New(), sha256.New()}) {
-		panic("should not pass the access sign check")
+	if VerifyAccessSign(context.Background(), "GRPC", "/abc", querys, headers, metadata, nil, signstr) {
+		t.Fatal("should not pass")
 	}
-	if AccessSignCheck("/abc", "1", "asldjlasd", s, []hash.Hash{md5.New(), sha256.New()}) {
-		panic("should not pass the access sign check")
+	if VerifyAccessSign(context.Background(), "GET", "/abc", querys, headers, metadata, nil, signstr) {
+		t.Fatal("should not pass")
+	}
+	if VerifyAccessSign(context.Background(), "GRPC", "/a", querys, headers, metadata, nil, signstr) {
+		t.Fatal("should not pass")
 	}
 }

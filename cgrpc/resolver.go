@@ -44,7 +44,7 @@ func (b *resolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, 
 			all, e := b.c.c.Discover(b.group, b.name)
 			if e != nil {
 				cc.ReportError(e)
-				log.Error(nil, "[cgrpc.client.resolver] discover servername:", b.name, "servergroup:", b.group, "error:", e)
+				log.Error(nil, "[cgrpc.client.resolver] discover servername:", b.name, "servergroup:", b.group, e)
 				b.c.resolver.wake(true)
 				b.c.resolver.wake(false)
 				continue

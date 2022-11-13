@@ -15,6 +15,7 @@ func init() {
 	all["rate"] = rate
 	all["token"] = token
 	all["session"] = session
+	all["accesskey"] = accesskey
 }
 
 func AllMids() map[string]cgrpc.OutsideHandler {
@@ -60,4 +61,16 @@ func session(ctx *cgrpc.Context) {
 		return
 	}
 	md["Session-Data"] = sessiondata
+}
+func accesskey(ctx *cgrpc.Context) {
+	md := ctx.GetMetadata()
+	accesskey := md["Access-Key"]
+	if accesskey == "" {
+		ctx.Abort(cerror.ErrKey)
+		return
+	}
+	delete(md, "Access-Key")
+	if !publicmids.VerifyAccessKey(ctx, "GRPC", ctx.GetPath(), accesskey) {
+		ctx.Abort(cerror.ErrKey)
+	}
 }

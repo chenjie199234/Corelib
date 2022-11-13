@@ -6,6 +6,8 @@ import (
 	"sync"
 )
 
+const maxPieceLen = 65530
+
 type Instance struct {
 	c *InstanceConfig
 
