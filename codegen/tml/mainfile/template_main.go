@@ -38,6 +38,7 @@ func main() {
 		publicmids.UpdateRateConfig(ac.HandlerRate)
 		publicmids.UpdateTokenConfig(ac.TokenSecret, ac.SessionTokenExpire.StdDuration())
 		publicmids.UpdateSessionConfig(ac.SessionTokenExpire.StdDuration())
+		publicmids.UpdateAccessConfig(ac.Accesses)
 	})
 	defer config.Close()
 	publicmids.UpdateReplayDefendRedisInstance(config.GetRedis("sign_replay_defend_redis"))
