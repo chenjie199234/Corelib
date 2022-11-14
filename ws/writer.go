@@ -68,6 +68,7 @@ func makeheader(buf *pool.Buffer, fin, firstpiece, mask bool, length uint64, msg
 	return
 }
 
+// RFC 6455: all message from client to server must be masked
 func WriteMsg(conn net.Conn, data []byte, fin, firstpiece, mask bool) error {
 	buf := pool.GetBuffer()
 	defer pool.PutBuffer(buf)
@@ -84,6 +85,7 @@ func WriteMsg(conn net.Conn, data []byte, fin, firstpiece, mask bool) error {
 }
 
 // RFC 6455: All control frames MUST have a payload length of 125 bytes or less and MUST NOT be fragmented.
+// RFC 6455: all message from client to server must be masked
 func WritePing(conn net.Conn, data []byte, mask bool) error {
 	if len(data) > 125 {
 		return ErrMsgLarge
@@ -103,6 +105,7 @@ func WritePing(conn net.Conn, data []byte, mask bool) error {
 }
 
 // RFC 6455: All control frames MUST have a payload length of 125 bytes or less and MUST NOT be fragmented.
+// RFC 6455: all message from client to server must be masked
 func WritePong(conn net.Conn, data []byte, mask bool) error {
 	if len(data) > 125 {
 		return ErrMsgLarge

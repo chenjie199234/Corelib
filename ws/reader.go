@@ -101,6 +101,8 @@ func decodeFirstSecond(reader *bufio.Reader) (fin, rsv1, rsv2, rsv3 bool, opcode
 //			msgbuf.Reset()
 //		}
 //	}
+//
+// RFC 6455: all message from client to server must be masked
 func Read(reader *bufio.Reader, msgbuf *pool.Buffer, maxmsglen uint32, ctlbuf *pool.Buffer, mustmask bool) (ctlcode OPCode, e error) {
 	for {
 		fin, _, _, _, opcode, mask, payloadlen, err := decodeFirstSecond(reader)
