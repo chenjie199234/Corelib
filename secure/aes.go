@@ -10,6 +10,7 @@ import (
 )
 
 var ErrAesSecretLength = errors.New("secret length must less then 32")
+var ErrAesSecretWrong = errors.New("secret wrong")
 var ErrAesCipherTextBroken = errors.New("cipher text broken")
 
 const _NONCE_SIZE = 16
@@ -27,7 +28,7 @@ func AesDecrypt(secret string, ciphertext []byte) ([]byte, error) {
 	aead, _ := cipher.NewGCMWithNonceSize(block, _NONCE_SIZE)
 	plaintext, e := aead.Open(nil, ciphertext[:_NONCE_SIZE], ciphertext[_NONCE_SIZE:], nil)
 	if e != nil {
-		return nil, e
+		return nil, ErrAesSecretWrong
 	}
 	return pkcs7UnPadding(plaintext, aes.BlockSize), nil
 }
