@@ -58,7 +58,7 @@ const textsource = `{
 			"max_open":256,
 			"max_idletime":"10m",
 			"io_timeout":"500ms",
-			"conn_timeout":"500ms"
+			"conn_timeout":"200ms"
 		}
 	},
 	"sql":{
@@ -67,7 +67,7 @@ const textsource = `{
 			"max_open":256,
 			"max_idle":100,
 			"max_idletime":"10m",
-			"io_timeout":"200ms",
+			"io_timeout":"500ms",
 			"conn_timeout":"200ms"
 		}
 	},
@@ -77,7 +77,7 @@ const textsource = `{
 			"max_open":256,
 			"max_idle":100,
 			"max_idletime":"10m",
-			"io_timeout":"200ms",
+			"io_timeout":"500ms",
 			"conn_timeout":"200ms"
 		}
 	},
