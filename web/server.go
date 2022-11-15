@@ -390,7 +390,6 @@ func (s *WebServer) Use(globalMids ...OutsideHandler) {
 }
 
 // thread unsafe
-// path can't start with /src,/src is for static resource
 func (s *WebServer) Get(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
 	s.r.Get(path, s.insideHandler(http.MethodGet, path, handlers))
