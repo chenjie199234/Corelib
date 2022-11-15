@@ -43,7 +43,7 @@ type ServerConfig struct {
 	//if this is 0,ConnectTimeout will be used as IdleTimeout
 	IdleTimeout time.Duration
 	HeartProbe  time.Duration //system's tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
-	SrcRoot     string        //use /src/relative_path_in_src_root to get the resource in SrcRoot
+	SrcRoot     string
 	MaxHeader   uint
 	Certs       map[string]string //mapkey: cert path,mapvalue: private key path
 	Cors        *CorsConfig
@@ -227,8 +227,14 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	instance.r.notFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		w.Write(common.Str2byte(cerror.ErrNoapi.Error()))
-		log.Error(nil, "[web.server] client:", realip(r), "path:", r.URL.Path, "method:", r.Method, "error: unknown path")
+		w.Write(common.Str2byte(cerror.ErrNotExist.Error()))
+		log.Error(nil, "[web.server] client:", realip(r), "path:", r.URL.Path, "method:", r.Method, "not exist")
+	})
+	instance.r.srcPermissionHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write(common.Str2byte(cerror.ErrPermission.Error()))
+		log.Error(nil, "[web.server] client:", realip(r), "path:", r.URL.Path, "method:", r.Method, "open src file permission denie")
 	})
 	instance.r.optionsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//for OPTIONS preflight
@@ -387,9 +393,6 @@ func (s *WebServer) Use(globalMids ...OutsideHandler) {
 // path can't start with /src,/src is for static resource
 func (s *WebServer) Get(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
-	if strings.HasPrefix(path, "/src") {
-		panic("[web.server] path can't start with /src,/src is for static resource")
-	}
 	s.r.Get(path, s.insideHandler(http.MethodGet, path, handlers))
 }
 

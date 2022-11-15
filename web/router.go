@@ -1,8 +1,11 @@
 package web
 
 import (
+	"fmt"
+	"io/fs"
 	"net/http"
-	"strings"
+	"os"
+	"path/filepath"
 
 	"github.com/chenjie199234/Corelib/container/trie"
 	"github.com/chenjie199234/Corelib/log"
@@ -11,15 +14,16 @@ import (
 )
 
 type router struct {
-	getTree         *trie.Trie[http.HandlerFunc]
-	postTree        *trie.Trie[http.HandlerFunc]
-	putTree         *trie.Trie[http.HandlerFunc]
-	patchTree       *trie.Trie[http.HandlerFunc]
-	deleteTree      *trie.Trie[http.HandlerFunc]
-	rewrite         map[string]map[string]string //first key method,second key old path,value new path
-	notFoundHandler http.HandlerFunc
-	optionsHandler  http.HandlerFunc
-	srcHandler      http.HandlerFunc
+	getTree              *trie.Trie[http.HandlerFunc]
+	postTree             *trie.Trie[http.HandlerFunc]
+	putTree              *trie.Trie[http.HandlerFunc]
+	patchTree            *trie.Trie[http.HandlerFunc]
+	deleteTree           *trie.Trie[http.HandlerFunc]
+	rewrite              map[string]map[string]string //first key method,second key old path,value new path
+	notFoundHandler      http.HandlerFunc
+	srcPermissionHandler http.HandlerFunc
+	optionsHandler       http.HandlerFunc
+	srcroot              fs.FS
 }
 
 func newRouter(srcroot string) *router {
@@ -32,7 +36,7 @@ func newRouter(srcroot string) *router {
 		rewrite:    make(map[string]map[string]string),
 	}
 	if srcroot != "" {
-		r.srcHandler = http.StripPrefix("/src", http.FileServer(http.Dir(srcroot))).ServeHTTP
+		r.srcroot = os.DirFS(srcroot)
 	}
 	return r
 }
@@ -169,9 +173,8 @@ func (r *router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		req.URL.Path = url
 	}
 	var handler http.HandlerFunc
-	if req.Method == http.MethodGet && strings.HasPrefix(req.URL.Path, "/src") {
-		handler = r.srcHandler
-	} else if req.Method == http.MethodOptions {
+	var cleanurl string
+	if req.Method == http.MethodOptions {
 		handler = r.optionsHandler
 	} else {
 		var ok bool
@@ -188,7 +191,7 @@ func (r *router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 			handler, ok = r.deleteTree.Get(req.URL.Path)
 		}
 		if !ok {
-			cleanurl := cleanPath(req.URL.Path)
+			cleanurl = cleanPath(req.URL.Path)
 			switch req.Method {
 			case http.MethodGet:
 				handler, _ = r.getTree.Get(cleanurl)
@@ -203,14 +206,33 @@ func (r *router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 			}
 		}
 	}
-	if handler == nil {
-		if r.notFoundHandler != nil {
-			r.notFoundHandler(resp, req)
-		} else {
-			http.NotFound(resp, req)
-		}
-	} else {
+	if handler != nil {
 		handler(resp, req)
+	} else if r.srcroot == nil {
+		r.notFoundHandler(resp, req)
+	} else if req.Method != http.MethodGet {
+		r.notFoundHandler(resp, req)
+	} else {
+		//src root exist,no api handler,the request is GET,try to serve static resource
+		if cleanurl == "/" {
+			cleanurl = "/index.html"
+		}
+		file, e := r.srcroot.Open(cleanurl[1:])
+		if e != nil {
+			if os.IsNotExist(e) {
+				fmt.Println(1)
+				r.notFoundHandler(resp, req)
+			} else {
+				r.srcPermissionHandler(resp, req)
+			}
+		} else if fileinfo, e := file.Stat(); e != nil || fileinfo.IsDir() {
+			fmt.Println(2)
+			r.notFoundHandler(resp, req)
+			file.Close()
+		} else {
+			http.ServeContent(resp, req, filepath.Base(cleanurl), fileinfo.ModTime(), file.(*os.File))
+			file.Close()
+		}
 	}
 }
 func (r *router) printPath() {
