@@ -37,7 +37,7 @@ const textsource = `{
 		"global_timeout":"500ms",
 		"idle_timeout":"5s",
 		"heart_probe":"1.5s",
-		"src_root":"./src",
+		"src_root":"",
 		"certs":{
 		},
 		"web_cors":{
