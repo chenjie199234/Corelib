@@ -1,7 +1,6 @@
 package web
 
 import (
-	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
@@ -229,13 +228,11 @@ func (r *router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		file, e := srcroot.Open(cleanurl[1:])
 		if e != nil {
 			if os.IsNotExist(e) {
-				fmt.Println(1)
 				r.notFoundHandler(resp, req)
 			} else {
 				r.srcPermissionHandler(resp, req)
 			}
 		} else if fileinfo, e := file.Stat(); e != nil || fileinfo.IsDir() {
-			fmt.Println(2)
 			r.notFoundHandler(resp, req)
 			file.Close()
 		} else {
