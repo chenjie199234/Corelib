@@ -334,6 +334,9 @@ func (s *WebServer) StopWebServer(force bool) {
 		s.s.Shutdown(context.Background())
 	}
 }
+func (s *WebServer) UpdateSrcRoot(srcroot string) {
+	s.r.UpdateSrcRoot(srcroot)
+}
 
 // key origin url,value new url
 func (s *WebServer) UpdateHandlerRewrite(rewrite map[string]map[string]string) {

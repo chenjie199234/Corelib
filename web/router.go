@@ -41,6 +41,14 @@ func newRouter(srcroot string) *router {
 	return r
 }
 
+func (r *router) UpdateSrcRoot(srcroot string) {
+	if srcroot == "" {
+		r.srcroot = nil
+	} else {
+		r.srcroot = os.DirFS(srcroot)
+	}
+}
+
 // the first character must be slash(/)
 //
 //	api/abc -> /api/abc
@@ -217,7 +225,8 @@ func (r *router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		if cleanurl == "/" {
 			cleanurl = "/index.html"
 		}
-		file, e := r.srcroot.Open(cleanurl[1:])
+		srcroot := r.srcroot
+		file, e := srcroot.Open(cleanurl[1:])
 		if e != nil {
 			if os.IsNotExist(e) {
 				fmt.Println(1)
