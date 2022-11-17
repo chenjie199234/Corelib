@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// [a-z][0-9],first character must in [a-z]
+// [a-z][0-9][-],first character must in [a-z]
 func SingleCheck(name string, hyphen bool) error {
 	if len(name) == 0 {
 		return errors.New("[name.SingleCheck] empty")
@@ -17,11 +17,15 @@ func SingleCheck(name string, hyphen bool) error {
 		return errors.New("[name.SingleCheck] first character must in [a-z]")
 	}
 	if name[len(name)-1] < '0' || (name[len(name)-1] > '9' && name[len(name)-1] < 'a') || name[len(name)-1] > 'z' {
-		return errors.New("[name.SingleCheck] last character must in [0-9a-z]")
+		return errors.New("[name.SingleCheck] last character must in [a-z][0-9]")
 	}
 	for _, v := range name {
 		if (!hyphen && v < '0') || (hyphen && v < '0' && v != '-') || (v > '9' && v < 'a') || v > 'z' {
-			return errors.New("[name.SingleCheck] character must in [a-z][0-9]")
+			if hyphen {
+				return errors.New("[name.SingleCheck] character must in [a-z][0-9][-]")
+			} else {
+				return errors.New("[name.SingleCheck] character must in [a-z][0-9]")
+			}
 		}
 	}
 	return nil
