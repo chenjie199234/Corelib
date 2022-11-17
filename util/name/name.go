@@ -6,7 +6,7 @@ import (
 )
 
 // [a-z][0-9],first character must in [a-z]
-func SingleCheck(name string) error {
+func SingleCheck(name string, hyphen bool) error {
 	if len(name) == 0 {
 		return errors.New("[name.SingleCheck] empty")
 	}
@@ -16,8 +16,11 @@ func SingleCheck(name string) error {
 	if name[0] < 'a' || name[0] > 'z' {
 		return errors.New("[name.SingleCheck] first character must in [a-z]")
 	}
+	if name[len(name)-1] < '0' || (name[len(name)-1] > '9' && name[len(name)-1] < 'a') || name[len(name)-1] > 'z' {
+		return errors.New("[name.SingleCheck] last character must in [0-9a-z]")
+	}
 	for _, v := range name {
-		if v < '0' || (v > '9' && v < 'a') || v > 'z' {
+		if (!hyphen && v < '0') || (hyphen && v < '0' && v != '-') || (v > '9' && v < 'a') || v > 'z' {
 			return errors.New("[name.SingleCheck] character must in [a-z][0-9]")
 		}
 	}
@@ -36,10 +39,12 @@ func FullCheck(full string) error {
 		return errors.New("[name.FullCheck] fullname's format must be group.name")
 	}
 	strs := strings.Split(full, ".")
-	if e := SingleCheck(strs[0]); e != nil {
+	if e := SingleCheck(strs[0], true); e != nil {
+		//group can use hyphen
 		return e
 	}
-	if e := SingleCheck(strs[1]); e != nil {
+	if e := SingleCheck(strs[1], false); e != nil {
+		//name can't use hyphen
 		return e
 	}
 	return nil

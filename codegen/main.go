@@ -47,7 +47,7 @@ var needkubernetesingress bool
 func main() {
 	flag.Parse()
 	//pre check
-	if e := cname.SingleCheck(*name); e != nil {
+	if e := cname.SingleCheck(*name, false); e != nil {
 		panic(e)
 	}
 	if *packagename == "" {
@@ -56,7 +56,7 @@ func main() {
 		panic("package name must end with project name,e.g. github.com/path_to_the_repo/project_name")
 	}
 	if len(*sub) != 0 {
-		if e := cname.SingleCheck(*sub); e != nil {
+		if e := cname.SingleCheck(*sub, false); e != nil {
 			panic(e)
 		}
 		checkBaseProjectName()
