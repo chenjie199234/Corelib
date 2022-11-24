@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -21,7 +22,7 @@ func (s *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context
 			peername: peername,
 			metadata: metadata,
 			handlers: handlers,
-			status:   0,
+			finish:   0,
 			e:        nil,
 		}
 		if metadata == nil {
@@ -37,7 +38,7 @@ func (s *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context
 		ctx.metadata = metadata
 	}
 	ctx.handlers = handlers
-	ctx.status = 0
+	ctx.finish = 0
 	ctx.e = nil
 	return ctx
 }
@@ -60,7 +61,7 @@ type Context struct {
 	peername string
 	metadata map[string]string
 	handlers []OutsideHandler
-	status   int8
+	finish   int32
 	body     []byte
 	bodyerr  error
 	e        *cerror.Error
@@ -69,15 +70,16 @@ type Context struct {
 func (c *Context) run() {
 	for _, handler := range c.handlers {
 		handler(c)
-		if c.status != 0 {
+		if c.finish != 0 {
 			break
 		}
 	}
 }
 
-// has race
 func (c *Context) Abort(e error) {
-	c.status = -1
+	if !atomic.CompareAndSwapInt32(&c.finish, 0, -1) {
+		return
+	}
 	c.e = cerror.ConvertStdError(e)
 	if c.e != nil {
 		c.w.Header().Set("Content-Type", "application/json")
@@ -89,9 +91,10 @@ func (c *Context) Abort(e error) {
 	}
 }
 
-// has race
 func (c *Context) Write(contenttype string, msg []byte) {
-	c.status = 1
+	if !atomic.CompareAndSwapInt32(&c.finish, 0, 1) {
+		return
+	}
 	c.w.Header().Set("Content-Type", contenttype)
 	c.w.WriteHeader(http.StatusOK)
 	c.w.Write(msg)
@@ -102,7 +105,9 @@ func (c *Context) WriteString(contenttype, msg string) {
 }
 
 func (c *Context) Redirect(code int, url string) {
-	c.status = 1
+	if !atomic.CompareAndSwapInt32(&c.finish, 0, 2) {
+		return
+	}
 	if code != 301 && code != 302 && code != 307 && code != 308 {
 		panic("[web.Context.Direct] httpcode must be 301/302/307/308")
 	}

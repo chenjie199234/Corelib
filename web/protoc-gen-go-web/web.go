@@ -161,10 +161,12 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("}")
 		g.P("}")
 		g.P("}else{")
-		g.P("if e:=ctx.ParseForm();e!=nil{")
-		g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
-		g.P("return")
-		g.P("}")
+		if len(method.Input.Fields) > 0 {
+			g.P("if e:=ctx.ParseForm();e!=nil{")
+			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
+			g.P("return")
+			g.P("}")
+		}
 		g.P("data:=", g.QualifiedGoIdent(bufpoolPackage.Ident("GetBuffer()")))
 		g.P("defer ", g.QualifiedGoIdent(bufpoolPackage.Ident("PutBuffer(data)")))
 		g.P("data.AppendByte('{')")
