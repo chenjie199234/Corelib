@@ -232,7 +232,11 @@ func initlocalapp(notice func(*AppConfig)) {
 }
 func initremoteapp(notice func(*AppConfig), wait chan *struct{}) (stopwatch func()) {
 	return RemoteConfigSdk.Watch("AppConfig", func(key, keyvalue, keytype string) {
-		//only support json now,so keytype will be ignore
+		//only support json
+		if keytype != "json" {
+			log.Error(nil, "[config.initremoteapp] config data can only support json format")
+			return
+		}
 		c := &AppConfig{}
 		if e := json.Unmarshal(common.Str2byte(keyvalue), c); e != nil {
 			log.Error(nil, "[config.initremoteapp] config data format error:", e)
@@ -445,11 +449,15 @@ func initlocalsource() {
 }
 func initremotesource(wait chan *struct{}) (stopwatch func()) {
 	return RemoteConfigSdk.Watch("SourceConfig", func(key, keyvalue, keytype string) {
+		//only support json
+		if keytype != "json" {
+			log.Error(nil, "[config.initremotesource] config data can only support json format")
+			return
+		}
 		//source config only init once
 		if sc != nil {
 			return
 		}
-		//only support json now,so keytype will be ignore
 		c := &sourceConfig{}
 		if e := json.Unmarshal(common.Str2byte(keyvalue), c); e != nil {
 			log.Error(nil, "[config.initremotesource] config data format error:", e)
