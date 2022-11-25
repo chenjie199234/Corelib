@@ -32,7 +32,6 @@ import (
 	servicestatus "github.com/chenjie199234/Corelib/codegen/tml/service/status"
 	subservice "github.com/chenjie199234/Corelib/codegen/tml/service/sub"
 	"github.com/chenjie199234/Corelib/codegen/tml/util"
-	"github.com/chenjie199234/Corelib/internal/version"
 	cname "github.com/chenjie199234/Corelib/util/name"
 )
 
@@ -46,7 +45,6 @@ var needkubernetesservice bool
 var needkubernetesingress bool
 
 func main() {
-	fmt.Println("codegen run on version:", version.String())
 	flag.Parse()
 	//pre check
 	if e := cname.SingleCheck(*name, false); e != nil {

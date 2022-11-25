@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"text/template"
+
+	"github.com/chenjie199234/Corelib/internal/version"
 )
 
 const text = `module {{.}}
@@ -12,7 +14,7 @@ go 1.18
 
 require (
 	github.com/chenjie199234/admin v0.0.2
-	github.com/chenjie199234/Corelib v0.0.74
+	github.com/chenjie199234/Corelib %s
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/segmentio/kafka-go v0.4.38
@@ -28,7 +30,7 @@ var file *os.File
 
 func init() {
 	var e error
-	tml, e = template.New("gomod").Parse(text)
+	tml, e = template.New("gomod").Parse(fmt.Sprintf(text, version.String()))
 	if e != nil {
 		panic(fmt.Sprintf("create template error:%s", e))
 	}

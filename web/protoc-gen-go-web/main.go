@@ -20,7 +20,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), version.String())
 		os.Exit(0)
 	}
-	fmt.Println("protoc-gen-go-web run on version:", version.String())
 	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
 		//pre check
 		for _, f := range gen.Files {
