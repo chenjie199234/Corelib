@@ -1,0 +1,15 @@
+package version
+
+import "fmt"
+
+var major = 0
+var minor = 0
+var patch = 74
+var status = "dev"
+
+func String() string {
+	if status != "" {
+		return fmt.Sprintf("v%d.%d.%d-%s", major, minor, patch, status)
+	}
+	return fmt.Sprintf("v%d.%d.%d", major, minor, patch)
+}

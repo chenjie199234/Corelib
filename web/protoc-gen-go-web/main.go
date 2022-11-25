@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/pbex"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -14,13 +15,12 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
-var version = "v0.0.1"
-
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
-		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), version)
+		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), version.String())
 		os.Exit(0)
 	}
+	fmt.Println("protoc-gen-go-web run on version:", version.String())
 	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
 		//pre check
 		for _, f := range gen.Files {

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/pbex"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -61,7 +62,7 @@ func genFileComment(gen *protogen.Plugin, file *protogen.File, g *protogen.Gener
 			protocVersion += "-" + s
 		}
 	}
-	g.P("// \tprotoc-gen-go-web ", version)
+	g.P("// \tprotoc-gen-go-web ", version.String())
 	g.P("// \tprotoc            ", protocVersion)
 	g.P("// source: ", file.Desc.Path())
 	g.P()
