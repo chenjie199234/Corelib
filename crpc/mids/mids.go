@@ -3,7 +3,6 @@ package mids
 import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/crpc"
-	"github.com/chenjie199234/Corelib/log"
 	publicmids "github.com/chenjie199234/Corelib/mids"
 )
 
@@ -26,9 +25,6 @@ func AllMids() map[string]crpc.OutsideHandler {
 // thread unsafe
 func RegMid(name string, handler crpc.OutsideHandler) {
 	all[name] = handler
-}
-func cleantrace(ctx *crpc.Context) {
-	log.CleanTrace(ctx)
 }
 func rate(ctx *crpc.Context) {
 	if pass := publicmids.CrpcRate(ctx, ctx.GetPath()); !pass {
