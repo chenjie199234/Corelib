@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/log"
 	publicmids "github.com/chenjie199234/Corelib/mids"
 	"github.com/chenjie199234/Corelib/web"
 )
@@ -14,6 +15,7 @@ var all map[string]web.OutsideHandler
 func init() {
 	all = make(map[string]web.OutsideHandler)
 	//register here
+	all["cleantrace"] = cleantrace
 	all["rate"] = rate
 	all["token"] = token
 	all["session"] = session
@@ -27,6 +29,9 @@ func AllMids() map[string]web.OutsideHandler {
 // thread unsafe
 func RegMid(name string, handler web.OutsideHandler) {
 	all[name] = handler
+}
+func cleantrace(ctx *web.Context) {
+	log.CleanTrace(ctx)
 }
 func rate(ctx *web.Context) {
 	switch ctx.GetMethod() {

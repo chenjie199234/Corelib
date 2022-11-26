@@ -92,6 +92,15 @@ func CopyTrace(src, dst context.Context) (context.Context, bool) {
 	return dst, false
 }
 
+func CleanTrace(ctx context.Context) {
+	tracedata, ok := ctx.Value(tracekey{}).(map[string]string)
+	if ok {
+		for k := range tracedata {
+			delete(tracedata, k)
+		}
+	}
+}
+
 func maketraceid() string {
 	nowstr := strconv.FormatInt(time.Now().UnixNano(), 10)
 	ranstr := strconv.FormatInt(rand.Int63(), 10)
