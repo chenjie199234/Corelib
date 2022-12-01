@@ -257,6 +257,7 @@ const sourcetext = `package config
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"os"
@@ -380,6 +381,7 @@ type MongoConfig struct {
 // KafkaPubConfig -
 type KafkaPubConfig struct {
 	Addrs          []string       $json:"addrs"$
+	TLS            bool           $json:"tls"$
 	Username       string         $json:"username"$
 	Passwd         string         $json:"password"$
 	AuthMethod     int            $json:"auth_method"$     //1-plain,2-scram sha256,3-scram sha512
@@ -392,6 +394,7 @@ type KafkaPubConfig struct {
 // KafkaSubConfig -
 type KafkaSubConfig struct {
 	Addrs       []string       $json:"addrs"$
+	TLS         bool           $json:"tls"$
 	Username    string         $json:"username"$
 	Passwd      string         $json:"password"$
 	AuthMethod  int            $json:"auth_method"$ //1-plain,2-scram sha256,3-scram sha512
@@ -773,6 +776,9 @@ func initkafkapub(){
 			Timeout:   pubc.ConnTimeout.StdDuration(),
 			DualStack: true,
 		}
+		if pubc.TLS {
+			dialer.TLS = &tls.Config{}
+		}
 		var e error
 		switch pubc.AuthMethod {
 		case 1:
@@ -843,6 +849,9 @@ func initkafkasub(){
 		dialer := &kafka.Dialer{
 			Timeout:   subc.ConnTimeout.StdDuration(),
 			DualStack: true,
+		}
+		if subc.TLS {
+			dialer.TLS = &tls.Config{}
 		}
 		var e error
 		switch subc.AuthMethod {
