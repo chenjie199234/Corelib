@@ -8,6 +8,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/pbex"
+
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -21,7 +22,6 @@ const (
 	regexpPackage    = protogen.GoImportPath("regexp")
 	ioPackage        = protogen.GoImportPath("io")
 	contextPackage   = protogen.GoImportPath("context")
-	stdjsonPackage   = protogen.GoImportPath("encoding/json")
 	base64Package    = protogen.GoImportPath("encoding/base64")
 	protoPackage     = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	protojsonPackage = protogen.GoImportPath("google.golang.org/protobuf/encoding/protojson")
@@ -320,7 +320,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 
 		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		//check
-		if pbex.NeedCheck(method.Input) {
+		if pbex.MessageHasPBEX(method.Input) {
 			g.P("if errstr := req.Validate(); errstr != \"\"{")
 			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\",errstr)")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
@@ -652,7 +652,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
 						g.P("if v!=nil{")
-						g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(v)")
+						g.P("temp,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("Marshal")), "(v)")
 						g.P("query.AppendByteSlice(temp)")
 						g.P("}")
 						g.P("query.AppendByte('&')")
@@ -660,14 +660,14 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					} else if field.Desc.IsMap() {
 						g.P("if len(req.Get", field.GoName, "())!=0{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.Get", field.GoName, "())")
+						g.P("temp,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("Marshal")), "(req.Get", field.GoName, "())")
 						g.P("query.AppendByteSlice(temp)")
 						g.P("query.AppendByte('&')")
 						g.P("}")
 					} else {
 						g.P("if req.Get", field.GoName, "()!=nil{")
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("temp,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(req.Get", field.GoName, "())")
+						g.P("temp,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("Marshal")), "(req.Get", field.GoName, "())")
 						g.P("query.AppendByteSlice(temp)")
 						g.P("query.AppendByte('&')")
 						g.P("}")

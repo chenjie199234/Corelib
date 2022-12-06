@@ -107,7 +107,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("}")
 
 		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
-		if pbex.NeedCheck(method.Input) {
+		if pbex.MessageHasPBEX(method.Input) {
 			g.P("if errstr := req.Validate(); errstr != \"\" {")
 			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\",errstr)")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")

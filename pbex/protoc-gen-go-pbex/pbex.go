@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/pbex"
 
 	"google.golang.org/protobuf/compiler/protogen"
@@ -47,7 +48,7 @@ func genFileComment(gen *protogen.Plugin, file *protogen.File, g *protogen.Gener
 			protocVersion += "-" + s
 		}
 	}
-	g.P("// \tprotoc-gen-pbex ", version)
+	g.P("// \tprotoc-gen-pbex ", version.String())
 	g.P("// \tprotoc         ", protocVersion)
 	g.P("// source: ", file.Desc.Path())
 	g.P()
@@ -116,7 +117,7 @@ func getallregs(m *protogen.Message) map[string]string {
 	return allregexps
 }
 func genMessage(g *protogen.GeneratedFile, m *protogen.Message) {
-	if pbex.NeedCheck(m) {
+	if pbex.MessageHasPBEX(m) {
 		geninit(g, m)
 		g.P("//return empty means pass")
 		g.P("func (m*", m.GoIdent.GoName, ")Validate() (errstr string){")
@@ -873,7 +874,7 @@ func messagecheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *prot
 	if proto.HasExtension(fop, pbex.E_MessageNotNil) {
 		notnil = proto.GetExtension(fop, pbex.E_MessageNotNil).(bool)
 	}
-	needcheck = pbex.NeedCheck(field.Message)
+	needcheck = pbex.MessageHasPBEX(field.Message)
 	if !notnil && !needcheck {
 		return
 	}
@@ -1035,7 +1036,7 @@ func mapcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 			valuecheck = true
 		}
 	case protoreflect.MessageKind:
-		if proto.HasExtension(fop, pbex.E_MapValueMessageNotNil) || pbex.NeedCheck(val.Message) {
+		if proto.HasExtension(fop, pbex.E_MapValueMessageNotNil) || pbex.MessageHasPBEX(val.Message) {
 			valuecheck = true
 		}
 	}
@@ -1547,7 +1548,7 @@ func mapcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 			if proto.HasExtension(fop, pbex.E_MapValueMessageNotNil) {
 				notnil = proto.GetExtension(fop, pbex.E_MapValueMessageNotNil).(bool)
 			}
-			needcheck = pbex.NeedCheck(val.Message)
+			needcheck = pbex.MessageHasPBEX(val.Message)
 			if !notnil && !needcheck {
 				break
 			}

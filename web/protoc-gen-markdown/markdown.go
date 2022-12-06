@@ -9,6 +9,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/pbex"
+
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -95,10 +96,14 @@ func genService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedF
 	}
 }
 func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions bool, checked map[string]*struct{}) {
+	if _, ok := checked[string(m.Desc.FullName())]; ok {
+		return
+	}
 	if !nest {
 		g.P("------------------------------------------------------------------------------------------------------------")
+	} else {
+		checked[string(m.Desc.FullName())] = nil
 	}
-	checked[string(m.Desc.FullName())] = nil
 	newmessage := make(map[string]*protogen.Message)
 	if nest {
 		g.P(m.Desc.Name(), ": {")
@@ -106,6 +111,13 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 		g.P("{")
 	}
 	for i, f := range m.Fields {
+		if f.Oneof != nil {
+			oneofs := make([]string, 0, len(f.Oneof.Fields))
+			for _, oneof := range f.Oneof.Fields {
+				oneofs = append(oneofs, strconv.Quote(string(oneof.Desc.Name())))
+			}
+			g.P("\t//" + strings.Join(oneofs, ",") + " can only exist one")
+		}
 		fop := f.Desc.Options().(*descriptorpb.FieldOptions)
 		comments := strings.Split(strings.TrimSuffix(f.Comments.Leading.String()+f.Comments.Trailing.String(), "\n"), "\n")
 		for _, comment := range comments {
@@ -1153,10 +1165,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 	}
 	g.P("}")
 	g.P("------------------------------------------------------------------------------------------------------------")
-	for k, v := range newmessage {
-		if _, ok := checked[k]; ok {
-			continue
-		}
+	for _, v := range newmessage {
 		jsondoc(g, v, true, skipoptions, checked)
 	}
 	return
@@ -1165,6 +1174,13 @@ func formdoc(g *protogen.GeneratedFile, m *protogen.Message) {
 	g.P("------------------------------------------------------------------------------------------------------------")
 	newmessage := make(map[string]*protogen.Message)
 	for _, f := range m.Fields {
+		if f.Oneof != nil {
+			oneofs := make([]string, 0, len(f.Oneof.Fields))
+			for _, oneof := range f.Oneof.Fields {
+				oneofs = append(oneofs, strconv.Quote(string(oneof.Desc.Name())))
+			}
+			g.P("\t//" + strings.Join(oneofs, ",") + " can only exist one")
+		}
 		fop := f.Desc.Options().(*descriptorpb.FieldOptions)
 		comments := strings.TrimSuffix(f.Comments.Leading.String()+f.Comments.Trailing.String(), "\n")
 		if comments != "" {

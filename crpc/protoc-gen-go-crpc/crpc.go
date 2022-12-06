@@ -7,6 +7,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/pbex"
+
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -107,7 +108,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("}")
 
 		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
-		if pbex.NeedCheck(method.Input) {
+		if pbex.MessageHasPBEX(method.Input) {
 			g.P("if errstr := req.Validate(); errstr != \"\" {")
 			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\",errstr)")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")

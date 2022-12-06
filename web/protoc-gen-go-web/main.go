@@ -9,6 +9,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/pbex"
+
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -27,7 +28,12 @@ func main() {
 				continue
 			}
 			if *f.Proto.Syntax != "proto3" {
-				panic("this plugin only support proto3 syntax!")
+				panic("plugin only support proto3 syntax!")
+			}
+			for _, m := range f.Messages {
+				if pbex.OneOfHasPBEX(m) {
+					panic("oneof fields should not contain pbex")
+				}
 			}
 			for _, s := range f.Services {
 				if s.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
@@ -38,15 +44,18 @@ func main() {
 					if mop.GetDeprecated() {
 						continue
 					}
+					if pbex.OneOfHasPBEX(m.Input) {
+						panic("oneof fields should not contain pbex")
+					}
+					if pbex.OneOfHasPBEX(m.Output) {
+						panic("oneof fields should not contain pbex")
+					}
 					if !proto.HasExtension(mop, pbex.E_Method) {
 						continue
 					}
 					httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
 					if httpmetohd != http.MethodGet && httpmetohd != http.MethodPost && httpmetohd != http.MethodPut && httpmetohd != http.MethodDelete && httpmetohd != http.MethodPatch {
 						panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", m.Desc.Name(), s.Desc.Name(), httpmetohd))
-					}
-					if pbex.HasOneOf(m.Input) || pbex.HasOneOf(m.Output) {
-						panic("can't support oneof in proto!")
 					}
 				}
 			}
