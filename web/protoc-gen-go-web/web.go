@@ -744,7 +744,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("query.AppendByte('\"')")
 						case protoreflect.MessageKind:
 							g.P("if v==nil{")
-							g.P("query.AppendString(\"null\")")
+							g.P("query.AppendString(\"{}\")")
 							g.P("}else{")
 							g.P("temp,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("Marshal")), "(v)")
 							g.P("query.AppendByteSlice(temp)")
