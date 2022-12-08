@@ -659,9 +659,99 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("}")
 					} else if field.Desc.IsMap() {
 						g.P("if len(req.Get", field.GoName, "())!=0{")
-						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
-						g.P("temp,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("Marshal")), "(req.Get", field.GoName, "())")
-						g.P("query.AppendByteSlice(temp)")
+						g.P("first:=true")
+						g.P("query.AppendString(", strconv.Quote(fname+"={"), ")")
+						g.P("for k,v:=range req.Get", field.GoName, "(){")
+						g.P("if first{")
+						g.P("first=false")
+						g.P("}else{")
+						g.P("query.AppendByte(',')")
+						g.P("}")
+						g.P("query.AppendByte('\"')")
+						switch field.Message.Fields[0].Desc.Kind() {
+						case protoreflect.Int32Kind:
+							fallthrough
+						case protoreflect.Sint32Kind:
+							fallthrough
+						case protoreflect.Sfixed32Kind:
+							//int32
+							g.P("query.AppendInt32(k)")
+						case protoreflect.Int64Kind:
+							fallthrough
+						case protoreflect.Sint64Kind:
+							fallthrough
+						case protoreflect.Sfixed64Kind:
+							//int64
+							g.P("query.AppendInt64(k)")
+						case protoreflect.Uint32Kind:
+							fallthrough
+						case protoreflect.Fixed32Kind:
+							//uint32
+							g.P("query.AppendUint32(k)")
+						case protoreflect.Uint64Kind:
+							fallthrough
+						case protoreflect.Fixed64Kind:
+							//uint64
+							g.P("query.AppendUint64(k)")
+						case protoreflect.StringKind:
+							//string
+							g.P("query.AppendString(k)")
+						}
+						g.P("query.AppendByte('\"')")
+						g.P("query.AppendByte(':')")
+						switch field.Message.Fields[1].Desc.Kind() {
+						case protoreflect.BoolKind:
+							g.P("query.AppendBool(v)")
+						case protoreflect.EnumKind:
+							g.P("query.AppendInt32(int32(v))")
+						case protoreflect.Int32Kind:
+							fallthrough
+						case protoreflect.Sint32Kind:
+							fallthrough
+						case protoreflect.Sfixed32Kind:
+							//int32
+							g.P("query.AppendInt32(v)")
+						case protoreflect.Int64Kind:
+							fallthrough
+						case protoreflect.Sint64Kind:
+							fallthrough
+						case protoreflect.Sfixed64Kind:
+							//int64
+							g.P("query.AppendInt64(v)")
+						case protoreflect.Uint32Kind:
+							fallthrough
+						case protoreflect.Fixed32Kind:
+							//uint32
+							g.P("query.AppendUint32(v)")
+						case protoreflect.Uint64Kind:
+							fallthrough
+						case protoreflect.Fixed64Kind:
+							//uint64
+							g.P("query.AppendUint64(v)")
+						case protoreflect.FloatKind:
+							g.P("query.AppendFloat32(v)")
+						case protoreflect.DoubleKind:
+							g.P("query.AppendFloat64(v)")
+						case protoreflect.StringKind:
+							g.P("query.AppendByte('\"')")
+							g.P("query.AppendString(v)")
+							g.P("query.AppendByte('\"')")
+						case protoreflect.BytesKind:
+							g.P("//req.", field.GoName, "is a map,it's value's type in protobuf is bytes,value should be base64 encoded")
+							g.P("//https://developers.google.com/protocol-buffers/docs/proto3#json")
+							g.P("query.AppendByte('\"')")
+							g.P("query.AppendString(", g.QualifiedGoIdent(base64Package.Ident("StdEncoding.EncodeToString")), "(v))")
+							g.P("query.AppendByte('\"')")
+						case protoreflect.MessageKind:
+							g.P("if v==nil{")
+							g.P("query.AppendString(\"null\")")
+							g.P("}else{")
+							g.P("temp,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("Marshal")), "(v)")
+							g.P("query.AppendByteSlice(temp)")
+							g.P("}")
+						}
+						g.P("}")
+						g.P("query.AppendByte('}')")
 						g.P("query.AppendByte('&')")
 						g.P("}")
 					} else {

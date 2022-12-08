@@ -39,6 +39,22 @@ func messagecheck(message *protogen.Message, checked map[string]*struct{}) bool 
 	return false
 }
 
+// check the message has oneof or not
+// this will check the nest messages too
+func MessageHasOneof(message *protogen.Message) bool {
+	if len(message.Oneofs) > 0 {
+		return true
+	}
+	for _, field := range message.Fields {
+		if field.Desc.Kind() == protoreflect.MessageKind {
+			if MessageHasOneof(field.Message) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // check the message's oneof field has pbex or not
 // this will check the nest messages too
 func OneOfHasPBEX(message *protogen.Message) bool {
