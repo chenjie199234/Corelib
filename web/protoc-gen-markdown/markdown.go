@@ -1179,7 +1179,7 @@ func formdoc(g *protogen.GeneratedFile, m *protogen.Message) {
 			for _, oneof := range f.Oneof.Fields {
 				oneofs = append(oneofs, strconv.Quote(string(oneof.Desc.Name())))
 			}
-			g.P("\t//" + strings.Join(oneofs, ",") + " can only exist one")
+			g.P("//" + strings.Join(oneofs, ",") + " can only exist one")
 		}
 		fop := f.Desc.Options().(*descriptorpb.FieldOptions)
 		comments := strings.TrimSuffix(f.Comments.Leading.String()+f.Comments.Trailing.String(), "\n")
