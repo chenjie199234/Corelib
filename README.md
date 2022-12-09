@@ -9,7 +9,7 @@
 	6.make sure the codegen's path is in the system's or user's PATH env
 	7.codegen -d path -n projectname -p packagename
 	(without -d or -d is empty the default:current dir will be used)
-	(projectname format,character must in [a-z][A-Z][0-9][_],first character must in [a-z][A-Z])
+	(projectname format,character must in [a-z][0-9],first character must in [a-z])
 	(packagename must end with projectname,default:projectname will be used as packagename,e.g. github.com/path_to_the_repo/projectname)
 # Description
 ## codegen
