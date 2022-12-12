@@ -172,29 +172,24 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("data.AppendByte('{')")
 		for i, field := range method.Input.Fields {
 			fname := string(field.Desc.Name())
-			g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
 			switch field.Desc.Kind() {
 			case protoreflect.BoolKind:
 				if field.Desc.IsList() {
-					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)==0{")
-					g.P("data.AppendString(", strconv.Quote("null"), ")")
-					g.P("}else{")
+					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)!=0{")
+					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
 					g.P("data.AppendByte('[')")
 					g.P("for i,form:=range forms{")
-					g.P("if len(form)==0{")
-					g.P("data.AppendString(", strconv.Quote("false"), ")")
-					g.P("}else{")
 					g.P("data.AppendString(form)")
-					g.P("}")
 					g.P("data.AppendByte(',')")
 					g.P("}")
 					g.P("data.Bytes()[data.Len()-1] = ']'")
+					g.P("data.AppendByte(',')")
 					g.P("}")
 				} else {
-					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
-					g.P("data.AppendString(", strconv.Quote("false"), ")")
-					g.P("}else{")
+					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
 					g.P("data.AppendString(form)")
+					g.P("data.AppendByte(',')")
 					g.P("}")
 				}
 			case protoreflect.EnumKind:
@@ -223,25 +218,21 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				fallthrough
 			case protoreflect.DoubleKind:
 				if field.Desc.IsList() {
-					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)==0{")
-					g.P("data.AppendString(", strconv.Quote("null"), ")")
-					g.P("}else{")
+					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)!=0{")
+					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
 					g.P("data.AppendByte('[')")
 					g.P("for _,form:=range forms{")
-					g.P("if len(form)==0{")
-					g.P("data.AppendString(", strconv.Quote("0"), ")")
-					g.P("}else{")
 					g.P("data.AppendString(form)")
-					g.P("}")
 					g.P("data.AppendByte(',')")
 					g.P("}")
 					g.P("data.Bytes()[data.Len()-1] = ']'")
+					g.P("data.AppendByte(',')")
 					g.P("}")
 				} else {
-					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
-					g.P("data.AppendString(", strconv.Quote("0"), ")")
-					g.P("}else{")
+					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
 					g.P("data.AppendString(form)")
+					g.P("data.AppendByte(',')")
 					g.P("}")
 				}
 			case protoreflect.BytesKind:
@@ -250,9 +241,8 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				fallthrough
 			case protoreflect.StringKind:
 				if field.Desc.IsList() {
-					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)==0{")
-					g.P("data.AppendString(", strconv.Quote("null"), ")")
-					g.P("}else{")
+					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)!=0{")
+					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
 					g.P("data.AppendByte('[')")
 					g.P("for _,form:=range forms{")
 					g.P("if len(form)==0{")
@@ -267,23 +257,25 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					g.P("data.AppendByte(',')")
 					g.P("}")
 					g.P("data.Bytes()[data.Len()-1] = ']'")
+					g.P("data.AppendByte(',')")
 					g.P("}")
 				} else {
-					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
-					g.P("data.AppendString(", strconv.Quote("\"\""), ")")
-					g.P("}else if len(form)<2 || form[0] !='\"' || form[len(form)-1]!='\"'{")
+					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
+					g.P("if len(form)<2 || form[0] !='\"' || form[len(form)-1]!='\"'{")
 					g.P("data.AppendByte('\"')")
 					g.P("data.AppendString(form)")
 					g.P("data.AppendByte('\"')")
 					g.P("}else{")
 					g.P("data.AppendString(form)")
+					g.P("}")
+					g.P("data.AppendByte(',')")
 					g.P("}")
 				}
 			case protoreflect.MessageKind:
 				if field.Desc.IsList() {
-					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)==0{")
-					g.P("data.AppendString(", strconv.Quote("null"), ")")
-					g.P("}else{")
+					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)!=0{")
+					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
 					g.P("data.AppendByte('[')")
 					g.P("for _,form:=range forms{")
 					g.P("if len(form)==0{")
@@ -294,20 +286,22 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					g.P("data.AppendByte(',')")
 					g.P("}")
 					g.P("data.Bytes()[data.Len()-1] = ']'")
+					g.P("data.AppendByte(',')")
 					g.P("}")
 				} else {
-					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)==0{")
-					g.P("data.AppendString(", strconv.Quote("null"), ")")
-					g.P("}else{")
+					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
 					g.P("data.AppendString(form)")
+					g.P("data.AppendByte(',')")
 					g.P("}")
 				}
 			}
-			if i != len(method.Input.Fields)-1 {
-				g.P("data.AppendByte(',')")
-			}
 		}
+		g.P("if data.Len() == 1{")
 		g.P("data.AppendByte('}')")
+		g.P("}else{")
+		g.P("data.Bytes()[data.Len()-1] = ']'")
+		g.P("}")
 		g.P("if data.Len()>2{")
 		g.P("if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(data.Bytes(),req);e!=nil{")
 		g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
