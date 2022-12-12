@@ -79,12 +79,12 @@ extend google.protobuf.FieldOptions {
 	uint64 map_key_uint_lt=160056;
 	uint64 map_key_uint_lte=160057;
 	//map key int
-	repeated uint64 map_key_int_in=160058;
-	repeated uint64 map_key_int_not_in=160059;
-	uint64 map_key_int_gt=160060;
-	uint64 map_key_int_gte=160061;
-	uint64 map_key_int_lt=160062;
-	uint64 map_key_int_lte=160063;
+	repeated int64 map_key_int_in=160058;
+	repeated int64 map_key_int_not_in=160059;
+	int64 map_key_int_gt=160060;
+	int64 map_key_int_gte=160061;
+	int64 map_key_int_lt=160062;
+	int64 map_key_int_lte=160063;
 
 	//map value bool
 	bool map_value_bool_eq=160064;
