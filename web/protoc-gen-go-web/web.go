@@ -300,7 +300,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("if data.Len() == 1{")
 		g.P("data.AppendByte('}')")
 		g.P("}else{")
-		g.P("data.Bytes()[data.Len()-1] = ']'")
+		g.P("data.Bytes()[data.Len()-1] = '}'")
 		g.P("}")
 		g.P("if data.Len()>2{")
 		g.P("if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(data.Bytes(),req);e!=nil{")
