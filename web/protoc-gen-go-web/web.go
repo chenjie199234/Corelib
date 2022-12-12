@@ -170,7 +170,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("data:=", g.QualifiedGoIdent(bufpoolPackage.Ident("GetBuffer()")))
 		g.P("defer ", g.QualifiedGoIdent(bufpoolPackage.Ident("PutBuffer(data)")))
 		g.P("data.AppendByte('{')")
-		for i, field := range method.Input.Fields {
+		for _, field := range method.Input.Fields {
 			fname := string(field.Desc.Name())
 			switch field.Desc.Kind() {
 			case protoreflect.BoolKind:
