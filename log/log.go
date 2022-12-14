@@ -12,6 +12,9 @@ import (
 	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/rotatefile"
 	"github.com/chenjie199234/Corelib/util/ctime"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 var trace bool
@@ -251,11 +254,20 @@ func writeany(buf *pool.Buffer, data interface{}) {
 		buf.AppendErrors(d)
 
 	default:
-		tmp, e := json.Marshal(data)
-		if e != nil {
-			buf.AppendString("unsupported type")
+		if d, ok := data.(protoreflect.ProtoMessage); ok {
+			tmp, e := protojson.Marshal(d)
+			if e != nil {
+				buf.AppendString("unsupported type")
+			} else {
+				buf.AppendByteSlice(tmp)
+			}
 		} else {
-			buf.AppendByteSlice(tmp)
+			tmp, e := json.Marshal(data)
+			if e != nil {
+				buf.AppendString("unsupported type")
+			} else {
+				buf.AppendByteSlice(tmp)
+			}
 		}
 	}
 }
