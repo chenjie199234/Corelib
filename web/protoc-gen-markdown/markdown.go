@@ -111,7 +111,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 		g.P("{")
 	}
 	for i, f := range m.Fields {
-		if f.Oneof != nil {
+		if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
 			oneofs := make([]string, 0, len(f.Oneof.Fields))
 			for _, oneof := range f.Oneof.Fields {
 				oneofs = append(oneofs, strconv.Quote(string(oneof.Desc.Name())))
@@ -1174,7 +1174,7 @@ func formdoc(g *protogen.GeneratedFile, m *protogen.Message) {
 	g.P("------------------------------------------------------------------------------------------------------------")
 	newmessage := make(map[string]*protogen.Message)
 	for _, f := range m.Fields {
-		if f.Oneof != nil {
+		if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
 			oneofs := make([]string, 0, len(f.Oneof.Fields))
 			for _, oneof := range f.Oneof.Fields {
 				oneofs = append(oneofs, strconv.Quote(string(oneof.Desc.Name())))
