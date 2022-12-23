@@ -67,7 +67,7 @@ func oneofcheck(message *protogen.Message, checked map[string]*struct{}) bool {
 	}
 	checked[message.GoIdent.String()] = nil
 	for _, field := range message.Fields {
-		if field.Oneof != nil && FieldHasPBEX(field) {
+		if field.Oneof != nil && !field.Desc.HasOptionalKeyword() && FieldHasPBEX(field) {
 			return true
 		}
 		if field.Desc.Kind() == protoreflect.MessageKind {
