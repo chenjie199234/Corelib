@@ -261,13 +261,13 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 				case protoreflect.Int64Kind:
 					//int64
 					g.P("\t\t//Warning!!!Value's type is int32,be careful of sign(+,-) and overflow")
-					g.P("\t\t{$key: ", strconv.Quote(string(oneoff.Desc.Name())), ",value: number|Long}|", strings.TrimSuffix(oneoff.Comments.Trailing.String(), "\n"))
+					g.P("\t\t{$key: ", strconv.Quote(string(oneoff.Desc.Name())), ",value: Long}|", strings.TrimSuffix(oneoff.Comments.Trailing.String(), "\n"))
 				case protoreflect.Fixed64Kind:
 					fallthrough
 				case protoreflect.Uint64Kind:
 					//uint64
 					g.P("\t\t//Warning!!!Value's type is int32,be careful of sign(+) and overflow")
-					g.P("\t\t{$key: ", strconv.Quote(string(oneoff.Desc.Name())), ",value: number|Long}|", strings.TrimSuffix(oneoff.Comments.Trailing.String(), "\n"))
+					g.P("\t\t{$key: ", strconv.Quote(string(oneoff.Desc.Name())), ",value: Long}|", strings.TrimSuffix(oneoff.Comments.Trailing.String(), "\n"))
 				case protoreflect.FloatKind:
 					g.P("\t\t//Warning!!!Value's type is float32,be careful of overflow")
 					fallthrough
@@ -335,22 +335,22 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 		case protoreflect.Int64Kind:
 			//int64
 			if f.Desc.IsList() {
-				g.P("\t//Warning!!!Element type is int64,be careful of sign(+,-) and overflow")
-				g.P("\t", f.Desc.Name(), ": Array<number|Long>|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t//Warning!!!Element type is int64,be careful of sign(+,-)")
+				g.P("\t", f.Desc.Name(), ": Array<Long>|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
-				g.P("\t//Warning!!!Type is int64,be careful of sign(+,-) and overflow")
-				g.P("\t", f.Desc.Name(), ": number|Long;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t//Warning!!!Type is int64,be careful of sign(+,-)")
+				g.P("\t", f.Desc.Name(), ": Long;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.Fixed64Kind:
 			fallthrough
 		case protoreflect.Uint64Kind:
 			//uint64
 			if f.Desc.IsList() {
-				g.P("\t//Warning!!!Element type is uint64,be careful of sign(+) and overflow")
-				g.P("\t", f.Desc.Name(), ": Array<number|Long>|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t//Warning!!!Element type is uint64,be careful of sign(+)")
+				g.P("\t", f.Desc.Name(), ": Array<Long>|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
-				g.P("\t//Warning!!!Type is uint64,be careful of sign(+) and overflow")
-				g.P("\t", f.Desc.Name(), ": number|Long;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t//Warning!!!Type is uint64,be careful of sign(+)")
+				g.P("\t", f.Desc.Name(), ": Long;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.FloatKind:
 			if f.Desc.IsList() {
@@ -393,26 +393,26 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 					//int32
 					keytype = "number"
 					keywarn += "map's key's type is int32,be careful of sign(+,-) and overflow"
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					keytype = "number|Long"
-					keywarn += "map's key's type is int64,be careful of sign(+,-) and overflow"
 				case protoreflect.Uint32Kind:
 					fallthrough
 				case protoreflect.Fixed32Kind:
 					//uint32
 					keytype = "number"
 					keywarn += "map's key's type is uint32,be careful of sign(+) and overflow"
+				case protoreflect.Int64Kind:
+					fallthrough
+				case protoreflect.Sint64Kind:
+					fallthrough
+				case protoreflect.Sfixed64Kind:
+					//int64
+					keytype = "Long"
+					keywarn += "map's key's type is int64,be careful of sign(+,-)"
 				case protoreflect.Uint64Kind:
 					fallthrough
 				case protoreflect.Fixed64Kind:
 					//uint64
-					keytype = "number|Long"
-					keywarn += "map's key's type is uint64,be carefule of sign(+) and overflow"
+					keytype = "Long"
+					keywarn += "map's key's type is uint64,be carefule of sign(+)"
 				case protoreflect.StringKind:
 					keytype = "string"
 				}
@@ -429,26 +429,26 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 					//int32
 					valuetype = "number"
 					valuewarn += "map's value's type is int32,be careful of sign(+,-) and overflow"
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					valuetype = "number|Long"
-					valuewarn += "map's value's type is int64,be careful of sign(+,-) and overflow"
 				case protoreflect.Uint32Kind:
 					fallthrough
 				case protoreflect.Fixed32Kind:
 					//uint32
 					valuetype = "number"
 					valuewarn += "map's value's type is uint32,be careful of sign(+) and overflow"
+				case protoreflect.Int64Kind:
+					fallthrough
+				case protoreflect.Sint64Kind:
+					fallthrough
+				case protoreflect.Sfixed64Kind:
+					//int64
+					valuetype = "Long"
+					valuewarn += "map's value's type is int64,be careful of sign(+,-)"
 				case protoreflect.Uint64Kind:
 					fallthrough
 				case protoreflect.Fixed64Kind:
 					//uint64
-					valuetype = "number|Long"
-					valuewarn += "map's value's type is uint64,be careful of sign(+) and overflow"
+					valuetype = "Long"
+					valuewarn += "map's value's type is uint64,be careful of sign(+)"
 				case protoreflect.FloatKind:
 					valuetype = "number"
 					valuewarn += "map's value's type is float32,be careful of overflow"
@@ -508,7 +508,7 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Int64Kind:
 					//int64
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: number|Long}"
+					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: Long}"
 				case protoreflect.Fixed32Kind:
 					fallthrough
 				case protoreflect.Uint32Kind:
@@ -518,7 +518,7 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Uint64Kind:
 					//uint64
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: number|Long}"
+					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: Long}"
 				case protoreflect.FloatKind:
 					fallthrough
 				case protoreflect.DoubleKind:
@@ -564,8 +564,7 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 					//int32
 					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined||!Number.isInteger(msg.", f.Oneof.Desc.Name(), ".value)){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value>2147483647||msg.", f.Oneof.Desc.Name(), ".value<-2147483648){")
+					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value>2147483647||msg.", f.Oneof.Desc.Name(), ".value<-2147483648){")
 					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
 					g.P("\t\t\t}")
 					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".value+','")
@@ -575,8 +574,7 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 					//uint32
 					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined||!Number.isInteger(msg.", f.Oneof.Desc.Name(), ".value)){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value>4294967295||msg.", f.Oneof.Desc.Name(), ".value<0){")
+					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value>4294967295||msg.", f.Oneof.Desc.Name(), ".value<0){")
 					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
 					g.P("\t\t\t}")
 					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".value+','")
@@ -586,33 +584,22 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Int64Kind:
 					//int64
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined||(typeof msg.", f.Oneof.Desc.Name(), ".value=='number'&&!Number.isInteger(msg.", f.Oneof.Desc.Name(), ".value))){")
+					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(typeof msg.", f.Oneof.Desc.Name(), ".value=='number'){")
-					g.P("\t\t\t\ts+='\"'+msg.", f.Oneof.Desc.Name(), ".value+'\",'")
 					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value.lessThan(Long.MIN_VALUE)||msg.", f.Oneof.Desc.Name(), ".value.greaterThan(Long.MAX_VALUE)){")
 					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ts+='\"'+msg.", f.Oneof.Desc.Name(), ".value.toString()+'\",'")
 					g.P("\t\t\t}")
+					g.P("\t\t\ts+='\"'+msg.", f.Oneof.Desc.Name(), ".value.toString()+'\",'")
 				case protoreflect.Fixed64Kind:
 					fallthrough
 				case protoreflect.Uint64Kind:
 					//uint64
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined||(typeof msg.", f.Oneof.Desc.Name(), ".value=='number'&&!Number.isInteger(msg.", f.Oneof.Desc.Name(), ".value))){")
+					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(typeof msg.", f.Oneof.Desc.Name(), ".value=='number'){")
-					g.P("\t\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value<0){")
-					g.P("\t\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t\ts+='\"'+msg.", f.Oneof.Desc.Name(), ".value+'\",'")
 					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value.lessThan(0)){")
 					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ts+='\"'+msg.", f.Oneof.Desc.Name(), ".value.toString()+'\",'")
 					g.P("\t\t\t}")
+					g.P("\t\t\ts+='\"'+msg.", f.Oneof.Desc.Name(), ".value.toString()+'\",'")
 				case protoreflect.FloatKind:
 					fallthrough
 				case protoreflect.DoubleKind:
@@ -778,11 +765,8 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t}else{")
 				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":['")
 				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined||(typeof element=='number'&&!Number.isInteger(element))){")
+				g.P("\t\t\tif(element==null||element==undefined){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(typeof element=='number'){")
-				g.P("\t\t\t\ts+='\"'+element+'\",'")
 				g.P("\t\t\t}else if(element.lessThan(Long.MIN_VALUE)||element.greaterThan(Long.MAX_VALUE)){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t\t\t}else{")
@@ -792,10 +776,8 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\ts=s.substr(0,s.length-1)+'],'")
 				g.P("\t}")
 			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined||(typeof msg.", f.Desc.Name(), "=='number'&&!Number.isInteger(msg.", f.Desc.Name(), "))){")
+				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
 				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t}else if(typeof msg.", f.Desc.Name(), "=='number'){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":\"'+msg.", f.Desc.Name(), "+'\",'")
 				g.P("\t}else if(msg.", f.Desc.Name(), ".lessThan(Long.MIN_VALUE)||msg.", f.Desc.Name(), ".greaterThan(Long.MAX_VALUE)){")
 				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t}else{")
@@ -816,12 +798,6 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
 				g.P("\t\t\tif(element==null||element==undefined||(typeof element=='number'&&!Number.isInteger(element))){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(typeof element=='number'){")
-				g.P("\t\t\t\tif(element<0){")
-				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\ts+='\"'+element+'\",'")
 				g.P("\t\t\t}else if(element.lessThan(0)){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t\t\t}else{")
@@ -831,13 +807,8 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\ts=s.substr(0,s.length-1)+'],'")
 				g.P("\t}")
 			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined||(typeof msg.", f.Desc.Name(), "=='number'&&!Number.isInteger(msg.", f.Desc.Name(), "))){")
+				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
 				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t}else if(typeof msg.", f.Desc.Name(), "=='number'){")
-				g.P("\t\tif(msg.", f.Desc.Name(), "<0){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t}")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":\"'+msg.", f.Desc.Name(), "+'\",'")
 				g.P("\t}else if(msg.", f.Desc.Name(), ".lessThan(0)){")
 				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t}else{")
@@ -935,8 +906,7 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 					//int32
 					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined||!Number.isInteger(kv[0])){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(kv[0]>2147483647||kv[0]<-2147483648){")
+					g.P("\t\t\t}else if(kv[0]>2147483647||kv[0]<-2147483648){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
 					g.P("\t\t\t}")
 					g.P("\t\t\ts+='\"'+kv[0]+'\":'")
@@ -946,8 +916,7 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 					//uint32
 					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined||!Number.isInteger(kv[0])){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(kv[0]>4294967295||kv[0]<0){")
+					g.P("\t\t\t}else if(kv[0]>4294967295||kv[0]<0){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
 					g.P("\t\t\t}")
 					g.P("\t\t\ts+='\"'+kv[0]+'\":'")
@@ -957,33 +926,22 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Sfixed64Kind:
 					//int64
-					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){")
+					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(typeof kv[0]=='number'){")
-					g.P("\t\t\t\ts+='\"'+kv[0]+'\":'")
 					g.P("\t\t\t}else if(kv[0].lessThan(Long.MIN_VALUE)||kv[0].greaterThan(Long.MAX_VALUE)){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ts+='\"'+kv[0].toString()+'\":'")
 					g.P("\t\t\t}")
+					g.P("\t\t\ts+='\"'+kv[0].toString()+'\":'")
 				case protoreflect.Uint64Kind:
 					fallthrough
 				case protoreflect.Fixed64Kind:
 					//uint64
-					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){")
+					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(typeof kv[0]=='number'){")
-					g.P("\t\t\t\tif(kv[0]<0){")
-					g.P("\t\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t\ts+='\"'+kv[0]+'\":'")
 					g.P("\t\t\t}else if(kv[0].lessThan(0)){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ts+='\"'+kv[0].toString()+'\":'")
 					g.P("\t\t\t}")
+					g.P("\t\t\ts+='\"'+kv[0].toString()+'\":'")
 				case protoreflect.StringKind:
 					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string\"")
@@ -1013,8 +971,7 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 					//int32
 					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined||!Number.isInteger(kv[1])){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(kv[1]>2147483647||kv[1]<-2147483648){")
+					g.P("\t\t\t}else if(kv[1]>2147483647||kv[1]<-2147483648){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
 					g.P("\t\t\t}")
 					g.P("\t\t\ts+=kv[1]+','")
@@ -1024,8 +981,7 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 					//uint32
 					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined||!Number.isInteger(kv[1])){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(kv[1]>4294967295||kv[1]<0){")
+					g.P("\t\t\t}else if(kv[1]>4294967295||kv[1]<0){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
 					g.P("\t\t\t}")
 					g.P("\t\t\ts+=kv[1]+','")
@@ -1035,33 +991,22 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Sfixed64Kind:
 					//int64
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined||(typeof kv[1]=='number'&&!Number.isInteger(kv[1]))){")
+					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(typeof kv[1]=='number'){")
-					g.P("\t\t\t\ts+='\"'+kv[1]+'\",'")
 					g.P("\t\t\t}else if(kv[1].lessThan(Long.MIN_VALUE)||kv[1].greaterThan(Long.MAX_VALUE)){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ts+='\"'+kv[1].toString()+'\",'")
 					g.P("\t\t\t}")
+					g.P("\t\t\ts+='\"'+kv[1].toString()+'\",'")
 				case protoreflect.Uint64Kind:
 					fallthrough
 				case protoreflect.Fixed64Kind:
 					//uint64
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined||(typeof kv[1]=='number'&&!Number.isInteger(kv[1]))){")
+					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(typeof kv[1]=='number'){")
-					g.P("\t\t\t\tif(kv[1]<0){")
-					g.P("\t\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t\ts+='\"'+kv[1]+'\",'")
 					g.P("\t\t\t}else if(kv[1].lessThan(0)){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ts+='\"'+kv[1].toString()+'\",'")
 					g.P("\t\t\t}")
+					g.P("\t\t\ts+='\"'+kv[1].toString()+'\",'")
 				case protoreflect.FloatKind:
 					fallthrough
 				case protoreflect.DoubleKind:
@@ -1154,7 +1099,7 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Int64Kind:
 					//int64
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: number|Long}"
+					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: Long}"
 				case protoreflect.Fixed32Kind:
 					fallthrough
 				case protoreflect.Uint32Kind:
@@ -1164,7 +1109,7 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Uint64Kind:
 					//uint64
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: number|Long}"
+					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: Long}"
 				case protoreflect.FloatKind:
 					fallthrough
 				case protoreflect.DoubleKind:
@@ -1209,8 +1154,7 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 					//int32
 					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined||!Number.isInteger(msg.", f.Oneof.Desc.Name(), ".value)){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value>2147483647||msg.", f.Oneof.Desc.Name(), ".value<-2147483648){")
+					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value>2147483647||msg.", f.Oneof.Desc.Name(), ".value<-2147483648){")
 					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
 					g.P("\t\t\t}")
 					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value+'&'")
@@ -1220,8 +1164,7 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 					//uint32
 					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined||!Number.isInteger(msg.", f.Oneof.Desc.Name(), ".value)){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value>4294967295||msg.", f.Oneof.Desc.Name(), ".value<0){")
+					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value>4294967295||msg.", f.Oneof.Desc.Name(), ".value<0){")
 					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
 					g.P("\t\t\t}")
 					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value+'&'")
@@ -1231,33 +1174,22 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Int64Kind:
 					//int64
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined||(typeof msg.", f.Oneof.Desc.Name(), ".value=='number'&&!Number.isInteger(msg.", f.Oneof.Desc.Name(), ".value))){")
+					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(typeof msg.", f.Oneof.Desc.Name(), ".value=='number'){")
-					g.P("\t\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value+'&'")
 					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value.lessThan(Long.MIN_VALUE)||msg.", f.Oneof.Desc.Name(), ".value.greaterThan(Long.MAX_VALUE)){")
 					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value.toString()+'&'")
 					g.P("\t\t\t}")
+					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value.toString()+'&'")
 				case protoreflect.Fixed64Kind:
 					fallthrough
 				case protoreflect.Uint64Kind:
 					//uint64
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined||(typeof msg.", f.Oneof.Desc.Name(), ".value=='number'&&!Number.isInteger(msg.", f.Oneof.Desc.Name(), ".value))){")
+					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(typeof msg.", f.Oneof.Desc.Name(), ".value=='number'){")
-					g.P("\t\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value<0){")
-					g.P("\t\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value+'&'")
 					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value.lessThan(0)){")
 					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value.toString()+'&'")
 					g.P("\t\t\t}")
+					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value.toString()+'&'")
 				case protoreflect.FloatKind:
 					fallthrough
 				case protoreflect.DoubleKind:
@@ -1394,11 +1326,8 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 			if f.Desc.IsList() {
 				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined&&msg.", f.Desc.Name(), ".length!=0){")
 				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined||(typeof element=='number'&&!Number.isInteger(element))){")
+				g.P("\t\t\tif(element==null||element==undefined){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(typeof element=='number'){")
-				g.P("\t\t\t\ts+='", f.Desc.Name(), "='+element+'&'")
 				g.P("\t\t\t}else if(element.lessThan(Long.MIN_VALUE)||element.greaterThan(Long.MAX_VALUE)){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t\t\t}else{")
@@ -1407,10 +1336,8 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined||(typeof msg.", f.Desc.Name(), "=='number'&&!Number.isInteger(msg.", f.Desc.Name(), "))){")
+				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
 				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t}else if(typeof msg.", f.Desc.Name(), "=='number'){")
-				g.P("\t\ts+='", f.Desc.Name(), "='+msg.", f.Desc.Name(), "+'&'")
 				g.P("\t}else if(msg.", f.Desc.Name(), ".lessThan(Long.MIN_VALUE)||msg.", f.Desc.Name(), ".greaterThan(Long.MAX_VALUE)){")
 				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t}else{")
@@ -1424,14 +1351,8 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 			if f.Desc.IsList() {
 				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined&&msg.", f.Desc.Name(), ".length!=0){")
 				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined||(typeof element=='number'&&!Number.isInteger(element))){")
+				g.P("\t\t\tif(element==null||element==undefined){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(typeof element=='number'){")
-				g.P("\t\t\t\tif(element<0){")
-				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\ts+='", f.Desc.Name(), "='+element+'&'")
 				g.P("\t\t\t}else if(element.lessThan(0)){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t\t\t}else{")
@@ -1440,13 +1361,8 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined||(typeof msg.", f.Desc.Name(), "=='number'&&!Number.isInteger(msg.", f.Desc.Name(), "))){")
+				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
 				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t}else if(typeof msg.", f.Desc.Name(), "=='number'){")
-				g.P("\t\tif(msg.", f.Desc.Name(), "<0){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t}")
-				g.P("\t\ts+='", f.Desc.Name(), "='+msg.", f.Desc.Name(), "+'&'")
 				g.P("\t}else if(msg.", f.Desc.Name(), ".lessThan(0)){")
 				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t}else{")
@@ -1521,8 +1437,7 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 					//int32
 					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined||!Number.isInteger(kv[0])){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(kv[0]>2147483647||kv[0]<-2147483648){")
+					g.P("\t\t\t}else if(kv[0]>2147483647||kv[0]<-2147483648){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
 					g.P("\t\t\t}")
 					g.P("\t\t\ttmps+='\"'+kv[0]+'\":'")
@@ -1532,8 +1447,7 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 					//uint32
 					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined||!Number.isInteger(kv[0])){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(kv[0]>4294967295||kv[0]<0){")
+					g.P("\t\t\t}else if(kv[0]>4294967295||kv[0]<0){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
 					g.P("\t\t\t}")
 					g.P("\t\t\ttmps+='\"'+kv[0]+'\":'")
@@ -1543,33 +1457,22 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Sfixed64Kind:
 					//int64
-					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){")
+					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(typeof kv[0]=='number'){")
-					g.P("\t\t\t\ttmps+='\"'+kv[0]+'\":'")
 					g.P("\t\t\t}else if(kv[0].lessThan(Long.MIN_VALUE)||kv[0].greaterThan(Long.MAX_VALUE)){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ttmps+='\"'+kv[0].toString()+'\":'")
 					g.P("\t\t\t}")
+					g.P("\t\t\t\ttmps+='\"'+kv[0].toString()+'\":'")
 				case protoreflect.Uint64Kind:
 					fallthrough
 				case protoreflect.Fixed64Kind:
 					//uint64
-					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){")
+					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(typeof kv[0]=='number'){")
-					g.P("\t\t\t\tif(kv[0]<0){")
-					g.P("\t\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t\ttmps+='\"'+kv[0]+'\":'")
 					g.P("\t\t\t}else if(kv[0].lessThan(0)){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ttmps+='\"'+kv[0].toString()+'\":'")
 					g.P("\t\t\t}")
+					g.P("\t\t\t\ttmps+='\"'+kv[0].toString()+'\":'")
 				case protoreflect.StringKind:
 					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string\"")
@@ -1599,8 +1502,7 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 					//int32
 					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined||!Number.isInteger(kv[1])){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(kv[1]>2147483647||kv[1]<-2147483648){")
+					g.P("\t\t\t}else if(kv[1]>2147483647||kv[1]<-2147483648){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
 					g.P("\t\t\t}")
 					g.P("\t\t\ttmps+=kv[1]+','")
@@ -1610,8 +1512,7 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 					//uint32
 					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined||!Number.isInteger(kv[1])){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(kv[1]>4294967295||kv[1]<0){")
+					g.P("\t\t\t}else if(kv[1]>4294967295||kv[1]<0){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
 					g.P("\t\t\t}")
 					g.P("\t\t\ttmps+=kv[1]+','")
@@ -1621,33 +1522,22 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Sfixed64Kind:
 					//int64
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined||(typeof kv[1]=='number'&&!Number.isInteger(kv[1]))){")
+					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(typeof kv[1]=='number'){")
-					g.P("\t\t\t\ttmps+='\"'+kv[1]+'\",'")
 					g.P("\t\t\t}else if(kv[1].lessThan(Long.MIN_VALUE)||kv[1].greaterThan(Long.MAX_VALUE)){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ttmps+='\"'+kv[1].toString()+'\",'")
 					g.P("\t\t\t}")
+					g.P("\t\t\ttmps+='\"'+kv[1].toString()+'\",'")
 				case protoreflect.Uint64Kind:
 					fallthrough
 				case protoreflect.Fixed64Kind:
 					//uint64
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined||(typeof kv[1]=='number'&&!Number.isInteger(kv[1]))){")
+					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(typeof kv[1]=='number'){")
-					g.P("\t\t\t\tif(kv[1]<0){")
-					g.P("\t\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t\ttmps+='\"'+kv[1]+'\",'")
 					g.P("\t\t\t}else if(kv[1].lessThan(0)){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ttmps+='\"'+kv[1].toString()+'\",'")
 					g.P("\t\t\t}")
+					g.P("\t\t\ttmps+='\"'+kv[1].toString()+'\",'")
 				case protoreflect.FloatKind:
 					fallthrough
 				case protoreflect.DoubleKind:
@@ -1741,8 +1631,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					//int32
 					g.P("\t\tif(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value!='number'||!Number.isInteger(jsonobj['", f.Oneof.Desc.Name(), "'].value)){")
 					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t}")
-					g.P("\t\tif(jsonobj['", f.Oneof.Desc.Name(), "'].value>2147483647||jsonobj['", f.Oneof.Desc.Name(), "'].value<-2147483648){")
+					g.P("\t\t}else if(jsonobj['", f.Oneof.Desc.Name(), "'].value>2147483647||jsonobj['", f.Oneof.Desc.Name(), "'].value<-2147483648){")
 					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
 					g.P("\t\t}")
 					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", f.Oneof.Desc.Name(), "'].value}")
@@ -1752,8 +1641,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					//uint32
 					g.P("\t\tif(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value!='number'||!Number.isInteger(jsonobj['", f.Oneof.Desc.Name(), "'].value)){")
 					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t}")
-					g.P("\t\tif(jsonobj['", f.Oneof.Desc.Name(), "'].value>4294967295||jsonobj['", f.Oneof.Desc.Name(), "'].value<0){")
+					g.P("\t\t}else if(jsonobj['", f.Oneof.Desc.Name(), "'].value>4294967295||jsonobj['", f.Oneof.Desc.Name(), "'].value<0){")
 					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
 					g.P("\t\t}")
 					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", f.Oneof.Desc.Name(), "'].value}")
@@ -1767,9 +1655,15 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					g.P("\t\t\tif(!Number.isInteger(jsonobj['", f.Oneof.Desc.Name(), "'].value)){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
 					g.P("\t\t\t}")
-					g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", f.Oneof.Desc.Name(), "'].value}")
+					g.P("\t\t\tlet tmp: Long=Long.ZERO")
+					g.P("\t\t\ttry{")
+					g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", f.Oneof.Desc.Name(), "'].value,false)")
+					g.P("\t\t\t}catch(e){")
+					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:tmp}")
 					g.P("\t\t}else if(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value=='string'){")
-					g.P("\t\t\tlet tmp: Long")
+					g.P("\t\t\tlet tmp: Long=Long.ZERO")
 					g.P("\t\t\ttry{")
 					g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", f.Oneof.Desc.Name(), "'].value,false)")
 					g.P("\t\t\t}catch(e){")
@@ -1793,9 +1687,15 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					g.P("\t\t\tif(jsonobj['", f.Oneof.Desc.Name(), "'].value<0){")
 					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
 					g.P("\t\t\t}")
-					g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", f.Oneof.Desc.Name(), "'].value}")
+					g.P("\t\t\tlet tmp: Long=Long.ZERO")
+					g.P("\t\t\ttry{")
+					g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", f.Oneof.Desc.Name(), "'].value,true)")
+					g.P("\t\t\t}catch(e){")
+					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:tmp}")
 					g.P("\t\t}else if(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value=='string'){")
-					g.P("\t\t\tlet tmp: Long")
+					g.P("\t\t\tlet tmp: Long=Long.ZERO")
 					g.P("\t\t\ttry{")
 					g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", f.Oneof.Desc.Name(), "'].value,true)")
 					g.P("\t\t\t}catch(e){")
@@ -1848,11 +1748,11 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=null")
 				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<boolean>|null|undefined'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<boolean>|null|undefined'")
 				g.P("\t}else{")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='boolean'){")
-				g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
+				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
 				g.P("\t\t\t}")
 				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<boolean>")
@@ -1864,7 +1764,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=false")
 				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='boolean'){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
 				g.P("\t}else{")
 				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
 				g.P("\t}")
@@ -1878,11 +1778,11 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=null")
 				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<", f.Enum.GoIdent.GoName, ">|null|undefined'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<", f.Enum.GoIdent.GoName, ">|null|undefined'")
 				g.P("\t}else{")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='number'||(", strings.Join(tmps, "&&"), ")){")
-				g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
+				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
 				g.P("\t\t\t}")
 				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<", f.Enum.GoIdent.GoName, ">")
@@ -1898,7 +1798,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=0")
 				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='number'||(", strings.Join(tmps, "&&"), ")){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
 				g.P("\t}else{")
 				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
 				g.P("\t}")
@@ -1913,14 +1813,13 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=null")
 				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
 				g.P("\t}else{")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='number'||!Number.isInteger(element)){")
-				g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(element>2147483647||element<-2147483648){")
-				g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\t}else if(element>2147483647||element<-2147483648){")
+				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t\t\t}")
 				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<number>")
@@ -1932,9 +1831,9 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=0")
 				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t}else if(jsonob['", f.Desc.Name(), "']>2147483647||jsonobj['", f.Desc.Name(), "']<-2147483648){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t}else{")
 				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
 				g.P("\t}")
@@ -1947,14 +1846,13 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=null")
 				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
 				g.P("\t}else{")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='number'||!Number.isInteger(element)){")
-				g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(element>4294967295||element<0){")
-				g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\t}else if(element>4294967295||element<0){")
+				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t\t\t}")
 				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<number>")
@@ -1966,9 +1864,9 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=0")
 				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t}else if(jsonob['", f.Desc.Name(), "']>4294967295||jsonobj['", f.Desc.Name(), "']<0){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t}else{")
 				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
 				g.P("\t}")
@@ -1983,33 +1881,39 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsobobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=null")
 				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number|Long>|null|undefined'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Long>|null|undefined'")
 				g.P("\t}else{")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element=='number'){")
 				g.P("\t\t\t\tif(!Number.isInteger(element)){")
-				g.P("\t\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\t\t}")
+				g.P("\t\t\t\tlet tmp: Long=Long.ZERO")
+				g.P("\t\t\t\ttry{")
+				g.P("\t\t\t\t\ttmp=Long.fromNumber(element,false)")
+				g.P("\t\t\t\t}catch(e){")
+				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t\t\t\t}")
 				g.P("\t\t\t\tif(obj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<number|Long>")
+				g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Long>")
 				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(element)")
+				g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(tmp)")
 				g.P("\t\t\t}else if(typeof element=='string'){")
 				g.P("\t\t\t\tlet tmp:Long=Long.ZERO")
 				g.P("\t\t\t\ttry{")
 				g.P("\t\t\t\t\ttmp=Long.fromString(element,false)")
 				g.P("\t\t\t\t}catch(e){")
-				g.P("\t\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t\t\t\t}")
 				g.P("\t\t\t\tif(tmp.toString()!=element){")
-				g.P("\t\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t\t\t\t}")
 				g.P("\t\t\t\tif(obj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<number|Long>")
+				g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Long>")
 				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(element)")
+				g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(tmp)")
 				g.P("\t\t\t}else{")
-				g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t\t\t}")
 				g.P("\t\t}")
 				g.P("\t}")
@@ -2018,22 +1922,28 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\tobj['", f.Desc.Name(), "']=0")
 				g.P("\t}else if(typeof jsobobj['", f.Desc.Name(), "']=='number'){")
 				g.P("\t\tif(!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
-				g.P("\t\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t\t}")
-				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
+				g.P("\t\tlet tmp: Long=Long.ZERO")
+				g.P("\t\ttry{")
+				g.P("\t\t\ttmp=Long.fromNumber(jsonobj['", f.Desc.Name(), "'],false)")
+				g.P("\t\t}catch(e){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t}")
+				g.P("\t\tobj['", f.Desc.Name(), "']=tmp")
 				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']=='string'){")
 				g.P("\t\tlet tmp:Long=Long.ZERO")
 				g.P("\t\ttry{")
 				g.P("\t\t\ttmp=Long.fromString(jsonobj['", f.Desc.Name(), "'],false)")
 				g.P("\t\t}catch(e){")
-				g.P("\t\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t\t}")
 				g.P("\t\tif(tmp.toString()!=jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t\t}")
 				g.P("\t\tobj['", f.Desc.Name(), "']=tmp")
 				g.P("\t}else{")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t}")
 			}
 		case protoreflect.Fixed64Kind:
@@ -2044,34 +1954,40 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsobobj['", f.Desc.Name(), "']==null||jsobobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=null")
 				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number|Long>|null|undefined'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Long>|null|undefined'")
 				g.P("\t}else{")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element=='number'){")
 				g.P("\t\t\t\tif(!Number.isInteger(element)){")
-				g.P("\t\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t\t\t\t}")
 				g.P("\t\t\t\tif(element<0){")
-				g.P("\t\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\t\t\t}")
+				g.P("\t\t\t\tlet tmp: Long=Long.ZERO")
+				g.P("\t\t\t\ttry{")
+				g.P("\t\t\t\t\ttmp=Long.fromNumber(element,true)")
+				g.P("\t\t\t\t}catch(e){")
+				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t\t\t\t}")
 				g.P("\t\t\t\tif(obj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<number|Long>")
+				g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Long>")
 				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(element)")
+				g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(tmp)")
 				g.P("\t\t\t}else if(typeof element=='string'){")
 				g.P("\t\t\t\tlet tmp:Long=Long.ZERO")
 				g.P("\t\t\t\ttry{")
 				g.P("\t\t\t\t\ttmp=Long.fromString(element,true)")
 				g.P("\t\t\t\t}catch(e){")
-				g.P("\t\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t\t\t\t}")
 				g.P("\t\t\t\tif(tmp.toString()!=element){")
-				g.P("\t\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t\t\t\t}")
 				g.P("\t\t\t\tif(obj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<number|Long>")
+				g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Long>")
 				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(element)")
+				g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(tmp)")
 				g.P("\t\t\t}else{")
 				g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t\t\t}")
@@ -2082,21 +1998,27 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\tobj['", f.Desc.Name(), "']=0")
 				g.P("\t}else if(typeof jsobobj['", f.Desc.Name(), "']=='number'){")
 				g.P("\t\tif(!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
-				g.P("\t\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t\t}")
 				g.P("\t\tif(jsobobj['", f.Desc.Name(), "']<0){")
-				g.P("\t\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t\t}")
-				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
+				g.P("\t\tlet tmp: Long=Long.ZERO")
+				g.P("\t\ttry{")
+				g.P("\t\t\ttmp=Long.fromNumber(jsonobj['", f.Desc.Name(), "'],true)")
+				g.P("\t\t}catch(e){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t}")
+				g.P("\t\tobj['", f.Desc.Name(), "']=tmp")
 				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']=='string'){")
 				g.P("\t\tlet tmp:Long=Long.ZERO")
 				g.P("\t\ttry{")
 				g.P("\t\t\ttmp=Long.fromString(jsonobj['", f.Desc.Name(), "'],true)")
 				g.P("\t\t}catch(e){")
-				g.P("\t\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t\t}")
 				g.P("\t\tif(tmp.toString()!=jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 				g.P("\t\t}")
 				g.P("\t\tobj['", f.Desc.Name(), "']=tmp")
 				g.P("\t}else{")
@@ -2111,11 +2033,11 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=null")
 				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
 				g.P("\t}else{")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='number'){")
-				g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
+				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
 				g.P("\t\t\t}")
 				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<number>")
@@ -2127,7 +2049,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=0")
 				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='number'){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
 				g.P("\t}else{")
 				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
 				g.P("\t}")
@@ -2137,11 +2059,11 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=null")
 				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<string>|null|undefined'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<string>|null|undefined'")
 				g.P("\t}else{")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='string'){")
-				g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
+				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
 				g.P("\t\t\t}")
 				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<string>")
@@ -2153,7 +2075,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=''")
 				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='string'){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
 				g.P("\t}else{")
 				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
 				g.P("\t}")
@@ -2163,17 +2085,17 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=null")
 				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Uint8Array>|null|undefined'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Uint8Array>|null|undefined'")
 				g.P("\t}else{")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='string'){")
-				g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
+				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
 				g.P("\t\t\t}")
 				g.P("\t\t\tlet buf:Uint8Array=new Uint8Array(Base64.length(element))")
 				g.P("\t\t\ttry{")
 				g.P("\t\t\t\tBase64.decode(element,buf,0)")
 				g.P("\t\t\t}catch(e){")
-				g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
+				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
 				g.P("\t\t\t}")
 				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Uint8Array>")
@@ -2185,13 +2107,13 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=new Uint8Array(0)")
 				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='string'){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
 				g.P("\t}else{")
 				g.P("\t\tlet buf:Uint8Array=new Uint8Array(Base64.length(jsonobj['", f.Desc.Name(), "']))")
 				g.P("\t\ttry{")
 				g.P("\t\t\tBase64.decode(jsonobj['", f.Desc.Name(), "'],buf,0)")
 				g.P("\t\t}catch(e){")
-				g.P("\t\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
 				g.P("\t\t}")
 				g.P("\t\tobj['", f.Desc.Name(), "']=buf")
 				g.P("\t}")
@@ -2214,7 +2136,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Sfixed64Kind:
 					//int64
-					keytype = "number|Long"
+					keytype = "Long"
 				case protoreflect.Uint32Kind:
 					fallthrough
 				case protoreflect.Fixed32Kind:
@@ -2224,7 +2146,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Fixed64Kind:
 					//uint64
-					keytype = "number|Long"
+					keytype = "Long"
 				case protoreflect.StringKind:
 					keytype = "string"
 				}
@@ -2246,7 +2168,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Sfixed64Kind:
 					//int64
-					valuetype = "number|Long"
+					valuetype = "Long"
 				case protoreflect.Uint32Kind:
 					fallthrough
 				case protoreflect.Fixed32Kind:
@@ -2256,7 +2178,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Fixed64Kind:
 					//uint64
-					valuetype = "number|Long"
+					valuetype = "Long"
 				case protoreflect.FloatKind:
 					valuetype = "number"
 				case protoreflect.DoubleKind:
@@ -2271,7 +2193,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=null")
 				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='object'){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Map<", keytype, ",", valuetype, ">|null|undefined'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Map<", keytype, ",", valuetype, ">|null|undefined'")
 				g.P("\t}else{")
 				g.P("\t\tfor(let key of Object.keys(jsonobj['", f.Desc.Name(), "'])){")
 				g.P("\t\t\tlet value=jsonobj['", f.Desc.Name(), "'][key]")
@@ -2284,10 +2206,9 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					//int32
 					g.P("\t\t\tlet k: number=Number(key)")
 					g.P("\t\t\tif(isNaN(k)||!Number.isInteger(k)){")
-					g.P("\t\t\t\tthrow 'format wrong!key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(k>2147483647||k<-2147483648){")
-					g.P("\t\t\t\tthrow 'format wrong!key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t}else if(k>2147483647||k<-2147483648){")
+					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 					g.P("\t\t\t}")
 				case protoreflect.Uint32Kind:
 					fallthrough
@@ -2295,10 +2216,9 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					//uint32
 					g.P("\t\t\tlet k: number=Number(key)")
 					g.P("\t\t\tif(isNaN(k)||!Number.isInteger(k)){")
-					g.P("\t\t\t\tthrow 'format wrong!key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(k>4294967295||k<0){")
-					g.P("\t\t\t\tthrow 'format wrong!key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t}else if(k>4294967295||k<0){")
+					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 					g.P("\t\t\t}")
 				case protoreflect.Int64Kind:
 					fallthrough
@@ -2310,10 +2230,10 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					g.P("\t\t\ttry{")
 					g.P("\t\t\t\tk=Long.fromString(key,false)")
 					g.P("\t\t\t}catch(e){")
-					g.P("\t\t\t\tthrow 'format wrong!key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tif(k.toString()!=key){")
-					g.P("\t\t\t\tthrow 'format wrong!key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 					g.P("\t\t\t}")
 				case protoreflect.Uint64Kind:
 					fallthrough
@@ -2323,10 +2243,10 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					g.P("\t\t\ttry{")
 					g.P("\t\t\t\tk=Long.fromString(key,true)")
 					g.P("\t\t\t}catch(e){")
-					g.P("\t\t\t\tthrow 'format wrong!key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tif(k.toString()!=key){")
-					g.P("\t\t\t\tthrow 'format wrong!key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 					g.P("\t\t\t}")
 				case protoreflect.StringKind:
 					g.P("\t\t\tlet k: string=key")
@@ -2334,7 +2254,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				switch f.Message.Fields[1].Desc.Kind() {
 				case protoreflect.BoolKind:
 					g.P("\t\t\tif(typeof value!='boolean'){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
+					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tlet v: boolean=value")
 				case protoreflect.EnumKind:
@@ -2343,7 +2263,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 						tmps = append(tmps, "value!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
 					}
 					g.P("\t\t\tif(typeof value!='number'||(", strings.Join(tmps, "&&"), ")){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Message.Fields[1].Enum.GoIdent.GoName, "'")
+					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Message.Fields[1].Enum.GoIdent.GoName, "'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tlet v: ", f.Message.Fields[1].Enum.GoIdent.GoName, "=value")
 				case protoreflect.Int32Kind:
@@ -2353,10 +2273,9 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				case protoreflect.Sfixed32Kind:
 					//int32
 					g.P("\t\t\tif(typeof value!='number'||!Number.isInteger(value)){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(value>2147483647&&value<-2147483648){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t}else if(value>2147483647&&value<-2147483648){")
+					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tlet v: number=value")
 				case protoreflect.Uint32Kind:
@@ -2364,10 +2283,9 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				case protoreflect.Fixed32Kind:
 					//uint32
 					g.P("\t\t\tif(typeof value!='number'||!Number.isInteger(value)){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(value>4294967295&&value<0){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t}else if(value>4294967295&&value<0){")
+					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tlet v: number=value")
 				case protoreflect.Int64Kind:
@@ -2376,78 +2294,90 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Sfixed64Kind:
 					//int64
-					g.P("\t\t\tif(typeof value=='number'&&!Number.isInteger(value)){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\tif(typeof value=='number'){")
+					g.P("\t\t\t\tif(!Number.isInteger(value)){")
+					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\t}")
 					g.P("\t\t\t}else if(typeof value!='string'){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, '.', f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, '.', f.Desc.Name(), " must be integer'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tlet v: Long=Long.Zero")
 					g.P("\t\t\tif(typeof value=='number'){")
-					g.P("\t\t\t\tv=Long.fromNumber(value,false)")
+					g.P("\t\t\t\ttry{")
+					g.P("\t\t\t\t\tv=Long.fromNumber(value,false)")
+					g.P("\t\t\t\t}catch(e){")
+					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, '.', f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\t}")
 					g.P("\t\t\t}else{")
 					g.P("\t\t\t\ttry{")
 					g.P("\t\t\t\t\tv=Long.fromString(value,false)")
 					g.P("\t\t\t\t}catch(e){")
-					g.P("\t\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 					g.P("\t\t\t\t}")
 					g.P("\t\t\t\tif(v.toString()!=value){")
-					g.P("\t\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 					g.P("\t\t\t\t}")
 					g.P("\t\t\t}")
 				case protoreflect.Uint64Kind:
 					fallthrough
 				case protoreflect.Fixed64Kind:
 					//uint64
-					g.P("\t\t\tif(typeof value=='number'&&!Number.isInteger(value)){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\tif(typeof value=='number'){")
+					g.P("\t\t\t\tif(!Number.isInteger(value)){")
+					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\t}")
 					g.P("\t\t\t}else if(typeof value!='string'){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, '.', f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, '.', f.Desc.Name(), " must be integer'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tlet v: Long=Long.Zero")
 					g.P("\t\t\tif(typeof value=='number'){")
-					g.P("\t\t\t\tv=Long.fromNumber(value,true)")
+					g.P("\t\t\t\ttry{")
+					g.P("\t\t\t\t\tv=Long.fromNumber(value,true)")
+					g.P("\t\t\t\t}catch(e){")
+					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\t}")
 					g.P("\t\t\t\tif(v.toNumber()!=value){")
-					g.P("\t\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 					g.P("\t\t\t\t}")
 					g.P("\t\t\t}else{")
 					g.P("\t\t\t\ttry{")
 					g.P("\t\t\t\t\tv=Long.fromString(value,true)")
 					g.P("\t\t\t\t}catch(e){")
-					g.P("\t\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 					g.P("\t\t\t\t}")
 					g.P("\t\t\t\tif(v.toString()!=value){")
-					g.P("\t\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
 					g.P("\t\t\t\t}")
 					g.P("\t\t\t}")
 				case protoreflect.FloatKind:
 					fallthrough
 				case protoreflect.DoubleKind:
 					g.P("\t\t\tif(typeof value!='number'){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
+					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tlet v: number=value")
 				case protoreflect.StringKind:
 					g.P("\t\t\tif(typeof value!='string'){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
+					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tlet v: string=value")
 				case protoreflect.BytesKind:
 					g.P("\t\t\tif(typeof value!='string'){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
+					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tlet buf:Uint8Array=new Uint8Array(Base64.length(value))")
 					g.P("\t\t\ttry{")
 					g.P("\t\t\t\tBase64.decode(value,buf,0)")
 					g.P("\t\t\t}catch(e){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
+					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tlet v: Uint8Array=buf")
 				case protoreflect.MessageKind:
-					g.P("\t\t\tlet v: ", f.Message.Fields[1].Message.GoIdent.GoName, "|null|undefined")
+					g.P("\t\t\tlet v: ", f.Message.Fields[1].Message.GoIdent.GoName, "|null|undefined=null")
 					g.P("\t\t\tif(typeof value==null||typeof value==undefined){")
 					g.P("\t\t\t\tv=null")
 					g.P("\t\t\t}else if(typeof value!='object'){")
-					g.P("\t\t\t\tthrow 'format wrong!value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.Fields[1].Message.GoIdent.GoName, "|null|undefined'")
+					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.Fields[1].Message.GoIdent.GoName, "|null|undefined'")
 					g.P("\t\t\t}else{")
 					g.P("\t\t\t\tv=JsonTo", f.Message.Fields[1].Message.GoIdent.GoName, "(value)")
 					g.P("\t\t\t}")
@@ -2462,11 +2392,11 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=null")
 				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<", f.Message.GoIdent.GoName, ">|null|undefined'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<", f.Message.GoIdent.GoName, ">|null|undefined'")
 				g.P("\t}else{")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='object'){")
-				g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.GoIdent.GoName, "'")
+				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.GoIdent.GoName, "'")
 				g.P("\t\t\t}")
 				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<", f.Message.GoIdent.GoName, ">")
@@ -2478,13 +2408,14 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(jsonobj['", f.Desc.Name(), "']=null||jsonobj['", f.Desc.Name(), "']==undefined){")
 				g.P("\t\tobj['", f.Desc.Name(), "']=null")
 				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='object'){")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.GoIdent.GoName, "'")
+				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.GoIdent.GoName, "'")
 				g.P("\t}else{")
 				g.P("\t\tobj['", f.Desc.Name(), "']=JsonTo", f.Message.GoIdent.GoName, "(jsonobj['", f.Desc.Name(), "'])")
 				g.P("\t}")
 			}
 		}
 	}
+	g.P("\treturn obj")
 	g.P("}")
 }
 

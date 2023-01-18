@@ -48,7 +48,7 @@ function JsonToData(jsonobj: Object): Data{
 	if(jsonobj['t']=null||jsonobj['t']==undefined){
 		obj['t']=null
 	}else if(typeof jsonobj['t']!='object'){
-		throw 'format wrong!Data.t must be Data'
+		throw 'Data.t must be Data'
 	}else{
 		obj['t']=JsonToData(jsonobj['t'])
 	}
@@ -56,10 +56,11 @@ function JsonToData(jsonobj: Object): Data{
 	if(jsonobj['e']==null||jsonobj['e']==undefined){
 		obj['e']=0
 	}else if(typeof jsonobj['e']!='number'||(jsonobj['e']!=0&&jsonobj['e']!=3)){
-		throw 'format wrong!Data.e must be enum in TE'
+		throw 'Data.e must be enum in TE'
 	}else{
 		obj['e']=jsonobj['e']
 	}
+	return obj
 }
 export interface HelloReq{
 	//Warning!!!Type is int32,be careful of sign(+,-) and overflow
@@ -70,14 +71,14 @@ export interface HelloReq{
 	u32: number;
 	//Warning!!!Element type is uint32,be careful of sign(+) and overflow
 	ru32: Array<number>|null|undefined;
-	//Warning!!!Type is int64,be careful of sign(+,-) and overflow
-	i64: number|Long;
-	//Warning!!!Element type is int64,be careful of sign(+,-) and overflow
-	ri64: Array<number|Long>|null|undefined;
-	//Warning!!!Type is uint64,be careful of sign(+) and overflow
-	u64: number|Long;
-	//Warning!!!Element type is uint64,be careful of sign(+) and overflow
-	ru64: Array<number|Long>|null|undefined;
+	//Warning!!!Type is int64,be careful of sign(+,-)
+	i64: Long;
+	//Warning!!!Element type is int64,be careful of sign(+,-)
+	ri64: Array<Long>|null|undefined;
+	//Warning!!!Type is uint64,be careful of sign(+)
+	u64: Long;
+	//Warning!!!Element type is uint64,be careful of sign(+)
+	ru64: Array<Long>|null|undefined;
 	b: boolean;
 	rb: Array<boolean>|null|undefined;
 	e: TE;
@@ -94,42 +95,42 @@ export interface HelloReq{
 	rd: Array<number>|null|undefined;
 	msg: Data|null|undefined;
 	rmsg: Array<Data|null|undefined>|null|undefined;
-	//Warning!!!map's key's type is uint64,be carefule of sign(+) and overflow
+	//Warning!!!map's key's type is uint64,be carefule of sign(+)
 	//Warning!!!map's value's type is int32,be careful of sign(+,-) and overflow
-	mi32: Map<number|Long,number>|null|undefined;
-	//Warning!!!map's key's type is uint64,be carefule of sign(+) and overflow
+	mi32: Map<Long,number>|null|undefined;
+	//Warning!!!map's key's type is uint64,be carefule of sign(+)
 	//Warning!!!map's value's type is uint32,be careful of sign(+) and overflow
-	mu32: Map<number|Long,number>|null|undefined;
-	//Warning!!!map's key's type is uint64,be carefule of sign(+) and overflow
-	//Warning!!!map's value's type is int64,be careful of sign(+,-) and overflow
-	mi64: Map<number|Long,number|Long>|null|undefined;
-	//Warning!!!map's key's type is uint64,be carefule of sign(+) and overflow
-	//Warning!!!map's value's type is uint64,be careful of sign(+) and overflow
-	mu64: Map<number|Long,number|Long>|null|undefined;
-	//Warning!!!map's key's type is uint64,be carefule of sign(+) and overflow
-	mb: Map<number|Long,boolean>|null|undefined;
-	//Warning!!!map's key's type is uint64,be carefule of sign(+) and overflow
-	me: Map<number|Long,TE>|null|undefined;
-	//Warning!!!map's key's type is uint64,be carefule of sign(+) and overflow
-	ms: Map<number|Long,string>|null|undefined;
-	//Warning!!!map's key's type is uint64,be carefule of sign(+) and overflow
-	mbs: Map<number|Long,Uint8Array>|null|undefined;
-	//Warning!!!map's key's type is uint64,be carefule of sign(+) and overflow
+	mu32: Map<Long,number>|null|undefined;
+	//Warning!!!map's key's type is uint64,be carefule of sign(+)
+	//Warning!!!map's value's type is int64,be careful of sign(+,-)
+	mi64: Map<Long,Long>|null|undefined;
+	//Warning!!!map's key's type is uint64,be carefule of sign(+)
+	//Warning!!!map's value's type is uint64,be careful of sign(+)
+	mu64: Map<Long,Long>|null|undefined;
+	//Warning!!!map's key's type is uint64,be carefule of sign(+)
+	mb: Map<Long,boolean>|null|undefined;
+	//Warning!!!map's key's type is uint64,be carefule of sign(+)
+	me: Map<Long,TE>|null|undefined;
+	//Warning!!!map's key's type is uint64,be carefule of sign(+)
+	ms: Map<Long,string>|null|undefined;
+	//Warning!!!map's key's type is uint64,be carefule of sign(+)
+	mbs: Map<Long,Uint8Array>|null|undefined;
+	//Warning!!!map's key's type is uint64,be carefule of sign(+)
 	//Warning!!!map's value's type is float32,be careful of overflow
-	mf: Map<number|Long,number>|null|undefined;
-	//Warning!!!map's key's type is uint64,be carefule of sign(+) and overflow
-	md: Map<number|Long,number>|null|undefined;
-	//Warning!!!map's key's type is uint64,be carefule of sign(+) and overflow
-	mmsg: Map<number|Long,Data|null|undefined>|null|undefined;
+	mf: Map<Long,number>|null|undefined;
+	//Warning!!!map's key's type is uint64,be carefule of sign(+)
+	md: Map<Long,number>|null|undefined;
+	//Warning!!!map's key's type is uint64,be carefule of sign(+)
+	mmsg: Map<Long,Data|null|undefined>|null|undefined;
 	union:
 		//Warning!!!Value's type is int32,be careful of sign(+,-) and overflow
 		{$key: "oi32",value: number}|
 		//Warning!!!Value's type is int32,be careful of sign(+) and overflow
 		{$key: "ou32",value: number}|
 		//Warning!!!Value's type is int32,be careful of sign(+,-) and overflow
-		{$key: "oi64",value: number|Long}|
+		{$key: "oi64",value: Long}|
 		//Warning!!!Value's type is int32,be careful of sign(+) and overflow
-		{$key: "ou64",value: number|Long}|
+		{$key: "ou64",value: Long}|
 		//Warning!!!Value's type is float32,be careful of overflow
 		{$key: "of",value: number}|
 		{$key: "od",value: number}|
@@ -195,10 +196,8 @@ function HelloReqToJson(msg: HelloReq): string{
 		s=s.substr(0,s.length-1)+'],'
 	}
 	//i64
-	if(msg.i64==null||msg.i64==undefined||(typeof msg.i64=='number'&&!Number.isInteger(msg.i64))){
+	if(msg.i64==null||msg.i64==undefined){
 		throw 'HelloReq.i64 must be integer'
-	}else if(typeof msg.i64=='number'){
-		s+='"i64":"'+msg.i64+'",'
 	}else if(msg.i64.lessThan(Long.MIN_VALUE)||msg.i64.greaterThan(Long.MAX_VALUE)){
 		throw 'HelloReq.i64 overflow'
 	}else{
@@ -212,11 +211,8 @@ function HelloReqToJson(msg: HelloReq): string{
 	}else{
 		s+='"ri64":['
 		for(let element of msg.ri64){
-			if(element==null||element==undefined||(typeof element=='number'&&!Number.isInteger(element))){
+			if(element==null||element==undefined){
 				throw 'element in HelloReq.ri64 must be integer'
-			}
-			if(typeof element=='number'){
-				s+='"'+element+'",'
 			}else if(element.lessThan(Long.MIN_VALUE)||element.greaterThan(Long.MAX_VALUE)){
 				throw 'element in HelloReq.ri64 overflow'
 			}else{
@@ -226,13 +222,8 @@ function HelloReqToJson(msg: HelloReq): string{
 		s=s.substr(0,s.length-1)+'],'
 	}
 	//u64
-	if(msg.u64==null||msg.u64==undefined||(typeof msg.u64=='number'&&!Number.isInteger(msg.u64))){
+	if(msg.u64==null||msg.u64==undefined){
 		throw 'HelloReq.u64 must be integer'
-	}else if(typeof msg.u64=='number'){
-		if(msg.u64<0){
-			throw 'HelloReq.u64 overflow'
-		}
-		s+='"u64":"'+msg.u64+'",'
 	}else if(msg.u64.lessThan(0)){
 		throw 'HelloReq.u64 overflow'
 	}else{
@@ -248,12 +239,6 @@ function HelloReqToJson(msg: HelloReq): string{
 		for(let element of msg.ru64){
 			if(element==null||element==undefined||(typeof element=='number'&&!Number.isInteger(element))){
 				throw 'element in HelloReq.ru64 must be integer'
-			}
-			if(typeof element=='number'){
-				if(element<0){
-					throw 'element in HelloReq.ru64 overflow'
-				}
-				s+='"'+element+'",'
 			}else if(element.lessThan(0)){
 				throw 'element in HelloReq.ru64 overflow'
 			}else{
@@ -418,23 +403,15 @@ function HelloReqToJson(msg: HelloReq): string{
 	}else{
 		s+='"mi32":{'
 		for(let kv of msg.mi32.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mi32 must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mi32 overflow"
-				}
-				s+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mi32 overflow"
-			}else{
-				s+='"'+kv[0].toString()+'":'
 			}
+			s+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined||!Number.isInteger(kv[1])){
 				throw "map's value in HelloReq.mi32 must be integer"
-			}
-			if(kv[1]>2147483647||kv[1]<-2147483648){
+			}else if(kv[1]>2147483647||kv[1]<-2147483648){
 				throw "map's value in HelloReq.mi32 overflow"
 			}
 			s+=kv[1]+','
@@ -449,23 +426,15 @@ function HelloReqToJson(msg: HelloReq): string{
 	}else{
 		s+='"mu32":{'
 		for(let kv of msg.mu32.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mu32 must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mu32 overflow"
-				}
-				s+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mu32 overflow"
-			}else{
-				s+='"'+kv[0].toString()+'":'
 			}
+			s+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined||!Number.isInteger(kv[1])){
 				throw "map's value in HelloReq.mu32 must be integer"
-			}
-			if(kv[1]>4294967295||kv[1]<0){
+			}else if(kv[1]>4294967295||kv[1]<0){
 				throw "map's value in HelloReq.mu32 overflow"
 			}
 			s+=kv[1]+','
@@ -480,29 +449,18 @@ function HelloReqToJson(msg: HelloReq): string{
 	}else{
 		s+='"mi64":{'
 		for(let kv of msg.mi64.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mi64 must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mi64 overflow"
-				}
-				s+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mi64 overflow"
-			}else{
-				s+='"'+kv[0].toString()+'":'
 			}
-			if(kv[1]==null||kv[1]==undefined||(typeof kv[1]=='number'&&!Number.isInteger(kv[1]))){
+			s+='"'+kv[0].toString()+'":'
+			if(kv[1]==null||kv[1]==undefined){
 				throw "map's value in HelloReq.mi64 must be integer"
-			}
-			if(typeof kv[1]=='number'){
-				s+='"'+kv[1]+'",'
 			}else if(kv[1].lessThan(Long.MIN_VALUE)||kv[1].greaterThan(Long.MAX_VALUE)){
 				throw "map's value in HelloReq.mi64 overflow"
-			}else{
-				s+='"'+kv[1].toString()+'",'
 			}
+			s+='"'+kv[1].toString()+'",'
 		}
 		s=s.substr(0,s.length-1)+'},'
 	}
@@ -514,32 +472,18 @@ function HelloReqToJson(msg: HelloReq): string{
 	}else{
 		s+='"mu64":{'
 		for(let kv of msg.mu64.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mu64 must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mu64 overflow"
-				}
-				s+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mu64 overflow"
-			}else{
-				s+='"'+kv[0].toString()+'":'
 			}
-			if(kv[1]==null||kv[1]==undefined||(typeof kv[1]=='number'&&!Number.isInteger(kv[1]))){
+			s+='"'+kv[0].toString()+'":'
+			if(kv[1]==null||kv[1]==undefined){
 				throw "map's value in HelloReq.mu64 must be integer"
-			}
-			if(typeof kv[1]=='number'){
-				if(kv[1]<0){
-					throw "map's value in HelloReq.mu64 overflow"
-				}
-				s+='"'+kv[1]+'",'
 			}else if(kv[1].lessThan(0)){
 				throw "map's value in HelloReq.mu64 overflow"
-			}else{
-				s+='"'+kv[1].toString()+'",'
 			}
+			s+='"'+kv[1].toString()+'",'
 		}
 		s=s.substr(0,s.length-1)+'},'
 	}
@@ -551,19 +495,12 @@ function HelloReqToJson(msg: HelloReq): string{
 	}else{
 		s+='"mb":{'
 		for(let kv of msg.mb.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mb must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mb overflow"
-				}
-				s+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mb overflow"
-			}else{
-				s+='"'+kv[0].toString()+'":'
 			}
+			s+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined){
 				throw "map's value in HelloReq.mb must be boolean"
 			}
@@ -579,19 +516,12 @@ function HelloReqToJson(msg: HelloReq): string{
 	}else{
 		s+='"me":{'
 		for(let kv of msg.me.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.me must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.me overflow"
-				}
-				s+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.me overflow"
-			}else{
-				s+='"'+kv[0].toString()+'":'
 			}
+			s+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined||(kv[1]!=0&&kv[1]!=3)){
 				throw "map's value in HelloReq.me must be enum in TE"
 			}
@@ -607,19 +537,12 @@ function HelloReqToJson(msg: HelloReq): string{
 	}else{
 		s+='"ms":{'
 		for(let kv of msg.ms.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.ms must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.ms overflow"
-				}
-				s+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.ms overflow"
-			}else{
-				s+='"'+kv[0].toString()+'":'
 			}
+			s+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined){
 				throw "map's value in HelloReq.ms must be string"
 			}
@@ -635,19 +558,12 @@ function HelloReqToJson(msg: HelloReq): string{
 	}else{
 		s+='"mbs":{'
 		for(let kv of msg.mbs.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mbs must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mbs overflow"
-				}
-				s+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mbs overflow"
-			}else{
-				s+='"'+kv[0].toString()+'":'
 			}
+			s+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined){
 				throw "map's value in HelloReq.mbs must be string"
 			}
@@ -663,19 +579,12 @@ function HelloReqToJson(msg: HelloReq): string{
 	}else{
 		s+='"mf":{'
 		for(let kv of msg.mf.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mf must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mf overflow"
-				}
-				s+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mf overflow"
-			}else{
-				s+='"'+kv[0].toString()+'":'
 			}
+			s+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined){
 				throw "map's value in HelloReq.mf must be number"
 			}
@@ -691,19 +600,12 @@ function HelloReqToJson(msg: HelloReq): string{
 	}else{
 		s+='"md":{'
 		for(let kv of msg.md.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.md must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.md overflow"
-				}
-				s+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.md overflow"
-			}else{
-				s+='"'+kv[0].toString()+'":'
 			}
+			s+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined){
 				throw "map's value in HelloReq.md must be number"
 			}
@@ -719,19 +621,12 @@ function HelloReqToJson(msg: HelloReq): string{
 	}else{
 		s+='"mmsg":{'
 		for(let kv of msg.mmsg.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mmsg must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mmsg overflow"
-				}
-				s+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mmsg overflow"
-			}else{
-				s+='"'+kv[0].toString()+'":'
 			}
+			s+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined){
 				s+='null,'
 			}else{
@@ -746,8 +641,7 @@ function HelloReqToJson(msg: HelloReq): string{
 			s+='"'+msg.union.$key+'":'
 			if(msg.union.value==null||msg.union.value==undefined||!Number.isInteger(msg.union.value)){
 				throw 'when HelloReq.union.$key is oi32,HelloReq.union.value must be integer'
-			}
-			if(msg.union.value>2147483647||msg.union.value<-2147483648){
+			}else if(msg.union.value>2147483647||msg.union.value<-2147483648){
 				throw 'HelloReq.union.value overflow'
 			}
 			s+=msg.union.value+','
@@ -755,38 +649,26 @@ function HelloReqToJson(msg: HelloReq): string{
 			s+='"'+msg.union.$key+'":'
 			if(msg.union.value==null||msg.union.value==undefined||!Number.isInteger(msg.union.value)){
 				throw 'when HelloReq.union.$key is ou32,HelloReq.union.value must be integer'
-			}
-			if(msg.union.value>4294967295||msg.union.value<0){
+			}else if(msg.union.value>4294967295||msg.union.value<0){
 				throw 'HelloReq.union.value overflow'
 			}
 			s+=msg.union.value+','
 		}else if(msg.union.$key=='oi64'){
 			s+='"'+msg.union.$key+'":'
-			if(msg.union.value==null||msg.union.value==undefined||(typeof msg.union.value=='number'&&!Number.isInteger(msg.union.value))){
+			if(msg.union.value==null||msg.union.value==undefined){
 				throw 'when HelloReq.union.$key is oi64,HelloReq.union.value must be integer'
-			}
-			if(typeof msg.union.value=='number'){
-				s+='"'+msg.union.value+'",'
 			}else if(msg.union.value.lessThan(Long.MIN_VALUE)||msg.union.value.greaterThan(Long.MAX_VALUE)){
 				throw 'HelloReq.union.value overflow'
-			}else{
-				s+='"'+msg.union.value.toString()+'",'
 			}
+			s+='"'+msg.union.value.toString()+'",'
 		}else if(msg.union.$key=='ou64'){
 			s+='"'+msg.union.$key+'":'
-			if(msg.union.value==null||msg.union.value==undefined||(typeof msg.union.value=='number'&&!Number.isInteger(msg.union.value))){
+			if(msg.union.value==null||msg.union.value==undefined){
 				throw 'when HelloReq.union.$key is ou64,HelloReq.union.value must be integer'
-			}
-			if(typeof msg.union.value=='number'){
-				if(msg.union.value<0){
-					throw 'HelloReq.union.value overflow'
-				}
-				s+='"'+msg.union.value+'",'
 			}else if(msg.union.value.lessThan(0)){
 				throw 'HelloReq.union.value overflow'
-			}else{
-				s+='"'+msg.union.value.toString()+'",'
 			}
+			s+='"'+msg.union.value.toString()+'",'
 		}else if(msg.union.$key=='of'){
 			s+='"'+msg.union.$key+'":'
 			if(msg.union.value==null||msg.union.value==undefined){
@@ -882,10 +764,8 @@ function HelloReqToForm(msg: HelloReq): string{
 		}
 	}
 	//i64
-	if(msg.i64==null||msg.i64==undefined||(typeof msg.i64=='number'&&!Number.isInteger(msg.i64))){
+	if(msg.i64==null||msg.i64==undefined){
 		throw 'HelloReq.i64 must be integer'
-	}else if(typeof msg.i64=='number'){
-		s+='i64='+msg.i64+'&'
 	}else if(msg.i64.lessThan(Long.MIN_VALUE)||msg.i64.greaterThan(Long.MAX_VALUE)){
 		throw 'HelloReq.i64 overflow'
 	}else{
@@ -894,11 +774,8 @@ function HelloReqToForm(msg: HelloReq): string{
 	//ri64
 	if(msg.ri64!=null&&msg.ri64!=undefined&&msg.ri64.length!=0){
 		for(let element of msg.ri64){
-			if(element==null||element==undefined||(typeof element=='number'&&!Number.isInteger(element))){
+			if(element==null||element==undefined){
 				throw 'element in HelloReq.ri64 must be integer'
-			}
-			if(typeof element=='number'){
-				s+='ri64='+element+'&'
 			}else if(element.lessThan(Long.MIN_VALUE)||element.greaterThan(Long.MAX_VALUE)){
 				throw 'element in HelloReq.ri64 overflow'
 			}else{
@@ -907,13 +784,8 @@ function HelloReqToForm(msg: HelloReq): string{
 		}
 	}
 	//u64
-	if(msg.u64==null||msg.u64==undefined||(typeof msg.u64=='number'&&!Number.isInteger(msg.u64))){
+	if(msg.u64==null||msg.u64==undefined){
 		throw 'HelloReq.u64 must be integer'
-	}else if(typeof msg.u64=='number'){
-		if(msg.u64<0){
-			throw 'HelloReq.u64 overflow'
-		}
-		s+='u64='+msg.u64+'&'
 	}else if(msg.u64.lessThan(0)){
 		throw 'HelloReq.u64 overflow'
 	}else{
@@ -922,14 +794,8 @@ function HelloReqToForm(msg: HelloReq): string{
 	//ru64
 	if(msg.ru64!=null&&msg.ru64!=undefined&&msg.ru64.length!=0){
 		for(let element of msg.ru64){
-			if(element==null||element==undefined||(typeof element=='number'&&!Number.isInteger(element))){
+			if(element==null||element==undefined){
 				throw 'element in HelloReq.ru64 must be integer'
-			}
-			if(typeof element=='number'){
-				if(element<0){
-					throw 'element in HelloReq.ru64 overflow'
-				}
-				s+='ru64='+element+'&'
 			}else if(element.lessThan(0)){
 				throw 'element in HelloReq.ru64 overflow'
 			}else{
@@ -1045,23 +911,15 @@ function HelloReqToForm(msg: HelloReq): string{
 	if(msg.mi32!=null&&msg.mi32!=undefined&&msg.mi32.size!=0){
 		let tmps: string="{"
 		for(let kv of msg.mi32.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mi32 must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mi32 overflow"
-				}
-				tmps+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mi32 overflow"
-			}else{
-				tmps+='"'+kv[0].toString()+'":'
 			}
+				tmps+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined||!Number.isInteger(kv[1])){
 				throw "map's value in HelloReq.mi32 must be integer"
-			}
-			if(kv[1]>2147483647||kv[1]<-2147483648){
+			}else if(kv[1]>2147483647||kv[1]<-2147483648){
 				throw "map's value in HelloReq.mi32 overflow"
 			}
 			tmps+=kv[1]+','
@@ -1077,23 +935,15 @@ function HelloReqToForm(msg: HelloReq): string{
 	if(msg.mu32!=null&&msg.mu32!=undefined&&msg.mu32.size!=0){
 		let tmps: string="{"
 		for(let kv of msg.mu32.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mu32 must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mu32 overflow"
-				}
-				tmps+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mu32 overflow"
-			}else{
-				tmps+='"'+kv[0].toString()+'":'
 			}
+				tmps+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined||!Number.isInteger(kv[1])){
 				throw "map's value in HelloReq.mu32 must be integer"
-			}
-			if(kv[1]>4294967295||kv[1]<0){
+			}else if(kv[1]>4294967295||kv[1]<0){
 				throw "map's value in HelloReq.mu32 overflow"
 			}
 			tmps+=kv[1]+','
@@ -1109,29 +959,18 @@ function HelloReqToForm(msg: HelloReq): string{
 	if(msg.mi64!=null&&msg.mi64!=undefined&&msg.mi64.size!=0){
 		let tmps: string="{"
 		for(let kv of msg.mi64.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mi64 must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mi64 overflow"
-				}
-				tmps+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mi64 overflow"
-			}else{
+			}
 				tmps+='"'+kv[0].toString()+'":'
-			}
-			if(kv[1]==null||kv[1]==undefined||(typeof kv[1]=='number'&&!Number.isInteger(kv[1]))){
+			if(kv[1]==null||kv[1]==undefined){
 				throw "map's value in HelloReq.mi64 must be integer"
-			}
-			if(typeof kv[1]=='number'){
-				tmps+='"'+kv[1]+'",'
 			}else if(kv[1].lessThan(Long.MIN_VALUE)||kv[1].greaterThan(Long.MAX_VALUE)){
 				throw "map's value in HelloReq.mi64 overflow"
-			}else{
-				tmps+='"'+kv[1].toString()+'",'
 			}
+			tmps+='"'+kv[1].toString()+'",'
 		}
 		if(tmps.length==1){
 			tmps+="}"
@@ -1144,32 +983,18 @@ function HelloReqToForm(msg: HelloReq): string{
 	if(msg.mu64!=null&&msg.mu64!=undefined&&msg.mu64.size!=0){
 		let tmps: string="{"
 		for(let kv of msg.mu64.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mu64 must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mu64 overflow"
-				}
-				tmps+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mu64 overflow"
-			}else{
+			}
 				tmps+='"'+kv[0].toString()+'":'
-			}
-			if(kv[1]==null||kv[1]==undefined||(typeof kv[1]=='number'&&!Number.isInteger(kv[1]))){
+			if(kv[1]==null||kv[1]==undefined){
 				throw "map's value in HelloReq.mu64 must be integer"
-			}
-			if(typeof kv[1]=='number'){
-				if(kv[1]<0){
-					throw "map's value in HelloReq.mu64 overflow"
-				}
-				tmps+='"'+kv[1]+'",'
 			}else if(kv[1].lessThan(0)){
 				throw "map's value in HelloReq.mu64 overflow"
-			}else{
-				tmps+='"'+kv[1].toString()+'",'
 			}
+			tmps+='"'+kv[1].toString()+'",'
 		}
 		if(tmps.length==1){
 			tmps+="}"
@@ -1182,19 +1007,12 @@ function HelloReqToForm(msg: HelloReq): string{
 	if(msg.mb!=null&&msg.mb!=undefined&&msg.mb.size!=0){
 		let tmps: string="{"
 		for(let kv of msg.mb.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mb must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mb overflow"
-				}
-				tmps+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mb overflow"
-			}else{
-				tmps+='"'+kv[0].toString()+'":'
 			}
+				tmps+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined){
 				throw "map's value in HelloReq.mb must be boolean"
 			}
@@ -1211,19 +1029,12 @@ function HelloReqToForm(msg: HelloReq): string{
 	if(msg.me!=null&&msg.me!=undefined&&msg.me.size!=0){
 		let tmps: string="{"
 		for(let kv of msg.me.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.me must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.me overflow"
-				}
-				tmps+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.me overflow"
-			}else{
-				tmps+='"'+kv[0].toString()+'":'
 			}
+				tmps+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined||(kv[1]!=0&&kv[1]!=3)){
 				throw "map's value in HelloReq.me must be enum in TE"
 			}
@@ -1240,19 +1051,12 @@ function HelloReqToForm(msg: HelloReq): string{
 	if(msg.ms!=null&&msg.ms!=undefined&&msg.ms.size!=0){
 		let tmps: string="{"
 		for(let kv of msg.ms.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.ms must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.ms overflow"
-				}
-				tmps+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.ms overflow"
-			}else{
-				tmps+='"'+kv[0].toString()+'":'
 			}
+				tmps+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined){
 				throw "map's value in HelloReq.ms must be string"
 			}
@@ -1269,19 +1073,12 @@ function HelloReqToForm(msg: HelloReq): string{
 	if(msg.mbs!=null&&msg.mbs!=undefined&&msg.mbs.size!=0){
 		let tmps: string="{"
 		for(let kv of msg.mbs.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mbs must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mbs overflow"
-				}
-				tmps+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mbs overflow"
-			}else{
-				tmps+='"'+kv[0].toString()+'":'
 			}
+				tmps+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined){
 				throw "map's value in HelloReq.mbs must be string"
 			}
@@ -1298,19 +1095,12 @@ function HelloReqToForm(msg: HelloReq): string{
 	if(msg.mf!=null&&msg.mf!=undefined&&msg.mf.size!=0){
 		let tmps: string="{"
 		for(let kv of msg.mf.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mf must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mf overflow"
-				}
-				tmps+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mf overflow"
-			}else{
-				tmps+='"'+kv[0].toString()+'":'
 			}
+				tmps+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined){
 				throw "map's value in HelloReq.mf must be number"
 			}
@@ -1327,19 +1117,12 @@ function HelloReqToForm(msg: HelloReq): string{
 	if(msg.md!=null&&msg.md!=undefined&&msg.md.size!=0){
 		let tmps: string="{"
 		for(let kv of msg.md.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.md must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.md overflow"
-				}
-				tmps+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.md overflow"
-			}else{
-				tmps+='"'+kv[0].toString()+'":'
 			}
+				tmps+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined){
 				throw "map's value in HelloReq.md must be number"
 			}
@@ -1356,19 +1139,12 @@ function HelloReqToForm(msg: HelloReq): string{
 	if(msg.mmsg!=null&&msg.mmsg!=undefined&&msg.mmsg.size!=0){
 		let tmps: string="{"
 		for(let kv of msg.mmsg.entries()){
-			if(kv[0]==null||kv[0]==undefined||(typeof kv[0]=='number'&&!Number.isInteger(kv[0]))){
+			if(kv[0]==null||kv[0]==undefined){
 				throw "map's key in HelloReq.mmsg must be integer"
-			}
-			if(typeof kv[0]=='number'){
-				if(kv[0]<0){
-					throw "map's key in HelloReq.mmsg overflow"
-				}
-				tmps+='"'+kv[0]+'":'
 			}else if(kv[0].lessThan(0)){
 				throw "map's key in HelloReq.mmsg overflow"
-			}else{
-				tmps+='"'+kv[0].toString()+'":'
 			}
+				tmps+='"'+kv[0].toString()+'":'
 			if(kv[1]==null||kv[1]==undefined){
 				tmps+='null,'
 			}else{
@@ -1387,44 +1163,31 @@ function HelloReqToForm(msg: HelloReq): string{
 		if(msg.union.$key=='oi32'){
 			if(msg.union.value==null||msg.union.value==undefined||!Number.isInteger(msg.union.value)){
 				throw 'when HelloReq.union.$key is oi32,HelloReq.union.value must be integer'
-			}
-			if(msg.union.value>2147483647||msg.union.value<-2147483648){
+			}else if(msg.union.value>2147483647||msg.union.value<-2147483648){
 				throw 'HelloReq.union.value overflow'
 			}
 			s+=msg.union.$key+'='+msg.union.value+'&'
 		}else if(msg.union.$key=='ou32'){
 			if(msg.union.value==null||msg.union.value==undefined||!Number.isInteger(msg.union.value)){
 				throw 'when HelloReq.union.$key is ou32,HelloReq.union.value must be integer'
-			}
-			if(msg.union.value>4294967295||msg.union.value<0){
+			}else if(msg.union.value>4294967295||msg.union.value<0){
 				throw 'HelloReq.union.value overflow'
 			}
 			s+=msg.union.$key+'='+msg.union.value+'&'
 		}else if(msg.union.$key=='oi64'){
-			if(msg.union.value==null||msg.union.value==undefined||(typeof msg.union.value=='number'&&!Number.isInteger(msg.union.value))){
+			if(msg.union.value==null||msg.union.value==undefined){
 				throw 'when HelloReq.union.$key is oi64,HelloReq.union.value must be integer'
-			}
-			if(typeof msg.union.value=='number'){
-				s+=msg.union.$key+'='+msg.union.value+'&'
 			}else if(msg.union.value.lessThan(Long.MIN_VALUE)||msg.union.value.greaterThan(Long.MAX_VALUE)){
 				throw 'HelloReq.union.value overflow'
-			}else{
-				s+=msg.union.$key+'='+msg.union.value.toString()+'&'
 			}
+			s+=msg.union.$key+'='+msg.union.value.toString()+'&'
 		}else if(msg.union.$key=='ou64'){
-			if(msg.union.value==null||msg.union.value==undefined||(typeof msg.union.value=='number'&&!Number.isInteger(msg.union.value))){
+			if(msg.union.value==null||msg.union.value==undefined){
 				throw 'when HelloReq.union.$key is ou64,HelloReq.union.value must be integer'
-			}
-			if(typeof msg.union.value=='number'){
-				if(msg.union.value<0){
-					throw 'HelloReq.union.value overflow'
-				}
-				s+=msg.union.$key+'='+msg.union.value+'&'
 			}else if(msg.union.value.lessThan(0)){
 				throw 'HelloReq.union.value overflow'
-			}else{
-				s+=msg.union.$key+'='+msg.union.value.toString()+'&'
 			}
+			s+=msg.union.$key+'='+msg.union.value.toString()+'&'
 		}else if(msg.union.$key=='of'){
 			if(msg.union.value==null||msg.union.value==undefined){
 				throw 'when HelloReq.union.$key is of,HelloReq.union.value must be number'
@@ -1474,9 +1237,9 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['i32']==null||jsonobj['i32']==undefined){
 		obj['i32']=0
 	}else if(typeof jsonobj['i32']!='number'||!Number.isInteger(jsonobj['i32'])){
-		throw 'format wrong!HelloReq.i32 must be integer'
+		throw 'HelloReq.i32 must be integer'
 	}else if(jsonob['i32']>2147483647||jsonobj['i32']<-2147483648){
-		throw 'format wrong!HelloReq.i32 overflow'
+		throw 'HelloReq.i32 overflow'
 	}else{
 		obj['i32']=jsonobj['i32']
 	}
@@ -1484,14 +1247,13 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['ri32']==null||jsonobj['ri32']==undefined){
 		obj['ri32']=null
 	}else if(!(jsonobj['ri32'] instanceof Array)){
-		throw 'format wrong!HelloReq.ri32 must be Array<number>|null|undefined'
+		throw 'HelloReq.ri32 must be Array<number>|null|undefined'
 	}else{
 		for(let element of jsonobj['ri32']){
 			if(typeof element!='number'||!Number.isInteger(element)){
-				throw 'format wrong!element in HelloReq.ri32 must be integer'
-			}
-			if(element>2147483647||element<-2147483648){
-				throw 'format wrong!element in HelloReq.ri32 overflow'
+				throw 'element in HelloReq.ri32 must be integer'
+			}else if(element>2147483647||element<-2147483648){
+				throw 'element in HelloReq.ri32 overflow'
 			}
 			if(obj['ri32']==undefined){
 				obj['ri32']=new Array<number>
@@ -1503,9 +1265,9 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['u32']==null||jsonobj['u32']==undefined){
 		obj['u32']=0
 	}else if(typeof jsonobj['u32']!='number'||!Number.isInteger(jsonobj['u32'])){
-		throw 'format wrong!HelloReq.u32 must be integer'
+		throw 'HelloReq.u32 must be integer'
 	}else if(jsonob['u32']>4294967295||jsonobj['u32']<0){
-		throw 'format wrong!HelloReq.u32 overflow'
+		throw 'HelloReq.u32 overflow'
 	}else{
 		obj['u32']=jsonobj['u32']
 	}
@@ -1513,14 +1275,13 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['ru32']==null||jsonobj['ru32']==undefined){
 		obj['ru32']=null
 	}else if(!(jsonobj['ru32'] instanceof Array)){
-		throw 'format wrong!HelloReq.ru32 must be Array<number>|null|undefined'
+		throw 'HelloReq.ru32 must be Array<number>|null|undefined'
 	}else{
 		for(let element of jsonobj['ru32']){
 			if(typeof element!='number'||!Number.isInteger(element)){
-				throw 'format wrong!element in HelloReq.ru32 must be integer'
-			}
-			if(element>4294967295||element<0){
-				throw 'format wrong!element in HelloReq.ru32 overflow'
+				throw 'element in HelloReq.ru32 must be integer'
+			}else if(element>4294967295||element<0){
+				throw 'element in HelloReq.ru32 overflow'
 			}
 			if(obj['ru32']==undefined){
 				obj['ru32']=new Array<number>
@@ -1533,54 +1294,66 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		obj['i64']=0
 	}else if(typeof jsobobj['i64']=='number'){
 		if(!Number.isInteger(jsonobj['i64'])){
-			throw 'format wrong!HelloReq.i64 must be integer'
+			throw 'HelloReq.i64 must be integer'
 		}
-		obj['i64']=jsonobj['i64']
+		let tmp: Long=Long.ZERO
+		try{
+			tmp=Long.fromNumber(jsonobj['i64'],false)
+		}catch(e){
+			throw 'HelloReq.i64 must be integer'
+		}
+		obj['i64']=tmp
 	}else if(typeof jsonobj['i64']=='string'){
 		let tmp:Long=Long.ZERO
 		try{
 			tmp=Long.fromString(jsonobj['i64'],false)
 		}catch(e){
-			throw 'format wrong!HelloReq.i64 must be integer'
+			throw 'HelloReq.i64 must be integer'
 		}
 		if(tmp.toString()!=jsonobj['i64']){
-			throw 'format wrong!HelloReq.i64 overflow'
+			throw 'HelloReq.i64 overflow'
 		}
 		obj['i64']=tmp
 	}else{
-		throw 'format wrong!HelloReq.i64 must be integer'
+		throw 'HelloReq.i64 must be integer'
 	}
 	//ri64
 	if(jsobobj['ri64']==null||jsonobj['ri64']==undefined){
 		obj['ri64']=null
 	}else if(!(jsonobj['ri64'] instanceof Array)){
-		throw 'format wrong!HelloReq.ri64 must be Array<number|Long>|null|undefined'
+		throw 'HelloReq.ri64 must be Array<Long>|null|undefined'
 	}else{
 		for(let element of jsonobj['ri64']){
 			if(typeof element=='number'){
 				if(!Number.isInteger(element)){
-					throw 'format wrong!element in HelloReq.ri64 must be integer'
+					throw 'element in HelloReq.ri64 must be integer'
+				}
+				let tmp: Long=Long.ZERO
+				try{
+					tmp=Long.fromNumber(element,false)
+				}catch(e){
+					throw 'element in HelloReq.ri64 must be integer'
 				}
 				if(obj['ri64']==undefined){
-					obj['ri64']=new Array<number|Long>
+					obj['ri64']=new Array<Long>
 				}
-				obj['ri64'].push(element)
+				obj['ri64'].push(tmp)
 			}else if(typeof element=='string'){
 				let tmp:Long=Long.ZERO
 				try{
 					tmp=Long.fromString(element,false)
 				}catch(e){
-					throw 'format wrong!element in HelloReq.ri64 must be integer'
+					throw 'element in HelloReq.ri64 must be integer'
 				}
 				if(tmp.toString()!=element){
-					throw 'format wrong!element in HelloReq.ri64 overflow'
+					throw 'element in HelloReq.ri64 overflow'
 				}
 				if(obj['ri64']==undefined){
-					obj['ri64']=new Array<number|Long>
+					obj['ri64']=new Array<Long>
 				}
-				obj['ri64'].push(element)
+				obj['ri64'].push(tmp)
 			}else{
-				throw 'format wrong!element in HelloReq.ri64 must be integer'
+				throw 'element in HelloReq.ri64 must be integer'
 			}
 		}
 	}
@@ -1589,21 +1362,27 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		obj['u64']=0
 	}else if(typeof jsobobj['u64']=='number'){
 		if(!Number.isInteger(jsonobj['u64'])){
-			throw 'format wrong!HelloReq.u64 must be integer'
+			throw 'HelloReq.u64 must be integer'
 		}
 		if(jsobobj['u64']<0){
-			throw 'format wrong!HelloReq.u64 overflow'
+			throw 'HelloReq.u64 overflow'
 		}
-		obj['u64']=jsonobj['u64']
+		let tmp: Long=Long.ZERO
+		try{
+			tmp=Long.fromNumber(jsonobj['u64'],true)
+		}catch(e){
+			throw 'HelloReq.u64 must be integer'
+		}
+		obj['u64']=tmp
 	}else if(typeof jsonobj['u64']=='string'){
 		let tmp:Long=Long.ZERO
 		try{
 			tmp=Long.fromString(jsonobj['u64'],true)
 		}catch(e){
-			throw 'format wrong!HelloReq.u64 must be integer'
+			throw 'HelloReq.u64 must be integer'
 		}
 		if(tmp.toString()!=jsonobj['u64']){
-			throw 'format wrong!HelloReq.u64 overflow'
+			throw 'HelloReq.u64 overflow'
 		}
 		obj['u64']=tmp
 	}else{
@@ -1613,34 +1392,40 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsobobj['ru64']==null||jsobobj['ru64']==undefined){
 		obj['ru64']=null
 	}else if(!(jsonobj['ru64'] instanceof Array)){
-		throw 'format wrong!HelloReq.ru64 must be Array<number|Long>|null|undefined'
+		throw 'HelloReq.ru64 must be Array<Long>|null|undefined'
 	}else{
 		for(let element of jsonobj['ru64']){
 			if(typeof element=='number'){
 				if(!Number.isInteger(element)){
-					throw 'format wrong!element in HelloReq.ru64 must be integer'
+					throw 'element in HelloReq.ru64 must be integer'
 				}
 				if(element<0){
-					throw 'format wrong!element in HelloReq.ru64 overflow'
+					throw 'element in HelloReq.ru64 overflow'
+				}
+				let tmp: Long=Long.ZERO
+				try{
+					tmp=Long.fromNumber(element,true)
+				}catch(e){
+					throw 'element in HelloReq.ru64 must be integer'
 				}
 				if(obj['ru64']==undefined){
-					obj['ru64']=new Array<number|Long>
+					obj['ru64']=new Array<Long>
 				}
-				obj['ru64'].push(element)
+				obj['ru64'].push(tmp)
 			}else if(typeof element=='string'){
 				let tmp:Long=Long.ZERO
 				try{
 					tmp=Long.fromString(element,true)
 				}catch(e){
-					throw 'format wrong!element in HelloReq.ru64 must be integer'
+					throw 'element in HelloReq.ru64 must be integer'
 				}
 				if(tmp.toString()!=element){
-					throw 'format wrong!element in HelloReq.ru64 overflow'
+					throw 'element in HelloReq.ru64 overflow'
 				}
 				if(obj['ru64']==undefined){
-					obj['ru64']=new Array<number|Long>
+					obj['ru64']=new Array<Long>
 				}
-				obj['ru64'].push(element)
+				obj['ru64'].push(tmp)
 			}else{
 				throw 'format wrong!element in HelloReq.ru64 must be integer'
 			}
@@ -1650,7 +1435,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['b']==null||jsonobj['b']==undefined){
 		obj['b']=false
 	}else if(typeof jsonobj['b']!='boolean'){
-		throw 'format wrong!HelloReq.b must be boolean'
+		throw 'HelloReq.b must be boolean'
 	}else{
 		obj['b']=jsonobj['b']
 	}
@@ -1658,11 +1443,11 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['rb']==null||jsonobj['rb']==undefined){
 		obj['rb']=null
 	}else if(!(jsonobj['rb'] instanceof Array)){
-		throw 'format wrong!HelloReq.rb must be Array<boolean>|null|undefined'
+		throw 'HelloReq.rb must be Array<boolean>|null|undefined'
 	}else{
 		for(let element of jsonobj['rb']){
 			if(typeof element!='boolean'){
-				throw 'format wrong!element in HelloReq.rb must be boolean'
+				throw 'element in HelloReq.rb must be boolean'
 			}
 			if(obj['rb']==undefined){
 				obj['rb']=new Array<boolean>
@@ -1674,7 +1459,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['e']==null||jsonobj['e']==undefined){
 		obj['e']=0
 	}else if(typeof jsonobj['e']!='number'||(jsonobj['e']!=0&&jsonobj['e']!=3)){
-		throw 'format wrong!HelloReq.e must be enum in TE'
+		throw 'HelloReq.e must be enum in TE'
 	}else{
 		obj['e']=jsonobj['e']
 	}
@@ -1682,11 +1467,11 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['es']==null||jsonobj['es']==undefined){
 		obj['es']=null
 	}else if(!(jsonobj['es'] instanceof Array)){
-		throw 'format wrong!HelloReq.es must be Array<TE>|null|undefined'
+		throw 'HelloReq.es must be Array<TE>|null|undefined'
 	}else{
 		for(let element of jsonobj['es']){
 			if(typeof element!='number'||(element!=0&&element!=3)){
-				throw 'format wrong!element in HelloReq.es must be enum in TE'
+				throw 'element in HelloReq.es must be enum in TE'
 			}
 			if(obj['es']==undefined){
 				obj['es']=new Array<TE>
@@ -1698,7 +1483,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['s']==null||jsonobj['s']==undefined){
 		obj['s']=''
 	}else if(typeof jsonobj['s']!='string'){
-		throw 'format wrong!HelloReq.s must be string'
+		throw 'HelloReq.s must be string'
 	}else{
 		obj['s']=jsonobj['s']
 	}
@@ -1706,11 +1491,11 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['rs']==null||jsonobj['rs']==undefined){
 		obj['rs']=null
 	}else if(!(jsonobj['rs'] instanceof Array)){
-		throw 'format wrong!HelloReq.rs must be Array<string>|null|undefined'
+		throw 'HelloReq.rs must be Array<string>|null|undefined'
 	}else{
 		for(let element of jsonobj['rs']){
 			if(typeof element!='string'){
-				throw 'format wrong!element in HelloReq.rs must be string'
+				throw 'element in HelloReq.rs must be string'
 			}
 			if(obj['rs']==undefined){
 				obj['rs']=new Array<string>
@@ -1722,13 +1507,13 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['bs']==null||jsonobj['bs']==undefined){
 		obj['bs']=new Uint8Array(0)
 	}else if(typeof jsonobj['bs']!='string'){
-		throw 'format wrong!HelloReq.bs must be base64 string from Uint8Array'
+		throw 'HelloReq.bs must be base64 string from Uint8Array'
 	}else{
 		let buf:Uint8Array=new Uint8Array(Base64.length(jsonobj['bs']))
 		try{
 			Base64.decode(jsonobj['bs'],buf,0)
 		}catch(e){
-			throw 'format wrong!HelloReq.bs must be base64 string from Uint8Array'
+			throw 'HelloReq.bs must be base64 string from Uint8Array'
 		}
 		obj['bs']=buf
 	}
@@ -1736,17 +1521,17 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['rbs']==null||jsonobj['rbs']==undefined){
 		obj['rbs']=null
 	}else if(!(jsonobj['rbs'] instanceof Array)){
-		throw 'format wrong!HelloReq.rbs must be Array<Uint8Array>|null|undefined'
+		throw 'HelloReq.rbs must be Array<Uint8Array>|null|undefined'
 	}else{
 		for(let element of jsonobj['rbs']){
 			if(typeof element!='string'){
-				throw 'format wrong!element in HelloReq.rbs must be base64 string from Uint8Array'
+				throw 'element in HelloReq.rbs must be base64 string from Uint8Array'
 			}
 			let buf:Uint8Array=new Uint8Array(Base64.length(element))
 			try{
 				Base64.decode(element,buf,0)
 			}catch(e){
-				throw 'format wrong!element in HelloReq.rbs must be base64 string from Uint8Array'
+				throw 'element in HelloReq.rbs must be base64 string from Uint8Array'
 			}
 			if(obj['rbs']==undefined){
 				obj['rbs']=new Array<Uint8Array>
@@ -1758,7 +1543,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['f']==null||jsonobj['f']==undefined){
 		obj['f']=0
 	}else if(typeof jsonobj['f']!='number'){
-		throw 'format wrong!HelloReq.f must be number'
+		throw 'HelloReq.f must be number'
 	}else{
 		obj['f']=jsonobj['f']
 	}
@@ -1766,11 +1551,11 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['rf']==null||jsonobj['rf']==undefined){
 		obj['rf']=null
 	}else if(!(jsonobj['rf'] instanceof Array)){
-		throw 'format wrong!HelloReq.rf must be Array<number>|null|undefined'
+		throw 'HelloReq.rf must be Array<number>|null|undefined'
 	}else{
 		for(let element of jsonobj['rf']){
 			if(typeof element!='number'){
-				throw 'format wrong!element in HelloReq.rf must be number'
+				throw 'element in HelloReq.rf must be number'
 			}
 			if(obj['rf']==undefined){
 				obj['rf']=new Array<number>
@@ -1782,7 +1567,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['d']==null||jsonobj['d']==undefined){
 		obj['d']=0
 	}else if(typeof jsonobj['d']!='number'){
-		throw 'format wrong!HelloReq.d must be number'
+		throw 'HelloReq.d must be number'
 	}else{
 		obj['d']=jsonobj['d']
 	}
@@ -1790,11 +1575,11 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['rd']==null||jsonobj['rd']==undefined){
 		obj['rd']=null
 	}else if(!(jsonobj['rd'] instanceof Array)){
-		throw 'format wrong!HelloReq.rd must be Array<number>|null|undefined'
+		throw 'HelloReq.rd must be Array<number>|null|undefined'
 	}else{
 		for(let element of jsonobj['rd']){
 			if(typeof element!='number'){
-				throw 'format wrong!element in HelloReq.rd must be number'
+				throw 'element in HelloReq.rd must be number'
 			}
 			if(obj['rd']==undefined){
 				obj['rd']=new Array<number>
@@ -1806,7 +1591,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['msg']=null||jsonobj['msg']==undefined){
 		obj['msg']=null
 	}else if(typeof jsonobj['msg']!='object'){
-		throw 'format wrong!HelloReq.msg must be Data'
+		throw 'HelloReq.msg must be Data'
 	}else{
 		obj['msg']=JsonToData(jsonobj['msg'])
 	}
@@ -1814,11 +1599,11 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['rmsg']==null||jsonobj['rmsg']==undefined){
 		obj['rmsg']=null
 	}else if(!(jsonobj['rmsg'] instanceof Array)){
-		throw 'format wrong!HelloReq.rmsg must be Array<Data>|null|undefined'
+		throw 'HelloReq.rmsg must be Array<Data>|null|undefined'
 	}else{
 		for(let element of jsonobj['rmsg']){
 			if(typeof element!='object'){
-				throw 'format wrong!element in HelloReq.rmsg must be Data'
+				throw 'element in HelloReq.rmsg must be Data'
 			}
 			if(obj['rmsg']==undefined){
 				obj['rmsg']=new Array<Data>
@@ -1830,7 +1615,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['mi32']==null||jsonobj['mi32']==undefined){
 		obj['mi32']=null
 	}else if(typeof jsonobj['mi32']!='object'){
-		throw 'format wrong!HelloReq.mi32 must be Map<number|Long,number>|null|undefined'
+		throw 'HelloReq.mi32 must be Map<Long,number>|null|undefined'
 	}else{
 		for(let key of Object.keys(jsonobj['mi32'])){
 			let value=jsonobj['mi32'][key]
@@ -1838,20 +1623,19 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
-				throw 'format wrong!key in HelloReq.mi32 must be integer'
+				throw 'key in HelloReq.mi32 must be integer'
 			}
 			if(k.toString()!=key){
-				throw 'format wrong!key in HelloReq.mi32 overflow'
+				throw 'key in HelloReq.mi32 overflow'
 			}
 			if(typeof value!='number'||!Number.isInteger(value)){
-				throw 'format wrong!value in HelloReq.mi32 must be integer'
-			}
-			if(value>2147483647&&value<-2147483648){
-				throw 'format wrong!value in HelloReq.mi32 overflow'
+				throw 'value in HelloReq.mi32 must be integer'
+			}else if(value>2147483647&&value<-2147483648){
+				throw 'value in HelloReq.mi32 overflow'
 			}
 			let v: number=value
 			if(obj['mi32']==undefined){
-				obj['mi32']=new Map<number|Long,number>
+				obj['mi32']=new Map<Long,number>
 			}
 			obj['mi32'].set(k,v)
 		}
@@ -1860,7 +1644,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['mu32']==null||jsonobj['mu32']==undefined){
 		obj['mu32']=null
 	}else if(typeof jsonobj['mu32']!='object'){
-		throw 'format wrong!HelloReq.mu32 must be Map<number|Long,number>|null|undefined'
+		throw 'HelloReq.mu32 must be Map<Long,number>|null|undefined'
 	}else{
 		for(let key of Object.keys(jsonobj['mu32'])){
 			let value=jsonobj['mu32'][key]
@@ -1868,20 +1652,19 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
-				throw 'format wrong!key in HelloReq.mu32 must be integer'
+				throw 'key in HelloReq.mu32 must be integer'
 			}
 			if(k.toString()!=key){
-				throw 'format wrong!key in HelloReq.mu32 overflow'
+				throw 'key in HelloReq.mu32 overflow'
 			}
 			if(typeof value!='number'||!Number.isInteger(value)){
-				throw 'format wrong!value in HelloReq.mu32 must be integer'
-			}
-			if(value>4294967295&&value<0){
-				throw 'format wrong!value in HelloReq.mu32 overflow'
+				throw 'value in HelloReq.mu32 must be integer'
+			}else if(value>4294967295&&value<0){
+				throw 'value in HelloReq.mu32 overflow'
 			}
 			let v: number=value
 			if(obj['mu32']==undefined){
-				obj['mu32']=new Map<number|Long,number>
+				obj['mu32']=new Map<Long,number>
 			}
 			obj['mu32'].set(k,v)
 		}
@@ -1890,7 +1673,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['mi64']==null||jsonobj['mi64']==undefined){
 		obj['mi64']=null
 	}else if(typeof jsonobj['mi64']!='object'){
-		throw 'format wrong!HelloReq.mi64 must be Map<number|Long,number|Long>|null|undefined'
+		throw 'HelloReq.mi64 must be Map<Long,Long>|null|undefined'
 	}else{
 		for(let key of Object.keys(jsonobj['mi64'])){
 			let value=jsonobj['mi64'][key]
@@ -1898,31 +1681,37 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
-				throw 'format wrong!key in HelloReq.mi64 must be integer'
+				throw 'key in HelloReq.mi64 must be integer'
 			}
 			if(k.toString()!=key){
-				throw 'format wrong!key in HelloReq.mi64 overflow'
+				throw 'key in HelloReq.mi64 overflow'
 			}
-			if(typeof value=='number'&&!Number.isInteger(value)){
-				throw 'format wrong!value in HelloReq.mi64 must be integer'
+			if(typeof value=='number'){
+				if(!Number.isInteger(value)){
+					throw 'value in HelloReq.mi64 must be integer'
+				}
 			}else if(typeof value!='string'){
-				throw 'format wrong!value in HelloReq46mi64 must be integer'
+				throw 'value in HelloReq46mi64 must be integer'
 			}
 			let v: Long=Long.Zero
 			if(typeof value=='number'){
-				v=Long.fromNumber(value,false)
+				try{
+					v=Long.fromNumber(value,false)
+				}catch(e){
+					throw 'value in HelloReq46mi64 must be integer'
+				}
 			}else{
 				try{
 					v=Long.fromString(value,false)
 				}catch(e){
-					throw 'format wrong!value in HelloReq.mi64 must be integer'
+					throw 'value in HelloReq.mi64 must be integer'
 				}
 				if(v.toString()!=value){
-					throw 'format wrong!value in HelloReq.mi64 overflow'
+					throw 'value in HelloReq.mi64 overflow'
 				}
 			}
 			if(obj['mi64']==undefined){
-				obj['mi64']=new Map<number|Long,number|Long>
+				obj['mi64']=new Map<Long,Long>
 			}
 			obj['mi64'].set(k,v)
 		}
@@ -1931,7 +1720,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['mu64']==null||jsonobj['mu64']==undefined){
 		obj['mu64']=null
 	}else if(typeof jsonobj['mu64']!='object'){
-		throw 'format wrong!HelloReq.mu64 must be Map<number|Long,number|Long>|null|undefined'
+		throw 'HelloReq.mu64 must be Map<Long,Long>|null|undefined'
 	}else{
 		for(let key of Object.keys(jsonobj['mu64'])){
 			let value=jsonobj['mu64'][key]
@@ -1939,34 +1728,40 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
-				throw 'format wrong!key in HelloReq.mu64 must be integer'
+				throw 'key in HelloReq.mu64 must be integer'
 			}
 			if(k.toString()!=key){
-				throw 'format wrong!key in HelloReq.mu64 overflow'
+				throw 'key in HelloReq.mu64 overflow'
 			}
-			if(typeof value=='number'&&!Number.isInteger(value)){
-				throw 'format wrong!value in HelloReq.mu64 must be integer'
+			if(typeof value=='number'){
+				if(!Number.isInteger(value)){
+					throw 'value in HelloReq.mu64 must be integer'
+				}
 			}else if(typeof value!='string'){
-				throw 'format wrong!value in HelloReq46mu64 must be integer'
+				throw 'value in HelloReq46mu64 must be integer'
 			}
 			let v: Long=Long.Zero
 			if(typeof value=='number'){
-				v=Long.fromNumber(value,true)
+				try{
+					v=Long.fromNumber(value,true)
+				}catch(e){
+					throw 'value in HelloReq.mu64 must be integer'
+				}
 				if(v.toNumber()!=value){
-					throw 'format wrong!value in HelloReq.mu64 overflow'
+					throw 'value in HelloReq.mu64 overflow'
 				}
 			}else{
 				try{
 					v=Long.fromString(value,true)
 				}catch(e){
-					throw 'format wrong!value in HelloReq.mu64 must be integer'
+					throw 'value in HelloReq.mu64 must be integer'
 				}
 				if(v.toString()!=value){
-					throw 'format wrong!value in HelloReq.mu64 overflow'
+					throw 'value in HelloReq.mu64 overflow'
 				}
 			}
 			if(obj['mu64']==undefined){
-				obj['mu64']=new Map<number|Long,number|Long>
+				obj['mu64']=new Map<Long,Long>
 			}
 			obj['mu64'].set(k,v)
 		}
@@ -1975,7 +1770,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['mb']==null||jsonobj['mb']==undefined){
 		obj['mb']=null
 	}else if(typeof jsonobj['mb']!='object'){
-		throw 'format wrong!HelloReq.mb must be Map<number|Long,boolean>|null|undefined'
+		throw 'HelloReq.mb must be Map<Long,boolean>|null|undefined'
 	}else{
 		for(let key of Object.keys(jsonobj['mb'])){
 			let value=jsonobj['mb'][key]
@@ -1983,17 +1778,17 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
-				throw 'format wrong!key in HelloReq.mb must be integer'
+				throw 'key in HelloReq.mb must be integer'
 			}
 			if(k.toString()!=key){
-				throw 'format wrong!key in HelloReq.mb overflow'
+				throw 'key in HelloReq.mb overflow'
 			}
 			if(typeof value!='boolean'){
-				throw 'format wrong!value in HelloReq.mb must be boolean'
+				throw 'value in HelloReq.mb must be boolean'
 			}
 			let v: boolean=value
 			if(obj['mb']==undefined){
-				obj['mb']=new Map<number|Long,boolean>
+				obj['mb']=new Map<Long,boolean>
 			}
 			obj['mb'].set(k,v)
 		}
@@ -2002,7 +1797,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['me']==null||jsonobj['me']==undefined){
 		obj['me']=null
 	}else if(typeof jsonobj['me']!='object'){
-		throw 'format wrong!HelloReq.me must be Map<number|Long,TE>|null|undefined'
+		throw 'HelloReq.me must be Map<Long,TE>|null|undefined'
 	}else{
 		for(let key of Object.keys(jsonobj['me'])){
 			let value=jsonobj['me'][key]
@@ -2010,17 +1805,17 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
-				throw 'format wrong!key in HelloReq.me must be integer'
+				throw 'key in HelloReq.me must be integer'
 			}
 			if(k.toString()!=key){
-				throw 'format wrong!key in HelloReq.me overflow'
+				throw 'key in HelloReq.me overflow'
 			}
 			if(typeof value!='number'||(value!=0&&value!=3)){
-				throw 'format wrong!value in HelloReq.me must be enum in TE'
+				throw 'value in HelloReq.me must be enum in TE'
 			}
 			let v: TE=value
 			if(obj['me']==undefined){
-				obj['me']=new Map<number|Long,TE>
+				obj['me']=new Map<Long,TE>
 			}
 			obj['me'].set(k,v)
 		}
@@ -2029,7 +1824,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['ms']==null||jsonobj['ms']==undefined){
 		obj['ms']=null
 	}else if(typeof jsonobj['ms']!='object'){
-		throw 'format wrong!HelloReq.ms must be Map<number|Long,string>|null|undefined'
+		throw 'HelloReq.ms must be Map<Long,string>|null|undefined'
 	}else{
 		for(let key of Object.keys(jsonobj['ms'])){
 			let value=jsonobj['ms'][key]
@@ -2037,17 +1832,17 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
-				throw 'format wrong!key in HelloReq.ms must be integer'
+				throw 'key in HelloReq.ms must be integer'
 			}
 			if(k.toString()!=key){
-				throw 'format wrong!key in HelloReq.ms overflow'
+				throw 'key in HelloReq.ms overflow'
 			}
 			if(typeof value!='string'){
-				throw 'format wrong!value in HelloReq.ms must be string'
+				throw 'value in HelloReq.ms must be string'
 			}
 			let v: string=value
 			if(obj['ms']==undefined){
-				obj['ms']=new Map<number|Long,string>
+				obj['ms']=new Map<Long,string>
 			}
 			obj['ms'].set(k,v)
 		}
@@ -2056,7 +1851,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['mbs']==null||jsonobj['mbs']==undefined){
 		obj['mbs']=null
 	}else if(typeof jsonobj['mbs']!='object'){
-		throw 'format wrong!HelloReq.mbs must be Map<number|Long,Uint8Array>|null|undefined'
+		throw 'HelloReq.mbs must be Map<Long,Uint8Array>|null|undefined'
 	}else{
 		for(let key of Object.keys(jsonobj['mbs'])){
 			let value=jsonobj['mbs'][key]
@@ -2064,23 +1859,23 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
-				throw 'format wrong!key in HelloReq.mbs must be integer'
+				throw 'key in HelloReq.mbs must be integer'
 			}
 			if(k.toString()!=key){
-				throw 'format wrong!key in HelloReq.mbs overflow'
+				throw 'key in HelloReq.mbs overflow'
 			}
 			if(typeof value!='string'){
-				throw 'format wrong!value in HelloReq.mbs must be base64 string from Uint8Array'
+				throw 'value in HelloReq.mbs must be base64 string from Uint8Array'
 			}
 			let buf:Uint8Array=new Uint8Array(Base64.length(value))
 			try{
 				Base64.decode(value,buf,0)
 			}catch(e){
-				throw 'format wrong!value in HelloReq.mbs must be base64 string from Uint8Array'
+				throw 'value in HelloReq.mbs must be base64 string from Uint8Array'
 			}
 			let v: Uint8Array=buf
 			if(obj['mbs']==undefined){
-				obj['mbs']=new Map<number|Long,Uint8Array>
+				obj['mbs']=new Map<Long,Uint8Array>
 			}
 			obj['mbs'].set(k,v)
 		}
@@ -2089,7 +1884,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['mf']==null||jsonobj['mf']==undefined){
 		obj['mf']=null
 	}else if(typeof jsonobj['mf']!='object'){
-		throw 'format wrong!HelloReq.mf must be Map<number|Long,number>|null|undefined'
+		throw 'HelloReq.mf must be Map<Long,number>|null|undefined'
 	}else{
 		for(let key of Object.keys(jsonobj['mf'])){
 			let value=jsonobj['mf'][key]
@@ -2097,17 +1892,17 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
-				throw 'format wrong!key in HelloReq.mf must be integer'
+				throw 'key in HelloReq.mf must be integer'
 			}
 			if(k.toString()!=key){
-				throw 'format wrong!key in HelloReq.mf overflow'
+				throw 'key in HelloReq.mf overflow'
 			}
 			if(typeof value!='number'){
-				throw 'format wrong!value in HelloReq.mf must be number'
+				throw 'value in HelloReq.mf must be number'
 			}
 			let v: number=value
 			if(obj['mf']==undefined){
-				obj['mf']=new Map<number|Long,number>
+				obj['mf']=new Map<Long,number>
 			}
 			obj['mf'].set(k,v)
 		}
@@ -2116,7 +1911,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['md']==null||jsonobj['md']==undefined){
 		obj['md']=null
 	}else if(typeof jsonobj['md']!='object'){
-		throw 'format wrong!HelloReq.md must be Map<number|Long,number>|null|undefined'
+		throw 'HelloReq.md must be Map<Long,number>|null|undefined'
 	}else{
 		for(let key of Object.keys(jsonobj['md'])){
 			let value=jsonobj['md'][key]
@@ -2124,17 +1919,17 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
-				throw 'format wrong!key in HelloReq.md must be integer'
+				throw 'key in HelloReq.md must be integer'
 			}
 			if(k.toString()!=key){
-				throw 'format wrong!key in HelloReq.md overflow'
+				throw 'key in HelloReq.md overflow'
 			}
 			if(typeof value!='number'){
-				throw 'format wrong!value in HelloReq.md must be number'
+				throw 'value in HelloReq.md must be number'
 			}
 			let v: number=value
 			if(obj['md']==undefined){
-				obj['md']=new Map<number|Long,number>
+				obj['md']=new Map<Long,number>
 			}
 			obj['md'].set(k,v)
 		}
@@ -2143,7 +1938,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	if(jsonobj['mmsg']==null||jsonobj['mmsg']==undefined){
 		obj['mmsg']=null
 	}else if(typeof jsonobj['mmsg']!='object'){
-		throw 'format wrong!HelloReq.mmsg must be Map<number|Long,Data|null|undefined>|null|undefined'
+		throw 'HelloReq.mmsg must be Map<Long,Data|null|undefined>|null|undefined'
 	}else{
 		for(let key of Object.keys(jsonobj['mmsg'])){
 			let value=jsonobj['mmsg'][key]
@@ -2151,21 +1946,21 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
-				throw 'format wrong!key in HelloReq.mmsg must be integer'
+				throw 'key in HelloReq.mmsg must be integer'
 			}
 			if(k.toString()!=key){
-				throw 'format wrong!key in HelloReq.mmsg overflow'
+				throw 'key in HelloReq.mmsg overflow'
 			}
-			let v: Data|null|undefined
+			let v: Data|null|undefined=null
 			if(typeof value==null||typeof value==undefined){
 				v=null
 			}else if(typeof value!='object'){
-				throw 'format wrong!value in HelloReq.mmsg must be Data|null|undefined'
+				throw 'value in HelloReq.mmsg must be Data|null|undefined'
 			}else{
 				v=JsonToData(value)
 			}
 			if(obj['mmsg']==undefined){
-				obj['mmsg']=new Map<number|Long,Data|null|undefined>
+				obj['mmsg']=new Map<Long,Data|null|undefined>
 			}
 			obj['mmsg'].set(k,v)
 		}
@@ -2175,16 +1970,14 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 	}else if(jsonobj['union'].$key=='oi32'){
 		if(typeof jsonobj['union'].value!='number'||!Number.isInteger(jsonobj['union'].value)){
 			throw 'when HelloReq.union.$key is oi32,HelloReq.union.value must be integer'
-		}
-		if(jsonobj['union'].value>2147483647||jsonobj['union'].value<-2147483648){
+		}else if(jsonobj['union'].value>2147483647||jsonobj['union'].value<-2147483648){
 			throw 'HelloReq.union.value overflow'
 		}
 		obj['union']={$key:'oi32',value:jsonobj['union'].value}
 	}else if(jsonobj['union'].$key=='ou32'){
 		if(typeof jsonobj['union'].value!='number'||!Number.isInteger(jsonobj['union'].value)){
 			throw 'when HelloReq.union.$key is ou32,HelloReq.union.value must be integer'
-		}
-		if(jsonobj['union'].value>4294967295||jsonobj['union'].value<0){
+		}else if(jsonobj['union'].value>4294967295||jsonobj['union'].value<0){
 			throw 'HelloReq.union.value overflow'
 		}
 		obj['union']={$key:'ou32',value:jsonobj['union'].value}
@@ -2193,9 +1986,15 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			if(!Number.isInteger(jsonobj['union'].value)){
 				throw 'when HelloReq.union.$key is oi64,HelloReq.union.value must be integer'
 			}
-			obj['union']={$key:'oi64',value:jsonobj['union'].value}
+			let tmp: Long=Long.ZERO
+			try{
+				tmp=Long.fromNumber(jsonobj['union'].value,false)
+			}catch(e){
+				throw 'when HelloReq.union.$key is oi64,HelloReq.union.value must be integer'
+			}
+			obj['union']={$key:'oi64',value:tmp}
 		}else if(typeof jsonobj['union'].value=='string'){
-			let tmp: Long
+			let tmp: Long=Long.ZERO
 			try{
 				tmp=Long.fromString(jsonobj['union'].value,false)
 			}catch(e){
@@ -2216,9 +2015,15 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			if(jsonobj['union'].value<0){
 				throw 'HelloReq.union.value overflow'
 			}
-			obj['union']={$key:'ou64',value:jsonobj['union'].value}
+			let tmp: Long=Long.ZERO
+			try{
+				tmp=Long.fromNumber(jsonobj['union'].value,true)
+			}catch(e){
+				throw 'when HelloReq.union.$key is ou64,HelloReq.union.value must be integer'
+			}
+			obj['union']={$key:'ou64',value:tmp}
 		}else if(typeof jsonobj['union'].value=='string'){
-			let tmp: Long
+			let tmp: Long=Long.ZERO
 			try{
 				tmp=Long.fromString(jsonobj['union'].value,true)
 			}catch(e){
@@ -2273,6 +2078,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 		obj['union']={$key:'omsg',value:JsonToData(jsonobj['union'].value)}
 	}
+	return obj
 }
 export interface HelloResp{
 	req: HelloReq|null|undefined;
@@ -2283,10 +2089,11 @@ function JsonToHelloResp(jsonobj: Object): HelloResp{
 	if(jsonobj['req']=null||jsonobj['req']==undefined){
 		obj['req']=null
 	}else if(typeof jsonobj['req']!='object'){
-		throw 'format wrong!HelloResp.req must be HelloReq'
+		throw 'HelloResp.req must be HelloReq'
 	}else{
 		obj['req']=JsonToHelloReq(jsonobj['req'])
 	}
+	return obj
 }
 const _WebPathTestHello: string ="/test.test/hello";
 export class TestBrowserClientToC {
