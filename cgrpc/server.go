@@ -269,14 +269,6 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			ctx, cancel = context.WithDeadline(ctx, start.Add(servertimeout))
 			defer cancel()
 		}
-		if dl, ok := ctx.Deadline(); ok && dl.UnixNano() < start.UnixNano()+int64(time.Millisecond) {
-			resp = nil
-			e = cerror.ErrDeadlineExceeded
-			end := time.Now()
-			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+localaddr[strings.LastIndex(localaddr, ":")+1:], "GRPC", path, &start, &end, e)
-			monitor.GrpcServerMonitor(sourceapp, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
-			return
-		}
 		workctx := s.getcontext(ctx, path, sourceapp, remoteaddr, mdata, totalhandlers, decode)
 		if _, ok := workctx.metadata["Client-IP"]; !ok {
 			workctx.metadata["Client-IP"] = sourceip

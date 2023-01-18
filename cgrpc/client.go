@@ -231,14 +231,30 @@ func transGrpcError(e error) *cerror.Error {
 		return cerror.ErrDeadlineExceeded
 	case codes.Unknown:
 		return cerror.ConvertErrorstr(s.Message())
+	case codes.InvalidArgument:
+		return cerror.MakeError(-1, http.StatusBadRequest, s.Message())
+	case codes.NotFound:
+		return cerror.MakeError(-1, http.StatusNotFound, s.Message())
+	case codes.AlreadyExists:
+		return cerror.MakeError(-1, http.StatusBadRequest, s.Message())
+	case codes.PermissionDenied:
+		return cerror.MakeError(-1, http.StatusForbidden, s.Message())
 	case codes.ResourceExhausted:
 		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
+	case codes.FailedPrecondition:
+		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
+	case codes.Aborted:
+		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
+	case codes.OutOfRange:
+		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
 	case codes.Unimplemented:
-		return cerror.ErrNoapi
+		return cerror.MakeError(-1, http.StatusNotImplemented, s.Message())
 	case codes.Internal:
 		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
 	case codes.Unavailable:
 		return cerror.MakeError(-1, http.StatusServiceUnavailable, s.Message())
+	case codes.DataLoss:
+		return cerror.MakeError(-1, http.StatusNotFound, s.Message())
 	case codes.Unauthenticated:
 		return cerror.MakeError(-1, http.StatusServiceUnavailable, s.Message())
 	default:

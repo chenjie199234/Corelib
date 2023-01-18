@@ -2,6 +2,7 @@ package crpc
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/stream"
@@ -17,7 +18,7 @@ func (s *CrpcServer) getContext(c context.Context, p *stream.Peer, msg *Msg, han
 			msg:      msg,
 			metadata: msg.Metadata,
 			handlers: handlers,
-			status:   0,
+			finish:   0,
 		}
 		if msg.Metadata == nil {
 			ctx.metadata = make(map[string]string)
@@ -31,7 +32,7 @@ func (s *CrpcServer) getContext(c context.Context, p *stream.Peer, msg *Msg, han
 		ctx.metadata = msg.Metadata
 	}
 	ctx.handlers = handlers
-	ctx.status = 0
+	ctx.finish = 0
 	return ctx
 }
 
@@ -48,13 +49,13 @@ type Context struct {
 	metadata map[string]string
 	peer     *stream.Peer
 	handlers []OutsideHandler
-	status   int8
+	finish   int32
 }
 
 func (c *Context) run() {
 	for _, handler := range c.handlers {
 		handler(c)
-		if c.status != 0 {
+		if c.finish != 0 {
 			break
 		}
 	}
@@ -62,6 +63,9 @@ func (c *Context) run() {
 
 // has race
 func (c *Context) Abort(e error) {
+	if !atomic.CompareAndSwapInt32(&c.finish, 0, -1) {
+		return
+	}
 	c.msg.Error = cerror.ConvertStdError(e)
 	if c.msg.Error != nil && (c.msg.Error.Httpcode < 400 || c.msg.Error.Httpcode > 999) {
 		panic("[crpc.Context.Abort] httpcode must in [400,999]")
@@ -71,18 +75,19 @@ func (c *Context) Abort(e error) {
 	c.msg.Body = nil
 	c.msg.Metadata = nil
 	c.msg.Tracedata = nil
-	c.status = -1
 }
 
 // has race
 func (c *Context) Write(resp []byte) {
+	if !atomic.CompareAndSwapInt32(&c.finish, 0, 1) {
+		return
+	}
 	c.msg.Path = ""
 	c.msg.Deadline = 0
 	c.msg.Body = resp
 	c.msg.Error = nil
 	c.msg.Metadata = nil
 	c.msg.Tracedata = nil
-	c.status = 1
 }
 
 func (c *Context) WriteString(resp string) {

@@ -149,16 +149,15 @@ func (c *ServerConfig) getCorsExpose() string {
 }
 
 type WebServer struct {
-	handlerTimeout map[string]map[string]time.Duration //first key method,second key path,value timeout
-	selfappname    string
-	c              *ServerConfig
-	ctxpool        *sync.Pool
-	global         []OutsideHandler
-	r              *router
-	s              *http.Server
-	clientnum      int32
-	stop           *graceful.Graceful
-	closetimer     *time.Timer
+	selfappname string
+	c           *ServerConfig
+	ctxpool     *sync.Pool
+	global      []OutsideHandler
+	r           *router
+	s           *http.Server
+	clientnum   int32
+	stop        *graceful.Graceful
+	closetimer  *time.Timer
 }
 
 func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, error) {
@@ -173,14 +172,13 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	c.validate()
 	//new server
 	instance := &WebServer{
-		handlerTimeout: make(map[string]map[string]time.Duration),
-		selfappname:    selfappname,
-		c:              c,
-		ctxpool:        &sync.Pool{},
-		global:         make([]OutsideHandler, 0, 10),
-		r:              newRouter(c.SrcRoot),
-		stop:           graceful.New(),
-		closetimer:     time.NewTimer(0),
+		selfappname: selfappname,
+		c:           c,
+		ctxpool:     &sync.Pool{},
+		global:      make([]OutsideHandler, 0, 10),
+		r:           newRouter(c.SrcRoot),
+		stop:        graceful.New(),
+		closetimer:  time.NewTimer(0),
 	}
 	<-instance.closetimer.C
 	instance.s = &http.Server{
@@ -375,16 +373,8 @@ func (s *WebServer) UpdateHandlerTimeout(htcs map[string]map[string]time.Duratio
 			tmp[method][path] = timeout
 		}
 	}
-	s.handlerTimeout = tmp
-}
-
-func (s *WebServer) getHandlerTimeout(method, path string) time.Duration {
-	if m, ok := s.handlerTimeout[method]; ok {
-		if t, ok := m[path]; ok {
-			return t
-		}
-	}
-	return s.c.GlobalTimeout
+	tmp["default"] = map[string]time.Duration{"default": s.c.GlobalTimeout}
+	s.r.updatetimeout(tmp)
 }
 
 // thread unsafe
@@ -509,10 +499,9 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 				return
 			}
 		}
-		var clientdl int64
+		//timeout
 		if temp := r.Header.Get("Core-Deadline"); temp != "" {
-			var e error
-			clientdl, e = strconv.ParseInt(temp, 10, 64)
+			clientdl, e := strconv.ParseInt(temp, 10, 64)
 			if e != nil {
 				log.Error(ctx, "[web.server] client:", sourceapp+":"+sourceip, "path:", path, "method:", method, "error: Deadline:", temp, "format error")
 				w.Header().Set("Content-Type", "application/json")
@@ -520,45 +509,11 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 				w.Write(common.Str2byte(cerror.ErrReq.Error()))
 				return
 			}
-		}
-		//set timeout
-		start := time.Now()
-		var min int64
-		servertimeout := int64(s.getHandlerTimeout(method, path))
-		if servertimeout > 0 {
-			serverdl := start.UnixNano() + servertimeout
 			if clientdl != 0 {
-				//compare use the small one
-				if clientdl < serverdl {
-					min = clientdl
-				} else {
-					min = serverdl
-				}
-			} else {
-				//use serverdl
-				min = serverdl
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithDeadline(ctx, time.Unix(0, clientdl))
+				defer cancel()
 			}
-		} else if clientdl != 0 {
-			//use client timeout
-			min = clientdl
-		} else {
-			//no timeout
-			min = 0
-		}
-		if min != 0 {
-			if min < start.UnixNano()+int64(time.Millisecond) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusGatewayTimeout)
-				w.Write(common.Str2byte(cerror.ErrDeadlineExceeded.Error()))
-				end := time.Now()
-
-				log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+r.Context().Value(localport{}).(string), method, path, &start, &end, cerror.ErrDeadlineExceeded)
-				monitor.WebServerMonitor(sourceapp, method, path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
-				return
-			}
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, min))
-			defer cancel()
 		}
 		//check server status
 		if !s.stop.AddOne() {
@@ -574,6 +529,7 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 		}
 		defer s.stop.DoneOne()
 		//logic
+		start := time.Now()
 		workctx := s.getContext(w, r, ctx, sourceapp, mdata, totalhandlers)
 		if _, ok := workctx.metadata["Client-IP"]; !ok {
 			workctx.metadata["Client-IP"] = sourceip

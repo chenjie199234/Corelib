@@ -117,7 +117,7 @@ func getallregs(m *protogen.Message) map[string]string {
 	return allregexps
 }
 func genMessage(g *protogen.GeneratedFile, m *protogen.Message) {
-	if pbex.MessageHasPBEX(m) {
+	if pbex.NeedValidate(m) {
 		geninit(g, m)
 		g.P("//return empty means pass")
 		g.P("func (m*", m.GoIdent.GoName, ")Validate() (errstr string){")
@@ -874,7 +874,7 @@ func messagecheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *prot
 	if proto.HasExtension(fop, pbex.E_MessageNotNil) {
 		notnil = proto.GetExtension(fop, pbex.E_MessageNotNil).(bool)
 	}
-	needcheck = pbex.MessageHasPBEX(field.Message)
+	needcheck = pbex.NeedValidate(field.Message)
 	if !notnil && !needcheck {
 		return
 	}
@@ -1036,7 +1036,7 @@ func mapcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 			valuecheck = true
 		}
 	case protoreflect.MessageKind:
-		if proto.HasExtension(fop, pbex.E_MapValueMessageNotNil) || pbex.MessageHasPBEX(val.Message) {
+		if proto.HasExtension(fop, pbex.E_MapValueMessageNotNil) || pbex.NeedValidate(val.Message) {
 			valuecheck = true
 		}
 	}
@@ -1548,7 +1548,7 @@ func mapcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 			if proto.HasExtension(fop, pbex.E_MapValueMessageNotNil) {
 				notnil = proto.GetExtension(fop, pbex.E_MapValueMessageNotNil).(bool)
 			}
-			needcheck = pbex.MessageHasPBEX(val.Message)
+			needcheck = pbex.NeedValidate(val.Message)
 			if !notnil && !needcheck {
 				break
 			}

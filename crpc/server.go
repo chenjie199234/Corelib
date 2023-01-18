@@ -195,45 +195,30 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 			ctx = log.InitTrace(ctx, msg.Tracedata["TraceID"], s.selfappname, host.Hostip, "CRPC", msg.Path, clientdeep)
 		}
 		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
-		//var globaldl int64
 		start := time.Now()
-		var min int64
-		servertimeout := int64(s.getHandlerTimeout(path))
-		if servertimeout > 0 {
-			serverdl := time.Now().UnixNano() + servertimeout
+		if servertimeout := int64(s.getHandlerTimeout(path)); servertimeout > 0 {
+			serverdl := start.UnixNano() + servertimeout
 			if msg.Deadline != 0 {
 				//compare use the small one
 				if msg.Deadline < serverdl {
-					min = msg.Deadline
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithDeadline(ctx, time.Unix(0, msg.Deadline))
+					defer cancel()
 				} else {
-					min = serverdl
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithDeadline(ctx, time.Unix(0, serverdl))
+					defer cancel()
 				}
 			} else {
 				//use server timeout
-				min = serverdl
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithDeadline(ctx, time.Unix(0, serverdl))
+				defer cancel()
 			}
 		} else if msg.Deadline != 0 {
 			//use client timeout
-			min = msg.Deadline
-		} else {
-			//no timeout
-			min = 0
-		}
-		if min != 0 {
-			if min < start.UnixNano()+int64(time.Millisecond) {
-				msg.Path = ""
-				msg.Deadline = 0
-				msg.Body = nil
-				msg.Error = cerror.ErrDeadlineExceeded
-				msg.Metadata = nil
-				msg.Tracedata = nil
-				end := time.Now()
-				log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+p.GetLocalPort(), "CRPC", path, &start, &end, msg.Error)
-				monitor.CrpcServerMonitor(sourceapp, "CRPC", path, msg.Error, uint64(end.UnixNano()-start.UnixNano()))
-				return
-			}
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, min))
+			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, msg.Deadline))
 			defer cancel()
 		}
 		//logic

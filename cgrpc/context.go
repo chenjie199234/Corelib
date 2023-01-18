@@ -2,6 +2,7 @@ package cgrpc
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -20,7 +21,7 @@ func (s *CGrpcServer) getcontext(c context.Context, path string, peername string
 			metadata:   metadata,
 			resp:       nil,
 			e:          nil,
-			status:     0,
+			finish:     0,
 		}
 		if metadata == nil {
 			ctx.metadata = make(map[string]string)
@@ -38,7 +39,7 @@ func (s *CGrpcServer) getcontext(c context.Context, path string, peername string
 	}
 	ctx.resp = nil
 	ctx.e = nil
-	ctx.status = 0
+	ctx.finish = 0
 	return ctx
 }
 func (s *CGrpcServer) putcontext(ctx *Context) {
@@ -58,13 +59,13 @@ type Context struct {
 	metadata   map[string]string
 	resp       interface{}
 	e          *cerror.Error
-	status     int8
+	finish     int32
 }
 
 func (c *Context) run() {
 	for _, handler := range c.handlers {
 		handler(c)
-		if c.status != 0 {
+		if c.finish != 0 {
 			break
 		}
 	}
@@ -72,7 +73,9 @@ func (c *Context) run() {
 
 // has race
 func (c *Context) Abort(e error) {
-	c.status = -1
+	if !atomic.CompareAndSwapInt32(&c.finish, 0, -1) {
+		return
+	}
 	c.e = cerror.ConvertStdError(e)
 	if c.e != nil && (c.e.Httpcode < 400 || c.e.Httpcode > 999) {
 		panic("[cgrpc.Context.Abort] httpcode must in [400,999]")
@@ -81,7 +84,9 @@ func (c *Context) Abort(e error) {
 
 // has race
 func (c *Context) Write(resp interface{}) {
-	c.status = 1
+	if !atomic.CompareAndSwapInt32(&c.finish, 0, -1) {
+		return
+	}
 	c.resp = resp
 }
 func (c *Context) DecodeReq(req protoreflect.ProtoMessage) error {
