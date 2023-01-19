@@ -42,22 +42,23 @@ function DataToJson(msg: Data): string{
 	}
 	return s
 }
-function JsonToData(jsonobj: Object): Data{
-	let obj: Object={}
+function JsonToData(jsonobj: { [k:string]:any }): Data{
+	let obj: Data={
+		t:null,
+		e:0,
+	}
 	//t
-	if(jsonobj['t']=null||jsonobj['t']==undefined){
-		obj['t']=null
-	}else if(typeof jsonobj['t']!='object'){
-		throw 'Data.t must be Data'
-	}else{
+	if(jsonobj['t']!=null&&jsonobj['t']!=undefined){
+		if(typeof jsonobj['t']!='object'){
+			throw 'Data.t must be Data'
+		}
 		obj['t']=JsonToData(jsonobj['t'])
 	}
 	//e
-	if(jsonobj['e']==null||jsonobj['e']==undefined){
-		obj['e']=0
-	}else if(typeof jsonobj['e']!='number'||(jsonobj['e']!=0&&jsonobj['e']!=3)){
-		throw 'Data.e must be enum in TE'
-	}else{
+	if(jsonobj['e']!=null&&jsonobj['e']!=undefined){
+		if(typeof jsonobj['e']!='number'||(jsonobj['e']!=0&&jsonobj['e']!=3)){
+			throw 'Data.e must be enum in TE'
+		}
 		obj['e']=jsonobj['e']
 	}
 	return obj
@@ -82,7 +83,7 @@ export interface HelloReq{
 	b: boolean;
 	rb: Array<boolean>|null|undefined;
 	e: TE;
-	es: Array<TE>|null|undefined;
+	re: Array<TE>|null|undefined;
 	s: string;
 	rs: Array<string>|null|undefined;
 	bs: Uint8Array;
@@ -274,16 +275,16 @@ function HelloReqToJson(msg: HelloReq): string{
 	}else{
 		s+='"e":'+msg.e+','
 	}
-	//es
-	if(msg.es==null||msg.es==undefined){
-		s+='"es":null,'
-	}else if(msg.es.length==0){
-		s+='"es":[],'
+	//re
+	if(msg.re==null||msg.re==undefined){
+		s+='"re":null,'
+	}else if(msg.re.length==0){
+		s+='"re":[],'
 	}else{
-		s+='"es":['
-		for(let element of msg.es){
+		s+='"re":['
+		for(let element of msg.re){
 			if(element==null||element==undefined||(element!=0&&element!=3)){
-				throw 'element in HelloReq.es must be enum in TE'
+				throw 'element in HelloReq.re must be enum in TE'
 			}
 			s+=element+','
 		}
@@ -824,13 +825,13 @@ function HelloReqToForm(msg: HelloReq): string{
 	}else{
 		s+='e='+msg.e+'&'
 	}
-	//es
-	if(msg.es!=null&&msg.es!=undefined&&msg.es.length!=0){
-		for(let element of msg.es){
+	//re
+	if(msg.re!=null&&msg.re!=undefined&&msg.re.length!=0){
+		for(let element of msg.re){
 			if(element==null||element==undefined||(element!=0&&element!=3)){
-				throw 'element in HelloReq.es must be enum in TE'
+				throw 'element in HelloReq.re must be enum in TE'
 			}
-			s+='es='+element+'&'
+			s+='re='+element+'&'
 		}
 	}
 	//s
@@ -1231,24 +1232,57 @@ function HelloReqToForm(msg: HelloReq): string{
 	}
 	return s
 }
-function JsonToHelloReq(jsonobj: Object): HelloReq{
-	let obj: Object={}
+function JsonToHelloReq(jsonobj: { [k:string]:any }): HelloReq{
+	let obj: HelloReq={
+		i32:0,
+		ri32:null,
+		u32:0,
+		ru32:null,
+		i64:Long.ZERO,
+		ri64:null,
+		u64:Long.ZERO,
+		ru64:null,
+		b:false,
+		rb:null,
+		e:0,
+		re:null,
+		s:'',
+		rs:null,
+		bs:new Uint8Array(0),
+		rbs:null,
+		f:0,
+		rf:null,
+		d:0,
+		rd:null,
+		msg:null,
+		rmsg:null,
+		mi32:null,
+		mu32:null,
+		mi64:null,
+		mu64:null,
+		mb:null,
+		me:null,
+		ms:null,
+		mbs:null,
+		mf:null,
+		md:null,
+		mmsg:null,
+		union:null,
+	}
 	//i32
-	if(jsonobj['i32']==null||jsonobj['i32']==undefined){
-		obj['i32']=0
-	}else if(typeof jsonobj['i32']!='number'||!Number.isInteger(jsonobj['i32'])){
-		throw 'HelloReq.i32 must be integer'
-	}else if(jsonob['i32']>2147483647||jsonobj['i32']<-2147483648){
-		throw 'HelloReq.i32 overflow'
-	}else{
+	if(jsonobj['i32']!=null&&jsonobj['i32']!=undefined){
+		if(typeof jsonobj['i32']!='number'||!Number.isInteger(jsonobj['i32'])){
+			throw 'HelloReq.i32 must be integer'
+		}else if(jsonobj['i32']>2147483647||jsonobj['i32']<-2147483648){
+			throw 'HelloReq.i32 overflow'
+		}
 		obj['i32']=jsonobj['i32']
 	}
 	//ri32
-	if(jsonobj['ri32']==null||jsonobj['ri32']==undefined){
-		obj['ri32']=null
-	}else if(!(jsonobj['ri32'] instanceof Array)){
-		throw 'HelloReq.ri32 must be Array<number>|null|undefined'
-	}else{
+	if(jsonobj['ri32']!=null&&jsonobj['ri32']!=undefined){
+		if(!(jsonobj['ri32'] instanceof Array)){
+			throw 'HelloReq.ri32 must be Array<number>|null|undefined'
+		}
 		for(let element of jsonobj['ri32']){
 			if(typeof element!='number'||!Number.isInteger(element)){
 				throw 'element in HelloReq.ri32 must be integer'
@@ -1262,21 +1296,19 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//u32
-	if(jsonobj['u32']==null||jsonobj['u32']==undefined){
-		obj['u32']=0
-	}else if(typeof jsonobj['u32']!='number'||!Number.isInteger(jsonobj['u32'])){
-		throw 'HelloReq.u32 must be integer'
-	}else if(jsonob['u32']>4294967295||jsonobj['u32']<0){
-		throw 'HelloReq.u32 overflow'
-	}else{
+	if(jsonobj['u32']!=null&&jsonobj['u32']!=undefined){
+		if(typeof jsonobj['u32']!='number'||!Number.isInteger(jsonobj['u32'])){
+			throw 'HelloReq.u32 must be integer'
+		}else if(jsonobj['u32']>4294967295||jsonobj['u32']<0){
+			throw 'HelloReq.u32 overflow'
+		}
 		obj['u32']=jsonobj['u32']
 	}
 	//ru32
-	if(jsonobj['ru32']==null||jsonobj['ru32']==undefined){
-		obj['ru32']=null
-	}else if(!(jsonobj['ru32'] instanceof Array)){
-		throw 'HelloReq.ru32 must be Array<number>|null|undefined'
-	}else{
+	if(jsonobj['ru32']!=null&&jsonobj['ru32']!=undefined){
+		if(!(jsonobj['ru32'] instanceof Array)){
+			throw 'HelloReq.ru32 must be Array<number>|null|undefined'
+		}
 		for(let element of jsonobj['ru32']){
 			if(typeof element!='number'||!Number.isInteger(element)){
 				throw 'element in HelloReq.ru32 must be integer'
@@ -1290,39 +1322,38 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//i64
-	if(jsonobj['i64']==null||jsonobj['i64']==undefined){
-		obj['i64']=0
-	}else if(typeof jsobobj['i64']=='number'){
-		if(!Number.isInteger(jsonobj['i64'])){
+	if(jsonobj['i64']!=null&&jsonobj['i64']!=undefined){
+		if(typeof jsonobj['i64']=='number'){
+			if(!Number.isInteger(jsonobj['i64'])){
+				throw 'HelloReq.i64 must be integer'
+			}
+			let tmp: Long=Long.ZERO
+			try{
+				tmp=Long.fromNumber(jsonobj['i64'],false)
+			}catch(e){
+				throw 'HelloReq.i64 must be integer'
+			}
+			obj['i64']=tmp
+		}else if(typeof jsonobj['i64']=='string'){
+			let tmp:Long=Long.ZERO
+			try{
+				tmp=Long.fromString(jsonobj['i64'],false)
+			}catch(e){
+				throw 'HelloReq.i64 must be integer'
+			}
+			if(tmp.toString()!=jsonobj['i64']){
+				throw 'HelloReq.i64 overflow'
+			}
+			obj['i64']=tmp
+		}else{
 			throw 'HelloReq.i64 must be integer'
 		}
-		let tmp: Long=Long.ZERO
-		try{
-			tmp=Long.fromNumber(jsonobj['i64'],false)
-		}catch(e){
-			throw 'HelloReq.i64 must be integer'
-		}
-		obj['i64']=tmp
-	}else if(typeof jsonobj['i64']=='string'){
-		let tmp:Long=Long.ZERO
-		try{
-			tmp=Long.fromString(jsonobj['i64'],false)
-		}catch(e){
-			throw 'HelloReq.i64 must be integer'
-		}
-		if(tmp.toString()!=jsonobj['i64']){
-			throw 'HelloReq.i64 overflow'
-		}
-		obj['i64']=tmp
-	}else{
-		throw 'HelloReq.i64 must be integer'
 	}
 	//ri64
-	if(jsobobj['ri64']==null||jsonobj['ri64']==undefined){
-		obj['ri64']=null
-	}else if(!(jsonobj['ri64'] instanceof Array)){
-		throw 'HelloReq.ri64 must be Array<Long>|null|undefined'
-	}else{
+	if(jsonobj['ri64']!=null&&jsonobj['ri64']!=undefined){
+		if(!(jsonobj['ri64'] instanceof Array)){
+			throw 'HelloReq.ri64 must be Array<Long>|null|undefined'
+		}
 		for(let element of jsonobj['ri64']){
 			if(typeof element=='number'){
 				if(!Number.isInteger(element)){
@@ -1358,42 +1389,41 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//u64
-	if(jsonobj['u64']==null||jsonobj['u64']==undefined){
-		obj['u64']=0
-	}else if(typeof jsobobj['u64']=='number'){
-		if(!Number.isInteger(jsonobj['u64'])){
-			throw 'HelloReq.u64 must be integer'
+	if(jsonobj['u64']!=null&&jsonobj['u64']!=undefined){
+		if(typeof jsonobj['u64']=='number'){
+			if(!Number.isInteger(jsonobj['u64'])){
+				throw 'HelloReq.u64 must be integer'
+			}
+			if(jsonobj['u64']<0){
+				throw 'HelloReq.u64 overflow'
+			}
+			let tmp: Long=Long.ZERO
+			try{
+				tmp=Long.fromNumber(jsonobj['u64'],true)
+			}catch(e){
+				throw 'HelloReq.u64 must be integer'
+			}
+			obj['u64']=tmp
+		}else if(typeof jsonobj['u64']=='string'){
+			let tmp:Long=Long.ZERO
+			try{
+				tmp=Long.fromString(jsonobj['u64'],true)
+			}catch(e){
+				throw 'HelloReq.u64 must be integer'
+			}
+			if(tmp.toString()!=jsonobj['u64']){
+				throw 'HelloReq.u64 overflow'
+			}
+			obj['u64']=tmp
+		}else{
+			throw 'format wrong!HelloReq.u64 must be integer'
 		}
-		if(jsobobj['u64']<0){
-			throw 'HelloReq.u64 overflow'
-		}
-		let tmp: Long=Long.ZERO
-		try{
-			tmp=Long.fromNumber(jsonobj['u64'],true)
-		}catch(e){
-			throw 'HelloReq.u64 must be integer'
-		}
-		obj['u64']=tmp
-	}else if(typeof jsonobj['u64']=='string'){
-		let tmp:Long=Long.ZERO
-		try{
-			tmp=Long.fromString(jsonobj['u64'],true)
-		}catch(e){
-			throw 'HelloReq.u64 must be integer'
-		}
-		if(tmp.toString()!=jsonobj['u64']){
-			throw 'HelloReq.u64 overflow'
-		}
-		obj['u64']=tmp
-	}else{
-		throw 'format wrong!HelloReq.u64 must be integer'
 	}
 	//ru64
-	if(jsobobj['ru64']==null||jsobobj['ru64']==undefined){
-		obj['ru64']=null
-	}else if(!(jsonobj['ru64'] instanceof Array)){
-		throw 'HelloReq.ru64 must be Array<Long>|null|undefined'
-	}else{
+	if(jsonobj['ru64']!=null&&jsonobj['ru64']!=undefined){
+		if(!(jsonobj['ru64'] instanceof Array)){
+			throw 'HelloReq.ru64 must be Array<Long>|null|undefined'
+		}
 		for(let element of jsonobj['ru64']){
 			if(typeof element=='number'){
 				if(!Number.isInteger(element)){
@@ -1432,19 +1462,17 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//b
-	if(jsonobj['b']==null||jsonobj['b']==undefined){
-		obj['b']=false
-	}else if(typeof jsonobj['b']!='boolean'){
-		throw 'HelloReq.b must be boolean'
-	}else{
+	if(jsonobj['b']!=null&&jsonobj['b']!=undefined){
+		if(typeof jsonobj['b']!='boolean'){
+			throw 'HelloReq.b must be boolean'
+		}
 		obj['b']=jsonobj['b']
 	}
 	//rb
-	if(jsonobj['rb']==null||jsonobj['rb']==undefined){
-		obj['rb']=null
-	}else if(!(jsonobj['rb'] instanceof Array)){
-		throw 'HelloReq.rb must be Array<boolean>|null|undefined'
-	}else{
+	if(jsonobj['rb']!=null&&jsonobj['rb']!=undefined){
+		if(!(jsonobj['rb'] instanceof Array)){
+			throw 'HelloReq.rb must be Array<boolean>|null|undefined'
+		}
 		for(let element of jsonobj['rb']){
 			if(typeof element!='boolean'){
 				throw 'element in HelloReq.rb must be boolean'
@@ -1456,43 +1484,39 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//e
-	if(jsonobj['e']==null||jsonobj['e']==undefined){
-		obj['e']=0
-	}else if(typeof jsonobj['e']!='number'||(jsonobj['e']!=0&&jsonobj['e']!=3)){
-		throw 'HelloReq.e must be enum in TE'
-	}else{
+	if(jsonobj['e']!=null&&jsonobj['e']!=undefined){
+		if(typeof jsonobj['e']!='number'||(jsonobj['e']!=0&&jsonobj['e']!=3)){
+			throw 'HelloReq.e must be enum in TE'
+		}
 		obj['e']=jsonobj['e']
 	}
-	//es
-	if(jsonobj['es']==null||jsonobj['es']==undefined){
-		obj['es']=null
-	}else if(!(jsonobj['es'] instanceof Array)){
-		throw 'HelloReq.es must be Array<TE>|null|undefined'
-	}else{
-		for(let element of jsonobj['es']){
+	//re
+	if(jsonobj['re']!=null&&jsonobj['re']!=undefined){
+		if(!(jsonobj['re'] instanceof Array)){
+			throw 'HelloReq.re must be Array<TE>|null|undefined'
+		}
+		for(let element of jsonobj['re']){
 			if(typeof element!='number'||(element!=0&&element!=3)){
-				throw 'element in HelloReq.es must be enum in TE'
+				throw 'element in HelloReq.re must be enum in TE'
 			}
-			if(obj['es']==undefined){
-				obj['es']=new Array<TE>
+			if(obj['re']==undefined){
+				obj['re']=new Array<TE>
 			}
-			obj['es'].push(element)
+			obj['re'].push(element)
 		}
 	}
 	//s
-	if(jsonobj['s']==null||jsonobj['s']==undefined){
-		obj['s']=''
-	}else if(typeof jsonobj['s']!='string'){
-		throw 'HelloReq.s must be string'
-	}else{
+	if(jsonobj['s']!=null&&jsonobj['s']!=undefined){
+		if(typeof jsonobj['s']!='string'){
+			throw 'HelloReq.s must be string'
+		}
 		obj['s']=jsonobj['s']
 	}
 	//rs
-	if(jsonobj['rs']==null||jsonobj['rs']==undefined){
-		obj['rs']=null
-	}else if(!(jsonobj['rs'] instanceof Array)){
-		throw 'HelloReq.rs must be Array<string>|null|undefined'
-	}else{
+	if(jsonobj['rs']!=null&&jsonobj['rs']!=undefined){
+		if(!(jsonobj['rs'] instanceof Array)){
+			throw 'HelloReq.rs must be Array<string>|null|undefined'
+		}
 		for(let element of jsonobj['rs']){
 			if(typeof element!='string'){
 				throw 'element in HelloReq.rs must be string'
@@ -1504,11 +1528,10 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//bs
-	if(jsonobj['bs']==null||jsonobj['bs']==undefined){
-		obj['bs']=new Uint8Array(0)
-	}else if(typeof jsonobj['bs']!='string'){
-		throw 'HelloReq.bs must be base64 string from Uint8Array'
-	}else{
+	if(jsonobj['bs']!=null&&jsonobj['bs']!=undefined){
+		if(typeof jsonobj['bs']!='string'){
+			throw 'HelloReq.bs must be base64 string from Uint8Array'
+		}
 		let buf:Uint8Array=new Uint8Array(Base64.length(jsonobj['bs']))
 		try{
 			Base64.decode(jsonobj['bs'],buf,0)
@@ -1518,11 +1541,10 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		obj['bs']=buf
 	}
 	//rbs
-	if(jsonobj['rbs']==null||jsonobj['rbs']==undefined){
-		obj['rbs']=null
-	}else if(!(jsonobj['rbs'] instanceof Array)){
-		throw 'HelloReq.rbs must be Array<Uint8Array>|null|undefined'
-	}else{
+	if(jsonobj['rbs']!=null&&jsonobj['rbs']!=undefined){
+		if(!(jsonobj['rbs'] instanceof Array)){
+			throw 'HelloReq.rbs must be Array<Uint8Array>|null|undefined'
+		}
 		for(let element of jsonobj['rbs']){
 			if(typeof element!='string'){
 				throw 'element in HelloReq.rbs must be base64 string from Uint8Array'
@@ -1540,19 +1562,17 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//f
-	if(jsonobj['f']==null||jsonobj['f']==undefined){
-		obj['f']=0
-	}else if(typeof jsonobj['f']!='number'){
-		throw 'HelloReq.f must be number'
-	}else{
+	if(jsonobj['f']!=null&&jsonobj['f']!=undefined){
+		if(typeof jsonobj['f']!='number'){
+			throw 'HelloReq.f must be number'
+		}
 		obj['f']=jsonobj['f']
 	}
 	//rf
-	if(jsonobj['rf']==null||jsonobj['rf']==undefined){
-		obj['rf']=null
-	}else if(!(jsonobj['rf'] instanceof Array)){
-		throw 'HelloReq.rf must be Array<number>|null|undefined'
-	}else{
+	if(jsonobj['rf']!=null&&jsonobj['rf']!=undefined){
+		if(!(jsonobj['rf'] instanceof Array)){
+			throw 'HelloReq.rf must be Array<number>|null|undefined'
+		}
 		for(let element of jsonobj['rf']){
 			if(typeof element!='number'){
 				throw 'element in HelloReq.rf must be number'
@@ -1564,19 +1584,17 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//d
-	if(jsonobj['d']==null||jsonobj['d']==undefined){
-		obj['d']=0
-	}else if(typeof jsonobj['d']!='number'){
-		throw 'HelloReq.d must be number'
-	}else{
+	if(jsonobj['d']!=null&&jsonobj['d']!=undefined){
+		if(typeof jsonobj['d']!='number'){
+			throw 'HelloReq.d must be number'
+		}
 		obj['d']=jsonobj['d']
 	}
 	//rd
-	if(jsonobj['rd']==null||jsonobj['rd']==undefined){
-		obj['rd']=null
-	}else if(!(jsonobj['rd'] instanceof Array)){
-		throw 'HelloReq.rd must be Array<number>|null|undefined'
-	}else{
+	if(jsonobj['rd']!=null&&jsonobj['rd']!=undefined){
+		if(!(jsonobj['rd'] instanceof Array)){
+			throw 'HelloReq.rd must be Array<number>|null|undefined'
+		}
 		for(let element of jsonobj['rd']){
 			if(typeof element!='number'){
 				throw 'element in HelloReq.rd must be number'
@@ -1588,19 +1606,17 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//msg
-	if(jsonobj['msg']=null||jsonobj['msg']==undefined){
-		obj['msg']=null
-	}else if(typeof jsonobj['msg']!='object'){
-		throw 'HelloReq.msg must be Data'
-	}else{
+	if(jsonobj['msg']!=null&&jsonobj['msg']!=undefined){
+		if(typeof jsonobj['msg']!='object'){
+			throw 'HelloReq.msg must be Data'
+		}
 		obj['msg']=JsonToData(jsonobj['msg'])
 	}
 	//rmsg
-	if(jsonobj['rmsg']==null||jsonobj['rmsg']==undefined){
-		obj['rmsg']=null
-	}else if(!(jsonobj['rmsg'] instanceof Array)){
-		throw 'HelloReq.rmsg must be Array<Data>|null|undefined'
-	}else{
+	if(jsonobj['rmsg']!=null&&jsonobj['rmsg']!=undefined){
+		if(!(jsonobj['rmsg'] instanceof Array)){
+			throw 'HelloReq.rmsg must be Array<Data>|null|undefined'
+		}
 		for(let element of jsonobj['rmsg']){
 			if(typeof element!='object'){
 				throw 'element in HelloReq.rmsg must be Data'
@@ -1612,14 +1628,13 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//mi32
-	if(jsonobj['mi32']==null||jsonobj['mi32']==undefined){
-		obj['mi32']=null
-	}else if(typeof jsonobj['mi32']!='object'){
-		throw 'HelloReq.mi32 must be Map<Long,number>|null|undefined'
-	}else{
+	if(jsonobj['mi32']!=null&&jsonobj['mi32']!=undefined){
+		if(typeof jsonobj['mi32']!='object'){
+			throw 'HelloReq.mi32 must be Map<Long,number>|null|undefined'
+		}
 		for(let key of Object.keys(jsonobj['mi32'])){
 			let value=jsonobj['mi32'][key]
-			let k: Long=Long.Zero
+			let k: Long=Long.ZERO
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
@@ -1641,14 +1656,13 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//mu32
-	if(jsonobj['mu32']==null||jsonobj['mu32']==undefined){
-		obj['mu32']=null
-	}else if(typeof jsonobj['mu32']!='object'){
-		throw 'HelloReq.mu32 must be Map<Long,number>|null|undefined'
-	}else{
+	if(jsonobj['mu32']!=null&&jsonobj['mu32']!=undefined){
+		if(typeof jsonobj['mu32']!='object'){
+			throw 'HelloReq.mu32 must be Map<Long,number>|null|undefined'
+		}
 		for(let key of Object.keys(jsonobj['mu32'])){
 			let value=jsonobj['mu32'][key]
-			let k: Long=Long.Zero
+			let k: Long=Long.ZERO
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
@@ -1670,14 +1684,13 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//mi64
-	if(jsonobj['mi64']==null||jsonobj['mi64']==undefined){
-		obj['mi64']=null
-	}else if(typeof jsonobj['mi64']!='object'){
-		throw 'HelloReq.mi64 must be Map<Long,Long>|null|undefined'
-	}else{
+	if(jsonobj['mi64']!=null&&jsonobj['mi64']!=undefined){
+		if(typeof jsonobj['mi64']!='object'){
+			throw 'HelloReq.mi64 must be Map<Long,Long>|null|undefined'
+		}
 		for(let key of Object.keys(jsonobj['mi64'])){
 			let value=jsonobj['mi64'][key]
-			let k: Long=Long.Zero
+			let k: Long=Long.ZERO
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
@@ -1693,7 +1706,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			}else if(typeof value!='string'){
 				throw 'value in HelloReq46mi64 must be integer'
 			}
-			let v: Long=Long.Zero
+			let v: Long=Long.ZERO
 			if(typeof value=='number'){
 				try{
 					v=Long.fromNumber(value,false)
@@ -1717,14 +1730,13 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//mu64
-	if(jsonobj['mu64']==null||jsonobj['mu64']==undefined){
-		obj['mu64']=null
-	}else if(typeof jsonobj['mu64']!='object'){
-		throw 'HelloReq.mu64 must be Map<Long,Long>|null|undefined'
-	}else{
+	if(jsonobj['mu64']!=null&&jsonobj['mu64']!=undefined){
+		if(typeof jsonobj['mu64']!='object'){
+			throw 'HelloReq.mu64 must be Map<Long,Long>|null|undefined'
+		}
 		for(let key of Object.keys(jsonobj['mu64'])){
 			let value=jsonobj['mu64'][key]
-			let k: Long=Long.Zero
+			let k: Long=Long.ZERO
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
@@ -1740,7 +1752,7 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			}else if(typeof value!='string'){
 				throw 'value in HelloReq46mu64 must be integer'
 			}
-			let v: Long=Long.Zero
+			let v: Long=Long.ZERO
 			if(typeof value=='number'){
 				try{
 					v=Long.fromNumber(value,true)
@@ -1767,14 +1779,13 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//mb
-	if(jsonobj['mb']==null||jsonobj['mb']==undefined){
-		obj['mb']=null
-	}else if(typeof jsonobj['mb']!='object'){
-		throw 'HelloReq.mb must be Map<Long,boolean>|null|undefined'
-	}else{
+	if(jsonobj['mb']!=null&&jsonobj['mb']!=undefined){
+		if(typeof jsonobj['mb']!='object'){
+			throw 'HelloReq.mb must be Map<Long,boolean>|null|undefined'
+		}
 		for(let key of Object.keys(jsonobj['mb'])){
 			let value=jsonobj['mb'][key]
-			let k: Long=Long.Zero
+			let k: Long=Long.ZERO
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
@@ -1794,14 +1805,13 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//me
-	if(jsonobj['me']==null||jsonobj['me']==undefined){
-		obj['me']=null
-	}else if(typeof jsonobj['me']!='object'){
-		throw 'HelloReq.me must be Map<Long,TE>|null|undefined'
-	}else{
+	if(jsonobj['me']!=null&&jsonobj['me']!=undefined){
+		if(typeof jsonobj['me']!='object'){
+			throw 'HelloReq.me must be Map<Long,TE>|null|undefined'
+		}
 		for(let key of Object.keys(jsonobj['me'])){
 			let value=jsonobj['me'][key]
-			let k: Long=Long.Zero
+			let k: Long=Long.ZERO
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
@@ -1821,14 +1831,13 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//ms
-	if(jsonobj['ms']==null||jsonobj['ms']==undefined){
-		obj['ms']=null
-	}else if(typeof jsonobj['ms']!='object'){
-		throw 'HelloReq.ms must be Map<Long,string>|null|undefined'
-	}else{
+	if(jsonobj['ms']!=null&&jsonobj['ms']!=undefined){
+		if(typeof jsonobj['ms']!='object'){
+			throw 'HelloReq.ms must be Map<Long,string>|null|undefined'
+		}
 		for(let key of Object.keys(jsonobj['ms'])){
 			let value=jsonobj['ms'][key]
-			let k: Long=Long.Zero
+			let k: Long=Long.ZERO
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
@@ -1848,14 +1857,13 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//mbs
-	if(jsonobj['mbs']==null||jsonobj['mbs']==undefined){
-		obj['mbs']=null
-	}else if(typeof jsonobj['mbs']!='object'){
-		throw 'HelloReq.mbs must be Map<Long,Uint8Array>|null|undefined'
-	}else{
+	if(jsonobj['mbs']!=null&&jsonobj['mbs']!=undefined){
+		if(typeof jsonobj['mbs']!='object'){
+			throw 'HelloReq.mbs must be Map<Long,Uint8Array>|null|undefined'
+		}
 		for(let key of Object.keys(jsonobj['mbs'])){
 			let value=jsonobj['mbs'][key]
-			let k: Long=Long.Zero
+			let k: Long=Long.ZERO
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
@@ -1881,14 +1889,13 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//mf
-	if(jsonobj['mf']==null||jsonobj['mf']==undefined){
-		obj['mf']=null
-	}else if(typeof jsonobj['mf']!='object'){
-		throw 'HelloReq.mf must be Map<Long,number>|null|undefined'
-	}else{
+	if(jsonobj['mf']!=null&&jsonobj['mf']!=undefined){
+		if(typeof jsonobj['mf']!='object'){
+			throw 'HelloReq.mf must be Map<Long,number>|null|undefined'
+		}
 		for(let key of Object.keys(jsonobj['mf'])){
 			let value=jsonobj['mf'][key]
-			let k: Long=Long.Zero
+			let k: Long=Long.ZERO
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
@@ -1908,14 +1915,13 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//md
-	if(jsonobj['md']==null||jsonobj['md']==undefined){
-		obj['md']=null
-	}else if(typeof jsonobj['md']!='object'){
-		throw 'HelloReq.md must be Map<Long,number>|null|undefined'
-	}else{
+	if(jsonobj['md']!=null&&jsonobj['md']!=undefined){
+		if(typeof jsonobj['md']!='object'){
+			throw 'HelloReq.md must be Map<Long,number>|null|undefined'
+		}
 		for(let key of Object.keys(jsonobj['md'])){
 			let value=jsonobj['md'][key]
-			let k: Long=Long.Zero
+			let k: Long=Long.ZERO
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
@@ -1935,14 +1941,13 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 		}
 	}
 	//mmsg
-	if(jsonobj['mmsg']==null||jsonobj['mmsg']==undefined){
-		obj['mmsg']=null
-	}else if(typeof jsonobj['mmsg']!='object'){
-		throw 'HelloReq.mmsg must be Map<Long,Data|null|undefined>|null|undefined'
-	}else{
+	if(jsonobj['mmsg']!=null&&jsonobj['mmsg']!=undefined){
+		if(typeof jsonobj['mmsg']!='object'){
+			throw 'HelloReq.mmsg must be Map<Long,Data|null|undefined>|null|undefined'
+		}
 		for(let key of Object.keys(jsonobj['mmsg'])){
 			let value=jsonobj['mmsg'][key]
-			let k: Long=Long.Zero
+			let k: Long=Long.ZERO
 			try{
 				k=Long.fromString(key,true)
 			}catch(e){
@@ -1965,132 +1970,132 @@ function JsonToHelloReq(jsonobj: Object): HelloReq{
 			obj['mmsg'].set(k,v)
 		}
 	}
-	if(jsonobj['union']==null||jsonobj['union']==undefined){
-		obj['union']=null
-	}else if(jsonobj['union'].$key=='oi32'){
-		if(typeof jsonobj['union'].value!='number'||!Number.isInteger(jsonobj['union'].value)){
+	//union
+	if(jsonobj['oi32']!=null&&jsonobj['oi32']!=undefined){
+		if(typeof jsonobj['oi32']!='number'||!Number.isInteger(jsonobj['oi32'])){
 			throw 'when HelloReq.union.$key is oi32,HelloReq.union.value must be integer'
-		}else if(jsonobj['union'].value>2147483647||jsonobj['union'].value<-2147483648){
+		}else if(jsonobj['oi32']>2147483647||jsonobj['oi32']<-2147483648){
 			throw 'HelloReq.union.value overflow'
 		}
-		obj['union']={$key:'oi32',value:jsonobj['union'].value}
-	}else if(jsonobj['union'].$key=='ou32'){
-		if(typeof jsonobj['union'].value!='number'||!Number.isInteger(jsonobj['union'].value)){
+		obj['union']={$key:'oi32',value:jsonobj['oi32']}
+	}else if(jsonobj['ou32']!=null&&jsonobj['ou32']!=undefined){
+		if(typeof jsonobj['ou32']!='number'||!Number.isInteger(jsonobj['ou32'])){
 			throw 'when HelloReq.union.$key is ou32,HelloReq.union.value must be integer'
-		}else if(jsonobj['union'].value>4294967295||jsonobj['union'].value<0){
+		}else if(jsonobj['ou32']>4294967295||jsonobj['ou32']<0){
 			throw 'HelloReq.union.value overflow'
 		}
-		obj['union']={$key:'ou32',value:jsonobj['union'].value}
-	}else if(jsonobj['union'].$key=='oi64'){
-		if(typeof jsonobj['union'].value=='number'){
-			if(!Number.isInteger(jsonobj['union'].value)){
+		obj['union']={$key:'ou32',value:jsonobj['ou32']}
+	}else if(jsonobj['oi64']!=null&&jsonobj['oi64']!=undefined){
+		if(typeof jsonobj['oi64']=='number'){
+			if(!Number.isInteger(jsonobj['oi64'])){
 				throw 'when HelloReq.union.$key is oi64,HelloReq.union.value must be integer'
 			}
 			let tmp: Long=Long.ZERO
 			try{
-				tmp=Long.fromNumber(jsonobj['union'].value,false)
+				tmp=Long.fromNumber(jsonobj['oi64'],false)
 			}catch(e){
 				throw 'when HelloReq.union.$key is oi64,HelloReq.union.value must be integer'
 			}
 			obj['union']={$key:'oi64',value:tmp}
-		}else if(typeof jsonobj['union'].value=='string'){
+		}else if(typeof jsonobj['oi64']=='string'){
 			let tmp: Long=Long.ZERO
 			try{
-				tmp=Long.fromString(jsonobj['union'].value,false)
+				tmp=Long.fromString(jsonobj['oi64'],false)
 			}catch(e){
 				throw 'when HelloReq.union.$key is oi64,HelloReq.union.value must be integer'
 			}
-			if(tmp.toString()!=jsonobj['union'].value){
+			if(tmp.toString()!=jsonobj['oi64']){
 				throw 'HelloReq.union.value overflow'
 			}
 			obj['union']={$key:'oi64',value:tmp}
 		}else{
 			throw 'when HelloReq.union.$key is oi64,HelloReq.union.value must be integer'
 		}
-	}else if(jsonobj['union'].$key=='ou64'){
-		if(typeof jsonobj['union'].value=='number'){
-			if(!Number.isInteger(jsonobj['union'].value)){
+	}else if(jsonobj['ou64']!=null&&jsonobj['ou64']!=undefined){
+		if(typeof jsonobj['ou64']=='number'){
+			if(!Number.isInteger(jsonobj['ou64'])){
 				throw 'when HelloReq.union.$key is ou64,HelloReq.union.value must be integer'
 			}
-			if(jsonobj['union'].value<0){
+			if(jsonobj['ou64']<0){
 				throw 'HelloReq.union.value overflow'
 			}
 			let tmp: Long=Long.ZERO
 			try{
-				tmp=Long.fromNumber(jsonobj['union'].value,true)
+				tmp=Long.fromNumber(jsonobj['ou64'],true)
 			}catch(e){
 				throw 'when HelloReq.union.$key is ou64,HelloReq.union.value must be integer'
 			}
 			obj['union']={$key:'ou64',value:tmp}
-		}else if(typeof jsonobj['union'].value=='string'){
+		}else if(typeof jsonobj['ou64']=='string'){
 			let tmp: Long=Long.ZERO
 			try{
-				tmp=Long.fromString(jsonobj['union'].value,true)
+				tmp=Long.fromString(jsonobj['ou64'],true)
 			}catch(e){
 				throw 'when HelloReq.union.$key is ou64,HelloReq.union.value must be integer'
 			}
-			if(tmp.toString()!=jsonobj['union'].value){
+			if(tmp.toString()!=jsonobj['ou64']){
 				throw 'HelloReq.union.value overflow'
 			}
 			obj['union']={$key:'ou64',value:tmp}
 		}else{
 			throw 'when HelloReq.union.$key is ou64,HelloReq.union.value must be integer'
 		}
-	}else if(jsonobj['union'].$key=='of'){
-		if(typeof jsonobj['union'].value!='number'){
+	}else if(jsonobj['of']!=null&&jsonobj['of']!=undefined){
+		if(typeof jsonobj['of']!='number'){
 			throw 'when HelloReq.union.$key is of,HelloReq.union.value must be number'
 		}
-		obj['union']={$key:'of',value:jsonobj['union'].value}
-	}else if(jsonobj['union'].$key=='od'){
-		if(typeof jsonobj['union'].value!='number'){
+		obj['union']={$key:'of',value:jsonobj['of']}
+	}else if(jsonobj['od']!=null&&jsonobj['od']!=undefined){
+		if(typeof jsonobj['od']!='number'){
 			throw 'when HelloReq.union.$key is od,HelloReq.union.value must be number'
 		}
-		obj['union']={$key:'od',value:jsonobj['union'].value}
-	}else if(jsonobj['union'].$key=='os'){
-		if(typeof jsonobj['union'].value!='string'){
+		obj['union']={$key:'od',value:jsonobj['od']}
+	}else if(jsonobj['os']!=null&&jsonobj['os']!=undefined){
+		if(typeof jsonobj['os']!='string'){
 			throw 'when HelloReq.union.$key is os,HelloReq.union.value must be string'
 		}
-		obj['union']={$key:'os',value:jsonobj['union'].value}
-	}else if(jsonobj['union'].$key=='obs'){
-		if(typeof jsonobj['union'].value!='string'){
+		obj['union']={$key:'os',value:jsonobj['os']}
+	}else if(jsonobj['obs']!=null&&jsonobj['obs']!=undefined){
+		if(typeof jsonobj['obs']!='string'){
 			throw 'when HelloReq.union.$key is obs,HelloReq.union.value must be base64 string from Uint8Array'
 		}
-		let buf: Uint8Array=new Uint8Array(Base64.length(jsonobj['union'].value))
+		let buf: Uint8Array=new Uint8Array(Base64.length(jsonobj['obs']))
 		try{
-			Base64.decode(jsonobj['union'].value,buf,0)
+			Base64.decode(jsonobj['obs'],buf,0)
 		}catch(e){
 			throw 'when HelloReq.union.$key is obs,HelloReq.union.value must be base64 string from Uint8Array'
 		}
 		obj['union']={$key:'obs',value:buf}
-	}else if(jsonobj['union'].$key=='oe'){
-		if(typeof jsonobj['union'].value!='number'||(jsonobj['union'].value!=0&&jsonobj['union'].value!=3)){
+	}else if(jsonobj['oe']!=null&&jsonobj['oe']!=undefined){
+		if(typeof jsonobj['oe']!='number'||(jsonobj['oe']!=0&&jsonobj['oe']!=3)){
 			throw 'when HelloReq.union.$key is oe,HelloReq.union.value must be enum in TE'
 		}
-		obj['union']={$key:'oe',value:jsonobj['union'].value}
-	}else if(jsonobj['union'].$key=='ob'){
-		if(typeof jsonobj['union'].value!='boolean'){
+		obj['union']={$key:'oe',value:jsonobj['oe']}
+	}else if(jsonobj['ob']!=null&&jsonobj['ob']!=undefined){
+		if(typeof jsonobj['ob']!='boolean'){
 			throw 'when HelloReq.union.$key is ob,HelloReq.union.value must be boolean'
 		}
-		obj['union']={$key:'ob',value:jsonobj['union'].value}
-	}else if(jsonobj['union'].$key=='omsg'){
-		if(typeof jsonobj['union'].value!='object'){
+		obj['union']={$key:'ob',value:jsonobj['ob']}
+	}else if(jsonobj['omsg']!=null&&jsonobj['omsg']!=undefined){
+		if(typeof jsonobj['omsg']!='object'){
 			throw 'when HelloReq.union.$key is omsg,HelloReq.union.value must be Data'
 		}
-		obj['union']={$key:'omsg',value:JsonToData(jsonobj['union'].value)}
-	}
+		obj['union']={$key:'omsg',value:JsonToData(jsonobj['omsg'])}
+		}
 	return obj
 }
 export interface HelloResp{
 	req: HelloReq|null|undefined;
 }
-function JsonToHelloResp(jsonobj: Object): HelloResp{
-	let obj: Object={}
+function JsonToHelloResp(jsonobj: { [k:string]:any }): HelloResp{
+	let obj: HelloResp={
+		req:null,
+	}
 	//req
-	if(jsonobj['req']=null||jsonobj['req']==undefined){
-		obj['req']=null
-	}else if(typeof jsonobj['req']!='object'){
-		throw 'HelloResp.req must be HelloReq'
-	}else{
+	if(jsonobj['req']!=null&&jsonobj['req']!=undefined){
+		if(typeof jsonobj['req']!='object'){
+			throw 'HelloResp.req must be HelloReq'
+		}
 		obj['req']=JsonToHelloReq(jsonobj['req'])
 	}
 	return obj

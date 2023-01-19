@@ -1595,81 +1595,173 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 }
 
 func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
-	g.P("function JsonTo", m.GoIdent.GoName, "(jsonobj: Object): ", m.GoIdent.GoName, "{")
+	g.P("function JsonTo", m.GoIdent.GoName, "(jsonobj: { [k:string]:any }): ", m.GoIdent.GoName, "{")
 	oneofs := make(map[string]*struct{}, len(m.Oneofs))
-	g.P("\tlet obj: Object={}")
+	g.P("\tlet obj: ", m.GoIdent.GoName, "={")
 	for _, f := range m.Fields {
 		if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
 			if _, ok := oneofs[f.Oneof.GoIdent.String()]; ok {
 				continue
 			}
 			oneofs[f.Oneof.GoIdent.String()] = nil
-			g.P("\tif(jsonobj['", f.Oneof.Desc.Name(), "']==null||jsonobj['", f.Oneof.Desc.Name(), "']==undefined){")
-			g.P("\t\tobj['", f.Oneof.Desc.Name(), "']=null")
-			for _, oneoff := range f.Oneof.Fields {
-				g.P("\t}else if(jsonobj['", f.Oneof.Desc.Name(), "'].$key=='", oneoff.Desc.Name(), "'){")
+			g.P("\t\t", f.Oneof.Desc.Name(), ":null,")
+			continue
+		}
+		switch f.Desc.Kind() {
+		case protoreflect.BoolKind:
+			if f.Desc.IsList() {
+				g.P("\t\t", f.Desc.Name(), ":null,")
+			} else {
+				g.P("\t\t", f.Desc.Name(), ":false,")
+			}
+		case protoreflect.EnumKind:
+			if f.Desc.IsList() {
+				g.P("\t\t", f.Desc.Name(), ":null,")
+			} else {
+				g.P("\t\t", f.Desc.Name(), ":0,")
+			}
+		case protoreflect.Sfixed32Kind:
+			fallthrough
+		case protoreflect.Sint32Kind:
+			fallthrough
+		case protoreflect.Int32Kind:
+			//int32
+			if f.Desc.IsList() {
+				g.P("\t\t", f.Desc.Name(), ":null,")
+			} else {
+				g.P("\t\t", f.Desc.Name(), ":0,")
+			}
+		case protoreflect.Fixed32Kind:
+			fallthrough
+		case protoreflect.Uint32Kind:
+			//uint32
+			if f.Desc.IsList() {
+				g.P("\t\t", f.Desc.Name(), ":null,")
+			} else {
+				g.P("\t\t", f.Desc.Name(), ":0,")
+			}
+		case protoreflect.Sfixed64Kind:
+			fallthrough
+		case protoreflect.Sint64Kind:
+			fallthrough
+		case protoreflect.Int64Kind:
+			//int64
+			if f.Desc.IsList() {
+				g.P("\t\t", f.Desc.Name(), ":null,")
+			} else {
+				g.P("\t\t", f.Desc.Name(), ":Long.ZERO,")
+			}
+		case protoreflect.Fixed64Kind:
+			fallthrough
+		case protoreflect.Uint64Kind:
+			//uint64
+			if f.Desc.IsList() {
+				g.P("\t\t", f.Desc.Name(), ":null,")
+			} else {
+				g.P("\t\t", f.Desc.Name(), ":Long.ZERO,")
+			}
+		case protoreflect.FloatKind:
+			//float32
+			fallthrough
+		case protoreflect.DoubleKind:
+			if f.Desc.IsList() {
+				g.P("\t\t", f.Desc.Name(), ":null,")
+			} else {
+				g.P("\t\t", f.Desc.Name(), ":0,")
+			}
+		case protoreflect.StringKind:
+			if f.Desc.IsList() {
+				g.P("\t\t", f.Desc.Name(), ":null,")
+			} else {
+				g.P("\t\t", f.Desc.Name(), ":'',")
+			}
+		case protoreflect.BytesKind:
+			if f.Desc.IsList() {
+				g.P("\t\t", f.Desc.Name(), ":null,")
+			} else {
+				g.P("\t\t", f.Desc.Name(), ":new Uint8Array(0),")
+			}
+		case protoreflect.MessageKind:
+			g.P("\t\t", f.Desc.Name(), ":null,")
+		}
+	}
+	g.P("\t}")
+	oneofs = make(map[string]*struct{}, len(m.Oneofs))
+	for _, f := range m.Fields {
+		if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
+			if _, ok := oneofs[f.Oneof.GoIdent.String()]; ok {
+				continue
+			}
+			oneofs[f.Oneof.GoIdent.String()] = nil
+			g.P("\t//", f.Oneof.Desc.Name())
+			for i, oneoff := range f.Oneof.Fields {
+				if i == 0 {
+					g.P("\tif(jsonobj['", oneoff.Desc.Name(), "']!=null&&jsonobj['", oneoff.Desc.Name(), "']!=undefined){")
+				} else {
+					g.P("\t}else if(jsonobj['", oneoff.Desc.Name(), "']!=null&&jsonobj['", oneoff.Desc.Name(), "']!=undefined){")
+				}
 				switch oneoff.Desc.Kind() {
 				case protoreflect.BoolKind:
-					g.P("\t\tif(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value!='boolean'){")
+					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='boolean'){")
 					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be boolean'")
 					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", f.Oneof.Desc.Name(), "'].value}")
+					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
 				case protoreflect.EnumKind:
 					tmps := make([]string, 0, len(oneoff.Enum.Values))
 					for _, v := range oneoff.Enum.Values {
-						tmps = append(tmps, "jsonobj['"+string(f.Oneof.Desc.Name())+"'].value!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
+						tmps = append(tmps, "jsonobj['"+string(oneoff.Desc.Name())+"']!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
 					}
-					g.P("\t\tif(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value!='number'||(", strings.Join(tmps, "&&"), ")){")
+					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='number'||(", strings.Join(tmps, "&&"), ")){")
 					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be enum in ", oneoff.Enum.GoIdent.GoName, "'")
 					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", f.Oneof.Desc.Name(), "'].value}")
+					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
 				case protoreflect.Sfixed32Kind:
 					fallthrough
 				case protoreflect.Sint32Kind:
 					fallthrough
 				case protoreflect.Int32Kind:
 					//int32
-					g.P("\t\tif(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value!='number'||!Number.isInteger(jsonobj['", f.Oneof.Desc.Name(), "'].value)){")
+					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", oneoff.Desc.Name(), "'])){")
 					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t}else if(jsonobj['", f.Oneof.Desc.Name(), "'].value>2147483647||jsonobj['", f.Oneof.Desc.Name(), "'].value<-2147483648){")
+					g.P("\t\t}else if(jsonobj['", oneoff.Desc.Name(), "']>2147483647||jsonobj['", oneoff.Desc.Name(), "']<-2147483648){")
 					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
 					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", f.Oneof.Desc.Name(), "'].value}")
+					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
 				case protoreflect.Fixed32Kind:
 					fallthrough
 				case protoreflect.Uint32Kind:
 					//uint32
-					g.P("\t\tif(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value!='number'||!Number.isInteger(jsonobj['", f.Oneof.Desc.Name(), "'].value)){")
+					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", oneoff.Desc.Name(), "'])){")
 					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t}else if(jsonobj['", f.Oneof.Desc.Name(), "'].value>4294967295||jsonobj['", f.Oneof.Desc.Name(), "'].value<0){")
+					g.P("\t\t}else if(jsonobj['", oneoff.Desc.Name(), "']>4294967295||jsonobj['", oneoff.Desc.Name(), "']<0){")
 					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
 					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", f.Oneof.Desc.Name(), "'].value}")
+					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
 				case protoreflect.Sfixed64Kind:
 					fallthrough
 				case protoreflect.Sint64Kind:
 					fallthrough
 				case protoreflect.Int64Kind:
 					//int64
-					g.P("\t\tif(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value=='number'){")
-					g.P("\t\t\tif(!Number.isInteger(jsonobj['", f.Oneof.Desc.Name(), "'].value)){")
+					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']=='number'){")
+					g.P("\t\t\tif(!Number.isInteger(jsonobj['", oneoff.Desc.Name(), "'])){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tlet tmp: Long=Long.ZERO")
 					g.P("\t\t\ttry{")
-					g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", f.Oneof.Desc.Name(), "'].value,false)")
+					g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", oneoff.Desc.Name(), "'],false)")
 					g.P("\t\t\t}catch(e){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:tmp}")
-					g.P("\t\t}else if(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value=='string'){")
+					g.P("\t\t}else if(typeof jsonobj['", oneoff.Desc.Name(), "']=='string'){")
 					g.P("\t\t\tlet tmp: Long=Long.ZERO")
 					g.P("\t\t\ttry{")
-					g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", f.Oneof.Desc.Name(), "'].value,false)")
+					g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", oneoff.Desc.Name(), "'],false)")
 					g.P("\t\t\t}catch(e){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
 					g.P("\t\t\t}")
-					g.P("\t\t\tif(tmp.toString()!=jsonobj['", f.Oneof.Desc.Name(), "'].value){")
+					g.P("\t\t\tif(tmp.toString()!=jsonobj['", oneoff.Desc.Name(), "']){")
 					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:tmp}")
@@ -1680,28 +1772,28 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Uint64Kind:
 					//uint64
-					g.P("\t\tif(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value=='number'){")
-					g.P("\t\t\tif(!Number.isInteger(jsonobj['", f.Oneof.Desc.Name(), "'].value)){")
+					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']=='number'){")
+					g.P("\t\t\tif(!Number.isInteger(jsonobj['", oneoff.Desc.Name(), "'])){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
 					g.P("\t\t\t}")
-					g.P("\t\t\tif(jsonobj['", f.Oneof.Desc.Name(), "'].value<0){")
+					g.P("\t\t\tif(jsonobj['", oneoff.Desc.Name(), "']<0){")
 					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tlet tmp: Long=Long.ZERO")
 					g.P("\t\t\ttry{")
-					g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", f.Oneof.Desc.Name(), "'].value,true)")
+					g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", oneoff.Desc.Name(), "'],true)")
 					g.P("\t\t\t}catch(e){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:tmp}")
-					g.P("\t\t}else if(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value=='string'){")
+					g.P("\t\t}else if(typeof jsonobj['", oneoff.Desc.Name(), "']=='string'){")
 					g.P("\t\t\tlet tmp: Long=Long.ZERO")
 					g.P("\t\t\ttry{")
-					g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", f.Oneof.Desc.Name(), "'].value,true)")
+					g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", oneoff.Desc.Name(), "'],true)")
 					g.P("\t\t\t}catch(e){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
 					g.P("\t\t\t}")
-					g.P("\t\t\tif(tmp.toString()!=jsonobj['", f.Oneof.Desc.Name(), "'].value){")
+					g.P("\t\t\tif(tmp.toString()!=jsonobj['", oneoff.Desc.Name(), "']){")
 					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
 					g.P("\t\t\t}")
 					g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:tmp}")
@@ -1711,45 +1803,44 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				case protoreflect.FloatKind:
 					fallthrough
 				case protoreflect.DoubleKind:
-					g.P("\t\tif(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value!='number'){")
+					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='number'){")
 					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be number'")
 					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", f.Oneof.Desc.Name(), "'].value}")
+					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
 				case protoreflect.StringKind:
-					g.P("\t\tif(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value!='string'){")
+					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='string'){")
 					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be string'")
 					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", f.Oneof.Desc.Name(), "'].value}")
+					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
 				case protoreflect.BytesKind:
-					g.P("\t\tif(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value!='string'){")
+					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='string'){")
 					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be base64 string from Uint8Array'")
 					g.P("\t\t}")
-					g.P("\t\tlet buf: Uint8Array=new Uint8Array(Base64.length(jsonobj['", f.Oneof.Desc.Name(), "'].value))")
+					g.P("\t\tlet buf: Uint8Array=new Uint8Array(Base64.length(jsonobj['", oneoff.Desc.Name(), "']))")
 					g.P("\t\ttry{")
-					g.P("\t\t\tBase64.decode(jsonobj['", f.Oneof.Desc.Name(), "'].value,buf,0)")
+					g.P("\t\t\tBase64.decode(jsonobj['", oneoff.Desc.Name(), "'],buf,0)")
 					g.P("\t\t}catch(e){")
 					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be base64 string from Uint8Array'")
 					g.P("\t\t}")
 					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:buf}")
 				case protoreflect.MessageKind:
-					g.P("\t\tif(typeof jsonobj['", f.Oneof.Desc.Name(), "'].value!='object'){")
+					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='object'){")
 					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be ", oneoff.Message.GoIdent.GoName, "'")
 					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:JsonTo", oneoff.Message.GoIdent.GoName, "(jsonobj['", f.Oneof.Desc.Name(), "'].value)}")
+					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:JsonTo", oneoff.Message.GoIdent.GoName, "(jsonobj['", oneoff.Desc.Name(), "'])}")
 				}
 			}
-			g.P("\t}")
+			g.P("\t\t}")
 			continue
 		}
 		g.P("\t//", f.Desc.Name())
 		switch f.Desc.Kind() {
 		case protoreflect.BoolKind:
 			if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=null")
-				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<boolean>|null|undefined'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<boolean>|null|undefined'")
+				g.P("\t\t}")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='boolean'){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
@@ -1761,11 +1852,10 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=false")
-				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='boolean'){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='boolean'){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
+				g.P("\t\t}")
 				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
 				g.P("\t}")
 			}
@@ -1775,11 +1865,10 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				for _, v := range f.Enum.Values {
 					tmps = append(tmps, "element!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
 				}
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=null")
-				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<", f.Enum.GoIdent.GoName, ">|null|undefined'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<", f.Enum.GoIdent.GoName, ">|null|undefined'")
+				g.P("\t\t}")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='number'||(", strings.Join(tmps, "&&"), ")){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
@@ -1795,11 +1884,10 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				for _, v := range f.Enum.Values {
 					tmps = append(tmps, "jsonobj['"+string(f.Desc.Name())+"']!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
 				}
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=0")
-				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='number'||(", strings.Join(tmps, "&&"), ")){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='number'||(", strings.Join(tmps, "&&"), ")){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
+				g.P("\t\t}")
 				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
 				g.P("\t}")
 			}
@@ -1810,11 +1898,10 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 		case protoreflect.Int32Kind:
 			//int32
 			if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=null")
-				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
+				g.P("\t\t}")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='number'||!Number.isInteger(element)){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
@@ -1828,13 +1915,12 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=0")
-				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t}else if(jsonob['", f.Desc.Name(), "']>2147483647||jsonobj['", f.Desc.Name(), "']<-2147483648){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t}else if(jsonobj['", f.Desc.Name(), "']>2147483647||jsonobj['", f.Desc.Name(), "']<-2147483648){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\t}")
 				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
 				g.P("\t}")
 			}
@@ -1843,11 +1929,10 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 		case protoreflect.Uint32Kind:
 			//uint32
 			if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=null")
-				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
+				g.P("\t\t}")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='number'||!Number.isInteger(element)){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
@@ -1861,13 +1946,12 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=0")
-				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t}else if(jsonob['", f.Desc.Name(), "']>4294967295||jsonobj['", f.Desc.Name(), "']<0){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t}else if(jsonobj['", f.Desc.Name(), "']>4294967295||jsonobj['", f.Desc.Name(), "']<0){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\t}")
 				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
 				g.P("\t}")
 			}
@@ -1878,11 +1962,10 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 		case protoreflect.Int64Kind:
 			//int64
 			if f.Desc.IsList() {
-				g.P("\tif(jsobobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=null")
-				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Long>|null|undefined'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Long>|null|undefined'")
+				g.P("\t\t}")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element=='number'){")
 				g.P("\t\t\t\tif(!Number.isInteger(element)){")
@@ -1918,32 +2001,32 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=0")
-				g.P("\t}else if(typeof jsobobj['", f.Desc.Name(), "']=='number'){")
-				g.P("\t\tif(!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']=='number'){")
+				g.P("\t\t\tif(!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
+				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\t}")
+				g.P("\t\t\tlet tmp: Long=Long.ZERO")
+				g.P("\t\t\ttry{")
+				g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", f.Desc.Name(), "'],false)")
+				g.P("\t\t\t}catch(e){")
+				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\t}")
+				g.P("\t\t\tobj['", f.Desc.Name(), "']=tmp")
+				g.P("\t\t}else if(typeof jsonobj['", f.Desc.Name(), "']=='string'){")
+				g.P("\t\t\tlet tmp:Long=Long.ZERO")
+				g.P("\t\t\ttry{")
+				g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", f.Desc.Name(), "'],false)")
+				g.P("\t\t\t}catch(e){")
+				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\t}")
+				g.P("\t\t\tif(tmp.toString()!=jsonobj['", f.Desc.Name(), "']){")
+				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\t\t}")
+				g.P("\t\t\tobj['", f.Desc.Name(), "']=tmp")
+				g.P("\t\t}else{")
 				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t\t}")
-				g.P("\t\tlet tmp: Long=Long.ZERO")
-				g.P("\t\ttry{")
-				g.P("\t\t\ttmp=Long.fromNumber(jsonobj['", f.Desc.Name(), "'],false)")
-				g.P("\t\t}catch(e){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t}")
-				g.P("\t\tobj['", f.Desc.Name(), "']=tmp")
-				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']=='string'){")
-				g.P("\t\tlet tmp:Long=Long.ZERO")
-				g.P("\t\ttry{")
-				g.P("\t\t\ttmp=Long.fromString(jsonobj['", f.Desc.Name(), "'],false)")
-				g.P("\t\t}catch(e){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t}")
-				g.P("\t\tif(tmp.toString()!=jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t}")
-				g.P("\t\tobj['", f.Desc.Name(), "']=tmp")
-				g.P("\t}else{")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t}")
 			}
 		case protoreflect.Fixed64Kind:
@@ -1951,11 +2034,10 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 		case protoreflect.Uint64Kind:
 			//uint64
 			if f.Desc.IsList() {
-				g.P("\tif(jsobobj['", f.Desc.Name(), "']==null||jsobobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=null")
-				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Long>|null|undefined'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Long>|null|undefined'")
+				g.P("\t\t}")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element=='number'){")
 				g.P("\t\t\t\tif(!Number.isInteger(element)){")
@@ -1994,35 +2076,35 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=0")
-				g.P("\t}else if(typeof jsobobj['", f.Desc.Name(), "']=='number'){")
-				g.P("\t\tif(!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']=='number'){")
+				g.P("\t\t\tif(!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
+				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\t}")
+				g.P("\t\t\tif(jsonobj['", f.Desc.Name(), "']<0){")
+				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\t\t}")
+				g.P("\t\t\tlet tmp: Long=Long.ZERO")
+				g.P("\t\t\ttry{")
+				g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", f.Desc.Name(), "'],true)")
+				g.P("\t\t\t}catch(e){")
+				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\t}")
+				g.P("\t\t\tobj['", f.Desc.Name(), "']=tmp")
+				g.P("\t\t}else if(typeof jsonobj['", f.Desc.Name(), "']=='string'){")
+				g.P("\t\t\tlet tmp:Long=Long.ZERO")
+				g.P("\t\t\ttry{")
+				g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", f.Desc.Name(), "'],true)")
+				g.P("\t\t\t}catch(e){")
+				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+				g.P("\t\t\t}")
+				g.P("\t\t\tif(tmp.toString()!=jsonobj['", f.Desc.Name(), "']){")
+				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+				g.P("\t\t\t}")
+				g.P("\t\t\tobj['", f.Desc.Name(), "']=tmp")
+				g.P("\t\t}else{")
+				g.P("\t\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t\t}")
-				g.P("\t\tif(jsobobj['", f.Desc.Name(), "']<0){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t}")
-				g.P("\t\tlet tmp: Long=Long.ZERO")
-				g.P("\t\ttry{")
-				g.P("\t\t\ttmp=Long.fromNumber(jsonobj['", f.Desc.Name(), "'],true)")
-				g.P("\t\t}catch(e){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t}")
-				g.P("\t\tobj['", f.Desc.Name(), "']=tmp")
-				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']=='string'){")
-				g.P("\t\tlet tmp:Long=Long.ZERO")
-				g.P("\t\ttry{")
-				g.P("\t\t\ttmp=Long.fromString(jsonobj['", f.Desc.Name(), "'],true)")
-				g.P("\t\t}catch(e){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t}")
-				g.P("\t\tif(tmp.toString()!=jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t}")
-				g.P("\t\tobj['", f.Desc.Name(), "']=tmp")
-				g.P("\t}else{")
-				g.P("\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
 				g.P("\t}")
 			}
 		case protoreflect.FloatKind:
@@ -2030,11 +2112,10 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 			fallthrough
 		case protoreflect.DoubleKind:
 			if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=null")
-				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
+				g.P("\t\t}")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='number'){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
@@ -2046,21 +2127,19 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=0")
-				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='number'){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='number'){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
+				g.P("\t\t}")
 				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
 				g.P("\t}")
 			}
 		case protoreflect.StringKind:
 			if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=null")
-				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<string>|null|undefined'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<string>|null|undefined'")
+				g.P("\t\t}")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='string'){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
@@ -2072,21 +2151,19 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=''")
-				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='string'){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='string'){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
+				g.P("\t\t}")
 				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
 				g.P("\t}")
 			}
 		case protoreflect.BytesKind:
 			if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=null")
-				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Uint8Array>|null|undefined'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Uint8Array>|null|undefined'")
+				g.P("\t\t}")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='string'){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
@@ -2104,11 +2181,10 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=new Uint8Array(0)")
-				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='string'){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='string'){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
+				g.P("\t\t}")
 				g.P("\t\tlet buf:Uint8Array=new Uint8Array(Base64.length(jsonobj['", f.Desc.Name(), "']))")
 				g.P("\t\ttry{")
 				g.P("\t\t\tBase64.decode(jsonobj['", f.Desc.Name(), "'],buf,0)")
@@ -2190,11 +2266,10 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				case protoreflect.MessageKind:
 					valuetype = f.Message.Fields[1].Message.GoIdent.GoName + "|null|undefined"
 				}
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=null")
-				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='object'){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Map<", keytype, ",", valuetype, ">|null|undefined'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='object'){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Map<", keytype, ",", valuetype, ">|null|undefined'")
+				g.P("\t\t}")
 				g.P("\t\tfor(let key of Object.keys(jsonobj['", f.Desc.Name(), "'])){")
 				g.P("\t\t\tlet value=jsonobj['", f.Desc.Name(), "'][key]")
 				switch f.Message.Fields[0].Desc.Kind() {
@@ -2226,7 +2301,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Sfixed64Kind:
 					//int64
-					g.P("\t\t\tlet k: Long=Long.Zero")
+					g.P("\t\t\tlet k: Long=Long.ZERO")
 					g.P("\t\t\ttry{")
 					g.P("\t\t\t\tk=Long.fromString(key,false)")
 					g.P("\t\t\t}catch(e){")
@@ -2239,7 +2314,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Fixed64Kind:
 					//uint64
-					g.P("\t\t\tlet k: Long=Long.Zero")
+					g.P("\t\t\tlet k: Long=Long.ZERO")
 					g.P("\t\t\ttry{")
 					g.P("\t\t\t\tk=Long.fromString(key,true)")
 					g.P("\t\t\t}catch(e){")
@@ -2301,7 +2376,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					g.P("\t\t\t}else if(typeof value!='string'){")
 					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, '.', f.Desc.Name(), " must be integer'")
 					g.P("\t\t\t}")
-					g.P("\t\t\tlet v: Long=Long.Zero")
+					g.P("\t\t\tlet v: Long=Long.ZERO")
 					g.P("\t\t\tif(typeof value=='number'){")
 					g.P("\t\t\t\ttry{")
 					g.P("\t\t\t\t\tv=Long.fromNumber(value,false)")
@@ -2329,7 +2404,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 					g.P("\t\t\t}else if(typeof value!='string'){")
 					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, '.', f.Desc.Name(), " must be integer'")
 					g.P("\t\t\t}")
-					g.P("\t\t\tlet v: Long=Long.Zero")
+					g.P("\t\t\tlet v: Long=Long.ZERO")
 					g.P("\t\t\tif(typeof value=='number'){")
 					g.P("\t\t\t\ttry{")
 					g.P("\t\t\t\t\tv=Long.fromNumber(value,true)")
@@ -2389,11 +2464,10 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t}")
 				g.P("\t}")
 			} else if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']==null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=null")
-				g.P("\t}else if(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<", f.Message.GoIdent.GoName, ">|null|undefined'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<", f.Message.GoIdent.GoName, ">|null|undefined'")
+				g.P("\t\t}")
 				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
 				g.P("\t\t\tif(typeof element!='object'){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.GoIdent.GoName, "'")
@@ -2405,11 +2479,10 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']=null||jsonobj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\tobj['", f.Desc.Name(), "']=null")
-				g.P("\t}else if(typeof jsonobj['", f.Desc.Name(), "']!='object'){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.GoIdent.GoName, "'")
-				g.P("\t}else{")
+				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='object'){")
+				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.GoIdent.GoName, "'")
+				g.P("\t\t}")
 				g.P("\t\tobj['", f.Desc.Name(), "']=JsonTo", f.Message.GoIdent.GoName, "(jsonobj['", f.Desc.Name(), "'])")
 				g.P("\t}")
 			}

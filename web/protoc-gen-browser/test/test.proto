@@ -24,7 +24,7 @@ message hello_req{
 	bool b=9;
 	repeated bool rb=10;
 	TE e=11;
-	repeated TE es=12;
+	repeated TE re=12;
 	string s=13;
 	repeated string rs=14;
 	bytes bs=15;
