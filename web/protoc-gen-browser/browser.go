@@ -2532,15 +2532,26 @@ func genToCService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 		}
 		pathname := "_WebPath" + s.GoName + method.GoName
 		g.P("\t", method.Desc.Name(), "(header: { [k: string]: string },req: ", method.Input.GoIdent.GoName, ",error: (Error)=>void,success: (", method.Output.GoIdent.GoName, ")=>void){")
+		g.P("\t\tif(header==null||header==undefined){")
+		g.P("\t\t\theader={}")
+		g.P("\t\t}")
 		if httpmetohd == http.MethodGet || httpmetohd == http.MethodDelete {
 			g.P("\t\theader[\"Content-Type\"] = \"application/x-www-form-urlencoded\"")
 		} else {
 			g.P("\t\theader[\"Content-Type\"] = \"application/json\"")
 		}
 		g.P("\t\tlet config={")
-		g.P("\t\t\turl:", pathname, ",")
+		if httpmetohd == http.MethodGet || httpmetohd == http.MethodDelete {
+			g.P("\t\t\turl:", pathname, "+'?'+", method.Input.GoIdent.GoName, "ToJson(req),")
+		} else {
+			g.P("\t\t\turl:", pathname, ",")
+		}
 		g.P("\t\t\tmethod: ", strconv.Quote(strings.ToLower(httpmetohd)), ",")
 		g.P("\t\t\tbaseURL: this.host,")
+		g.P("\t\t\theaders: header,")
+		if httpmetohd == http.MethodPost || httpmetohd == http.MethodPatch || httpmetohd == http.MethodPut {
+			g.P("\t\t\tdata: ", method.Input.GoIdent.GoName, "ToJson(req),")
+		}
 		g.P("\t\t}")
 		g.P("\t\tAxios.request(config)")
 		g.P("\t\t.then(function(response){")
