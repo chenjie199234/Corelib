@@ -1201,17 +1201,17 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be string'")
 					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value+'&'")
+					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+encodeURIComponent(msg.", f.Oneof.Desc.Name(), ".value)+'&'")
 				case protoreflect.BytesKind:
 					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
 					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be Uint8Array'")
 					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+Base64.encode(msg.", f.Oneof.Desc.Name(), ".value,0,msg.", f.Oneof.Desc.Name(), ".value.length)+'&'")
+					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+encodeURIComponent(Base64.encode(msg.", f.Oneof.Desc.Name(), ".value,0,msg.", f.Oneof.Desc.Name(), ".value.length))+'&'")
 				case protoreflect.MessageKind:
 					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
 					g.P("\t\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'=null&'")
 					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+", oneoff.Message.GoIdent.GoName, "ToJson(msg.", f.Oneof.Desc.Name(), ".value)+'&'")
+					g.P("\t\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+encodeURIComponent(", oneoff.Message.GoIdent.GoName, "ToJson(msg.", f.Oneof.Desc.Name(), ".value))+'&'")
 					g.P("\t\t\t}")
 				}
 				if i == len(f.Oneof.Fields)-1 {
@@ -1396,14 +1396,14 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t\tif(element==null||element==undefined){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
 				g.P("\t\t\t}")
-				g.P("\t\t\ts+='", f.Desc.Name(), "='+element+'&'")
+				g.P("\t\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(element)+'&'")
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
 				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
 				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
 				g.P("\t}else{")
-				g.P("\t\ts+='", f.Desc.Name(), "='+msg.", f.Desc.Name(), "+'&'")
+				g.P("\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(msg.", f.Desc.Name(), ")+'&'")
 				g.P("\t}")
 			}
 		case protoreflect.BytesKind:
@@ -1413,14 +1413,14 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t\tif(element==null||element==undefined){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Uint8Array'")
 				g.P("\t\t\t}")
-				g.P("\t\t\ts+='", f.Desc.Name(), "='+Base64.encode(element,0,element.length)+'&'")
+				g.P("\t\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(Base64.encode(element,0,element.length))+'&'")
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
 				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
 				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Uint8Array'")
 				g.P("\t}else{")
-				g.P("\t\ts+='", f.Desc.Name(), "='+Base64.encode(msg.", f.Desc.Name(), ",0,msg.", f.Desc.Name(), ".length)+'&'")
+				g.P("\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(Base64.encode(msg.", f.Desc.Name(), ",0,msg.", f.Desc.Name(), ".length))+'&'")
 				g.P("\t}")
 			}
 		case protoreflect.MessageKind:
@@ -1568,7 +1568,7 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t}else{")
 				g.P("\t\t\ttmps=tmps.substr(0,tmps.length-1)+'}'")
 				g.P("\t\t}")
-				g.P("\t\ts+='", f.Desc.Name(), "='+tmps+'&'")
+				g.P("\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(tmps)+'&'")
 				g.P("\t}")
 			} else if f.Desc.IsList() {
 				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined&&msg.", f.Desc.Name(), ".length!=0){")
@@ -1576,13 +1576,13 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t\tif(element==null||element==undefined){")
 				g.P("\t\t\t\ts+='", f.Desc.Name(), "=null&'")
 				g.P("\t\t\t}else{")
-				g.P("\t\t\t\ts+='", f.Desc.Name(), "='+", f.Message.GoIdent.GoName, "ToJson(element)+'&'")
+				g.P("\t\t\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(", f.Message.GoIdent.GoName, "ToJson(element))+'&'")
 				g.P("\t\t\t}")
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
 				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined){")
-				g.P("\t\ts+='", f.Desc.Name(), "='+"+f.Message.GoIdent.GoName, "ToJson(msg.", f.Desc.Name(), ")+'&'")
+				g.P("\t\ts+='", f.Desc.Name(), "='+encodeURIComponent("+f.Message.GoIdent.GoName, "ToJson(msg.", f.Desc.Name(), "))+'&'")
 				g.P("\t}")
 			}
 		}
