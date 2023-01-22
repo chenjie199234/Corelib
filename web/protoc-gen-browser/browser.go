@@ -2513,7 +2513,7 @@ func genToCService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 	clientName := s.GoName + "BrowserClientToC"
 	g.P("export class ", clientName, " {")
 	g.P("\tconstructor(host: string){")
-	g.P("\t\tif(host===null||host===undefined||host.length==0){")
+	g.P("\t\tif(host==null||host==undefined||host.length==0){")
 	g.P("\t\t\tthrow \"", clientName, "'s host missing\"")
 	g.P("\t\t}")
 	g.P("\t\tthis.host=host;")
