@@ -2532,7 +2532,7 @@ func genToCService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 		}
 		pathname := "_WebPath" + s.GoName + method.GoName
 		g.P("\t//timeout must be integer,timeout's unit is millisecond")
-		g.P("\t", method.Desc.Name(), "(header: { [k: string]: string },req: ", method.Input.GoIdent.GoName, ",timeout: number,errorf: (Error)=>void,successf: (", method.Output.GoIdent.GoName, ")=>void){")
+		g.P("\t", method.Desc.Name(), "(header: { [k: string]: string },req: ", method.Input.GoIdent.GoName, ",timeout: number,errorf: (arg: Error)=>void,successf: (arg: ", method.Output.GoIdent.GoName, ")=>void){")
 		g.P("\t\tif(!Number.isInteger(timeout)){")
 		g.P("\t\t\tthrow 'timeout must be integer'")
 		g.P("\t\t}")
@@ -2581,7 +2581,7 @@ func genToCService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 		g.P("\t\t\t}")
 		g.P("\t\t\tlet err:Error={code:-1,msg:''}")
 		g.P("\t\t\ttry{")
-		g.P("\t\t\t\tlet tmp:object=JSON.parse(error.response.data)")
+		g.P("\t\t\t\tlet tmp=JSON.parse(error.response.data)")
 		g.P("\t\t\t\tif(tmp.code==undefined||typeof tmp.code!='number'||!Number.isInteger(tmp.code)||tmp.msg==undefined||typeof tmp.msg!='string'){")
 		g.P("\t\t\t\t\terr.msg=error.response.data")
 		g.P("\t\t\t\t}else{")
@@ -2592,7 +2592,7 @@ func genToCService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 		g.P("\t\t\t\terr.msg=error.response.data")
 		g.P("\t\t\t}")
 		g.P("\t\t\terrorf(err)")
-		g.P("\t\t}")
+		g.P("\t\t})")
 		g.P("\t}")
 	}
 	g.P("\tprivate host: string")
