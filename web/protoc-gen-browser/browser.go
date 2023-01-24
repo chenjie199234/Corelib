@@ -37,19 +37,15 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 	//gen req and resp
 	genReqAndResp(file, g)
 
-	//gen toc service
 	for _, service := range file.Services {
 		if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 			continue
 		}
+		//gen path
+		genPath(file, service, g)
+		//gen toc service
 		genToCService(file, service, g)
-	}
-
-	//gen tob service
-	for _, service := range file.Services {
-		if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
-			continue
-		}
+		//gen tob service
 		genToBService(file, service, g)
 	}
 	return g
@@ -2492,7 +2488,7 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 	g.P("}")
 }
 
-func genToCService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) {
+func genPath(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) {
 	for _, method := range s.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
 		if mop.GetDeprecated() {
@@ -2509,14 +2505,16 @@ func genToCService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 		pathurl := "/" + *file.Proto.Package + "." + string(s.Desc.Name()) + "/" + string(method.Desc.Name())
 		g.P("const ", pathname, ": string =", strconv.Quote(pathurl), ";")
 	}
-
+}
+func genToCService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) {
 	clientName := s.GoName + "BrowserClientToC"
+	g.P("//ToC means this is used for users")
 	g.P("export class ", clientName, " {")
 	g.P("\tconstructor(host: string){")
 	g.P("\t\tif(host==null||host==undefined||host.length==0){")
 	g.P("\t\t\tthrow \"", clientName, "'s host missing\"")
 	g.P("\t\t}")
-	g.P("\t\tthis.host=host;")
+	g.P("\t\tthis.host=host")
 	g.P("\t}")
 	for _, method := range s.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
@@ -2532,6 +2530,7 @@ func genToCService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 		}
 		pathname := "_WebPath" + s.GoName + method.GoName
 		g.P("\t//timeout must be integer,timeout's unit is millisecond")
+		g.P("\t//don't set Content-Type in header")
 		g.P("\t", method.Desc.Name(), "(header: { [k: string]: string },req: ", method.Input.GoIdent.GoName, ",timeout: number,errorf: (arg: Error)=>void,successf: (arg: ", method.Output.GoIdent.GoName, ")=>void){")
 		g.P("\t\tif(!Number.isInteger(timeout)){")
 		g.P("\t\t\tthrow 'timeout must be integer'")
@@ -2589,5 +2588,78 @@ func genToCService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 	g.P("}")
 }
 func genToBService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) {
-
+	clientName := s.GoName + "BrowserClientToB"
+	g.P("//ToB means this is used for internal")
+	g.P("//ToB client must be used with https://github.com/chenjie199234/admin")
+	g.P("//If your are not using 'admin' as your tob request's proxy gate,don't use this")
+	g.P("export class ", clientName, " {")
+	g.P("\tconstructor(proxyhost: string,servergroup: string){")
+	g.P("\t\tif(proxyhost==null||proxyhost==undefined||proxyhost.length==0){")
+	g.P("\t\t\tthrow \"", clientName, "'s proxyhost missing\"")
+	g.P("\t\t}")
+	g.P("\t\tif(servergroup==null||servergroup==undefined||servergroup.length==0){")
+	g.P("\t\t\tthrow \"", clientName, "'s servergroup missing\"")
+	g.P("\t\t}")
+	g.P("\t\tthis.host=proxyhost")
+	g.P("\t\tthis.group=servergroup")
+	g.P("\t}")
+	for _, method := range s.Methods {
+		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
+		if mop.GetDeprecated() {
+			continue
+		}
+		pathname := "_WebPath" + s.GoName + method.GoName
+		g.P("\t//timeout must be integer,timeout's unit is millisecond")
+		g.P("\t//don't set Content-Type in header")
+		g.P("\t", method.Desc.Name(), "(header: { [k: string]: string },req: ", method.Input.GoIdent.GoName, ",timeout: number,errorf: (arg: Error)=>void,successf: (arg: ", method.Output.GoIdent.GoName, ")=>void){")
+		g.P("\t\tif(!Number.isInteger(timeout)){")
+		g.P("\t\t\tthrow 'timeout must be integer'")
+		g.P("\t\t}")
+		g.P("\t\tif(header==null||header==undefined){")
+		g.P("\t\t\theader={}")
+		g.P("\t\t}")
+		g.P("\t\theader[\"Content-Type\"] = \"application/json\"")
+		g.P("\t\tlet config={")
+		g.P("\t\t\turl:'/admin.proxy/tob',")
+		g.P("\t\t\tmethod: 'post',")
+		g.P("\t\t\tbaseURL: this.host,")
+		g.P("\t\t\theaders: header,")
+		g.P("\t\t\tdata:{")
+		g.P("\t\t\t\tpath:", pathname, ",")
+		g.P("\t\t\t\tapp:'", *file.Proto.Package, "',")
+		g.P("\t\t\t\tgroup:this.group,")
+		g.P("\t\t\t\tdata:", method.Input.GoIdent.GoName, "ToJson(req),")
+		g.P("\t\t\t},")
+		g.P("\t\t\ttimeout: timeout,")
+		g.P("\t\t}")
+		g.P("\t\tAxios.request(config)")
+		g.P("\t\t.then(function(response){")
+		g.P("\t\t\ttry{")
+		g.P("\t\t\t\tlet obj:", method.Output.GoIdent.GoName, "=JsonTo", method.Output.GoIdent.GoName, "(response.data)")
+		g.P("\t\t\t\tsuccessf(obj)")
+		g.P("\t\t\t}catch(e){")
+		g.P("\t\t\t\tlet err:Error={code:-1,msg:'response error'}")
+		g.P("\t\t\t\terrorf(err)")
+		g.P("\t\t\t}")
+		g.P("\t\t})")
+		g.P("\t\t.catch(function(error){")
+		g.P("\t\t\tif(error.response==undefined){")
+		g.P("\t\t\t\terrorf({code:-2,msg:error.message})")
+		g.P("\t\t\t\treturn")
+		g.P("\t\t\t}")
+		g.P("\t\t\tlet respdata=error.response.data")
+		g.P("\t\t\tlet err:Error={code:-1,msg:''}")
+		g.P("\t\t\tif(respdata.code==undefined||typeof respdata.code!='number'||!Number.isInteger(respdata.code)||respdata.msg==undefined||typeof respdata.msg!='string'){")
+		g.P("\t\t\t\terr.msg=respdata")
+		g.P("\t\t\t}else{")
+		g.P("\t\t\t\terr.code=respdata.code")
+		g.P("\t\t\t\terr.msg=respdata.msg")
+		g.P("\t\t\t}")
+		g.P("\t\t\terrorf(err)")
+		g.P("\t\t})")
+		g.P("\t}")
+	}
+	g.P("\tprivate host: string")
+	g.P("\tprivate group: string")
+	g.P("}")
 }
