@@ -179,7 +179,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)!=0{")
 					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
 					g.P("data.AppendByte('[')")
-					g.P("for i,form:=range forms{")
+					g.P("for _,form:=range forms{")
 					g.P("data.AppendString(form)")
 					g.P("data.AppendByte(',')")
 					g.P("}")
