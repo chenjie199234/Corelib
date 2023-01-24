@@ -2546,7 +2546,7 @@ func genToCService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 		}
 		g.P("\t\tlet config={")
 		if httpmetohd == http.MethodGet || httpmetohd == http.MethodDelete {
-			g.P("\t\t\turl:", pathname, "+'?'+", method.Input.GoIdent.GoName, "ToJson(req),")
+			g.P("\t\t\turl:", pathname, "+'?'+", method.Input.GoIdent.GoName, "ToForm(req),")
 		} else {
 			g.P("\t\t\turl:", pathname, ",")
 		}
