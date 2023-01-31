@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// [a-z][0-9][-],first character must in [a-z]
+// [a-z][0-9][-],first character must in [a-z],last character must in [a-z][0-9]
 func SingleCheck(name string, hyphen bool) error {
 	if len(name) == 0 {
 		return errors.New("[name.SingleCheck] empty")

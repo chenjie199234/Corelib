@@ -63,9 +63,9 @@ func genFileComment(gen *protogen.Plugin, file *protogen.File, g *protogen.Gener
 			protocVersion += "-" + s
 		}
 	}
-	g.P("// \tprotoc-gen-go-web ", version.String())
-	g.P("// \tprotoc            ", protocVersion)
-	g.P("// source: ", file.Desc.Path())
+	g.P("// \tprotoc-gen-go-web ", version.String(), "<br />")
+	g.P("// \tprotoc            ", protocVersion, "<br />")
+	g.P("// source: ", file.Desc.Path(), "<br />")
 	g.P()
 }
 
