@@ -1,10 +1,10 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/chenjie199234/Corelib/internal/version"
@@ -17,9 +17,11 @@ import (
 )
 
 func main() {
-	if len(os.Args) == 2 && os.Args[1] == "--version" {
-		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), version.String())
-		os.Exit(0)
+	showversion := flag.Bool("version", false, "print the version and exit")
+	flag.Parse()
+	if *showversion {
+		fmt.Printf("protoc-gen-browser %s\n", version.String())
+		return
 	}
 	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
 		//pre check
@@ -60,9 +62,13 @@ func main() {
 				}
 			}
 			//delete old file
-			oldfile := f.GeneratedFilenamePrefix + "_browser.ts"
-			if e := os.RemoveAll(oldfile); e != nil {
-				panic("remove old file " + oldfile + " error:" + e.Error())
+			oldtocfile := f.GeneratedFilenamePrefix + "_browser_toc.ts"
+			oldtobfile := f.GeneratedFilenamePrefix + "_browser_tob.ts"
+			if e := os.RemoveAll(oldtocfile); e != nil {
+				panic("remove old file " + oldtocfile + " error:" + e.Error())
+			}
+			if e := os.RemoveAll(oldtobfile); e != nil {
+				panic("remove old file " + oldtobfile + " error:" + e.Error())
 			}
 		}
 		//gen file
@@ -73,7 +79,8 @@ func main() {
 			if f.Desc.Options().(*descriptorpb.FileOptions).GetDeprecated() {
 				continue
 			}
-			generateFile(gen, f)
+			generateToC(gen, f)
+			generateToB(gen, f)
 		}
 		gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 		return nil

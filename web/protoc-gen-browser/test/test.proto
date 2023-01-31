@@ -7,6 +7,7 @@ service test {
 	rpc hello(hello_req)returns(hello_resp){
 		option (pbex.method)="get";
 	}
+	rpc world(world_req)returns(world_resp);
 }
 enum TE{
 	A=0;
@@ -66,4 +67,10 @@ message data {
 }
 message hello_resp{
 	hello_req req=1;
+}
+message world_req{
+	string req=1;
+}
+message world_resp{
+	string resp=1;
 }

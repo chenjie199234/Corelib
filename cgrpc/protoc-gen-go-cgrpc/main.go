@@ -1,9 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/pbex"
@@ -14,9 +14,11 @@ import (
 )
 
 func main() {
-	if len(os.Args) == 2 && os.Args[1] == "--version" {
-		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), version.String())
-		os.Exit(0)
+	showversion := flag.Bool("version", false, "print the version and exit")
+	flag.Parse()
+	if *showversion {
+		fmt.Printf("protoc-gen-go-cgrpc %s\n", version.String())
+		return
 	}
 	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
 		//pre check

@@ -17,9 +17,8 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
-// generateFile generates a _web.pb.go file containing web service definitions.
-func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
-	filename := file.GeneratedFilenamePrefix + "_browser.ts"
+func generateToC(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
+	filename := file.GeneratedFilenamePrefix + "_browser_toc.ts"
 	g := gen.NewGeneratedFile(filename, file.GoImportPath)
 
 	genFileComment(gen, file, g)
@@ -35,7 +34,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 	g.P()
 
 	//gen req and resp
-	genReqAndResp(file, g)
+	genReqAndResp(file, g, true)
 
 	for _, service := range file.Services {
 		if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
@@ -45,6 +44,34 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 		genPath(file, service, g)
 		//gen toc service
 		genToCService(file, service, g)
+	}
+	return g
+}
+func generateToB(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
+	filename := file.GeneratedFilenamePrefix + "_browser_tob.ts"
+	g := gen.NewGeneratedFile(filename, file.GoImportPath)
+
+	genFileComment(gen, file, g)
+
+	g.P("import Axios from \"axios\";")
+	g.P("import Long from \"long\";")
+	g.P("import Base64 from \"@protobufjs/base64\"")
+	g.P()
+	g.P("export interface Error{")
+	g.P("\tcode: number;")
+	g.P("\tmsg: string;")
+	g.P("}")
+	g.P()
+
+	//gen req and resp
+	genReqAndResp(file, g, false)
+
+	for _, service := range file.Services {
+		if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
+			continue
+		}
+		//gen path
+		genPath(file, service, g)
 		//gen tob service
 		genToBService(file, service, g)
 	}
@@ -68,7 +95,8 @@ func genFileComment(gen *protogen.Plugin, file *protogen.File, g *protogen.Gener
 	g.P()
 }
 
-func genReqAndResp(file *protogen.File, g *protogen.GeneratedFile) {
+// target toc-true,tob-false
+func genReqAndResp(file *protogen.File, g *protogen.GeneratedFile, target bool) {
 	enums := make(map[string]*protogen.Enum)
 	messages := make(map[string]*protogen.Message)
 	tojson := make(map[string]*struct{})
@@ -83,17 +111,27 @@ func genReqAndResp(file *protogen.File, g *protogen.GeneratedFile) {
 			if mop.GetDeprecated() {
 				continue
 			}
-			if !proto.HasExtension(mop, pbex.E_Method) {
+			if target && !proto.HasExtension(mop, pbex.E_Method) {
 				continue
 			}
-			httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
-			messages[method.Input.GoIdent.String()] = method.Input
-			tojson[method.Input.GoIdent.String()] = nil
-			if httpmetohd == http.MethodGet || httpmetohd == http.MethodDelete {
-				toform[method.Input.GoIdent.String()] = nil
+			if target {
+				//toc
+				messages[method.Input.GoIdent.String()] = method.Input
+				httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
+				if httpmetohd == http.MethodGet || httpmetohd == http.MethodDelete {
+					toform[method.Input.GoIdent.String()] = nil
+				} else {
+					tojson[method.Input.GoIdent.String()] = nil
+				}
+				messages[method.Output.GoIdent.String()] = method.Output
+				jsonto[method.Output.GoIdent.String()] = nil
+			} else {
+				//tob
+				messages[method.Input.GoIdent.String()] = method.Input
+				tojson[method.Input.GoIdent.String()] = nil
+				messages[method.Output.GoIdent.String()] = method.Output
+				jsonto[method.Output.GoIdent.String()] = nil
 			}
-			messages[method.Output.GoIdent.String()] = method.Output
-			jsonto[method.Output.GoIdent.String()] = nil
 		}
 	}
 	//check nested
