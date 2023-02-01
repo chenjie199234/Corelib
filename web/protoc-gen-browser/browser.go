@@ -17,63 +17,65 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
-func generateToC(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
-	filename := file.GeneratedFilenamePrefix + "_browser_toc.ts"
-	g := gen.NewGeneratedFile(filename, file.GoImportPath)
-
-	genFileComment(gen, file, g)
-
-	g.P("import Axios from \"axios\";")
-	g.P("import Long from \"long\";")
-	g.P("import Base64 from \"@protobufjs/base64\"")
-	g.P()
-	g.P("export interface Error{")
-	g.P("\tcode: number;")
-	g.P("\tmsg: string;")
-	g.P("}")
-	g.P()
-
-	//gen req and resp
-	genReqAndResp(file, g, true)
-
-	for _, service := range file.Services {
-		if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
-			continue
-		}
-		//gen path
-		genPath(file, service, g)
-		//gen toc service
-		genToCService(file, service, g)
+// target toc-true,tob-false
+func generateFile(gen *protogen.Plugin, file *protogen.File, target bool) *protogen.GeneratedFile {
+	var filename string
+	if target {
+		filename = file.GeneratedFilenamePrefix + "_browser_toc.ts"
+	} else {
+		filename = file.GeneratedFilenamePrefix + "_browser_tob.ts"
 	}
-	return g
-}
-func generateToB(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
-	filename := file.GeneratedFilenamePrefix + "_browser_tob.ts"
 	g := gen.NewGeneratedFile(filename, file.GoImportPath)
 
 	genFileComment(gen, file, g)
 
+	//gen req and resp
+	enums, msgs, tojson, toform, jsonto, needlong, needbase64, methodcount := reqANDresp(file, g, target)
+	if methodcount == 0 {
+		return g
+	}
 	g.P("import Axios from \"axios\";")
-	g.P("import Long from \"long\";")
-	g.P("import Base64 from \"@protobufjs/base64\"")
+	if needlong {
+		g.P("import Long from \"long\";")
+	}
+	if needbase64 {
+		g.P("import Base64 from \"@protobufjs/base64\"")
+	}
 	g.P()
 	g.P("export interface Error{")
 	g.P("\tcode: number;")
 	g.P("\tmsg: string;")
 	g.P("}")
 	g.P()
-
-	//gen req and resp
-	genReqAndResp(file, g, false)
+	for _, e := range enums {
+		genEnum(e, g)
+	}
+	for _, m := range msgs {
+		genInterface(m, g)
+		if _, ok := tojson[m.GoIdent.String()]; ok {
+			genToJson(m, g)
+		}
+		if _, ok := toform[m.GoIdent.String()]; ok {
+			genToForm(m, g)
+		}
+		if _, ok := jsonto[m.GoIdent.String()]; ok {
+			genJsonTo(m, g)
+		}
+	}
 
 	for _, service := range file.Services {
 		if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 			continue
 		}
 		//gen path
-		genPath(file, service, g)
-		//gen tob service
-		genToBService(file, service, g)
+		genPath(file, service, g, target)
+		if target {
+			//gen toc service
+			genToCService(file, service, g)
+		} else {
+			//gen tob service
+			genToBService(file, service, g)
+		}
 	}
 	return g
 }
@@ -96,12 +98,12 @@ func genFileComment(gen *protogen.Plugin, file *protogen.File, g *protogen.Gener
 }
 
 // target toc-true,tob-false
-func genReqAndResp(file *protogen.File, g *protogen.GeneratedFile, target bool) {
-	enums := make(map[string]*protogen.Enum)
-	messages := make(map[string]*protogen.Message)
-	tojson := make(map[string]*struct{})
-	toform := make(map[string]*struct{})
-	jsonto := make(map[string]*struct{})
+func reqANDresp(file *protogen.File, g *protogen.GeneratedFile, target bool) (enums []*protogen.Enum, msgs []*protogen.Message, tojson map[string]*struct{}, toform map[string]*struct{}, jsonto map[string]*struct{}, needlong, needbase64 bool, methodcount uint32) {
+	tmpenums := make(map[string]*protogen.Enum)
+	tmpmsgs := make(map[string]*protogen.Message)
+	tojson = make(map[string]*struct{})
+	toform = make(map[string]*struct{})
+	jsonto = make(map[string]*struct{})
 	for _, service := range file.Services {
 		if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 			continue
@@ -116,32 +118,41 @@ func genReqAndResp(file *protogen.File, g *protogen.GeneratedFile, target bool) 
 			}
 			if target {
 				//toc
-				messages[method.Input.GoIdent.String()] = method.Input
+				tmpmsgs[method.Input.GoIdent.String()] = method.Input
 				httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
 				if httpmetohd == http.MethodGet || httpmetohd == http.MethodDelete {
 					toform[method.Input.GoIdent.String()] = nil
 				} else {
 					tojson[method.Input.GoIdent.String()] = nil
 				}
-				messages[method.Output.GoIdent.String()] = method.Output
+				tmpmsgs[method.Output.GoIdent.String()] = method.Output
 				jsonto[method.Output.GoIdent.String()] = nil
 			} else {
 				//tob
-				messages[method.Input.GoIdent.String()] = method.Input
+				tmpmsgs[method.Input.GoIdent.String()] = method.Input
 				tojson[method.Input.GoIdent.String()] = nil
-				messages[method.Output.GoIdent.String()] = method.Output
+				tmpmsgs[method.Output.GoIdent.String()] = method.Output
 				jsonto[method.Output.GoIdent.String()] = nil
 			}
+			methodcount++
 		}
 	}
 	//check nested
-	nestcheck := messages
+	nestcheck := tmpmsgs
 	for len(nestcheck) > 0 {
 		newnestcheck := make(map[string]*protogen.Message)
 		for _, m := range nestcheck {
 			for _, f := range m.Fields {
 				if f.Desc.Kind() == protoreflect.EnumKind {
-					enums[f.Enum.GoIdent.String()] = f.Enum
+					tmpenums[f.Enum.GoIdent.String()] = f.Enum
+					continue
+				}
+				if f.Desc.Kind() == protoreflect.Uint64Kind || f.Desc.Kind() == protoreflect.Fixed64Kind || f.Desc.Kind() == protoreflect.Int64Kind || f.Desc.Kind() == protoreflect.Sint64Kind || f.Desc.Kind() == protoreflect.Sfixed64Kind {
+					needlong = true
+					continue
+				}
+				if f.Desc.Kind() == protoreflect.BytesKind {
+					needbase64 = true
 					continue
 				}
 				if f.Desc.Kind() != protoreflect.MessageKind {
@@ -149,8 +160,8 @@ func genReqAndResp(file *protogen.File, g *protogen.GeneratedFile, target bool) 
 				}
 				if !f.Desc.IsMap() {
 					needcheck := false
-					if _, ok := messages[f.Message.GoIdent.String()]; !ok {
-						messages[f.Message.GoIdent.String()] = f.Message
+					if _, ok := tmpmsgs[f.Message.GoIdent.String()]; !ok {
+						tmpmsgs[f.Message.GoIdent.String()] = f.Message
 						needcheck = true
 					}
 					if _, ok := tojson[m.GoIdent.String()]; ok {
@@ -168,61 +179,63 @@ func genReqAndResp(file *protogen.File, g *protogen.GeneratedFile, target bool) 
 					if needcheck {
 						newnestcheck[f.Message.GoIdent.String()] = f.Message
 					}
-				} else if f.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
-					needcheck := false
-					if _, ok := messages[f.Message.Fields[1].Message.GoIdent.String()]; !ok {
-						messages[f.Message.Fields[1].Message.GoIdent.String()] = f.Message.Fields[1].Message
-						needcheck = true
+				} else {
+					k := f.Message.Fields[0]
+					v := f.Message.Fields[1]
+					if k.Desc.Kind() == protoreflect.Uint64Kind || k.Desc.Kind() == protoreflect.Fixed64Kind || k.Desc.Kind() == protoreflect.Int64Kind || k.Desc.Kind() == protoreflect.Sint64Kind || k.Desc.Kind() == protoreflect.Sfixed64Kind {
+						needlong = true
 					}
-					if _, ok := tojson[m.GoIdent.String()]; ok {
-						if _, ok = tojson[f.Message.Fields[1].Message.GoIdent.String()]; !ok {
-							tojson[f.Message.Fields[1].Message.GoIdent.String()] = nil
+					if k.Desc.Kind() == protoreflect.BytesKind {
+						needbase64 = true
+					}
+					if v.Desc.Kind() == protoreflect.Uint64Kind || v.Desc.Kind() == protoreflect.Fixed64Kind || v.Desc.Kind() == protoreflect.Int64Kind || v.Desc.Kind() == protoreflect.Sint64Kind || v.Desc.Kind() == protoreflect.Sfixed64Kind {
+						needlong = true
+					}
+					if v.Desc.Kind() == protoreflect.BytesKind {
+						needbase64 = true
+					}
+					if v.Desc.Kind() == protoreflect.MessageKind {
+						needcheck := false
+						if _, ok := tmpmsgs[v.Message.GoIdent.String()]; !ok {
+							tmpmsgs[v.Message.GoIdent.String()] = v.Message
 							needcheck = true
 						}
-					}
-					if _, ok := jsonto[m.GoIdent.String()]; ok {
-						if _, ok := jsonto[f.Message.Fields[1].Message.GoIdent.String()]; !ok {
-							jsonto[f.Message.Fields[1].Message.GoIdent.String()] = nil
-							needcheck = true
+						if _, ok := tojson[m.GoIdent.String()]; ok {
+							if _, ok = tojson[v.Message.GoIdent.String()]; !ok {
+								tojson[v.Message.GoIdent.String()] = nil
+								needcheck = true
+							}
 						}
-					}
-					if needcheck {
-						newnestcheck[f.Message.Fields[1].Message.GoIdent.String()] = f.Message.Fields[1].Message
+						if _, ok := jsonto[m.GoIdent.String()]; ok {
+							if _, ok := jsonto[v.Message.GoIdent.String()]; !ok {
+								jsonto[v.Message.GoIdent.String()] = nil
+								needcheck = true
+							}
+						}
+						if needcheck {
+							newnestcheck[v.Message.GoIdent.String()] = v.Message
+						}
 					}
 				}
 			}
 		}
 		nestcheck = newnestcheck
 	}
-	ms := make([]*protogen.Message, 0, len(messages))
-	for _, v := range messages {
-		ms = append(ms, v)
+	enums = make([]*protogen.Enum, 0, len(enums))
+	for _, v := range tmpenums {
+		enums = append(enums, v)
 	}
-	sort.Slice(ms, func(i, j int) bool {
-		return ms[i].GoIdent.String() < ms[j].GoIdent.String()
+	sort.Slice(enums, func(i, j int) bool {
+		return enums[i].GoIdent.String() < enums[j].GoIdent.String()
 	})
-	es := make([]*protogen.Enum, 0, len(enums))
-	for _, v := range enums {
-		es = append(es, v)
+	msgs = make([]*protogen.Message, 0, len(tmpmsgs))
+	for _, v := range tmpmsgs {
+		msgs = append(msgs, v)
 	}
-	sort.Slice(es, func(i, j int) bool {
-		return es[i].GoIdent.String() < es[j].GoIdent.String()
+	sort.Slice(msgs, func(i, j int) bool {
+		return msgs[i].GoIdent.String() < msgs[j].GoIdent.String()
 	})
-	for _, e := range es {
-		genEnum(e, g)
-	}
-	for _, m := range ms {
-		genInterface(m, g)
-		if _, ok := tojson[m.GoIdent.String()]; ok {
-			genToJson(m, g)
-		}
-		if _, ok := toform[m.GoIdent.String()]; ok {
-			genToForm(m, g)
-		}
-		if _, ok := jsonto[m.GoIdent.String()]; ok {
-			genJsonTo(m, g)
-		}
-	}
+	return
 }
 func genEnum(e *protogen.Enum, g *protogen.GeneratedFile) {
 	g.P("export enum ", e.GoIdent.GoName, "{")
@@ -2526,18 +2539,15 @@ func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
 	g.P("}")
 }
 
-func genPath(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) {
+// target toc-true,tob-false
+func genPath(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile, target bool) {
 	for _, method := range s.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
 		if mop.GetDeprecated() {
 			continue
 		}
-		if !proto.HasExtension(mop, pbex.E_Method) {
+		if target && !proto.HasExtension(mop, pbex.E_Method) {
 			continue
-		}
-		httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
-		if httpmetohd != http.MethodGet && httpmetohd != http.MethodPost && httpmetohd != http.MethodPut && httpmetohd != http.MethodDelete && httpmetohd != http.MethodPatch {
-			panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", method.Desc.Name(), s.Desc.Name(), httpmetohd))
 		}
 		pathname := "_WebPath" + s.GoName + method.GoName
 		pathurl := "/" + *file.Proto.Package + "." + string(s.Desc.Name()) + "/" + string(method.Desc.Name())

@@ -67,10 +67,10 @@ func main() {
 			}
 			//delete old file
 			oldtocfile := f.GeneratedFilenamePrefix + "_browser_toc.ts"
-			oldtobfile := f.GeneratedFilenamePrefix + "_browser_tob.ts"
 			if e := os.RemoveAll(oldtocfile); e != nil {
 				panic("remove old file " + oldtocfile + " error:" + e.Error())
 			}
+			oldtobfile := f.GeneratedFilenamePrefix + "_browser_tob.ts"
 			if e := os.RemoveAll(oldtobfile); e != nil {
 				panic("remove old file " + oldtobfile + " error:" + e.Error())
 			}
@@ -83,9 +83,9 @@ func main() {
 			if f.Desc.Options().(*descriptorpb.FileOptions).GetDeprecated() {
 				continue
 			}
-			generateToC(gen, f)
+			generateFile(gen, f, true)
 			if *gentob {
-				generateToB(gen, f)
+				generateFile(gen, f, false)
 			}
 		}
 		gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
