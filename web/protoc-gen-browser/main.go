@@ -23,7 +23,11 @@ func main() {
 		fmt.Printf("protoc-gen-browser %s\n", version.String())
 		return
 	}
-	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
+	var flags flag.FlagSet
+	gentob := flags.Bool("gen_tob", false, "")
+	protogen.Options{
+		ParamFunc: flags.Set,
+	}.Run(func(gen *protogen.Plugin) error {
 		//pre check
 		for _, f := range gen.Files {
 			if !f.Generate {
@@ -80,7 +84,9 @@ func main() {
 				continue
 			}
 			generateToC(gen, f)
-			generateToB(gen, f)
+			if *gentob {
+				generateToB(gen, f)
+			}
 		}
 		gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 		return nil
