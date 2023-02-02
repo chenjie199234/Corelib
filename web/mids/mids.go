@@ -110,24 +110,3 @@ func accesskey(ctx *web.Context) {
 		ctx.Abort(cerror.ErrKey)
 	}
 }
-func accesssign(ctx *web.Context) {
-	md := ctx.GetMetadata()
-	signstr := ctx.GetHeader("Access-Sign")
-	if signstr == "" {
-		signstr = md["Access-Sign"]
-		delete(md, "Access-Sign")
-	}
-	if signstr == "" {
-		ctx.Abort(cerror.ErrSign)
-		return
-	}
-	r := ctx.GetRequest()
-	body, e := ctx.GetBody()
-	if e != nil {
-		ctx.Abort(cerror.ErrSystem)
-		return
-	}
-	if !publicmids.VerifyAccessSign(ctx, ctx.GetMethod(), ctx.GetPath(), r.URL.Query(), r.Header, md, body, signstr) {
-		ctx.Abort(cerror.ErrSign)
-	}
-}
