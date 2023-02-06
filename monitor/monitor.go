@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -16,7 +15,6 @@ import (
 )
 
 var m monitor
-var refresher *time.Timer
 
 var wclker sync.Mutex
 var wslker sync.Mutex
@@ -26,6 +24,7 @@ var cclker sync.Mutex
 var cslker sync.Mutex
 
 type monitor struct {
+	inited          bool
 	Sysinfos        *sysinfo
 	WebClientinfos  map[string]map[string]*pathinfo //first key peername,second key path
 	WebServerinfos  map[string]map[string]*pathinfo //first key peername,second key path
@@ -38,18 +37,18 @@ type sysinfo struct {
 	RoutineNum int
 	ThreadNum  int
 	HeapobjNum int
-	GcTime     int
+	GCTime     uint64
 }
 type pathinfo struct {
 	TotalCount     uint32
 	ErrCodeCount   map[int32]uint32
-	T50            uint64      //nano second
-	T90            uint64      //nano second
-	T99            uint64      //nano second
-	TotaltimeWaste uint64      //nano second
-	maxTimewaste   uint64      //nano second
-	timewaste      [114]uint32 //value:count,index:0-9(0ms-10ms) each 1ms,10-27(10ms-100ms) each 5ms,index:28-72(100ms-1s) each 20ms,index:73-112(1s-5s) each 100ms,index:113 more then 5s
+	TotaltimeWaste uint64       //nano second
+	maxTimewaste   uint64       //nano second
+	timewaste      [5001]uint32 //value:count,index:0-4999(1ms-5000ms) each 1ms,index:5000 more then 5s
 	lker           *sync.Mutex
+	T50            uint64 //nano second
+	T90            uint64 //nano second
+	T99            uint64 //nano second
 }
 
 func init() {
@@ -57,29 +56,13 @@ func init() {
 		log.Warning(nil, "[monitor] env MONITOR missing,monitor closed")
 		return
 	} else if n, e := strconv.Atoi(str); e != nil || n != 0 && n != 1 {
-		log.Warning(nil, "[monitor] env MONITOR format error,monitor closed")
+		log.Warning(nil, "[monitor] env MONITOR format error,must in [0,1],monitor closed")
 		return
 	} else if n == 0 {
 		log.Warning(nil, "[monitor] env MONITOR is 0,monitor closed")
 		return
 	}
 	refresh()
-	go func() {
-		<-refresher.C
-		wclker.Lock()
-		wslker.Lock()
-		gclker.Lock()
-		gslker.Lock()
-		cclker.Lock()
-		cslker.Lock()
-		refresh()
-		wclker.Unlock()
-		wslker.Unlock()
-		gclker.Unlock()
-		gslker.Unlock()
-		cclker.Unlock()
-		cslker.Unlock()
-	}()
 	go func() {
 		http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
 			tmpm := getMonitorInfo()
@@ -93,7 +76,7 @@ func init() {
 			buf.AppendString("# HELP gc_time\n")
 			buf.AppendString("# TYPE gc_time gauge\n")
 			buf.AppendString("gc_time ")
-			buf.AppendFloat64(float64(tmpm.Sysinfos.GcTime) / 1000 / 1000)
+			buf.AppendFloat64(float64(tmpm.Sysinfos.GCTime) / 1000 / 1000)
 			buf.AppendByte('\n')
 
 			buf.AppendString("# HELP routine_num\n")
@@ -606,43 +589,37 @@ func init() {
 	}()
 }
 func refresh() {
+	m.inited = true
 	m.WebClientinfos = make(map[string]map[string]*pathinfo)
 	m.WebServerinfos = make(map[string]map[string]*pathinfo)
 	m.GrpcClientinfos = make(map[string]map[string]*pathinfo)
 	m.GrpcServerinfos = make(map[string]map[string]*pathinfo)
 	m.CrpcClientinfos = make(map[string]map[string]*pathinfo)
 	m.CrpcServerinfos = make(map[string]map[string]*pathinfo)
-	if refresher == nil {
-		refresher = time.NewTimer(time.Minute*2 + time.Second)
-	} else {
-		refresher.Reset(time.Minute*2 + time.Second)
-		for len(refresher.C) > 0 {
-			<-refresher.C
-		}
-	}
 }
 
-func timewasteIndex(timewaste uint64) int {
-	switch {
-	case timewaste < uint64(time.Millisecond*10):
-		return int((timewaste) / uint64(time.Millisecond))
-	case timewaste < uint64(time.Millisecond)*100:
-		return 10 + int((timewaste-uint64(time.Millisecond)*10)/(uint64(time.Millisecond)*5))
-	case timewaste < uint64(time.Second):
-		return 28 + int((timewaste-uint64(time.Millisecond)*100)/(uint64(time.Millisecond)*20))
-	case timewaste < uint64(time.Second)*5:
-		return 73 + int((timewaste-uint64(time.Second))/(uint64(time.Millisecond)*100))
-	default:
-		return 113
+// timewaste nanosecond
+func index(timewaste uint64) int64 {
+	var ms int64
+	if timewaste%1000000 > 0 {
+		ms = int64(timewaste/1000000 + 1)
+	} else {
+		ms = int64(timewaste / 1000000)
 	}
+	if ms == 0 {
+		ms = 1
+	}
+	if ms <= (time.Second * 5).Milliseconds() {
+		return ms - 1
+	}
+	return 5000
 }
 func WebClientMonitor(peername, method, path string, e error, timewaste uint64) {
-	if refresher == nil {
+	if !m.inited {
 		return
 	}
 	recordpath := method + ":" + path
 	wclker.Lock()
-	defer wclker.Unlock()
 	peer, ok := m.WebClientinfos[peername]
 	if !ok {
 		peer = make(map[string]*pathinfo)
@@ -656,22 +633,17 @@ func WebClientMonitor(peername, method, path string, e error, timewaste uint64) 
 		}
 		peer[recordpath] = pinfo
 	}
+	pinfo.lker.Lock()
+	wclker.Unlock()
 	//timewaste
-	for {
-		oldmax := pinfo.maxTimewaste
-		if oldmax >= timewaste {
-			break
-		}
-		if atomic.CompareAndSwapUint64(&pinfo.maxTimewaste, oldmax, timewaste) {
-			break
-		}
+	if timewaste > pinfo.maxTimewaste {
+		pinfo.maxTimewaste = timewaste
 	}
-	atomic.AddUint64(&pinfo.TotaltimeWaste, timewaste)
-	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
-	atomic.AddUint32(&pinfo.TotalCount, 1)
+	pinfo.TotaltimeWaste += timewaste
+	pinfo.timewaste[index(timewaste)]++
+	pinfo.TotalCount++
 	//error
 	ee := cerror.ConvertStdError(e)
-	pinfo.lker.Lock()
 	if ee == nil {
 		pinfo.ErrCodeCount[0]++
 	} else {
@@ -680,12 +652,11 @@ func WebClientMonitor(peername, method, path string, e error, timewaste uint64) 
 	pinfo.lker.Unlock()
 }
 func WebServerMonitor(peername, method, path string, e error, timewaste uint64) {
-	if refresher == nil {
+	if !m.inited {
 		return
 	}
 	recordpath := method + ":" + path
 	wslker.Lock()
-	defer wslker.Unlock()
 	peer, ok := m.WebServerinfos[peername]
 	if !ok {
 		peer = make(map[string]*pathinfo)
@@ -699,22 +670,17 @@ func WebServerMonitor(peername, method, path string, e error, timewaste uint64) 
 		}
 		peer[recordpath] = pinfo
 	}
+	pinfo.lker.Lock()
+	wslker.Unlock()
 	//timewaste
-	for {
-		oldmax := pinfo.maxTimewaste
-		if oldmax >= timewaste {
-			break
-		}
-		if atomic.CompareAndSwapUint64(&pinfo.maxTimewaste, oldmax, timewaste) {
-			break
-		}
+	if timewaste > pinfo.maxTimewaste {
+		pinfo.maxTimewaste = timewaste
 	}
-	atomic.AddUint64(&pinfo.TotaltimeWaste, timewaste)
-	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
-	atomic.AddUint32(&pinfo.TotalCount, 1)
+	pinfo.TotaltimeWaste += timewaste
+	pinfo.timewaste[index(timewaste)]++
+	pinfo.TotalCount++
 	//error
 	ee := cerror.ConvertStdError(e)
-	pinfo.lker.Lock()
 	if ee == nil {
 		pinfo.ErrCodeCount[0]++
 	} else {
@@ -723,12 +689,11 @@ func WebServerMonitor(peername, method, path string, e error, timewaste uint64) 
 	pinfo.lker.Unlock()
 }
 func GrpcClientMonitor(peername, method, path string, e error, timewaste uint64) {
-	if refresher == nil {
+	if !m.inited {
 		return
 	}
 	recordpath := method + ":" + path
 	gclker.Lock()
-	defer gclker.Unlock()
 	peer, ok := m.GrpcClientinfos[peername]
 	if !ok {
 		peer = make(map[string]*pathinfo)
@@ -742,22 +707,17 @@ func GrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 		}
 		peer[recordpath] = pinfo
 	}
+	pinfo.lker.Lock()
+	gclker.Unlock()
 	//timewaste
-	for {
-		oldmax := pinfo.maxTimewaste
-		if oldmax >= timewaste {
-			break
-		}
-		if atomic.CompareAndSwapUint64(&pinfo.maxTimewaste, oldmax, timewaste) {
-			break
-		}
+	if timewaste > pinfo.maxTimewaste {
+		pinfo.maxTimewaste = timewaste
 	}
-	atomic.AddUint64(&pinfo.TotaltimeWaste, timewaste)
-	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
-	atomic.AddUint32(&pinfo.TotalCount, 1)
+	pinfo.TotaltimeWaste += timewaste
+	pinfo.timewaste[index(timewaste)]++
+	pinfo.TotalCount++
 	//error
 	ee := cerror.ConvertStdError(e)
-	pinfo.lker.Lock()
 	if ee == nil {
 		pinfo.ErrCodeCount[0]++
 	} else {
@@ -766,12 +726,11 @@ func GrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 func GrpcServerMonitor(peername, method, path string, e error, timewaste uint64) {
-	if refresher == nil {
+	if !m.inited {
 		return
 	}
 	recordpath := method + ":" + path
 	gslker.Lock()
-	defer gslker.Unlock()
 	peer, ok := m.GrpcServerinfos[peername]
 	if !ok {
 		peer = make(map[string]*pathinfo)
@@ -785,22 +744,17 @@ func GrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 		}
 		peer[recordpath] = pinfo
 	}
+	pinfo.lker.Lock()
+	gslker.Unlock()
 	//timewaste
-	for {
-		oldmax := pinfo.maxTimewaste
-		if oldmax >= timewaste {
-			break
-		}
-		if atomic.CompareAndSwapUint64(&pinfo.maxTimewaste, oldmax, timewaste) {
-			break
-		}
+	if timewaste > pinfo.maxTimewaste {
+		pinfo.maxTimewaste = timewaste
 	}
-	atomic.AddUint64(&pinfo.TotaltimeWaste, timewaste)
-	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
-	atomic.AddUint32(&pinfo.TotalCount, 1)
+	pinfo.TotaltimeWaste += timewaste
+	pinfo.timewaste[index(timewaste)]++
+	pinfo.TotalCount++
 	//error
 	ee := cerror.ConvertStdError(e)
-	pinfo.lker.Lock()
 	if ee == nil {
 		pinfo.ErrCodeCount[0]++
 	} else {
@@ -809,12 +763,11 @@ func GrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 func CrpcClientMonitor(peername, method, path string, e error, timewaste uint64) {
-	if refresher == nil {
+	if !m.inited {
 		return
 	}
 	recordpath := method + ":" + path
 	cclker.Lock()
-	defer cclker.Unlock()
 	peer, ok := m.CrpcClientinfos[peername]
 	if !ok {
 		peer = make(map[string]*pathinfo)
@@ -828,22 +781,17 @@ func CrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 		}
 		peer[recordpath] = pinfo
 	}
+	pinfo.lker.Lock()
+	cclker.Unlock()
 	//timewaste
-	for {
-		oldmax := pinfo.maxTimewaste
-		if oldmax >= timewaste {
-			break
-		}
-		if atomic.CompareAndSwapUint64(&pinfo.maxTimewaste, oldmax, timewaste) {
-			break
-		}
+	if timewaste > pinfo.maxTimewaste {
+		pinfo.maxTimewaste = timewaste
 	}
-	atomic.AddUint64(&pinfo.TotaltimeWaste, timewaste)
-	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
-	atomic.AddUint32(&pinfo.TotalCount, 1)
+	pinfo.TotaltimeWaste += timewaste
+	pinfo.timewaste[index(timewaste)]++
+	pinfo.TotalCount++
 	//error
 	ee := cerror.ConvertStdError(e)
-	pinfo.lker.Lock()
 	if ee == nil {
 		pinfo.ErrCodeCount[0]++
 	} else {
@@ -852,12 +800,11 @@ func CrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 func CrpcServerMonitor(peername, method, path string, e error, timewaste uint64) {
-	if refresher == nil {
+	if !m.inited {
 		return
 	}
 	recordpath := method + ":" + path
 	cslker.Lock()
-	defer cslker.Unlock()
 	peer, ok := m.CrpcServerinfos[peername]
 	if !ok {
 		peer = make(map[string]*pathinfo)
@@ -871,22 +818,17 @@ func CrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 		}
 		peer[recordpath] = pinfo
 	}
+	pinfo.lker.Lock()
+	cslker.Unlock()
 	//timewaste
-	for {
-		oldmax := pinfo.maxTimewaste
-		if oldmax >= timewaste {
-			break
-		}
-		if atomic.CompareAndSwapUint64(&pinfo.maxTimewaste, oldmax, timewaste) {
-			break
-		}
+	if timewaste > pinfo.maxTimewaste {
+		pinfo.maxTimewaste = timewaste
 	}
-	atomic.AddUint64(&pinfo.TotaltimeWaste, timewaste)
-	atomic.AddUint32(&(pinfo.timewaste[timewasteIndex(timewaste)]), 1)
-	atomic.AddUint32(&pinfo.TotalCount, 1)
+	pinfo.TotaltimeWaste += timewaste
+	pinfo.timewaste[index(timewaste)]++
+	pinfo.TotalCount++
 	//error
 	ee := cerror.ConvertStdError(e)
-	pinfo.lker.Lock()
 	if ee == nil {
 		pinfo.ErrCodeCount[0]++
 	} else {
@@ -895,7 +837,7 @@ func CrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 
-var lastgcindex uint32
+var prefixGCwastetime uint64
 
 func getMonitorInfo() *monitor {
 	wclker.Lock()
@@ -955,70 +897,56 @@ func getMonitorInfo() *monitor {
 	meminfo := &runtime.MemStats{}
 	runtime.ReadMemStats(meminfo)
 	r.Sysinfos.HeapobjNum = int(meminfo.HeapObjects)
-	if meminfo.NumGC > lastgcindex+256 {
-		lastgcindex = meminfo.NumGC - 256
-	}
-	for lastgcindex < meminfo.NumGC {
-		r.Sysinfos.GcTime += int(meminfo.PauseNs[lastgcindex%256])
-		lastgcindex++
-	}
+	r.Sysinfos.GCTime = meminfo.PauseTotalNs - prefixGCwastetime
+	prefixGCwastetime = meminfo.PauseTotalNs
 	return r
-
 }
-func getT(data *[114]uint32, maxtimewaste uint64, totalcount uint32) (uint64, uint64, uint64) {
+func getT(data *[5001]uint32, maxtimewaste uint64, totalcount uint32) (uint64, uint64, uint64) {
 	if totalcount == 0 {
 		return 0, 0, 0
 	}
 	var T50, T90, T99 uint64
-	T50Count := uint32(float64(totalcount)*0.49) + 1
-	T90Count := uint32(float64(totalcount)*0.9) + 1
-	T99Count := uint32(float64(totalcount)*0.99) + 1
+	var T50Done, T90Done, T99Done bool
+	T50Count := uint32(float64(totalcount) * 0.5)
+	T90Count := uint32(float64(totalcount) * 0.9)
+	T99Count := uint32(float64(totalcount) * 0.99)
 	var sum uint32
 	var prefixtime uint64
+	var timepiece uint64
 	for index, count := range *data {
-		var timepiece uint64
-		switch {
-		case index < 10:
+		if count == 0 {
+			continue
+		}
+		if index <= 4999 {
+			prefixtime = uint64(time.Millisecond) * uint64(index)
+		} else {
+			prefixtime = uint64(time.Second * 5)
+		}
+		if index <= 4999 {
 			if maxtimewaste-prefixtime >= uint64(time.Millisecond) {
 				timepiece = uint64(time.Millisecond)
 			} else {
 				timepiece = maxtimewaste - prefixtime
 			}
-		case index < 28:
-			if maxtimewaste-prefixtime >= uint64(time.Millisecond)*5 {
-				timepiece = uint64(time.Millisecond) * 5
-			} else {
-				timepiece = maxtimewaste - prefixtime
-			}
-		case index < 73:
-			if maxtimewaste-prefixtime >= uint64(time.Millisecond)*20 {
-				timepiece = uint64(time.Millisecond) * 20
-			} else {
-				timepiece = maxtimewaste - prefixtime
-			}
-		case index < 113:
-			if maxtimewaste-prefixtime >= uint64(time.Millisecond)*100 {
-				timepiece = uint64(time.Millisecond) * 100
-			} else {
-				timepiece = maxtimewaste - prefixtime
-			}
-		default:
-			timepiece = maxtimewaste - uint64(time.Second)*5
+		} else {
+			timepiece = maxtimewaste - prefixtime
 		}
-		if sum+count >= T99Count && T99 == 0 {
+		if sum+count >= T99Count && !T99Done {
 			T99 = prefixtime + uint64(float64(timepiece)*(float64(T99Count-sum)/float64(count)))
+			T99Done = true
 		}
-		if sum+count >= T90Count && T90 == 0 {
+		if sum+count >= T90Count && !T90Done {
 			T90 = prefixtime + uint64(float64(timepiece)*(float64(T90Count-sum)/float64(count)))
+			T90Done = true
 		}
-		if sum+count >= T50Count && T50 == 0 {
+		if sum+count >= T50Count && !T50Done {
 			T50 = prefixtime + uint64(float64(timepiece)*(float64(T50Count-sum)/float64(count)))
+			T50Done = true
 		}
-		if T99 != 0 && T90 != 0 && T50 != 0 {
+		if T99Done && T90Done && T50Done {
 			break
 		}
 		sum += count
-		prefixtime += timepiece
 	}
 	return T50, T90, T99
 }
