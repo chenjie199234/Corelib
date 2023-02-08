@@ -2683,7 +2683,7 @@ func genToBService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 		g.P("\t\tAxios.request(config)")
 		g.P("\t\t.then(function(response){")
 		g.P("\t\t\ttry{")
-		g.P("\t\t\t\tlet obj:", method.Output.GoIdent.GoName, "=JsonTo", method.Output.GoIdent.GoName, "(response.data)")
+		g.P("\t\t\t\tlet obj:", method.Output.GoIdent.GoName, "=JsonTo", method.Output.GoIdent.GoName, "(response.data.data)")
 		g.P("\t\t\t\tsuccessf(obj)")
 		g.P("\t\t\t}catch(e){")
 		g.P("\t\t\t\tlet err:Error={code:-1,msg:'response error'}")
