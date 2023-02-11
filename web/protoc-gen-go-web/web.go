@@ -24,6 +24,7 @@ const (
 	ioPackage        = protogen.GoImportPath("io")
 	contextPackage   = protogen.GoImportPath("context")
 	base64Package    = protogen.GoImportPath("encoding/base64")
+	stdjsonPackage   = protogen.GoImportPath("encoding/json")
 	protoPackage     = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	protojsonPackage = protogen.GoImportPath("google.golang.org/protobuf/encoding/protojson")
 	webPackage       = protogen.GoImportPath("github.com/chenjie199234/Corelib/web")
@@ -137,179 +138,172 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P(fname, "(", p1, ")", freturn, "{")
 		g.P("return func(ctx *", g.QualifiedGoIdent(webPackage.Ident("Context")), "){")
 		g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
-		g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetContentType(),", strconv.Quote("application/json"), "){")
-		g.P("data,e:=ctx.GetBody()")
-		g.P("if e!=nil{")
-		g.P("ctx.Abort(e)")
-		g.P("return")
-		g.P("}")
-		g.P("if len(data)>0{")
-		g.P("if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(data,req);e!=nil{")
-		g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
-		g.P("return")
-		g.P("}")
-		g.P("}")
-		g.P("}else if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetContentType(),", strconv.Quote("application/x-protobuf"), "){")
-		g.P("data,e:=ctx.GetBody()")
-		g.P("if e!=nil{")
-		g.P("ctx.Abort(e)")
-		g.P("return")
-		g.P("}")
-		g.P("if len(data)>0{")
-		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(data,req);e!=nil{")
-		g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
-		g.P("return")
-		g.P("}")
-		g.P("}")
-		g.P("}else{")
-		if len(method.Input.Fields) > 0 {
+		if httpmetohd == http.MethodPost || httpmetohd == http.MethodPut || httpmetohd == http.MethodPatch {
+			g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetContentType(),", strconv.Quote("application/json"), "){")
+			g.P("data,e:=ctx.GetBody()")
+			g.P("if e!=nil{")
+			g.P("ctx.Abort(e)")
+			g.P("return")
+			g.P("}")
+			g.P("if len(data)>0{")
+			g.P("if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(data,req);e!=nil{")
+			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
+			g.P("return")
+			g.P("}")
+			g.P("}")
+			g.P("}else if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetContentType(),", strconv.Quote("application/x-protobuf"), "){")
+			g.P("data,e:=ctx.GetBody()")
+			g.P("if e!=nil{")
+			g.P("ctx.Abort(e)")
+			g.P("return")
+			g.P("}")
+			g.P("if len(data)>0{")
+			g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(data,req);e!=nil{")
+			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
+			g.P("return")
+			g.P("}")
+			g.P("}")
+			g.P("}else{")
+			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
+			g.P("return")
+			g.P("}")
+		} else if len(method.Input.Fields) > 0 {
 			g.P("if e:=ctx.ParseForm();e!=nil{")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 			g.P("return")
 			g.P("}")
-		}
-		g.P("data:=", g.QualifiedGoIdent(bufpoolPackage.Ident("GetBuffer()")))
-		g.P("defer ", g.QualifiedGoIdent(bufpoolPackage.Ident("PutBuffer(data)")))
-		g.P("data.AppendByte('{')")
-		for _, field := range method.Input.Fields {
-			fname := string(field.Desc.Name())
-			switch field.Desc.Kind() {
-			case protoreflect.BoolKind:
-				if field.Desc.IsList() {
-					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)!=0{")
-					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
-					g.P("data.AppendByte('[')")
-					g.P("for _,form:=range forms{")
-					g.P("data.AppendString(form)")
-					g.P("data.AppendByte(',')")
-					g.P("}")
-					g.P("data.Bytes()[data.Len()-1] = ']'")
-					g.P("data.AppendByte(',')")
-					g.P("}")
-				} else {
-					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
-					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
-					g.P("data.AppendString(form)")
-					g.P("data.AppendByte(',')")
-					g.P("}")
-				}
-			case protoreflect.EnumKind:
-				fallthrough
-			case protoreflect.Int32Kind:
-				fallthrough
-			case protoreflect.Sint32Kind:
-				fallthrough
-			case protoreflect.Uint32Kind:
-				fallthrough
-			case protoreflect.Int64Kind:
-				fallthrough
-			case protoreflect.Sint64Kind:
-				fallthrough
-			case protoreflect.Uint64Kind:
-				fallthrough
-			case protoreflect.Sfixed32Kind:
-				fallthrough
-			case protoreflect.Fixed32Kind:
-				fallthrough
-			case protoreflect.FloatKind:
-				fallthrough
-			case protoreflect.Sfixed64Kind:
-				fallthrough
-			case protoreflect.Fixed64Kind:
-				fallthrough
-			case protoreflect.DoubleKind:
-				if field.Desc.IsList() {
-					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)!=0{")
-					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
-					g.P("data.AppendByte('[')")
-					g.P("for _,form:=range forms{")
-					g.P("data.AppendString(form)")
-					g.P("data.AppendByte(',')")
-					g.P("}")
-					g.P("data.Bytes()[data.Len()-1] = ']'")
-					g.P("data.AppendByte(',')")
-					g.P("}")
-				} else {
-					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
-					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
-					g.P("data.AppendString(form)")
-					g.P("data.AppendByte(',')")
-					g.P("}")
-				}
-			case protoreflect.BytesKind:
-				g.P("//req.", field.GoName, "'s type in protobuf is bytes,value should be base64 encoded")
-				g.P("//https://developers.google.com/protocol-buffers/docs/proto3#json")
-				fallthrough
-			case protoreflect.StringKind:
-				if field.Desc.IsList() {
-					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)!=0{")
-					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
-					g.P("data.AppendByte('[')")
-					g.P("for _,form:=range forms{")
-					g.P("if len(form)==0{")
-					g.P("data.AppendString(", strconv.Quote("\"\""), ")")
-					g.P("}else if len(form)<2 || form[0] !='\"' || form[len(form)-1]!='\"'{")
-					g.P("data.AppendByte('\"')")
-					g.P("data.AppendString(form)")
-					g.P("data.AppendByte('\"')")
-					g.P("}else{")
-					g.P("data.AppendString(form)")
-					g.P("}")
-					g.P("data.AppendByte(',')")
-					g.P("}")
-					g.P("data.Bytes()[data.Len()-1] = ']'")
-					g.P("data.AppendByte(',')")
-					g.P("}")
-				} else {
-					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
-					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
-					g.P("if len(form)<2 || form[0] !='\"' || form[len(form)-1]!='\"'{")
-					g.P("data.AppendByte('\"')")
-					g.P("data.AppendString(form)")
-					g.P("data.AppendByte('\"')")
-					g.P("}else{")
-					g.P("data.AppendString(form)")
-					g.P("}")
-					g.P("data.AppendByte(',')")
-					g.P("}")
-				}
-			case protoreflect.MessageKind:
-				if field.Desc.IsList() {
-					g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)!=0{")
-					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
-					g.P("data.AppendByte('[')")
-					g.P("for _,form:=range forms{")
-					g.P("if len(form)==0{")
-					g.P("data.AppendString(", strconv.Quote("null"), ")")
-					g.P("}else{")
-					g.P("data.AppendString(form)")
-					g.P("}")
-					g.P("data.AppendByte(',')")
-					g.P("}")
-					g.P("data.Bytes()[data.Len()-1] = ']'")
-					g.P("data.AppendByte(',')")
-					g.P("}")
-				} else {
-					g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
-					g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
-					g.P("data.AppendString(form)")
-					g.P("data.AppendByte(',')")
-					g.P("}")
+			g.P("data:=", g.QualifiedGoIdent(bufpoolPackage.Ident("GetBuffer()")))
+			g.P("defer ", g.QualifiedGoIdent(bufpoolPackage.Ident("PutBuffer(data)")))
+			g.P("data.AppendByte('{')")
+			for _, field := range method.Input.Fields {
+				fname := string(field.Desc.Name())
+				switch field.Desc.Kind() {
+				case protoreflect.BoolKind:
+					if field.Desc.IsList() {
+						g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)!=0{")
+						g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
+						g.P("data.AppendByte('[')")
+						g.P("for _,form:=range forms{")
+						g.P("data.AppendString(form)")
+						g.P("data.AppendByte(',')")
+						g.P("}")
+						g.P("data.Bytes()[data.Len()-1] = ']'")
+						g.P("data.AppendByte(',')")
+						g.P("}")
+					} else {
+						g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+						g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
+						g.P("data.AppendString(form)")
+						g.P("data.AppendByte(',')")
+						g.P("}")
+					}
+				case protoreflect.EnumKind:
+					fallthrough
+				case protoreflect.Int32Kind:
+					fallthrough
+				case protoreflect.Sint32Kind:
+					fallthrough
+				case protoreflect.Uint32Kind:
+					fallthrough
+				case protoreflect.Int64Kind:
+					fallthrough
+				case protoreflect.Sint64Kind:
+					fallthrough
+				case protoreflect.Uint64Kind:
+					fallthrough
+				case protoreflect.Sfixed32Kind:
+					fallthrough
+				case protoreflect.Fixed32Kind:
+					fallthrough
+				case protoreflect.FloatKind:
+					fallthrough
+				case protoreflect.Sfixed64Kind:
+					fallthrough
+				case protoreflect.Fixed64Kind:
+					fallthrough
+				case protoreflect.DoubleKind:
+					if field.Desc.IsList() {
+						g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)!=0{")
+						g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
+						g.P("data.AppendByte('[')")
+						g.P("for _,form:=range forms{")
+						g.P("data.AppendString(form)")
+						g.P("data.AppendByte(',')")
+						g.P("}")
+						g.P("data.Bytes()[data.Len()-1] = ']'")
+						g.P("data.AppendByte(',')")
+						g.P("}")
+					} else {
+						g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+						g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
+						g.P("data.AppendString(form)")
+						g.P("data.AppendByte(',')")
+						g.P("}")
+					}
+				case protoreflect.BytesKind:
+					g.P("//req.", field.GoName, "'s type in protobuf is bytes,value should be base64 encoded")
+					g.P("//https://developers.google.com/protocol-buffers/docs/proto3#json")
+					fallthrough
+				case protoreflect.StringKind:
+					if field.Desc.IsList() {
+						g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)!=0{")
+						g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
+						g.P("data.AppendByte('[')")
+						g.P("for _,form:=range forms{")
+						g.P("if len(form)==0{")
+						g.P("data.AppendString(", strconv.Quote("\"\""), ")")
+						g.P("}else{")
+						g.P("//transfer json escape")
+						g.P("formb,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(form)")
+						g.P("data.AppendByteSlice(formb)")
+						g.P("}")
+						g.P("data.AppendByte(',')")
+						g.P("}")
+						g.P("data.Bytes()[data.Len()-1] = ']'")
+						g.P("data.AppendByte(',')")
+						g.P("}")
+					} else {
+						g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+						g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
+						g.P("//transfer json escape")
+						g.P("formb,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(form)")
+						g.P("data.AppendByteSlice(formb)")
+						g.P("data.AppendByte(',')")
+						g.P("}")
+					}
+				case protoreflect.MessageKind:
+					if field.Desc.IsList() {
+						g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)!=0{")
+						g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
+						g.P("data.AppendByte('[')")
+						g.P("for _,form:=range forms{")
+						g.P("if len(form)==0{")
+						g.P("data.AppendString(", strconv.Quote("null"), ")")
+						g.P("}else{")
+						g.P("data.AppendString(form)")
+						g.P("}")
+						g.P("data.AppendByte(',')")
+						g.P("}")
+						g.P("data.Bytes()[data.Len()-1] = ']'")
+						g.P("data.AppendByte(',')")
+						g.P("}")
+					} else {
+						g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+						g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
+						g.P("data.AppendString(form)")
+						g.P("data.AppendByte(',')")
+						g.P("}")
+					}
 				}
 			}
+			g.P("if data.Len() > 1{")
+			g.P("data.Bytes()[data.Len()-1] = '}'")
+			g.P("if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(data.Bytes(),req);e!=nil{")
+			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
+			g.P("return")
+			g.P("}")
+			g.P("}")
 		}
-		g.P("if data.Len() == 1{")
-		g.P("data.AppendByte('}')")
-		g.P("}else{")
-		g.P("data.Bytes()[data.Len()-1] = '}'")
-		g.P("}")
-		g.P("if data.Len()>2{")
-		g.P("if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(data.Bytes(),req);e!=nil{")
-		g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
-		g.P("return")
-		g.P("}")
-		g.P("}")
-		g.P("}")
 
 		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		//check
@@ -601,7 +595,9 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("}")
 					} else {
 						g.P("query.AppendString(", strconv.Quote(fname+"="), ")")
+						g.P("if req.Get", field.GoName, "()!=\"\"{")
 						g.P("query.AppendString(", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(req.Get", field.GoName, "()))")
+						g.P("}")
 						g.P("query.AppendByte('&')")
 					}
 				case protoreflect.BytesKind:
@@ -644,7 +640,6 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("}else{")
 						g.P("tmpbuf.AppendByte(',')")
 						g.P("}")
-						g.P("tmpbuf.AppendByte('\"')")
 						switch field.Message.Fields[0].Desc.Kind() {
 						case protoreflect.Int32Kind:
 							fallthrough
@@ -652,29 +647,37 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							fallthrough
 						case protoreflect.Sfixed32Kind:
 							//int32
+							g.P("tmpbuf.AppendByte('\"')")
 							g.P("tmpbuf.AppendInt32(k)")
+							g.P("tmpbuf.AppendByte('\"')")
 						case protoreflect.Int64Kind:
 							fallthrough
 						case protoreflect.Sint64Kind:
 							fallthrough
 						case protoreflect.Sfixed64Kind:
 							//int64
+							g.P("tmpbuf.AppendByte('\"')")
 							g.P("tmpbuf.AppendInt64(k)")
+							g.P("tmpbuf.AppendByte('\"')")
 						case protoreflect.Uint32Kind:
 							fallthrough
 						case protoreflect.Fixed32Kind:
 							//uint32
+							g.P("tmpbuf.AppendByte('\"')")
 							g.P("tmpbuf.AppendUint32(k)")
+							g.P("tmpbuf.AppendByte('\"')")
 						case protoreflect.Uint64Kind:
 							fallthrough
 						case protoreflect.Fixed64Kind:
 							//uint64
+							g.P("tmpbuf.AppendByte('\"')")
 							g.P("tmpbuf.AppendUint64(k)")
+							g.P("tmpbuf.AppendByte('\"')")
 						case protoreflect.StringKind:
-							//string
-							g.P("tmpbuf.AppendString(k)")
+							g.P("//transfer the json escape")
+							g.P("kk,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(k)")
+							g.P("tmpbuf.AppendByteSlice(kk)")
 						}
-						g.P("tmpbuf.AppendByte('\"')")
 						g.P("tmpbuf.AppendByte(':')")
 						switch field.Message.Fields[1].Desc.Kind() {
 						case protoreflect.BoolKind:
@@ -710,9 +713,9 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						case protoreflect.DoubleKind:
 							g.P("tmpbuf.AppendFloat64(v)")
 						case protoreflect.StringKind:
-							g.P("tmpbuf.AppendByte('\"')")
-							g.P("tmpbuf.AppendString(v)")
-							g.P("tmpbuf.AppendByte('\"')")
+							g.P("//transfer the json escape")
+							g.P("vv,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(v)")
+							g.P("tmpbuf.AppendByteSlice(vv)")
 						case protoreflect.BytesKind:
 							g.P("//req.", field.GoName, "is a map,it's value's type in protobuf is bytes,value should be base64 encoded")
 							g.P("//https://developers.google.com/protocol-buffers/docs/proto3#json")

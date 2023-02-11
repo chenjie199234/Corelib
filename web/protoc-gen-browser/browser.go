@@ -901,7 +901,9 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t\tif(element==null||element==undefined){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
 				g.P("\t\t\t}")
-				g.P("\t\t\ts+='\"'+element+'\",'")
+				g.P("\t\t\t//transfer the json escape")
+				g.P("\t\t\tlet vv=JSON.stringify(element)")
+				g.P("\t\t\ts+=vv+','")
 				g.P("\t\t}")
 				g.P("\t\ts=s.substr(0,s.length-1)+'],'")
 				g.P("\t}")
@@ -909,7 +911,9 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
 				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
 				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":\"'+msg.", f.Desc.Name(), "+'\",'")
+				g.P("\t\t//transfer the json escape")
+				g.P("\t\tlet vv=JSON.stringify(msg.", f.Desc.Name(), ")")
+				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":'+vv+','")
 				g.P("\t}")
 			}
 		case protoreflect.BytesKind:
@@ -993,7 +997,9 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string\"")
 					g.P("\t\t\t}")
-					g.P("\t\t\ts+='\"'+kv[0]+'\":'")
+					g.P("\t\t\t//transfer the json escape")
+					g.P("\t\t\tlet vv=JSON.stringify(kv[0])")
+					g.P("\t\t\ts+=vv+':'")
 				}
 				switch f.Message.Fields[1].Desc.Kind() {
 				case protoreflect.BoolKind:
@@ -1065,7 +1071,9 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string\"")
 					g.P("\t\t\t}")
-					g.P("\t\t\ts+='\"'+kv[1]+'\",'")
+					g.P("\t\t\t//transfer the json escape")
+					g.P("\t\t\tlet vv=JSON.stringify(kv[1])")
+					g.P("\t\t\ts+=vv+','")
 				case protoreflect.BytesKind:
 					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string\"")
@@ -1524,7 +1532,9 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined){")
 					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string\"")
 					g.P("\t\t\t}")
-					g.P("\t\t\ttmps+='\"'+kv[0]+'\":'")
+					g.P("\t\t\t//transfer the json escape")
+					g.P("\t\t\tlet kk=JSON.stringify(kv[0])")
+					g.P("\t\t\ttmps+=kk+':'")
 				}
 				switch f.Message.Fields[1].Desc.Kind() {
 				case protoreflect.BoolKind:
@@ -1596,7 +1606,9 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string\"")
 					g.P("\t\t\t}")
-					g.P("\t\t\ttmps+='\"'+kv[1]+'\",'")
+					g.P("\t\t\t//transfer the json escape")
+					g.P("\t\t\tlet vv=JSON.stringify(kv[1])")
+					g.P("\t\t\ttmps+=vv+','")
 				case protoreflect.BytesKind:
 					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
 					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string\"")
