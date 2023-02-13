@@ -118,7 +118,7 @@ func crpcDNS(group, name string) (map[string]*crpc.RegisterData, error) {
 	return result, nil
 }
 
-func getWebClientConfig() *web.ClientConfig {
+func GetWebClientConfig() *web.ClientConfig {
 	wc := config.GetWebClientConfig()
 	return &web.ClientConfig{
 		ConnectTimeout: time.Duration(wc.ConnectTimeout),
