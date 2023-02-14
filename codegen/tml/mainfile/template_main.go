@@ -41,8 +41,16 @@ func main() {
 		publicmids.UpdateAccessConfig(ac.Accesses)
 	})
 	defer config.Close()
-	publicmids.UpdateRateRedisInstance(config.GetRedis("rate_redis"))
-	publicmids.UpdateSessionRedisInstance(config.GetRedis("session_redis"))
+	if rateredis := config.GetRedis("rate_redis"); rateredis != nil {
+		publicmids.UpdateRateRedisInstance(rateredis)
+	} else {
+		log.Warning(nil, "[main] rate redis missing,all rate check will be failed")
+	}
+	if sessionredis := config.GetRedis("session_redis"); sessionredis != nil {
+		publicmids.UpdateSessionRedisInstance(sessionredis)
+	} else {
+		log.Warning(nil, "[main] session redis missing,all session event will be failed")
+	}
 	//start the whole business service
 	if e := service.StartService(); e != nil {
 		log.Error(nil,e)
