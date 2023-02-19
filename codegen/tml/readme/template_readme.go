@@ -12,8 +12,9 @@ $$$
 运行cmd脚本可查看使用方法.windows下将./cmd.sh换为cmd.bat
 ./cmd.sh help 输出帮助信息
 ./cmd.sh pb 解析proto文件,生成桩代码
-./cmd.sh new 在该项目中创建一个新的子服务
-./cmd.sh kube 增加或者更新kubernetes的配置
+./cmd.sh sub 在该项目中创建一个新的子服务
+./cmd.sh kube 新建kubernetes的配置
+./cmd.sh html 新建前端html代码模版
 $$$
 
 ### 服务端口
