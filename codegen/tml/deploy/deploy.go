@@ -1,12 +1,11 @@
-package kubernetes
+package deploy
 
 import (
-	"fmt"
 	"os"
 	"text/template"
 )
 
-const dockerfiletext = `FROM golang:1.18-buster as builder
+const docker = `FROM golang:1.18-buster as builder
 ENV GOSUMDB='off' \
 	GOOS='linux' \
 	GOARCH='amd64' \
@@ -24,7 +23,7 @@ EXPOSE 6060 8000 9000 10000
 COPY --from=builder /code/main /code/AppConfig.json /code/SourceConfig.json ./
 ENTRYPOINT ["./main"]`
 
-const deploymenttext = `apiVersion: apps/v1
+const deployment = `apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{.ProjectName}}-deployment
@@ -179,60 +178,47 @@ spec:
           serviceName: {{.ProjectName}}
           servicePort: 8000{{ end }}`
 
-const path = "./"
-const dockerfilename = "Dockerfile"
-const deploymentname = "deployment.yaml"
-
-var dockerfiletml *template.Template
-var dockerfilefile *os.File
-
-var deploymenttml *template.Template
-var deploymentfile *os.File
-
-func init() {
-	var e error
-	dockerfiletml, e = template.New("dockerfile").Parse(dockerfiletext)
-	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
-	}
-
-	deploymenttml, e = template.New("deployment").Parse(deploymenttext)
-	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
-	}
-}
-func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
-	}
-	dockerfilefile, e = os.OpenFile(path+dockerfilename, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+dockerfilename, e))
-	}
-
-	deploymentfile, e = os.OpenFile(path+deploymentname, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+deploymentname, e))
-	}
-}
-
 type data struct {
 	ProjectName string
 	NeedService bool
 	NeedIngress bool
 }
 
-func Execute(projectname string, needservice bool, needingress bool) {
-	if e := dockerfiletml.Execute(dockerfilefile, projectname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+dockerfilename, e))
+func CreatePathAndFile(projectname string, needservice bool, needingress bool) {
+	dockerfile, e := os.OpenFile("./Dockerfile", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if e != nil {
+		panic("open ./Dockerfile error: " + e.Error())
 	}
-	tempdata := &data{
+	if _, e := dockerfile.WriteString(docker); e != nil {
+		panic("write ./Dockerfile error: " + e.Error())
+	}
+	if e := dockerfile.Sync(); e != nil {
+		panic("sync ./Dockerfile error: " + e.Error())
+	}
+	if e := dockerfile.Close(); e != nil {
+		panic("close ./Dockerfile error: " + e.Error())
+	}
+
+	tmp := &data{
 		ProjectName: projectname,
 		NeedService: needservice,
 		NeedIngress: needingress,
 	}
-	if e := deploymenttml.Execute(deploymentfile, tempdata); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+deploymentname, e))
+	deploymenttemplate, e := template.New("./deployment.yaml").Parse(deployment)
+	if e != nil {
+		panic("parse ./deployment.yaml template error: " + e.Error())
+	}
+	kubernetesfile, e := os.OpenFile("./deployment.yaml", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if e != nil {
+		panic("open ./deployment.yaml error: " + e.Error())
+	}
+	if e := deploymenttemplate.Execute(kubernetesfile, tmp); e != nil {
+		panic("write ./deployment.yaml error: " + e.Error())
+	}
+	if e := kubernetesfile.Sync(); e != nil {
+		panic("sync ./deployment.yaml error: " + e.Error())
+	}
+	if e := kubernetesfile.Close(); e != nil {
+		panic("close ./deployment.yaml error: " + e.Error())
 	}
 }

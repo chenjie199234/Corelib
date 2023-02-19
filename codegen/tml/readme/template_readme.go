@@ -1,13 +1,12 @@
 package readme
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"text/template"
 )
 
-const text = `# {{.}}
+const txt = `# {{.}}
 $$$
 {{.}}是一个微服务.
 运行cmd脚本可查看使用方法.windows下将./cmd.sh换为cmd.bat
@@ -48,31 +47,22 @@ AppConfig.json该文件配置了该服务需要使用的业务配置,可热更�
 SourceConfig.json该文件配置了该服务需要使用的资源配置,不热更新
 $$$`
 
-const path = "./"
-const name = "README.md"
-
-var tml *template.Template
-var file *os.File
-
-func init() {
-	var e error
-	tml, e = template.New("api").Parse(strings.Replace(text, "$", "`", -1))
+func CreatePathAndFile(projectname string) {
+	readmetemplate, e := template.New("./README.md").Parse(strings.Replace(txt, "$", "`", -1))
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./README.md template error: " + e.Error())
 	}
-}
-func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
-	}
-	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e := os.OpenFile("./README.md", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
+		panic("open ./README.md error: " + e.Error())
 	}
-}
-func Execute(ProjectName string) {
-	if e := tml.Execute(file, ProjectName); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
+	if e := readmetemplate.Execute(file, projectname); e != nil {
+		panic("write ./README.md error: " + e.Error())
+	}
+	if e := file.Sync(); e != nil {
+		panic("sync ./README.md error: " + e.Error())
+	}
+	if e := file.Close(); e != nil {
+		panic("close ./README.md error: " + e.Error())
 	}
 }

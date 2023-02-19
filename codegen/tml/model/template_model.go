@@ -1,12 +1,11 @@
 package model
 
 import (
-	"fmt"
 	"os"
 	"text/template"
 )
 
-const text = `package model
+const txt = `package model
 
 import "os"
 
@@ -25,36 +24,34 @@ func init() {
 	}
 }`
 
-const path = "./model/"
-const name = "model.go"
-
 type data struct {
 	PackageName string
 	ProjectName string
 }
 
-var tml *template.Template
-var file *os.File
-
-func init() {
-	var e error
-	tml, e = template.New("model").Parse(text)
+func CreatePathAndFile(packagename, projectname string) {
+	if e := os.MkdirAll("./model/", 0755); e != nil {
+		panic("mkdir ./model/ error: " + e.Error())
+	}
+	tmp := &data{
+		PackageName: packagename,
+		ProjectName: projectname,
+	}
+	modeltemplate, e := template.New("./model/model.go").Parse(txt)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./model/model.go template error: " + e.Error())
 	}
-}
-func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
-	}
-	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e := os.OpenFile("./model/model.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
+		panic("open ./model/model.go error: " + e.Error())
 	}
-}
-func Execute(PackageName, ProjectName string) {
-	if e := tml.Execute(file, &data{PackageName: PackageName, ProjectName: ProjectName}); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
+	if e := modeltemplate.Execute(file, tmp); e != nil {
+		panic("write ./model/model.go error: " + e.Error())
+	}
+	if e := file.Sync(); e != nil {
+		panic("sync ./model/model.go error: " + e.Error())
+	}
+	if e := file.Close(); e != nil {
+		panic("close ./model/model.go error: " + e.Error())
 	}
 }

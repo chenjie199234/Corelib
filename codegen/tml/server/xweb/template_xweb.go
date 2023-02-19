@@ -1,12 +1,11 @@
 package xweb
 
 import (
-	"fmt"
 	"os"
 	"text/template"
 )
 
-const text = `package xweb
+const txt = `package xweb
 
 import (
 	"net/http"
@@ -50,7 +49,7 @@ func StartWebServer() {
 	}
 	var e error
 	if s, e = web.NewWebServer(webc, model.Group, model.Name); e != nil {
-		log.Error(nil,"[xweb] new error:", e)
+		log.Error(nil, "[xweb] new error:", e)
 		return
 	}
 	UpdateHandlerTimeout(config.AC.HandlerTimeout)
@@ -65,10 +64,10 @@ func StartWebServer() {
 	//api.RegisterExampleWebServer(s, service.SvcExample, mids.AllMids())
 
 	if e = s.StartWebServer(":8000"); e != nil && e != web.ErrServerClosed {
-		log.Error(nil,"[xweb] start error:", e)
+		log.Error(nil, "[xweb] start error:", e)
 		return
 	}
-	log.Info(nil,"[xweb] server closed")
+	log.Info(nil, "[xweb] server closed")
 }
 
 // UpdateHandlerTimeout -
@@ -108,31 +107,25 @@ func StopWebServer(force bool) {
 	}
 }`
 
-const path = "./server/xweb/"
-const name = "xweb.go"
-
-var tml *template.Template
-var file *os.File
-
-func init() {
-	var e error
-	tml, e = template.New("xweb").Parse(text)
+func CreatePathAndFile(packagename string) {
+	if e := os.MkdirAll("./server/xweb/", 0755); e != nil {
+		panic("mkdir ./server/xweb/ error: " + e.Error())
+	}
+	xwebtemplate, e := template.New("./server/xweb/xweb.go").Parse(txt)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./server/xweb/xweb.go template error: " + e.Error())
 	}
-}
-func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
-	}
-	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e := os.OpenFile("./server/xweb/xweb.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
+		panic("open ./server/xweb/xweb.go error: " + e.Error())
 	}
-}
-func Execute(PackageName string) {
-	if e := tml.Execute(file, PackageName); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
+	if e := xwebtemplate.Execute(file, packagename); e != nil {
+		panic("write ./server/xweb/xweb.go error: " + e.Error())
+	}
+	if e := file.Sync(); e != nil {
+		panic("sync ./server/xweb/xweb.go error: " + e.Error())
+	}
+	if e := file.Close(); e != nil {
+		panic("close ./server/xweb/xweb.go error: " + e.Error())
 	}
 }

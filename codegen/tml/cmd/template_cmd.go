@@ -1,13 +1,12 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"text/template"
 )
 
-const textbash = `#!/bin/bash
+const txtbash = `#!/bin/bash
 #      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
 
 cd $(dirname $0)
@@ -15,7 +14,7 @@ cd $(dirname $0)
 help() {
 	echo "cmd.sh — every thing you need"
 	echo "         please install git"
-	echo "         please install golang"
+	echo "         please install golang(1.18+)"
 	echo "         please install protoc           (github.com/protocolbuffers/protobuf)"
 	echo "         please install protoc-gen-go    (github.com/protocolbuffers/protobuf-go)"
 	echo "         please install codegen          (github.com/chenjie199234/Corelib)"
@@ -24,10 +23,11 @@ help() {
 	echo "   ./cmd.sh <option>"
 	echo ""
 	echo "Options:"
-	echo "   pb                        Generate the proto in this program"
-	echo "   new <sub service name>    Create a new sub service"
-	echo "   kube                      Update or add kubernetes config"
-	echo "   h/-h/help/-help/--help    Show this message"
+	echo "   pb                        Generate the proto in this program."
+	echo "   sub <sub service name>    Create a new sub service."
+	echo "   kube                      Update kubernetes config."
+	echo "   html                      Create html template."
+	echo "   h/-h/help/-help/--help    Show this message."
 }
 
 pb() {
@@ -50,12 +50,16 @@ pb() {
 	go mod tidy
 }
 
-new() {
-	codegen -n {{.ProjectName}} -p {{.PackageName}} -s $1
+sub() {
+	codegen -n {{.ProjectName}} -p {{.PackageName}} -sub $1
 }
 
 kube() {
-	codegen -n {{.ProjectName}} -p {{.PackageName}} -k
+	codegen -n {{.ProjectName}} -p {{.PackageName}} -kube
+}
+
+html() {
+	codegen -n {{.ProjectName}} -p {{.PackageName}} -html
 }
 
 if !(type git >/dev/null 2>&1);then
@@ -98,14 +102,19 @@ if [[ "$1" == "kube" ]];then
 	exit 0
 fi
 
-if [[ $# == 2 ]] && [[ "$1" == "new" ]];then
-	new $2
+if [[ "$1" == "html" ]];then
+	html
+	exit 0
+fi
+
+if [[ $# == 2 ]] && [[ "$1" == "sub" ]];then
+	sub $2
 	exit 0
 fi
 
 echo "option unsupport"
 help`
-const textbat = `@echo off
+const txtbat = `@echo off
 REM      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
 
 cd %~dp0
@@ -182,23 +191,29 @@ if %1 == "kube" (
 if "%1" ==  "kube" (
 	goto :kube
 )
-if %1 == "new" (
-	if "%2" == "" (
-		goto :help
-	)
-	if %2 == "" (
-		goto :help
-	)
-	goto :new
+if %1 == "html" (
+	goto :html
 )
-if "%1" == "new" (
+if "%1" ==  "html" (
+	goto :html
+)
+if %1 == "sub" (
 	if "%2" == "" (
 		goto :help
 	)
 	if %2 == "" (
 		goto :help
 	)
-	goto :new
+	goto :sub
+)
+if "%1" == "sub" (
+	if "%2" == "" (
+		goto :help
+	)
+	if %2 == "" (
+		goto :help
+	)
+	goto :sub
 )
 
 :pb
@@ -222,17 +237,21 @@ if "%1" == "new" (
 goto :end
 
 :kube
-	codegen -n {{.ProjectName}} -p {{.PackageName}} -k
+	codegen -n {{.ProjectName}} -p {{.PackageName}} -kube
 goto :end
 
-:new
-	codegen -n {{.ProjectName}} -p {{.PackageName}} -s %2
+:html
+	codegen -n {{.ProjectName}} -p {{.PackageName}} -html
+goto :end
+
+:sub
+	codegen -n {{.ProjectName}} -p {{.PackageName}} -sub %2
 goto :end
 
 :help
 	echo cmd.bat — every thing you need
 	echo           please install git
-	echo           please install golang
+	echo           please install golang(1.18+)
 	echo           please install protoc           (github.com/protocolbuffers/protobuf)
 	echo           please install protoc-gen-go    (github.com/protocolbuffers/protobuf-go)
 	echo           please install codegen          (github.com/chenjie199234/Corelib)
@@ -242,63 +261,61 @@ goto :end
 	echo
 	echo Options:
 	echo    pb                        Generate the proto in this program.
-	echo    new <sub service name^>    Create a new sub service.
-	echo    kube                      Update or add kubernetes config.
+	echo    sub <sub service name^>    Create a new sub service.
+	echo    kube                      Update kubernetes config.
+	echo    html                      Create html template.
 	echo    h/-h/help/-help/--help    Show this message.
 
 :end
 pause
 exit /b 0`
 
-const path = "./"
-const namebash = "cmd.sh"
-const namebat = "cmd.bat"
-
-var tmlbash *template.Template
-var tmlbat *template.Template
-var filebash *os.File
-var filebat *os.File
-
-type Data struct {
+type data struct {
 	PackageName  string
 	ProjectName  string
 	GoListFormat string
 }
 
-func init() {
-	var e error
-	tmlbash, e = template.New("bash").Parse(textbash)
+func CreatePathAndFile(packagename, projectname string) {
+	tmp := &data{
+		PackageName:  packagename,
+		ProjectName:  projectname,
+		GoListFormat: "\"{{.Dir}}\"",
+	}
+	//./cmd.sh
+	bashtemplate, e := template.New("./cmd.sh").Parse(txtbash)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./cmd.sh error: " + e.Error())
 	}
-	tmlbat, e = template.New("bat").Parse(strings.Replace(textbat, "\n", "\r\n", -1))
+	bashfile, e := os.OpenFile("./cmd.sh", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0755)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("open ./cmd.sh error: " + e.Error())
 	}
-}
-func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
+	if e := bashtemplate.Execute(bashfile, tmp); e != nil {
+		panic("write ./cmd.sh error: " + e.Error())
 	}
-	filebash, e = os.OpenFile(path+namebash, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if e := bashfile.Sync(); e != nil {
+		panic("sync ./cmd.sh error: " + e.Error())
+	}
+	if e := bashfile.Close(); e != nil {
+		panic("close ./cmd.sh error: " + e.Error())
+	}
+	//./cmd.bat
+	battemplate, e := template.New("./cmd.bat").Parse(strings.Replace(txtbat, "\n", "\r\n", -1))
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+namebash, e))
+		panic("parse ./cmd.bat error: " + e.Error())
 	}
-	e = os.Chmod(path+namebash, 0755)
+	batfile, e := os.OpenFile("./cmd.bat", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("change file:%s execute right error:%s", path+namebash, e))
+		panic("parse ./cmd.bat error: " + e.Error())
 	}
-	filebat, e = os.OpenFile(path+namebat, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+namebat, e))
+	if e := battemplate.Execute(batfile, tmp); e != nil {
+		panic("write ./cmd.bat error: " + e.Error())
 	}
-}
-func Execute(PackageName, ProjectName string) {
-	if e := tmlbash.Execute(filebash, &Data{PackageName: PackageName, ProjectName: ProjectName, GoListFormat: "\"{{.Dir}}\""}); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+namebash, e))
+	if e := batfile.Sync(); e != nil {
+		panic("sync ./cmd.bat error: " + e.Error())
 	}
-	if e := tmlbat.Execute(filebat, &Data{PackageName: PackageName, ProjectName: ProjectName, GoListFormat: "\"{{.Dir}}\""}); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+namebat, e))
+	if e := batfile.Close(); e != nil {
+		panic("close ./cmd.bat error: " + e.Error())
 	}
 }

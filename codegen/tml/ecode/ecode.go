@@ -1,12 +1,10 @@
 package ecode
 
 import (
-	"fmt"
 	"os"
-	"text/template"
 )
 
-const text = `package ecode
+const txt = `package ecode
 
 import (
 	"net/http"
@@ -29,7 +27,7 @@ var (
 	ErrBusy       = cerror.ErrBusy       //10011 // http code 503
 	ErrNotExist   = cerror.ErrNotExist   //10012 // http code 404
 
-	ErrBusiness1 = cerror.MakeError(20001,http.StatusBadRequest, "business error 1")
+	ErrBusiness1 = cerror.MakeError(20001, http.StatusBadRequest, "business error 1")
 )
 
 func ReturnEcode(originerror error, defaulterror *cerror.Error) error {
@@ -39,31 +37,21 @@ func ReturnEcode(originerror error, defaulterror *cerror.Error) error {
 	return defaulterror
 }`
 
-const path = "./ecode/"
-const filename = "ecode.go"
-
-var tml *template.Template
-var file *os.File
-
-func init() {
-	var e error
-	tml, e = template.New("ecode").Parse(text)
-	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
-	}
-}
 func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
+	if e := os.MkdirAll("./ecode/", 0755); e != nil {
+		panic("mkdir ./ecode/ error: " + e.Error())
 	}
-	file, e = os.OpenFile(path+filename, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e := os.OpenFile("./ecode/ecode.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+filename, e))
+		panic("open ./ecode/ecode.go error: " + e.Error())
 	}
-}
-func Execute() {
-	if e := tml.Execute(file, nil); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+filename, e))
+	if _, e := file.WriteString(txt); e != nil {
+		panic("write ./ecode/ecode.go error: " + e.Error())
+	}
+	if e := file.Sync(); e != nil {
+		panic("sync ./ecode/ecode.go error: " + e.Error())
+	}
+	if e := file.Close(); e != nil {
+		panic("close ./ecode/ecode.go error: " + e.Error())
 	}
 }

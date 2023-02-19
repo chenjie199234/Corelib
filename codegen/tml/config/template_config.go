@@ -1,13 +1,12 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"text/template"
 )
 
-const text = `package config
+const txt = `package config
 
 import (
 	"os"
@@ -130,7 +129,7 @@ func initenv() {
 		log.Warning(nil, "[config.initenv] missing env DEPLOY_ENV")
 	}
 }`
-const apptext = `package config
+const apptxt = `package config
 
 import (
 	"encoding/json"
@@ -147,13 +146,13 @@ import (
 // AppConfig can hot update
 // this is the config used for this app
 type AppConfig struct {
-	HandlerTimeout         map[string]map[string]ctime.Duration      $json:"handler_timeout"$      //first key path,second key method(GET,POST,PUT,PATCH,DELETE,CRPC,GRPC),value timeout
-	WebPathRewrite         map[string]map[string]string              $json:"web_path_rewrite"$     //first key method(GET,POST,PUT,PATCH,DELETE),second key origin url,value new url
-	HandlerRate            map[string][]*publicmids.PathRateConfig   $json:"handler_rate"$         //key path
-	Accesses               map[string][]*publicmids.PathAccessConfig $json:"accesses"$             //key path
-	TokenSecret            string                                    $json:"token_secret"$         //if don't need token check,this can be ingored
-	SessionTokenExpire     ctime.Duration                            $json:"session_token_expire"$ //if don't need session and token check,this can be ignored
-	Service                *ServiceConfig                            $json:"service"$
+	HandlerTimeout     map[string]map[string]ctime.Duration      $json:"handler_timeout"$      //first key path,second key method(GET,POST,PUT,PATCH,DELETE,CRPC,GRPC),value timeout
+	WebPathRewrite     map[string]map[string]string              $json:"web_path_rewrite"$     //first key method(GET,POST,PUT,PATCH,DELETE),second key origin url,value new url
+	HandlerRate        map[string][]*publicmids.PathRateConfig   $json:"handler_rate"$         //key path
+	Accesses           map[string][]*publicmids.PathAccessConfig $json:"accesses"$             //key path
+	TokenSecret        string                                    $json:"token_secret"$         //if don't need token check,this can be ingored
+	SessionTokenExpire ctime.Duration                            $json:"session_token_expire"$ //if don't need session and token check,this can be ignored
+	Service            *ServiceConfig                            $json:"service"$
 }
 type ServiceConfig struct {
 	//add your config here
@@ -253,7 +252,7 @@ func initremoteapp(notice func(*AppConfig), wait chan *struct{}) (stopwatch func
 		}
 	})
 }`
-const sourcetext = `package config
+const sourcetxt = `package config
 
 import (
 	"context"
@@ -284,9 +283,9 @@ type sourceConfig struct {
 	CrpcClient  *CrpcClientConfig       $json:"crpc_client"$
 	WebServer   *WebServerConfig        $json:"web_server"$
 	WebClient   *WebClientConfig        $json:"web_client"$
-	Mongo       map[string]*MongoConfig $json:"mongo"$     //key example:xxx_mongo
-	Sql         map[string]*SqlConfig   $json:"sql"$       //key example:xx_sql
-	Redis       map[string]*RedisConfig $json:"redis"$     //key example:xx_redis
+	Mongo       map[string]*MongoConfig $json:"mongo"$ //key example:xxx_mongo
+	Sql         map[string]*SqlConfig   $json:"sql"$   //key example:xx_sql
+	Redis       map[string]*RedisConfig $json:"redis"$ //key example:xx_redis
 	KafkaPub    []*KafkaPubConfig       $json:"kafka_pub"$
 	KafkaSub    []*KafkaSubConfig       $json:"kafka_sub"$
 }
@@ -351,31 +350,31 @@ type WebClientConfig struct {
 
 // RedisConfig -
 type RedisConfig struct {
-	URL         string         $json:"url"$           //[redis/rediss]://[[username:]password@]host/[dbindex]
-	MaxOpen     uint16         $json:"max_open"$      //if this is 0,means no limit //this will overwrite the param in url
-	MaxIdle     uint16         $json:"max_idle"$      //defaule 100   //this will overwrite the param in url
-	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
-	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
-	ConnTimeout ctime.Duration $json:"conn_timeout"$  //default 250ms //this will overwrite the param in url
+	URL         string         $json:"url"$          //[redis/rediss]://[[username:]password@]host/[dbindex]
+	MaxOpen     uint16         $json:"max_open"$     //if this is 0,means no limit //this will overwrite the param in url
+	MaxIdle     uint16         $json:"max_idle"$     //defaule 100   //this will overwrite the param in url
+	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 10min //this will overwrite the param in url
+	IOTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms //this will overwrite the param in url
+	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms //this will overwrite the param in url
 }
 
 // SqlConfig -
 type SqlConfig struct {
-	URL         string         $json:"url"$           //[username:password@][protocol(address)]/[dbname][?param1=value1&...&paramN=valueN]
-	MaxOpen     uint16         $json:"max_open"$      //if this is 0,means no limit //this will overwrite the param in url
-	MaxIdle     uint16         $json:"max_idle"$      //default 100   //this will overwrite the param in url
-	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
-	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
-	ConnTimeout ctime.Duration $json:"conn_timeout"$  //default 250ms //this will overwrite the param in url
+	URL         string         $json:"url"$          //[username:password@][protocol(address)]/[dbname][?param1=value1&...&paramN=valueN]
+	MaxOpen     uint16         $json:"max_open"$     //if this is 0,means no limit //this will overwrite the param in url
+	MaxIdle     uint16         $json:"max_idle"$     //default 100   //this will overwrite the param in url
+	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 10min //this will overwrite the param in url
+	IOTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms //this will overwrite the param in url
+	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms //this will overwrite the param in url
 }
 
 // MongoConfig -
 type MongoConfig struct {
-	URL         string         $json:"url"$           //[mongodb/mongodb+srv]://[username:password@]host1,...,hostN/[dbname][?param1=value1&...&paramN=valueN]
-	MaxOpen     uint64         $json:"max_open"$      //if this is 0,means no limit //this will overwrite the param in url
-	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
-	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
-	ConnTimeout ctime.Duration $json:"conn_timeout"$  //default 250ms //this will overwrite the param in url
+	URL         string         $json:"url"$          //[mongodb/mongodb+srv]://[username:password@]host1,...,hostN/[dbname][?param1=value1&...&paramN=valueN]
+	MaxOpen     uint64         $json:"max_open"$     //if this is 0,means no limit //this will overwrite the param in url
+	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 10min //this will overwrite the param in url
+	IOTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms //this will overwrite the param in url
+	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms //this will overwrite the param in url
 }
 
 // KafkaPubConfig -
@@ -943,59 +942,54 @@ func GetKafkaPuber(topic string) *kafka.Writer {
 	return kafkaPubers[topic]
 }`
 
-const path = "./config/"
-const name = "config.go"
-const app = "app_config.go"
-const source = "source_config.go"
-
-var tml *template.Template
-var tmlapp *template.Template
-var tmlsource *template.Template
-var file *os.File
-var fileapp *os.File
-var filesource *os.File
-
-func init() {
-	var e error
-	tml, e = template.New("config").Parse(strings.ReplaceAll(text, "$", "`"))
+func CreatePathAndFile(packagename string) {
+	if e := os.MkdirAll("./config/", 0755); e != nil {
+		panic("mkdir ./config/ error: " + e.Error())
+	}
+	//./config/config.go
+	configtemplate, e := template.New("./config/config.go").Parse(txt)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./config/config.go template error: " + e.Error())
 	}
-	tmlapp, e = template.New("app_config").Parse(strings.ReplaceAll(apptext, "$", "`"))
+	configfile, e := os.OpenFile("./config/config.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("open ./config/config.go error: " + e.Error())
 	}
-	tmlsource, e = template.New("source_config").Parse(strings.ReplaceAll(sourcetext, "$", "`"))
+	if e := configtemplate.Execute(configfile, packagename); e != nil {
+		panic("write ./config/config.go error: " + e.Error())
+	}
+	if e := configfile.Sync(); e != nil {
+		panic("sync ./config/config.go error: " + e.Error())
+	}
+	if e := configfile.Close(); e != nil {
+		panic("close ./config/config.go error: " + e.Error())
+	}
+	//./config/app_config.go
+	appfile, e := os.OpenFile("./config/app_config.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("open ./config/app_config.go error: " + e.Error())
 	}
-}
-func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
+	if _, e := appfile.WriteString(strings.ReplaceAll(apptxt, "$", "`")); e != nil {
+		panic("write ./config/app_config.go error: " + e.Error())
 	}
-	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if e := appfile.Sync(); e != nil {
+		panic("sync ./config/app_config.go error: " + e.Error())
+	}
+	if e := appfile.Close(); e != nil {
+		panic("close ./config/app_config.go error: " + e.Error())
+	}
+	//./config/source_config.go
+	sourcefile, e := os.OpenFile("./config/source_config.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
+		panic("open ./config/source_config.go error: " + e.Error())
 	}
-	fileapp, e = os.OpenFile(path+app, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+app, e))
+	if _, e := sourcefile.WriteString(strings.ReplaceAll(sourcetxt, "$", "`")); e != nil {
+		panic("write ./config/source_config.go error: " + e.Error())
 	}
-	filesource, e = os.OpenFile(path+source, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+source, e))
+	if e := sourcefile.Sync(); e != nil {
+		panic("sync ./config/source_config.go error: " + e.Error())
 	}
-}
-func Execute(PackageName string) {
-	if e := tml.Execute(file, PackageName); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
-	}
-	if e := tmlapp.Execute(fileapp, nil); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+app, e))
-	}
-	if e := tmlsource.Execute(filesource, nil); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+source, e))
+	if e := sourcefile.Close(); e != nil {
+		panic("close ./config/source_config.go error: " + e.Error())
 	}
 }

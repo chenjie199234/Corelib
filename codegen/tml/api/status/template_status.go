@@ -1,12 +1,11 @@
 package status
 
 import (
-	"fmt"
 	"os"
 	"text/template"
 )
 
-const text = `syntax="proto3";
+const txt = `syntax="proto3";
 
 //this is the proto package name,all proto in this project must use this name as the proto package name
 package {{.ProjectName}};
@@ -33,36 +32,34 @@ message pingresp{
 	int64 server_timestamp=2;
 }`
 
-const path = "./api/"
-const name = "status.proto"
-
-var tml *template.Template
-var file *os.File
-
 type data struct {
 	PackageName string
 	ProjectName string
 }
 
-func init() {
-	var e error
-	tml, e = template.New("api").Parse(text)
+func CreatePathAndFile(packagename, projectname string) {
+	tmp := &data{
+		PackageName: packagename,
+		ProjectName: projectname,
+	}
+	if e := os.MkdirAll("./api/", 0755); e != nil {
+		panic("mkdir ./api/ error: " + e.Error())
+	}
+	prototemplate, e := template.New("./api/" + projectname + "_status.proto").Parse(txt)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./api/" + projectname + "_status.proto error: " + e.Error())
 	}
-}
-func CreatePathAndFile(ProjectName string) {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
-	}
-	file, e = os.OpenFile(path+ProjectName+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e := os.OpenFile("./api/"+projectname+"_status.proto", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+ProjectName+name, e))
+		panic("open ./api/" + projectname + "_status.proto error: " + e.Error())
 	}
-}
-func Execute(PackageName, ProjectName string) {
-	if e := tml.Execute(file, &data{PackageName: PackageName, ProjectName: ProjectName}); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
+	if e := prototemplate.Execute(file, tmp); e != nil {
+		panic("write ./api/" + projectname + "_status.proto error: " + e.Error())
+	}
+	if e := file.Sync(); e != nil {
+		panic("sync ./api/" + projectname + "_status.proto error: " + e.Error())
+	}
+	if e := file.Close(); e != nil {
+		panic("close ./api/" + projectname + "_status.proto error: " + e.Error())
 	}
 }

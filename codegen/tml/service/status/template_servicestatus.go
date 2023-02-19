@@ -1,12 +1,11 @@
 package status
 
 import (
-	"fmt"
 	"os"
 	"text/template"
 )
 
-const text = `package status
+const txt = `package status
 
 import (
 	"context"
@@ -26,7 +25,7 @@ import (
 
 // Service subservice for status business
 type Service struct {
-	stop      *graceful.Graceful
+	stop *graceful.Graceful
 
 	statusDao *statusdao.Dao
 }
@@ -42,7 +41,7 @@ func Start() *Service {
 }
 
 // Ping -
-func (s *Service) Ping(ctx context.Context,in *api.Pingreq) (*api.Pingresp, error) {
+func (s *Service) Ping(ctx context.Context, in *api.Pingreq) (*api.Pingresp, error) {
 	//if _, ok := ctx.(*crpc.Context); ok {
 	//        log.Info("this is a crpc call")
 	//}
@@ -60,31 +59,25 @@ func (s *Service) Stop() {
 	s.stop.Close(nil, nil)
 }`
 
-const path = "./service/status/"
-const name = "service.go"
-
-var tml *template.Template
-var file *os.File
-
-func init() {
-	var e error
-	tml, e = template.New("status").Parse(text)
+func CreatePathAndFile(packagename string) {
+	if e := os.MkdirAll("./service/status/", 0755); e != nil {
+		panic("mkdir ./service/status/ error: " + e.Error())
+	}
+	servicetemplate, e := template.New("./service/status/service.go").Parse(txt)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./service/status/service.go template error: " + e.Error())
 	}
-}
-func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
-	}
-	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e := os.OpenFile("./service/status/service.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
+		panic("open ./service/status/service.go error: " + e.Error())
 	}
-}
-func Execute(PackageName string) {
-	if e := tml.Execute(file, PackageName); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
+	if e := servicetemplate.Execute(file, packagename); e != nil {
+		panic("write ./service/status/service.go error: " + e.Error())
+	}
+	if e := file.Sync(); e != nil {
+		panic("sync ./service/status/service.go error: " + e.Error())
+	}
+	if e := file.Close(); e != nil {
+		panic("close ./service/status/service.go error: " + e.Error())
 	}
 }

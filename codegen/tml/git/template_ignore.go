@@ -1,12 +1,10 @@
 package git
 
 import (
-	"fmt"
 	"os"
-	"text/template"
 )
 
-const text = `*
+const txt = `*
 !.gitignore
 !/api/
 !/api/*
@@ -32,6 +30,10 @@ const text = `*
 !/util/*
 !/util/**/
 !/util/**/*
+!/html/
+!/html/*
+!/html/**/
+!/html/**/*
 !/server/
 !/server/*
 !/server/**/
@@ -51,31 +53,18 @@ const text = `*
 !README.md
 !SourceConfig.json`
 
-const path = "./"
-const name = ".gitignore"
-
-var tml *template.Template
-var file *os.File
-
-func init() {
-	var e error
-	tml, e = template.New("ignore").Parse(text)
-	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
-	}
-}
 func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
-	}
-	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e := os.OpenFile("./.gitignore", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
+		panic("open ./.gitignore error: " + e.Error())
 	}
-}
-func Execute() {
-	if e := tml.Execute(file, nil); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
+	if _, e := file.WriteString(txt); e != nil {
+		panic("write ./.gitignore error: " + e.Error())
+	}
+	if e := file.Sync(); e != nil {
+		panic("sync ./.gitignore error: " + e.Error())
+	}
+	if e := file.Close(); e != nil {
+		panic("close ./.gitignore error: " + e.Error())
 	}
 }

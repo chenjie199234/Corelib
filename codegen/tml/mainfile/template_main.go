@@ -1,12 +1,11 @@
 package mainfile
 
 import (
-	"fmt"
 	"os"
 	"text/template"
 )
 
-const text = `package main
+const txt = `package main
 
 import (
 	"os"
@@ -53,7 +52,7 @@ func main() {
 	}
 	//start the whole business service
 	if e := service.StartService(); e != nil {
-		log.Error(nil,e)
+		log.Error(nil, e)
 		return
 	}
 	//start low level net service
@@ -109,31 +108,22 @@ func main() {
 	wg.Wait()
 }`
 
-const path = "./"
-const name = "main.go"
-
-var tml *template.Template
-var file *os.File
-
-func init() {
-	var e error
-	tml, e = template.New("main").Parse(text)
+func CreatePathAndFile(packagename string) {
+	maintemplate, e := template.New("./main.go").Parse(txt)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./main.go template error: " + e.Error())
 	}
-}
-func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
-	}
-	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e := os.OpenFile("./main.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
+		panic("open ./main.go error: " + e.Error())
 	}
-}
-func Execute(PackageName string) {
-	if e := tml.Execute(file, PackageName); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
+	if e := maintemplate.Execute(file, packagename); e != nil {
+		panic("write ./main.go error: " + e.Error())
+	}
+	if e := file.Sync(); e != nil {
+		panic("sync ./main.go error: " + e.Error())
+	}
+	if e := file.Close(); e != nil {
+		panic("close ./main.go error: " + e.Error())
 	}
 }

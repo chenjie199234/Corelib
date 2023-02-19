@@ -1,12 +1,11 @@
 package service
 
 import (
-	"fmt"
 	"os"
 	"text/template"
 )
 
-const text = `package service
+const txt = `package service
 
 import (
 	"{{.}}/dao"
@@ -32,31 +31,25 @@ func StopService() {
 	SvcStatus.Stop()
 }`
 
-const path = "./service/"
-const name = "service.go"
-
-var tml *template.Template
-var file *os.File
-
-func init() {
-	var e error
-	tml, e = template.New("service").Parse(text)
+func CreatePathAndFile(packagename string) {
+	if e := os.MkdirAll("./service/", 0755); e != nil {
+		panic("mkdir ./service/ error: " + e.Error())
+	}
+	servicetemplate, e := template.New("./service/service.go").Parse(txt)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./service/service.go template error: " + e.Error())
 	}
-}
-func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
-	}
-	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e := os.OpenFile("./service/service.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
+		panic("open ./service/service.go error: " + e.Error())
 	}
-}
-func Execute(PackageName string) {
-	if e := tml.Execute(file, PackageName); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
+	if e := servicetemplate.Execute(file, packagename); e != nil {
+		panic("write ./service/service.go error: " + e.Error())
+	}
+	if e := file.Sync(); e != nil {
+		panic("sync ./service/service.go error: " + e.Error())
+	}
+	if e := file.Close(); e != nil {
+		panic("close ./service/service.go error: " + e.Error())
 	}
 }
