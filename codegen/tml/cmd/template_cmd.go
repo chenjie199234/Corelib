@@ -35,7 +35,7 @@ pb() {
 	rm ./api/*.md
 	rm ./api/*.ts
 	go mod tidy
-	corelib=$(go list -m -f {{.GoListFormat}} github.com/chenjie199234/Corelib)
+	corelib=$(go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib)
 	workdir=$(pwd)
 	cd $corelib
 	go install ./...
@@ -221,7 +221,7 @@ if "%1" == "sub" (
 	del >nul 2>nul .\api\*.md
 	del >nul 2>nul .\api\*.ts
 	go mod tidy
-	for /F %%i in ('go list -m -f {{.GoListFormat}} github.com/chenjie199234/Corelib') do ( set corelib=%%i )
+	for /F %%i in ('go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib') do ( set corelib=%%i )
 	set workdir=%cd%
 	cd %corelib%
 	go install ./...
@@ -271,16 +271,14 @@ pause
 exit /b 0`
 
 type data struct {
-	PackageName  string
-	ProjectName  string
-	GoListFormat string
+	PackageName string
+	ProjectName string
 }
 
 func CreatePathAndFile(packagename, projectname string) {
 	tmp := &data{
-		PackageName:  packagename,
-		ProjectName:  projectname,
-		GoListFormat: "\"{{.Dir}}\"",
+		PackageName: packagename,
+		ProjectName: projectname,
 	}
 	//./cmd.sh
 	bashtemplate, e := template.New("./cmd.sh").Parse(txtbash)
