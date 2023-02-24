@@ -24,8 +24,8 @@ const index = `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{.}}</title>
   </head>
-  <body style="display:flex;place-items:center;margin:0">
-    <div id="app" style="max-width:1280px;text-align:center;margin:0 auto"></div>
+  <body style="display:flex;margin:0">
+  <div id="app" style="display:flex;width:100%"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>`
@@ -91,8 +91,10 @@ const pkg = `{
 
 const main = `import { createApp } from 'vue'
 import app from './app.vue'
+import { createVuestic } from 'vuestic-ui'
+import 'vuestic-ui/css'
 
-createApp(app).mount('#app')`
+createApp(app).use(createVuestic()).mount('#app')`
 
 const app = `<script setup lang="ts">
 </script>
