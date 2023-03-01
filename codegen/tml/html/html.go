@@ -24,8 +24,8 @@ const index = `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{.}}</title>
   </head>
-  <body style="display:flex;margin:0">
-  <div id="app" style="display:flex;width:100%"></div>
+  <body>
+  <div id="app" style="display:flex;width:100%;height:100vh;overflow:hidden"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>`
