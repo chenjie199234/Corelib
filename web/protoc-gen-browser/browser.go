@@ -2593,19 +2593,34 @@ func genToCService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 		g.P("\t//don't set Content-Type in header")
 		g.P("\t", method.Desc.Name(), "(header: { [k: string]: string },req: ", method.Input.GoIdent.GoName, ",timeout: number,errorf: (arg: Error)=>void,successf: (arg: ", method.Output.GoIdent.GoName, ")=>void){")
 		g.P("\t\tif(!Number.isInteger(timeout)){")
-		g.P("\t\t\tthrow 'timeout must be integer'")
+		g.P("\t\t\terrorf({code:-2,msg:'timeout must be integer'})")
+		g.P("\t\t\treturn")
 		g.P("\t\t}")
 		g.P("\t\tif(header==null||header==undefined){")
 		g.P("\t\t\theader={}")
 		g.P("\t\t}")
 		if httpmetohd == http.MethodGet || httpmetohd == http.MethodDelete {
 			g.P("\t\theader[\"Content-Type\"] = \"application/x-www-form-urlencoded\"")
+			g.P("\t\tlet form: string=''")
+			g.P("\t\ttry{")
+			g.P("\t\t\tform=", method.Input.GoIdent.GoName, "ToForm(req)")
+			g.P("\t\t}catch(e){")
+			g.P("\t\t\terrorf({code:-2,msg:e})")
+			g.P("\t\t\treturn")
+			g.P("\t\t}")
 		} else {
 			g.P("\t\theader[\"Content-Type\"] = \"application/json\"")
+			g.P("\t\tlet body: string=''")
+			g.P("\t\ttry{")
+			g.P("\t\t\tbody=", method.Input.GoIdent.GoName, "ToJson(req)")
+			g.P("\t\t}catch(e){")
+			g.P("\t\t\terrorf({code:-2,msg:e})")
+			g.P("\t\t\treturn")
+			g.P("\t\t}")
 		}
 		g.P("\t\tlet config={")
 		if httpmetohd == http.MethodGet || httpmetohd == http.MethodDelete {
-			g.P("\t\t\turl:", pathname, "+'?'+", method.Input.GoIdent.GoName, "ToForm(req),")
+			g.P("\t\t\turl:", pathname, "+'?'+form,")
 		} else {
 			g.P("\t\t\turl:", pathname, ",")
 		}
@@ -2613,7 +2628,7 @@ func genToCService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 		g.P("\t\t\tbaseURL: this.host,")
 		g.P("\t\t\theaders: header,")
 		if httpmetohd == http.MethodPost || httpmetohd == http.MethodPatch || httpmetohd == http.MethodPut {
-			g.P("\t\t\tdata: ", method.Input.GoIdent.GoName, "ToJson(req),")
+			g.P("\t\t\tdata: body,")
 		}
 		g.P("\t\t\ttimeout: timeout,")
 		g.P("\t\t}")
