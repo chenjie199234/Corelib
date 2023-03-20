@@ -90,11 +90,11 @@ const pkg = `{
 }`
 
 const main = `import { createApp } from 'vue'
-import app from './app.vue'
+import main from './main.vue'
 import { createVuestic } from 'vuestic-ui'
 import 'vuestic-ui/css'
 
-createApp(app).use(createVuestic()).mount('#app')`
+createApp(main).use(createVuestic()).mount('#app')`
 
 const app = `<script setup lang="ts">
 </script>
@@ -202,19 +202,19 @@ func CreatePathAndFile(projectname string) {
 	if e := viteconfigfile.Close(); e != nil {
 		panic("close ./html/vite.config.ts error: " + e.Error())
 	}
-	//./html/src/app.vue
-	appfile, e := os.OpenFile("./html/src/app.vue", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	//./html/src/main.vue
+	appfile, e := os.OpenFile("./html/src/main.vue", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic("open ./html/src/app.vue error: " + e.Error())
+		panic("open ./html/src/main.vue error: " + e.Error())
 	}
 	if _, e := appfile.WriteString(app); e != nil {
-		panic("write ./html/src/app.vue error: " + e.Error())
+		panic("write ./html/src/main.vue error: " + e.Error())
 	}
 	if e := appfile.Sync(); e != nil {
-		panic("sync ./html/src/app.vue error: " + e.Error())
+		panic("sync ./html/src/main.vue error: " + e.Error())
 	}
 	if e := appfile.Close(); e != nil {
-		panic("close ./html/src/app.vue error: " + e.Error())
+		panic("close ./html/src/main.vue error: " + e.Error())
 	}
 	//./html/src/main.ts
 	mainfile, e := os.OpenFile("./html/src/main.ts", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
