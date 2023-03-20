@@ -2695,7 +2695,7 @@ func genToBService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 		g.P("\t\t}")
 		g.P("\t\theader[\"Content-Type\"] = \"application/json\"")
 		g.P("\t\tlet config={")
-		g.P("\t\t\turl:'/admin.config/proxy',")
+		g.P("\t\t\turl:'/admin.app/proxy',")
 		g.P("\t\t\tmethod: 'post',")
 		g.P("\t\t\tbaseURL: this.host,")
 		g.P("\t\t\theaders: header,")

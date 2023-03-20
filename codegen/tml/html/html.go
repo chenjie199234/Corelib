@@ -25,7 +25,7 @@ const index = `<!DOCTYPE html>
     <title>{{.}}</title>
   </head>
   <body>
-  <div id="app" style="display:flex;width:100%;height:100vh;overflow:hidden"></div>
+  <div id="app" style="display:flex;width:100%;height:100vh;overflow:hidden;background-color:white"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>`
