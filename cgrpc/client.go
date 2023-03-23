@@ -16,6 +16,7 @@ import (
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/graceful"
+	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -187,9 +188,11 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 		md.Set("Core-Metadata", common.Byte2str(d))
 	}
 	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
-	if traceid != "" {
-		md.Set("Core-Tracedata", traceid, c.selfappname, selfmethod, selfpath, strconv.Itoa(selfdeep))
+	if traceid == "" {
+		ctx = log.InitTrace(ctx, "", c.selfappname, host.Hostip, "unknown", "unknown", 0)
+		traceid, _, _, selfmethod, selfpath, selfdeep = log.GetTrace(ctx)
 	}
+	md.Set("Core-Tracedata", traceid, c.selfappname, selfmethod, selfpath, strconv.Itoa(selfdeep))
 	md.Set("Core-Target", c.serverappname)
 	ctx = gmetadata.NewOutgoingContext(ctx, md)
 	for {

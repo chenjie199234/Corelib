@@ -21,6 +21,7 @@ import (
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/graceful"
+	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
 )
 
@@ -252,16 +253,18 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	}
 
 	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
-	if traceid != "" {
-		tracedata, _ := json.Marshal(map[string]string{
-			"TraceID":      traceid,
-			"SourceApp":    c.selfappname,
-			"SourceMethod": selfmethod,
-			"SourcePath":   selfpath,
-			"Deep":         strconv.Itoa(selfdeep),
-		})
-		header.Set("Core-Tracedata", common.Byte2str(tracedata))
+	if traceid == "" {
+		ctx = log.InitTrace(ctx, "", c.selfappname, host.Hostip, "unknown", "unknown", 0)
+		traceid, _, _, selfmethod, selfpath, selfdeep = log.GetTrace(ctx)
 	}
+	tracedata, _ := json.Marshal(map[string]string{
+		"TraceID":      traceid,
+		"SourceApp":    c.selfappname,
+		"SourceMethod": selfmethod,
+		"SourcePath":   selfpath,
+		"Deep":         strconv.Itoa(selfdeep),
+	})
+	header.Set("Core-Tracedata", common.Byte2str(tracedata))
 	if c.globaltimeout != 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.globaltimeout))

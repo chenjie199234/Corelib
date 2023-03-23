@@ -18,6 +18,7 @@ import (
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/graceful"
+	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
 	"google.golang.org/protobuf/proto"
 )
@@ -256,15 +257,17 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		Body:     in,
 		Metadata: metadata,
 	}
-	traceid, selfappname, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
-	if traceid != "" {
-		msg.Tracedata = map[string]string{
-			"TraceID":      traceid,
-			"SourceApp":    selfappname,
-			"SourceMethod": selfmethod,
-			"SourcePath":   selfpath,
-			"Deep":         strconv.Itoa(selfdeep),
-		}
+	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
+	if traceid == "" {
+		ctx = log.InitTrace(ctx, "", c.selfappname, host.Hostip, "unknown", "unknown", 0)
+		traceid, _, _, selfmethod, selfpath, selfdeep = log.GetTrace(ctx)
+	}
+	msg.Tracedata = map[string]string{
+		"TraceID":      traceid,
+		"SourceApp":    c.selfappname,
+		"SourceMethod": selfmethod,
+		"SourcePath":   selfpath,
+		"Deep":         strconv.Itoa(selfdeep),
 	}
 	if c.c.GlobalTimeout != 0 {
 		var cancel context.CancelFunc
