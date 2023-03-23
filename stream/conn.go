@@ -299,7 +299,6 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 			if len(clientverifydata) > maxPieceLen {
 				data = clientverifydata[:maxPieceLen]
 				clientverifydata = clientverifydata[maxPieceLen:]
-
 			} else {
 				data = clientverifydata
 				clientverifydata = nil

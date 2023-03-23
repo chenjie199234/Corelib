@@ -210,7 +210,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		gmd, ok := metadata.FromIncomingContext(ctx)
 		if ok {
 			if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != s.selfappname {
-				return nil, cerror.ErrClosing
+				return nil, cerror.ErrTarget
 			}
 		}
 		atomic.AddInt64(&s.totalreqnum, 1)

@@ -258,7 +258,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 					atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 					if doneinfo.Err != nil {
 						server.Pickinfo.LastFailTime = time.Now().UnixNano()
-						if cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrClosing) {
+						if cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrClosing) || cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrTarget) {
 							server.closing = true
 							b.c.ResolveNow()
 						}

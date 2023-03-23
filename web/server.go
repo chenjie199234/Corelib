@@ -421,8 +421,8 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 		if target := r.Header.Get("Core-Target"); target != "" && target != s.selfappname {
 			//this is not the required server.tell peer self closed
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(int(cerror.ErrClosing.Httpcode))
-			w.Write(common.Str2byte(cerror.ErrClosing.Error()))
+			w.WriteHeader(int(cerror.ErrTarget.Httpcode))
+			w.Write(common.Str2byte(cerror.ErrTarget.Error()))
 			return
 		}
 		//cors
