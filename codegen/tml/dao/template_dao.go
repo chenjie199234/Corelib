@@ -74,7 +74,7 @@ func GetCGrpcClientConfig() *cgrpc.ClientConfig {
 
 func cgrpcDNS(group, name string) (map[string]*cgrpc.RegisterData, error) {
 	result := make(map[string]*cgrpc.RegisterData)
-	addrs, e := net.LookupHost(name + "-headless." + group)
+	addrs, e := GetAppIPsByCoreDNS(name + "-headless." + group)
 	if e != nil {
 		return nil, e
 	}
@@ -102,7 +102,7 @@ func GetCrpcClientConfig() *crpc.ClientConfig {
 
 func crpcDNS(group, name string) (map[string]*crpc.RegisterData, error) {
 	result := make(map[string]*crpc.RegisterData)
-	addrs, e := net.LookupHost(name + "-headless." + group)
+	addrs, e := GetAppIPsByCoreDNS(name + "-headless." + group)
 	if e != nil {
 		return nil, e
 	}
@@ -126,6 +126,10 @@ func GetWebClientConfig() *web.ClientConfig {
 		HeartProbe:     time.Duration(wc.HeartProbe),
 		MaxHeader:      2048,
 	}
+}
+
+func GetAppIPsByCoreDNS(appgroup, appname string) ([]string, error) {
+	return net.LookupHost(appname + "-headless." + appgroup)
 }`
 
 func CreatePathAndFile(packagename string) {

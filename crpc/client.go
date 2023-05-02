@@ -87,6 +87,7 @@ type CrpcClient struct {
 	reqpool *sync.Pool
 }
 
+// thread unsafe
 func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername string) (*CrpcClient, error) {
 	serverappname := servergroup + "." + servername
 	selfappname := selfgroup + "." + selfname

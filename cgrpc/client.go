@@ -87,6 +87,7 @@ type CGrpcClient struct {
 	stop          *graceful.Graceful
 }
 
+// thread unsafe
 func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername string) (*CGrpcClient, error) {
 	serverappname := servergroup + "." + servername
 	selfappname := selfgroup + "." + selfname
