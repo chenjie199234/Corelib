@@ -129,7 +129,14 @@ func GetWebClientConfig() *web.ClientConfig {
 }
 
 func GetAppIPsByCoreDNS(appgroup, appname string) ([]string, error) {
-	return net.LookupHost(appname + "-headless." + appgroup)
+	ips, e := net.LookupHost(appname + "-headless." + appgroup)
+	if e != nil {
+		if ee, ok := e.(*net.DNSError); ok && ee.IsNotFound {
+			return nil, ecode.ErrAppNotExist
+		}
+		return nil, e
+	}
+	return ips, nil
 }`
 
 func CreatePathAndFile(packagename string) {
