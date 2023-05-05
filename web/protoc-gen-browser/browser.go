@@ -525,7 +525,11 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 	g.P("}")
 }
 func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
-	g.P("function ", m.GoIdent.GoName, "ToJson(msg: ", m.GoIdent.GoName, "): string{")
+	if len(m.Fields) == 0 {
+		g.P("function ", m.GoIdent.GoName, "ToJson(_msg: ", m.GoIdent.GoName, "): string{")
+	} else {
+		g.P("function ", m.GoIdent.GoName, "ToJson(msg: ", m.GoIdent.GoName, "): string{")
+	}
 	oneofs := make(map[string]*struct{}, len(m.Oneofs))
 	g.P("\tlet s: string=\"{\"")
 	for _, f := range m.Fields {
@@ -1124,7 +1128,11 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 }
 
 func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
-	g.P("function ", m.GoIdent.GoName, "ToForm(msg: ", m.GoIdent.GoName, "): string{")
+	if len(m.Fields) == 0 {
+		g.P("function ", m.GoIdent.GoName, "ToForm(_msg: ", m.GoIdent.GoName, "): string{")
+	} else {
+		g.P("function ", m.GoIdent.GoName, "ToForm(msg: ", m.GoIdent.GoName, "): string{")
+	}
 	oneofs := make(map[string]*struct{}, len(m.Oneofs))
 	g.P("\tlet s: string=\"\"")
 	for _, f := range m.Fields {
@@ -1654,7 +1662,11 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 }
 
 func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
-	g.P("function JsonTo", m.GoIdent.GoName, "(jsonobj: { [k:string]:any }): ", m.GoIdent.GoName, "{")
+	if len(m.Fields) == 0 {
+		g.P("function JsonTo", m.GoIdent.GoName, "(_jsonobj: { [k:string]:any }): ", m.GoIdent.GoName, "{")
+	} else {
+		g.P("function JsonTo", m.GoIdent.GoName, "(jsonobj: { [k:string]:any }): ", m.GoIdent.GoName, "{")
+	}
 	oneofs := make(map[string]*struct{}, len(m.Oneofs))
 	g.P("\tlet obj: ", m.GoIdent.GoName, "={")
 	for _, f := range m.Fields {
