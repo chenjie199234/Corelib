@@ -4,14 +4,12 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -31,10 +29,8 @@ type ClientConfig struct {
 	HeartProbe     time.Duration //tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
 	//if this is 0,means useless,connection will keep alive until it is closed
-	IdleTimeout   time.Duration
-	MaxHeader     uint
-	SkipVerifyTLS bool     //don't verify the server's cert
-	CAs           []string //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
+	IdleTimeout time.Duration
+	MaxHeader   uint
 }
 
 func (c *ClientConfig) validate() {
@@ -49,8 +45,8 @@ func (c *ClientConfig) validate() {
 	if c.MaxHeader == 0 {
 		c.MaxHeader = 1024
 	}
-	if c.MaxHeader > 65535 {
-		c.MaxHeader = 65535
+	if c.MaxHeader > 65536 {
+		c.MaxHeader = 65536
 	}
 }
 
@@ -68,7 +64,7 @@ type hostinfo struct {
 }
 
 // serverhost format [http/https]://[username[:password]@]the.host.name[:port]
-func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername, serverhost string) (*WebClient, error) {
+func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername, serverhost string, tlsc *tls.Config) (*WebClient, error) {
 	serverappname := servergroup + "." + servername
 	selfappname := selfgroup + "." + selfname
 	if e := name.FullCheck(selfappname); e != nil {
@@ -92,29 +88,13 @@ func NewWebClient(c *ClientConfig, selfgroup, selfname, servergroup, servername,
 		c = &ClientConfig{}
 	}
 	c.validate()
-	var certpool *x509.CertPool
-	if len(c.CAs) != 0 {
-		certpool = x509.NewCertPool()
-		for _, cert := range c.CAs {
-			certPEM, e := os.ReadFile(cert)
-			if e != nil {
-				return nil, errors.New("[web.client] read cert file:" + cert + " error:" + e.Error())
-			}
-			if !certpool.AppendCertsFromPEM(certPEM) {
-				return nil, errors.New("[web.client] load cert file:" + cert + " error:" + e.Error())
-			}
-		}
-	}
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
 			Timeout:   c.ConnectTimeout,
 			KeepAlive: c.HeartProbe,
 		}).DialContext,
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: c.SkipVerifyTLS,
-			RootCAs:            certpool,
-		},
+		TLSClientConfig:        tlsc,
 		TLSHandshakeTimeout:    c.ConnectTimeout,
 		ForceAttemptHTTP2:      true,
 		MaxIdleConnsPerHost:    128,

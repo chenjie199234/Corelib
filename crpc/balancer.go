@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/stream"
 	"google.golang.org/protobuf/proto"
 )
@@ -108,7 +109,7 @@ func newCorelibBalancer(c *CrpcClient) *corelibBalancer {
 func (b *corelibBalancer) ResolverError(e error) {
 	b.lastResolveError = e
 }
-func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
+func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData) {
 	b.lastResolveError = nil
 	d, _ := json.Marshal(all)
 	b.lker.Lock()
@@ -222,9 +223,9 @@ func (b *corelibBalancer) ReconnectCheck(server *ServerForPick) bool {
 	return true
 }
 
-// reason - true,online
-// reason - false,offline
-func (b *corelibBalancer) RebuildPicker(reason bool) {
+// OnOff - true,online
+// OnOff - false,offline
+func (b *corelibBalancer) RebuildPicker(OnOff bool) {
 	b.lker.Lock()
 	tmp := make([]*ServerForPick, 0, len(b.servers))
 	for _, server := range b.servers {
@@ -233,7 +234,8 @@ func (b *corelibBalancer) RebuildPicker(reason bool) {
 		}
 	}
 	b.pservers = tmp
-	if reason {
+	if OnOff {
+		//when online server,wake the block call
 		b.c.resolver.wake(false)
 	}
 	b.lker.Unlock()
@@ -241,7 +243,7 @@ func (b *corelibBalancer) RebuildPicker(reason bool) {
 func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 	refresh := false
 	for {
-		server := b.c.c.Picker(b.pservers)
+		server := b.c.picker(b.pservers)
 		if server != nil {
 			return server, nil
 		}

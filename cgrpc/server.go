@@ -30,9 +30,9 @@ import (
 type OutsideHandler func(*Context)
 
 type ServerConfig struct {
-	GlobalTimeout  time.Duration     //global timeout for every rpc call(including connection establish time)
+	GlobalTimeout  time.Duration     //global timeout for every rpc call,<=0 means no timeout
 	ConnectTimeout time.Duration     //default 500ms
-	HeartPorbe     time.Duration     //default 1s
+	HeartPorbe     time.Duration     //default 10s,min 10s
 	MaxMsgLen      uint32            //default 64M,min 64k
 	Certs          map[string]string //mapkey: cert path,mapvalue: key path
 }
@@ -41,16 +41,13 @@ func (c *ServerConfig) validate() {
 	if c.ConnectTimeout <= 0 {
 		c.ConnectTimeout = 500 * time.Millisecond
 	}
-	if c.GlobalTimeout < 0 {
-		c.GlobalTimeout = 0
-	}
-	if c.HeartPorbe < time.Second {
-		c.HeartPorbe = time.Second
+	if c.HeartPorbe < time.Second*10 {
+		c.HeartPorbe = time.Second * 10
 	}
 	if c.MaxMsgLen == 0 {
 		c.MaxMsgLen = 1024 * 1024 * 64
-	} else if c.MaxMsgLen < 65535 {
-		c.MaxMsgLen = 65535
+	} else if c.MaxMsgLen < 65536 {
+		c.MaxMsgLen = 65536
 	}
 }
 

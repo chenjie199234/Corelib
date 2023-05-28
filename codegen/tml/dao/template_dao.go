@@ -16,6 +16,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cgrpc"
 	"github.com/chenjie199234/Corelib/crpc"
+	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/web"
 )
 
@@ -31,8 +32,11 @@ func NewApi() error {
 	cgrpcc := GetCGrpcClientConfig()
 	_ = cgrpcc //avoid unuse
 
+	//init discover for example server
+	//examplediscover := NewDSNDiscover("examplename-headless.examplegroup", time.Second * 10, 9000, 10000, 8000)
+
 	//init cgrpc client below
-	//examplecgrpc e = cgrpc.NewCGrpcClient(cgrpcc, model.Group, model.Name, "examplegroup", "examplename")
+	//examplecgrpc, e = cgrpc.NewCGrpcClient(cgrpcc, nil, examplediscover, model.Group, model.Name, "examplegroup", "examplename", nil)
 	//if e != nil {
 	//         return e
 	//}
@@ -42,7 +46,7 @@ func NewApi() error {
 	_ = crpcc //avoid unuse
 
 	//init crpc client below
-	//examplecrpc, e = crpc.NewCrpcClient(crpcc, model.Group, model.Name, "examplegroup", "examplename")
+	//examplecrpc, e = crpc.NewCrpcClient(crpcc, nil, examplediscover, model.Group, model.Name, "examplegroup", "examplename", nil)
 	//if e != nil {
 	// 	return e
 	//}
@@ -52,7 +56,7 @@ func NewApi() error {
 	_ = webc //avoid unuse
 
 	//init web client below
-	//exampleweb, e = web.NewWebClient(webc, model.Group, model.Name, "examplegroup", "examplename", "http://examplehost:exampleport")
+	//exampleweb, e = web.NewWebClient(webc, model.Group, model.Name, "examplegroup", "examplename", "http://examplehost:exampleport", nil)
 	//if e != nil {
 	// 	return e
 	//}
@@ -67,26 +71,7 @@ func GetCGrpcClientConfig() *cgrpc.ClientConfig {
 		ConnectTimeout:   time.Duration(gc.ConnectTimeout),
 		GlobalTimeout:    time.Duration(gc.GlobalTimeout),
 		HeartProbe:       time.Duration(gc.HeartProbe),
-		Discover:         cgrpcDNS,
-		DiscoverInterval: time.Second * 10,
 	}
-}
-
-func cgrpcDNS(group, name string) (map[string]*cgrpc.RegisterData, error) {
-	result := make(map[string]*cgrpc.RegisterData)
-	addrs, e := GetAppIPsByCoreDNS(name + "-headless." + group)
-	if e != nil {
-		return nil, e
-	}
-	for i := range addrs {
-		addrs[i] = addrs[i] + ":10000"
-	}
-	dserver := make(map[string]*struct{})
-	dserver["dns"] = nil
-	for _, addr := range addrs {
-		result[addr] = &cgrpc.RegisterData{DServers: dserver}
-	}
-	return result, nil
 }
 
 func GetCrpcClientConfig() *crpc.ClientConfig {
@@ -95,26 +80,7 @@ func GetCrpcClientConfig() *crpc.ClientConfig {
 		ConnectTimeout:   time.Duration(rc.ConnectTimeout),
 		GlobalTimeout:    time.Duration(rc.GlobalTimeout),
 		HeartProbe:       time.Duration(rc.HeartProbe),
-		Discover:         crpcDNS,
-		DiscoverInterval: time.Second * 10,
 	}
-}
-
-func crpcDNS(group, name string) (map[string]*crpc.RegisterData, error) {
-	result := make(map[string]*crpc.RegisterData)
-	addrs, e := GetAppIPsByCoreDNS(name + "-headless." + group)
-	if e != nil {
-		return nil, e
-	}
-	for i := range addrs {
-		addrs[i] = addrs[i] + ":9000"
-	}
-	dserver := make(map[string]*struct{})
-	dserver["dns"] = nil
-	for _, addr := range addrs {
-		result[addr] = &crpc.RegisterData{DServers: dserver}
-	}
-	return result, nil
 }
 
 func GetWebClientConfig() *web.ClientConfig {
@@ -126,17 +92,6 @@ func GetWebClientConfig() *web.ClientConfig {
 		HeartProbe:     time.Duration(wc.HeartProbe),
 		MaxHeader:      2048,
 	}
-}
-
-func GetAppIPsByCoreDNS(appgroup, appname string) ([]string, error) {
-	ips, e := net.LookupHost(appname + "-headless." + appgroup)
-	if e != nil {
-		if ee, ok := e.(*net.DNSError); ok && ee.IsNotFound {
-			return nil, ecode.ErrAppNotExist
-		}
-		return nil, e
-	}
-	return ips, nil
 }`
 
 func CreatePathAndFile(packagename string) {

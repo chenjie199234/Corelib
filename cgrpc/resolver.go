@@ -4,70 +4,68 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
-	"time"
 
+	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/log"
+
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 )
 
 type resolverBuilder struct {
-	group, name string
-	c           *CGrpcClient
+	c *CGrpcClient
 }
 
 func (b *resolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	r := &corelibResolver{
-		lker:         &sync.Mutex{},
-		sstatus:      true,
-		system:       make(chan *struct{}, 1),
-		systemNotice: make(map[chan *struct{}]*struct{}),
-		cstatus:      false,
-		call:         make(chan *struct{}, 1),
-		callNotice:   make(map[chan *struct{}]*struct{}),
-		cc:           cc,
-		stop:         make(chan *struct{}),
+		c:        b.c,
+		lker:     &sync.Mutex{},
+		snotices: make(map[chan *struct{}]*struct{}),
+		cnotices: make(map[chan *struct{}]*struct{}),
+		stop:     make(chan *struct{}),
 	}
 	b.c.resolver = r
-	r.system <- nil
 	go func() {
-		tker := time.NewTicker(b.c.c.DiscoverInterval)
+		dnotice, cancel := b.c.discover.GetNotice()
+		defer cancel()
 		for {
 			select {
-			case <-tker.C:
-			case <-r.system:
-			case <-r.call:
+			case _, ok := <-dnotice:
+				if !ok {
+					log.Error(nil, "[cgrpc.client.resolver] discover stopped!")
+				}
 			case <-r.stop:
-				tker.Stop()
+				cc.ReportError(ClientClosed)
+				b.c.resolver.wake(false)
+				b.c.resolver.wake(true)
 				return
 			}
-			all, e := b.c.c.Discover(b.group, b.name)
+			all, e := b.c.discover.GetAddrs(discover.Cgrpc)
 			if e != nil {
 				cc.ReportError(e)
-				log.Error(nil, "[cgrpc.client.resolver] discover servername:", b.name, "servergroup:", b.group, e)
 				b.c.resolver.wake(true)
 				b.c.resolver.wake(false)
-				continue
-			}
-			s := resolver.State{
-				Addresses: make([]resolver.Address, 0, len(all)),
-			}
-			for addr, info := range all {
-				if info == nil || len(info.DServers) == 0 {
-					continue
+			} else {
+				s := resolver.State{
+					Addresses: make([]resolver.Address, 0, len(all)),
 				}
-				attr := &attributes.Attributes{}
-				attr = attr.WithValue("addition", info.Addition)
-				attr = attr.WithValue("dservers", info.DServers)
-				s.Addresses = append(s.Addresses, resolver.Address{
-					Addr:               addr,
-					BalancerAttributes: attr,
-				})
+				for addr, info := range all {
+					if info == nil || len(info.DServers) == 0 {
+						continue
+					}
+					attr := &attributes.Attributes{}
+					attr = attr.WithValue("addition", info.Addition)
+					attr = attr.WithValue("dservers", info.DServers)
+					s.Addresses = append(s.Addresses, resolver.Address{
+						Addr:               addr,
+						BalancerAttributes: attr,
+					})
+				}
+				cc.UpdateState(s)
 			}
-			cc.UpdateState(s)
 		}
 	}()
-	return b.c.resolver, nil
+	return r, nil
 }
 
 func (b *resolverBuilder) Scheme() string {
@@ -75,20 +73,23 @@ func (b *resolverBuilder) Scheme() string {
 }
 
 type corelibResolver struct {
-	lker         *sync.Mutex
-	sstatus      bool
-	system       chan *struct{}
-	systemNotice map[chan *struct{}]*struct{}
-	cstatus      bool
-	call         chan *struct{}
-	callNotice   map[chan *struct{}]*struct{}
-	cc           resolver.ClientConn
-	stop         chan *struct{}
-	stopstatus   int32
+	c          *CGrpcClient
+	lker       *sync.Mutex
+	snotices   map[chan *struct{}]*struct{}
+	cnotices   map[chan *struct{}]*struct{}
+	stop       chan *struct{}
+	stopstatus int32
 }
 
 func (r *corelibResolver) ResolveNow(op resolver.ResolveNowOptions) {
 	r.triger(nil, true)
+}
+
+func (r *corelibResolver) Close() {
+	if atomic.SwapInt32(&r.stopstatus, 1) == 1 {
+		return
+	}
+	close(r.stop)
 }
 
 // systemORcall true - system,false - call
@@ -96,27 +97,23 @@ func (r *corelibResolver) triger(notice chan *struct{}, systemORcall bool) {
 	r.lker.Lock()
 	defer r.lker.Unlock()
 	if systemORcall {
-		if notice != nil {
-			r.systemNotice[notice] = nil
+		exist := len(r.snotices)
+		r.snotices[notice] = nil
+		if exist == 0 {
+			r.c.discover.Now()
 		}
-		if r.sstatus {
-			return
-		}
-		r.sstatus = true
-		r.system <- nil
 	} else {
-		if notice != nil {
-			r.callNotice[notice] = nil
+		exist := len(r.cnotices)
+		r.cnotices[notice] = nil
+		if exist == 0 {
+			r.c.discover.Now()
 		}
-		if r.cstatus {
-			return
-		}
-		r.cstatus = true
-		r.call <- nil
 	}
 }
 
 // systemORcall true - system,false - call
+// the system's wait will block until the discover return,no matter there are usable servers or not
+// the call's wail will block until there are usable servers
 func (r *corelibResolver) wait(ctx context.Context, systemORcall bool) error {
 	notice := make(chan *struct{}, 1)
 	r.triger(notice, systemORcall)
@@ -125,12 +122,12 @@ func (r *corelibResolver) wait(ctx context.Context, systemORcall bool) error {
 		return nil
 	case <-ctx.Done():
 		r.lker.Lock()
+		defer r.lker.Unlock()
 		if systemORcall {
-			delete(r.systemNotice, notice)
+			delete(r.snotices, notice)
 		} else {
-			delete(r.callNotice, notice)
+			delete(r.cnotices, notice)
 		}
-		r.lker.Unlock()
 		return ctx.Err()
 	}
 }
@@ -138,25 +135,20 @@ func (r *corelibResolver) wait(ctx context.Context, systemORcall bool) error {
 // systemORcall true - system,false - call
 func (r *corelibResolver) wake(systemORcall bool) {
 	r.lker.Lock()
+	defer r.lker.Unlock()
 	if systemORcall {
-		r.sstatus = false
-		for notice := range r.systemNotice {
-			delete(r.systemNotice, notice)
-			notice <- nil
+		for notice := range r.snotices {
+			delete(r.snotices, notice)
+			if notice != nil {
+				notice <- nil
+			}
 		}
 	} else {
-		r.cstatus = false
-		for notice := range r.callNotice {
-			delete(r.callNotice, notice)
-			notice <- nil
+		for notice := range r.cnotices {
+			delete(r.cnotices, notice)
+			if notice != nil {
+				notice <- nil
+			}
 		}
 	}
-	r.lker.Unlock()
-}
-
-func (r *corelibResolver) Close() {
-	if atomic.SwapInt32(&r.stopstatus, 1) == 1 {
-		return
-	}
-	close(r.stop)
 }

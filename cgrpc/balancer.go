@@ -215,9 +215,9 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 	}
 }
 
-// reason - true,online
-// reason - false,offline
-func (b *corelibBalancer) rebuildpicker(reason bool) {
+// OnOff - true,online
+// OnOff - false,offline
+func (b *corelibBalancer) rebuildpicker(OnOff bool) {
 	tmp := make([]*ServerForPick, 0, len(b.servers))
 	for _, server := range b.servers {
 		if server.Pickable() {
@@ -225,7 +225,7 @@ func (b *corelibBalancer) rebuildpicker(reason bool) {
 		}
 	}
 	b.pservers = tmp
-	if reason {
+	if OnOff {
 		b.c.resolver.wake(false)
 	}
 	return
@@ -245,7 +245,7 @@ func (b *corelibBalancer) Close() {
 func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	refresh := false
 	for {
-		server := b.c.c.Picker(b.pservers)
+		server := b.c.picker(b.pservers)
 		if server != nil {
 			if dl, ok := info.Ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic

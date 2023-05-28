@@ -198,8 +198,8 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 	return
 }
 
-// 1.raw tcp client,serveraddr's format is [tcp/tcps]://ip:port
-// 2.websocket client,serveraddr's format is [ws/wss]://host:port/path
+// 1.raw tcp client,serveraddr's format is [tcp/tcps]://[host/ip]:port
+// 2.websocket client,serveraddr's format is [ws/wss]://[host/ip]:port/path
 // 3.both raw tcp or websocket use websocket's data frame format to communicate with the server
 // 4.if tlsc is not nil,tls handshake is required
 // 5.websocket need websocket's handshake,raw tcp doesn't need
@@ -217,6 +217,9 @@ func (this *Instance) StartClient(serveraddr string, verifydata []byte, tlsc *tl
 	if u.Scheme != "tcp" && u.Scheme != "tcps" && u.Scheme != "ws" && u.Scheme != "wss" {
 		log.Error(nil, "[Stream.StartClient] unknown scheme:", u.Scheme)
 		return false
+	}
+	if (u.Scheme == "tcps" || u.Scheme == "wss") && tlsc == nil {
+		tlsc = &tls.Config{}
 	}
 	if this.mng.Finishing() {
 		return false

@@ -25,17 +25,11 @@ import (
 type OutsideHandler func(*Context)
 
 type ServerConfig struct {
-	GlobalTimeout  time.Duration     //global timeout for every rpc call
+	GlobalTimeout  time.Duration     //global timeout for every rpc call,<=0 means no timeout
 	ConnectTimeout time.Duration     //default 500ms
 	HeartPorbe     time.Duration     //default 1s,3 probe missing means disconnect
 	MaxMsgLen      uint32            //default 64M,min 64k
 	Certs          map[string]string //mapkey: cert path,mapvalue: key path
-}
-
-func (c *ServerConfig) validate() {
-	if c.GlobalTimeout < 0 {
-		c.GlobalTimeout = 0
-	}
 }
 
 type CrpcServer struct {
@@ -63,7 +57,6 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 	if c == nil {
 		c = &ServerConfig{}
 	}
-	c.validate()
 	serverinstance := &CrpcServer{
 		c:              c,
 		selfappname:    selfappname,

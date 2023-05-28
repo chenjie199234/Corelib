@@ -4,60 +4,60 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
-	"time"
 
+	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/log"
 )
 
 type corelibResolver struct {
-	lker         *sync.Mutex
-	sstatus      bool
-	system       chan *struct{}
-	systemNotice map[chan *struct{}]*struct{}
-	cstatus      bool
-	call         chan *struct{}
-	callNotice   map[chan *struct{}]*struct{}
-	stop         chan *struct{}
-	stopstatus   int32
+	c          *CrpcClient
+	lker       *sync.Mutex
+	snotices   map[chan *struct{}]*struct{}
+	cnotices   map[chan *struct{}]*struct{}
+	stop       chan *struct{}
+	stopstatus int32
 }
 
-func newCorelibResolver(group, name string, c *CrpcClient) *corelibResolver {
+func newCorelibResolver(c *CrpcClient) *corelibResolver {
 	r := &corelibResolver{
-		lker:         &sync.Mutex{},
-		sstatus:      true,
-		system:       make(chan *struct{}, 1),
-		systemNotice: make(map[chan *struct{}]*struct{}),
-		cstatus:      false,
-		call:         make(chan *struct{}, 1),
-		callNotice:   make(map[chan *struct{}]*struct{}),
-		stop:         make(chan *struct{}),
+		c:        c,
+		lker:     &sync.Mutex{},
+		snotices: make(map[chan *struct{}]*struct{}, 10),
+		cnotices: make(map[chan *struct{}]*struct{}, 10),
+		stop:     make(chan *struct{}),
 	}
-	r.system <- nil
 	go func() {
-		tker := time.NewTicker(c.c.DiscoverInterval)
 		for {
-			select {
-			case <-tker.C:
-			case <-r.system:
-			case <-r.call:
-			case <-r.stop:
-				tker.Stop()
-				return
-			}
-			all, e := c.c.Discover(group, name)
-			if e != nil {
-				c.balancer.ResolverError(e)
-				log.Error(nil, "[crpc.client.resolver] discover servername:", name, "servergroup:", group, e)
-				r.wake(true)
-				r.wake(false)
-				continue
-			}
-			for k, v := range all {
-				if v == nil || len(v.DServers) == 0 {
-					delete(all, k)
+			dnotice, cancel := c.discover.GetNotice()
+			defer cancel()
+			//first init triger,this is used to active the dnotice
+			c.discover.Now()
+			for {
+				select {
+				case _, ok := <-dnotice:
+					if !ok {
+						log.Error(nil, "[crpc.client.resolver] discover stopped!")
+					}
+				case <-r.stop:
+					c.balancer.ResolverError(ClientClosed)
+					r.wake(false)
+					r.wake(true)
+					return
+				}
+				all, e := c.discover.GetAddrs(discover.Crpc)
+				if e != nil {
+					c.balancer.ResolverError(e)
+					r.wake(false)
+					r.wake(true)
+				} else {
+					for k, v := range all {
+						if v == nil || len(v.DServers) == 0 {
+							delete(all, k)
+						}
+					}
+					c.balancer.UpdateDiscovery(all)
 				}
 			}
-			c.balancer.UpdateDiscovery(all)
 		}
 	}()
 	return r
@@ -78,27 +78,23 @@ func (r *corelibResolver) triger(notice chan *struct{}, systemORcall bool) {
 	r.lker.Lock()
 	defer r.lker.Unlock()
 	if systemORcall {
-		if notice != nil {
-			r.systemNotice[notice] = nil
+		exist := len(r.snotices)
+		r.snotices[notice] = nil
+		if exist == 0 {
+			r.c.discover.Now()
 		}
-		if r.sstatus {
-			return
-		}
-		r.sstatus = true
-		r.system <- nil
 	} else {
-		if notice != nil {
-			r.callNotice[notice] = nil
+		exist := len(r.cnotices)
+		r.cnotices[notice] = nil
+		if exist == 0 {
+			r.c.discover.Now()
 		}
-		if r.cstatus {
-			return
-		}
-		r.cstatus = true
-		r.call <- nil
 	}
 }
 
 // systemORcall true - system,false - call
+// the system's wait will block until the discover return,no matter there are usable servers or not
+// the call's wail will block until there are usable servers
 func (r *corelibResolver) wait(ctx context.Context, systemORcall bool) error {
 	notice := make(chan *struct{}, 1)
 	r.triger(notice, systemORcall)
@@ -108,9 +104,9 @@ func (r *corelibResolver) wait(ctx context.Context, systemORcall bool) error {
 	case <-ctx.Done():
 		r.lker.Lock()
 		if systemORcall {
-			delete(r.systemNotice, notice)
+			delete(r.snotices, notice)
 		} else {
-			delete(r.callNotice, notice)
+			delete(r.cnotices, notice)
 		}
 		r.lker.Unlock()
 		return ctx.Err()
@@ -121,16 +117,18 @@ func (r *corelibResolver) wait(ctx context.Context, systemORcall bool) error {
 func (r *corelibResolver) wake(systemORcall bool) {
 	r.lker.Lock()
 	if systemORcall {
-		r.sstatus = false
-		for notice := range r.systemNotice {
-			delete(r.systemNotice, notice)
-			notice <- nil
+		for notice := range r.snotices {
+			delete(r.snotices, notice)
+			if notice != nil {
+				notice <- nil
+			}
 		}
 	} else {
-		r.cstatus = false
-		for notice := range r.callNotice {
-			delete(r.callNotice, notice)
-			notice <- nil
+		for notice := range r.cnotices {
+			delete(r.cnotices, notice)
+			if notice != nil {
+				notice <- nil
+			}
 		}
 	}
 	r.lker.Unlock()

@@ -3,9 +3,7 @@ package crpc
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
-	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -13,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
@@ -25,52 +24,11 @@ import (
 
 type PickHandler func(servers []*ServerForPick) *ServerForPick
 
-// key server's addr,format: ip:port
-// if the value is nil means this server node is offline
-type DiscoveryHandler func(servergroup, servername string) (map[string]*RegisterData, error)
-type RegisterData struct {
-	//server register on which discovery server
-	//if this is empty means this server node is offline
-	DServers map[string]*struct{}
-	Addition []byte
-}
-
 type ClientConfig struct {
-	GlobalTimeout    time.Duration //global timeout for every rpc call
-	ConnectTimeout   time.Duration //default 500ms
-	HeartProbe       time.Duration //default 1s,3 probe missing means disconnect
-	MaxMsgLen        uint32        //default 64M,min 64k
-	UseTLS           bool          //crpc or crpcs
-	SkipVerifyTLS    bool          //don't verify the server's cert
-	CAs              []string      //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
-	Picker           PickHandler
-	Discover         DiscoveryHandler //this function is used to resolve server addrs
-	DiscoverInterval time.Duration    //the frequency call Discover to resolve the server addrs,default 10s,min 1s
-}
-
-func (c *ClientConfig) validate() {
-	//this is checked by stream,don't need to check here
-	// if c.ConnectTimeout <= 0 {
-	// c.ConnectTimeout = time.Millisecond * 500
-	// }
-	if c.GlobalTimeout < 0 {
-		c.GlobalTimeout = 0
-	}
-	//this is checked by stream,don't need to check here
-	// if c.HeartPorbe < time.Second {
-	// c.HeartPorbe = time.Second
-	// }
-	if c.DiscoverInterval <= 0 {
-		c.DiscoverInterval = time.Second * 10
-	} else if c.DiscoverInterval < time.Second {
-		c.DiscoverInterval = time.Second
-	}
-	//this is checked by stream,don't need to check here
-	// if c.MaxMsgLen == 0 {
-	// c.MaxMsgLen = 1024 * 1024 * 64
-	// } else if c.MaxMsgLen < 65535 {
-	// c.MaxMsgLen = 65535
-	// }
+	GlobalTimeout  time.Duration //global timeout for every rpc call,<=0 means no timeout
+	ConnectTimeout time.Duration //default 500ms
+	HeartProbe     time.Duration //default 1s,3 probe missing means disconnect
+	MaxMsgLen      uint32        //default 64M,min 64k
 }
 
 type CrpcClient struct {
@@ -82,13 +40,15 @@ type CrpcClient struct {
 
 	resolver *corelibResolver
 	balancer *corelibBalancer
+	picker   PickHandler
+	discover discover.DI
 
 	stop    *graceful.Graceful
 	reqpool *sync.Pool
 }
 
-// thread unsafe
-func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername string) (*CrpcClient, error) {
+// if tlsc is not nil,the tls will be actived
+func NewCrpcClient(c *ClientConfig, p PickHandler, d discover.DI, selfgroup, selfname, servergroup, servername string, tlsc *tls.Config) (*CrpcClient, error) {
 	serverappname := servergroup + "." + servername
 	selfappname := selfgroup + "." + selfname
 	if e := name.FullCheck(selfappname); e != nil {
@@ -97,35 +57,21 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername
 	if c == nil {
 		return nil, errors.New("[crpc.client] missing config")
 	}
-	if c.Discover == nil {
-		return nil, errors.New("[crpc.client] missing discover in config")
+	if d == nil {
+		return nil, errors.New("[crpc.client] missing discover")
 	}
-	if c.Picker == nil {
+	if p == nil {
 		log.Warning(nil, "[crpc.client] missing picker in config,default picker will be used")
-		c.Picker = defaultPicker
-	}
-	c.validate()
-	var certpool *x509.CertPool
-	if len(c.CAs) != 0 {
-		certpool = x509.NewCertPool()
-		for _, cert := range c.CAs {
-			certPEM, e := os.ReadFile(cert)
-			if e != nil {
-				return nil, errors.New("[crpc.client] read cert file:" + cert + " error:" + e.Error())
-			}
-			if !certpool.AppendCertsFromPEM(certPEM) {
-				return nil, errors.New("[crpc.client] load cert file:" + cert + " error:" + e.Error())
-			}
-		}
+		p = defaultPicker
 	}
 	client := &CrpcClient{
 		selfappname:   selfappname,
 		serverappname: serverappname,
 		c:             c,
-		tlsc: &tls.Config{
-			InsecureSkipVerify: c.SkipVerifyTLS,
-			RootCAs:            certpool,
-		},
+		tlsc:          tlsc,
+
+		picker:   p,
+		discover: d,
 
 		reqpool: &sync.Pool{},
 		stop:    graceful.New(),
@@ -145,12 +91,22 @@ func NewCrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername
 	instancec.OfflineFunc = client.offlinefunc
 	client.instance, _ = stream.NewInstance(instancec)
 	//init discover
-	client.resolver = newCorelibResolver(servergroup, servername, client)
+	client.resolver = newCorelibResolver(client)
 	return client, nil
 }
 
 func (c *CrpcClient) ResolveNow() {
 	c.resolver.ResolveNow()
+}
+
+func (c *CrpcClient) GetServerIps() (ips []string, lasterror error) {
+	tmp, e := c.discover.GetAddrs(discover.NotNeed)
+	ips = make([]string, 0, len(tmp))
+	for k := range tmp {
+		ips = append(ips, k)
+	}
+	lasterror = e
+	return
 }
 
 // force - false graceful,wait all requests finish,true - not graceful,close all connections immediately
@@ -169,7 +125,7 @@ func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 		return
 	}
 	var addr string
-	if c.c.UseTLS {
+	if c.tlsc != nil {
 		addr = "tcps://" + server.addr
 	} else {
 		addr = "tcp://" + server.addr
@@ -270,7 +226,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		"SourcePath":   selfpath,
 		"Deep":         strconv.Itoa(selfdeep),
 	}
-	if c.c.GlobalTimeout != 0 {
+	if c.c.GlobalTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout))
 		defer cancel()

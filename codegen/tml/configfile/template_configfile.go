@@ -9,33 +9,33 @@ const source = `{
 	"cgrpc_server":{
 		"connect_timeout":"200ms",
 		"global_timeout":"500ms",
-		"heart_probe":"1.5s",
+		"heart_probe":"10s",
 		"certs":{
 		}
 	},
 	"cgrpc_client":{
 		"connect_timeout":"200ms",
 		"global_timeout":"0",
-		"heart_probe":"1.5s"
+		"heart_probe":"10s"
 	},
 	"crpc_server":{
 		"connect_timeout":"200ms",
 		"global_timeout":"500ms",
-		"heart_probe":"1.5s",
+		"heart_probe":"3s",
 		"certs":{
 		}
 	},
 	"crpc_client":{
 		"connect_timeout":"200ms",
 		"global_timeout":"0",
-		"heart_probe":"1.5s"
+		"heart_probe":"3s"
 	},
 	"web_server":{
 		"close_mode":0,
 		"connect_timeout":"200ms",
 		"global_timeout":"500ms",
-		"idle_timeout":"5s",
-		"heart_probe":"1.5s",
+		"idle_timeout":"10s",
+		"heart_probe":"3s",
 		"src_root":"",
 		"certs":{
 		},
@@ -48,8 +48,8 @@ const source = `{
 	"web_client":{
 		"connect_timeout":"200ms",
 		"global_timeout":"0",
-		"idle_timeout":"5s",
-		"heart_probe":"1.5s"
+		"idle_timeout":"10s",
+		"heart_probe":"3s"
 	},
 	"mongo":{
 		"example_mongo":{
