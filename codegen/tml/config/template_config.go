@@ -112,7 +112,7 @@ func initenv() {
 			os.Exit(1)
 		}
 		var e error
-		if RemoteConfigSdk, e = configsdk.NewConfigSdk(model.Group, model.Name, group, host, secret); e != nil {
+		if RemoteConfigSdk, e = configsdk.NewConfigSdk(model.Group, model.Name, group, host, secret, nil); e != nil {
 			log.Error(nil, "[config.initenv] new remote config sdk error:", e)
 			Close()
 			os.Exit(1)
