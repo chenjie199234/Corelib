@@ -8,16 +8,15 @@ import (
 const txt = `package dao
 
 import (
-	"net"
 	"time"
 
-	//"{{.}}/model"
+	// "{{.}}/model"
 	"{{.}}/config"
 
 	"github.com/chenjie199234/Corelib/cgrpc"
 	"github.com/chenjie199234/Corelib/crpc"
-	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/web"
+	// "github.com/chenjie199234/Corelib/discover"
 )
 
 //var ExampleCGrpcApi example.ExampleCGrpcClient
