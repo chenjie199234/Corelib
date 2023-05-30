@@ -90,14 +90,14 @@ const pkg = `{
     "preview": "vite preview"
   },
   "dependencies": {
-    "vue": "^3.2.47",
-    "vuestic-ui": "^1.5.3"
+    "vue": "^3.3.4",
+    "vuestic-ui": "^1.6.5"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^4.2.1",
+    "@vitejs/plugin-vue": "^4.2.3",
     "typescript": "^5.0.4",
-    "vite": "^4.3.4",
-    "vue-tsc": "^1.6.4"
+    "vite": "^4.3.9",
+    "vue-tsc": "^1.6.5"
   }
 }`
 
