@@ -7,6 +7,7 @@ import (
 )
 
 type KubernetesD struct {
+	silent    bool
 	group     string
 	app       string
 	crpcport  int
@@ -21,8 +22,9 @@ type KubernetesD struct {
 	lasterror error
 }
 
-func NewKubernetesDiscover(group, app string, crpcport, cgrpcport, webport int) DI {
+func NewKubernetesDiscover(group, app string, crpcport, cgrpcport, webport int, silent bool) DI {
 	d := &KubernetesD{
+		silent:    silent,
 		group:     group,
 		app:       app,
 		crpcport:  crpcport,

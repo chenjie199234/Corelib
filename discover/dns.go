@@ -12,6 +12,7 @@ import (
 )
 
 type DnsD struct {
+	silent    bool
 	host      string
 	crpcport  int
 	cgrpcport int
@@ -27,11 +28,13 @@ type DnsD struct {
 }
 
 // interval min is 1s,default is 10s
-func NewDSNDiscover(host string, interval time.Duration, crpcport, cgrpcport, webport int) DI {
+// if silent is true,means no logs
+func NewDSNDiscover(host string, interval time.Duration, crpcport, cgrpcport, webport int, silent bool) DI {
 	if interval < time.Second {
 		interval = time.Second * 10
 	}
 	d := &DnsD{
+		silent:    silent,
 		host:      host,
 		crpcport:  crpcport,
 		cgrpcport: cgrpcport,
@@ -137,7 +140,9 @@ func (d *DnsD) run() {
 		case <-tker.C:
 		}
 		if atomic.LoadInt32(&d.status) == 2 {
-			log.Info(nil, "[discover.dns] host:", d.host, cerror.ErrDiscoverStopped)
+			if !d.silent {
+				log.Info(nil, "[discover.dns] host:", d.host, cerror.ErrDiscoverStopped)
+			}
 			d.lasterror = cerror.ErrDiscoverStopped
 			return
 		}
