@@ -37,6 +37,8 @@ const tsconfig = `{
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
+    "noImplicitAny": false,
+    "noImplicitThis":false,
 
     /* Bundler mode */
     "moduleResolution": "bundler",
