@@ -51,7 +51,8 @@ const txt = `*
 !go.mod
 !main.go
 !README.md
-!SourceConfig.json`
+!SourceConfig.json
+!package.json`
 
 func CreatePathAndFile() {
 	file, e := os.OpenFile("./.gitignore", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
