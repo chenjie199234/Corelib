@@ -7,6 +7,7 @@ import (
 )
 
 type DirectD struct {
+	app       string
 	addr      string
 	crpcport  int
 	cgrpcport int
@@ -17,8 +18,9 @@ type DirectD struct {
 }
 
 // addr can be host/ipv4/ipv6
-func NewDirectDiscover(addr string, crpcport, cgrpcport, webport int) DI {
+func NewDirectDiscover(targetappgroup, targetappname, addr string, crpcport, cgrpcport, webport int) DI {
 	return &DirectD{
+		app:       targetappgroup + "." + targetappname,
 		addr:      addr,
 		crpcport:  crpcport,
 		cgrpcport: cgrpcport,
@@ -108,4 +110,7 @@ func (d *DirectD) Stop() {
 		delete(d.notices, notice)
 		close(notice)
 	}
+}
+func (d *DirectD) CheckApp(app string) bool {
+	return app == d.app
 }

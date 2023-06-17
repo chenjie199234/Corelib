@@ -21,6 +21,7 @@ type DI interface {
 	// addrs and lasterror can both exist,when lasterror is not nil,the addrs is the old addrs.
 	GetAddrs(PortType) (addrs map[string]*RegisterData, lasterror error)
 	Stop()
+	CheckApp(string) bool
 }
 
 type RegisterData struct {

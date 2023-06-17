@@ -34,7 +34,7 @@ type ServerConfig struct {
 
 type CrpcServer struct {
 	c              *ServerConfig
-	selfappname    string
+	selfapp        string
 	tlsc           *tls.Config
 	global         []OutsideHandler
 	ctxpool        *sync.Pool
@@ -49,8 +49,8 @@ type client struct {
 	calls     map[uint64]context.CancelFunc
 }
 
-func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, error) {
-	selfappname := selfgroup + "." + selfname
+func NewCrpcServer(c *ServerConfig, selfappgroup, selfappname string) (*CrpcServer, error) {
+	selfapp := selfappgroup + "." + selfappname
 	if e := name.FullCheck(selfappname); e != nil {
 		return nil, e
 	}
@@ -59,7 +59,7 @@ func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, er
 	}
 	serverinstance := &CrpcServer{
 		c:              c,
-		selfappname:    selfappname,
+		selfapp:        selfapp,
 		global:         make([]OutsideHandler, 0, 10),
 		ctxpool:        &sync.Pool{},
 		handler:        make(map[string]func(context.Context, *stream.Peer, *Msg), 10),
@@ -174,7 +174,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 		sourcemethod := "unknown"
 		sourcepath := "unknown"
 		if len(msg.Tracedata) == 0 || msg.Tracedata["TraceID"] == "" {
-			ctx = log.InitTrace(ctx, "", s.selfappname, host.Hostip, "CRPC", msg.Path, 0)
+			ctx = log.InitTrace(ctx, "", s.selfapp, host.Hostip, "CRPC", msg.Path, 0)
 		} else {
 			sourceapp = msg.Tracedata["SourceApp"]
 			sourcemethod = msg.Tracedata["SourceMethod"]
@@ -185,7 +185,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 				p.Close()
 				return
 			}
-			ctx = log.InitTrace(ctx, msg.Tracedata["TraceID"], s.selfappname, host.Hostip, "CRPC", msg.Path, clientdeep)
+			ctx = log.InitTrace(ctx, msg.Tracedata["TraceID"], s.selfapp, host.Hostip, "CRPC", msg.Path, clientdeep)
 		}
 		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
 		start := time.Now()
@@ -255,7 +255,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 				}
 			}
 			end := time.Now()
-			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+p.GetLocalPort(), "CRPC", path, &start, &end, msg.Error)
+			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfapp, host.Hostip+":"+p.GetLocalPort(), "CRPC", path, &start, &end, msg.Error)
 			monitor.CrpcServerMonitor(sourceapp, "CRPC", path, msg.Error, uint64(end.UnixNano()-start.UnixNano()))
 			s.putContext(workctx)
 		}()
@@ -269,7 +269,7 @@ func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]b
 		//self closing
 		return nil, false
 	}
-	if common.Byte2str(peerVerifyData) != s.selfappname {
+	if common.Byte2str(peerVerifyData) != s.selfapp {
 		return nil, false
 	}
 	return nil, true

@@ -53,7 +53,7 @@ func (c *ServerConfig) validate() {
 
 type CGrpcServer struct {
 	c              *ServerConfig
-	selfappname    string //group.name
+	selfapp        string //group.name
 	global         []OutsideHandler
 	ctxpool        *sync.Pool
 	server         *grpc.Server
@@ -63,8 +63,8 @@ type CGrpcServer struct {
 	totalreqnum    int64
 }
 
-func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, error) {
-	selfappname := selfgroup + "." + selfname
+func NewCGrpcServer(c *ServerConfig, selfappgroup, selfappname string) (*CGrpcServer, error) {
+	selfapp := selfappgroup + "." + selfappname
 	if e := name.FullCheck(selfappname); e != nil {
 		return nil, e
 	}
@@ -74,7 +74,7 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 	c.validate()
 	serverinstance := &CGrpcServer{
 		c:              c,
-		selfappname:    selfappname,
+		selfapp:        selfapp,
 		global:         make([]OutsideHandler, 0),
 		ctxpool:        &sync.Pool{},
 		services:       make(map[string]*grpc.ServiceDesc),
@@ -206,7 +206,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 	return func(_ interface{}, ctx context.Context, decode func(interface{}) error, _ grpc.UnaryServerInterceptor) (resp interface{}, e error) {
 		gmd, ok := metadata.FromIncomingContext(ctx)
 		if ok {
-			if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != s.selfappname {
+			if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != s.selfapp {
 				return nil, cerror.ErrTarget
 			}
 		}
@@ -231,7 +231,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		sourcepath := "unknown"
 		if ok {
 			if data := gmd.Get("Core-Tracedata"); len(data) == 0 || data[0] == "" {
-				ctx = log.InitTrace(ctx, "", s.selfappname, host.Hostip, "GRPC", path, 0)
+				ctx = log.InitTrace(ctx, "", s.selfapp, host.Hostip, "GRPC", path, 0)
 			} else if len(data) != 5 {
 				log.Error(nil, "[cgrpc.server] client:", sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format wrong")
 				return nil, cerror.ErrReq
@@ -244,7 +244,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 					log.Error(nil, "[cgrpc.server] client:", sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format wrong")
 					return nil, cerror.ErrReq
 				}
-				ctx = log.InitTrace(ctx, data[0], s.selfappname, host.Hostip, "GRPC", path, clientdeep)
+				ctx = log.InitTrace(ctx, data[0], s.selfapp, host.Hostip, "GRPC", path, clientdeep)
 			}
 		}
 		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
@@ -279,7 +279,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				workctx.resp = nil
 			}
 			end := time.Now()
-			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+localaddr[strings.LastIndex(localaddr, ":")+1:], "GRPC", path, &start, &end, workctx.e)
+			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfapp, host.Hostip+":"+localaddr[strings.LastIndex(localaddr, ":")+1:], "GRPC", path, &start, &end, workctx.e)
 			monitor.GrpcServerMonitor(sourceapp, "GRPC", path, workctx.e, uint64(end.UnixNano()-start.UnixNano()))
 			resp = workctx.resp
 			if workctx.e != nil {

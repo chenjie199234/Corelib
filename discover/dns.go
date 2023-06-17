@@ -13,6 +13,7 @@ import (
 
 type DnsD struct {
 	silent    bool
+	app       string
 	host      string
 	crpcport  int
 	cgrpcport int
@@ -29,12 +30,13 @@ type DnsD struct {
 
 // interval min is 1s,default is 10s
 // if silent is true,means no logs
-func NewDSNDiscover(host string, interval time.Duration, crpcport, cgrpcport, webport int, silent bool) DI {
+func NewDSNDiscover(targetappgroup, targetappname, host string, interval time.Duration, crpcport, cgrpcport, webport int, silent bool) DI {
 	if interval < time.Second {
 		interval = time.Second * 10
 	}
 	d := &DnsD{
 		silent:    silent,
+		app:       targetappgroup + "." + targetappname,
 		host:      host,
 		crpcport:  crpcport,
 		cgrpcport: cgrpcport,
@@ -48,6 +50,7 @@ func NewDSNDiscover(host string, interval time.Duration, crpcport, cgrpcport, we
 	go d.run()
 	return d
 }
+
 func (d *DnsD) Now() {
 	if !atomic.CompareAndSwapInt32(&d.status, 0, 1) {
 		return
@@ -183,4 +186,7 @@ func (d *DnsD) run() {
 		}
 		atomic.CompareAndSwapInt32(&d.status, 1, 0)
 	}
+}
+func (d *DnsD) CheckApp(app string) bool {
+	return app == d.app
 }

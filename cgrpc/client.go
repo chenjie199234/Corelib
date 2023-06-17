@@ -55,11 +55,11 @@ func (c *ClientConfig) validate() {
 }
 
 type CGrpcClient struct {
-	selfappname   string
-	serverappname string //group.name
-	c             *ClientConfig
-	tlsc          *tls.Config
-	conn          *grpc.ClientConn
+	selfapp   string
+	serverapp string //group.name
+	c         *ClientConfig
+	tlsc      *tls.Config
+	conn      *grpc.ClientConn
 
 	resolver *corelibResolver
 	balancer *corelibBalancer
@@ -70,10 +70,10 @@ type CGrpcClient struct {
 }
 
 // if tlsc is not nil,the tls will be actived
-func NewCGrpcClient(c *ClientConfig, p PickHandler, d discover.DI, selfgroup, selfname, servergroup, servername string, tlsc *tls.Config) (*CGrpcClient, error) {
-	serverappname := servergroup + "." + servername
-	selfappname := selfgroup + "." + selfname
-	if e := name.FullCheck(selfappname); e != nil {
+func NewCGrpcClient(c *ClientConfig, p PickHandler, d discover.DI, selfappgroup, selfappname, serverappgroup, serverappname string, tlsc *tls.Config) (*CGrpcClient, error) {
+	serverapp := serverappgroup + "." + serverappname
+	selfapp := selfappgroup + "." + selfappname
+	if e := name.FullCheck(selfapp); e != nil {
 		return nil, e
 	}
 	if c == nil {
@@ -82,19 +82,22 @@ func NewCGrpcClient(c *ClientConfig, p PickHandler, d discover.DI, selfgroup, se
 	if d == nil {
 		return nil, errors.New("[cgrpc.client] missing discover in config")
 	}
+	if !d.CheckApp(serverapp) {
+		return nil, errors.New("[cgrpc.client] discover's target app not match")
+	}
 	if p == nil {
 		log.Warning(nil, "[cgrpc.client] missing picker in config,default picker will be used")
 		p = defaultPicker
 	}
 	c.validate()
 	client := &CGrpcClient{
-		selfappname:   selfappname,
-		serverappname: serverappname,
-		c:             c,
-		tlsc:          tlsc,
-		picker:        p,
-		discover:      d,
-		stop:          graceful.New(),
+		selfapp:   selfapp,
+		serverapp: serverapp,
+		c:         c,
+		tlsc:      tlsc,
+		picker:    p,
+		discover:  d,
+		stop:      graceful.New(),
 	}
 	opts := make([]grpc.DialOption, 0, 10)
 	opts = append(opts, grpc.WithDisableRetry())
@@ -118,7 +121,7 @@ func NewCGrpcClient(c *ClientConfig, p PickHandler, d discover.DI, selfgroup, se
 	opts = append(opts, grpc.WithDefaultServiceConfig("{\"loadBalancingConfig\":[{\"corelib\":{}}]}"))
 	//resolver
 	opts = append(opts, grpc.WithResolvers(&resolverBuilder{c: client}))
-	conn, e := grpc.Dial("corelib:///"+serverappname, opts...)
+	conn, e := grpc.Dial("corelib:///"+serverapp, opts...)
 	if e != nil {
 		return nil, e
 	}
@@ -169,11 +172,11 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 	}
 	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
 	if traceid == "" {
-		ctx = log.InitTrace(ctx, "", c.selfappname, host.Hostip, "unknown", "unknown", 0)
+		ctx = log.InitTrace(ctx, "", c.selfapp, host.Hostip, "unknown", "unknown", 0)
 		traceid, _, _, selfmethod, selfpath, selfdeep = log.GetTrace(ctx)
 	}
-	md.Set("Core-Tracedata", traceid, c.selfappname, selfmethod, selfpath, strconv.Itoa(selfdeep))
-	md.Set("Core-Target", c.serverappname)
+	md.Set("Core-Tracedata", traceid, c.selfapp, selfmethod, selfpath, strconv.Itoa(selfdeep))
+	md.Set("Core-Target", c.serverapp)
 	ctx = gmetadata.NewOutgoingContext(ctx, md)
 	for {
 		start := time.Now()
@@ -184,8 +187,8 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 			//pick error or create stream unretryable error,req doesn't send
 		} else {
 			//req send,recv error
-			log.Trace(ctx, log.CLIENT, c.serverappname, p.Addr.String(), "GRPC", path, &start, &end, e)
-			monitor.GrpcClientMonitor(c.serverappname, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
+			log.Trace(ctx, log.CLIENT, c.serverapp, p.Addr.String(), "GRPC", path, &start, &end, e)
+			monitor.GrpcClientMonitor(c.serverapp, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 		}
 		if cerror.Equal(e, cerror.ErrClosing) {
 			continue

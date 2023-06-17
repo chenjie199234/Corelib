@@ -9,7 +9,7 @@ import (
 type KubernetesD struct {
 	silent    bool
 	group     string
-	app       string
+	name      string
 	crpcport  int
 	cgrpcport int
 	webport   int
@@ -22,11 +22,11 @@ type KubernetesD struct {
 	lasterror error
 }
 
-func NewKubernetesDiscover(group, app string, crpcport, cgrpcport, webport int, silent bool) DI {
+func NewKubernetesDiscover(targetappgroup, targetappname string, crpcport, cgrpcport, webport int, silent bool) DI {
 	d := &KubernetesD{
 		silent:    silent,
-		group:     group,
-		app:       app,
+		group:     targetappgroup,
+		name:      targetappname,
 		crpcport:  crpcport,
 		cgrpcport: cgrpcport,
 		webport:   webport,
@@ -88,6 +88,9 @@ func (d *KubernetesD) Stop() {
 		return
 	}
 	close(d.stop)
+}
+func (d *KubernetesD) CheckApp(app string) bool {
+	return app == d.group+"."+d.name
 }
 func (d *KubernetesD) run() {
 	//TODO
