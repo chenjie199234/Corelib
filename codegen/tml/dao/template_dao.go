@@ -32,7 +32,7 @@ func NewApi() error {
 	_ = cgrpcc //avoid unuse
 
 	//init discover for example server
-	//examplediscover := NewDSNDiscover("examplename-headless.examplegroup", time.Second * 10, 9000, 10000, 8000, false)
+	//examplediscover := NewDSNDiscover("examplegroup", "examplename", "examplename-headless.examplegroup", time.Second * 10, 9000, 10000, 8000, false)
 
 	//init cgrpc client below
 	//examplecgrpc, e = cgrpc.NewCGrpcClient(cgrpcc, nil, examplediscover, model.Group, model.Name, "examplegroup", "examplename", nil)
