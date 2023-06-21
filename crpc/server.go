@@ -126,7 +126,7 @@ func (s *CrpcServer) tellAllPeerSelfClosed() {
 			c.RLock()
 			d, _ := proto.Marshal(&Msg{
 				Callid: c.maxcallid + 1,
-				Error:  cerror.ErrClosing,
+				Error:  cerror.ErrServerClosing,
 			})
 			c.maxcallid = 0
 			p.SendMessage(nil, d, nil, nil)
@@ -281,7 +281,7 @@ func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 		//tel all peers self closed
 		d, _ := proto.Marshal(&Msg{
 			Callid: 0,
-			Error:  cerror.ErrClosing,
+			Error:  cerror.ErrServerClosing,
 		})
 		p.SendMessage(nil, d, nil, nil)
 	}
@@ -331,7 +331,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
-		msg.Error = cerror.ErrClosing
+		msg.Error = cerror.ErrServerClosing
 		msg.Metadata = nil
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
@@ -346,7 +346,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
-		msg.Error = cerror.ErrClosing
+		msg.Error = cerror.ErrServerClosing
 		msg.Metadata = nil
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)

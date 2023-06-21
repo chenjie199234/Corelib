@@ -12,6 +12,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
+	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
@@ -38,7 +39,7 @@ type CrpcClient struct {
 	tlsc      *tls.Config
 	instance  *stream.Instance
 
-	resolver *corelibResolver
+	resolver *resolver.CorelibResolver
 	balancer *corelibBalancer
 	picker   PickHandler
 	discover discover.DI
@@ -80,6 +81,7 @@ func NewCrpcClient(c *ClientConfig, p PickHandler, d discover.DI, selfappgroup, 
 		stop:    graceful.New(),
 	}
 	client.balancer = newCorelibBalancer(client)
+	client.resolver = resolver.NewCorelibResolver(client.balancer, client.discover)
 	instancec := &stream.InstanceConfig{
 		HeartprobeInterval: c.HeartProbe,
 		TcpC: &stream.TcpConfig{
@@ -93,13 +95,11 @@ func NewCrpcClient(c *ClientConfig, p PickHandler, d discover.DI, selfappgroup, 
 	instancec.UserdataFunc = client.userfunc
 	instancec.OfflineFunc = client.offlinefunc
 	client.instance, _ = stream.NewInstance(instancec)
-	//init discover
-	client.resolver = newCorelibResolver(client)
 	return client, nil
 }
 
 func (c *CrpcClient) ResolveNow() {
-	c.resolver.ResolveNow()
+	c.resolver.Now()
 }
 
 func (c *CrpcClient) GetServerIps() (ips []string, lasterror error) {
@@ -165,7 +165,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 		return
 	}
 	server.lker.Lock()
-	if msg.Error != nil && cerror.Equal(msg.Error, cerror.ErrClosing) {
+	if msg.Error != nil && cerror.Equal(msg.Error, cerror.ErrServerClosing) {
 		//update pickable status
 		server.setpeer(nil)
 		//all calls' callid big and equal then this msg's callid are unprocessed
@@ -204,11 +204,9 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 
 var errPickAgain = errors.New("[crpc.client] picked server closed")
 
-var ClientClosed = errors.New("[crpc.client] closed")
-
 func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata map[string]string) ([]byte, error) {
 	if !c.stop.AddOne() {
-		return nil, ClientClosed
+		return nil, cerror.ErrClientClosing
 	}
 	defer c.stop.DoneOne()
 	msg := &Msg{
@@ -276,7 +274,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 			if r.err != nil {
 				//req error,update last fail time
 				server.Pickinfo.LastFailTime = time.Now().UnixNano()
-				if cerror.Equal(r.err, cerror.ErrClosing) {
+				if cerror.Equal(r.err, cerror.ErrServerClosing) {
 					server.closing = true
 					//triger discovery
 					c.ResolveNow()

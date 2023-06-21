@@ -18,6 +18,7 @@ import (
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
 
+	"github.com/chenjie199234/Corelib/internal/resolver"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
@@ -27,7 +28,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	gmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/resolver"
+	gresolver "google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 )
 
@@ -61,7 +62,7 @@ type CGrpcClient struct {
 	tlsc      *tls.Config
 	conn      *grpc.ClientConn
 
-	resolver *corelibResolver
+	resolver *resolver.CorelibResolver
 	balancer *corelibBalancer
 	picker   PickHandler
 	discover discover.DI
@@ -120,7 +121,7 @@ func NewCGrpcClient(c *ClientConfig, p PickHandler, d discover.DI, selfappgroup,
 	opts = append(opts, grpc.WithDisableServiceConfig())
 	opts = append(opts, grpc.WithDefaultServiceConfig("{\"loadBalancingConfig\":[{\"corelib\":{}}]}"))
 	//resolver
-	opts = append(opts, grpc.WithResolvers(&resolverBuilder{c: client}))
+	gresolver.Register(&resolverBuilder{c: client})
 	conn, e := grpc.Dial("corelib:///"+serverapp, opts...)
 	if e != nil {
 		return nil, e
@@ -130,7 +131,7 @@ func NewCGrpcClient(c *ClientConfig, p PickHandler, d discover.DI, selfappgroup,
 }
 
 func (c *CGrpcClient) ResolveNow() {
-	c.resolver.ResolveNow(resolver.ResolveNowOptions{})
+	c.resolver.Now()
 }
 
 func (c *CGrpcClient) GetServerIps() (ips []string, lasterror error) {
@@ -190,7 +191,7 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 			log.Trace(ctx, log.CLIENT, c.serverapp, p.Addr.String(), "GRPC", path, &start, &end, e)
 			monitor.GrpcClientMonitor(c.serverapp, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 		}
-		if cerror.Equal(e, cerror.ErrClosing) {
+		if cerror.Equal(e, cerror.ErrServerClosing) {
 			continue
 		}
 		if e == nil {

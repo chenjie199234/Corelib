@@ -12,7 +12,6 @@ import (
 )
 
 type DnsD struct {
-	silent    bool
 	app       string
 	host      string
 	crpcport  int
@@ -30,12 +29,11 @@ type DnsD struct {
 
 // interval min is 1s,default is 10s
 // if silent is true,means no logs
-func NewDSNDiscover(targetappgroup, targetappname, host string, interval time.Duration, crpcport, cgrpcport, webport int, silent bool) DI {
+func NewDSNDiscover(targetappgroup, targetappname, host string, interval time.Duration, crpcport, cgrpcport, webport int) DI {
 	if interval < time.Second {
 		interval = time.Second * 10
 	}
 	d := &DnsD{
-		silent:    silent,
 		app:       targetappgroup + "." + targetappname,
 		host:      host,
 		crpcport:  crpcport,
@@ -143,16 +141,14 @@ func (d *DnsD) run() {
 		case <-tker.C:
 		}
 		if atomic.LoadInt32(&d.status) == 2 {
-			if !d.silent {
-				log.Info(nil, "[discover.dns] host:", d.host, cerror.ErrDiscoverStopped)
-			}
+			log.Info(nil, "[discover.dns] host:", d.host, cerror.ErrDiscoverStopped)
 			d.lasterror = cerror.ErrDiscoverStopped
 			return
 		}
 		atomic.CompareAndSwapInt32(&d.status, 0, 1)
 		addrs, e := net.LookupHost(d.host)
 		if e != nil {
-			log.Error(nil, "[discover.dns]", e)
+			log.Error(nil, "[discover.dns] host:", d.host, e)
 			d.Lock()
 			d.lasterror = e
 			for notice := range d.notices {

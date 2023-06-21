@@ -11,6 +11,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
+	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/stream"
 	"google.golang.org/protobuf/proto"
 )
@@ -115,9 +116,9 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData)
 	b.lker.Lock()
 	defer func() {
 		if len(b.servers) == 0 || len(b.pservers) > 0 {
-			b.c.resolver.wake(false)
+			b.c.resolver.Wake(resolver.CALL)
 		}
-		b.c.resolver.wake(true)
+		b.c.resolver.Wake(resolver.SYSTEM)
 		b.lker.Unlock()
 	}()
 	if bytes.Equal(b.serversRaw, d) {
@@ -211,7 +212,7 @@ func (b *corelibBalancer) ReconnectCheck(server *ServerForPick) bool {
 	b.lker.Unlock()
 	time.Sleep(time.Millisecond * 100)
 	//need to check server register status
-	b.c.resolver.wait(context.Background(), true)
+	b.c.resolver.Wait(context.Background(), resolver.SYSTEM)
 	b.lker.Lock()
 	if len(server.dservers) == 0 {
 		//server already unregister,remove server
@@ -236,7 +237,7 @@ func (b *corelibBalancer) RebuildPicker(OnOff bool) {
 	b.pservers = tmp
 	if OnOff {
 		//when online server,wake the block call
-		b.c.resolver.wake(false)
+		b.c.resolver.Wake(resolver.CALL)
 	}
 	b.lker.Unlock()
 }
@@ -253,7 +254,7 @@ func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 			}
 			return nil, cerror.ErrNoserver
 		}
-		if e := b.c.resolver.wait(ctx, false); e != nil {
+		if e := b.c.resolver.Wait(ctx, resolver.CALL); e != nil {
 			if e == context.DeadlineExceeded {
 				return nil, cerror.ErrDeadlineExceeded
 			} else if e == context.Canceled {

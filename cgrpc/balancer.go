@@ -6,12 +6,59 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/discover"
+	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
+
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/resolver"
+	gresolver "google.golang.org/grpc/resolver"
 )
 
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+type resolverBuilder struct {
+	c *CGrpcClient
+}
+
+func (b *resolverBuilder) Build(target gresolver.Target, cc gresolver.ClientConn, opts gresolver.BuildOptions) (gresolver.Resolver, error) {
+	r := resolver.NewCorelibResolver(&balancerWraper{cc: cc}, b.c.discover)
+	b.c.resolver = r
+	return r, nil
+}
+
+func (b *resolverBuilder) Scheme() string {
+	return "corelib"
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+type balancerWraper struct {
+	cc gresolver.ClientConn
+}
+
+func (b *balancerWraper) ResolverError(e error) {
+	b.cc.ReportError(e)
+}
+func (b *balancerWraper) UpdateDiscovery(all map[string]*discover.RegisterData) {
+	s := gresolver.State{
+		Addresses: make([]gresolver.Address, 0, len(all)),
+	}
+	for addr, info := range all {
+		if info == nil || len(info.DServers) == 0 {
+			continue
+		}
+		attr := &attributes.Attributes{}
+		attr = attr.WithValue("addition", info.Addition)
+		attr = attr.WithValue("dservers", info.DServers)
+		s.Addresses = append(s.Addresses, gresolver.Address{
+			Addr:               addr,
+			BalancerAttributes: attr,
+		})
+	}
+	b.cc.UpdateState(s)
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
 type balancerBuilder struct {
 	c *CGrpcClient
 }
@@ -64,15 +111,15 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 	b.lastResolveError = nil
 	defer func() {
 		if len(b.servers) == 0 {
-			b.c.resolver.wake(false)
+			b.c.resolver.Wake(resolver.CALL)
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: b})
 		} else if len(b.pservers) > 0 {
-			b.c.resolver.wake(false)
+			b.c.resolver.Wake(resolver.CALL)
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: b})
 		} else {
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: b})
 		}
-		b.c.resolver.wake(true)
+		b.c.resolver.Wake(resolver.SYSTEM)
 	}()
 	//offline
 	for _, server := range b.servers {
@@ -105,7 +152,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 			if len(dservers) == 0 {
 				continue
 			}
-			sc, e := b.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{HealthCheckEnabled: true})
+			sc, e := b.cc.NewSubConn([]gresolver.Address{addr}, balancer.NewSubConnOptions{HealthCheckEnabled: true})
 			if e != nil {
 				//this can only happened on client is closing
 				continue
@@ -226,7 +273,7 @@ func (b *corelibBalancer) rebuildpicker(OnOff bool) {
 	}
 	b.pservers = tmp
 	if OnOff {
-		b.c.resolver.wake(false)
+		b.c.resolver.Wake(resolver.CALL)
 	}
 	return
 }
@@ -258,7 +305,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 					atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
 					if doneinfo.Err != nil {
 						server.Pickinfo.LastFailTime = time.Now().UnixNano()
-						if cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrClosing) || cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrTarget) {
+						if cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrServerClosing) || cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrTarget) {
 							server.closing = true
 							b.c.ResolveNow()
 						}
@@ -272,7 +319,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 			}
 			return balancer.PickResult{}, cerror.ErrNoserver
 		}
-		if e := b.c.resolver.wait(info.Ctx, false); e != nil {
+		if e := b.c.resolver.Wait(info.Ctx, resolver.CALL); e != nil {
 			if e == context.DeadlineExceeded {
 				return balancer.PickResult{}, cerror.ErrDeadlineExceeded
 			} else if e == context.Canceled {
