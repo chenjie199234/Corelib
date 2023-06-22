@@ -277,7 +277,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 				if cerror.Equal(r.err, cerror.ErrServerClosing) {
 					server.closing = true
 					//triger discovery
-					c.ResolveNow()
+					c.resolver.Now()
 					//server is closing,this req can be retry
 					r.respdata = nil
 					r.err = nil
