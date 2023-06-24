@@ -11,6 +11,8 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
+	"github.com/chenjie199234/Corelib/internal/picker"
+	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -18,7 +20,6 @@ import (
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
 
-	"github.com/chenjie199234/Corelib/internal/resolver"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
@@ -31,8 +32,6 @@ import (
 	gresolver "google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 )
-
-type PickHandler func(servers []*ServerForPick) *ServerForPick
 
 type ClientConfig struct {
 	GlobalTimeout  time.Duration //global timeout for every rpc call,<=0 means no timeout
@@ -64,14 +63,14 @@ type CGrpcClient struct {
 
 	resolver *resolver.CorelibResolver
 	balancer *corelibBalancer
-	picker   PickHandler
+	picker   picker.PI
 	discover discover.DI
 
 	stop *graceful.Graceful
 }
 
 // if tlsc is not nil,the tls will be actived
-func NewCGrpcClient(c *ClientConfig, p PickHandler, d discover.DI, selfappgroup, selfappname, serverappgroup, serverappname string, tlsc *tls.Config) (*CGrpcClient, error) {
+func NewCGrpcClient(c *ClientConfig, d discover.DI, selfappgroup, selfappname, serverappgroup, serverappname string, tlsc *tls.Config) (*CGrpcClient, error) {
 	serverapp := serverappgroup + "." + serverappname
 	selfapp := selfappgroup + "." + selfappname
 	if e := name.FullCheck(selfapp); e != nil {
@@ -86,17 +85,13 @@ func NewCGrpcClient(c *ClientConfig, p PickHandler, d discover.DI, selfappgroup,
 	if !d.CheckApp(serverapp) {
 		return nil, errors.New("[cgrpc.client] discover's target app not match")
 	}
-	if p == nil {
-		log.Warning(nil, "[cgrpc.client] missing picker in config,default picker will be used")
-		p = defaultPicker
-	}
 	c.validate()
 	client := &CGrpcClient{
 		selfapp:   selfapp,
 		serverapp: serverapp,
 		c:         c,
 		tlsc:      tlsc,
-		picker:    p,
+		picker:    picker.NewPicker(),
 		discover:  d,
 		stop:      graceful.New(),
 	}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
+	"github.com/chenjie199234/Corelib/internal/picker"
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
@@ -22,8 +23,6 @@ import (
 	"github.com/chenjie199234/Corelib/util/name"
 	"google.golang.org/protobuf/proto"
 )
-
-type PickHandler func(servers []*ServerForPick) *ServerForPick
 
 type ClientConfig struct {
 	GlobalTimeout  time.Duration //global timeout for every rpc call,<=0 means no timeout
@@ -41,7 +40,7 @@ type CrpcClient struct {
 
 	resolver *resolver.CorelibResolver
 	balancer *corelibBalancer
-	picker   PickHandler
+	picker   picker.PI
 	discover discover.DI
 
 	stop    *graceful.Graceful
@@ -49,7 +48,7 @@ type CrpcClient struct {
 }
 
 // if tlsc is not nil,the tls will be actived
-func NewCrpcClient(c *ClientConfig, p PickHandler, d discover.DI, selfappgroup, selfappname, serverappgroup, serverappname string, tlsc *tls.Config) (*CrpcClient, error) {
+func NewCrpcClient(c *ClientConfig, d discover.DI, selfappgroup, selfappname, serverappgroup, serverappname string, tlsc *tls.Config) (*CrpcClient, error) {
 	serverapp := serverappgroup + "." + serverappname
 	selfapp := selfappgroup + "." + selfappname
 	if e := name.FullCheck(selfapp); e != nil {
@@ -64,17 +63,13 @@ func NewCrpcClient(c *ClientConfig, p PickHandler, d discover.DI, selfappgroup, 
 	if !d.CheckApp(serverapp) {
 		return nil, errors.New("[crpc.client] discover's target app not match")
 	}
-	if p == nil {
-		log.Warning(nil, "[crpc.client] missing picker in config,default picker will be used")
-		p = defaultPicker
-	}
 	client := &CrpcClient{
 		selfapp:   selfapp,
 		serverapp: serverapp,
 		c:         c,
 		tlsc:      tlsc,
 
-		picker:   p,
+		picker:   picker.NewPicker(),
 		discover: d,
 
 		reqpool: &sync.Pool{},
@@ -202,8 +197,6 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	go c.start(server, true)
 }
 
-var errPickAgain = errors.New("[crpc.client] picked server closed")
-
 func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata map[string]string) ([]byte, error) {
 	if !c.stop.AddOne() {
 		return nil, cerror.ErrClientClosing
@@ -239,7 +232,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 	r := c.getreq(msg)
 	for {
 		start := time.Now()
-		server, e := c.balancer.Pick(ctx)
+		server, done, e := c.balancer.Pick(ctx)
 		if e != nil {
 			end := time.Now()
 			log.Trace(ctx, log.CLIENT, c.serverapp, "pick failed,no server addr", "CRPC", path, &start, &end, e)
@@ -248,32 +241,30 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		}
 		if ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 			//at least 5ms for net lag and server logic
+			done()
 			end := time.Now()
 			log.Trace(ctx, log.CLIENT, c.serverapp, server.addr, "CRPC", path, &start, &end, cerror.ErrDeadlineExceeded)
 			monitor.CrpcClientMonitor(c.serverapp, "CRPC", path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, cerror.ErrDeadlineExceeded
 		}
 		msg.Callid = atomic.AddUint64(&server.callid, 1)
-		atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 		if e = server.sendmessage(ctx, r); e != nil {
-			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
-			if e == errPickAgain {
-				continue
-			}
+			done()
 			end := time.Now()
 			log.Trace(ctx, log.CLIENT, c.serverapp, server.addr, "CRPC", path, &start, &end, e)
 			monitor.CrpcClientMonitor(c.serverapp, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
+			if cerror.Equal(e, cerror.ErrClosed) {
+				continue
+			}
 			return nil, e
 		}
 		select {
 		case <-r.finish:
-			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
+			done()
 			end := time.Now()
 			log.Trace(ctx, log.CLIENT, c.serverapp, server.addr, "CRPC", path, &start, &end, r.err)
 			monitor.CrpcClientMonitor(c.serverapp, "CRPC", path, r.err, uint64(end.UnixNano()-start.UnixNano()))
 			if r.err != nil {
-				//req error,update last fail time
-				server.Pickinfo.LastFailTime = time.Now().UnixNano()
 				if cerror.Equal(r.err, cerror.ErrServerClosing) {
 					server.closing = true
 					//triger discovery
@@ -290,12 +281,10 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 			//resp and err maybe both nil
 			return resp, e
 		case <-ctx.Done():
-			atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
+			done()
 			server.lker.Lock()
 			delete(server.reqs, msg.Callid)
 			server.lker.Unlock()
-			//update last fail time
-			server.Pickinfo.LastFailTime = time.Now().UnixNano()
 			c.putreq(r)
 			if ctx.Err() == context.DeadlineExceeded {
 				e = cerror.ErrDeadlineExceeded

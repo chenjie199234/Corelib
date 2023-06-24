@@ -2,11 +2,11 @@ package cgrpc
 
 import (
 	"context"
-	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
+	"github.com/chenjie199234/Corelib/internal/picker"
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
 
@@ -80,7 +80,6 @@ type corelibBalancer struct {
 	c                *CGrpcClient
 	cc               balancer.ClientConn
 	servers          map[balancer.SubConn]*ServerForPick
-	pservers         []*ServerForPick
 	lastResolveError error
 }
 
@@ -91,15 +90,11 @@ type ServerForPick struct {
 	status   int32
 	closing  bool
 
-	Pickinfo *pickinfo
+	Pickinfo *picker.ServerPickInfo
 }
 
-type pickinfo struct {
-	LastFailTime   int64  //last fail timestamp nano second
-	Activecalls    int32  //current active calls
-	DServerNum     int32  //this server registered on how many discoveryservers
-	DServerOffline int64  //
-	Addition       []byte //addition info register on register center
+func (s *ServerForPick) GetServerPickInfo() *picker.ServerPickInfo {
+	return s.Pickinfo
 }
 
 func (s *ServerForPick) Pickable() bool {
@@ -113,7 +108,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 		if len(b.servers) == 0 {
 			b.c.resolver.Wake(resolver.CALL)
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: b})
-		} else if len(b.pservers) > 0 {
+		} else if b.c.picker.ServerLen() > 0 {
 			b.c.resolver.Wake(resolver.CALL)
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: b})
 		} else {
@@ -162,8 +157,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 				subconn:  sc,
 				dservers: dservers,
 				status:   int32(connectivity.Idle),
-				Pickinfo: &pickinfo{
-					LastFailTime:   0,
+				Pickinfo: &picker.ServerPickInfo{
 					Activecalls:    0,
 					DServerNum:     int32(len(dservers)),
 					DServerOffline: 0,
@@ -215,7 +209,7 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 	defer func() {
 		if len(b.servers) == 0 {
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: b})
-		} else if len(b.pservers) > 0 {
+		} else if b.c.picker.ServerLen() > 0 {
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: b})
 		} else {
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: b})
@@ -265,13 +259,13 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 // OnOff - true,online
 // OnOff - false,offline
 func (b *corelibBalancer) rebuildpicker(OnOff bool) {
-	tmp := make([]*ServerForPick, 0, len(b.servers))
+	tmp := make([]picker.ServerForPick, 0, len(b.servers))
 	for _, server := range b.servers {
 		if server.Pickable() {
 			tmp = append(tmp, server)
 		}
 	}
-	b.pservers = tmp
+	b.c.picker.UpdateServers(tmp)
 	if OnOff {
 		b.c.resolver.Wake(resolver.CALL)
 	}
@@ -286,27 +280,26 @@ func (b *corelibBalancer) Close() {
 		log.Info(nil, "[cgrpc.client] server:", b.c.serverapp+":"+server.addr, "offline")
 	}
 	b.servers = make(map[balancer.SubConn]*ServerForPick)
-	b.pservers = make([]*ServerForPick, 0)
+	b.c.picker.UpdateServers(make([]picker.ServerForPick, 0))
 }
 
 func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	refresh := false
 	for {
-		server := b.c.picker(b.pservers)
+		server, done := b.c.picker.Pick()
 		if server != nil {
 			if dl, ok := info.Ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic
+				done()
 				return balancer.PickResult{}, cerror.ErrDeadlineExceeded
 			}
-			atomic.AddInt32(&server.Pickinfo.Activecalls, 1)
 			return balancer.PickResult{
-				SubConn: server.subconn,
+				SubConn: server.(*ServerForPick).subconn,
 				Done: func(doneinfo balancer.DoneInfo) {
-					atomic.AddInt32(&server.Pickinfo.Activecalls, -1)
+					done()
 					if doneinfo.Err != nil {
-						server.Pickinfo.LastFailTime = time.Now().UnixNano()
 						if cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrServerClosing) || cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrTarget) {
-							server.closing = true
+							server.(*ServerForPick).closing = true
 							b.c.ResolveNow()
 						}
 					}

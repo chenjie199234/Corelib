@@ -35,7 +35,7 @@ func NewApi() error {
 	//examplediscover := NewDSNDiscover("examplegroup", "examplename", "examplename-headless.examplegroup", time.Second * 10, 9000, 10000, 8000)
 
 	//init cgrpc client below
-	//examplecgrpc, e = cgrpc.NewCGrpcClient(cgrpcc, nil, examplediscover, model.Group, model.Name, "examplegroup", "examplename", nil)
+	//examplecgrpc, e = cgrpc.NewCGrpcClient(cgrpcc, examplediscover, model.Group, model.Name, "examplegroup", "examplename", nil)
 	//if e != nil {
 	//         return e
 	//}
@@ -45,7 +45,7 @@ func NewApi() error {
 	_ = crpcc //avoid unuse
 
 	//init crpc client below
-	//examplecrpc, e = crpc.NewCrpcClient(crpcc, nil, examplediscover, model.Group, model.Name, "examplegroup", "examplename", nil)
+	//examplecrpc, e = crpc.NewCrpcClient(crpcc, examplediscover, model.Group, model.Name, "examplegroup", "examplename", nil)
 	//if e != nil {
 	// 	return e
 	//}
