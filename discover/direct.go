@@ -67,7 +67,7 @@ func (d *DirectD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
 	case Crpc:
 		if d.crpcport > 0 {
 			if strings.Contains(d.addr, ".") {
-				//treat ad host or ipv4
+				//treat as host or ipv4
 				r[d.addr+":"+strconv.Itoa(d.crpcport)] = reg
 			} else {
 				//treat as ipv6
@@ -79,7 +79,7 @@ func (d *DirectD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
 	case Cgrpc:
 		if d.cgrpcport > 0 {
 			if strings.Contains(d.addr, ".") {
-				//treat ad host or ipv4
+				//treat as host or ipv4
 				r[d.addr+":"+strconv.Itoa(d.cgrpcport)] = reg
 			} else {
 				//treat as ipv6
@@ -91,7 +91,7 @@ func (d *DirectD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
 	case Web:
 		if d.webport > 0 {
 			if strings.Contains(d.addr, ".") {
-				//treat ad host or ipv4
+				//treat as host or ipv4
 				r[d.addr+":"+strconv.Itoa(d.webport)] = reg
 			} else {
 				//treat as ipv6

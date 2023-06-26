@@ -11,7 +11,6 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
-	"github.com/chenjie199234/Corelib/internal/picker"
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
@@ -63,7 +62,6 @@ type CGrpcClient struct {
 
 	resolver *resolver.CorelibResolver
 	balancer *corelibBalancer
-	picker   picker.PI
 	discover discover.DI
 
 	stop *graceful.Graceful
@@ -91,7 +89,6 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfappgroup, selfappname, s
 		serverapp: serverapp,
 		c:         c,
 		tlsc:      tlsc,
-		picker:    picker.NewPicker(),
 		discover:  d,
 		stop:      graceful.New(),
 	}

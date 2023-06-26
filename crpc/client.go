@@ -12,7 +12,6 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
-	"github.com/chenjie199234/Corelib/internal/picker"
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
@@ -40,7 +39,6 @@ type CrpcClient struct {
 
 	resolver *resolver.CorelibResolver
 	balancer *corelibBalancer
-	picker   picker.PI
 	discover discover.DI
 
 	stop    *graceful.Graceful
@@ -69,7 +67,6 @@ func NewCrpcClient(c *ClientConfig, d discover.DI, selfappgroup, selfappname, se
 		c:         c,
 		tlsc:      tlsc,
 
-		picker:   picker.NewPicker(),
 		discover: d,
 
 		reqpool: &sync.Pool{},
@@ -225,8 +222,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout))
 		defer cancel()
 	}
-	dl, ok := ctx.Deadline()
-	if ok {
+	if dl, ok := ctx.Deadline(); ok {
 		msg.Deadline = dl.UnixNano()
 	}
 	r := c.getreq(msg)
@@ -234,18 +230,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		start := time.Now()
 		server, done, e := c.balancer.Pick(ctx)
 		if e != nil {
-			end := time.Now()
-			log.Trace(ctx, log.CLIENT, c.serverapp, "pick failed,no server addr", "CRPC", path, &start, &end, e)
-			monitor.CrpcClientMonitor(c.serverapp, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
-		}
-		if ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
-			//at least 5ms for net lag and server logic
-			done()
-			end := time.Now()
-			log.Trace(ctx, log.CLIENT, c.serverapp, server.addr, "CRPC", path, &start, &end, cerror.ErrDeadlineExceeded)
-			monitor.CrpcClientMonitor(c.serverapp, "CRPC", path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
-			return nil, cerror.ErrDeadlineExceeded
 		}
 		msg.Callid = atomic.AddUint64(&server.callid, 1)
 		if e = server.sendmessage(ctx, r); e != nil {

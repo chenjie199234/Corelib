@@ -523,8 +523,8 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 			}
 			//tell peer self closed
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(int(cerror.ErrClosing.Httpcode))
-			w.Write(common.Str2byte(cerror.ErrClosing.Error()))
+			w.WriteHeader(int(cerror.ErrServerClosing.Httpcode))
+			w.Write(common.Str2byte(cerror.ErrServerClosing.Error()))
 			return
 		}
 		defer s.stop.DoneOne()

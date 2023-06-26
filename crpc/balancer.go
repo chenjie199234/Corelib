@@ -22,6 +22,7 @@ type corelibBalancer struct {
 	lker             *sync.RWMutex
 	serversRaw       []byte
 	servers          map[string]*ServerForPick //key server addr
+	picker           picker.PI
 	lastResolveError error
 }
 type ServerForPick struct {
@@ -101,6 +102,7 @@ func newCorelibBalancer(c *CrpcClient) *corelibBalancer {
 		lker:       &sync.RWMutex{},
 		serversRaw: nil,
 		servers:    make(map[string]*ServerForPick),
+		picker:     picker.NewPicker(),
 	}
 }
 
@@ -112,7 +114,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData)
 	d, _ := json.Marshal(all)
 	b.lker.Lock()
 	defer func() {
-		if len(b.servers) == 0 || b.c.picker.ServerLen() > 0 {
+		if len(b.servers) == 0 || b.picker.ServerLen() > 0 {
 			b.c.resolver.Wake(resolver.CALL)
 		}
 		b.c.resolver.Wake(resolver.SYSTEM)
@@ -230,7 +232,7 @@ func (b *corelibBalancer) RebuildPicker(OnOff bool) {
 			tmp = append(tmp, server)
 		}
 	}
-	b.c.picker.UpdateServers(tmp)
+	b.picker.UpdateServers(tmp)
 	if OnOff {
 		//when online server,wake the block call
 		b.c.resolver.Wake(resolver.CALL)
@@ -240,8 +242,13 @@ func (b *corelibBalancer) RebuildPicker(OnOff bool) {
 func (b *corelibBalancer) Pick(ctx context.Context) (server *ServerForPick, done func(), e error) {
 	refresh := false
 	for {
-		server, done := b.c.picker.Pick()
+		server, done := b.picker.Pick()
 		if server != nil {
+			if dl, ok := ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
+				//at least 5ms for net lag and server logic
+				done()
+				return nil, nil, cerror.ErrDeadlineExceeded
+			}
 			return server.(*ServerForPick), done, nil
 		}
 		if refresh {

@@ -68,6 +68,7 @@ func (b *balancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptio
 		c:       b.c,
 		cc:      cc,
 		servers: make(map[balancer.SubConn]*ServerForPick),
+		picker:  picker.NewPicker(),
 	}
 	return b.c.balancer
 }
@@ -80,6 +81,7 @@ type corelibBalancer struct {
 	c                *CGrpcClient
 	cc               balancer.ClientConn
 	servers          map[balancer.SubConn]*ServerForPick
+	picker           picker.PI
 	lastResolveError error
 }
 
@@ -108,7 +110,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 		if len(b.servers) == 0 {
 			b.c.resolver.Wake(resolver.CALL)
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: b})
-		} else if b.c.picker.ServerLen() > 0 {
+		} else if b.picker.ServerLen() > 0 {
 			b.c.resolver.Wake(resolver.CALL)
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: b})
 		} else {
@@ -209,7 +211,7 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 	defer func() {
 		if len(b.servers) == 0 {
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: b})
-		} else if b.c.picker.ServerLen() > 0 {
+		} else if b.picker.ServerLen() > 0 {
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: b})
 		} else {
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: b})
@@ -265,7 +267,7 @@ func (b *corelibBalancer) rebuildpicker(OnOff bool) {
 			tmp = append(tmp, server)
 		}
 	}
-	b.c.picker.UpdateServers(tmp)
+	b.picker.UpdateServers(tmp)
 	if OnOff {
 		b.c.resolver.Wake(resolver.CALL)
 	}
@@ -280,13 +282,13 @@ func (b *corelibBalancer) Close() {
 		log.Info(nil, "[cgrpc.client] server:", b.c.serverapp+":"+server.addr, "offline")
 	}
 	b.servers = make(map[balancer.SubConn]*ServerForPick)
-	b.c.picker.UpdateServers(make([]picker.ServerForPick, 0))
+	b.picker.UpdateServers(make([]picker.ServerForPick, 0))
 }
 
 func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	refresh := false
 	for {
-		server, done := b.c.picker.Pick()
+		server, done := b.picker.Pick()
 		if server != nil {
 			if dl, ok := info.Ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic
@@ -297,11 +299,9 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 				SubConn: server.(*ServerForPick).subconn,
 				Done: func(doneinfo balancer.DoneInfo) {
 					done()
-					if doneinfo.Err != nil {
-						if cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrServerClosing) || cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrTarget) {
-							server.(*ServerForPick).closing = true
-							b.c.ResolveNow()
-						}
+					if cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrServerClosing) || cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrTarget) {
+						server.(*ServerForPick).closing = true
+						b.c.ResolveNow()
 					}
 				},
 			}, nil
