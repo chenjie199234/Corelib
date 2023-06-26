@@ -55,7 +55,7 @@ func NewApi() error {
 	_ = webc //avoid unuse
 
 	//init web client below
-	//exampleweb, e = web.NewWebClient(webc, model.Group, model.Name, "examplegroup", "examplename", "http://examplehost:exampleport", nil)
+	//exampleweb, e = web.NewWebClient(webc, examplediscover, model.Group, model.Name, "examplegroup", "examplename", nil)
 	//if e != nil {
 	// 	return e
 	//}
