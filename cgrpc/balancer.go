@@ -22,7 +22,7 @@ type resolverBuilder struct {
 }
 
 func (b *resolverBuilder) Build(target gresolver.Target, cc gresolver.ClientConn, opts gresolver.BuildOptions) (gresolver.Resolver, error) {
-	r := resolver.NewCorelibResolver(&balancerWraper{cc: cc}, b.c.discover)
+	r := resolver.NewCorelibResolver(&balancerWraper{cc: cc}, b.c.discover, discover.Cgrpc)
 	b.c.resolver = r
 	return r, nil
 }

@@ -15,7 +15,6 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
-	"github.com/chenjie199234/Corelib/internal/picker"
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
@@ -26,7 +25,7 @@ import (
 )
 
 type ClientConfig struct {
-	ConnectTimeout time.Duration
+	ConnectTimeout time.Duration //default 500ms
 	GlobalTimeout  time.Duration //request's max handling time
 	HeartProbe     time.Duration //tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
 	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
@@ -39,13 +38,16 @@ func (c *ClientConfig) validate() {
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0
 	}
+	if c.ConnectTimeout <= 0 {
+		c.ConnectTimeout = time.Millisecond * 500
+	}
 	if c.HeartProbe == 0 {
 		c.HeartProbe = time.Second * 15
 	} else if c.HeartProbe > 0 && c.HeartProbe < time.Second {
 		c.HeartProbe = time.Second
 	}
 	if c.MaxHeader == 0 {
-		c.MaxHeader = 1024
+		c.MaxHeader = 2048
 	}
 	if c.MaxHeader > 65536 {
 		c.MaxHeader = 65536
@@ -67,14 +69,14 @@ type WebClient struct {
 }
 
 // if tlsc is not nil,the tls will be actived
-func NewWebClient(c *ClientConfig, p picker.PI, d discover.DI, selfappgroup, selfappname, serverappgroup, serverappname string, tlsc *tls.Config) (*WebClient, error) {
+func NewWebClient(c *ClientConfig, d discover.DI, selfappgroup, selfappname, serverappgroup, serverappname string, tlsc *tls.Config) (*WebClient, error) {
 	serverapp := serverappgroup + "." + serverappname
 	selfapp := selfappgroup + "." + selfappname
-	if e := name.FullCheck(selfappname); e != nil {
+	if e := name.FullCheck(selfapp); e != nil {
 		return nil, e
 	}
 	if c == nil {
-		return nil, errors.New("[web.client] missing config")
+		c = &ClientConfig{}
 	}
 	if d == nil {
 		return nil, errors.New("[web.client] missing discover")
@@ -114,7 +116,7 @@ func NewWebClient(c *ClientConfig, p picker.PI, d discover.DI, selfappgroup, sel
 		stop: graceful.New(),
 	}
 	client.balancer = newCorelibBalancer(client)
-	client.resolver = resolver.NewCorelibResolver(client.balancer, client.discover)
+	client.resolver = resolver.NewCorelibResolver(client.balancer, client.discover, discover.Web)
 	return client, nil
 }
 
@@ -212,7 +214,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		"Deep":         strconv.Itoa(selfdeep),
 	})
 	header.Set("Core-Tracedata", common.Byte2str(tracedata))
-	if c.c.GlobalTimeout != 0 {
+	if c.c.GlobalTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout))
 		defer cancel()

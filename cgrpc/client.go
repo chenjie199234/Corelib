@@ -75,7 +75,7 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfappgroup, selfappname, s
 		return nil, e
 	}
 	if c == nil {
-		return nil, errors.New("[cgrpc.client] missing config")
+		c = &ClientConfig{}
 	}
 	if d == nil {
 		return nil, errors.New("[cgrpc.client] missing discover in config")

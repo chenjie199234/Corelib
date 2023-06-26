@@ -53,7 +53,7 @@ func NewCrpcClient(c *ClientConfig, d discover.DI, selfappgroup, selfappname, se
 		return nil, e
 	}
 	if c == nil {
-		return nil, errors.New("[crpc.client] missing config")
+		c = &ClientConfig{}
 	}
 	if d == nil {
 		return nil, errors.New("[crpc.client] missing discover")
@@ -73,7 +73,7 @@ func NewCrpcClient(c *ClientConfig, d discover.DI, selfappgroup, selfappname, se
 		stop:    graceful.New(),
 	}
 	client.balancer = newCorelibBalancer(client)
-	client.resolver = resolver.NewCorelibResolver(client.balancer, client.discover)
+	client.resolver = resolver.NewCorelibResolver(client.balancer, client.discover, discover.Crpc)
 	instancec := &stream.InstanceConfig{
 		HeartprobeInterval: c.HeartProbe,
 		TcpC: &stream.TcpConfig{

@@ -25,6 +25,7 @@ func NewDirectDiscover(targetappgroup, targetappname, addr string, crpcport, cgr
 		crpcport:  crpcport,
 		cgrpcport: cgrpcport,
 		webport:   webport,
+		notices:   make(map[chan *struct{}]*struct{}),
 	}
 }
 

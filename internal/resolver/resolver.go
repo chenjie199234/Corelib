@@ -24,7 +24,7 @@ type CorelibResolver struct {
 	stopstatus int32
 }
 
-func NewCorelibResolver(b Balancer, d discover.DI) *CorelibResolver {
+func NewCorelibResolver(b Balancer, d discover.DI, pt discover.PortType) *CorelibResolver {
 	r := &CorelibResolver{
 		b:       b,
 		d:       d,
@@ -57,7 +57,7 @@ func NewCorelibResolver(b Balancer, d discover.DI) *CorelibResolver {
 					r.Wake(SYSTEM)
 					return
 				}
-				all, e := d.GetAddrs(discover.Crpc)
+				all, e := d.GetAddrs(pt)
 				if e != nil {
 					b.ResolverError(e)
 					r.Wake(CALL)
