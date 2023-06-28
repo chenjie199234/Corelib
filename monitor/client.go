@@ -108,7 +108,7 @@ func GrpcClientMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo.lker.Unlock()
 }
 func CrpcClientMonitor(peername, method, path string, e error, timewaste uint64) {
-	if clientinited {
+	if !clientinited {
 		return
 	}
 	recordpath := method + ":" + path
