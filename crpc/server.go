@@ -51,7 +51,7 @@ type client struct {
 
 func NewCrpcServer(c *ServerConfig, selfappgroup, selfappname string) (*CrpcServer, error) {
 	selfapp := selfappgroup + "." + selfappname
-	if e := name.FullCheck(selfappname); e != nil {
+	if e := name.FullCheck(selfapp); e != nil {
 		return nil, e
 	}
 	if c == nil {

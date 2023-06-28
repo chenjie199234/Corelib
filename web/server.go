@@ -149,21 +149,21 @@ func (c *ServerConfig) getCorsExpose() string {
 }
 
 type WebServer struct {
-	selfappname string
-	c           *ServerConfig
-	ctxpool     *sync.Pool
-	global      []OutsideHandler
-	r           *router
-	s           *http.Server
-	clientnum   int32
-	stop        *graceful.Graceful
-	closetimer  *time.Timer
+	selfapp    string
+	c          *ServerConfig
+	ctxpool    *sync.Pool
+	global     []OutsideHandler
+	r          *router
+	s          *http.Server
+	clientnum  int32
+	stop       *graceful.Graceful
+	closetimer *time.Timer
 }
 
-func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, error) {
+func NewWebServer(c *ServerConfig, selfappgroup, selfappname string) (*WebServer, error) {
 	//pre check
-	selfappname := selfgroup + "." + selfname
-	if e := name.FullCheck(selfappname); e != nil {
+	selfapp := selfappgroup + "." + selfappname
+	if e := name.FullCheck(selfapp); e != nil {
 		return nil, e
 	}
 	if c == nil {
@@ -172,13 +172,13 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	c.validate()
 	//new server
 	instance := &WebServer{
-		selfappname: selfappname,
-		c:           c,
-		ctxpool:     &sync.Pool{},
-		global:      make([]OutsideHandler, 0, 10),
-		r:           newRouter(c.SrcRoot),
-		stop:        graceful.New(),
-		closetimer:  time.NewTimer(0),
+		selfapp:    selfapp,
+		c:          c,
+		ctxpool:    &sync.Pool{},
+		global:     make([]OutsideHandler, 0, 10),
+		r:          newRouter(c.SrcRoot),
+		stop:       graceful.New(),
+		closetimer: time.NewTimer(0),
 	}
 	<-instance.closetimer.C
 	instance.s = &http.Server{
@@ -418,7 +418,7 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 	copy(totalhandlers[len(s.global):], handlers)
 	return func(w http.ResponseWriter, r *http.Request) {
 		//target
-		if target := r.Header.Get("Core-Target"); target != "" && target != s.selfappname {
+		if target := r.Header.Get("Core-Target"); target != "" && target != s.selfapp {
 			//this is not the required server.tell peer self closed
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(int(cerror.ErrTarget.Httpcode))
@@ -469,7 +469,7 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 				return
 			}
 			if len(tracedata) == 0 || tracedata["TraceID"] == "" {
-				ctx = log.InitTrace(r.Context(), "", s.selfappname, host.Hostip, method, path, 0)
+				ctx = log.InitTrace(r.Context(), "", s.selfapp, host.Hostip, method, path, 0)
 			} else {
 				sourceapp = tracedata["SourceApp"]
 				sourcemethod = tracedata["SourceMethod"]
@@ -482,10 +482,10 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 					w.Write(common.Str2byte(cerror.ErrReq.Error()))
 					return
 				}
-				ctx = log.InitTrace(r.Context(), tracedata["TraceID"], s.selfappname, host.Hostip, method, path, clientdeep)
+				ctx = log.InitTrace(r.Context(), tracedata["TraceID"], s.selfapp, host.Hostip, method, path, clientdeep)
 			}
 		} else {
-			ctx = log.InitTrace(r.Context(), "", s.selfappname, host.Hostip, method, path, 0)
+			ctx = log.InitTrace(r.Context(), "", s.selfapp, host.Hostip, method, path, 0)
 		}
 		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
 		var mdata map[string]string
@@ -545,7 +545,7 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 				workctx.e = cerror.ErrPanic
 			}
 			end := time.Now()
-			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+r.Context().Value(localport{}).(string), method, path, &start, &end, workctx.e)
+			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfapp, host.Hostip+":"+r.Context().Value(localport{}).(string), method, path, &start, &end, workctx.e)
 			monitor.WebServerMonitor(sourceapp, method, path, workctx.e, uint64(end.UnixNano()-start.UnixNano()))
 			s.putContext(workctx)
 		}()

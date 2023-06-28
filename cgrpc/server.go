@@ -65,7 +65,7 @@ type CGrpcServer struct {
 
 func NewCGrpcServer(c *ServerConfig, selfappgroup, selfappname string) (*CGrpcServer, error) {
 	selfapp := selfappgroup + "." + selfappname
-	if e := name.FullCheck(selfappname); e != nil {
+	if e := name.FullCheck(selfapp); e != nil {
 		return nil, e
 	}
 	if c == nil {
