@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,7 +68,7 @@ func (d *DirectD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
 		r[d.addr] = reg
 	case Crpc:
 		if d.crpcport > 0 {
-			if strings.Contains(d.addr, ".") {
+			if !strings.Contains(d.addr, ":") {
 				//treat as host or ipv4
 				r[d.addr+":"+strconv.Itoa(d.crpcport)] = reg
 			} else {
@@ -79,7 +80,7 @@ func (d *DirectD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
 		}
 	case Cgrpc:
 		if d.cgrpcport > 0 {
-			if strings.Contains(d.addr, ".") {
+			if !strings.Contains(d.addr, ":") {
 				//treat as host or ipv4
 				r[d.addr+":"+strconv.Itoa(d.cgrpcport)] = reg
 			} else {
@@ -91,7 +92,7 @@ func (d *DirectD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
 		}
 	case Web:
 		if d.webport > 0 {
-			if strings.Contains(d.addr, ".") {
+			if !strings.Contains(d.addr, ":") {
 				//treat as host or ipv4
 				r[d.addr+":"+strconv.Itoa(d.webport)] = reg
 			} else {
