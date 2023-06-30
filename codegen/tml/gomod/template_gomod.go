@@ -19,7 +19,7 @@ require (
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/segmentio/kafka-go v0.4.40
 	go.mongodb.org/mongo-driver v1.12.0
-	google.golang.org/protobuf v1.30.0
+	google.golang.org/protobuf v1.31.0
 )`
 
 func CreatePathAndFile(packagename string) {
