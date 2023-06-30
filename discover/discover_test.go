@@ -6,7 +6,7 @@ import (
 )
 
 func Test_Discover(t *testing.T) {
-	d := NewDSNDiscover("testg", "testn", "www.baidu.com", time.Second*10, 9000, 10000, 8000)
+	d := NewDNSDiscover("testg", "testn", "www.baidu.com", time.Second*10, 9000, 10000, 8000)
 	go func() {
 		ch, cancel := d.GetNotice()
 		defer cancel()
