@@ -64,6 +64,10 @@ func NewApi() error {
 	return nil
 }
 
+func UpdateAPI(ac *config.AppConfig) {
+
+}
+
 func GetCGrpcClientConfig() *cgrpc.ClientConfig {
 	gc := config.GetCGrpcClientConfig()
 	return &cgrpc.ClientConfig{
