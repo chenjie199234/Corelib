@@ -2,6 +2,7 @@ package discover
 
 import (
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -22,6 +23,7 @@ type KubernetesD struct {
 	lasterror error
 }
 
+// TODO WIP
 func NewKubernetesDiscover(targetappgroup, targetappname string, crpcport, cgrpcport, webport int, silent bool) DI {
 	d := &KubernetesD{
 		silent:    silent,
@@ -68,15 +70,33 @@ func (d *KubernetesD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
 		switch pt {
 		case Crpc:
 			if d.crpcport > 0 {
-				k = k + ":" + strconv.Itoa(d.crpcport)
+				if strings.Contains(k, ":") {
+					//ipv6
+					k = "[" + k + "]:" + strconv.Itoa(d.crpcport)
+				} else {
+					//ipv4
+					k = k + ":" + strconv.Itoa(d.crpcport)
+				}
 			}
 		case Cgrpc:
 			if d.cgrpcport > 0 {
-				k = k + ":" + strconv.Itoa(d.cgrpcport)
+				if strings.Contains(k, ":") {
+					//ipv6
+					k = "[" + k + "]:" + strconv.Itoa(d.cgrpcport)
+				} else {
+					//ipv4
+					k = k + ":" + strconv.Itoa(d.cgrpcport)
+				}
 			}
 		case Web:
 			if d.webport > 0 {
-				k = k + ":" + strconv.Itoa(d.webport)
+				if strings.Contains(k, ":") {
+					//ipv6
+					k = "[" + k + "]:" + strconv.Itoa(d.webport)
+				} else {
+					//ipv4
+					k = k + ":" + strconv.Itoa(d.webport)
+				}
 			}
 		}
 		r[k] = v
