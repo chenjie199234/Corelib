@@ -35,8 +35,9 @@ type Peer struct {
 	dispatcher    chan *struct{}
 	cr            *bufio.Reader
 	c             net.Conn
-	header        http.Header //if this is not nil,means this is a websocket peer
+	rawaddr       string //only useful when peertype is _PEER_SERVER
 	peertype      int
+	header        http.Header    //if this is not nil,means this is a websocket peer
 	lastactive    int64          //unixnano timestamp
 	recvidlestart int64          //unixnano timestamp
 	sendidlestart int64          //unixnano timestamp
@@ -46,9 +47,10 @@ type Peer struct {
 	context.CancelFunc
 }
 
-func newPeer(selfMaxMsgLen uint32, peertype int) *Peer {
+func newPeer(selfMaxMsgLen uint32, peertype int, rawaddr string) *Peer {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &Peer{
+		rawaddr:       rawaddr,
 		peertype:      peertype,
 		selfMaxMsgLen: selfMaxMsgLen,
 		dispatcher:    make(chan *struct{}, 1),
@@ -184,6 +186,11 @@ func (p *Peer) GetLocalPort() string {
 
 func (p *Peer) GetNetlag() int64 {
 	return atomic.LoadInt64(&p.netlag)
+}
+
+// only useful when peertype is _PEER_SERVER
+func (p *Peer) GetRawAddr() string {
+	return p.rawaddr
 }
 
 // get the direct peer's addr(maybe a proxy)

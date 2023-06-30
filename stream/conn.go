@@ -46,7 +46,7 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 	this.listeners = append(this.listeners, tmplistener)
 	this.Unlock()
 	for {
-		p := newPeer(this.c.TcpC.MaxMsgLen, _PEER_CLIENT)
+		p := newPeer(this.c.TcpC.MaxMsgLen, _PEER_CLIENT, "")
 		conn, e := tmplistener.AcceptTCP()
 		if e != nil {
 			if ee, ok := e.(interface {
@@ -241,7 +241,7 @@ func (this *Instance) StartClient(serveraddr string, verifydata []byte, tlsc *tl
 	//disable system's keep alive probe
 	//use self's heartbeat probe
 	(conn.(*net.TCPConn)).SetKeepAlive(false)
-	p := newPeer(this.c.TcpC.MaxMsgLen, _PEER_SERVER)
+	p := newPeer(this.c.TcpC.MaxMsgLen, _PEER_SERVER, u.Host)
 	if u.Scheme == "tcps" || u.Scheme == "wss" {
 		p.c = tls.Client(conn, tlsc)
 	} else {
