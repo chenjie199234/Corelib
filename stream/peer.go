@@ -190,7 +190,10 @@ func (p *Peer) GetNetlag() int64 {
 
 // only useful when peertype is _PEER_SERVER
 func (p *Peer) GetRawAddr() string {
-	return p.rawaddr
+	if p.peertype == _PEER_SERVER {
+		return p.rawaddr
+	}
+	return ""
 }
 
 // get the direct peer's addr(maybe a proxy)
