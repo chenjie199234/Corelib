@@ -3,6 +3,7 @@ package discover
 import (
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -85,30 +86,35 @@ func (d *DnsD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
 	}
 	r := make(map[string]*RegisterData)
 	for k, v := range d.addrs {
-		ip := net.ParseIP(k)
 		switch pt {
 		case Crpc:
 			if d.crpcport > 0 {
-				if len(ip) == 4 {
-					k = k + ":" + strconv.Itoa(d.crpcport)
-				} else if len(ip) == 16 {
+				if strings.Contains(k, ":") {
+					//ipv6
 					k = "[" + k + "]:" + strconv.Itoa(d.crpcport)
+				} else {
+					//ipv4
+					k = k + ":" + strconv.Itoa(d.crpcport)
 				}
 			}
 		case Cgrpc:
 			if d.cgrpcport > 0 {
-				if len(ip) == 4 {
-					k = k + ":" + strconv.Itoa(d.cgrpcport)
-				} else if len(ip) == 16 {
+				if strings.Contains(k, ":") {
+					//ipv6
 					k = "[" + k + "]:" + strconv.Itoa(d.cgrpcport)
+				} else {
+					//ipv4
+					k = k + ":" + strconv.Itoa(d.cgrpcport)
 				}
 			}
 		case Web:
 			if d.webport > 0 {
-				if len(ip) == 4 {
-					k = k + ":" + strconv.Itoa(d.webport)
-				} else if len(ip) == 16 {
+				if strings.Contains(k, ":") {
+					//ipv6
 					k = "[" + k + "]:" + strconv.Itoa(d.webport)
+				} else {
+					//ipv4
+					k = k + ":" + strconv.Itoa(d.webport)
 				}
 			}
 		}
