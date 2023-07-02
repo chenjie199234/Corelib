@@ -28,34 +28,35 @@ const (
 )
 
 type Peer struct {
-	selfMaxMsgLen uint32
-	peerMaxMsgLen uint32
-	peergroup     *group
-	status        int32 //1 - working,0 - closed
-	dispatcher    chan *struct{}
-	cr            *bufio.Reader
-	c             net.Conn
-	rawaddr       string //only useful when peertype is _PEER_SERVER
-	peertype      int
-	header        http.Header    //if this is not nil,means this is a websocket peer
-	lastactive    int64          //unixnano timestamp
-	recvidlestart int64          //unixnano timestamp
-	sendidlestart int64          //unixnano timestamp
-	netlag        int64          //unixnano
-	data          unsafe.Pointer //user data
+	selfMaxMsgLen  uint32
+	peerMaxMsgLen  uint32
+	peergroup      *group
+	status         int32 //1 - working,0 - closed
+	dispatcher     chan *struct{}
+	cr             *bufio.Reader
+	c              net.Conn
+	rawconnectaddr string //only useful when peertype is _PEER_SERVER,this is the server's raw connect addr
+	peertype       int
+	header         http.Header    //if this is not nil,means this is a websocket peer
+	lastactive     int64          //unixnano timestamp
+	recvidlestart  int64          //unixnano timestamp
+	sendidlestart  int64          //unixnano timestamp
+	netlag         int64          //unixnano
+	data           unsafe.Pointer //user data
 	context.Context
 	context.CancelFunc
 }
 
-func newPeer(selfMaxMsgLen uint32, peertype int, rawaddr string) *Peer {
+// rawconnectaddr is only useful when peertype is _PEER_SERVER,this is the server's raw connect addr
+func newPeer(selfMaxMsgLen uint32, peertype int, rawconnectaddr string) *Peer {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &Peer{
-		rawaddr:       rawaddr,
-		peertype:      peertype,
-		selfMaxMsgLen: selfMaxMsgLen,
-		dispatcher:    make(chan *struct{}, 1),
-		Context:       ctx,
-		CancelFunc:    cancel,
+		rawconnectaddr: rawconnectaddr,
+		peertype:       peertype,
+		selfMaxMsgLen:  selfMaxMsgLen,
+		dispatcher:     make(chan *struct{}, 1),
+		Context:        ctx,
+		CancelFunc:     cancel,
 	}
 	p.dispatcher <- nil
 	return p
@@ -188,10 +189,10 @@ func (p *Peer) GetNetlag() int64 {
 	return atomic.LoadInt64(&p.netlag)
 }
 
-// only useful when peertype is _PEER_SERVER
-func (p *Peer) GetRawAddr() string {
+// only useful when peertype is _PEER_SERVER,this is the server's raw connect addr
+func (p *Peer) GetRawConnectAddr() string {
 	if p.peertype == _PEER_SERVER {
-		return p.rawaddr
+		return p.rawconnectaddr
 	}
 	return ""
 }
