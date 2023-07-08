@@ -57,7 +57,7 @@ const source = `{
 			"max_open":256,
 			"max_idletime":"10m",
 			"io_timeout":"500ms",
-			"conn_timeout":"200ms"
+			"conn_timeout":"250ms"
 		}
 	},
 	"sql":{
@@ -67,7 +67,7 @@ const source = `{
 			"max_idle":100,
 			"max_idletime":"10m",
 			"io_timeout":"500ms",
-			"conn_timeout":"200ms"
+			"conn_timeout":"250ms"
 		}
 	},
 	"redis":{
@@ -77,7 +77,7 @@ const source = `{
 			"max_idle":100,
 			"max_idletime":"10m",
 			"io_timeout":"500ms",
-			"conn_timeout":"200ms"
+			"conn_timeout":"250ms"
 		}
 	},
 	"kafka_pub":[

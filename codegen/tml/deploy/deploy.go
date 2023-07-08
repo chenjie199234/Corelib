@@ -83,10 +83,18 @@ spec:
               value: <CONFIG_TYPE>
             - name: REMOTE_CONFIG_SERVICE_GROUP
               value: <REMOTE_CONFIG_SERVICE_GROUP>
-            - name: REMOTE_CONFIG_SERVICE_HOST
-              value: <REMOTE_CONFIG_SERVICE_HOST>
+            - name: REMOTE_CONFIG_SERVICE_WEB_HOST
+              value: <REMOTE_CONFIG_SERVICE_WEB_HOST>
+            - name: REMOTE_CONFIG_SERVICE_WEB_PORT
+              value: <REMOTE_CONFIG_SERVICE_WEB_PORT>
             - name: REMOTE_CONFIG_SECRET
               value: <REMOTE_CONFIG_SECRET>
+            - name: PERMISSION_SERVICE_GROUP
+              value: <PERMISSION_SERVICE_GROUP>
+            - name: PERMISSION_SERVICE_WEB_HOST
+              value: <PERMISSION_SERVICE_WEB_HOST>
+            - name: PERMISSION_SERVICE_WEB_PORT
+              value: <PERMISSION_SERVICE_WEB_PORT>
           livenessProbe:
             tcpSocket:
               port: 8000

@@ -86,34 +86,9 @@ func initenv() {
 		log.Warning(nil, "[config.initenv] missing env CONFIG_TYPE")
 	}
 	if EC.ConfigType != nil && *EC.ConfigType == 1 {
-		var group string
-		if str, ok := os.LookupEnv("REMOTE_CONFIG_SERVICE_GROUP"); ok && str != "<REMOTE_CONFIG_SERVICE_GROUP>" && str != "" {
-			group = str
-		} else {
-			log.Error(nil, "[config.initenv] missing env REMOTE_CONFIG_SERVICE_GROUP")
-			Close()
-			os.Exit(1)
-		}
-		var host string
-		if str, ok := os.LookupEnv("REMOTE_CONFIG_SERVICE_HOST"); ok && str != "<REMOTE_CONFIG_SERVICE_HOST>" && str != "" {
-			host = str
-		} else {
-			log.Error(nil, "[config.initenv] missing env REMOTE_CONFIG_SERVICE_HOST")
-			Close()
-			os.Exit(1)
-		}
-		var secret string
-		if str, ok := os.LookupEnv("REMOTE_CONFIG_SECRET"); ok && str != "<REMOTE_CONFIG_SECRET>" && str != "" {
-			secret = str
-		}
-		if len(secret) >= 32 {
-			log.Error(nil, "[config.initenv] REMOTE_CONFIG_SECRET too long")
-			Close()
-			os.Exit(1)
-		}
 		var e error
-		if RemoteConfigSdk, e = configsdk.NewConfigSdk(model.Group, model.Name, group, host, secret, nil); e != nil {
-			log.Error(nil, "[config.initenv] new remote config sdk error:", e)
+		if RemoteConfigSdk, e = configsdk.NewConfigSdk(model.Group, model.Name, nil); e != nil {
+			log.Error(nil, "[config.initenv] new remote config sdk:", e)
 			Close()
 			os.Exit(1)
 		}
@@ -269,7 +244,7 @@ import (
 	"github.com/chenjie199234/Corelib/redis"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/plain"
 	"github.com/segmentio/kafka-go/sasl/scram"
@@ -656,14 +631,11 @@ func initredis(){
 			ConnTimeout: redisc.ConnTimeout.StdDuration(),
 			IOTimeout:   redisc.IOTimeout.StdDuration(),
 		})
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		if e := tempredis.Ping(ctx); e != nil {
-			cancel()
+		if e := tempredis.Ping(context.Background()); e != nil {
 			log.Error(nil, "[config.initredis] ping redis:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
-		cancel()
 		rediss[k] = tempredis
 	}
 }
@@ -698,15 +670,12 @@ func initmongo(){
 			Close()
 			os.Exit(1)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		e = tempdb.Ping(ctx, readpref.Primary())
+		e = tempdb.Ping(context.Background(), readpref.Primary())
 		if e != nil {
-			cancel()
 			log.Error(nil, "[config.initmongo] ping mongodb:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
-		cancel()
 		mongos[k] = tempdb
 	}
 }
@@ -730,7 +699,16 @@ func initsql(){
 		if k == "example_sql" {
 			continue
 		}
-		tempdb, e := sql.Open("mysql", sqlc.URL)
+		tmpc, e := mysql.ParseDSN(sqlc.URL)
+		if e != nil {
+			log.Error(nil, "[config.initsql] open mysql:", k, "error:", e)
+			Close()
+			os.Exit(1)
+		}
+		tmpc.Timeout = sqlc.ConnTimeout.StdDuration()
+		tmpc.ReadTimeout = sqlc.IOTimeout.StdDuration()
+		tmpc.WriteTimeout = sqlc.IOTimeout.StdDuration()
+		tempdb, e := sql.Open("mysql", tmpc.FormatDSN())
 		if e != nil {
 			log.Error(nil, "[config.initsql] open mysql:", k, "error:", e)
 			Close()
@@ -739,15 +717,12 @@ func initsql(){
 		tempdb.SetMaxOpenConns(int(sqlc.MaxOpen))
 		tempdb.SetMaxIdleConns(int(sqlc.MaxIdle))
 		tempdb.SetConnMaxIdleTime(sqlc.MaxIdletime.StdDuration())
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		e = tempdb.PingContext(ctx)
+		e = tempdb.PingContext(context.Background())
 		if e != nil {
-			cancel()
 			log.Error(nil, "[config.initsql] ping mysql:", k, "error:", e)
 			Close()
 			os.Exit(1)
 		}
-		cancel()
 		sqls[k] = tempdb
 	}
 }
