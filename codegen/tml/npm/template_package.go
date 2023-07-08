@@ -8,9 +8,9 @@ const txt = `{
   "private": true,
   "type": "module",
   "dependencies": {
-    "axios": "^1.4.0",
-    "long": "^5.2.3",
-    "@protobufjs/base64":"^1.1.2"
+    "axios": "latest",
+    "long": "latest",
+    "@protobufjs/base64":"latest"
   }
 }`
 
