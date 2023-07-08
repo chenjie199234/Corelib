@@ -90,23 +90,20 @@ const pkg = `{
     "preview": "vite preview"
   },
   "dependencies": {
-    "vue": "^3.3.4",
-    "vuestic-ui": "^1.6.5"
+    "vue": "latest",
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^4.2.3",
-    "typescript": "^5.0.4",
-    "vite": "^4.3.9",
-    "vue-tsc": "^1.6.5"
+    "@vitejs/plugin-vue": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "vue-tsc": "latest"
   }
 }`
 
 const main = `import { createApp } from 'vue'
 import main from './main.vue'
-import { createVuestic } from 'vuestic-ui'
-import 'vuestic-ui/css'
 
-createApp(main).use(createVuestic()).mount('#app')`
+createApp(main).mount('#app')`
 
 const app = `<script setup lang="ts">
 </script>
