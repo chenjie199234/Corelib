@@ -90,7 +90,7 @@ const pkg = `{
     "preview": "vite preview"
   },
   "dependencies": {
-    "vue": "latest",
+    "vue": "latest"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "latest",
