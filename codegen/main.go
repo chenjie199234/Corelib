@@ -321,9 +321,9 @@ func createHtml() {
 		fmt.Println("abort")
 		return
 	}
-	if e := os.RemoveAll("./html/"); e != nil {
+	if e := os.RemoveAll("./html"); e != nil {
 		if !os.IsNotExist(e) {
-			panic("delete old ./html/ dir error: " + e.Error())
+			panic("delete old ./html dir error: " + e.Error())
 		}
 	}
 	fmt.Println("start create html.")
