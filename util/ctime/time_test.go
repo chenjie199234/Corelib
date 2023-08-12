@@ -11,7 +11,7 @@ type TData struct {
 }
 
 func Test_Mtime(t *testing.T) {
-	data := `{"dd":"1h10m3s8ms9us10ns"}`
+	data := `{"dd":"0h0m3s8ms9us10ns"}`
 	d := &TData{}
 	e := json.Unmarshal([]byte(data), d)
 	if e != nil {

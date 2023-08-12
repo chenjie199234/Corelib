@@ -291,43 +291,43 @@ func (r *router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 }
 func (r *router) printPath() {
 	for path := range r.getTree.GetAll() {
-		log.Info(nil, "[web.server] GET:", path)
+		log.Info(nil, "[web.server] GET: "+path, nil)
 	}
 	if rewrite, ok := r.rewrite["GET"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] GET:", ourl, "=>", nurl)
+			log.Info(nil, "[web.server] GET: "+ourl+" => "+nurl, nil)
 		}
 	}
 	for path := range r.postTree.GetAll() {
-		log.Info(nil, "[web.server] POST:", path)
+		log.Info(nil, "[web.server] POST: "+path, nil)
 	}
 	if rewrite, ok := r.rewrite["POST"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] POST:", ourl, "=>", nurl)
+			log.Info(nil, "[web.server] POST: "+ourl+" => "+nurl, nil)
 		}
 	}
 	for path := range r.putTree.GetAll() {
-		log.Info(nil, "[web.server] PUT:", path)
+		log.Info(nil, "[web.server] PUT: "+path, nil)
 	}
 	if rewrite, ok := r.rewrite["PUT"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] PUT:", ourl, "=>", nurl)
+			log.Info(nil, "[web.server] PUT: "+ourl+" => "+nurl, nil)
 		}
 	}
 	for path := range r.patchTree.GetAll() {
-		log.Info(nil, "[web.server] PATCH:", path)
+		log.Info(nil, "[web.server] PATCH: "+path, nil)
 	}
 	if rewrite, ok := r.rewrite["PATCH"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] PATCH:", ourl, "=>", nurl)
+			log.Info(nil, "[web.server] PATCH: "+ourl+" => "+nurl, nil)
 		}
 	}
 	for path := range r.deleteTree.GetAll() {
-		log.Info(nil, "[web.server] DELETE:", path)
+		log.Info(nil, "[web.server] DELETE: "+path, nil)
 	}
 	if rewrite, ok := r.rewrite["DELETE"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] DELETE:", ourl, "=>", nurl)
+			log.Info(nil, "[web.server] DELETE: "+ourl+" => "+nurl, nil)
 		}
 	}
 }

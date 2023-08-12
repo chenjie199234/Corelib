@@ -144,7 +144,7 @@ func (c *CrpcClient) onlinefunc(p *stream.Peer) bool {
 	p.SetData(unsafe.Pointer(server))
 	server.setpeer(p)
 	c.balancer.RebuildPicker(true)
-	log.Info(nil, "[crpc.client.onlinefunc] server:", c.serverapp+":"+p.GetRemoteAddr(), "online")
+	log.Info(nil, "[crpc.client] online", map[string]interface{}{"sname": c.serverapp, "sip": p.GetRemoteAddr()})
 	return true
 }
 
@@ -153,7 +153,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
-		log.Error(nil, "[crpc.client.userfunc] server:", c.serverapp+":"+p.GetRemoteAddr(), "data format wrong:", e)
+		log.Error(nil, "[crpc.client] userdata format wrong", map[string]interface{}{"sname": c.serverapp, "sip": p.GetRemoteAddr()})
 		return
 	}
 	server.lker.Lock()
@@ -180,7 +180,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 
 func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
-	log.Info(nil, "[crpc.client.offlinefunc] server:", c.serverapp+":"+p.GetRemoteAddr(), "offline")
+	log.Info(nil, "[crpc.client] offline", map[string]interface{}{"sname": c.serverapp, "sip": p.GetRemoteAddr()})
 	server.setpeer(nil)
 	c.balancer.RebuildPicker(false)
 	server.lker.Lock()
@@ -236,6 +236,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		if e = server.sendmessage(ctx, r); e != nil {
 			done()
 			end := time.Now()
+			log.Error(ctx, "[crpc.client] send message failed", map[string]interface{}{"sname": c.serverapp, "sip": server.addr, "path": path, "error": e})
 			log.Trace(ctx, log.CLIENT, c.serverapp, server.addr, "CRPC", path, &start, &end, e)
 			monitor.CrpcClientMonitor(c.serverapp, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 			if cerror.Equal(e, cerror.ErrClosed) {

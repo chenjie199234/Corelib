@@ -14,11 +14,32 @@ type A struct {
 }
 
 func Test_Log(t *testing.T) {
-	du := time.Second
-	cdu := ctime.Duration(du)
-	now := time.Now()
-	e := errors.New("e")
-	ee := cerror.MakeError(1, 500, "msg")
-	a := A{Name: "name"}
-	Error(nil, int(1), []int{1}, uint(1), []uint{1}, int8(1), []int8{1}, int16(1), []int16{1}, uint16(1), []uint16{1}, int32(1), []int32{1}, uint32(1), []uint32{1}, int64(1), []int64{1}, uint64(1), []uint64{1}, float32(1.1), []float32{1.1}, float64(1.2), []float64{1.2}, byte('g'), []byte("lmn"), [][]byte{[]byte("abc"), []byte("xyz")}, "lmn", []string{"abc", "xyz"}, du, &du, []time.Duration{du}, []*time.Duration{nil, &du}, cdu, &cdu, []ctime.Duration{cdu}, []*ctime.Duration{nil, &cdu}, now, &now, []time.Time{now}, []*time.Time{nil, &now}, e, ee, []error{e, ee, nil}, a, &a, []A{a}, []*A{&a})
+	trace = true
+	kvs := make(map[string]interface{}, 10)
+	kvs["0"] = "abc\"\"defg"
+	now := time.Now().UTC()
+	kvs["\"1"] = now
+	kvs["2"] = &now
+	kvs["3"] = []time.Time{now, now}
+	kvs["4"] = []*time.Time{&now, nil, &now}
+	d := time.Hour + 2*time.Minute + 3*time.Second + 4*time.Millisecond + 5*time.Microsecond + 6*time.Nanosecond
+	kvs["11"] = d
+	kvs["12"] = &d
+	kvs["13"] = []time.Duration{d, d}
+	kvs["14"] = []*time.Duration{&d, nil, &d}
+
+	cd := ctime.Duration(d)
+	kvs["21"] = cd
+	kvs["22"] = &cd
+	kvs["23"] = []ctime.Duration{cd, cd}
+	kvs["24"] = []*ctime.Duration{&cd, nil, &cd}
+
+	stde := errors.New("std \" error")
+	ce := cerror.MakeError(100, 400, "corelib error")
+	kvs["31"] = stde
+	kvs["32"] = []error{stde, nil, stde}
+	kvs["33"] = ce
+	kvs["34"] = []error{ce, nil, ce}
+	kvs["35"] = []error{stde, nil, ce}
+	Error(InitTrace(nil, "", "test", "127.0.0.1", "POST", "/abc", 0), "fffffuck", nil)
 }

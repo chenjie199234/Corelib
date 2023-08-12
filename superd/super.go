@@ -3,7 +3,6 @@ package superd
 import (
 	"errors"
 	"os"
-	"sort"
 	"sync"
 	"sync/atomic"
 
@@ -16,21 +15,21 @@ const (
 	s_WORKING
 )
 
-//struct
+// struct
 type Super struct {
 	processid uint64
 	lker      *sync.RWMutex
-	groups    map[string]*group
+	apps      map[string]*app
 	status    int
 	notice    chan string
 	closech   chan struct{}
 }
 
-//maxlogsize unit M
+// maxlogsize unit M
 func NewSuper() *Super {
 	instance := &Super{
 		lker:    new(sync.RWMutex),
-		groups:  make(map[string]*group, 5),
+		apps:    make(map[string]*app, 5),
 		status:  s_WORKING,
 		notice:  make(chan string, 100),
 		closech: make(chan struct{}, 1),
@@ -41,13 +40,13 @@ func NewSuper() *Super {
 		}()
 		for {
 			select {
-			case groupname, ok := <-instance.notice:
+			case fullappname, ok := <-instance.notice:
 				if !ok {
 					return
 				}
 				instance.lker.Lock()
-				delete(instance.groups, groupname)
-				if instance.status == s_CLOSING && len(instance.groups) == 0 {
+				delete(instance.apps, fullappname)
+				if instance.status == s_CLOSING && len(instance.apps) == 0 {
 					instance.lker.Unlock()
 					return
 				}
@@ -64,11 +63,11 @@ func (s *Super) CloseSuper() {
 		return
 	}
 	s.status = s_CLOSING
-	if len(s.groups) == 0 {
+	if len(s.apps) == 0 {
 		close(s.notice)
 	} else {
-		for _, g := range s.groups {
-			go g.stopGroup(true)
+		for _, a := range s.apps {
+			go a.stopApp(true)
 		}
 	}
 	s.lker.Unlock()
@@ -77,14 +76,15 @@ func (s *Super) CloseSuper() {
 }
 func dirop(path string) error {
 	finfo, e := os.Lstat(path)
-	if e != nil && os.IsNotExist(e) {
+	if e != nil {
+		if !os.IsNotExist(e) {
+			return errors.New("get " + path + " dir info error:" + e.Error())
+		}
 		if e = os.MkdirAll(path, 0755); e != nil {
 			return errors.New(path + " dir not exist,and create error:" + e.Error())
 		}
-	} else if e != nil {
-		return errors.New("get " + path + " dir info error:" + e.Error())
 	} else if !finfo.IsDir() {
-		return errors.New(path + " is not a dir")
+		return errors.New(path + " already exist and it's not a dir")
 	}
 	return nil
 }
@@ -95,203 +95,199 @@ type Cmd struct {
 	Env  []string `json:"env"`
 }
 
-func (s *Super) CreateGroup(groupname, appname, url string, buildcmds []*Cmd, runcmd *Cmd) error {
-	//check group name
-	fullappname := groupname + "." + appname
-	if e := name.FullCheck(fullappname); e != nil {
+func (s *Super) CreateApp(project, groupname, appname, url string, buildcmds []*Cmd, runcmd *Cmd) error {
+	if e := name.FullCheck(groupname + "." + appname); e != nil {
 		return e
 	}
+	fullappname := project + "." + groupname + "." + appname
 	s.lker.Lock()
 	defer s.lker.Unlock()
 	if s.status == s_CLOSING {
-		return errors.New("[create] Superd is closing")
+		return errors.New("[CreateApp] Superd is closing")
 	}
-	g, ok := s.groups[fullappname]
+	a, ok := s.apps[fullappname]
 	if !ok {
 		var e error
 		if e = os.RemoveAll("./app_log/" + fullappname); e != nil {
-			return errors.New("[create] remove old dir error:" + e.Error())
+			return errors.New("[CreateApp] remove old dir error:" + e.Error())
 		}
 		if e = os.RemoveAll("./app/" + fullappname); e != nil {
-			return errors.New("[create] remote old dir error:" + e.Error())
+			return errors.New("[CreateApp] remote old dir error:" + e.Error())
 		}
 		if e = dirop("./app_log/" + fullappname); e != nil {
-			return errors.New("[create] " + e.Error())
+			return errors.New("[CreateApp] " + e.Error())
 		}
 		if e = dirop("./app/" + fullappname); e != nil {
-			return errors.New("[create] " + e.Error())
+			return errors.New("[CreateApp] " + e.Error())
 		}
-		g = &group{
+		a = &app{
 			s:         s,
-			name:      fullappname,
+			project:   project,
+			group:     groupname,
+			app:       appname,
 			url:       url,
 			buildcmds: buildcmds,
 			runcmd:    runcmd,
-			status:    g_UPDATING,
-			processes: make(map[uint64]*process, 5),
+			status:    a_UPDATING,
 			opstatus:  1,
+			processes: make(map[uint64]*process, 5),
 			plker:     new(sync.RWMutex),
 			notice:    make(chan uint64, 100),
 		}
-		g.logfile, e = rotatefile.NewRotateFile("./app_log/"+fullappname, fullappname)
+		a.logfile, e = rotatefile.NewRotateFile("./app_log/"+fullappname, fullappname)
 		if e != nil {
-			return errors.New("[create] " + e.Error())
+			return errors.New("[CreateApp] " + e.Error())
 		}
-		s.groups[fullappname] = g
-		go g.startGroup()
+		s.apps[fullappname] = a
+		go a.startApp()
 		return nil
 	} else {
-		return errors.New("[create] group already exist")
+		return errors.New("[CreateApp] app already exist")
 	}
 }
-func (s *Super) UpdateGroup(groupname, appname string) error {
+func (s *Super) UpdateApp(project, groupname, appname string) error {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	g, ok := s.groups[groupname+"."+appname]
+	a, ok := s.apps[project+"."+groupname+"."+appname]
 	if !ok {
-		return errors.New("[update] group doesn't exist")
+		return errors.New("[UpdateApp] app doesn't exist")
 	}
-	go g.updateGroup()
+	go a.updateApp()
 	return nil
 }
-func (s *Super) BuildGroup(groupname, appname, branchname, tagname string) error {
-	if branchname == "" && tagname == "" {
-		return errors.New("[build] missing branch or tag")
-	}
+func (s *Super) BuildApp(project, groupname, appname, commitid string) error {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	g, ok := s.groups[groupname+"."+appname]
+	a, ok := s.apps[project+"."+groupname+"."+appname]
 	if !ok {
-		return errors.New("[build] group doesn't exist")
+		return errors.New("[BuildApp] app doesn't exist")
 	}
-	go g.buildGroup(branchname, tagname)
+	go a.buildApp(commitid)
 	return nil
 }
-func (s *Super) StopGroup(groupname, appname string) error {
+func (s *Super) StopApp(project, groupname, appname string) error {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	g, ok := s.groups[groupname+"."+appname]
+	a, ok := s.apps[project+"."+groupname+"."+appname]
 	if !ok {
-		return errors.New("[stop] group doesn't exist")
+		return errors.New("[StopApp] app doesn't exist")
 	}
-	g.stopGroup(false)
+	a.stopApp(false)
 	return nil
 }
-func (s *Super) DeleteGroup(groupname, appname string) error {
+func (s *Super) DeleteApp(project, groupname, appname string) error {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	g, ok := s.groups[groupname+"."+appname]
+	a, ok := s.apps[project+"."+groupname+"."+appname]
 	if !ok {
-		return errors.New("[delete] group doesn't exist")
+		return errors.New("[DeleteApp] app doesn't exist")
 	}
-	g.stopGroup(true)
+	a.stopApp(true)
 	return nil
 }
-func (s *Super) StartProcess(groupname, appname string, autorestart bool) error {
+func (s *Super) StartAppProcess(project, groupname, appname string, autorestart bool) error {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	g, ok := s.groups[groupname+"."+appname]
+	a, ok := s.apps[project+"."+groupname+"."+appname]
 	if !ok {
-		return errors.New("[startprocess] group doesn't exist")
+		return errors.New("[StartAppProcess] app doesn't exist")
 	}
-	if e := g.startProcess(atomic.AddUint64(&s.processid, 1), autorestart); e != nil {
-		return errors.New("[startprocess] " + e.Error())
+	if e := a.startProcess(atomic.AddUint64(&s.processid, 1), autorestart); e != nil {
+		return errors.New("[StartAppProcess] " + e.Error())
 	}
 	return nil
 }
-func (s *Super) RestartProcess(groupname, appname string, pid uint64) error {
+func (s *Super) RestartAppProcess(project, groupname, appname string, pid uint64) error {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	g, ok := s.groups[groupname+"."+appname]
+	a, ok := s.apps[project+"."+groupname+"."+appname]
 	if !ok {
-		return errors.New("[restartprocess] group doesn't exist")
+		return errors.New("[RestartAppProcess] app doesn't exist")
 	}
-	if e := g.restartProcess(pid); e != nil {
-		return errors.New("[restartprocess] " + e.Error())
+	if e := a.restartProcess(pid); e != nil {
+		return errors.New("[RestartAppProcess] " + e.Error())
 	}
 	return nil
 }
-func (s *Super) StopProcess(groupname, appname string, pid uint64) error {
+func (s *Super) StopAppProcess(project, groupname, appname string, pid uint64) error {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	g, ok := s.groups[groupname+"."+appname]
+	a, ok := s.apps[project+"."+groupname+"."+appname]
 	if !ok {
-		return errors.New("[stopprocess] group doesn't exist")
+		return errors.New("[StopAppProcess] app doesn't exist")
 	}
-	g.stopProcess(pid)
+	a.stopProcess(pid)
 	return nil
 }
 
-type GroupInfo struct {
-	Name        string         `json:"name"`
-	Url         string         `json:"url"`
-	BuildCmds   []*Cmd         `json:"build_cmds"`
-	RunCmd      *Cmd           `json:"run_cmd"`
-	Status      int32          `json:"status"`    //0 closing,1 updating,2 updatefailed,3 updatesuccess,4 building,5 buildfailed,6 buildsuccess
-	OpStatus    int32          `json:"op_status"` //0 idle,1 some operation is happening on this group
-	AllBranch   []string       `json:"all_branch"`
-	CurBranch   string         `json:"cur_branch"`
-	AllTag      []string       `json:"all_tag"`
-	CurTag      string         `json:"cur_tag"`
-	CurCommitid string         `json:"commitid"`
-	Pinfo       []*ProcessInfo `json:"process_info"`
+type AppInfo struct {
+	Project     string            `json:"project"`
+	Group       string            `json:"group"`
+	App         string            `json:"app"`
+	Url         string            `json:"url"`
+	BuildCmds   []*Cmd            `json:"build_cmds"`
+	RunCmd      *Cmd              `json:"run_cmd"`
+	Status      int32             `json:"status"`    //0 closing,1 updating,2 updatefailed,3 updatesuccess,4 building,5 buildfailed,6 buildsuccess
+	OpStatus    int32             `json:"op_status"` //0 idle,1 some operation is happening on this app
+	AllBranch   map[string]string `json:"all_branch"`
+	AllTag      map[string]string `json:"all_tag"`
+	BinCommitid string            `json:"bin_commitid"`
+	ProcessInfo []*ProcessInfo    `json:"process_info"`
 }
 type ProcessInfo struct {
 	Lpid        uint64 `json:"logic_pid"`
 	Ppid        uint64 `json:"physic_pid"`
 	Stime       int64  `json:"start_time"`
-	BinBranch   string `json:"bin_branch"`
-	BinTag      string `json:"bin_tag"`
 	BinCommitid string `json:"bin_commitid"`
 	Status      int    `json:"status"` //0 closing,1 starting,2 working
 	Restart     int    `json:"restart"`
 	AutoRestart bool   `json:"auto_restart"`
 }
 
-func (s *Super) GetGroupList() []string {
+func (s *Super) GetAppList() map[string]map[string]string {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	result := make([]string, 0, len(s.groups)+1)
-	for k := range s.groups {
-		result = append(result, k)
+	result := make(map[string]map[string]string)
+	for _, a := range s.apps {
+		if _, ok := result[a.project]; !ok {
+			result[a.project] = make(map[string]string)
+		}
+		result[a.project][a.group] = a.app
 	}
-	sort.Strings(result)
 	return result
 }
-func (s *Super) GetGroupInfo(groupname, appname string) (*GroupInfo, error) {
+func (s *Super) GetAppInfo(project, groupname, appname string) (*AppInfo, error) {
 	s.lker.RLock()
 	defer s.lker.RUnlock()
-	g, ok := s.groups[groupname+"."+appname]
+	a, ok := s.apps[project+"."+groupname+"."+appname]
 	if !ok {
-		return nil, errors.New("[groupinfo] group doesn't exist")
+		return nil, errors.New("[GetAppInfo] app doesn't exist")
 	}
-	result := new(GroupInfo)
-	result.Name = g.name
-	result.Url = g.url
-	result.BuildCmds = g.buildcmds
-	result.RunCmd = g.runcmd
-	result.Status = g.status
-	result.OpStatus = g.opstatus
-	result.AllBranch = g.allbranch
-	result.CurBranch = g.curbranch
-	result.AllTag = g.alltag
-	result.CurTag = g.curtag
-	result.CurCommitid = g.curcommitid
-	g.plker.RLock()
-	defer g.plker.RUnlock()
-	result.Pinfo = make([]*ProcessInfo, 0, len(g.processes))
-	for _, p := range g.processes {
+	result := new(AppInfo)
+	result.Project = a.project
+	result.Group = a.group
+	result.App = a.app
+	result.Url = a.url
+	result.BuildCmds = a.buildcmds
+	result.RunCmd = a.runcmd
+	result.Status = a.status
+	result.OpStatus = a.opstatus
+	result.AllBranch = a.allbranch
+	result.AllTag = a.alltag
+	result.BinCommitid = a.bincommitid
+	a.plker.RLock()
+	defer a.plker.RUnlock()
+	result.ProcessInfo = make([]*ProcessInfo, 0, len(a.processes))
+	for _, p := range a.processes {
 		p.lker.RLock()
 		ppid := 0
 		if p.status == p_WORKING {
 			ppid = p.cmd.Process.Pid
 		}
-		result.Pinfo = append(result.Pinfo, &ProcessInfo{
+		result.ProcessInfo = append(result.ProcessInfo, &ProcessInfo{
 			Lpid:        p.logicpid,
 			Ppid:        uint64(ppid),
 			Stime:       p.stime,
-			BinBranch:   p.binbranch,
-			BinTag:      p.bintag,
 			BinCommitid: p.bincommitid,
 			Status:      p.status,
 			Restart:     p.restart,

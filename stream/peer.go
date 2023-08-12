@@ -69,19 +69,31 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	now := nowtime.UnixNano()
 	if now-atomic.LoadInt64(&p.lastactive) > int64(heart) {
 		//heartbeat timeout
-		log.Error(nil, "[Stream.checkheart] heart timeout:", p.c.RemoteAddr().String())
+		if p.peertype == _PEER_CLIENT {
+			log.Error(nil, "[Stream.checkheart] heart timeout", map[string]interface{}{"cip": p.c.RemoteAddr().String()})
+		} else {
+			log.Error(nil, "[Stream.checkheart] heart timeout", map[string]interface{}{"sip": p.c.RemoteAddr().String()})
+		}
 		p.c.Close()
 		return
 	}
 	if now-atomic.LoadInt64(&p.sendidlestart) > int64(sendidle) {
 		//send idle timeout
-		log.Error(nil, "[Stream.checkheart] send idle timeout:", p.c.RemoteAddr().String())
+		if p.peertype == _PEER_CLIENT {
+			log.Error(nil, "[Stream.checkheart] send idle timeout", map[string]interface{}{"cip": p.c.RemoteAddr().String()})
+		} else {
+			log.Error(nil, "[Stream.checkheart] send idle timeout", map[string]interface{}{"sip": p.c.RemoteAddr().String()})
+		}
 		p.c.Close()
 		return
 	}
 	if recvidle != 0 && now-atomic.LoadInt64(&p.recvidlestart) > int64(recvidle) {
 		//recv idle timeout
-		log.Error(nil, "[Stream.checkheart] recv idle timeout:", p.c.RemoteAddr().String())
+		if p.peertype == _PEER_CLIENT {
+			log.Error(nil, "[Stream.checkheart] recv idle timeout:", map[string]interface{}{"cip": p.c.RemoteAddr().String()})
+		} else {
+			log.Error(nil, "[Stream.checkheart] recv idle timeout:", map[string]interface{}{"sip": p.c.RemoteAddr().String()})
+		}
 		p.c.Close()
 		return
 	}
@@ -92,7 +104,11 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 		tmp.Resize(8)
 		binary.BigEndian.PutUint64(tmp.Bytes(), uint64(now))
 		if e := ws.WritePing(p.c, tmp.Bytes(), false); e != nil {
-			log.Error(nil, "[Stream.checkheart] write ping to:", p.c.RemoteAddr().String(), e)
+			if p.peertype == _PEER_CLIENT {
+				log.Error(nil, "[Stream.checkheart] write ping to client failed", map[string]interface{}{"cip": p.c.RemoteAddr().String(), "error": e})
+			} else {
+				log.Error(nil, "[Stream.checkheart] write ping to server failed", map[string]interface{}{"sip": p.c.RemoteAddr().String(), "error": e})
+			}
 			p.c.Close()
 			return
 		}
@@ -159,7 +175,11 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 			userdata = nil
 		}
 		if e := ws.WriteMsg(p.c, data, userdata == nil, first, false); e != nil {
-			log.Error(ctx, "[Stream.SendMessage] write to:", p.c.RemoteAddr().String(), e)
+			if p.peertype == _PEER_CLIENT {
+				log.Error(ctx, "[Stream.SendMessage] write to client failed", map[string]interface{}{"cip": p.c.RemoteAddr().String(), "error": e})
+			} else {
+				log.Error(ctx, "[Stream.SendMessage] write to server failed", map[string]interface{}{"sip": p.c.RemoteAddr().String(), "error": e})
+			}
 			p.c.Close()
 			if as != nil {
 				as(p, e)

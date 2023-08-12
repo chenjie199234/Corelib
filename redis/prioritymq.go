@@ -13,9 +13,22 @@ import (
 	"github.com/gomodule/redigo/redis"
 )
 
-//all tasks in one group will compete by priority
+//group(redissorted set): task1(priority1) task2(priority2) task3(priority3)...
+//{group}_task1(redis string):1		//this is the finishing status for task1
+//{group}_task1_topic1(redis list):[data1,data2,data3...]
+//{group}_task1_topic2(redis list):[data1,data2,data3...]
+//...
+//{group}_task2(redis string):1		//this is the finishing status for task2
+//{group}_task2_topic1(redis list):[data1,data2,data3...]
+//{group}_task2_topic2(redis list):[data1,data2,data3...]
+//...
+//{group}_task3(redis string):1		//this is the finishing status for task3
+//{group}_task3_topic1(redis list):[data1,data2,data3...]
+//{group}_task3_topic2(redis list):[data1,data2,data3...]
+
+//tasks in one same group will compete by priority
+//tasks in different groups have no competition
 //one specific group will only work on one redis node when in cluster mode
-//tasks in different groups has no compete
 //different groups may work on different redis node when in cluster mode(depend on the group name)
 
 func init() {
@@ -26,12 +39,12 @@ func init() {
 	hfinishprioritymq = hex.EncodeToString(finishprioritymqsha1[:])
 }
 
-var ErrPriorityMQMissingGroup = errors.New("priority mq missing group")
+var ErrPriorityMQGroupMissing = errors.New("priority mq group missing")
 
 // priority - the bigger the number is ranked previous
 func (p *Pool) PriorityMQSetTask(ctx context.Context, group, taskname string, priority uint64) error {
 	if group == "" {
-		return ErrPriorityMQMissingGroup
+		return ErrPriorityMQGroupMissing
 	}
 	c, e := p.p.GetContext(ctx)
 	if e != nil {
@@ -44,7 +57,7 @@ func (p *Pool) PriorityMQSetTask(ctx context.Context, group, taskname string, pr
 
 func (p *Pool) PriorityMQInterrupt(ctx context.Context, group, taskname string) error {
 	if group == "" {
-		return ErrPriorityMQMissingGroup
+		return ErrPriorityMQGroupMissing
 	}
 	c, e := p.p.GetContext(ctx)
 	if e != nil {
@@ -89,7 +102,7 @@ var hfinishprioritymq = ""
 
 // this function should be call by the puber
 // return 1 means task finished
-// return 0 means task still working
+// return 0 means task is finishing
 func (p *Pool) PriorityMQFinishTask(ctx context.Context, group, taskname string, topicnames ...string) (int, error) {
 	if len(topicnames) == 0 {
 		return 0, nil
@@ -116,8 +129,13 @@ func (p *Pool) PriorityMQFinishTask(ctx context.Context, group, taskname string,
 	return r, e
 }
 
-var pubprioritymq = `local exist=redis.call("EXISTS",KEYS[2])
-if(exist==1)
+var pubprioritymq = `local task=redis.call("ZSCORE",KEYS[1],ARGV[1])
+if(exist==nil)
+then
+	return -2
+end
+local finish=redis.call("EXISTS",KEYS[2])
+if(finish==1)
 then
 	return -1
 end
@@ -127,7 +145,8 @@ end
 return 0`
 var hpubprioritymq = ""
 
-var ErrPriorityMQTaskFinished = errors.New("task finished")
+var ErrPriorityMQTaskMissing = errors.New("task missing")        // task maybe interrupted or finished
+var ErrPriorityMQTaskFinishing = errors.New("task is finishing") // task is finishing
 
 func (p *Pool) PriorityMQPub(ctx context.Context, group, taskname, topicname string, datas ...[]byte) error {
 	if len(datas) == 0 {
@@ -154,19 +173,22 @@ func (p *Pool) PriorityMQPub(ctx context.Context, group, taskname, topicname str
 		return e
 	}
 	if r == -1 {
-		return ErrPriorityMQTaskFinished
+		return ErrPriorityMQTaskFinishing
+	}
+	if r == -2 {
+		return ErrPriorityMQTaskMissing
 	}
 	return nil
 }
 
-var ErrPriorityMQMissingTopic = errors.New("priority mq missing topic")
+var ErrPriorityMQTopicMissing = errors.New("priority mq topic missing")
 
 func (p *Pool) PriorityMQSub(group, topicname string, subhandler func(taskname, data string)) (cancel func(), e error) {
 	if group == "" {
-		return nil, ErrPriorityMQMissingGroup
+		return nil, ErrPriorityMQGroupMissing
 	}
 	if topicname == "" {
-		return nil, ErrPriorityMQMissingTopic
+		return nil, ErrPriorityMQTopicMissing
 	}
 	var c redis.Conn
 	status := 0 //0-working,1-cancel
@@ -191,7 +213,7 @@ func (p *Pool) PriorityMQSub(group, topicname string, subhandler func(taskname, 
 			}
 			c, e = p.p.GetContext(context.Background())
 			if e != nil {
-				log.Error(nil, "[redis.PriorityMQ.sub] get connection error:", e)
+				log.Error(nil, "[redis.PriorityMQ.sub] get connection failed", map[string]interface{}{"group": group, "topic": topicname, "error": e})
 				continue
 			}
 			for {
@@ -201,7 +223,7 @@ func (p *Pool) PriorityMQSub(group, topicname string, subhandler func(taskname, 
 				var datas []string
 				datas, e = redis.Strings(c.(redis.ConnWithTimeout).DoWithTimeout(0, "ZREVRANGE", group, 0, -1))
 				if e != nil {
-					log.Error(nil, "[redis.PriorityMQ.sub] get tasks error:", e)
+					log.Error(nil, "[redis.PriorityMQ.sub] get tasks in group failed", map[string]interface{}{"group": group, "error": e})
 					break
 				}
 				if len(datas) == 0 {
@@ -223,7 +245,7 @@ func (p *Pool) PriorityMQSub(group, topicname string, subhandler func(taskname, 
 						//timeout
 						continue
 					}
-					log.Error(nil, "[redis.PriorityMQ.sub] BLPOP error:", e)
+					log.Error(nil, "[redis.PriorityMQ.sub] read topic failed", map[string]interface{}{"group": group, "topic": topicname, "error": e})
 					break
 				}
 				if subhandler != nil {

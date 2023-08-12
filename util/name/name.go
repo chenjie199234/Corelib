@@ -44,11 +44,11 @@ func FullCheck(full string) error {
 	}
 	strs := strings.Split(full, ".")
 	if e := SingleCheck(strs[0], true); e != nil {
-		//group can use hyphen
+		//group can use dash
 		return e
 	}
 	if e := SingleCheck(strs[1], false); e != nil {
-		//name can't use hyphen
+		//name can't use dash
 		return e
 	}
 	return nil

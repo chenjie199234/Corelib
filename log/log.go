@@ -9,8 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/rotatefile"
+	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -93,58 +95,80 @@ func init() {
 		}
 	}
 }
-func Debug(ctx context.Context, datas ...interface{}) {
+func Debug(ctx context.Context, summary string, kvs map[string]interface{}) {
 	if level > 0 {
 		return
 	}
-	buf := pool.GetBuffer()
-	buf.AppendString("[DBG] ")
-	write(ctx, buf, datas...)
+	write(ctx, "DEBUG", summary, kvs)
 }
-func Info(ctx context.Context, datas ...interface{}) {
+func Info(ctx context.Context, summary string, kvs map[string]interface{}) {
 	if level > 1 {
 		return
 	}
-	buf := pool.GetBuffer()
-	buf.AppendString("[INF] ")
-	write(ctx, buf, datas...)
+	write(ctx, "INFO", summary, kvs)
 }
-func Warning(ctx context.Context, datas ...interface{}) {
+func Warning(ctx context.Context, summary string, kvs map[string]interface{}) {
 	if level > 2 {
 		return
 	}
-	buf := pool.GetBuffer()
-	buf.AppendString("[WRN] ")
-	write(ctx, buf, datas...)
+	write(ctx, "WARN", summary, kvs)
 }
-func Error(ctx context.Context, datas ...interface{}) {
-	buf := pool.GetBuffer()
-	buf.AppendString("[ERR] ")
-	write(ctx, buf, datas...)
+func Error(ctx context.Context, summary string, kvs map[string]interface{}) {
+	write(ctx, "ERROR", summary, kvs)
 }
-func write(ctx context.Context, buf *pool.Buffer, datas ...interface{}) {
-	buf.AppendStdTime(time.Now())
+func write(ctx context.Context, lv, summary string, kvs map[string]interface{}) {
+	buf := pool.GetBuffer()
+	buf.AppendString("{\"_lv\":\"")
+	buf.AppendString(lv)
+	buf.AppendString("\",\"_summary\":\"")
+	buf.AppendString(summary)
+	buf.AppendString("\",\"_time\":\"")
+	buf.AppendStdTime(time.Now().UTC())
+	buf.AppendString("\",\"_fileline\":\"")
 	_, file, line, _ := runtime.Caller(2)
-	buf.AppendByte(' ')
 	buf.AppendString(file)
 	buf.AppendByte(':')
 	buf.AppendInt(line)
+	buf.AppendByte('"')
 	if trace {
 		traceid, _, _, _, _, deep := GetTrace(ctx)
 		if traceid != "" {
-			buf.AppendByte(' ')
-			buf.AppendString("Traceid: ")
+			buf.AppendString(",\"_tid\":\"")
 			buf.AppendString(traceid)
-			buf.AppendByte(' ')
-			buf.AppendString("Tracedeep: ")
+			buf.AppendString("\",\"_tdeep\":")
 			buf.AppendInt(deep)
 		}
 	}
-	for _, data := range datas {
-		buf.AppendByte(' ')
-		writeany(buf, data)
+	if len(kvs) != 0 {
+		buf.AppendString(",\"_kvs\":{")
+		first := true
+		for k, v := range kvs {
+			if !first {
+				buf.AppendString(",")
+			}
+			special := false
+			for _, vv := range k {
+				if vv == '\\' || vv == '"' {
+					special = true
+					break
+				}
+			}
+			if special {
+				kk, _ := json.Marshal(k)
+				buf.AppendByteSlice(kk)
+				buf.AppendByte(':')
+			} else {
+				buf.AppendByte('"')
+				buf.AppendString(k)
+				buf.AppendString("\":")
+			}
+			writeany(buf, v)
+			first = false
+		}
+		buf.AppendString("}}\n")
+	} else {
+		buf.AppendString("}\n")
 	}
-	buf.AppendByte('\n')
 	if target&1 > 0 {
 		os.Stderr.Write(buf.Bytes())
 	}
@@ -160,17 +184,36 @@ func write(ctx context.Context, buf *pool.Buffer, datas ...interface{}) {
 func writeany(buf *pool.Buffer, data interface{}) {
 	switch d := data.(type) {
 	case string:
-		buf.AppendString(d)
+		special := false
+		for _, v := range d {
+			if v == '\\' || v == '"' {
+				special = true
+				break
+			}
+		}
+		if special {
+			dd, _ := json.Marshal(d)
+			buf.AppendByteSlice(dd)
+		} else {
+			buf.AppendByte('"')
+			buf.AppendString(d)
+			buf.AppendByte('"')
+		}
 	case []string:
+		for i, v := range d {
+			special := false
+			for _, vv := range v {
+				if vv == '\\' || vv == '"' {
+					special = true
+					break
+				}
+			}
+			if special {
+				vv, _ := json.Marshal(v)
+				d[i] = common.Byte2str(vv)
+			}
+		}
 		buf.AppendStrings(d)
-	//case []uint8:
-	case []byte:
-		buf.AppendByteSlice(d)
-	case [][]byte:
-		buf.AppendByteSlices(d)
-	//case uint8:
-	case byte:
-		buf.AppendByte(d)
 
 	case int64:
 		buf.AppendInt64(d)
@@ -211,6 +254,10 @@ func writeany(buf *pool.Buffer, data interface{}) {
 		buf.AppendInt8(d)
 	case []int8:
 		buf.AppendInt8s(d)
+	case uint8:
+		buf.AppendUint8(d)
+	case []uint8:
+		buf.AppendUint8s(d)
 
 	case int16:
 		buf.AppendInt16(d)
@@ -222,9 +269,13 @@ func writeany(buf *pool.Buffer, data interface{}) {
 		buf.AppendUint16s(d)
 
 	case ctime.Duration:
+		buf.AppendByte('"')
 		buf.AppendDuration(d)
+		buf.AppendByte('"')
 	case *ctime.Duration:
+		buf.AppendByte('"')
 		buf.AppendDuration(*d)
+		buf.AppendByte('"')
 	case []ctime.Duration:
 		buf.AppendDurations(d)
 	case []*ctime.Duration:
@@ -240,18 +291,69 @@ func writeany(buf *pool.Buffer, data interface{}) {
 		buf.AppendStdDurationPointers(d)
 
 	case time.Time:
+		buf.AppendByte('"')
 		buf.AppendStdTime(d)
+		buf.AppendByte('"')
 	case *time.Time:
+		buf.AppendByte('"')
 		buf.AppendStdTime(*d)
+		buf.AppendByte('"')
 	case []time.Time:
 		buf.AppendStdTimes(d)
 	case []*time.Time:
 		buf.AppendStdTimePointers(d)
 
-	case error:
+	case *cerror.Error:
 		buf.AppendError(d)
-	case []error:
+	case []*cerror.Error:
 		buf.AppendErrors(d)
+	case error:
+		estr := d.Error()
+		special := false
+		for _, v := range estr {
+			if v == '\\' || v == '"' {
+				special = true
+				break
+			}
+		}
+		if special {
+			dd, _ := json.Marshal(estr)
+			buf.AppendByteSlice(dd)
+		} else {
+			buf.AppendByte('"')
+			buf.AppendString(estr)
+			buf.AppendByte('"')
+		}
+	case []error:
+		buf.AppendByte('[')
+		for i, v := range d {
+			if i != 0 {
+				buf.AppendByte(',')
+			}
+			if v == nil {
+				buf.AppendString("null")
+			} else if vv, ok := v.(*cerror.Error); ok {
+				buf.AppendError(vv)
+			} else {
+				estr := v.Error()
+				special := false
+				for _, vvv := range estr {
+					if vvv == '\\' || vvv == '"' {
+						special = true
+						break
+					}
+				}
+				if special {
+					dd, _ := json.Marshal(estr)
+					buf.AppendByteSlice(dd)
+				} else {
+					buf.AppendByte('"')
+					buf.AppendString(estr)
+					buf.AppendByte('"')
+				}
+			}
+		}
+		buf.AppendByte(']')
 
 	default:
 		if d, ok := data.(protoreflect.ProtoMessage); ok {

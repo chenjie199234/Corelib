@@ -226,13 +226,13 @@ func NewWebServer(c *ServerConfig, selfappgroup, selfappname string) (*WebServer
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		w.Write(common.Str2byte(cerror.ErrNotExist.Error()))
-		log.Error(nil, "[web.server] client:", realip(r), "path:", r.URL.Path, "method:", r.Method, "not exist")
+		log.Error(nil, "[web.server] path not exist", map[string]interface{}{"cip": realip(r), "path": r.URL.Path, "method": r.Method})
 	})
 	instance.r.srcPermissionHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		w.Write(common.Str2byte(cerror.ErrPermission.Error()))
-		log.Error(nil, "[web.server] client:", realip(r), "path:", r.URL.Path, "method:", r.Method, "open src file permission denie")
+		log.Error(nil, "[web.server] static src file permission denie", map[string]interface{}{"cip": realip(r), "path": r.URL.Path, "method": r.Method})
 	})
 	instance.r.optionsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//for OPTIONS preflight
@@ -462,7 +462,7 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 		if tracestr := r.Header.Get("Core-Tracedata"); tracestr != "" {
 			tracedata := make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(tracestr), &tracedata); e != nil {
-				log.Error(nil, "[web.server] client:", sourceip, "path:", path, "method:", method, "error: tracedata:", tracestr, "format error")
+				log.Error(nil, "[web.server] tracedata format wrong", map[string]interface{}{"cip": sourceip, "path": path, "method": method, "tracedata": tracestr})
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(cerror.ErrReq.Error()))
@@ -476,7 +476,7 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 				sourcepath = tracedata["SourcePath"]
 				clientdeep, e := strconv.Atoi(tracedata["Deep"])
 				if e != nil || sourceapp == "" || sourcemethod == "" || sourcepath == "" || clientdeep == 0 {
-					log.Error(nil, "[web.server] client:", sourceip, "path:", path, "method:", method, "error: tracedata:", tracestr, "format error")
+					log.Error(nil, "[web.server] tracedata format wrong", map[string]interface{}{"cip": sourceip, "path": path, "method": method, "tracedata": tracestr})
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusBadRequest)
 					w.Write(common.Str2byte(cerror.ErrReq.Error()))
@@ -492,7 +492,7 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 		if mdstr := r.Header.Get("Core-Metadata"); mdstr != "" {
 			mdata = make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(mdstr), &mdata); e != nil {
-				log.Error(ctx, "[web.server] client:", sourceapp+":"+sourceip, "path:", path, "method:", method, "error: metadata:", mdstr, "format error")
+				log.Error(ctx, "[web.server] metadata format wrong", map[string]interface{}{"cname": sourceapp, "cip": sourceip, "path": path, "method": method, "metadata": mdstr})
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(cerror.ErrReq.Error()))
@@ -503,7 +503,7 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 		if temp := r.Header.Get("Core-Deadline"); temp != "" {
 			clientdl, e := strconv.ParseInt(temp, 10, 64)
 			if e != nil {
-				log.Error(ctx, "[web.server] client:", sourceapp+":"+sourceip, "path:", path, "method:", method, "error: Deadline:", temp, "format error")
+				log.Error(ctx, "[web.server] deadline format wrong", map[string]interface{}{"cname": sourceapp, "cip": sourceip, "path": path, "method": method, "deadline": temp})
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(cerror.ErrReq.Error()))
@@ -538,7 +538,7 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 			if e := recover(); e != nil {
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[web.server] client:", sourceapp+":"+sourceip, "path:", path, "method:", method, "panic:", e, "stack:", base64.StdEncoding.EncodeToString(stack[:n]))
+				log.Error(workctx, "[web.server] panic", map[string]interface{}{"cname": sourceapp, "cip": sourceip, "path": path, "method": method, "panic": e, "stack": base64.StdEncoding.EncodeToString(stack[:n])})
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write(common.Str2byte(cerror.ErrPanic.Error()))

@@ -1,7 +1,6 @@
 package pool
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -29,34 +28,36 @@ func Test_Pool(t *testing.T) {
 	b.Reset()
 	var cs ctime.Duration = ctime.Duration(s)
 	b.AppendDuration(cs)
-	if b.String() != "1s" {
+	if b.String() != "0h0m1s0ms0us0ns" {
 		panic("corelib duration error")
 	}
 	b.Reset()
 	b.AppendDurations([]ctime.Duration{cs})
-	if b.String() != "[\"1s\"]" {
+	if b.String() != "[\"0h0m1s0ms0us0ns\"]" {
 		panic("corelib durations error")
 	}
 	b.Reset()
 	b.AppendDurationPointers([]*ctime.Duration{nil, &cs})
-	if b.String() != "[null,\"1s\"]" {
+	if b.String() != "[null,\"0h0m1s0ms0us0ns\"]" {
 		panic("corelib durationpointers error")
 	}
 	b.Reset()
-	stde := errors.New("stde")
-	ce := cerror.MakeError(1, 500, "ce")
-	b.AppendError(stde)
-	if b.String() != "stde" {
-		panic("std error error")
-	}
-	b.Reset()
-	b.AppendError(ce)
-	if b.String() != "{\"code\":1,\"msg\":\"ce\"}" {
+	normale := cerror.MakeError(1, 500, "normale")
+	speciale := cerror.MakeError(1, 500, "special\"e")
+	b.AppendError(normale)
+	if b.String() != "{\"code\":1,\"msg\":\"normale\"}" {
 		panic("corelib error error")
 	}
 	b.Reset()
-	b.AppendErrors([]error{nil, stde, ce})
-	if b.String() != "[null,\"stde\",{\"code\":1,\"msg\":\"ce\"}]" {
+	b.AppendError(speciale)
+	t.Log(b.String())
+	if b.String() != "{\"code\":1,\"msg\":\"special\\\"e\"}" {
+		panic("corelib error error")
+	}
+	b.Reset()
+	b.AppendErrors([]*cerror.Error{nil, normale, speciale})
+	t.Log(b.String())
+	if b.String() != "[null,{\"code\":1,\"msg\":\"normale\"},{\"code\":1,\"msg\":\"special\\\"e\"}]" {
 		panic("corelib errors error")
 	}
 	b.Reset()

@@ -23,7 +23,7 @@ var LastUsageMEM float64
 func initmem() {
 	cgroupTotalstr, e := os.ReadFile("/sys/fs/cgroup/memory/memory.limit_in_bytes")
 	if e != nil {
-		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.limit_in_bytes:", e)
+		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.limit_in_bytes failed", map[string]interface{}{"error": e})
 		return
 	}
 	if cgroupTotalstr[len(cgroupTotalstr)-1] == 10 {
@@ -31,12 +31,12 @@ func initmem() {
 	}
 	cgrouptotal, e := strconv.ParseInt(common.Byte2str(cgroupTotalstr), 10, 64)
 	if e != nil {
-		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.limit_in_bytes data:", cgroupTotalstr, "format wrong")
+		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.limit_in_bytes data format wrong", map[string]interface{}{"limit_in_bytes": cgroupTotalstr})
 		return
 	}
 	physicstr, e := os.ReadFile("/proc/meminfo")
 	if e != nil {
-		log.Error(nil, "[monitor.mem] read /proc/meminfo:", e)
+		log.Error(nil, "[monitor.mem] read /proc/meminfo failed", map[string]interface{}{"error": e})
 		return
 	}
 	var physictotal int64
@@ -44,11 +44,11 @@ func initmem() {
 		if !strings.HasPrefix(line, "MemTotal:") {
 			continue
 		}
-		line = strings.TrimSpace(strings.Split(line, ":")[1])
-		line = line[:len(line)-3]
-		physictotal, e = strconv.ParseInt(line, 10, 64)
+		tmp := strings.TrimSpace(strings.Split(line, ":")[1])
+		tmp = tmp[:len(tmp)-3]
+		physictotal, e = strconv.ParseInt(tmp, 10, 64)
 		if e != nil {
-			log.Error(nil, "[monitor.mem] read /proc/meminfo data:", physicstr, "format wrong")
+			log.Error(nil, "[monitor.mem] read /proc/meminfo data format wrong", map[string]interface{}{"MemTotal": line})
 			return
 		}
 		physictotal *= 1024
@@ -86,15 +86,16 @@ func memCollect() (float64, float64) {
 func memMetricCGROUP() {
 	usagestr, e := os.ReadFile("/sys/fs/cgroup/memory/memory.usage_in_bytes")
 	if e != nil {
-		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes:", e)
+		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes failed", map[string]interface{}{"error": e})
 		return
 	}
 	if usagestr[len(usagestr)-1] == 10 {
+		//drop \n
 		usagestr = usagestr[:len(usagestr)-1]
 	}
 	usage, e := strconv.ParseInt(common.Byte2str(usagestr), 10, 64)
 	if e != nil {
-		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes data:", usagestr, "format wrong")
+		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes data format wrong", map[string]interface{}{"usage_in_bytes": usagestr})
 		return
 	}
 	LastUsageMEM = float64(usage) / float64(TotalMEM)
@@ -105,18 +106,18 @@ func memMetricCGROUP() {
 func memMetricPHYSIC() {
 	physicstr, e := os.ReadFile("/proc/meminfo")
 	if e != nil {
-		log.Error(nil, "[monitor.mem] read /proc/meminfo:", e)
+		log.Error(nil, "[monitor.mem] read /proc/meminfo failed", map[string]interface{}{"error": e})
 		return
 	}
 	for _, line := range strings.Split(common.Byte2str(physicstr), "\n") {
 		if !strings.HasPrefix(line, "MemAvailable:") {
 			continue
 		}
-		line = strings.TrimSpace(strings.Split(line, ":")[1])
-		line = line[:len(line)-3]
-		physicavailable, e := strconv.ParseInt(line, 10, 64)
+		tmp := strings.TrimSpace(strings.Split(line, ":")[1])
+		tmp = tmp[:len(tmp)-3]
+		physicavailable, e := strconv.ParseInt(tmp, 10, 64)
 		if e != nil {
-			log.Error(nil, "[monitor.mem] read /proc/meminfo data:", physicstr, "format wrong")
+			log.Error(nil, "[monitor.mem] read /proc/meminfo data format wrong", map[string]interface{}{"MemAvailable": line})
 			return
 		}
 		LastUsageMEM = float64(physicavailable) / float64(TotalMEM)

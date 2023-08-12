@@ -32,7 +32,7 @@ func UpdateSessionRedisUrl(redisurl string) {
 			IOTimeout:   time.Second,
 		})
 	} else {
-		log.Warning(nil, "[session] redis missing,all session event will be failed")
+		log.Warning(nil, "[session] redis missing,all session event will be failed", nil)
 	}
 	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&sessionredis)), unsafe.Pointer(newp)))
 	if oldp != nil {
@@ -41,7 +41,7 @@ func UpdateSessionRedisUrl(redisurl string) {
 }
 func UpdateSessionRedisInstance(p *redis.Pool) {
 	if p == nil {
-		log.Warning(nil, "[session] redis missing,all session event will be failed")
+		log.Warning(nil, "[session] redis missing,all session event will be failed", nil)
 	}
 	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&sessionredis)), unsafe.Pointer(p)))
 	if oldp != nil {
@@ -54,7 +54,7 @@ func UpdateSessionRedisInstance(p *redis.Pool) {
 func MakeSession(ctx context.Context, userid, data string) string {
 	redisclient := sessionredis
 	if redisclient == nil {
-		log.Error(ctx, "[session.make] redis missing")
+		log.Error(ctx, "[session.make] redis missing", nil)
 		return ""
 	}
 	result := make([]byte, 8)
@@ -62,12 +62,12 @@ func MakeSession(ctx context.Context, userid, data string) string {
 	sessionid := hex.EncodeToString(result)
 	conn, e := redisclient.GetContext(ctx)
 	if e != nil {
-		log.Error(ctx, "[session.make] get redis conn:", e)
+		log.Error(ctx, "[session.make] get redis conn failed", map[string]interface{}{"error": e})
 		return ""
 	}
 	defer conn.Close()
 	if _, e = conn.DoContext(ctx, "PSETEX", "session_"+userid, sessionexpire.Milliseconds(), sessionid+"_"+data); e != nil {
-		log.Error(ctx, "[session.make] write redis session data:", e)
+		log.Error(ctx, "[session.make] write session data failed", map[string]interface{}{"error": e})
 		return ""
 	}
 	return "userid=" + userid + ",sessionid=" + sessionid
@@ -76,17 +76,17 @@ func MakeSession(ctx context.Context, userid, data string) string {
 func CleanSession(ctx context.Context, userid string) bool {
 	redisclient := sessionredis
 	if redisclient == nil {
-		log.Error(ctx, "[session.clean] redis missing")
+		log.Error(ctx, "[session.clean] redis missing", nil)
 		return false
 	}
 	conn, e := redisclient.GetContext(ctx)
 	if e != nil {
-		log.Error(ctx, "[session.clean] get redis conn:", e)
+		log.Error(ctx, "[session.clean] get redis conn failed", map[string]interface{}{"error": e})
 		return false
 	}
 	defer conn.Close()
 	if _, e = conn.DoContext(ctx, "DEL", "session_"+userid); e != nil {
-		log.Error(ctx, "[session.clean] delete redis session data:", e)
+		log.Error(ctx, "[session.clean] delete session data failed", map[string]interface{}{"error": e})
 		return false
 	}
 	return true
@@ -95,17 +95,17 @@ func CleanSession(ctx context.Context, userid string) bool {
 func ExtendSession(ctx context.Context, userid string, expire time.Duration) bool {
 	redisclient := sessionredis
 	if redisclient == nil {
-		log.Error(ctx, "[session.extend] redis missing")
+		log.Error(ctx, "[session.extend] redis missing", nil)
 		return false
 	}
 	conn, e := redisclient.GetContext(ctx)
 	if e != nil {
-		log.Error(ctx, "[session.extend] get redis conn:", e)
+		log.Error(ctx, "[session.extend] get redis conn failed", map[string]interface{}{"error": e})
 		return false
 	}
 	defer conn.Close()
 	if _, e = conn.DoContext(ctx, "PEXPIRE", "session_"+userid, expire.Milliseconds()); e != nil {
-		log.Error(ctx, "[session.extend] update redis session data:", e)
+		log.Error(ctx, "[session.extend] update session data failed", map[string]interface{}{"error": e})
 		return false
 	}
 	return true
@@ -114,7 +114,7 @@ func ExtendSession(ctx context.Context, userid string, expire time.Duration) boo
 func VerifySession(ctx context.Context, sessionstr string) (string, bool) {
 	redisclient := sessionredis
 	if redisclient == nil {
-		log.Error(ctx, "[session.verify] redis missing")
+		log.Error(ctx, "[session.verify] redis missing", nil)
 		return "", false
 	}
 	index := strings.LastIndex(sessionstr, ",")
@@ -133,14 +133,14 @@ func VerifySession(ctx context.Context, sessionstr string) (string, bool) {
 	sessionid = sessionid[10:]
 	conn, e := redisclient.GetContext(ctx)
 	if e != nil {
-		log.Error(ctx, "[session.verify] get redis conn:", e)
+		log.Error(ctx, "[session.verify] get redis conn failed", map[string]interface{}{"error": e})
 		return "", false
 	}
 	defer conn.Close()
 	str, e := redis.String(conn.DoContext(ctx, "GET", "session_"+userid))
 	if e != nil {
 		if e != redis.ErrNil {
-			log.Error(ctx, "[session.verify] read redis session data:", e)
+			log.Error(ctx, "[session.verify] read session data failed", map[string]interface{}{"error": e})
 		}
 		return "", false
 	}

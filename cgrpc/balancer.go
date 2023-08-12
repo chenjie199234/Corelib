@@ -220,7 +220,7 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 	if s.ConnectivityState == connectivity.Shutdown {
 		if server.status == int32(connectivity.Ready) {
 			//offline
-			log.Info(nil, "[cgrpc.client] server:", b.c.serverapp+":"+server.addr, "offline")
+			log.Info(nil, "[cgrpc.client] offline", map[string]interface{}{"sname": b.c.serverapp, "sip": server.addr})
 			server.status = int32(connectivity.Shutdown)
 			b.rebuildpicker(false)
 		} else {
@@ -232,7 +232,7 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 	if s.ConnectivityState == connectivity.Idle {
 		if server.status == int32(connectivity.Ready) {
 			//offline
-			log.Info(nil, "[cgrpc.client] server:", b.c.serverapp+":"+server.addr, "offline")
+			log.Info(nil, "[cgrpc.client] offline", map[string]interface{}{"sname": b.c.serverapp, "sip": server.addr})
 			server.status = int32(s.ConnectivityState)
 			b.rebuildpicker(false)
 		} else {
@@ -248,12 +248,12 @@ func (b *corelibBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.Sub
 		}
 	} else if s.ConnectivityState == connectivity.Ready {
 		//online
-		log.Info(nil, "[cgrpc.client] server:", b.c.serverapp+":"+server.addr, "online")
+		log.Info(nil, "[cgrpc.client] online", map[string]interface{}{"sname": b.c.serverapp, "sip": server.addr})
 		server.status = int32(s.ConnectivityState)
 		b.rebuildpicker(true)
 	} else if s.ConnectivityState == connectivity.TransientFailure {
 		//connect failed
-		log.Error(nil, "[cgrpc.client] connect to server:", b.c.serverapp+":"+server.addr, s.ConnectionError)
+		log.Error(nil, "[cgrpc.client] connect failed", map[string]interface{}{"sname": b.c.serverapp, "sip": server.addr})
 		server.status = int32(s.ConnectivityState)
 	}
 }
@@ -279,7 +279,7 @@ func (b *corelibBalancer) Close() {
 	for _, server := range b.servers {
 		server.status = int32(connectivity.Shutdown)
 		b.cc.RemoveSubConn(server.subconn)
-		log.Info(nil, "[cgrpc.client] server:", b.c.serverapp+":"+server.addr, "offline")
+		log.Info(nil, "[cgrpc.client] offline", map[string]interface{}{"sname": b.c.serverapp, "sip": server.addr})
 	}
 	b.servers = make(map[balancer.SubConn]*ServerForPick)
 	b.picker.UpdateServers(make([]picker.ServerForPick, 0))

@@ -147,14 +147,14 @@ func (d *DnsD) run() {
 		case <-tker.C:
 		}
 		if atomic.LoadInt32(&d.status) == 2 {
-			log.Info(nil, "[discover.dns] host:", d.host, cerror.ErrDiscoverStopped)
+			log.Info(nil, "[discover.dns] discover stopped", map[string]interface{}{"host": d.host})
 			d.lasterror = cerror.ErrDiscoverStopped
 			return
 		}
 		atomic.CompareAndSwapInt32(&d.status, 0, 1)
 		addrs, e := net.LookupHost(d.host)
 		if e != nil {
-			log.Error(nil, "[discover.dns] host:", d.host, e)
+			log.Error(nil, "[discover.dns] look up failed", map[string]interface{}{"host": d.host, "error": e})
 			d.Lock()
 			d.lasterror = e
 			for notice := range d.notices {

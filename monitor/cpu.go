@@ -82,7 +82,7 @@ func cpuCollect() (float64, float64, float64) {
 func getCPUNum() {
 	quotastr, e := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_quota_us")
 	if e != nil && !os.IsNotExist(e) {
-		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us:", e)
+		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us failed", map[string]interface{}{"error": e})
 		return
 	}
 	if e == nil {
@@ -91,7 +91,7 @@ func getCPUNum() {
 		}
 		quota, e := strconv.ParseInt(common.Byte2str(quotastr), 10, 64)
 		if e != nil {
-			log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us data:", quotastr, "format wrong")
+			log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us data format wrong", map[string]interface{}{"cfs_quota_us": quotastr})
 			return
 		}
 		if quota > 0 {
@@ -106,7 +106,7 @@ func getCPUNum() {
 func cpunumCGROUP(quota int64) {
 	periodstr, e := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_period_us")
 	if e != nil {
-		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_period_us:", e)
+		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_period_us failed", map[string]interface{}{"error": e})
 		return
 	}
 	if periodstr[len(periodstr)-1] == 10 {
@@ -114,7 +114,7 @@ func cpunumCGROUP(quota int64) {
 	}
 	period, e := strconv.ParseInt(common.Byte2str(periodstr), 10, 64)
 	if e != nil {
-		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_period_us data:", periodstr, "format wrong")
+		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_period_us data format wrong", map[string]interface{}{"cfs_period_us": periodstr})
 		return
 	}
 	CPUNum = float64(quota) / float64(period)
@@ -127,7 +127,7 @@ func cpunumPHYSIC() {
 func cpuMetricCGROUP(now int64) {
 	usagestr, e := os.ReadFile("/sys/fs/cgroup/cpu/cpuacct.usage")
 	if e != nil {
-		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage:", e)
+		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage failed", map[string]interface{}{"error": e})
 		return
 	}
 	if usagestr[len(usagestr)-1] == 10 {
@@ -135,7 +135,7 @@ func cpuMetricCGROUP(now int64) {
 	}
 	usage, e := strconv.ParseInt(common.Byte2str(usagestr), 10, 64)
 	if e != nil {
-		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage data:", usagestr, "format wrong")
+		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage data format wrong", map[string]interface{}{"usage": usagestr})
 		return
 	}
 	oldUsage := cpuUsageLast
@@ -156,7 +156,7 @@ func cpuMetricCGROUP(now int64) {
 func cpuMetricPHYSIC() {
 	tmpdata, e := os.ReadFile("/proc/stat")
 	if e != nil {
-		log.Error(nil, "[monitor.cpu] read /proc/stat:", e)
+		log.Error(nil, "[monitor.cpu] read /proc/stat failed", map[string]interface{}{"error": e})
 		return
 	}
 	var line string
@@ -181,7 +181,7 @@ func cpuMetricPHYSIC() {
 		}
 		value, e := strconv.ParseInt(piece, 10, 64)
 		if e != nil {
-			log.Error(nil, "[monitor.cpu] /proc/stat data broken:", e)
+			log.Error(nil, "[monitor.cpu] /proc/stat data broken", map[string]interface{}{"error": e})
 			return
 		}
 		tmpTotal += value

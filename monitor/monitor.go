@@ -16,13 +16,13 @@ import (
 
 func init() {
 	if str := os.Getenv("MONITOR"); str == "" || str == "<MONITOR>" {
-		log.Warning(nil, "[monitor] env MONITOR missing,monitor closed")
+		log.Warning(nil, "[monitor] env MONITOR missing,monitor closed", nil)
 		return
 	} else if n, e := strconv.Atoi(str); e != nil || n != 0 && n != 1 {
-		log.Warning(nil, "[monitor] env MONITOR format error,must in [0,1],monitor closed")
+		log.Warning(nil, "[monitor] env MONITOR format error,must in [0,1],monitor closed", nil)
 		return
 	} else if n == 0 {
-		log.Warning(nil, "[monitor] env MONITOR is 0,monitor closed")
+		log.Warning(nil, "[monitor] env MONITOR is 0,monitor closed", nil)
 		return
 	}
 	initmem()
