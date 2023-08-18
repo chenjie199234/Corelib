@@ -35,7 +35,7 @@ func StartCrpcServer() {
 	}
 	var e error
 	if s, e = crpc.NewCrpcServer(crpcc, model.Group, model.Name); e != nil {
-		log.Error(nil, "[xcrpc] new error:", e)
+		log.Error(nil, "[xcrpc] new server failed", map[string]interface{}{"error": e})
 		return
 	}
 	UpdateHandlerTimeout(config.AC.HandlerTimeout)
@@ -49,10 +49,10 @@ func StartCrpcServer() {
 	//api.RegisterExampleCrpcServer(s, service.SvcExample,mids.AllMids())
 
 	if e = s.StartCrpcServer(":9000"); e != nil && e != crpc.ErrServerClosed {
-		log.Error(nil, "[xcrpc] start error:", e)
+		log.Error(nil, "[xcrpc] start server failed", map[string]interface{}{"error": e})
 		return
 	}
-	log.Info(nil, "[xcrpc] server closed")
+	log.Info(nil, "[xcrpc] server closed", nil)
 }
 
 // UpdateHandlerTimeout -

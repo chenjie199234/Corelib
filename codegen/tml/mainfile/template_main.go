@@ -44,16 +44,16 @@ func main() {
 	if rateredis := config.GetRedis("rate_redis"); rateredis != nil {
 		publicmids.UpdateRateRedisInstance(rateredis)
 	} else {
-		log.Warning(nil, "[main] rate redis missing,all rate check will be failed")
+		log.Warning(nil, "[main] rate redis missing,all rate check will be failed", nil)
 	}
 	if sessionredis := config.GetRedis("session_redis"); sessionredis != nil {
 		publicmids.UpdateSessionRedisInstance(sessionredis)
 	} else {
-		log.Warning(nil, "[main] session redis missing,all session event will be failed")
+		log.Warning(nil, "[main] session redis missing,all session event will be failed", nil)
 	}
 	//start the whole business service
 	if e := service.StartService(); e != nil {
-		log.Error(nil, e)
+		log.Error(nil, "[main] start service failed", map[string]interface{}{"error": e})
 		return
 	}
 	//start low level net service

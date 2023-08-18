@@ -43,13 +43,13 @@ func Start() *Service {
 // Ping -
 func (s *Service) Ping(ctx context.Context, in *api.Pingreq) (*api.Pingresp, error) {
 	//if _, ok := ctx.(*crpc.Context); ok {
-	//        log.Info("this is a crpc call")
+	//        log.Info("this is a crpc call", nil)
 	//}
 	//if _, ok := ctx.(*cgrpc.Context); ok {
-	//        log.Info("this is a cgrpc call")
+	//        log.Info("this is a cgrpc call", nil)
 	//}
 	//if _, ok := ctx.(*web.Context); ok {
-	//        log.Info("this is a web call")
+	//        log.Info("this is a web call", nil)
 	//}
 	return &api.Pingresp{ClientTimestamp: in.Timestamp, ServerTimestamp: time.Now().UnixNano()}, nil
 }

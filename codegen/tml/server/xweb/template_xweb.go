@@ -49,7 +49,7 @@ func StartWebServer() {
 	}
 	var e error
 	if s, e = web.NewWebServer(webc, model.Group, model.Name); e != nil {
-		log.Error(nil, "[xweb] new error:", e)
+		log.Error(nil, "[xweb] new server failed", map[string]interface{}{"error": e})
 		return
 	}
 	UpdateHandlerTimeout(config.AC.HandlerTimeout)
@@ -64,10 +64,10 @@ func StartWebServer() {
 	//api.RegisterExampleWebServer(s, service.SvcExample, mids.AllMids())
 
 	if e = s.StartWebServer(":8000"); e != nil && e != web.ErrServerClosed {
-		log.Error(nil, "[xweb] start error:", e)
+		log.Error(nil, "[xweb] start server failed", map[string]interface{}{"error": e})
 		return
 	}
-	log.Info(nil, "[xweb] server closed")
+	log.Info(nil, "[xweb] server closed", nil)
 }
 
 // UpdateHandlerTimeout -

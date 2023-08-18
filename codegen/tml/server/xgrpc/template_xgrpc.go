@@ -35,7 +35,7 @@ func StartCGrpcServer() {
 	}
 	var e error
 	if s, e = cgrpc.NewCGrpcServer(cgrpcc, model.Group, model.Name); e != nil {
-		log.Error(nil, "[xgrpc] new error:", e)
+		log.Error(nil, "[xgrpc] new server failed", map[string]interface{}{"error": e})
 		return
 	}
 	UpdateHandlerTimeout(config.AC.HandlerTimeout)
@@ -49,10 +49,10 @@ func StartCGrpcServer() {
 	//api.RegisterExampleCGrpcServer(s, service.SvcExample, mids.AllMids())
 
 	if e = s.StartCGrpcServer(":10000"); e != nil && e != cgrpc.ErrServerClosed {
-		log.Error(nil, "[xgrpc] start error:", e)
+		log.Error(nil, "[xgrpc] start server failed", map[string]interface{}{"error": e})
 		return
 	}
-	log.Info(nil, "[xgrpc] server closed")
+	log.Info(nil, "[xgrpc] server closed", nil)
 }
 
 // UpdateHandlerTimeout -
