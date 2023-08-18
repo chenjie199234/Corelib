@@ -55,7 +55,7 @@ func writeany(buf *pool.Buffer, data interface{}) {
 		}
 		if special {
 			dd, _ := json.Marshal(d)
-			buf.AppendByteSlice(dd)
+			buf.AppendBytes(dd)
 		} else {
 			buf.AppendByte('"')
 			buf.AppendString(d)
@@ -180,7 +180,7 @@ func writeany(buf *pool.Buffer, data interface{}) {
 		}
 		if special {
 			dd, _ := json.Marshal(estr)
-			buf.AppendByteSlice(dd)
+			buf.AppendBytes(dd)
 		} else {
 			buf.AppendByte('"')
 			buf.AppendString(estr)
@@ -207,7 +207,7 @@ func writeany(buf *pool.Buffer, data interface{}) {
 				}
 				if special {
 					dd, _ := json.Marshal(estr)
-					buf.AppendByteSlice(dd)
+					buf.AppendBytes(dd)
 				} else {
 					buf.AppendByte('"')
 					buf.AppendString(estr)
@@ -222,7 +222,7 @@ func writeany(buf *pool.Buffer, data interface{}) {
 		if e != nil {
 			buf.AppendString("unsupported type")
 		} else {
-			buf.AppendByteSlice(tmp)
+			buf.AppendBytes(tmp)
 		}
 	}
 }

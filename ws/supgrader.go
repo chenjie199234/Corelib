@@ -40,7 +40,7 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 			return
 		}
 		if prefix {
-			buf.AppendByteSlice(line)
+			buf.AppendBytes(line)
 			continue
 		}
 		if len(line) == 0 && buf.Len() == 0 {
@@ -54,7 +54,7 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 			line = buf.Bytes()
 		} else {
 			//deal the buf+line
-			buf.AppendByteSlice(line)
+			buf.AppendBytes(line)
 			line = buf.Bytes()
 		}
 		//deal

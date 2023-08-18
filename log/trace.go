@@ -152,7 +152,7 @@ func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string,
 	}
 	if special {
 		d, _ := json.Marshal(emsg)
-		buf.AppendByteSlice(d)
+		buf.AppendBytes(d)
 	} else {
 		buf.AppendString(emsg)
 	}

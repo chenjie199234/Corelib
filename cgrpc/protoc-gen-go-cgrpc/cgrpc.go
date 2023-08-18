@@ -92,6 +92,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	g.P()
 	// Server handler
 	for _, method := range service.Methods {
+		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 			continue
 		}
@@ -101,15 +102,15 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P(fname, "(", p1, ")", freturn, "{")
 		g.P("return func(ctx *", g.QualifiedGoIdent(cgrpcPackage.Ident("Context")), "){")
 		g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
-		g.P("if ctx.DecodeReq(req)!=nil{")
+		g.P("if e := ctx.DecodeReq(req); e != nil{")
+		g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\", map[string]interface{}{\"error\": e})")
 		g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 		g.P("return")
 		g.P("}")
 
-		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		if pbex.NeedValidate(method.Input) {
 			g.P("if errstr := req.Validate(); errstr != \"\" {")
-			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\",errstr)")
+			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\", map[string]interface{}{\"error\": errstr})")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 			g.P("return")
 			g.P("}")

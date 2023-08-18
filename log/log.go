@@ -155,7 +155,7 @@ func write(ctx context.Context, lv, summary string, kvs map[string]interface{}) 
 			}
 			if special {
 				kk, _ := json.Marshal(k)
-				buf.AppendByteSlice(kk)
+				buf.AppendBytes(kk)
 				buf.AppendByte(':')
 			} else {
 				buf.AppendByte('"')
@@ -193,7 +193,7 @@ func writeany(buf *pool.Buffer, data interface{}) {
 		}
 		if special {
 			dd, _ := json.Marshal(d)
-			buf.AppendByteSlice(dd)
+			buf.AppendBytes(dd)
 		} else {
 			buf.AppendByte('"')
 			buf.AppendString(d)
@@ -318,7 +318,7 @@ func writeany(buf *pool.Buffer, data interface{}) {
 		}
 		if special {
 			dd, _ := json.Marshal(estr)
-			buf.AppendByteSlice(dd)
+			buf.AppendBytes(dd)
 		} else {
 			buf.AppendByte('"')
 			buf.AppendString(estr)
@@ -345,7 +345,7 @@ func writeany(buf *pool.Buffer, data interface{}) {
 				}
 				if special {
 					dd, _ := json.Marshal(estr)
-					buf.AppendByteSlice(dd)
+					buf.AppendBytes(dd)
 				} else {
 					buf.AppendByte('"')
 					buf.AppendString(estr)
@@ -361,14 +361,14 @@ func writeany(buf *pool.Buffer, data interface{}) {
 			if e != nil {
 				buf.AppendString("unsupported type")
 			} else {
-				buf.AppendByteSlice(tmp)
+				buf.AppendBytes(tmp)
 			}
 		} else {
 			tmp, e := json.Marshal(data)
 			if e != nil {
 				buf.AppendString("unsupported type")
 			} else {
-				buf.AppendByteSlice(tmp)
+				buf.AppendBytes(tmp)
 			}
 		}
 	}

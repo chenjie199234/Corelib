@@ -15,7 +15,7 @@ import (
 	"github.com/chenjie199234/Corelib/pool"
 )
 
-//thread unsafe
+// thread unsafe
 type RotateFile struct {
 	path, name string
 	file       atomic.Value
@@ -208,7 +208,7 @@ func (f *RotateFile) CleanNow(lastModTimestampBeforeThisNS int64) error {
 	return nil
 }
 
-//return byte num
+// return byte num
 func (f *RotateFile) GetCurFileLen() int64 {
 	return f.curlen
 }
@@ -220,7 +220,7 @@ func (f *RotateFile) Write(data []byte) (int, error) {
 		return 0, fmt.Errorf("[rotatefile.Write] rotate file closed")
 	}
 	buf := pool.GetBuffer()
-	buf.AppendByteSlice(data)
+	buf.AppendBytes(data)
 	f.caslist.Push(buf)
 	select {
 	case f.notice <- struct{}{}:

@@ -299,7 +299,7 @@ func (b *Buffer) AppendUint64s(data []uint64) {
 func (b *Buffer) AppendByte(data byte) {
 	*b = append(*b, data)
 }
-func (b *Buffer) AppendByteSlice(data []byte) {
+func (b *Buffer) AppendBytes(data []byte) {
 	*b = append(*b, data...)
 }
 func (b *Buffer) AppendString(data string) {

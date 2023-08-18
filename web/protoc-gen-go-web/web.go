@@ -121,6 +121,8 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	g.P()
 	// Server handler
 	for _, method := range service.Methods {
+		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
+
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
 		if mop.GetDeprecated() {
 			continue
@@ -140,35 +142,41 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
 		if httpmetohd == http.MethodPost || httpmetohd == http.MethodPut || httpmetohd == http.MethodPatch {
 			g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetContentType(),", strconv.Quote("application/json"), "){")
-			g.P("data,e:=ctx.GetBody()")
+			g.P("data, e := ctx.GetBody()")
 			g.P("if e!=nil{")
+			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\", map[string]interface{}{\"error\": e})")
 			g.P("ctx.Abort(e)")
 			g.P("return")
 			g.P("}")
 			g.P("if len(data)>0{")
-			g.P("if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(data,req);e!=nil{")
+			g.P("if e := (", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(data,req);e!=nil{")
+			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\", map[string]interface{}{\"error\": e})")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 			g.P("return")
 			g.P("}")
 			g.P("}")
 			g.P("}else if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetContentType(),", strconv.Quote("application/x-protobuf"), "){")
-			g.P("data,e:=ctx.GetBody()")
+			g.P("data, e := ctx.GetBody()")
 			g.P("if e!=nil{")
+			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\", map[string]interface{}{\"error\": e})")
 			g.P("ctx.Abort(e)")
 			g.P("return")
 			g.P("}")
 			g.P("if len(data)>0{")
 			g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(data,req);e!=nil{")
+			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\", map[string]interface{}{\"error\": e})")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 			g.P("return")
 			g.P("}")
 			g.P("}")
 			g.P("}else{")
+			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\", map[string]interface{}{\"error\": \"POST,PUT,PATCH only support application/json or application/x-protobuf\"})")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 			g.P("return")
 			g.P("}")
 		} else if len(method.Input.Fields) > 0 {
 			g.P("if e:=ctx.ParseForm();e!=nil{")
+			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\", map[string]interface{}{\"error\": e})")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 			g.P("return")
 			g.P("}")
@@ -255,7 +263,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("}else{")
 						g.P("//transfer json escape")
 						g.P("formb,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(form)")
-						g.P("data.AppendByteSlice(formb)")
+						g.P("data.AppendBytes(formb)")
 						g.P("}")
 						g.P("data.AppendByte(',')")
 						g.P("}")
@@ -267,7 +275,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("data.AppendString(", strconv.Quote(strconv.Quote(fname)+":"), ")")
 						g.P("//transfer json escape")
 						g.P("formb,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(form)")
-						g.P("data.AppendByteSlice(formb)")
+						g.P("data.AppendBytes(formb)")
 						g.P("data.AppendByte(',')")
 						g.P("}")
 					}
@@ -299,17 +307,17 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("if data.Len() > 1{")
 			g.P("data.Bytes()[data.Len()-1] = '}'")
 			g.P("if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(data.Bytes(),req);e!=nil{")
+			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\", map[string]interface{}{\"error\": e})")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 			g.P("return")
 			g.P("}")
 			g.P("}")
 		}
 
-		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		//check
 		if pbex.NeedValidate(method.Input) {
 			g.P("if errstr := req.Validate(); errstr != \"\"{")
-			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\",errstr)")
+			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\", map[string]interface{}{\"error\": errstr})")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 			g.P("return")
 			g.P("}")
@@ -676,7 +684,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						case protoreflect.StringKind:
 							g.P("//transfer the json escape")
 							g.P("kk,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(k)")
-							g.P("tmpbuf.AppendByteSlice(kk)")
+							g.P("tmpbuf.AppendBytes(kk)")
 						}
 						g.P("tmpbuf.AppendByte(':')")
 						switch field.Message.Fields[1].Desc.Kind() {
@@ -715,7 +723,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						case protoreflect.StringKind:
 							g.P("//transfer the json escape")
 							g.P("vv,_:=", g.QualifiedGoIdent(stdjsonPackage.Ident("Marshal")), "(v)")
-							g.P("tmpbuf.AppendByteSlice(vv)")
+							g.P("tmpbuf.AppendBytes(vv)")
 						case protoreflect.BytesKind:
 							g.P("//req.", field.GoName, "is a map,it's value's type in protobuf is bytes,value should be base64 encoded")
 							g.P("//https://developers.google.com/protocol-buffers/docs/proto3#json")
@@ -727,7 +735,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("tmpbuf.AppendString(\"null\")")
 							g.P("}else{")
 							g.P("tmp,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{AllowPartial: true,UseProtoNames: true,UseEnumNumbers: true}.Marshal(v)")
-							g.P("tmpbuf.AppendByteSlice(tmp)")
+							g.P("tmpbuf.AppendBytes(tmp)")
 							g.P("}")
 						}
 						g.P("}")
