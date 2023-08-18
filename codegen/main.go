@@ -114,6 +114,7 @@ func createBaseProject() {
 	gomod.CreatePathAndFile(*packagename)
 
 	model.CreatePathAndFile(*packagename, *projectname)
+	submodel.CreatePathAndFile("status")
 
 	util.CreatePathAndFile()
 
