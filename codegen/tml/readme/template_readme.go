@@ -35,9 +35,8 @@ GROUP                                   该项目所属的项目组,[a-z][0-9],�
 RUN_ENV                                 当前运行环境,如:test,pre,prod
 DEPLOY_ENV                              部署环境,如:ali-kube-shanghai-1,ali-host-hangzhou-1
 MONITOR                                 是否开启系统监控采集,0关闭,1开启
-CONFIG_TYPE                             配置类型
-                                        0-使用本地配置
-                                        1-使用远程配置中心config服务
+
+CONFIG_TYPE                             配置类型:0-使用本地配置.1-使用远程配置中心config服务
 REMOTE_CONFIG_SERVICE_PROJECT           当CONFIG_TYPE为1时,远程配置中心服务的项目,[a-z][0-9],第一个字符必须是[a-z]
 REMOTE_CONFIG_SERVICE_GROUP             当CONFIG_TYPE为1时,远程配置中心服务的项目组,[a-z][0-9],第一个字符必须是[a-z]
 REMOTE_CONFIG_SERVICE_WEB_HOST          当CONFIG_TYPE为1时,远程配置中心服务的host
