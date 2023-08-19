@@ -26,10 +26,10 @@ ENTRYPOINT ["./main"]`
 const deployment = `apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{.ProjectName}}-deployment
-  namespace: <GROUP>
+  name: {{.AppName}}-deployment
+  namespace: <PROJECT>-<GROUP>
   labels:
-    app: {{.ProjectName}}
+    app: {{.AppName}}
 spec:
   replicas: 2
   revisionHistoryLimit: 5
@@ -41,14 +41,14 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app: {{.ProjectName}}
+      app: {{.AppName}}
   template:
     metadata:
       labels:
-        app: {{.ProjectName}}
+        app: {{.AppName}}
     spec:
       containers:
-        - name: {{.ProjectName}}
+        - name: {{.AppName}}
           image: <IMAGE>
           imagePullPolicy: IfNotPresent
           resources:
@@ -64,9 +64,9 @@ spec:
                 fieldRef:
                   fieldPath: status.podIP
             - name: GROUP
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
+              value: <GROUP>
+            - name: PROJECT
+              value: <PROJECT>
             - name: LOG_LEVEL
               value: <LOG_LEVEL>
             - name: LOG_TRACE
@@ -112,18 +112,18 @@ spec:
             successThreshold: 1
             failureThreshold: 3
       imagePullSecrets:
-        - name: <GROUP>-secret
+        - name: <PROJECT>-<GROUP>-secret
 ---
 apiVersion: autoscaling/v2beta2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{.ProjectName}}-hpa
-  namespace: <GROUP>
+  name: {{.AppName}}-hpa
+  namespace: <PROJECT>-<GROUP>
 spec:
   scaleTargetRef:   
     apiVersion: apps/v1
     kind: Deployment  
-    name: {{.ProjectName}}-deployment
+    name: {{.AppName}}-deployment
   maxReplicas: 10
   minReplicas: 2
   metrics:
@@ -143,23 +143,23 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{.ProjectName}}-headless
-  namespace: <GROUP>
+  name: {{.AppName}}-headless
+  namespace: <PROJECT>-<GROUP>
   labels:
-    app: {{.ProjectName}}
+    app: {{.AppName}}
 spec:
   type: ClusterIP
   clusterIP: None
   selector:
-    app: {{.ProjectName}}
+    app: {{.AppName}}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{.ProjectName}}
-  namespace: <GROUP>
+  name: {{.AppName}}
+  namespace: <PROJECT>-<GROUP>
   labels:
-    app: {{.ProjectName}}
+    app: {{.AppName}}
 spec:
   type: ClusterIP
   ports:
@@ -167,13 +167,13 @@ spec:
     protocol: TCP
     port: 8000
   selector:
-    app: {{.ProjectName}}{{ end }}{{ if .NeedIngress}}
+    app: {{.AppName}}{{ end }}{{ if .NeedIngress}}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{.ProjectName}}-ingress
-  namespace: <GROUP>
+  name: {{.AppName}}-ingress
+  namespace: <PROJECT>-<GROUP>
   annotations:
     nginx.ingress.kubernetes.io/use-regex: 'true'
 spec:
@@ -181,18 +181,18 @@ spec:
   - host: <HOST>
     http:
       paths:
-      - path: /{{.ProjectName}}.*
+      - path: /{{.AppName}}.*
         backend:
-          serviceName: {{.ProjectName}}
+          serviceName: {{.AppName}}
           servicePort: 8000{{ end }}`
 
 type data struct {
-	ProjectName string
+	AppName     string
 	NeedService bool
 	NeedIngress bool
 }
 
-func CreatePathAndFile(projectname string, needservice bool, needingress bool) {
+func CreatePathAndFile(appname string, needservice bool, needingress bool) {
 	dockerfile, e := os.OpenFile("./Dockerfile", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
 		panic("open ./Dockerfile error: " + e.Error())
@@ -208,7 +208,7 @@ func CreatePathAndFile(projectname string, needservice bool, needingress bool) {
 	}
 
 	tmp := &data{
-		ProjectName: projectname,
+		AppName:     appname,
 		NeedService: needservice,
 		NeedIngress: needingress,
 	}

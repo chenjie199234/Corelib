@@ -169,7 +169,6 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			mids = proto.GetExtension(mop, pbex.E_CrpcMidwares).([]string)
 		}
 		fname := "_" + service.GoName + "_" + method.GoName + "_" + "CrpcHandler(svc." + method.GoName + ")"
-		pathname := "_CrpcPath" + service.GoName + method.GoName
 		if len(mids) > 0 {
 			g.P("{")
 			str := ""
@@ -188,10 +187,10 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("}")
 			g.P("}")
 			g.P("mids = append(mids,", fname, ")")
-			g.P("engine.RegisterHandler(", pathname, ",mids...)")
+			g.P("engine.RegisterHandler(", strconv.Quote(*file.Proto.Package+"."+string(service.Desc.Name())), ",", strconv.Quote(string(method.Desc.Name())), ",mids...)")
 			g.P("}")
 		} else {
-			g.P("engine.RegisterHandler(", pathname, ",", fname, ")")
+			g.P("engine.RegisterHandler(", strconv.Quote(*file.Proto.Package+"."+string(service.Desc.Name())), ",", strconv.Quote(string(method.Desc.Name())), ",", fname, ")")
 		}
 	}
 	g.P("}")

@@ -36,7 +36,7 @@ import (
 	cname "github.com/chenjie199234/Corelib/util/name"
 )
 
-var projectname = flag.String("n", "", "project's name\ncharacter:[a-z][0-9]\nfirst character must in [a-z]")
+var appname = flag.String("n", "", "app name\ncharacter:[a-z][0-9]\nfirst character must in [a-z]")
 var packagename = flag.String("p", "", "project's package name\npackage name must end with project's name\nif this is empty the project's name will be used as the package's name\nthis is useful when your project will be uploaded to github or gitlab\ne.g. github.com/path_to_the_repo/project_name")
 
 var gensub = flag.String("sub", "", "create subservice in this project\ncharacter:[a-z][0-9]\nfirst character must in [a-z]\ndon't use this direct by codegen,use the cmd.sh/cmd.bat in your project instead")
@@ -46,14 +46,14 @@ var genhtml = flag.Bool("html", false, "create project's html template\ndon't us
 func main() {
 	flag.Parse()
 	//pre check
-	if e := cname.SingleCheck(*projectname, false); e != nil {
+	if e := cname.SingleCheck(*appname, false); e != nil {
 		panic(e)
 	}
 	if *packagename == "" {
-		packagename = projectname
+		packagename = appname
 	}
-	if *packagename != *projectname && !strings.HasSuffix(*packagename, "/"+*projectname) {
-		panic("package's name must end with project's name,e.g. github.com/path_to_the_repo/project_name")
+	if *packagename != *appname && !strings.HasSuffix(*packagename, "/"+*appname) {
+		panic("package's name must end with app name,e.g. github.com/path_to_the_repo/app_name")
 	}
 	if len(*gensub) == 0 && !*genhtml && !*genkube {
 		//create the base project
@@ -75,35 +75,35 @@ func main() {
 }
 
 func createBaseProject() {
-	finfo, e := os.Stat("./" + *projectname)
+	finfo, e := os.Stat("./" + *appname)
 	if e != nil {
 		if !os.IsNotExist(e) {
-			panic("get ./" + *projectname + " info error: " + e.Error())
+			panic("get ./" + *appname + " info error: " + e.Error())
 		}
-		if e := os.MkdirAll("./"+*projectname, 0755); e != nil {
-			panic("mkdir ./" + *projectname + " error: " + e.Error())
+		if e := os.MkdirAll("./"+*appname, 0755); e != nil {
+			panic("mkdir ./" + *appname + " error: " + e.Error())
 		}
 	} else if !finfo.IsDir() {
-		panic("./" + *projectname + " exist and it is not a dir")
-	} else if files, e := os.ReadDir("./" + *projectname); e != nil {
-		panic("./" + *projectname + " check dir empty error: " + e.Error())
+		panic("./" + *appname + " exist and it is not a dir")
+	} else if files, e := os.ReadDir("./" + *appname); e != nil {
+		panic("./" + *appname + " check dir empty error: " + e.Error())
 	} else if len(files) > 0 {
-		panic("./" + *projectname + " exist and it is not an empty dir")
+		panic("./" + *appname + " exist and it is not an empty dir")
 	}
-	if e = os.Chdir("./" + *projectname); e != nil {
-		panic("cd ./" + *projectname + " error: " + e.Error())
+	if e = os.Chdir("./" + *appname); e != nil {
+		panic("cd ./" + *appname + " error: " + e.Error())
 	}
 	//pre check success
-	fmt.Println("start create base project.")
+	fmt.Println("start create base app.")
 	api.CreatePathAndFile()
 
-	statusapi.CreatePathAndFile(*packagename, *projectname)
+	statusapi.CreatePathAndFile(*packagename, *appname)
 
 	ecode.CreatePathAndFile()
 
 	config.CreatePathAndFile(*packagename)
 
-	configfile.CreatePathAndFile(*projectname)
+	configfile.CreatePathAndFile(*appname)
 
 	dao.CreatePathAndFile(*packagename)
 
@@ -113,7 +113,7 @@ func createBaseProject() {
 
 	gomod.CreatePathAndFile(*packagename)
 
-	model.CreatePathAndFile(*packagename, *projectname)
+	model.CreatePathAndFile(*packagename, *appname)
 	submodel.CreatePathAndFile("status")
 
 	util.CreatePathAndFile()
@@ -128,14 +128,14 @@ func createBaseProject() {
 
 	servicestatus.CreatePathAndFile(*packagename)
 
-	cmd.CreatePathAndFile(*packagename, *projectname)
+	cmd.CreatePathAndFile(*packagename, *appname)
 
-	readme.CreatePathAndFile(*projectname)
+	readme.CreatePathAndFile(*appname)
 
 	git.CreatePathAndFile()
 
 	npm.CreatePathAndFile()
-	fmt.Println("base project create success!")
+	fmt.Println("base app create success!")
 }
 func checkBaseProject() {
 	f, e := os.Open("./model/model.go")
@@ -143,7 +143,7 @@ func checkBaseProject() {
 		panic("open ./model/model.go error: " + e.Error())
 	}
 	bio := bufio.NewReader(f)
-	var tmppackage, tmpproject string
+	var tmppackage, tmpapp string
 	for {
 		line, _, e := bio.ReadLine()
 		if e != nil {
@@ -154,11 +154,11 @@ func checkBaseProject() {
 		}
 		str := strings.TrimSpace(string(line))
 		if strings.HasPrefix(str, "const Name = ") {
-			tmpproject = str[13:]
-			if len(tmpproject) <= 2 || tmpproject[0] != '"' || tmpproject[len(tmpproject)-1] != '"' {
+			tmpapp = str[13:]
+			if len(tmpapp) <= 2 || tmpapp[0] != '"' || tmpapp[len(tmpapp)-1] != '"' {
 				panic("./model/model.go broken!")
 			}
-			tmpproject = tmpproject[1 : len(tmpproject)-1]
+			tmpapp = tmpapp[1 : len(tmpapp)-1]
 		}
 		if strings.HasPrefix(str, "const pkg = ") {
 			tmppackage = str[12:]
@@ -167,18 +167,18 @@ func checkBaseProject() {
 			}
 			tmppackage = tmppackage[1 : len(tmppackage)-1]
 		}
-		if tmppackage != "" && tmpproject != "" {
+		if tmppackage != "" && tmpapp != "" {
 			break
 		}
 	}
-	if tmppackage == "" || tmpproject == "" {
+	if tmppackage == "" || tmpapp == "" {
 		panic("./model/model.go broken!")
 	}
 	if tmppackage != *packagename {
-		panic("package name conflict,this is not the required project")
+		panic("package name conflict,this is not the required app")
 	}
-	if tmpproject != *projectname {
-		panic("project name conflict,this is not the required project")
+	if tmpapp != *appname {
+		panic("app name conflict,this is not the required app")
 	}
 }
 
@@ -214,7 +214,7 @@ func createSubProject() {
 		panic("./model/" + *gensub + ".go check file exist error: " + e.Error())
 	}
 	//sub api
-	subapi.CreatePathAndFile(*packagename, *projectname, *gensub)
+	subapi.CreatePathAndFile(*packagename, *appname, *gensub)
 	//sub dao
 	subdao.CreatePathAndFile(*gensub)
 	//sub service
@@ -298,7 +298,7 @@ func createKubernetes() {
 		}
 	}
 	fmt.Println("start create kubernetes config.")
-	deploy.CreatePathAndFile(*projectname, needservice, needingress)
+	deploy.CreatePathAndFile(*appname, needservice, needingress)
 	fmt.Println("kubernetes config create success!")
 }
 func createHtml() {
@@ -328,7 +328,7 @@ func createHtml() {
 		}
 	}
 	fmt.Println("start create html.")
-	html.CreatePathAndFile(*projectname)
+	html.CreatePathAndFile(*appname)
 	fmt.Println("html create success!")
 	fmt.Println()
 	fmt.Println("cd html")

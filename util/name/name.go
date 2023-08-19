@@ -31,7 +31,7 @@ func SingleCheck(name string, dash bool) error {
 	return nil
 }
 
-// full = group.name
+// full = namespace.app
 func FullCheck(full string) error {
 	if len(full) == 0 {
 		return errors.New("[name.FullCheck] empty")
@@ -40,15 +40,15 @@ func FullCheck(full string) error {
 		return errors.New("[name.FullCheck] too long")
 	}
 	if strings.Count(full, ".") != 1 {
-		return errors.New("[name.FullCheck] fullname's format must be group.name")
+		return errors.New("[name.FullCheck] fullname's format must be namespace.app")
 	}
 	strs := strings.Split(full, ".")
 	if e := SingleCheck(strs[0], true); e != nil {
-		//group can use dash
+		//namespace can use dash
 		return e
 	}
 	if e := SingleCheck(strs[1], false); e != nil {
-		//name can't use dash
+		//app can't use dash
 		return e
 	}
 	return nil

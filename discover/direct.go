@@ -18,9 +18,9 @@ type DirectD struct {
 }
 
 // addr can be host/ipv4/ipv6
-func NewDirectDiscover(targetappgroup, targetappname, addr string, crpcport, cgrpcport, webport int) DI {
+func NewDirectDiscover(targetproject, targetgroup, targetapp, addr string, crpcport, cgrpcport, webport int) DI {
 	return &DirectD{
-		app:       targetappgroup + "." + targetappname,
+		app:       targetproject + "-" + targetgroup + "." + targetapp,
 		addr:      addr,
 		crpcport:  crpcport,
 		cgrpcport: cgrpcport,

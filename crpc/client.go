@@ -31,11 +31,11 @@ type ClientConfig struct {
 }
 
 type CrpcClient struct {
-	selfapp   string
-	serverapp string //group.name
-	c         *ClientConfig
-	tlsc      *tls.Config
-	instance  *stream.Instance
+	self     string
+	server   string
+	c        *ClientConfig
+	tlsc     *tls.Config
+	instance *stream.Instance
 
 	resolver *resolver.CorelibResolver
 	balancer *corelibBalancer
@@ -46,26 +46,42 @@ type CrpcClient struct {
 }
 
 // if tlsc is not nil,the tls will be actived
-func NewCrpcClient(c *ClientConfig, d discover.DI, selfappgroup, selfappname, serverappgroup, serverappname string, tlsc *tls.Config) (*CrpcClient, error) {
-	serverapp := serverappgroup + "." + serverappname
-	selfapp := selfappgroup + "." + selfappname
-	if e := name.FullCheck(selfapp); e != nil {
+func NewCrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfapp, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*CrpcClient, error) {
+	//pre check
+	if e := name.SingleCheck(selfproject, false); e != nil {
 		return nil, e
 	}
+	if e := name.SingleCheck(selfgroup, false); e != nil {
+		return nil, e
+	}
+	if e := name.SingleCheck(selfapp, false); e != nil {
+		return nil, e
+	}
+	if e := name.SingleCheck(serverproject, false); e != nil {
+		return nil, e
+	}
+	if e := name.SingleCheck(servergroup, false); e != nil {
+		return nil, e
+	}
+	if e := name.SingleCheck(serverapp, false); e != nil {
+		return nil, e
+	}
+	serverfullname := serverproject + "-" + servergroup + "." + serverapp
+	selffullname := selfproject + "-" + selfgroup + "." + selfapp
 	if c == nil {
 		c = &ClientConfig{}
 	}
 	if d == nil {
 		return nil, errors.New("[crpc.client] missing discover")
 	}
-	if !d.CheckApp(serverapp) {
+	if !d.CheckApp(serverfullname) {
 		return nil, errors.New("[crpc.client] discover's target app not match")
 	}
 	client := &CrpcClient{
-		selfapp:   selfapp,
-		serverapp: serverapp,
-		c:         c,
-		tlsc:      tlsc,
+		self:   selffullname,
+		server: serverfullname,
+		c:      c,
+		tlsc:   tlsc,
 
 		discover: d,
 
@@ -125,7 +141,7 @@ func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 	} else {
 		addr = "tcp://" + server.addr
 	}
-	if !c.instance.StartClient(addr, common.Str2byte(c.serverapp), c.tlsc) {
+	if !c.instance.StartClient(addr, common.Str2byte(c.server), c.tlsc) {
 		go c.start(server, true)
 	}
 }
@@ -144,7 +160,7 @@ func (c *CrpcClient) onlinefunc(p *stream.Peer) bool {
 	p.SetData(unsafe.Pointer(server))
 	server.setpeer(p)
 	c.balancer.RebuildPicker(true)
-	log.Info(nil, "[crpc.client] online", map[string]interface{}{"sname": c.serverapp, "sip": p.GetRemoteAddr()})
+	log.Info(nil, "[crpc.client] online", map[string]interface{}{"sname": c.server, "sip": p.GetRemoteAddr()})
 	return true
 }
 
@@ -153,7 +169,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
-		log.Error(nil, "[crpc.client] userdata format wrong", map[string]interface{}{"sname": c.serverapp, "sip": p.GetRemoteAddr()})
+		log.Error(nil, "[crpc.client] userdata format wrong", map[string]interface{}{"sname": c.server, "sip": p.GetRemoteAddr()})
 		return
 	}
 	server.lker.Lock()
@@ -180,7 +196,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 
 func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
-	log.Info(nil, "[crpc.client] offline", map[string]interface{}{"sname": c.serverapp, "sip": p.GetRemoteAddr()})
+	log.Info(nil, "[crpc.client] offline", map[string]interface{}{"sname": c.server, "sip": p.GetRemoteAddr()})
 	server.setpeer(nil)
 	c.balancer.RebuildPicker(false)
 	server.lker.Lock()
@@ -207,12 +223,12 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 	}
 	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
 	if traceid == "" {
-		ctx = log.InitTrace(ctx, "", c.selfapp, host.Hostip, "unknown", "unknown", 0)
+		ctx = log.InitTrace(ctx, "", c.self, host.Hostip, "unknown", "unknown", 0)
 		traceid, _, _, selfmethod, selfpath, selfdeep = log.GetTrace(ctx)
 	}
 	msg.Tracedata = map[string]string{
 		"TraceID":      traceid,
-		"SourceApp":    c.selfapp,
+		"SourceApp":    c.self,
 		"SourceMethod": selfmethod,
 		"SourcePath":   selfpath,
 		"Deep":         strconv.Itoa(selfdeep),
@@ -236,9 +252,9 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		if e = server.sendmessage(ctx, r); e != nil {
 			done()
 			end := time.Now()
-			log.Error(ctx, "[crpc.client] send message failed", map[string]interface{}{"sname": c.serverapp, "sip": server.addr, "path": path, "error": e})
-			log.Trace(ctx, log.CLIENT, c.serverapp, server.addr, "CRPC", path, &start, &end, e)
-			monitor.CrpcClientMonitor(c.serverapp, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
+			log.Error(ctx, "[crpc.client] send message failed", map[string]interface{}{"sname": c.server, "sip": server.addr, "path": path, "error": e})
+			log.Trace(ctx, log.CLIENT, c.server, server.addr, "CRPC", path, &start, &end, e)
+			monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 			if cerror.Equal(e, cerror.ErrClosed) {
 				continue
 			}
@@ -248,8 +264,8 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		case <-r.finish:
 			done()
 			end := time.Now()
-			log.Trace(ctx, log.CLIENT, c.serverapp, server.addr, "CRPC", path, &start, &end, r.err)
-			monitor.CrpcClientMonitor(c.serverapp, "CRPC", path, r.err, uint64(end.UnixNano()-start.UnixNano()))
+			log.Trace(ctx, log.CLIENT, c.server, server.addr, "CRPC", path, &start, &end, r.err)
+			monitor.CrpcClientMonitor(c.server, "CRPC", path, r.err, uint64(end.UnixNano()-start.UnixNano()))
 			if r.err != nil {
 				if cerror.Equal(r.err, cerror.ErrServerClosing) {
 					server.closing = true
@@ -286,8 +302,8 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 				e = cerror.ConvertStdError(ctx.Err())
 			}
 			end := time.Now()
-			log.Trace(ctx, log.CLIENT, c.serverapp, server.addr, "CRPC", path, &start, &end, e)
-			monitor.CrpcClientMonitor(c.serverapp, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
+			log.Trace(ctx, log.CLIENT, c.server, server.addr, "CRPC", path, &start, &end, e)
+			monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 	}

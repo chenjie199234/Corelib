@@ -280,7 +280,7 @@ func (r *router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 			} else {
 				r.srcPermissionHandler(resp, req)
 			}
-		} else if fileinfo, e := file.Stat(); e != nil || fileinfo.IsDir() {
+		} else if fileinfo, e := file.Stat(); e != nil || !fileinfo.Mode().IsRegular() {
 			r.notFoundHandler(resp, req)
 			file.Close()
 		} else {

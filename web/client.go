@@ -55,11 +55,11 @@ func (c *ClientConfig) validate() {
 }
 
 type WebClient struct {
-	selfapp   string
-	serverapp string
-	c         *ClientConfig
-	tlsc      *tls.Config
-	client    *http.Client
+	self   string
+	server string
+	c      *ClientConfig
+	tlsc   *tls.Config
+	client *http.Client
 
 	resolver *resolver.CorelibResolver
 	balancer *corelibBalancer
@@ -69,19 +69,35 @@ type WebClient struct {
 }
 
 // if tlsc is not nil,the tls will be actived
-func NewWebClient(c *ClientConfig, d discover.DI, selfappgroup, selfappname, serverappgroup, serverappname string, tlsc *tls.Config) (*WebClient, error) {
-	serverapp := serverappgroup + "." + serverappname
-	selfapp := selfappgroup + "." + selfappname
-	if e := name.FullCheck(selfapp); e != nil {
+func NewWebClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfapp, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*WebClient, error) {
+	//pre check
+	if e := name.SingleCheck(selfproject, false); e != nil {
 		return nil, e
 	}
+	if e := name.SingleCheck(selfgroup, false); e != nil {
+		return nil, e
+	}
+	if e := name.SingleCheck(selfapp, false); e != nil {
+		return nil, e
+	}
+	if e := name.SingleCheck(serverproject, false); e != nil {
+		return nil, e
+	}
+	if e := name.SingleCheck(servergroup, false); e != nil {
+		return nil, e
+	}
+	if e := name.SingleCheck(serverapp, false); e != nil {
+		return nil, e
+	}
+	serverfullname := serverproject + "-" + servergroup + "." + serverapp
+	selffullname := selfproject + "-" + selfgroup + "." + selfapp
 	if c == nil {
 		c = &ClientConfig{}
 	}
 	if d == nil {
 		return nil, errors.New("[web.client] missing discover")
 	}
-	if !d.CheckApp(serverapp) {
+	if !d.CheckApp(serverfullname) {
 		return nil, errors.New("[web.client] discover's target app not match")
 	}
 	c.validate()
@@ -102,10 +118,10 @@ func NewWebClient(c *ClientConfig, d discover.DI, selfappgroup, selfappname, ser
 		transport.DisableKeepAlives = true
 	}
 	client := &WebClient{
-		selfapp:   selfapp,
-		serverapp: serverapp,
-		c:         c,
-		tlsc:      tlsc,
+		self:   selffullname,
+		server: serverfullname,
+		c:      c,
+		tlsc:   tlsc,
 		client: &http.Client{
 			Transport: transport,
 			Timeout:   c.GlobalTimeout,
@@ -195,7 +211,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	if header == nil {
 		header = make(http.Header)
 	}
-	header.Set("Core-Target", c.serverapp)
+	header.Set("Core-Target", c.server)
 	if len(metadata) != 0 {
 		d, _ := json.Marshal(metadata)
 		header.Set("Core-Metadata", common.Byte2str(d))
@@ -203,12 +219,12 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 
 	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
 	if traceid == "" {
-		ctx = log.InitTrace(ctx, "", c.selfapp, host.Hostip, "unknown", "unknown", 0)
+		ctx = log.InitTrace(ctx, "", c.self, host.Hostip, "unknown", "unknown", 0)
 		traceid, _, _, selfmethod, selfpath, selfdeep = log.GetTrace(ctx)
 	}
 	tracedata, _ := json.Marshal(map[string]string{
 		"TraceID":      traceid,
-		"SourceApp":    c.selfapp,
+		"SourceApp":    c.self,
 		"SourceMethod": selfmethod,
 		"SourcePath":   selfpath,
 		"Deep":         strconv.Itoa(selfdeep),
@@ -252,8 +268,8 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		end := time.Now()
 		if e != nil {
 			e = cerror.ConvertStdError(e.(*url.Error).Unwrap())
-			log.Trace(ctx, log.CLIENT, c.serverapp, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
-			monitor.WebClientMonitor(c.serverapp, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
+			log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
+			monitor.WebClientMonitor(c.server, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
 		if resp.StatusCode/100 != 2 {
@@ -261,8 +277,8 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			resp.Body.Close()
 			if e != nil {
 				e = cerror.ConvertStdError(e)
-				log.Trace(ctx, log.CLIENT, c.serverapp, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
-				monitor.WebClientMonitor(c.serverapp, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
+				log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
+				monitor.WebClientMonitor(c.server, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 				return nil, e
 			}
 			if len(respbody) == 0 {
@@ -273,16 +289,16 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				e = tmpe
 			}
 			if resp.StatusCode == int(cerror.ErrServerClosing.Httpcode) && cerror.Equal(e, cerror.ErrServerClosing) {
-				log.Trace(ctx, log.CLIENT, c.serverapp, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, cerror.ErrServerClosing)
-				monitor.WebClientMonitor(c.serverapp, method, path, cerror.ErrServerClosing, uint64(end.UnixNano()-start.UnixNano()))
+				log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, cerror.ErrServerClosing)
+				monitor.WebClientMonitor(c.server, method, path, cerror.ErrServerClosing, uint64(end.UnixNano()-start.UnixNano()))
 				continue
 			}
-			log.Trace(ctx, log.CLIENT, c.serverapp, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
-			monitor.WebClientMonitor(c.serverapp, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
+			log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
+			monitor.WebClientMonitor(c.server, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
-		log.Trace(ctx, log.CLIENT, c.serverapp, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, nil)
-		monitor.WebClientMonitor(c.serverapp, method, path, nil, uint64(end.UnixNano()-start.UnixNano()))
+		log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, nil)
+		monitor.WebClientMonitor(c.server, method, path, nil, uint64(end.UnixNano()-start.UnixNano()))
 		return resp, nil
 	}
 }

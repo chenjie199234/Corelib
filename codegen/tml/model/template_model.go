@@ -7,35 +7,49 @@ import (
 
 const txt = `package model
 
-import "os"
+import (
+	"os"
+
+	"github.com/chenjie199234/Corelib/util/name"
+)
 
 // Warning!!!!!!!!!!!
 // This file is readonly!
 // Don't modify this file!
 
 const pkg = "{{.PackageName}}"
-const Name = "{{.ProjectName}}"
+const Name = "{{.AppName}}"
 
 var Group = os.Getenv("GROUP")
+var Project = os.Getenv("PROJECT")
 
 func init() {
 	if Group == "" || Group == "<GROUP>" {
 		panic("missing GROUP env")
 	}
+	if name.SingleCheck(Group, false) != nil {
+		panic("env GROUP format wrong")
+	}
+	if Project == "" || Project == "<PROJECT>" {
+		panic("missing PROJECT env")
+	}
+	if name.SingleCheck(Project, false) != nil {
+		panic("env PROJECT format wrong")
+	}
 }`
 
 type data struct {
 	PackageName string
-	ProjectName string
+	AppName     string
 }
 
-func CreatePathAndFile(packagename, projectname string) {
+func CreatePathAndFile(packagename, appname string) {
 	if e := os.MkdirAll("./model/", 0755); e != nil {
 		panic("mkdir ./model/ error: " + e.Error())
 	}
 	tmp := &data{
 		PackageName: packagename,
-		ProjectName: projectname,
+		AppName:     appname,
 	}
 	modeltemplate, e := template.New("./model/model.go").Parse(txt)
 	if e != nil {

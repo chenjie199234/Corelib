@@ -30,12 +30,12 @@ type DnsD struct {
 
 // interval min is 1s,default is 10s
 // if silent is true,means no logs
-func NewDNSDiscover(targetappgroup, targetappname, host string, interval time.Duration, crpcport, cgrpcport, webport int) DI {
+func NewDNSDiscover(targetproject, targetgroup, targetapp, host string, interval time.Duration, crpcport, cgrpcport, webport int) DI {
 	if interval < time.Second {
 		interval = time.Second * 10
 	}
 	d := &DnsD{
-		app:       targetappgroup + "." + targetappname,
+		app:       targetproject + "-" + targetgroup + "." + targetapp,
 		host:      host,
 		crpcport:  crpcport,
 		cgrpcport: cgrpcport,

@@ -54,11 +54,11 @@ func (c *ClientConfig) validate() {
 }
 
 type CGrpcClient struct {
-	selfapp   string
-	serverapp string //group.name
-	c         *ClientConfig
-	tlsc      *tls.Config
-	conn      *grpc.ClientConn
+	self   string
+	server string
+	c      *ClientConfig
+	tlsc   *tls.Config
+	conn   *grpc.ClientConn
 
 	resolver *resolver.CorelibResolver
 	balancer *corelibBalancer
@@ -68,29 +68,45 @@ type CGrpcClient struct {
 }
 
 // if tlsc is not nil,the tls will be actived
-func NewCGrpcClient(c *ClientConfig, d discover.DI, selfappgroup, selfappname, serverappgroup, serverappname string, tlsc *tls.Config) (*CGrpcClient, error) {
-	serverapp := serverappgroup + "." + serverappname
-	selfapp := selfappgroup + "." + selfappname
-	if e := name.FullCheck(selfapp); e != nil {
+func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfapp, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*CGrpcClient, error) {
+	//pre check
+	if e := name.SingleCheck(selfproject, false); e != nil {
 		return nil, e
 	}
+	if e := name.SingleCheck(selfgroup, false); e != nil {
+		return nil, e
+	}
+	if e := name.SingleCheck(selfapp, false); e != nil {
+		return nil, e
+	}
+	if e := name.SingleCheck(serverproject, false); e != nil {
+		return nil, e
+	}
+	if e := name.SingleCheck(servergroup, false); e != nil {
+		return nil, e
+	}
+	if e := name.SingleCheck(serverapp, false); e != nil {
+		return nil, e
+	}
+	serverfullname := serverproject + "-" + servergroup + "." + serverapp
+	selffullname := selfproject + "-" + selfgroup + "." + selfapp
 	if c == nil {
 		c = &ClientConfig{}
 	}
 	if d == nil {
 		return nil, errors.New("[cgrpc.client] missing discover in config")
 	}
-	if !d.CheckApp(serverapp) {
+	if !d.CheckApp(serverfullname) {
 		return nil, errors.New("[cgrpc.client] discover's target app not match")
 	}
 	c.validate()
 	client := &CGrpcClient{
-		selfapp:   selfapp,
-		serverapp: serverapp,
-		c:         c,
-		tlsc:      tlsc,
-		discover:  d,
-		stop:      graceful.New(),
+		self:     selffullname,
+		server:   serverfullname,
+		c:        c,
+		tlsc:     tlsc,
+		discover: d,
+		stop:     graceful.New(),
 	}
 	opts := make([]grpc.DialOption, 0, 10)
 	opts = append(opts, grpc.WithDisableRetry())
@@ -165,11 +181,11 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 	}
 	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
 	if traceid == "" {
-		ctx = log.InitTrace(ctx, "", c.selfapp, host.Hostip, "unknown", "unknown", 0)
+		ctx = log.InitTrace(ctx, "", c.self, host.Hostip, "unknown", "unknown", 0)
 		traceid, _, _, selfmethod, selfpath, selfdeep = log.GetTrace(ctx)
 	}
-	md.Set("Core-Tracedata", traceid, c.selfapp, selfmethod, selfpath, strconv.Itoa(selfdeep))
-	md.Set("Core-Target", c.serverapp)
+	md.Set("Core-Tracedata", traceid, c.self, selfmethod, selfpath, strconv.Itoa(selfdeep))
+	md.Set("Core-Target", c.server)
 	ctx = gmetadata.NewOutgoingContext(ctx, md)
 	for {
 		start := time.Now()
@@ -180,8 +196,8 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 			//pick error or create stream unretryable error,req doesn't send
 		} else {
 			//req send,recv error
-			log.Trace(ctx, log.CLIENT, c.serverapp, p.Addr.String(), "GRPC", path, &start, &end, e)
-			monitor.GrpcClientMonitor(c.serverapp, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
+			log.Trace(ctx, log.CLIENT, c.server, p.Addr.String(), "GRPC", path, &start, &end, e)
+			monitor.GrpcClientMonitor(c.server, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 		}
 		if cerror.Equal(e, cerror.ErrServerClosing) {
 			continue
