@@ -34,7 +34,7 @@ func StartCGrpcServer() {
 		Certs:          c.Certs,
 	}
 	var e error
-	if s, e = cgrpc.NewCGrpcServer(cgrpcc, model.Group, model.Name); e != nil {
+	if s, e = cgrpc.NewCGrpcServer(cgrpcc, model.Project, model.Group, model.Name); e != nil {
 		log.Error(nil, "[xgrpc] new server failed", map[string]interface{}{"error": e})
 		return
 	}

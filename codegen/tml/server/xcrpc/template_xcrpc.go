@@ -34,7 +34,7 @@ func StartCrpcServer() {
 		Certs:          c.Certs,
 	}
 	var e error
-	if s, e = crpc.NewCrpcServer(crpcc, model.Group, model.Name); e != nil {
+	if s, e = crpc.NewCrpcServer(crpcc, model.Project, model.Group, model.Name); e != nil {
 		log.Error(nil, "[xcrpc] new server failed", map[string]interface{}{"error": e})
 		return
 	}

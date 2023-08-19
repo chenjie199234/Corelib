@@ -48,7 +48,7 @@ func StartWebServer() {
 		}
 	}
 	var e error
-	if s, e = web.NewWebServer(webc, model.Group, model.Name); e != nil {
+	if s, e = web.NewWebServer(webc, model.Project, model.Group, model.Name); e != nil {
 		log.Error(nil, "[xweb] new server failed", map[string]interface{}{"error": e})
 		return
 	}
