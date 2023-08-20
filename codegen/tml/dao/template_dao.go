@@ -29,7 +29,7 @@ func NewApi() error {
 	_ = e //avoid unuse
 
 	//init discover for example server
-	//examplediscover := discover.NewDNSDiscover("exampleproject", "examplegroup", "examplename", "examplename-headless.examplegroup", time.Second*10, 9000, 10000, 8000)
+	//examplediscover := discover.NewDNSDiscover("exampleproject", "examplegroup", "examplename", "exampleproject-examplegroup.examplename-headless", time.Second*10, 9000, 10000, 8000)
 
 	cgrpcc := GetCGrpcClientConfig()
 	_ = cgrpcc //avoid unuse
