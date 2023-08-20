@@ -32,16 +32,17 @@ metadata:
     app: {{.AppName}}
 spec:
   replicas: 2
-  revisionHistoryLimit: 5
   minReadySeconds: 5
+  progressDeadlineSeconds: 300
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: {{.AppName}}
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 0
-  selector:
-    matchLabels:
-      app: {{.AppName}}
   template:
     metadata:
       labels:
@@ -51,6 +52,16 @@ spec:
         - name: {{.AppName}}
           image: <IMAGE>
           imagePullPolicy: IfNotPresent
+          ports:
+            - name: web
+              protocol: TCP
+              containerPort: 8000
+            - name: crpc
+              protocol: TCP
+              containerPort: 9000
+            - name: grpc
+              protocol: TCP
+              containerPort: 10000
           resources:
             limits:
               memory: 4096Mi
@@ -99,7 +110,7 @@ spec:
               value: <PERMISSION_SERVICE_WEB_HOST>
             - name: PERMISSION_SERVICE_WEB_PORT
               value: <PERMISSION_SERVICE_WEB_PORT>
-          livenessProbe:
+          startupProbe:
             tcpSocket:
               port: 8000
             initialDelaySeconds: 5
@@ -107,7 +118,7 @@ spec:
             periodSeconds: 1
             successThreshold: 1
             failureThreshold: 3
-          readinessProbe:
+          livenessProbe:
             tcpSocket:
               port: 8000
             initialDelaySeconds: 5
@@ -118,11 +129,13 @@ spec:
       imagePullSecrets:
         - name: <PROJECT>-<GROUP>-secret
 ---
-apiVersion: autoscaling/v2beta2
+apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {{.AppName}}-hpa
   namespace: <PROJECT>-<GROUP>
+  labels:
+    app: {{.AppName}}
 spec:
   scaleTargetRef:   
     apiVersion: apps/v1
@@ -131,18 +144,18 @@ spec:
   maxReplicas: 10
   minReplicas: 2
   metrics:
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: AverageValue
-        averageValue: 3500Mi
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: AverageValue
-        averageValue: 3400m{{ if .NeedService }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: AverageValue
+          averageValue: 3500Mi
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: AverageValue
+          averageValue: 3400m{{ if .NeedService }}
 ---
 apiVersion: v1
 kind: Service
@@ -154,6 +167,13 @@ metadata:
 spec:
   type: ClusterIP
   clusterIP: None
+  ports:
+    - name: crpc
+      protocol: TCP
+      port: 9000
+    - name: grpc
+      protocol: TCP
+      port: 10000
   selector:
     app: {{.AppName}}
 ---
@@ -167,9 +187,9 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - name: web
-    protocol: TCP
-    port: 8000
+    - name: web
+      protocol: TCP
+      port: 8000
   selector:
     app: {{.AppName}}{{ end }}{{ if .NeedIngress}}
 ---
@@ -178,17 +198,22 @@ kind: Ingress
 metadata:
   name: {{.AppName}}-ingress
   namespace: <PROJECT>-<GROUP>
+  labels:
+    app: {{.AppName}}
   annotations:
     nginx.ingress.kubernetes.io/use-regex: 'true'
 spec:
   rules: 
-  - host: <HOST>
-    http:
-      paths:
-      - path: /{{.AppName}}.*
-        backend:
-          serviceName: {{.AppName}}
-          servicePort: 8000{{ end }}`
+    - host: <HOST>
+      http:
+        paths:
+          - path: /{{.AppName}}.*
+            pathType: Prefix
+            backend:
+              service:
+                name: {{.AppName}}
+                port:
+                  number: 8000{{ end }}`
 
 type data struct {
 	AppName     string
