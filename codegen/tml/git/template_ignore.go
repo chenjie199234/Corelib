@@ -45,14 +45,12 @@ const txt = `*
 !AppConfig.json
 !cmd.sh
 !cmd.bat
-!probe.sh
 !deployment.yaml
 !Dockerfile
 !go.mod
 !main.go
 !README.md
-!SourceConfig.json
-!package.json`
+!SourceConfig.json`
 
 func CreatePathAndFile() {
 	file, e := os.OpenFile("./.gitignore", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
