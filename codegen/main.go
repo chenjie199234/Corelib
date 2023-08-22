@@ -24,7 +24,6 @@ import (
 	"github.com/chenjie199234/Corelib/codegen/tml/mainfile"
 	"github.com/chenjie199234/Corelib/codegen/tml/model"
 	submodel "github.com/chenjie199234/Corelib/codegen/tml/model/sub"
-	"github.com/chenjie199234/Corelib/codegen/tml/npm"
 	"github.com/chenjie199234/Corelib/codegen/tml/readme"
 	"github.com/chenjie199234/Corelib/codegen/tml/server/xcrpc"
 	"github.com/chenjie199234/Corelib/codegen/tml/server/xgrpc"
@@ -134,7 +133,6 @@ func createBaseProject() {
 
 	git.CreatePathAndFile()
 
-	npm.CreatePathAndFile()
 	fmt.Println("base app create success!")
 }
 func checkBaseProject() {
