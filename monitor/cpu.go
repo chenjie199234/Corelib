@@ -133,7 +133,7 @@ func gopsutilCPU() {
 	if LastUsageCPU > MaxUsageCPU {
 		MaxUsageCPU = LastUsageCPU
 	}
-	AverageUsageCPU = 1 - (idle-cpuIdleStart)/(idle-cpuTotalStart)
+	AverageUsageCPU = 1 - (idle-cpuIdleStart)/(total-cpuTotalStart)
 	cpuTotalLast = total
 	cpuIdleLast = idle
 }
