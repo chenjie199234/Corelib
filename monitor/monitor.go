@@ -58,8 +58,8 @@ func init() {
 			buf.AppendUint64(threadnum)
 			buf.AppendByte('\n')
 
-			buf.AppendString("# HELP cpu")
-			buf.AppendString("# TYPE cpu gauge")
+			buf.AppendString("# HELP cpu\n")
+			buf.AppendString("# TYPE cpu gauge\n")
 			//cur
 			buf.AppendString("cpu{id=\"cur\"} ")
 			buf.AppendFloat64(lastcpu)
@@ -73,8 +73,8 @@ func init() {
 			buf.AppendFloat64(averagecpu)
 			buf.AppendByte('\n')
 
-			buf.AppendString("# HELP mem")
-			buf.AppendString("# TYPE mem gauge")
+			buf.AppendString("# HELP mem\n")
+			buf.AppendString("# TYPE mem gauge\n")
 			//total
 			buf.AppendString("mem{id=\"total\"} ")
 			buf.AppendUint64(totalmem)
