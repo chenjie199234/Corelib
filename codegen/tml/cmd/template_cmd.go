@@ -249,23 +249,22 @@ goto :end
 goto :end
 
 :help
-	echo cmd.bat — every thing you need
+	echo cmd.bat - every thing you need
 	echo           please install git
 	echo           please install golang(1.18+)
 	echo           please install protoc           (github.com/protocolbuffers/protobuf)
 	echo           please install protoc-gen-go    (github.com/protocolbuffers/protobuf-go)
 	echo           please install codegen          (github.com/chenjie199234/Corelib)
-	echo
+	echo.
 	echo Usage:
-	echo    ./cmd.bat <option^>
-	echo
+	echo    ./cmd.bat ^<option^>
+	echo.
 	echo Options:
 	echo    pb                        Generate the proto in this program.
-	echo    sub <sub service name^>    Create a new sub service.
+	echo    sub ^<sub service name^>    Create a new sub service.
 	echo    kube                      Update kubernetes config.
 	echo    html                      Create html template.
 	echo    h/-h/help/-help/--help    Show this message.
-
 :end
 pause
 exit /b 0`
