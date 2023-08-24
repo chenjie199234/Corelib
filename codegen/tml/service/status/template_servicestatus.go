@@ -16,11 +16,12 @@ import (
 	statusdao "{{.}}/dao/status"
 	// "{{.}}/ecode"
 
+	"github.com/chenjie199234/Corelib/monitor"
+	"github.com/chenjie199234/Corelib/util/graceful"
 	// "github.com/chenjie199234/Corelib/cgrpc"
 	// "github.com/chenjie199234/Corelib/crpc"
 	// "github.com/chenjie199234/Corelib/log"
 	// "github.com/chenjie199234/Corelib/web"
-	"github.com/chenjie199234/Corelib/util/graceful"
 )
 
 // Service subservice for status business
@@ -51,7 +52,19 @@ func (s *Service) Ping(ctx context.Context, in *api.Pingreq) (*api.Pingresp, err
 	//if _, ok := ctx.(*web.Context); ok {
 	//        log.Info("this is a web call", nil)
 	//}
-	return &api.Pingresp{ClientTimestamp: in.Timestamp, ServerTimestamp: time.Now().UnixNano()}, nil
+	totalmem, lastmem, maxmem := monitor.GetMEM()
+	lastcpu, maxcpu, avgcpu := monitor.GetCPU()
+	return &api.Pingresp{
+		ClientTimestamp: in.Timestamp,
+		ServerTimestamp: time.Now().UnixNano(),
+		TotalMem:        totalmem,
+		CurMemUsage:     lastmem,
+		MaxMemUsage:     maxmem,
+		CpuNum:          monitor.CPUNum,
+		CurCpuUsage:     lastcpu,
+		AvgCpuUsage:     avgcpu,
+		MaxCpuUsage:     maxcpu,
+	}, nil
 }
 
 // Stop -

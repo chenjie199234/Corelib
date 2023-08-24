@@ -2,128 +2,121 @@ package monitor
 
 import (
 	"os"
+	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 var memlker sync.Mutex
 
-var TotalMEM int64 //bytes
-
-var cgroupMEM bool
-
-var MaxUsageMEM float64
-var LastUsageMEM float64
+var TotalMem uint64     //bytes
+var MaxUsageMEM uint64  //bytes
+var LastUsageMEM uint64 //bytes
 
 func initmem() {
-	cgroupTotalstr, e := os.ReadFile("/sys/fs/cgroup/memory/memory.limit_in_bytes")
-	if e != nil {
-		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.limit_in_bytes failed", map[string]interface{}{"error": e})
-		return
-	}
-	if cgroupTotalstr[len(cgroupTotalstr)-1] == 10 {
-		cgroupTotalstr = cgroupTotalstr[:len(cgroupTotalstr)-1]
-	}
-	cgrouptotal, e := strconv.ParseInt(common.Byte2str(cgroupTotalstr), 10, 64)
-	if e != nil {
-		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.limit_in_bytes data format wrong", map[string]interface{}{"limit_in_bytes": cgroupTotalstr})
-		return
-	}
-	physicstr, e := os.ReadFile("/proc/meminfo")
-	if e != nil {
-		log.Error(nil, "[monitor.mem] read /proc/meminfo failed", map[string]interface{}{"error": e})
-		return
-	}
-	var physictotal int64
-	for _, line := range strings.Split(common.Byte2str(physicstr), "\n") {
-		if !strings.HasPrefix(line, "MemTotal:") {
-			continue
-		}
-		tmp := strings.TrimSpace(strings.Split(line, ":")[1])
-		tmp = tmp[:len(tmp)-3]
-		physictotal, e = strconv.ParseInt(tmp, 10, 64)
-		if e != nil {
-			log.Error(nil, "[monitor.mem] read /proc/meminfo data format wrong", map[string]interface{}{"MemTotal": line})
-			return
-		}
-		physictotal *= 1024
-		break
-	}
-	if cgrouptotal > physictotal {
-		TotalMEM = physictotal
-	} else {
-		TotalMEM = cgrouptotal
-		cgroupMEM = true
-	}
+	cgroup := getTotalMEM()
 	go func() {
 		tker := time.NewTicker(time.Millisecond * 100)
 		for {
 			<-tker.C
 			memlker.Lock()
-			if cgroupMEM {
-				memMetricCGROUP()
+			if cgroup {
+				cgroupMEM()
 			} else {
-				memMetricPHYSIC()
+				gopsutilMEM()
 			}
 			memlker.Unlock()
 		}
 	}()
 }
 
-func memCollect() (float64, float64) {
+func memCollect() (uint64, uint64, uint64) {
 	memlker.Lock()
 	defer func() {
-		MaxUsageMEM = 0
+		MaxUsageMEM = -MaxUsageMEM
 		memlker.Unlock()
 	}()
-	return LastUsageMEM, MaxUsageMEM
+	if MaxUsageMEM < 0 {
+		return TotalMem, LastUsageMEM, -MaxUsageMEM
+	}
+	return TotalMem, LastUsageMEM, MaxUsageMEM
 }
-func memMetricCGROUP() {
+
+func GetMEM() (uint64, uint64, uint64) {
+	memlker.Lock()
+	defer memlker.Unlock()
+	if MaxUsageMEM < 0 {
+		return TotalMem, LastUsageMEM, -MaxUsageMEM
+	}
+	return TotalMem, LastUsageMEM, MaxUsageMEM
+}
+
+func getTotalMEM() (cgroup bool) {
+	defer func() {
+		if TotalMem == 0 {
+			memory, _ := mem.VirtualMemory()
+			TotalMem = memory.Total
+		}
+	}()
+	if runtime.GOOS != "linux" {
+		return false
+	}
+	limitstr, e := os.ReadFile("/sys/fs/cgroup/memory/memory.limit_in_bytes")
+	if e != nil {
+		if !os.IsNotExist(e) {
+			panic("[monitor.mem] read /sys/fs/cgroup/memory/memory.limit_in_bytes error: " + e.Error())
+		}
+		return false
+	}
+	//drop '/n' if exist
+	if limitstr[len(limitstr)-1] == 10 {
+		limitstr = limitstr[:len(limitstr)-1]
+	}
+	limit, e := strconv.ParseUint(common.Byte2str(limitstr), 10, 64)
+	if e != nil {
+		panic("[monitor.mem] read /sys/fs/cgroup/memory/memory.limit_in_bytes data format wrong:" + e.Error())
+	}
+	memory, e := mem.VirtualMemory()
+	if e != nil {
+		panic("[monitor.mem] get pc memory info error: " + e.Error())
+	}
+	if memory.Total > limit && limit != 0 {
+		TotalMem = limit
+		return true
+	}
+	TotalMem = memory.Total
+	return false
+}
+
+func cgroupMEM() {
 	usagestr, e := os.ReadFile("/sys/fs/cgroup/memory/memory.usage_in_bytes")
 	if e != nil {
 		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes failed", map[string]interface{}{"error": e})
 		return
 	}
+	//drop \n
 	if usagestr[len(usagestr)-1] == 10 {
-		//drop \n
 		usagestr = usagestr[:len(usagestr)-1]
 	}
-	usage, e := strconv.ParseInt(common.Byte2str(usagestr), 10, 64)
+	usage, e := strconv.ParseUint(common.Byte2str(usagestr), 10, 64)
 	if e != nil {
 		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes data format wrong", map[string]interface{}{"usage_in_bytes": usagestr})
 		return
 	}
-	LastUsageMEM = float64(usage) / float64(TotalMEM)
+	LastUsageMEM = usage
 	if LastUsageMEM > MaxUsageMEM {
 		MaxUsageMEM = LastUsageMEM
 	}
 }
-func memMetricPHYSIC() {
-	physicstr, e := os.ReadFile("/proc/meminfo")
-	if e != nil {
-		log.Error(nil, "[monitor.mem] read /proc/meminfo failed", map[string]interface{}{"error": e})
-		return
-	}
-	for _, line := range strings.Split(common.Byte2str(physicstr), "\n") {
-		if !strings.HasPrefix(line, "MemAvailable:") {
-			continue
-		}
-		tmp := strings.TrimSpace(strings.Split(line, ":")[1])
-		tmp = tmp[:len(tmp)-3]
-		physicavailable, e := strconv.ParseInt(tmp, 10, 64)
-		if e != nil {
-			log.Error(nil, "[monitor.mem] read /proc/meminfo data format wrong", map[string]interface{}{"MemAvailable": line})
-			return
-		}
-		LastUsageMEM = float64(physicavailable) / float64(TotalMEM)
-		if LastUsageMEM > MaxUsageMEM {
-			MaxUsageMEM = LastUsageMEM
-		}
-		break
+func gopsutilMEM() {
+	memory, _ := mem.VirtualMemory()
+	LastUsageMEM = memory.Used
+	if LastUsageMEM > MaxUsageMEM {
+		MaxUsageMEM = LastUsageMEM
 	}
 }

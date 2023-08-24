@@ -1,20 +1,22 @@
 package monitor
 
 import (
-	"encoding/json"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/pool"
-	"github.com/chenjie199234/Corelib/util/host"
 )
 
 func init() {
+	if runtime.GOOS != "linux" && runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
+		panic("[monitor] unsupported GOOS")
+	}
 	if str := os.Getenv("MONITOR"); str == "" || str == "<MONITOR>" {
 		log.Warning(nil, "[monitor] env MONITOR missing,monitor closed", nil)
 		return
@@ -33,7 +35,7 @@ func init() {
 		http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
 			routinenum, threadnum, gctime := golangCollect()
 			lastcpu, maxcpu, averagecpu := cpuCollect()
-			lastmem, maxmem := memCollect()
+			totalmem, lastmem, maxmem := memCollect()
 			webc, grpcc, crpcc := clientCollect()
 			webs, grpcs, crpcs := serverCollect()
 			buf := pool.GetBuffer()
@@ -73,13 +75,17 @@ func init() {
 
 			buf.AppendString("# HELP mem")
 			buf.AppendString("# TYPE mem gauge")
+			//total
+			buf.AppendString("mem{id=\"total\"} ")
+			buf.AppendUint64(totalmem)
+			buf.AppendByte('\n')
 			//cur
 			buf.AppendString("mem{id=\"cur\"} ")
-			buf.AppendFloat64(lastmem)
+			buf.AppendUint64(lastmem)
 			buf.AppendByte('\n')
 			//max
 			buf.AppendString("mem{id=\"max\"} ")
-			buf.AppendFloat64(maxmem)
+			buf.AppendUint64(maxmem)
 			buf.AppendByte('\n')
 
 			if len(webc) > 0 {
@@ -479,25 +485,6 @@ func init() {
 			}
 			w.Write(buf.Bytes())
 			pool.PutBuffer(buf)
-		})
-		http.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
-			d, _ := json.Marshal(&struct {
-				HostIP   string  `json:"host_ip"`
-				HostName string  `json:"host_name"`
-				CpuNum   float64 `json:"cpu_num"`
-				CpuUsage float64 `json:"cur_usage"`
-				MemTotal uint64  `json:"mem_total"`
-				MemUsage float64 `json:"mem_usage"`
-			}{
-				HostIP:   host.Hostip,
-				HostName: host.Hostname,
-				CpuNum:   CPUNum,
-				CpuUsage: LastUsageCPU,
-				MemTotal: uint64(TotalMEM),
-				MemUsage: LastUsageMEM,
-			})
-			w.Header().Set("Content-Type", "application/json")
-			w.Write(d)
 		})
 		http.ListenAndServe(":6060", nil)
 	}()

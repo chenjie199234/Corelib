@@ -4,59 +4,37 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/shirou/gopsutil/v3/cpu"
 )
 
 var cpulker sync.Mutex
 
-// how many logic cpu we can use
 var CPUNum float64
-
-var cgroupCPU bool
-
 var MaxUsageCPU float64
 var AverageUsageCPU float64
 var LastUsageCPU float64
 
-// physic
-var cpuTotalStart int64
-var cpuTotalLast int64
-var cpuIdleStart int64
-var cpuIdleLast int64
-
-// cgroup
-var cpuUsageStart int64
-var cpuUsageStartTime int64
-var cpuUsageLast int64
-var cpuUsageLastTime int64
-
 func initcpu() {
-	if runtime.GOOS != "linux" {
-		return
-	}
-	getCPUNum()
-	if CPUNum == 0 {
-		return
-	}
-	if cgroupCPU {
-		cpuMetricCGROUP(time.Now().UnixNano())
+	cgroup := getCPUNum()
+	if cgroup {
+		cgroupCPU(time.Now().UnixNano())
 	} else {
-		cpuMetricPHYSIC()
+		gopsutilCPU()
 	}
 	go func() {
 		ticker := time.NewTicker(time.Millisecond * 100)
 		for {
 			t := <-ticker.C
 			cpulker.Lock()
-			if cgroupCPU {
-				cpuMetricCGROUP(t.UnixNano())
+			if cgroup {
+				cgroupCPU(t.UnixNano())
 			} else {
-				cpuMetricPHYSIC()
+				gopsutilCPU()
 			}
 			cpulker.Unlock()
 		}
@@ -66,65 +44,108 @@ func initcpu() {
 func cpuCollect() (float64, float64, float64) {
 	cpulker.Lock()
 	defer func() {
-		MaxUsageCPU = 0
+		MaxUsageCPU = -MaxUsageCPU
 		cpulker.Unlock()
 	}()
-	if cgroupCPU {
-		cpuUsageStart = cpuUsageLast
-		cpuUsageStartTime = cpuUsageLastTime
-	} else {
-		cpuTotalStart = cpuTotalLast
-		cpuIdleStart = cpuIdleLast
+	//cgroup
+	cpuUsageStart = cpuUsageLast
+	cpuUsageStartTime = cpuUsageLastTime
+
+	//gopsutil
+	cpuTotalStart = cpuTotalLast
+	cpuIdleStart = cpuIdleLast
+	if MaxUsageCPU < 0 {
+		return LastUsageCPU, -MaxUsageCPU, AverageUsageCPU
 	}
 	return LastUsageCPU, MaxUsageCPU, AverageUsageCPU
 }
 
-func getCPUNum() {
-	quotastr, e := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_quota_us")
-	if e != nil && !os.IsNotExist(e) {
-		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us failed", map[string]interface{}{"error": e})
-		return
+func GetCPU() (float64, float64, float64) {
+	cpulker.Lock()
+	defer cpulker.Unlock()
+	if MaxUsageCPU < 0 {
+		return LastUsageCPU, -MaxUsageCPU, AverageUsageCPU
 	}
-	if e == nil {
-		if quotastr[len(quotastr)-1] == 10 {
-			quotastr = quotastr[:len(quotastr)-1]
-		}
-		quota, e := strconv.ParseInt(common.Byte2str(quotastr), 10, 64)
-		if e != nil {
-			log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us data format wrong", map[string]interface{}{"cfs_quota_us": quotastr})
-			return
-		}
-		if quota > 0 {
-			cpunumCGROUP(quota)
-			cgroupCPU = true
-			return
-		}
-	}
-	cpunumPHYSIC()
+	return LastUsageCPU, MaxUsageCPU, AverageUsageCPU
 }
 
-func cpunumCGROUP(quota int64) {
+func getCPUNum() (cgroup bool) {
+	defer func() {
+		if CPUNum == 0 {
+			CPUNum = float64(runtime.NumCPU())
+		}
+	}()
+	if runtime.GOOS != "linux" {
+		return false
+	}
+	quotastr, e := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_quota_us")
+	if e != nil {
+		if !os.IsNotExist(e) {
+			panic("[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us error: " + e.Error())
+		}
+		return false
+	}
+	//delete '/n' if exist
+	if quotastr[len(quotastr)-1] == 10 {
+		quotastr = quotastr[:len(quotastr)-1]
+	}
+	quota, e := strconv.ParseInt(common.Byte2str(quotastr), 10, 64)
+	if e != nil {
+		panic("[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us data format wrong: " + e.Error())
+	}
+	if quota <= 0 {
+		return false
+	}
 	periodstr, e := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_period_us")
 	if e != nil {
-		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_period_us failed", map[string]interface{}{"error": e})
-		return
+		panic("[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us success,but read /sys/fs/cgroup/cpu/cpu.cfs_period_us error: " + e.Error())
 	}
+	//delete '/n' if exist
 	if periodstr[len(periodstr)-1] == 10 {
 		periodstr = periodstr[:len(periodstr)-1]
 	}
 	period, e := strconv.ParseInt(common.Byte2str(periodstr), 10, 64)
 	if e != nil {
-		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_period_us data format wrong", map[string]interface{}{"cfs_period_us": periodstr})
-		return
+		panic("[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us success,but read /sys/fs/cgroup/cpu/cpu.cfs_period_us data format wrong: " + e.Error())
 	}
 	CPUNum = float64(quota) / float64(period)
+	return true
 }
 
-func cpunumPHYSIC() {
-	CPUNum = float64(runtime.NumCPU())
+// gopsutil
+var cpuTotalStart float64
+var cpuTotalLast float64
+var cpuIdleStart float64
+var cpuIdleLast float64
+
+func gopsutilCPU() {
+	times, _ := cpu.Times(false)
+	total := times[0].User + times[0].System + times[0].Idle + times[0].Nice + times[0].Iowait + times[0].Irq + times[0].Softirq + times[0].Steal + times[0].Guest + times[0].GuestNice
+	idle := times[0].Idle + times[0].Iowait
+	if cpuTotalStart == 0 {
+		cpuTotalLast = total
+		cpuTotalStart = total
+		cpuIdleLast = idle
+		cpuIdleStart = idle
+		return
+	}
+	LastUsageCPU = 1 - (idle-cpuIdleLast)/(total-cpuTotalLast)
+	if LastUsageCPU > MaxUsageCPU {
+		MaxUsageCPU = LastUsageCPU
+	}
+	AverageUsageCPU = 1 - (idle-cpuIdleStart)/(idle-cpuTotalStart)
+	cpuTotalLast = total
+	cpuIdleLast = idle
 }
 
-func cpuMetricCGROUP(now int64) {
+// cgroup
+var cpuUsageStart int64
+var cpuUsageStartTime int64
+var cpuUsageLast int64
+var cpuUsageLastTime int64
+
+// now: timestamp(nanosecond)
+func cgroupCPU(now int64) {
 	usagestr, e := os.ReadFile("/sys/fs/cgroup/cpu/cpuacct.usage")
 	if e != nil {
 		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage failed", map[string]interface{}{"error": e})
@@ -151,57 +172,4 @@ func cpuMetricCGROUP(now int64) {
 		MaxUsageCPU = LastUsageCPU
 	}
 	AverageUsageCPU = float64(cpuUsageLast-cpuUsageStart) / CPUNum / float64(cpuUsageLastTime-cpuUsageStartTime)
-}
-
-func cpuMetricPHYSIC() {
-	tmpdata, e := os.ReadFile("/proc/stat")
-	if e != nil {
-		log.Error(nil, "[monitor.cpu] read /proc/stat failed", map[string]interface{}{"error": e})
-		return
-	}
-	var line string
-	for _, line = range strings.Split(common.Byte2str(tmpdata), "\n") {
-		if !strings.HasPrefix(line, "cpu ") {
-			continue
-		}
-		for i, c := range line {
-			if c == '0' || c == '1' || c == '2' || c == '3' || c == '4' || c == '5' || c == '6' || c == '7' || c == '8' || c == '9' {
-				line = line[i:]
-				break
-			}
-		}
-		break
-	}
-	pieces := strings.Split(line, " ")
-	tmpTotal := int64(0)
-	tmpIdle := int64(0)
-	for i, piece := range pieces {
-		if len(piece) == 0 {
-			continue
-		}
-		value, e := strconv.ParseInt(piece, 10, 64)
-		if e != nil {
-			log.Error(nil, "[monitor.cpu] /proc/stat data broken", map[string]interface{}{"error": e})
-			return
-		}
-		tmpTotal += value
-		if i == 3 || i == 4 {
-			//idle or iowait
-			tmpIdle += value
-		}
-	}
-	if cpuTotalStart == 0 {
-		cpuTotalLast = tmpTotal
-		cpuIdleLast = tmpIdle
-		cpuTotalStart = tmpTotal
-		cpuIdleStart = tmpIdle
-		return
-	}
-	LastUsageCPU = 1 - float64(tmpIdle-cpuIdleLast)/float64(tmpTotal-cpuTotalLast)
-	if LastUsageCPU > MaxUsageCPU {
-		MaxUsageCPU = LastUsageCPU
-	}
-	AverageUsageCPU = 1 - float64(tmpIdle-cpuIdleStart)/float64(tmpTotal-cpuTotalStart)
-	cpuTotalLast = tmpTotal
-	cpuIdleLast = tmpIdle
 }
