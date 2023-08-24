@@ -336,7 +336,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("respd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
 		g.P("ctx.Write(\"application/x-protobuf\",respd)")
 		g.P("}else{")
-		g.P("respd,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{AllowPartial: true,UseProtoNames: true, UseEnumNumbers: true}.Marshal(resp)")
+		g.P("respd,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{AllowPartial: true,UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true}.Marshal(resp)")
 		g.P("ctx.Write(\"application/json\",respd)")
 		g.P("}")
 		g.P("}")
