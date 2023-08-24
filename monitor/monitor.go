@@ -93,13 +93,14 @@ func init() {
 				buf.AppendString("# TYPE web_client_call_time summary\n")
 				for peername, peer := range webc {
 					for pathname, path := range peer {
+						t50, t90, t99 := path.getT()
 						//50 percent
 						buf.AppendString("web_client_call_time{peer=\"")
 						buf.AppendString(peername)
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.50\"} ")
-						buf.AppendFloat64(float64(path.T50) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t50) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//90 percent
 						buf.AppendString("web_client_call_time{peer=\"")
@@ -107,7 +108,7 @@ func init() {
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.90\"} ")
-						buf.AppendFloat64(float64(path.T90) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t90) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//99 percent
 						buf.AppendString("web_client_call_time{peer=\"")
@@ -115,7 +116,7 @@ func init() {
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.99\"} ")
-						buf.AppendFloat64(float64(path.T99) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t99) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//sum
 						buf.AppendString("web_client_call_time_sum{peer=\"")
@@ -159,13 +160,14 @@ func init() {
 				buf.AppendString("# HELP web_server_call_time summary\n")
 				for peername, peer := range webs {
 					for pathname, path := range peer {
+						t50, t90, t99 := path.getT()
 						//50 percent
 						buf.AppendString("web_server_call_time{peer=\"")
 						buf.AppendString(peername)
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.50\"} ")
-						buf.AppendFloat64(float64(path.T50) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t50) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//90 percent
 						buf.AppendString("web_server_call_time{peer=\"")
@@ -173,7 +175,7 @@ func init() {
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.90\"} ")
-						buf.AppendFloat64(float64(path.T90) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t90) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//99 percent
 						buf.AppendString("web_server_call_time{peer=\"")
@@ -181,7 +183,7 @@ func init() {
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.99\"} ")
-						buf.AppendFloat64(float64(path.T99) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t99) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//sum
 						buf.AppendString("web_server_call_time_sum{peer=\"")
@@ -225,13 +227,14 @@ func init() {
 				buf.AppendString("# HELP grpc_client_call_time summary\n")
 				for peername, peer := range grpcc {
 					for pathname, path := range peer {
+						t50, t90, t99 := path.getT()
 						//50 percent
 						buf.AppendString("grpc_client_call_time{peer=\"")
 						buf.AppendString(peername)
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.50\"} ")
-						buf.AppendFloat64(float64(path.T50) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t50) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//90 percent
 						buf.AppendString("grpc_client_call_time{peer=\"")
@@ -239,7 +242,7 @@ func init() {
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.90\"} ")
-						buf.AppendFloat64(float64(path.T90) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t90) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//99 percent
 						buf.AppendString("grpc_client_call_time{peer=\"")
@@ -247,7 +250,7 @@ func init() {
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.99\"} ")
-						buf.AppendFloat64(float64(path.T99) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t99) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//sum
 						buf.AppendString("grpc_client_call_time_sum{peer=\"")
@@ -291,13 +294,14 @@ func init() {
 				buf.AppendString("# HELP grpc_server_call_time summary\n")
 				for peername, peer := range grpcs {
 					for pathname, path := range peer {
+						t50, t90, t99 := path.getT()
 						//50 percent
 						buf.AppendString("grpc_server_call_time{peer=\"")
 						buf.AppendString(peername)
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.50\"} ")
-						buf.AppendFloat64(float64(path.T50) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t50) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//90 percent
 						buf.AppendString("grpc_server_call_time{peer=\"")
@@ -305,7 +309,7 @@ func init() {
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.90\"} ")
-						buf.AppendFloat64(float64(path.T90) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t90) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//99 percent
 						buf.AppendString("grpc_server_call_time{peer=\"")
@@ -313,7 +317,7 @@ func init() {
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.99\"} ")
-						buf.AppendFloat64(float64(path.T99) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t99) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//sum
 						buf.AppendString("grpc_server_call_time_sum{peer=\"")
@@ -357,13 +361,14 @@ func init() {
 				buf.AppendString("# HELP crpc_client_time summary\n")
 				for peername, peer := range crpcc {
 					for pathname, path := range peer {
+						t50, t90, t99 := path.getT()
 						//50 percent
 						buf.AppendString("crpc_client_call_time{peer=\"")
 						buf.AppendString(peername)
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.50\"} ")
-						buf.AppendFloat64(float64(path.T50) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t50) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//90 percent
 						buf.AppendString("crpc_client_call_time{peer=\"")
@@ -371,7 +376,7 @@ func init() {
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.90\"} ")
-						buf.AppendFloat64(float64(path.T90) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t90) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//99 percent
 						buf.AppendString("crpc_client_call_time{peer=\"")
@@ -379,7 +384,7 @@ func init() {
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.99\"} ")
-						buf.AppendFloat64(float64(path.T99) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t99) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//sum
 						buf.AppendString("crpc_client_call_time_sum{peer=\"")
@@ -423,13 +428,14 @@ func init() {
 				buf.AppendString("# HELP crpc_server_time summary\n")
 				for peername, peer := range crpcs {
 					for pathname, path := range peer {
+						t50, t90, t99 := path.getT()
 						//50 percent
 						buf.AppendString("crpc_server_call_time{peer=\"")
 						buf.AppendString(peername)
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.50\"} ")
-						buf.AppendFloat64(float64(path.T50) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t50) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//90 percent
 						buf.AppendString("crpc_server_call_time{peer=\"")
@@ -437,7 +443,7 @@ func init() {
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.90\"} ")
-						buf.AppendFloat64(float64(path.T90) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t90) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//99 percent
 						buf.AppendString("crpc_server_call_time{peer=\"")
@@ -445,7 +451,7 @@ func init() {
 						buf.AppendString("\",path=\"")
 						buf.AppendString(pathname)
 						buf.AppendString("\",quantile=\"0.99\"} ")
-						buf.AppendFloat64(float64(path.T99) / 1000 / 1000) //transfer uint to ms
+						buf.AppendFloat64(float64(t99) / 1000 / 1000) //transfer uint to ms
 						buf.AppendByte('\n')
 						//sum
 						buf.AppendString("crpc_server_call_time_sum{peer=\"")
@@ -492,19 +498,11 @@ func init() {
 
 // timewaste nanosecond
 func index(timewaste uint64) int64 {
-	var ms int64
-	if timewaste%1000000 > 0 {
-		ms = int64(timewaste/1000000 + 1)
-	} else {
-		ms = int64(timewaste / 1000000)
+	i := timewaste / 1000000
+	if i >= 5000 {
+		return 5000
 	}
-	if ms == 0 {
-		ms = 1
-	}
-	if ms <= (time.Second * 5).Milliseconds() {
-		return ms - 1
-	}
-	return 5000
+	return int64(i)
 }
 
 type pathinfo struct {
@@ -514,24 +512,21 @@ type pathinfo struct {
 	maxTimewaste   uint64           //nano second
 	timewaste      [5001]uint32     //index:0-4999(1ms-5000ms) each 1ms,index:5000 more then 5s,value:count
 	lker           *sync.Mutex
-	T50            uint64 //nano second
-	T90            uint64 //nano second
-	T99            uint64 //nano second
 }
 
-func getT(data *[5001]uint32, maxtimewaste uint64, totalcount uint32) (uint64, uint64, uint64) {
-	if totalcount == 0 {
+func (p *pathinfo) getT() (uint64, uint64, uint64) {
+	if p.TotalCount == 0 {
 		return 0, 0, 0
 	}
 	var T50, T90, T99 uint64
 	var T50Done, T90Done, T99Done bool
-	T50Count := uint32(float64(totalcount) * 0.5)
-	T90Count := uint32(float64(totalcount) * 0.9)
-	T99Count := uint32(float64(totalcount) * 0.99)
+	T50Count := uint32(float64(p.TotalCount) * 0.5)
+	T90Count := uint32(float64(p.TotalCount) * 0.9)
+	T99Count := uint32(float64(p.TotalCount) * 0.99)
 	var sum uint32
 	var prefixtime uint64
 	var timepiece uint64
-	for index, count := range *data {
+	for index, count := range p.timewaste {
 		if count == 0 {
 			continue
 		}
@@ -541,13 +536,13 @@ func getT(data *[5001]uint32, maxtimewaste uint64, totalcount uint32) (uint64, u
 			prefixtime = uint64(time.Second * 5)
 		}
 		if index <= 4999 {
-			if maxtimewaste-prefixtime >= uint64(time.Millisecond) {
+			if p.maxTimewaste-prefixtime >= uint64(time.Millisecond) {
 				timepiece = uint64(time.Millisecond)
 			} else {
-				timepiece = maxtimewaste - prefixtime
+				timepiece = p.maxTimewaste - prefixtime
 			}
 		} else {
-			timepiece = maxtimewaste - prefixtime
+			timepiece = p.maxTimewaste - prefixtime
 		}
 		if sum+count >= T99Count && !T99Done {
 			T99 = prefixtime + uint64(float64(timepiece)*(float64(T99Count-sum)/float64(count)))
