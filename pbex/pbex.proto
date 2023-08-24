@@ -2,9 +2,6 @@ syntax="proto3";
 package pbex;
 option go_package="github.com/chenjie199234/Corelib/pbex;pbex";
 import "google/protobuf/descriptor.proto";
-extend google.protobuf.FileOptions {
-	string project_group=140000;
-}
 extend google.protobuf.MethodOptions {
 	string method=150001;// this is only useful for webserver
 	repeated string web_midwares=150002;
