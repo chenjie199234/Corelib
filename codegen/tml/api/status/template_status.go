@@ -36,6 +36,8 @@ message pingresp{
 	double cur_cpu_usage=7;
 	double avg_cpu_usage=8;
 	double max_cpu_usage=9;
+	string host=10;
+	string ip=11;
 }`
 
 type data struct {

@@ -18,6 +18,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/util/graceful"
+	"github.com/chenjie199234/Corelib/util/host"
 	// "github.com/chenjie199234/Corelib/cgrpc"
 	// "github.com/chenjie199234/Corelib/crpc"
 	// "github.com/chenjie199234/Corelib/log"
@@ -64,6 +65,8 @@ func (s *Service) Ping(ctx context.Context, in *api.Pingreq) (*api.Pingresp, err
 		CurCpuUsage:     lastcpu,
 		AvgCpuUsage:     avgcpu,
 		MaxCpuUsage:     maxcpu,
+		Host:            host.Hostname,
+		Ip:              host.Hostip,
 	}, nil
 }
 
