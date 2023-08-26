@@ -87,7 +87,7 @@ func initenv() {
 	}
 	if EC.ConfigType != nil && *EC.ConfigType == 1 {
 		var e error
-		if RemoteConfigSdk, e = configsdk.NewConfigSdk(model.Group, model.Name, nil); e != nil {
+		if RemoteConfigSdk, e = configsdk.NewConfigSdk(model.Project, model.Group, model.Name, nil); e != nil {
 			log.Error(nil, "[config.initenv] new remote config sdk failed", map[string]interface{}{"error": e})
 			Close()
 			os.Exit(1)
