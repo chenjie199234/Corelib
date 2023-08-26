@@ -89,7 +89,7 @@ const source = `{
 			"compress_method":2,
 			"topic_name":"example_topic",
 			"io_timeout":"500ms",
-			"conn_timeout":"200ms"
+			"conn_timeout":"250ms"
 		}
 	],
 	"kafka_sub":[
@@ -100,7 +100,7 @@ const source = `{
 			"auth_method":3,
 			"topic_name":"example_topic",
 			"group_name":"example_group",
-			"conn_timeout":"200ms",
+			"conn_timeout":"250ms",
 			"start_offset":-2,
 			"commit_interval":"0s"
 		}
@@ -116,17 +116,17 @@ const app = `{
 	},
 	"web_path_rewrite":{
 		"GET":{
-			"/example/origin/url":"/example/new/url"
+			"/origin/url":"/{{.}}.exampleservice/examplemethod"
 		}
 	},
 	"handler_rate":{
-		"/{{.}}.status/ping":[{
+		"/{{.}}.exampleservice/examplemethod":[{
 			"method":["GET","GRPC","CRPC"],
 			"max_per_sec":10
 		}]
 	},
 	"accesses":{
-		"/{{.}}.status/ping":[{
+		"/{{.}}.exampleservice/examplemethod":[{
 			"method":["GET","GRPC","CRPC"],
 			"accesses":{
 				"accessid":"accesskey"
