@@ -39,8 +39,8 @@ func Init(notice func(c *AppConfig)) {
 	initenv()
 	if EC.ConfigType != nil && *EC.ConfigType == 1 {
 		tmer := time.NewTimer(time.Second * 2)
-		waitapp := make(chan *struct{})
-		waitsource := make(chan *struct{})
+		waitapp := make(chan *struct{}, 1)
+		waitsource := make(chan *struct{}, 1)
 		initremoteapp(notice, waitapp)
 		stopwatchsource := initremotesource(waitsource)
 		appinit := false
@@ -238,6 +238,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
@@ -415,18 +416,7 @@ func initlocalsource() {
 		os.Exit(1)
 	}
 	log.Info(nil, "[config.local.source] update success", map[string]interface{}{"config": sc})
-
-	initgrpcserver()
-	initgrpcclient()
-	initcrpcserver()
-	initcrpcclient()
-	initwebserver()
-	initwebclient()
-	initredis()
-	initmongo()
-	initsql()
-	initkafkapub()
-	initkafkasub()
+	initsource()
 }
 func initremotesource(wait chan *struct{}) (stopwatch func()) {
 	return RemoteConfigSdk.Watch("SourceConfig", func(key, keyvalue, keytype string) {
@@ -446,22 +436,71 @@ func initremotesource(wait chan *struct{}) (stopwatch func()) {
 		}
 		sc = c
 		log.Info(nil, "[config.remote.source] update success", map[string]interface{}{"config": sc})
-		initgrpcserver()
-		initgrpcclient()
-		initcrpcserver()
-		initcrpcclient()
-		initwebserver()
-		initwebclient()
-		initredis()
-		initmongo()
-		initsql()
-		initkafkapub()
-		initkafkasub()
+		initsource()
 		select {
 		case wait <- nil:
 		default:
 		}
 	})
+}
+func initsource() {
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		initgrpcserver()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initgrpcclient()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initcrpcserver()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initcrpcclient()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initwebserver()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initwebclient()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initredis()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initmongo()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initsql()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initkafkapub()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initkafkasub()
+		wg.Done()
+	}()
+	wg.Wait()
 }
 func initgrpcserver() {
 	if sc.CGrpcServer == nil {
@@ -622,7 +661,7 @@ func initredis(){
 		if k == "example_redis" {
 			continue
 		}
-		tempredis := redis.NewRedis(&redis.Config{
+		rediss[k] = redis.NewRedis(&redis.Config{
 			RedisName:   k,
 			URL:         redisc.URL,
 			MaxIdle:     redisc.MaxIdle,
@@ -631,13 +670,23 @@ func initredis(){
 			ConnTimeout: redisc.ConnTimeout.StdDuration(),
 			IOTimeout:   redisc.IOTimeout.StdDuration(),
 		})
-		if e := tempredis.Ping(context.Background()); e != nil {
-			log.Error(nil, "[config.initredis] ping failed", map[string]interface{}{"redis": k, "error": e})
-			Close()
-			os.Exit(1)
-		}
-		rediss[k] = tempredis
 	}
+	wg := &sync.WaitGroup{}
+	for k, v := range rediss {
+		redisname := k
+		redisclient := v
+		wg.Add(1)
+		go func() {
+			if e := redisclient.Ping(context.Background()); e != nil {
+				wg.Done()
+				log.Error(nil, "[config.initredis] ping failed", map[string]interface{}{"redis": redisname, "error": e})
+				Close()
+				os.Exit(1)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 func initmongo(){
 	for k, mongoc := range sc.Mongo {
@@ -664,20 +713,30 @@ func initmongo(){
 		op = op.SetMaxConnIdleTime(mongoc.MaxIdletime.StdDuration())
 		op = op.SetMaxPoolSize(mongoc.MaxOpen)
 		op = op.SetTimeout(mongoc.IOTimeout.StdDuration())
-		tempdb, e := mongo.Connect(nil, op)
+		db, e := mongo.Connect(nil, op)
 		if e != nil {
 			log.Error(nil, "[config.initmongo] open failed", map[string]interface{}{"mongodb": k, "error": e})
 			Close()
 			os.Exit(1)
 		}
-		e = tempdb.Ping(context.Background(), readpref.Primary())
-		if e != nil {
-			log.Error(nil, "[config.initmongo] ping failed", map[string]interface{}{"mongodb": k, "error": e})
-			Close()
-			os.Exit(1)
-		}
-		mongos[k] = tempdb
+		mongos[k] = db
 	}
+	wg := &sync.WaitGroup{}
+	for k, v := range mongos {
+		mongoname := k
+		mongoclient := v
+		wg.Add(1)
+		go func() {
+			if e := mongoclient.Ping(context.Background(), readpref.Primary()); e != nil {
+				wg.Done()
+				log.Error(nil, "[config.initmongo] ping failed", map[string]interface{}{"mongodb": mongoname, "error": e})
+				Close()
+				os.Exit(1)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 func initsql(){
 	for _, sqlc := range sc.Sql {
@@ -708,23 +767,33 @@ func initsql(){
 		tmpc.Timeout = sqlc.ConnTimeout.StdDuration()
 		tmpc.ReadTimeout = sqlc.IOTimeout.StdDuration()
 		tmpc.WriteTimeout = sqlc.IOTimeout.StdDuration()
-		tempdb, e := sql.Open("mysql", tmpc.FormatDSN())
+		db, e := sql.Open("mysql", tmpc.FormatDSN())
 		if e != nil {
 			log.Error(nil, "[config.initsql] open failed", map[string]interface{}{"mysql": k, "error": e})
 			Close()
 			os.Exit(1)
 		}
-		tempdb.SetMaxOpenConns(int(sqlc.MaxOpen))
-		tempdb.SetMaxIdleConns(int(sqlc.MaxIdle))
-		tempdb.SetConnMaxIdleTime(sqlc.MaxIdletime.StdDuration())
-		e = tempdb.PingContext(context.Background())
-		if e != nil {
-			log.Error(nil, "[config.initsql] ping failed", map[string]interface{}{"mysql": k, "error": e})
-			Close()
-			os.Exit(1)
-		}
-		sqls[k] = tempdb
+		db.SetMaxOpenConns(int(sqlc.MaxOpen))
+		db.SetMaxIdleConns(int(sqlc.MaxIdle))
+		db.SetConnMaxIdleTime(sqlc.MaxIdletime.StdDuration())
+		sqls[k] = db
 	}
+	wg := &sync.WaitGroup{}
+	for k, v := range sqls {
+		sqlname := k
+		sqlclient := v
+		wg.Add(1)
+		go func() {
+			if e := sqlclient.PingContext(context.Background()); e != nil {
+				wg.Done()
+				log.Error(nil, "[config.initsql] ping failed", map[string]interface{}{"mysql": sqlname, "error": e})
+				Close()
+				os.Exit(1)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 func initkafkapub(){
 	for _, pubc := range sc.KafkaPub {
@@ -783,7 +852,7 @@ func initkafkapub(){
 		case 4:
 			compressor = kafka.Zstd.Codec()
 		}
-		writer := kafka.NewWriter(kafka.WriterConfig{
+		kafkaPubers[pubc.TopicName] = kafka.NewWriter(kafka.WriterConfig{
 			Brokers:          pubc.Addrs,
 			Topic:            pubc.TopicName,
 			Dialer:           dialer,
@@ -795,7 +864,6 @@ func initkafkapub(){
 			Async:            false,
 			CompressionCodec: compressor,
 		})
-		kafkaPubers[pubc.TopicName] = writer
 	}
 }
 func initkafkasub(){
@@ -846,7 +914,7 @@ func initkafkasub(){
 			Close()
 			os.Exit(1)
 		}
-		reader := kafka.NewReader(kafka.ReaderConfig{
+		kafkaSubers[subc.TopicName+subc.GroupName] = kafka.NewReader(kafka.ReaderConfig{
 			Brokers:                subc.Addrs,
 			Dialer:                 dialer,
 			Topic:                  subc.TopicName,
@@ -860,7 +928,6 @@ func initkafkasub(){
 			WatchPartitionChanges:  true,
 			MaxAttempts:            3,
 		})
-		kafkaSubers[subc.TopicName+subc.GroupName] = reader
 	}
 }
 
