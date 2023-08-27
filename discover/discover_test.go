@@ -6,7 +6,10 @@ import (
 )
 
 func Test_Discover(t *testing.T) {
-	d := NewDNSDiscover("testp", "testg", "testn", "www.baidu.com", time.Second*10, 9000, 10000, 8000)
+	d, e := NewDNSDiscover("testp", "testg", "testn", "www.baidu.com", time.Second*10, 9000, 10000, 8000)
+	if e != nil {
+		t.Fatal("new dns discover error:" + e.Error())
+	}
 	go func() {
 		ch, cancel := d.GetNotice()
 		defer cancel()

@@ -36,8 +36,6 @@ func NewCorelibResolver(b Balancer, d discover.DI, pt discover.PortType) *Coreli
 		for {
 			dnotice, cancel := d.GetNotice()
 			defer cancel()
-			//first init triger,this is used to active the dnotice
-			d.Now()
 			for {
 				var ok bool
 				select {

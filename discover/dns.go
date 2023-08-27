@@ -10,10 +10,11 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/util/name"
 )
 
 type DnsD struct {
-	app       string
+	target    string
 	host      string
 	crpcport  int
 	cgrpcport int
@@ -30,12 +31,16 @@ type DnsD struct {
 
 // interval min is 1s,default is 10s
 // if silent is true,means no logs
-func NewDNSDiscover(targetproject, targetgroup, targetapp, host string, interval time.Duration, crpcport, cgrpcport, webport int) DI {
+func NewDNSDiscover(targetproject, targetgroup, targetapp, host string, interval time.Duration, crpcport, cgrpcport, webport int) (DI, error) {
+	targetfullname, e := name.MakeFullName(targetproject, targetgroup, targetapp)
+	if e != nil {
+		return nil, e
+	}
 	if interval < time.Second {
 		interval = time.Second * 10
 	}
 	d := &DnsD{
-		app:       targetproject + "-" + targetgroup + "." + targetapp,
+		target:    targetfullname,
 		host:      host,
 		crpcport:  crpcport,
 		cgrpcport: cgrpcport,
@@ -47,7 +52,7 @@ func NewDNSDiscover(targetproject, targetgroup, targetapp, host string, interval
 	d.triger <- nil
 	d.status = 1
 	go d.run()
-	return d
+	return d, nil
 }
 
 func (d *DnsD) Now() {
@@ -68,6 +73,12 @@ func (d *DnsD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 	d.Lock()
 	d.notices[ch] = nil
 	d.Unlock()
+	if atomic.LoadInt32(&d.status) == 0 {
+		select {
+		case ch <- nil:
+		default:
+		}
+	}
 	return ch, func() {
 		d.Lock()
 		if _, ok := d.notices[ch]; ok {
@@ -176,6 +187,7 @@ func (d *DnsD) run() {
 		d.Lock()
 		d.addrs = tmp
 		d.lasterror = nil
+		atomic.CompareAndSwapInt32(&d.status, 1, 0)
 		for notice := range d.notices {
 			select {
 			case notice <- nil:
@@ -186,9 +198,8 @@ func (d *DnsD) run() {
 		for len(tker.C) > 0 {
 			<-tker.C
 		}
-		atomic.CompareAndSwapInt32(&d.status, 1, 0)
 	}
 }
-func (d *DnsD) CheckApp(app string) bool {
-	return app == d.app
+func (d *DnsD) CheckTarget(target string) bool {
+	return target == d.target
 }

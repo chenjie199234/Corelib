@@ -65,16 +65,10 @@ type CGrpcServer struct {
 
 func NewCGrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string) (*CGrpcServer, error) {
 	//pre check
-	if e := name.SingleCheck(selfproject, false); e != nil {
+	selffullname, e := name.MakeFullName(selfproject, selfgroup, selfapp)
+	if e != nil {
 		return nil, e
 	}
-	if e := name.SingleCheck(selfgroup, false); e != nil {
-		return nil, e
-	}
-	if e := name.SingleCheck(selfapp, false); e != nil {
-		return nil, e
-	}
-	selffullname := selfproject + "-" + selfgroup + "." + selfapp
 	if c == nil {
 		c = &ServerConfig{}
 	}

@@ -25,11 +25,11 @@ import (
 
 // NewApi create all dependent service's api we need in this program
 func NewApi() error {
-	var e error
-	_ = e //avoid unuse
-
 	//init discover for example server
-	//examplediscover := discover.NewDNSDiscover("exampleproject", "examplegroup", "examplename", "exampleproject-examplegroup.examplename-headless", time.Second*10, 9000, 10000, 8000)
+	//examplediscover, e := discover.NewDNSDiscover("exampleproject", "examplegroup", "examplename", "exampleproject-examplegroup.examplename-headless", time.Second*10, 9000, 10000, 8000)
+	//if e != nil {
+	//	return e
+	//}
 
 	cgrpcc := GetCGrpcClientConfig()
 	_ = cgrpcc //avoid unuse

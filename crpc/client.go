@@ -48,33 +48,21 @@ type CrpcClient struct {
 // if tlsc is not nil,the tls will be actived
 func NewCrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfapp, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*CrpcClient, error) {
 	//pre check
-	if e := name.SingleCheck(selfproject, false); e != nil {
+	serverfullname, e := name.MakeFullName(serverproject, servergroup, serverapp)
+	if e != nil {
 		return nil, e
 	}
-	if e := name.SingleCheck(selfgroup, false); e != nil {
+	selffullname, e := name.MakeFullName(selfproject, selfgroup, selfapp)
+	if e != nil {
 		return nil, e
 	}
-	if e := name.SingleCheck(selfapp, false); e != nil {
-		return nil, e
-	}
-	if e := name.SingleCheck(serverproject, false); e != nil {
-		return nil, e
-	}
-	if e := name.SingleCheck(servergroup, false); e != nil {
-		return nil, e
-	}
-	if e := name.SingleCheck(serverapp, false); e != nil {
-		return nil, e
-	}
-	serverfullname := serverproject + "-" + servergroup + "." + serverapp
-	selffullname := selfproject + "-" + selfgroup + "." + selfapp
 	if c == nil {
 		c = &ClientConfig{}
 	}
 	if d == nil {
 		return nil, errors.New("[crpc.client] missing discover")
 	}
-	if !d.CheckApp(serverfullname) {
+	if !d.CheckTarget(serverfullname) {
 		return nil, errors.New("[crpc.client] discover's target app not match")
 	}
 	client := &CrpcClient{

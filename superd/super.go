@@ -96,10 +96,10 @@ type Cmd struct {
 }
 
 func (s *Super) CreateApp(project, groupname, appname, url string, buildcmds []*Cmd, runcmd *Cmd) error {
-	if e := name.FullCheck(groupname + "." + appname); e != nil {
+	fullappname, e := name.MakeFullName(project, groupname, appname)
+	if e != nil {
 		return e
 	}
-	fullappname := project + "." + groupname + "." + appname
 	s.lker.Lock()
 	defer s.lker.Unlock()
 	if s.status == s_CLOSING {
