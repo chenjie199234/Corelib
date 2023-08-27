@@ -1,12 +1,11 @@
 package xgrpc
 
 import (
-	"fmt"
 	"os"
 	"text/template"
 )
 
-const text = `package xgrpc
+const txt = `package xgrpc
 
 import (
 	"strings"
@@ -35,8 +34,8 @@ func StartCGrpcServer() {
 		Certs:          c.Certs,
 	}
 	var e error
-	if s, e = cgrpc.NewCGrpcServer(cgrpcc, model.Group, model.Name); e != nil {
-		log.Error(nil,"[xgrpc] new error:", e)
+	if s, e = cgrpc.NewCGrpcServer(cgrpcc, model.Project, model.Group, model.Name); e != nil {
+		log.Error(nil, "[xgrpc] new server failed", map[string]interface{}{"error": e})
 		return
 	}
 	UpdateHandlerTimeout(config.AC.HandlerTimeout)
@@ -50,10 +49,10 @@ func StartCGrpcServer() {
 	//api.RegisterExampleCGrpcServer(s, service.SvcExample, mids.AllMids())
 
 	if e = s.StartCGrpcServer(":10000"); e != nil && e != cgrpc.ErrServerClosed {
-		log.Error(nil,"[xgrpc] start error:", e)
+		log.Error(nil, "[xgrpc] start server failed", map[string]interface{}{"error": e})
 		return
 	}
-	log.Info(nil,"[xgrpc] server closed")
+	log.Info(nil, "[xgrpc] server closed", nil)
 }
 
 // UpdateHandlerTimeout -
@@ -81,31 +80,25 @@ func StopCGrpcServer(force bool) {
 	}
 }`
 
-const path = "./server/xgrpc/"
-const name = "xgrpc.go"
-
-var tml *template.Template
-var file *os.File
-
-func init() {
-	var e error
-	tml, e = template.New("xgrpc").Parse(text)
+func CreatePathAndFile(packagename string) {
+	if e := os.MkdirAll("./server/xgrpc/", 0755); e != nil {
+		panic("mkdir ./server/xgrpc/ error: " + e.Error())
+	}
+	xgrpctemplate, e := template.New("./server/xgrpc/xgrpc.go").Parse(txt)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./server/xgrpc/xgrpc.go template error: " + e.Error())
 	}
-}
-func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
-	}
-	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e := os.OpenFile("./server/xgrpc/xgrpc.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
+		panic("open ./server/xgrpc/xgrpc.go error: " + e.Error())
 	}
-}
-func Execute(PackageName string) {
-	if e := tml.Execute(file, PackageName); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
+	if e := xgrpctemplate.Execute(file, packagename); e != nil {
+		panic("write ./server/xgrpc/xgrpc.go error: " + e.Error())
+	}
+	if e := file.Sync(); e != nil {
+		panic("sync ./server/xgrpc/xgrpc.go error: " + e.Error())
+	}
+	if e := file.Close(); e != nil {
+		panic("close ./server/xgrpc/xgrpc.go error: " + e.Error())
 	}
 }

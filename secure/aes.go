@@ -23,14 +23,14 @@ func AesDecrypt(secret string, ciphertext []byte) ([]byte, error) {
 	if len(ciphertext) <= _NONCE_SIZE || (len(ciphertext)-_NONCE_SIZE)%aes.BlockSize != 0 {
 		return nil, ErrAesCipherTextBroken
 	}
-	s := pkcs7Padding(common.Str2byte(secret), 32)
+	s := padding(common.Str2byte(secret), 32)
 	block, _ := aes.NewCipher(s)
 	aead, _ := cipher.NewGCMWithNonceSize(block, _NONCE_SIZE)
 	plaintext, e := aead.Open(nil, ciphertext[:_NONCE_SIZE], ciphertext[_NONCE_SIZE:], nil)
 	if e != nil {
 		return nil, ErrAesSecretWrong
 	}
-	return pkcs7UnPadding(plaintext, aes.BlockSize), nil
+	return unpadding(plaintext, aes.BlockSize), nil
 }
 
 // max secret length 31
@@ -38,8 +38,8 @@ func AesEncrypt(secret string, plaintext []byte) ([]byte, error) {
 	if len(secret) >= 32 {
 		return nil, ErrAesSecretLength
 	}
-	s := pkcs7Padding(common.Str2byte(secret), 32)
-	tmp := pkcs7Padding(plaintext, uint8(aes.BlockSize))
+	s := padding(common.Str2byte(secret), 32)
+	tmp := padding(plaintext, uint8(aes.BlockSize))
 	block, _ := aes.NewCipher(s)
 	aead, _ := cipher.NewGCMWithNonceSize(block, _NONCE_SIZE)
 	nonce := make([]byte, _NONCE_SIZE)

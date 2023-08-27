@@ -1,12 +1,11 @@
 package xcrpc
 
 import (
-	"fmt"
 	"os"
 	"text/template"
 )
 
-const text = `package xcrpc
+const txt = `package xcrpc
 
 import (
 	"strings"
@@ -35,8 +34,8 @@ func StartCrpcServer() {
 		Certs:          c.Certs,
 	}
 	var e error
-	if s, e = crpc.NewCrpcServer(crpcc, model.Group, model.Name); e != nil {
-		log.Error(nil,"[xcrpc] new error:", e)
+	if s, e = crpc.NewCrpcServer(crpcc, model.Project, model.Group, model.Name); e != nil {
+		log.Error(nil, "[xcrpc] new server failed", map[string]interface{}{"error": e})
 		return
 	}
 	UpdateHandlerTimeout(config.AC.HandlerTimeout)
@@ -50,10 +49,10 @@ func StartCrpcServer() {
 	//api.RegisterExampleCrpcServer(s, service.SvcExample,mids.AllMids())
 
 	if e = s.StartCrpcServer(":9000"); e != nil && e != crpc.ErrServerClosed {
-		log.Error(nil,"[xcrpc] start error:", e)
+		log.Error(nil, "[xcrpc] start server failed", map[string]interface{}{"error": e})
 		return
 	}
-	log.Info(nil,"[xcrpc] server closed")
+	log.Info(nil, "[xcrpc] server closed", nil)
 }
 
 // UpdateHandlerTimeout -
@@ -81,31 +80,25 @@ func StopCrpcServer(force bool) {
 	}
 }`
 
-const path = "./server/xcrpc/"
-const name = "xcrpc.go"
-
-var tml *template.Template
-var file *os.File
-
-func init() {
-	var e error
-	tml, e = template.New("xcrpc").Parse(text)
+func CreatePathAndFile(packagename string) {
+	if e := os.MkdirAll("./server/xcrpc/", 0755); e != nil {
+		panic("mkdir ./server/xcrpc/ error: " + e.Error())
+	}
+	xcrpctemplate, e := template.New("./server/xcrpc/xcrpc.go").Parse(txt)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./server/xcrpc/xcrpc.go template error: " + e.Error())
 	}
-}
-func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
-	}
-	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e := os.OpenFile("./server/xcrpc/xcrpc.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
+		panic("open ./server/xcrpc/xcrpc.go error: " + e.Error())
 	}
-}
-func Execute(PackageName string) {
-	if e := tml.Execute(file, PackageName); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
+	if e := xcrpctemplate.Execute(file, packagename); e != nil {
+		panic("write ./server/xcrpc/xcrpc.go error: " + e.Error())
+	}
+	if e := file.Sync(); e != nil {
+		panic("sync ./server/xcrpc/xcrpc.go error: " + e.Error())
+	}
+	if e := file.Close(); e != nil {
+		panic("close ./server/xcrpc/xcrpc.go error: " + e.Error())
 	}
 }

@@ -74,7 +74,7 @@ func WriteMsg(conn net.Conn, data []byte, fin, firstpiece, mask bool) error {
 	defer pool.PutBuffer(buf)
 	maskkey := makeheader(buf, fin, firstpiece, mask, uint64(len(data)), uint8(_BINARY))
 	headlen := buf.Len()
-	buf.AppendByteSlice(data)
+	buf.AppendBytes(data)
 	if mask {
 		domask(buf.Bytes()[headlen:], maskkey)
 	}
@@ -94,7 +94,7 @@ func WritePing(conn net.Conn, data []byte, mask bool) error {
 	defer pool.PutBuffer(buf)
 	maskkey := makeheader(buf, true, true, mask, uint64(len(data)), uint8(_PING))
 	headlen := buf.Len()
-	buf.AppendByteSlice(data)
+	buf.AppendBytes(data)
 	if mask {
 		domask(buf.Bytes()[headlen:], maskkey)
 	}
@@ -114,7 +114,7 @@ func WritePong(conn net.Conn, data []byte, mask bool) error {
 	defer pool.PutBuffer(buf)
 	maskkey := makeheader(buf, true, true, mask, uint64(len(data)), uint8(_PONG))
 	headlen := buf.Len()
-	buf.AppendByteSlice(data)
+	buf.AppendBytes(data)
 	if mask {
 		domask(buf.Bytes()[headlen:], maskkey)
 	}

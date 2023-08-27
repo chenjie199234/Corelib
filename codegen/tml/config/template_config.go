@@ -1,13 +1,12 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"text/template"
 )
 
-const text = `package config
+const txt = `package config
 
 import (
 	"os"
@@ -40,8 +39,8 @@ func Init(notice func(c *AppConfig)) {
 	initenv()
 	if EC.ConfigType != nil && *EC.ConfigType == 1 {
 		tmer := time.NewTimer(time.Second * 2)
-		waitapp := make(chan *struct{})
-		waitsource := make(chan *struct{})
+		waitapp := make(chan *struct{}, 1)
+		waitsource := make(chan *struct{}, 1)
 		initremoteapp(notice, waitapp)
 		stopwatchsource := initremotesource(waitsource)
 		appinit := false
@@ -54,7 +53,7 @@ func Init(notice func(c *AppConfig)) {
 				sourceinit = true
 				stopwatchsource()
 			case <-tmer.C:
-				log.Error(nil, "[config.Init] timeout")
+				log.Error(nil, "[config.Init] timeout", nil)
 				Close()
 				os.Exit(1)
 			}
@@ -78,43 +77,18 @@ func initenv() {
 	if str, ok := os.LookupEnv("CONFIG_TYPE"); ok && str != "<CONFIG_TYPE>" && str != "" {
 		configtype, e := strconv.Atoi(str)
 		if e != nil || (configtype != 0 && configtype != 1 && configtype != 2) {
-			log.Error(nil, "[config.initenv] env CONFIG_TYPE must be number in [0,1,2]")
+			log.Error(nil, "[config.initenv] env CONFIG_TYPE must be number in [0,1,2]", nil)
 			Close()
 			os.Exit(1)
 		}
 		EC.ConfigType = &configtype
 	} else {
-		log.Warning(nil, "[config.initenv] missing env CONFIG_TYPE")
+		log.Warning(nil, "[config.initenv] missing env CONFIG_TYPE", nil)
 	}
 	if EC.ConfigType != nil && *EC.ConfigType == 1 {
-		var group string
-		if str, ok := os.LookupEnv("REMOTE_CONFIG_SERVICE_GROUP"); ok && str != "<REMOTE_CONFIG_SERVICE_GROUP>" && str != "" {
-			group = str
-		} else {
-			log.Error(nil, "[config.initenv] missing env REMOTE_CONFIG_SERVICE_GROUP")
-			Close()
-			os.Exit(1)
-		}
-		var host string
-		if str, ok := os.LookupEnv("REMOTE_CONFIG_SERVICE_HOST"); ok && str != "<REMOTE_CONFIG_SERVICE_HOST>" && str != "" {
-			host = str
-		} else {
-			log.Error(nil, "[config.initenv] missing env REMOTE_CONFIG_SERVICE_HOST")
-			Close()
-			os.Exit(1)
-		}
-		var secret string
-		if str, ok := os.LookupEnv("REMOTE_CONFIG_SECRET"); ok && str != "<REMOTE_CONFIG_SECRET>" && str != "" {
-			secret = str
-		}
-		if len(secret) >= 32 {
-			log.Error(nil, "[config.initenv] REMOTE_CONFIG_SECRET too long")
-			Close()
-			os.Exit(1)
-		}
 		var e error
-		if RemoteConfigSdk, e = configsdk.NewConfigSdk(model.Group, model.Name, group, host, secret); e != nil {
-			log.Error(nil, "[config.initenv] new remote config sdk error:", e)
+		if RemoteConfigSdk, e = configsdk.NewConfigSdk(model.Project, model.Group, model.Name, nil); e != nil {
+			log.Error(nil, "[config.initenv] new remote config sdk failed", map[string]interface{}{"error": e})
 			Close()
 			os.Exit(1)
 		}
@@ -122,15 +96,15 @@ func initenv() {
 	if str, ok := os.LookupEnv("RUN_ENV"); ok && str != "<RUN_ENV>" && str != "" {
 		EC.RunEnv = &str
 	} else {
-		log.Warning(nil, "[config.initenv] missing env RUN_ENV")
+		log.Warning(nil, "[config.initenv] missing env RUN_ENV", nil)
 	}
 	if str, ok := os.LookupEnv("DEPLOY_ENV"); ok && str != "<DEPLOY_ENV>" && str != "" {
 		EC.DeployEnv = &str
 	} else {
-		log.Warning(nil, "[config.initenv] missing env DEPLOY_ENV")
+		log.Warning(nil, "[config.initenv] missing env DEPLOY_ENV", nil)
 	}
 }`
-const apptext = `package config
+const apptxt = `package config
 
 import (
 	"encoding/json"
@@ -147,13 +121,13 @@ import (
 // AppConfig can hot update
 // this is the config used for this app
 type AppConfig struct {
-	HandlerTimeout         map[string]map[string]ctime.Duration      $json:"handler_timeout"$      //first key path,second key method(GET,POST,PUT,PATCH,DELETE,CRPC,GRPC),value timeout
-	WebPathRewrite         map[string]map[string]string              $json:"web_path_rewrite"$     //first key method(GET,POST,PUT,PATCH,DELETE),second key origin url,value new url
-	HandlerRate            map[string][]*publicmids.PathRateConfig   $json:"handler_rate"$         //key path
-	Accesses               map[string][]*publicmids.PathAccessConfig $json:"accesses"$             //key path
-	TokenSecret            string                                    $json:"token_secret"$         //if don't need token check,this can be ingored
-	SessionTokenExpire     ctime.Duration                            $json:"session_token_expire"$ //if don't need session and token check,this can be ignored
-	Service                *ServiceConfig                            $json:"service"$
+	HandlerTimeout     map[string]map[string]ctime.Duration      $json:"handler_timeout"$      //first key path,second key method(GET,POST,PUT,PATCH,DELETE,CRPC,GRPC),value timeout
+	WebPathRewrite     map[string]map[string]string              $json:"web_path_rewrite"$     //first key method(GET,POST,PUT,PATCH,DELETE),second key origin url,value new url
+	HandlerRate        map[string][]*publicmids.PathRateConfig   $json:"handler_rate"$         //key path
+	Accesses           map[string][]*publicmids.PathAccessConfig $json:"accesses"$             //key path
+	TokenSecret        string                                    $json:"token_secret"$         //if don't need token check,this can be ingored
+	SessionTokenExpire ctime.Duration                            $json:"session_token_expire"$ //if don't need session and token check,this can be ignored
+	Service            *ServiceConfig                            $json:"service"$
 }
 type ServiceConfig struct {
 	//add your config here
@@ -171,28 +145,29 @@ var watcher *fsnotify.Watcher
 func initlocalapp(notice func(*AppConfig)) {
 	data, e := os.ReadFile("./AppConfig.json")
 	if e != nil {
-		log.Error(nil, "[config.initlocalapp] read config file error:", e)
+		log.Error(nil, "[config.local.app] read config file failed", map[string]interface{}{"error": e})
 		Close()
 		os.Exit(1)
 	}
 	AC = &AppConfig{}
 	if e = json.Unmarshal(data, AC); e != nil {
-		log.Error(nil, "[config.initlocalapp] config file format error:", e)
+		log.Error(nil, "[config.local.app] config file format wrong", map[string]interface{}{"error": e})
 		Close()
 		os.Exit(1)
 	}
 	validateAppConfig(AC)
+	log.Info(nil, "[config.local.app] update success", map[string]interface{}{"config": AC})
 	if notice != nil {
 		notice(AC)
 	}
 	watcher, e = fsnotify.NewWatcher()
 	if e != nil {
-		log.Error(nil, "[config.initlocalapp] create watcher for hot update error:", e)
+		log.Error(nil, "[config.local.app] create watcher for hot update failed", map[string]interface{}{"error": e})
 		Close()
 		os.Exit(1)
 	}
 	if e = watcher.Add("./"); e != nil {
-		log.Error(nil, "[config.initlocalapp] create watcher for hot update error:", e)
+		log.Error(nil, "[config.local.app] create watcher for hot update failed", map[string]interface{}{"error": e})
 		Close()
 		os.Exit(1)
 	}
@@ -208,15 +183,16 @@ func initlocalapp(notice func(*AppConfig)) {
 				}
 				data, e := os.ReadFile("./AppConfig.json")
 				if e != nil {
-					log.Error(nil, "[config.initlocalapp] hot update read config file error:", e)
+					log.Error(nil, "[config.local.app] hot update read config file failed", map[string]interface{}{"error": e})
 					continue
 				}
 				c := &AppConfig{}
 				if e = json.Unmarshal(data, c); e != nil {
-					log.Error(nil, "[config.initlocalapp] hot update config file format error:", e)
+					log.Error(nil, "[config.local.app] hot update config file format wrong", map[string]interface{}{"error": e})
 					continue
 				}
 				validateAppConfig(c)
+				log.Info(nil, "[config.local.app] update success", map[string]interface{}{"config": c})
 				if notice != nil {
 					notice(c)
 				}
@@ -225,7 +201,7 @@ func initlocalapp(notice func(*AppConfig)) {
 				if !ok {
 					return
 				}
-				log.Error(nil, "[config.initlocalapp] hot update watcher error:", err)
+				log.Error(nil, "[config.local.app] hot update watcher failed", map[string]interface{}{"error": err})
 			}
 		}
 	}()
@@ -234,15 +210,16 @@ func initremoteapp(notice func(*AppConfig), wait chan *struct{}) (stopwatch func
 	return RemoteConfigSdk.Watch("AppConfig", func(key, keyvalue, keytype string) {
 		//only support json
 		if keytype != "json" {
-			log.Error(nil, "[config.initremoteapp] config data can only support json format")
+			log.Error(nil, "[config.remote.app] config data can only support json format", nil)
 			return
 		}
 		c := &AppConfig{}
 		if e := json.Unmarshal(common.Str2byte(keyvalue), c); e != nil {
-			log.Error(nil, "[config.initremoteapp] config data format error:", e)
+			log.Error(nil, "[config.remote.app] config data format wrong", map[string]interface{}{"error": e})
 			return
 		}
 		validateAppConfig(c)
+		log.Info(nil, "[config.remote.app] update success", map[string]interface{}{"config": c})
 		if notice != nil {
 			notice(c)
 		}
@@ -253,7 +230,7 @@ func initremoteapp(notice func(*AppConfig), wait chan *struct{}) (stopwatch func
 		}
 	})
 }`
-const sourcetext = `package config
+const sourcetxt = `package config
 
 import (
 	"context"
@@ -261,13 +238,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/plain"
 	"github.com/segmentio/kafka-go/sasl/scram"
@@ -284,9 +262,9 @@ type sourceConfig struct {
 	CrpcClient  *CrpcClientConfig       $json:"crpc_client"$
 	WebServer   *WebServerConfig        $json:"web_server"$
 	WebClient   *WebClientConfig        $json:"web_client"$
-	Mongo       map[string]*MongoConfig $json:"mongo"$     //key example:xxx_mongo
-	Sql         map[string]*SqlConfig   $json:"sql"$       //key example:xx_sql
-	Redis       map[string]*RedisConfig $json:"redis"$     //key example:xx_redis
+	Mongo       map[string]*MongoConfig $json:"mongo"$ //key example:xxx_mongo
+	Sql         map[string]*SqlConfig   $json:"sql"$   //key example:xx_sql
+	Redis       map[string]*RedisConfig $json:"redis"$ //key example:xx_redis
 	KafkaPub    []*KafkaPubConfig       $json:"kafka_pub"$
 	KafkaSub    []*KafkaSubConfig       $json:"kafka_sub"$
 }
@@ -301,7 +279,7 @@ type CGrpcServerConfig struct {
 
 // CGrpcClientConfig
 type CGrpcClientConfig struct {
-	ConnectTimeout ctime.Duration $json:"conn_timeout"$   //default 500ms,max time to finish the handshake
+	ConnectTimeout ctime.Duration $json:"connect_timeout"$   //default 500ms,max time to finish the handshake
 	GlobalTimeout  ctime.Duration $json:"global_timeout"$ //max time to handle the request,0 means no default timeout
 	HeartProbe     ctime.Duration $json:"heart_probe"$    //default 1.5s
 }
@@ -316,7 +294,7 @@ type CrpcServerConfig struct {
 
 // CrpcClientConfig -
 type CrpcClientConfig struct {
-	ConnectTimeout ctime.Duration $json:"conn_timeout"$   //default 500ms,max time to finish the handshake
+	ConnectTimeout ctime.Duration $json:"connect_timeout"$   //default 500ms,max time to finish the handshake
 	GlobalTimeout  ctime.Duration $json:"global_timeout"$ //max time to handle the request,0 means no default timeout
 	HeartProbe     ctime.Duration $json:"heart_probe"$    //default 1.5s
 }
@@ -343,7 +321,7 @@ type WebCorsConfig struct {
 
 // WebClientConfig -
 type WebClientConfig struct {
-	ConnectTimeout ctime.Duration $json:"conn_timeout"$   //default 500ms,max time to finish the handshake
+	ConnectTimeout ctime.Duration $json:"connect_timeout"$   //default 500ms,max time to finish the handshake
 	GlobalTimeout  ctime.Duration $json:"global_timeout"$ //max time to handle the request,0 means no default timeout
 	IdleTimeout    ctime.Duration $json:"idle_timeout"$   //default 5s
 	HeartProbe     ctime.Duration $json:"heart_probe"$    //default 1.5s
@@ -351,31 +329,31 @@ type WebClientConfig struct {
 
 // RedisConfig -
 type RedisConfig struct {
-	URL         string         $json:"url"$           //[redis/rediss]://[[username:]password@]host/[dbindex]
-	MaxOpen     uint16         $json:"max_open"$      //if this is 0,means no limit //this will overwrite the param in url
-	MaxIdle     uint16         $json:"max_idle"$      //defaule 100   //this will overwrite the param in url
-	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
-	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
-	ConnTimeout ctime.Duration $json:"conn_timeout"$  //default 250ms //this will overwrite the param in url
+	URL         string         $json:"url"$          //[redis/rediss]://[[username:]password@]host/[dbindex]
+	MaxOpen     uint16         $json:"max_open"$     //if this is 0,means no limit //this will overwrite the param in url
+	MaxIdle     uint16         $json:"max_idle"$     //defaule 100   //this will overwrite the param in url
+	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 10min //this will overwrite the param in url
+	IOTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms //this will overwrite the param in url
+	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms //this will overwrite the param in url
 }
 
 // SqlConfig -
 type SqlConfig struct {
-	URL         string         $json:"url"$           //[username:password@][protocol(address)]/[dbname][?param1=value1&...&paramN=valueN]
-	MaxOpen     uint16         $json:"max_open"$      //if this is 0,means no limit //this will overwrite the param in url
-	MaxIdle     uint16         $json:"max_idle"$      //default 100   //this will overwrite the param in url
-	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
-	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
-	ConnTimeout ctime.Duration $json:"conn_timeout"$  //default 250ms //this will overwrite the param in url
+	URL         string         $json:"url"$          //[username:password@][protocol(address)]/[dbname][?param1=value1&...&paramN=valueN]
+	MaxOpen     uint16         $json:"max_open"$     //if this is 0,means no limit //this will overwrite the param in url
+	MaxIdle     uint16         $json:"max_idle"$     //default 100   //this will overwrite the param in url
+	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 10min //this will overwrite the param in url
+	IOTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms //this will overwrite the param in url
+	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms //this will overwrite the param in url
 }
 
 // MongoConfig -
 type MongoConfig struct {
-	URL         string         $json:"url"$           //[mongodb/mongodb+srv]://[username:password@]host1,...,hostN/[dbname][?param1=value1&...&paramN=valueN]
-	MaxOpen     uint64         $json:"max_open"$      //if this is 0,means no limit //this will overwrite the param in url
-	MaxIdletime ctime.Duration $json:"max_idletime"$  //default 10min //this will overwrite the param in url
-	IOTimeout   ctime.Duration $json:"io_timeout"$    //default 500ms //this will overwrite the param in url
-	ConnTimeout ctime.Duration $json:"conn_timeout"$  //default 250ms //this will overwrite the param in url
+	URL         string         $json:"url"$          //[mongodb/mongodb+srv]://[username:password@]host1,...,hostN/[dbname][?param1=value1&...&paramN=valueN]
+	MaxOpen     uint64         $json:"max_open"$     //if this is 0,means no limit //this will overwrite the param in url
+	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 10min //this will overwrite the param in url
+	IOTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms //this will overwrite the param in url
+	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms //this will overwrite the param in url
 }
 
 // KafkaPubConfig -
@@ -427,34 +405,24 @@ var kafkaPubers map[string]*kafka.Writer
 func initlocalsource() {
 	data, e := os.ReadFile("./SourceConfig.json")
 	if e != nil {
-		log.Error(nil, "[config.initlocalsource] read config file error:", e)
+		log.Error(nil, "[config.local.source] read config file failed", map[string]interface{}{"error": e})
 		Close()
 		os.Exit(1)
 	}
 	sc = &sourceConfig{}
 	if e = json.Unmarshal(data, sc); e != nil {
-		log.Error(nil, "[config.initlocalsource] config file format error:", e)
+		log.Error(nil, "[config.local.source] config file format wrong", map[string]interface{}{"error": e})
 		Close()
 		os.Exit(1)
 	}
-
-	initgrpcserver()
-	initgrpcclient()
-	initcrpcserver()
-	initcrpcclient()
-	initwebserver()
-	initwebclient()
-	initredis()
-	initmongo()
-	initsql()
-	initkafkapub()
-	initkafkasub()
+	log.Info(nil, "[config.local.source] update success", map[string]interface{}{"config": sc})
+	initsource()
 }
 func initremotesource(wait chan *struct{}) (stopwatch func()) {
 	return RemoteConfigSdk.Watch("SourceConfig", func(key, keyvalue, keytype string) {
 		//only support json
 		if keytype != "json" {
-			log.Error(nil, "[config.initremotesource] config data can only support json format")
+			log.Error(nil, "[config.remote.source] config data can only support json format", nil)
 			return
 		}
 		//source config only init once
@@ -463,26 +431,76 @@ func initremotesource(wait chan *struct{}) (stopwatch func()) {
 		}
 		c := &sourceConfig{}
 		if e := json.Unmarshal(common.Str2byte(keyvalue), c); e != nil {
-			log.Error(nil, "[config.initremotesource] config data format error:", e)
+			log.Error(nil, "[config.remote.source] config data format wrong", map[string]interface{}{"error": e})
 			return
 		}
 		sc = c
-		initgrpcserver()
-		initgrpcclient()
-		initcrpcserver()
-		initcrpcclient()
-		initwebserver()
-		initwebclient()
-		initredis()
-		initmongo()
-		initsql()
-		initkafkapub()
-		initkafkasub()
+		log.Info(nil, "[config.remote.source] update success", map[string]interface{}{"config": sc})
+		initsource()
 		select {
 		case wait <- nil:
 		default:
 		}
 	})
+}
+func initsource() {
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		initgrpcserver()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initgrpcclient()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initcrpcserver()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initcrpcclient()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initwebserver()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initwebclient()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initredis()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initmongo()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initsql()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initkafkapub()
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		initkafkasub()
+		wg.Done()
+	}()
+	wg.Wait()
 }
 func initgrpcserver() {
 	if sc.CGrpcServer == nil {
@@ -643,7 +661,7 @@ func initredis(){
 		if k == "example_redis" {
 			continue
 		}
-		tempredis := redis.NewRedis(&redis.Config{
+		rediss[k] = redis.NewRedis(&redis.Config{
 			RedisName:   k,
 			URL:         redisc.URL,
 			MaxIdle:     redisc.MaxIdle,
@@ -652,16 +670,23 @@ func initredis(){
 			ConnTimeout: redisc.ConnTimeout.StdDuration(),
 			IOTimeout:   redisc.IOTimeout.StdDuration(),
 		})
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		if e := tempredis.Ping(ctx); e != nil {
-			cancel()
-			log.Error(nil, "[config.initsource] ping redis:", k, "error:", e)
-			Close()
-			os.Exit(1)
-		}
-		cancel()
-		rediss[k] = tempredis
 	}
+	wg := &sync.WaitGroup{}
+	for k, v := range rediss {
+		redisname := k
+		redisclient := v
+		wg.Add(1)
+		go func() {
+			if e := redisclient.Ping(context.Background()); e != nil {
+				wg.Done()
+				log.Error(nil, "[config.initredis] ping failed", map[string]interface{}{"redis": redisname, "error": e})
+				Close()
+				os.Exit(1)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 func initmongo(){
 	for k, mongoc := range sc.Mongo {
@@ -688,23 +713,30 @@ func initmongo(){
 		op = op.SetMaxConnIdleTime(mongoc.MaxIdletime.StdDuration())
 		op = op.SetMaxPoolSize(mongoc.MaxOpen)
 		op = op.SetTimeout(mongoc.IOTimeout.StdDuration())
-		tempdb, e := mongo.Connect(nil, op)
+		db, e := mongo.Connect(nil, op)
 		if e != nil {
-			log.Error(nil, "[config.initsource] open mongodb:", k, "error:", e)
+			log.Error(nil, "[config.initmongo] open failed", map[string]interface{}{"mongodb": k, "error": e})
 			Close()
 			os.Exit(1)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		e = tempdb.Ping(ctx, readpref.Primary())
-		if e != nil {
-			cancel()
-			log.Error(nil, "[config.initsource] ping mongodb:", k, "error:", e)
-			Close()
-			os.Exit(1)
-		}
-		cancel()
-		mongos[k] = tempdb
+		mongos[k] = db
 	}
+	wg := &sync.WaitGroup{}
+	for k, v := range mongos {
+		mongoname := k
+		mongoclient := v
+		wg.Add(1)
+		go func() {
+			if e := mongoclient.Ping(context.Background(), readpref.Primary()); e != nil {
+				wg.Done()
+				log.Error(nil, "[config.initmongo] ping failed", map[string]interface{}{"mongodb": mongoname, "error": e})
+				Close()
+				os.Exit(1)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 func initsql(){
 	for _, sqlc := range sc.Sql {
@@ -726,26 +758,42 @@ func initsql(){
 		if k == "example_sql" {
 			continue
 		}
-		tempdb, e := sql.Open("mysql", sqlc.URL)
+		tmpc, e := mysql.ParseDSN(sqlc.URL)
 		if e != nil {
-			log.Error(nil, "[config.initsource] open mysql:", k, "error:", e)
+			log.Error(nil, "[config.initsql] url format wrong", map[string]interface{}{"mysql": k, "error": e})
 			Close()
 			os.Exit(1)
 		}
-		tempdb.SetMaxOpenConns(int(sqlc.MaxOpen))
-		tempdb.SetMaxIdleConns(int(sqlc.MaxIdle))
-		tempdb.SetConnMaxIdleTime(sqlc.MaxIdletime.StdDuration())
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		e = tempdb.PingContext(ctx)
+		tmpc.Timeout = sqlc.ConnTimeout.StdDuration()
+		tmpc.ReadTimeout = sqlc.IOTimeout.StdDuration()
+		tmpc.WriteTimeout = sqlc.IOTimeout.StdDuration()
+		db, e := sql.Open("mysql", tmpc.FormatDSN())
 		if e != nil {
-			cancel()
-			log.Error(nil, "[config.initsource] ping mysql:", k, "error:", e)
+			log.Error(nil, "[config.initsql] open failed", map[string]interface{}{"mysql": k, "error": e})
 			Close()
 			os.Exit(1)
 		}
-		cancel()
-		sqls[k] = tempdb
+		db.SetMaxOpenConns(int(sqlc.MaxOpen))
+		db.SetMaxIdleConns(int(sqlc.MaxIdle))
+		db.SetConnMaxIdleTime(sqlc.MaxIdletime.StdDuration())
+		sqls[k] = db
 	}
+	wg := &sync.WaitGroup{}
+	for k, v := range sqls {
+		sqlname := k
+		sqlclient := v
+		wg.Add(1)
+		go func() {
+			if e := sqlclient.PingContext(context.Background()); e != nil {
+				wg.Done()
+				log.Error(nil, "[config.initsql] ping failed", map[string]interface{}{"mysql": sqlname, "error": e})
+				Close()
+				os.Exit(1)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 func initkafkapub(){
 	for _, pubc := range sc.KafkaPub {
@@ -756,7 +804,7 @@ func initkafkapub(){
 			pubc.Addrs = []string{"127.0.0.1:9092"}
 		}
 		if (pubc.AuthMethod == 1 || pubc.AuthMethod == 2 || pubc.AuthMethod == 3) && (pubc.Username == "" || pubc.Passwd == "") {
-			log.Error(nil, "[config.initsource] pub topic:", pubc.TopicName, "username or password missing")
+			log.Error(nil, "[config.initkafkapub] username or password missing when auth_method != 0", map[string]interface{}{"topic": pubc.TopicName})
 			Close()
 			os.Exit(1)
 		}
@@ -789,7 +837,7 @@ func initkafkapub(){
 			dialer.SASLMechanism, e = scram.Mechanism(scram.SHA512, pubc.Username, pubc.Passwd)
 		}
 		if e != nil {
-			log.Error(nil, "[config.initsource] kafka topic:", pubc.TopicName, "pub username and password parse error:", e)
+			log.Error(nil, "[config.initkafkapub] username and password wrong",map[string]interface{}{"topic": pubc.TopicName, "error": e})
 			Close()
 			os.Exit(1)
 		}
@@ -804,7 +852,7 @@ func initkafkapub(){
 		case 4:
 			compressor = kafka.Zstd.Codec()
 		}
-		writer := kafka.NewWriter(kafka.WriterConfig{
+		kafkaPubers[pubc.TopicName] = kafka.NewWriter(kafka.WriterConfig{
 			Brokers:          pubc.Addrs,
 			Topic:            pubc.TopicName,
 			Dialer:           dialer,
@@ -816,7 +864,6 @@ func initkafkapub(){
 			Async:            false,
 			CompressionCodec: compressor,
 		})
-		kafkaPubers[pubc.TopicName] = writer
 	}
 }
 func initkafkasub(){
@@ -828,12 +875,12 @@ func initkafkasub(){
 			subc.Addrs = []string{"127.0.0.1:9092"}
 		}
 		if (subc.AuthMethod == 1 || subc.AuthMethod == 2 || subc.AuthMethod == 3) && (subc.Username == "" || subc.Passwd == "") {
-			log.Error(nil, "[config.initsource] sub topic:", subc.TopicName, "username or password missing")
+			log.Error(nil, "[config.initkafkasub] username or password missing when auth_method != 0", map[string]interface{}{"topic": subc.TopicName})
 			Close()
 			os.Exit(1)
 		}
 		if subc.GroupName == "" {
-			log.Error(nil, "[config.initsource] sub topic:", subc.TopicName, "groupname missing")
+			log.Error(nil, "[config.initkafkasub] groupname missing", map[string]interface{}{"topic": subc.TopicName})
 			Close()
 			os.Exit(1)
 		}
@@ -863,11 +910,11 @@ func initkafkasub(){
 			dialer.SASLMechanism, e = scram.Mechanism(scram.SHA512, subc.Username, subc.Passwd)
 		}
 		if e != nil {
-			log.Error(nil, "[config.initsource] kafka topic:", subc.TopicName, "sub username and password parse error:", e)
+			log.Error(nil, "[config.initkafkasub] username and password wrong", map[string]interface{}{"topic": subc.TopicName, "error": e})
 			Close()
 			os.Exit(1)
 		}
-		reader := kafka.NewReader(kafka.ReaderConfig{
+		kafkaSubers[subc.TopicName+subc.GroupName] = kafka.NewReader(kafka.ReaderConfig{
 			Brokers:                subc.Addrs,
 			Dialer:                 dialer,
 			Topic:                  subc.TopicName,
@@ -881,7 +928,6 @@ func initkafkasub(){
 			WatchPartitionChanges:  true,
 			MaxAttempts:            3,
 		})
-		kafkaSubers[subc.TopicName+subc.GroupName] = reader
 	}
 }
 
@@ -943,59 +989,54 @@ func GetKafkaPuber(topic string) *kafka.Writer {
 	return kafkaPubers[topic]
 }`
 
-const path = "./config/"
-const name = "config.go"
-const app = "app_config.go"
-const source = "source_config.go"
-
-var tml *template.Template
-var tmlapp *template.Template
-var tmlsource *template.Template
-var file *os.File
-var fileapp *os.File
-var filesource *os.File
-
-func init() {
-	var e error
-	tml, e = template.New("config").Parse(strings.ReplaceAll(text, "$", "`"))
+func CreatePathAndFile(packagename string) {
+	if e := os.MkdirAll("./config/", 0755); e != nil {
+		panic("mkdir ./config/ error: " + e.Error())
+	}
+	//./config/config.go
+	configtemplate, e := template.New("./config/config.go").Parse(txt)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./config/config.go template error: " + e.Error())
 	}
-	tmlapp, e = template.New("app_config").Parse(strings.ReplaceAll(apptext, "$", "`"))
+	configfile, e := os.OpenFile("./config/config.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("open ./config/config.go error: " + e.Error())
 	}
-	tmlsource, e = template.New("source_config").Parse(strings.ReplaceAll(sourcetext, "$", "`"))
+	if e := configtemplate.Execute(configfile, packagename); e != nil {
+		panic("write ./config/config.go error: " + e.Error())
+	}
+	if e := configfile.Sync(); e != nil {
+		panic("sync ./config/config.go error: " + e.Error())
+	}
+	if e := configfile.Close(); e != nil {
+		panic("close ./config/config.go error: " + e.Error())
+	}
+	//./config/app_config.go
+	appfile, e := os.OpenFile("./config/app_config.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("open ./config/app_config.go error: " + e.Error())
 	}
-}
-func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
+	if _, e := appfile.WriteString(strings.ReplaceAll(apptxt, "$", "`")); e != nil {
+		panic("write ./config/app_config.go error: " + e.Error())
 	}
-	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if e := appfile.Sync(); e != nil {
+		panic("sync ./config/app_config.go error: " + e.Error())
+	}
+	if e := appfile.Close(); e != nil {
+		panic("close ./config/app_config.go error: " + e.Error())
+	}
+	//./config/source_config.go
+	sourcefile, e := os.OpenFile("./config/source_config.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
+		panic("open ./config/source_config.go error: " + e.Error())
 	}
-	fileapp, e = os.OpenFile(path+app, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+app, e))
+	if _, e := sourcefile.WriteString(strings.ReplaceAll(sourcetxt, "$", "`")); e != nil {
+		panic("write ./config/source_config.go error: " + e.Error())
 	}
-	filesource, e = os.OpenFile(path+source, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+source, e))
+	if e := sourcefile.Sync(); e != nil {
+		panic("sync ./config/source_config.go error: " + e.Error())
 	}
-}
-func Execute(PackageName string) {
-	if e := tml.Execute(file, PackageName); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
-	}
-	if e := tmlapp.Execute(fileapp, nil); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+app, e))
-	}
-	if e := tmlsource.Execute(filesource, nil); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+source, e))
+	if e := sourcefile.Close(); e != nil {
+		panic("close ./config/source_config.go error: " + e.Error())
 	}
 }

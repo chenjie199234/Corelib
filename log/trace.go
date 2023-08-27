@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -21,8 +22,8 @@ const (
 )
 
 type TraceLog struct {
-	TraceId    string `json:"trace_id"` //the whole trace route
-	Deep       int    `json:"deep"`
+	TraceId    string `json:"_tid"` //the whole trace route
+	TraceDeep  int    `json:"_tdeep"`
 	Start      int64  `json:"start"` //nanosecond
 	End        int64  `json:"end"`   //nanosecond
 	HostName   string `json:"host_name"`
@@ -113,9 +114,9 @@ func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string,
 		emsg = ee.Msg
 	}
 	buf := pool.GetBuffer()
-	buf.AppendString("[TRC] {\"trace_id\":\"")
+	buf.AppendString("{\"_lv\":\"TRACE\",\"_tid\":\"")
 	buf.AppendString(traceid)
-	buf.AppendString("\",\"deep\":")
+	buf.AppendString("\",\"_tdeep\":")
 	buf.AppendInt(deep)
 	buf.AppendString(",\"start\":")
 	buf.AppendInt64(start.UnixNano())
@@ -142,7 +143,19 @@ func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string,
 	buf.AppendString("\",\"to_path\":\"")
 	buf.AppendString(topath)
 	buf.AppendString("\",\"err_msg\":\"")
-	buf.AppendString(emsg)
+	special := false
+	for _, v := range emsg {
+		if v == '\\' || v == '"' {
+			special = true
+			break
+		}
+	}
+	if special {
+		d, _ := json.Marshal(emsg)
+		buf.AppendBytes(d)
+	} else {
+		buf.AppendString(emsg)
+	}
 	buf.AppendString("\",\"err_code\":")
 	buf.AppendInt32(ecode)
 	buf.AppendString("}\n")

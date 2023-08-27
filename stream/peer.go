@@ -28,32 +28,35 @@ const (
 )
 
 type Peer struct {
-	selfMaxMsgLen uint32
-	peerMaxMsgLen uint32
-	peergroup     *group
-	status        int32 //1 - working,0 - closed
-	dispatcher    chan *struct{}
-	cr            *bufio.Reader
-	c             net.Conn
-	header        http.Header //if this is not nil,means this is a websocket peer
-	peertype      int
-	lastactive    int64          //unixnano timestamp
-	recvidlestart int64          //unixnano timestamp
-	sendidlestart int64          //unixnano timestamp
-	netlag        int64          //unixnano
-	data          unsafe.Pointer //user data
+	selfMaxMsgLen  uint32
+	peerMaxMsgLen  uint32
+	peergroup      *group
+	status         int32 //1 - working,0 - closed
+	dispatcher     chan *struct{}
+	cr             *bufio.Reader
+	c              net.Conn
+	rawconnectaddr string //only useful when peertype is _PEER_SERVER,this is the server's raw connect addr
+	peertype       int
+	header         http.Header    //if this is not nil,means this is a websocket peer
+	lastactive     int64          //unixnano timestamp
+	recvidlestart  int64          //unixnano timestamp
+	sendidlestart  int64          //unixnano timestamp
+	netlag         int64          //unixnano
+	data           unsafe.Pointer //user data
 	context.Context
 	context.CancelFunc
 }
 
-func newPeer(selfMaxMsgLen uint32, peertype int) *Peer {
+// rawconnectaddr is only useful when peertype is _PEER_SERVER,this is the server's raw connect addr
+func newPeer(selfMaxMsgLen uint32, peertype int, rawconnectaddr string) *Peer {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &Peer{
-		peertype:      peertype,
-		selfMaxMsgLen: selfMaxMsgLen,
-		dispatcher:    make(chan *struct{}, 1),
-		Context:       ctx,
-		CancelFunc:    cancel,
+		rawconnectaddr: rawconnectaddr,
+		peertype:       peertype,
+		selfMaxMsgLen:  selfMaxMsgLen,
+		dispatcher:     make(chan *struct{}, 1),
+		Context:        ctx,
+		CancelFunc:     cancel,
 	}
 	p.dispatcher <- nil
 	return p
@@ -66,19 +69,31 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	now := nowtime.UnixNano()
 	if now-atomic.LoadInt64(&p.lastactive) > int64(heart) {
 		//heartbeat timeout
-		log.Error(nil, "[Stream.checkheart] heart timeout:", p.c.RemoteAddr().String())
+		if p.peertype == _PEER_CLIENT {
+			log.Error(nil, "[Stream.checkheart] heart timeout", map[string]interface{}{"cip": p.c.RemoteAddr().String()})
+		} else {
+			log.Error(nil, "[Stream.checkheart] heart timeout", map[string]interface{}{"sip": p.c.RemoteAddr().String()})
+		}
 		p.c.Close()
 		return
 	}
 	if now-atomic.LoadInt64(&p.sendidlestart) > int64(sendidle) {
 		//send idle timeout
-		log.Error(nil, "[Stream.checkheart] send idle timeout:", p.c.RemoteAddr().String())
+		if p.peertype == _PEER_CLIENT {
+			log.Error(nil, "[Stream.checkheart] send idle timeout", map[string]interface{}{"cip": p.c.RemoteAddr().String()})
+		} else {
+			log.Error(nil, "[Stream.checkheart] send idle timeout", map[string]interface{}{"sip": p.c.RemoteAddr().String()})
+		}
 		p.c.Close()
 		return
 	}
 	if recvidle != 0 && now-atomic.LoadInt64(&p.recvidlestart) > int64(recvidle) {
 		//recv idle timeout
-		log.Error(nil, "[Stream.checkheart] recv idle timeout:", p.c.RemoteAddr().String())
+		if p.peertype == _PEER_CLIENT {
+			log.Error(nil, "[Stream.checkheart] recv idle timeout:", map[string]interface{}{"cip": p.c.RemoteAddr().String()})
+		} else {
+			log.Error(nil, "[Stream.checkheart] recv idle timeout:", map[string]interface{}{"sip": p.c.RemoteAddr().String()})
+		}
 		p.c.Close()
 		return
 	}
@@ -89,7 +104,11 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 		tmp.Resize(8)
 		binary.BigEndian.PutUint64(tmp.Bytes(), uint64(now))
 		if e := ws.WritePing(p.c, tmp.Bytes(), false); e != nil {
-			log.Error(nil, "[Stream.checkheart] write ping to:", p.c.RemoteAddr().String(), e)
+			if p.peertype == _PEER_CLIENT {
+				log.Error(nil, "[Stream.checkheart] write ping to client failed", map[string]interface{}{"cip": p.c.RemoteAddr().String(), "error": e})
+			} else {
+				log.Error(nil, "[Stream.checkheart] write ping to server failed", map[string]interface{}{"sip": p.c.RemoteAddr().String(), "error": e})
+			}
 			p.c.Close()
 			return
 		}
@@ -156,7 +175,11 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 			userdata = nil
 		}
 		if e := ws.WriteMsg(p.c, data, userdata == nil, first, false); e != nil {
-			log.Error(ctx, "[Stream.SendMessage] write to:", p.c.RemoteAddr().String(), e)
+			if p.peertype == _PEER_CLIENT {
+				log.Error(ctx, "[Stream.SendMessage] write to client failed", map[string]interface{}{"cip": p.c.RemoteAddr().String(), "error": e})
+			} else {
+				log.Error(ctx, "[Stream.SendMessage] write to server failed", map[string]interface{}{"sip": p.c.RemoteAddr().String(), "error": e})
+			}
 			p.c.Close()
 			if as != nil {
 				as(p, e)
@@ -184,6 +207,14 @@ func (p *Peer) GetLocalPort() string {
 
 func (p *Peer) GetNetlag() int64 {
 	return atomic.LoadInt64(&p.netlag)
+}
+
+// only useful when peertype is _PEER_SERVER,this is the server's raw connect addr
+func (p *Peer) GetRawConnectAddr() string {
+	if p.peertype == _PEER_SERVER {
+		return p.rawconnectaddr
+	}
+	return ""
 }
 
 // get the direct peer's addr(maybe a proxy)

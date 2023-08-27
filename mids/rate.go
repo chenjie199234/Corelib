@@ -46,7 +46,7 @@ func UpdateRateRedisUrl(redisurl string) {
 			IOTimeout:   time.Second * 5,
 		})
 	} else {
-		log.Warning(nil, "[rate] redis missing,all rate check will be failed")
+		log.Warning(nil, "[rate] redis missing,all rate check will be failed", nil)
 	}
 	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.p)), unsafe.Pointer(newp)))
 	if oldp != nil {
@@ -55,7 +55,7 @@ func UpdateRateRedisUrl(redisurl string) {
 }
 func UpdateRateRedisInstance(p *redis.Pool) {
 	if p == nil {
-		log.Warning(nil, "[rate] redis missing,all rate check will be failed")
+		log.Warning(nil, "[rate] redis missing,all rate check will be failed", nil)
 	}
 	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.p)), unsafe.Pointer(p)))
 	if oldp != nil {
@@ -130,7 +130,7 @@ func UpdateRateConfig(c map[string][]*PathRateConfig) {
 func checkrate(ctx context.Context, infos [][2]interface{}) bool {
 	redisclient := rateinstance.p
 	if redisclient == nil {
-		log.Error(ctx, "[rate] redis missing")
+		log.Error(ctx, "[rate] redis missing", nil)
 		return false
 	}
 	rates := make(map[string]uint64)
@@ -139,14 +139,14 @@ func checkrate(ctx context.Context, infos [][2]interface{}) bool {
 	}
 	pass, e := redisclient.RateLimitSecondMax(ctx, rates)
 	if e != nil {
-		log.Error(ctx, "[rate] update redis check data:", e)
+		log.Error(ctx, "[rate] update redis failed", map[string]interface{}{"error": e})
 	}
 	return pass
 }
 
 func GrpcRate(ctx context.Context, path string) bool {
 	if rateinstance.grpc == nil {
-		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
+		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first", nil)
 		//didn't update the config
 		return false
 	}
@@ -159,7 +159,7 @@ func GrpcRate(ctx context.Context, path string) bool {
 }
 func CrpcRate(ctx context.Context, path string) bool {
 	if rateinstance.crpc == nil {
-		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
+		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first", nil)
 		//didn't update the config
 		return false
 	}
@@ -172,7 +172,7 @@ func CrpcRate(ctx context.Context, path string) bool {
 }
 func HttpGetRate(ctx context.Context, path string) bool {
 	if rateinstance.get == nil {
-		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
+		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first", nil)
 		//didn't update the config
 		return false
 	}
@@ -185,7 +185,7 @@ func HttpGetRate(ctx context.Context, path string) bool {
 }
 func HttpPostRate(ctx context.Context, path string) bool {
 	if rateinstance.post == nil {
-		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
+		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first", nil)
 		//didn't update the config
 		return false
 	}
@@ -198,7 +198,7 @@ func HttpPostRate(ctx context.Context, path string) bool {
 }
 func HttpPutRate(ctx context.Context, path string) bool {
 	if rateinstance.put == nil {
-		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
+		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first", nil)
 		//didn't update the config
 		return false
 	}
@@ -211,7 +211,7 @@ func HttpPutRate(ctx context.Context, path string) bool {
 }
 func HttpPatchRate(ctx context.Context, path string) bool {
 	if rateinstance.patch == nil {
-		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
+		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first", nil)
 		//didn't update the config
 		return false
 	}
@@ -224,7 +224,7 @@ func HttpPatchRate(ctx context.Context, path string) bool {
 }
 func HttpDelRate(ctx context.Context, path string) bool {
 	if rateinstance.del == nil {
-		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
+		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first", nil)
 		//didn't update the config
 		return false
 	}

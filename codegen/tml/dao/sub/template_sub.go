@@ -1,12 +1,11 @@
 package sub
 
 import (
-	"fmt"
 	"os"
 	"text/template"
 )
 
-const text = `package {{.}}
+const dao = `package {{.}}
 
 import (
 	csql "database/sql"
@@ -32,83 +31,84 @@ func NewDao(sql *csql.DB, redis *credis.Pool, mongo *cmongo.Client) *Dao {
 		mongo: mongo,
 	}
 }`
-const textsql = `package {{.}}`
-const textredis = `package {{.}}`
-const textmongo = `package {{.}}`
+const sql = `package {{.}}`
+const redis = `package {{.}}`
+const mongo = `package {{.}}`
 
-const path = "./dao/"
-const name = "dao.go"
-const namesql = "sql.go"
-const nameredis = "redis.go"
-const namemongo = "mongo.go"
-
-var tml *template.Template
-var tmlsql *template.Template
-var tmlredis *template.Template
-var tmlmongo *template.Template
-
-var file *os.File
-var filesql *os.File
-var fileredis *os.File
-var filemongo *os.File
-
-type data struct {
-	Pname string
-	Sname string
-}
-
-func init() {
-	var e error
-	tml, e = template.New("dao").Parse(text)
-	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
-	}
-	tmlsql, e = template.New("sql").Parse(textsql)
-	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
-	}
-	tmlredis, e = template.New("redis").Parse(textredis)
-	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
-	}
-	tmlmongo, e = template.New("mongo").Parse(textmongo)
-	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
-	}
-}
 func CreatePathAndFile(sname string) {
-	var e error
-	if e = os.MkdirAll(path+sname+"/", 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
+	if e := os.MkdirAll("./dao/"+sname+"/", 0755); e != nil {
+		panic("mkdir ./dao/" + sname + "/ error: " + e.Error())
 	}
-	file, e = os.OpenFile(path+sname+"/"+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	//dao.go
+	daotemplate, e := template.New("./dao/" + sname + "/dao.go").Parse(dao)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+sname+"/"+name, e))
+		panic("parse ./dao/" + sname + "/dao.go template error: " + e.Error())
 	}
-	filesql, e = os.OpenFile(path+sname+"/"+namesql, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	daofile, e := os.OpenFile("./dao/"+sname+"/dao.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+sname+"/"+namesql, e))
+		panic("open ./dao/" + sname + "/dao.go error: " + e.Error())
 	}
-	fileredis, e = os.OpenFile(path+sname+"/"+nameredis, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if e := daotemplate.Execute(daofile, sname); e != nil {
+		panic("write ./dao/" + sname + "/dao.go error: " + e.Error())
+	}
+	if e := daofile.Sync(); e != nil {
+		panic("sync ./dao/" + sname + "/dao.go error: " + e.Error())
+	}
+	if e := daofile.Close(); e != nil {
+		panic("close ./dao/" + sname + "/dao.go error: " + e.Error())
+	}
+	//sql.go
+	sqltemplate, e := template.New("./dao/" + sname + "/sql.go").Parse(sql)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+sname+"/"+nameredis, e))
+		panic("parse ./dao/" + sname + "/sql.go template error: " + e.Error())
 	}
-	filemongo, e = os.OpenFile(path+sname+"/"+namemongo, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	sqlfile, e := os.OpenFile("./dao/"+sname+"/sql.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+sname+"/"+namemongo, e))
+		panic("open ./dao/" + sname + "/sql.go error: " + e.Error())
 	}
-}
-func Execute(sname string) {
-	if e := tml.Execute(file, sname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+sname+"/"+name, e))
+	if e := sqltemplate.Execute(sqlfile, sname); e != nil {
+		panic("write ./dao/" + sname + "/sql.go error: " + e.Error())
 	}
-	if e := tmlsql.Execute(filesql, sname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+sname+"/"+namesql, e))
+	if e := sqlfile.Sync(); e != nil {
+		panic("sync ./dao/" + sname + "/sql.go error: " + e.Error())
 	}
-	if e := tmlredis.Execute(fileredis, sname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+sname+"/"+nameredis, e))
+	if e := sqlfile.Close(); e != nil {
+		panic("close ./dao/" + sname + "/sql.go error: " + e.Error())
 	}
-	if e := tmlmongo.Execute(filemongo, sname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+sname+"/"+namemongo, e))
+	//mongo.go
+	mongotemplate, e := template.New("./dao/" + sname + "/mongo.go").Parse(mongo)
+	if e != nil {
+		panic("parse ./dao/" + sname + "/mongo.go template error: " + e.Error())
+	}
+	mongofile, e := os.OpenFile("./dao/"+sname+"/mongo.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if e != nil {
+		panic("open ./dao/" + sname + "/mongo.go error: " + e.Error())
+	}
+	if e := mongotemplate.Execute(mongofile, sname); e != nil {
+		panic("write ./dao/" + sname + "/mongo.go error: " + e.Error())
+	}
+	if e := mongofile.Sync(); e != nil {
+		panic("sync ./dao/" + sname + "/mongo.go error: " + e.Error())
+	}
+	if e := mongofile.Close(); e != nil {
+		panic("close ./dao/" + sname + "/mongo.go error: " + e.Error())
+	}
+	//redis.go
+	redistemplate, e := template.New("./dao/" + sname + "/redis.go").Parse(redis)
+	if e != nil {
+		panic("parse ./dao/" + sname + "/redis.go template error: " + e.Error())
+	}
+	redisfile, e := os.OpenFile("./dao/"+sname+"/redis.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if e != nil {
+		panic("open ./dao/" + sname + "/redis.go error: " + e.Error())
+	}
+	if e := redistemplate.Execute(redisfile, sname); e != nil {
+		panic("write ./dao/" + sname + "/redis.go error: " + e.Error())
+	}
+	if e := redisfile.Sync(); e != nil {
+		panic("sync ./dao/" + sname + "/redis.go error: " + e.Error())
+	}
+	if e := redisfile.Close(); e != nil {
+		panic("close ./dao/" + sname + "/redis.go error: " + e.Error())
 	}
 }

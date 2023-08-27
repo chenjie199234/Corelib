@@ -1,6 +1,7 @@
 package pool
 
 import (
+	"encoding/json"
 	"strconv"
 	"sync"
 	"time"
@@ -298,24 +299,8 @@ func (b *Buffer) AppendUint64s(data []uint64) {
 func (b *Buffer) AppendByte(data byte) {
 	*b = append(*b, data)
 }
-func (b *Buffer) AppendByteSlice(data []byte) {
+func (b *Buffer) AppendBytes(data []byte) {
 	*b = append(*b, data...)
-}
-func (b *Buffer) AppendByteSlices(data [][]byte) {
-	if data == nil {
-		b.AppendNil()
-	} else if len(data) == 0 {
-		b.AppendEmptySlice()
-	} else {
-		*b = append(*b, '[')
-		for _, d := range data {
-			*b = append(*b, '"')
-			*b = append(*b, d...)
-			*b = append(*b, '"')
-			*b = append(*b, ',')
-		}
-		(*b)[len(*b)-1] = ']'
-	}
 }
 func (b *Buffer) AppendString(data string) {
 	*b = append(*b, data...)
@@ -406,46 +391,28 @@ func (b *Buffer) AppendStdDurationPointers(data []*time.Duration) {
 	}
 }
 func (b *Buffer) AppendDuration(data ctime.Duration) {
-	if data == 0 {
-		*b = append(*b, "0s"...)
-		return
-	}
 	d := time.Duration(data)
-	if d >= time.Hour {
-		*b = strconv.AppendInt(*b, int64(d/time.Hour), 10)
-		*b = append(*b, 'h')
-		if d = d % time.Hour; d == 0 {
-			return
-		}
-	}
-	if d >= time.Minute {
-		*b = strconv.AppendInt(*b, int64(d/time.Minute), 10)
-		*b = append(*b, 'm')
-		if d = d % time.Minute; d == 0 {
-			return
-		}
-	}
-	if d >= time.Second {
-		*b = strconv.AppendInt(*b, int64(d/time.Second), 10)
-		*b = append(*b, 's')
-		if d = d % time.Second; d == 0 {
-			return
-		}
-	}
-	if d >= time.Millisecond {
-		*b = strconv.AppendInt(*b, int64(d/time.Millisecond), 10)
-		*b = append(*b, "ms"...)
-		if d = d % time.Millisecond; d == 0 {
-			return
-		}
-	}
-	if d >= time.Microsecond {
-		*b = strconv.AppendInt(*b, int64(d/time.Microsecond), 10)
-		*b = append(*b, "us"...)
-		if d = d % time.Millisecond; d == 0 {
-			return
-		}
-	}
+	//hour
+	*b = strconv.AppendInt(*b, int64(d/time.Hour), 10)
+	*b = append(*b, 'h')
+	d = d % time.Hour
+	//minute
+	*b = strconv.AppendInt(*b, int64(d/time.Minute), 10)
+	*b = append(*b, 'm')
+	d = d % time.Minute
+	//second
+	*b = strconv.AppendInt(*b, int64(d/time.Second), 10)
+	*b = append(*b, 's')
+	d = d % time.Second
+	//millisecond
+	*b = strconv.AppendInt(*b, int64(d/time.Millisecond), 10)
+	*b = append(*b, "ms"...)
+	d = d % time.Millisecond
+	//microsecond
+	*b = strconv.AppendInt(*b, int64(d/time.Microsecond), 10)
+	*b = append(*b, "us"...)
+	d = d % time.Microsecond
+	//nanosecond
 	*b = strconv.AppendInt(*b, int64(d), 10)
 	*b = append(*b, "ns"...)
 }
@@ -524,53 +491,69 @@ func (b *Buffer) AppendStdTimePointers(data []*time.Time) {
 		(*b)[len(*b)-1] = ']'
 	}
 }
-func (b *Buffer) AppendError(e error) {
+
+func (b *Buffer) AppendError(e *cerror.Error) {
 	if e == nil {
 		b.AppendNil()
-	} else if ee, ok := e.(*cerror.Error); ok {
-		if ee == nil {
-			b.AppendNil()
+	} else {
+		*b = append(*b, "{\"code\":"...)
+		*b = strconv.AppendInt(*b, int64(e.Code), 10)
+		*b = append(*b, ",\"msg\":"...)
+		special := false
+		for _, v := range e.Msg {
+			if v == '\\' || v == '"' {
+				special = true
+				break
+			}
+		}
+		if special {
+			dd, _ := json.Marshal(e.Msg)
+			*b = append(*b, dd...)
+			*b = append(*b, '}')
 		} else {
-			*b = append(*b, "{\"code\":"...)
-			*b = strconv.AppendInt(*b, int64(ee.Code), 10)
-			*b = append(*b, ",\"msg\":\""...)
-			*b = append(*b, ee.Msg...)
+			*b = append(*b, '"')
+			*b = append(*b, e.Msg...)
 			*b = append(*b, "\"}"...)
 		}
-	} else {
-		*b = append(*b, e.Error()...)
 	}
 }
-func (b *Buffer) AppendErrors(e []error) {
-	if e == nil {
+func (b *Buffer) AppendErrors(es []*cerror.Error) {
+	if es == nil {
 		b.AppendNil()
-	} else if len(e) == 0 {
+	} else if len(es) == 0 {
 		b.AppendEmptySlice()
 	} else {
 		*b = append(*b, '[')
-		for _, ee := range e {
-			if ee == nil {
+		for _, e := range es {
+			if e == nil {
 				b.AppendNil()
-			} else if eee, ok := ee.(*cerror.Error); ok {
-				if eee == nil {
-					b.AppendNil()
+			} else {
+				*b = append(*b, "{\"code\":"...)
+				*b = strconv.AppendInt(*b, int64(e.Code), 10)
+				*b = append(*b, ",\"msg\":"...)
+				special := false
+				for _, v := range e.Msg {
+					if v == '\\' || v == '"' {
+						special = true
+						break
+					}
+				}
+				if special {
+					dd, _ := json.Marshal(e.Msg)
+					*b = append(*b, dd...)
+					*b = append(*b, '}')
 				} else {
-					*b = append(*b, "{\"code\":"...)
-					*b = strconv.AppendInt(*b, int64(eee.Code), 10)
-					*b = append(*b, ",\"msg\":\""...)
-					*b = append(*b, eee.Msg...)
+					*b = append(*b, '"')
+					*b = append(*b, e.Msg...)
 					*b = append(*b, "\"}"...)
 				}
-			} else {
-				*b = append(*b, '"')
-				*b = append(*b, ee.Error()...)
-				*b = append(*b, '"')
 			}
 			*b = append(*b, ',')
 		}
 		(*b)[len(*b)-1] = ']'
 	}
 }
+
 func (b *Buffer) AppendNil() {
 	*b = append(*b, "null"...)
 }

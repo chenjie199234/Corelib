@@ -1,42 +1,41 @@
 package configfile
 
 import (
-	"fmt"
 	"os"
 	"text/template"
 )
 
-const textsource = `{
+const source = `{
 	"cgrpc_server":{
 		"connect_timeout":"200ms",
 		"global_timeout":"500ms",
-		"heart_probe":"1.5s",
+		"heart_probe":"10s",
 		"certs":{
 		}
 	},
 	"cgrpc_client":{
 		"connect_timeout":"200ms",
 		"global_timeout":"0",
-		"heart_probe":"1.5s"
+		"heart_probe":"10s"
 	},
 	"crpc_server":{
 		"connect_timeout":"200ms",
 		"global_timeout":"500ms",
-		"heart_probe":"1.5s",
+		"heart_probe":"3s",
 		"certs":{
 		}
 	},
 	"crpc_client":{
 		"connect_timeout":"200ms",
 		"global_timeout":"0",
-		"heart_probe":"1.5s"
+		"heart_probe":"3s"
 	},
 	"web_server":{
 		"close_mode":0,
 		"connect_timeout":"200ms",
 		"global_timeout":"500ms",
-		"idle_timeout":"5s",
-		"heart_probe":"1.5s",
+		"idle_timeout":"10s",
+		"heart_probe":"3s",
 		"src_root":"",
 		"certs":{
 		},
@@ -49,8 +48,8 @@ const textsource = `{
 	"web_client":{
 		"connect_timeout":"200ms",
 		"global_timeout":"0",
-		"idle_timeout":"5s",
-		"heart_probe":"1.5s"
+		"idle_timeout":"10s",
+		"heart_probe":"3s"
 	},
 	"mongo":{
 		"example_mongo":{
@@ -58,7 +57,7 @@ const textsource = `{
 			"max_open":256,
 			"max_idletime":"10m",
 			"io_timeout":"500ms",
-			"conn_timeout":"200ms"
+			"conn_timeout":"250ms"
 		}
 	},
 	"sql":{
@@ -68,7 +67,7 @@ const textsource = `{
 			"max_idle":100,
 			"max_idletime":"10m",
 			"io_timeout":"500ms",
-			"conn_timeout":"200ms"
+			"conn_timeout":"250ms"
 		}
 	},
 	"redis":{
@@ -78,7 +77,7 @@ const textsource = `{
 			"max_idle":100,
 			"max_idletime":"10m",
 			"io_timeout":"500ms",
-			"conn_timeout":"200ms"
+			"conn_timeout":"250ms"
 		}
 	},
 	"kafka_pub":[
@@ -90,7 +89,7 @@ const textsource = `{
 			"compress_method":2,
 			"topic_name":"example_topic",
 			"io_timeout":"500ms",
-			"conn_timeout":"200ms"
+			"conn_timeout":"250ms"
 		}
 	],
 	"kafka_sub":[
@@ -101,13 +100,13 @@ const textsource = `{
 			"auth_method":3,
 			"topic_name":"example_topic",
 			"group_name":"example_group",
-			"conn_timeout":"200ms",
+			"conn_timeout":"250ms",
 			"start_offset":-2,
 			"commit_interval":"0s"
 		}
 	]
 }`
-const textapp = `{
+const app = `{
 	"handler_timeout":{
 		"/{{.}}.status/ping":{
 			"GET":"200ms",
@@ -117,17 +116,17 @@ const textapp = `{
 	},
 	"web_path_rewrite":{
 		"GET":{
-			"/example/origin/url":"/example/new/url"
+			"/origin/url":"/{{.}}.exampleservice/examplemethod"
 		}
 	},
 	"handler_rate":{
-		"/{{.}}.status/ping":[{
+		"/{{.}}.exampleservice/examplemethod":[{
 			"method":["GET","GRPC","CRPC"],
 			"max_per_sec":10
 		}]
 	},
 	"accesses":{
-		"/{{.}}.status/ping":[{
+		"/{{.}}.exampleservice/examplemethod":[{
 			"method":["GET","GRPC","CRPC"],
 			"accesses":{
 				"accessid":"accesskey"
@@ -141,46 +140,37 @@ const textapp = `{
 	}
 }`
 
-const path = "./"
-const sourcename = "SourceConfig.json"
-const appname = "AppConfig.json"
-
-var tmlsource *template.Template
-var tmlapp *template.Template
-
-var filesource *os.File
-var fileapp *os.File
-
-func init() {
-	var e error
-	tmlsource, e = template.New("source").Parse(textsource)
+func CreatePathAndFile(projectname string) {
+	//./SourceConfig.json
+	sourcefile, e := os.OpenFile("./SourceConfig.json", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("open ./SourceConfig.json error: " + e.Error())
 	}
-	tmlapp, e = template.New("app").Parse(textapp)
+	if _, e := sourcefile.WriteString(source); e != nil {
+		panic("write ./SourceConfig.json error: " + e.Error())
+	}
+	if e := sourcefile.Sync(); e != nil {
+		panic("sync ./SourceConfig.json error: " + e.Error())
+	}
+	if e := sourcefile.Close(); e != nil {
+		panic("close ./SourceConfig.json error: " + e.Error())
+	}
+	//./AppConfig.json
+	apptemplate, e := template.New("./AppConfig.json").Parse(app)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./AppConfig.json template error: " + e.Error())
 	}
-}
-func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
-	}
-	filesource, e = os.OpenFile(path+sourcename, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	appfile, e := os.OpenFile("./AppConfig.json", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+sourcename, e))
+		panic("open ./AppConfig.json error: " + e.Error())
 	}
-	fileapp, e = os.OpenFile(path+appname, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+appname, e))
+	if e := apptemplate.Execute(appfile, projectname); e != nil {
+		panic("write ./AppConfig.json error: " + e.Error())
 	}
-}
-func Execute(projectname string) {
-	if e := tmlsource.Execute(filesource, projectname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+sourcename, e))
+	if e := appfile.Sync(); e != nil {
+		panic("sync ./AppConfig.json error: " + e.Error())
 	}
-	if e := tmlapp.Execute(fileapp, projectname); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+appname, e))
+	if e := appfile.Close(); e != nil {
+		panic("close ./AppConfig.json error: " + e.Error())
 	}
 }

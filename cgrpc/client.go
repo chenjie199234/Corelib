@@ -3,134 +3,105 @@ package cgrpc
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/discover"
+	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/graceful"
+	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	gmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/resolver"
+	gresolver "google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 )
 
-type PickHandler func(servers []*ServerForPick) *ServerForPick
-
-// key server's addr "ip:port"
-// if the value is nil means this server node is offline
-type DiscoveryHandler func(servergroup, servername string) (map[string]*RegisterData, error)
-type RegisterData struct {
-	//server register on which discovery server
-	//if this is empty means this server node is offline
-	DServers map[string]*struct{}
-	Addition []byte
-}
-
 type ClientConfig struct {
-	GlobalTimeout    time.Duration //global timeout for every rpc call
-	ConnectTimeout   time.Duration //default 500ms
-	HeartProbe       time.Duration //default 1s
-	MaxMsgLen        uint32        //default 64M,min 64k
-	UseTLS           bool          //grpc or grpcs
-	SkipVerifyTLS    bool          //don't verify the server's cert
-	CAs              []string      //CAs' path,specific the CAs need to be used,this will overwrite the default behavior:use the system's certpool
-	Picker           PickHandler
-	Discover         DiscoveryHandler //this function is used to resolve server addrs
-	DiscoverInterval time.Duration    //the frequency call Discover to resolve the server addrs,default 10s,min 1s
+	GlobalTimeout  time.Duration //global timeout for every rpc call,<=0 means no timeout
+	ConnectTimeout time.Duration //default 500ms
+	HeartProbe     time.Duration //default 10s,min 10s
+	MaxMsgLen      uint32        //default 64M,min 64k
 }
 
 func (c *ClientConfig) validate() {
 	if c.ConnectTimeout <= 0 {
 		c.ConnectTimeout = time.Millisecond * 500
 	}
-	if c.GlobalTimeout < 0 {
-		c.GlobalTimeout = 0
-	}
-	if c.HeartProbe < time.Second {
-		c.HeartProbe = time.Second
-	}
-	if c.DiscoverInterval <= 0 {
-		c.DiscoverInterval = time.Second * 10
-	} else if c.DiscoverInterval < time.Second {
-		c.DiscoverInterval = time.Second
+	if c.HeartProbe < time.Second*10 {
+		c.HeartProbe = time.Second * 10
 	}
 	if c.MaxMsgLen == 0 {
 		c.MaxMsgLen = 1024 * 1024 * 64
-	} else if c.MaxMsgLen < 65535 {
-		c.MaxMsgLen = 65535
+	} else if c.MaxMsgLen < 65536 {
+		c.MaxMsgLen = 65536
 	}
 }
 
 type CGrpcClient struct {
-	c             *ClientConfig
-	selfappname   string
-	serverappname string //group.name
-	conn          *grpc.ClientConn
-	resolver      *corelibResolver
-	balancer      *corelibBalancer
-	stop          *graceful.Graceful
+	self   string
+	server string
+	c      *ClientConfig
+	tlsc   *tls.Config
+	conn   *grpc.ClientConn
+
+	resolver *resolver.CorelibResolver
+	balancer *corelibBalancer
+	discover discover.DI
+
+	stop *graceful.Graceful
 }
 
-func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servername string) (*CGrpcClient, error) {
-	serverappname := servergroup + "." + servername
-	selfappname := selfgroup + "." + selfname
-	if e := name.FullCheck(selfappname); e != nil {
+// if tlsc is not nil,the tls will be actived
+func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfapp, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*CGrpcClient, error) {
+	//pre check
+	serverfullname, e := name.MakeFullName(serverproject, servergroup, serverapp)
+	if e != nil {
+		return nil, e
+	}
+	selffullname, e := name.MakeFullName(selfproject, selfgroup, selfapp)
+	if e != nil {
 		return nil, e
 	}
 	if c == nil {
-		return nil, errors.New("[cgrpc.client] missing config")
+		c = &ClientConfig{}
 	}
-	if c.Discover == nil {
+	if d == nil {
 		return nil, errors.New("[cgrpc.client] missing discover in config")
 	}
-	if c.Picker == nil {
-		log.Warning(nil, "[cgrpc.client] missing picker in config,default picker will be used")
-		c.Picker = defaultPicker
+	if !d.CheckTarget(serverfullname) {
+		return nil, errors.New("[cgrpc.client] discover's target app not match")
 	}
 	c.validate()
-	clientinstance := &CGrpcClient{
-		c:             c,
-		selfappname:   selfappname,
-		serverappname: serverappname,
-		stop:          graceful.New(),
+	client := &CGrpcClient{
+		self:     selffullname,
+		server:   serverfullname,
+		c:        c,
+		tlsc:     tlsc,
+		discover: d,
+		stop:     graceful.New(),
 	}
-	opts := make([]grpc.DialOption, 0)
+	opts := make([]grpc.DialOption, 0, 10)
 	opts = append(opts, grpc.WithDisableRetry())
-	if !c.UseTLS {
-		opts = append(opts, grpc.WithInsecure())
+	if tlsc == nil {
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	} else {
-		var certpool *x509.CertPool
-		if len(c.CAs) != 0 {
-			certpool = x509.NewCertPool()
-			for _, cert := range c.CAs {
-				certPEM, e := os.ReadFile(cert)
-				if e != nil {
-					return nil, errors.New("[cgrpc.client] read cert file:" + cert + " error:" + e.Error())
-				}
-				if !certpool.AppendCertsFromPEM(certPEM) {
-					return nil, errors.New("[cgrpc.client] load cert file:" + cert + " error:" + e.Error())
-				}
-			}
-		}
-		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
-			InsecureSkipVerify: c.SkipVerifyTLS,
-			RootCAs:            certpool,
-		})))
+		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(client.tlsc)))
 	}
 	opts = append(opts, grpc.WithConnectParams(grpc.ConnectParams{
 		MinConnectTimeout: c.ConnectTimeout,
@@ -142,21 +113,31 @@ func NewCGrpcClient(c *ClientConfig, selfgroup, selfname, servergroup, servernam
 	opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{Time: c.HeartProbe, Timeout: c.HeartProbe*3 + c.HeartProbe/3}))
 	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(int(c.MaxMsgLen))))
 	//balancer
-	balancer.Register(&balancerBuilder{c: clientinstance})
+	balancer.Register(&balancerBuilder{c: client})
 	opts = append(opts, grpc.WithDisableServiceConfig())
 	opts = append(opts, grpc.WithDefaultServiceConfig("{\"loadBalancingConfig\":[{\"corelib\":{}}]}"))
 	//resolver
-	opts = append(opts, grpc.WithResolvers(&resolverBuilder{group: servergroup, name: servername, c: clientinstance}))
-	conn, e := grpc.Dial("corelib:///"+serverappname, opts...)
+	gresolver.Register(&resolverBuilder{c: client})
+	conn, e := grpc.Dial("corelib:///"+serverapp, opts...)
 	if e != nil {
 		return nil, e
 	}
-	clientinstance.conn = conn
-	return clientinstance, nil
+	client.conn = conn
+	return client, nil
 }
 
 func (c *CGrpcClient) ResolveNow() {
-	c.resolver.ResolveNow(resolver.ResolveNowOptions{})
+	c.resolver.Now()
+}
+
+func (c *CGrpcClient) GetServerIps() (ips []string, lasterror error) {
+	tmp, e := c.discover.GetAddrs(discover.NotNeed)
+	ips = make([]string, 0, len(tmp))
+	for k := range tmp {
+		ips = append(ips, k)
+	}
+	lasterror = e
+	return
 }
 
 // force - false graceful,wait all requests finish,true - not graceful,close all connections immediately
@@ -176,7 +157,7 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 		return ClientClosed
 	}
 	defer c.stop.DoneOne()
-	if c.c.GlobalTimeout != 0 {
+	if c.c.GlobalTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout))
 		defer cancel()
@@ -187,10 +168,12 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 		md.Set("Core-Metadata", common.Byte2str(d))
 	}
 	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
-	if traceid != "" {
-		md.Set("Core-Tracedata", traceid, c.selfappname, selfmethod, selfpath, strconv.Itoa(selfdeep))
+	if traceid == "" {
+		ctx = log.InitTrace(ctx, "", c.self, host.Hostip, "unknown", "unknown", 0)
+		traceid, _, _, selfmethod, selfpath, selfdeep = log.GetTrace(ctx)
 	}
-	md.Set("Core-Target", c.serverappname)
+	md.Set("Core-Tracedata", traceid, c.self, selfmethod, selfpath, strconv.Itoa(selfdeep))
+	md.Set("Core-Target", c.server)
 	ctx = gmetadata.NewOutgoingContext(ctx, md)
 	for {
 		start := time.Now()
@@ -201,10 +184,10 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 			//pick error or create stream unretryable error,req doesn't send
 		} else {
 			//req send,recv error
-			log.Trace(ctx, log.CLIENT, c.serverappname, p.Addr.String(), "GRPC", path, &start, &end, e)
-			monitor.GrpcClientMonitor(c.serverappname, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
+			log.Trace(ctx, log.CLIENT, c.server, p.Addr.String(), "GRPC", path, &start, &end, e)
+			monitor.GrpcClientMonitor(c.server, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
 		}
-		if cerror.Equal(e, cerror.ErrClosing) {
+		if cerror.Equal(e, cerror.ErrServerClosing) {
 			continue
 		}
 		if e == nil {
@@ -231,14 +214,30 @@ func transGrpcError(e error) *cerror.Error {
 		return cerror.ErrDeadlineExceeded
 	case codes.Unknown:
 		return cerror.ConvertErrorstr(s.Message())
+	case codes.InvalidArgument:
+		return cerror.MakeError(-1, http.StatusBadRequest, s.Message())
+	case codes.NotFound:
+		return cerror.MakeError(-1, http.StatusNotFound, s.Message())
+	case codes.AlreadyExists:
+		return cerror.MakeError(-1, http.StatusBadRequest, s.Message())
+	case codes.PermissionDenied:
+		return cerror.MakeError(-1, http.StatusForbidden, s.Message())
 	case codes.ResourceExhausted:
 		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
+	case codes.FailedPrecondition:
+		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
+	case codes.Aborted:
+		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
+	case codes.OutOfRange:
+		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
 	case codes.Unimplemented:
-		return cerror.ErrNoapi
+		return cerror.MakeError(-1, http.StatusNotImplemented, s.Message())
 	case codes.Internal:
 		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
 	case codes.Unavailable:
 		return cerror.MakeError(-1, http.StatusServiceUnavailable, s.Message())
+	case codes.DataLoss:
+		return cerror.MakeError(-1, http.StatusNotFound, s.Message())
 	case codes.Unauthenticated:
 		return cerror.MakeError(-1, http.StatusServiceUnavailable, s.Message())
 	default:

@@ -149,22 +149,21 @@ func (c *ServerConfig) getCorsExpose() string {
 }
 
 type WebServer struct {
-	handlerTimeout map[string]map[string]time.Duration //first key method,second key path,value timeout
-	selfappname    string
-	c              *ServerConfig
-	ctxpool        *sync.Pool
-	global         []OutsideHandler
-	r              *router
-	s              *http.Server
-	clientnum      int32
-	stop           *graceful.Graceful
-	closetimer     *time.Timer
+	self       string
+	c          *ServerConfig
+	ctxpool    *sync.Pool
+	global     []OutsideHandler
+	r          *router
+	s          *http.Server
+	clientnum  int32
+	stop       *graceful.Graceful
+	closetimer *time.Timer
 }
 
-func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, error) {
+func NewWebServer(c *ServerConfig, selfproject, selfgroup, selfapp string) (*WebServer, error) {
 	//pre check
-	selfappname := selfgroup + "." + selfname
-	if e := name.FullCheck(selfappname); e != nil {
+	selffullname, e := name.MakeFullName(selfproject, selfgroup, selfapp)
+	if e != nil {
 		return nil, e
 	}
 	if c == nil {
@@ -173,14 +172,13 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 	c.validate()
 	//new server
 	instance := &WebServer{
-		handlerTimeout: make(map[string]map[string]time.Duration),
-		selfappname:    selfappname,
-		c:              c,
-		ctxpool:        &sync.Pool{},
-		global:         make([]OutsideHandler, 0, 10),
-		r:              newRouter(c.SrcRoot),
-		stop:           graceful.New(),
-		closetimer:     time.NewTimer(0),
+		self:       selffullname,
+		c:          c,
+		ctxpool:    &sync.Pool{},
+		global:     make([]OutsideHandler, 0, 10),
+		r:          newRouter(c.SrcRoot),
+		stop:       graceful.New(),
+		closetimer: time.NewTimer(0),
 	}
 	<-instance.closetimer.C
 	instance.s = &http.Server{
@@ -228,13 +226,13 @@ func NewWebServer(c *ServerConfig, selfgroup, selfname string) (*WebServer, erro
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		w.Write(common.Str2byte(cerror.ErrNotExist.Error()))
-		log.Error(nil, "[web.server] client:", realip(r), "path:", r.URL.Path, "method:", r.Method, "not exist")
+		log.Error(nil, "[web.server] path not exist", map[string]interface{}{"cip": realip(r), "path": r.URL.Path, "method": r.Method})
 	})
 	instance.r.srcPermissionHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		w.Write(common.Str2byte(cerror.ErrPermission.Error()))
-		log.Error(nil, "[web.server] client:", realip(r), "path:", r.URL.Path, "method:", r.Method, "open src file permission denie")
+		log.Error(nil, "[web.server] static src file permission denie", map[string]interface{}{"cip": realip(r), "path": r.URL.Path, "method": r.Method})
 	})
 	instance.r.optionsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//for OPTIONS preflight
@@ -375,16 +373,8 @@ func (s *WebServer) UpdateHandlerTimeout(htcs map[string]map[string]time.Duratio
 			tmp[method][path] = timeout
 		}
 	}
-	s.handlerTimeout = tmp
-}
-
-func (s *WebServer) getHandlerTimeout(method, path string) time.Duration {
-	if m, ok := s.handlerTimeout[method]; ok {
-		if t, ok := m[path]; ok {
-			return t
-		}
-	}
-	return s.c.GlobalTimeout
+	tmp["default"] = map[string]time.Duration{"default": s.c.GlobalTimeout}
+	s.r.updatetimeout(tmp)
 }
 
 // thread unsafe
@@ -428,11 +418,11 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 	copy(totalhandlers[len(s.global):], handlers)
 	return func(w http.ResponseWriter, r *http.Request) {
 		//target
-		if target := r.Header.Get("Core-Target"); target != "" && target != s.selfappname {
+		if target := r.Header.Get("Core-Target"); target != "" && target != s.self {
 			//this is not the required server.tell peer self closed
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(int(cerror.ErrClosing.Httpcode))
-			w.Write(common.Str2byte(cerror.ErrClosing.Error()))
+			w.WriteHeader(int(cerror.ErrTarget.Httpcode))
+			w.Write(common.Str2byte(cerror.ErrTarget.Error()))
 			return
 		}
 		//cors
@@ -472,93 +462,58 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 		if tracestr := r.Header.Get("Core-Tracedata"); tracestr != "" {
 			tracedata := make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(tracestr), &tracedata); e != nil {
-				log.Error(nil, "[web.server] client:", sourceip, "path:", path, "method:", method, "error: tracedata:", tracestr, "format error")
+				log.Error(nil, "[web.server] tracedata format wrong", map[string]interface{}{"cip": sourceip, "path": path, "method": method, "tracedata": tracestr})
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(cerror.ErrReq.Error()))
 				return
 			}
 			if len(tracedata) == 0 || tracedata["TraceID"] == "" {
-				ctx = log.InitTrace(r.Context(), "", s.selfappname, host.Hostip, method, path, 0)
+				ctx = log.InitTrace(r.Context(), "", s.self, host.Hostip, method, path, 0)
 			} else {
 				sourceapp = tracedata["SourceApp"]
 				sourcemethod = tracedata["SourceMethod"]
 				sourcepath = tracedata["SourcePath"]
 				clientdeep, e := strconv.Atoi(tracedata["Deep"])
 				if e != nil || sourceapp == "" || sourcemethod == "" || sourcepath == "" || clientdeep == 0 {
-					log.Error(nil, "[web.server] client:", sourceip, "path:", path, "method:", method, "error: tracedata:", tracestr, "format error")
+					log.Error(nil, "[web.server] tracedata format wrong", map[string]interface{}{"cip": sourceip, "path": path, "method": method, "tracedata": tracestr})
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusBadRequest)
 					w.Write(common.Str2byte(cerror.ErrReq.Error()))
 					return
 				}
-				ctx = log.InitTrace(r.Context(), tracedata["TraceID"], s.selfappname, host.Hostip, method, path, clientdeep)
+				ctx = log.InitTrace(r.Context(), tracedata["TraceID"], s.self, host.Hostip, method, path, clientdeep)
 			}
 		} else {
-			ctx = log.InitTrace(r.Context(), "", s.selfappname, host.Hostip, method, path, 0)
+			ctx = log.InitTrace(r.Context(), "", s.self, host.Hostip, method, path, 0)
 		}
 		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
 		var mdata map[string]string
 		if mdstr := r.Header.Get("Core-Metadata"); mdstr != "" {
 			mdata = make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(mdstr), &mdata); e != nil {
-				log.Error(ctx, "[web.server] client:", sourceapp+":"+sourceip, "path:", path, "method:", method, "error: metadata:", mdstr, "format error")
+				log.Error(ctx, "[web.server] metadata format wrong", map[string]interface{}{"cname": sourceapp, "cip": sourceip, "path": path, "method": method, "metadata": mdstr})
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(cerror.ErrReq.Error()))
 				return
 			}
 		}
-		var clientdl int64
+		//timeout
 		if temp := r.Header.Get("Core-Deadline"); temp != "" {
-			var e error
-			clientdl, e = strconv.ParseInt(temp, 10, 64)
+			clientdl, e := strconv.ParseInt(temp, 10, 64)
 			if e != nil {
-				log.Error(ctx, "[web.server] client:", sourceapp+":"+sourceip, "path:", path, "method:", method, "error: Deadline:", temp, "format error")
+				log.Error(ctx, "[web.server] deadline format wrong", map[string]interface{}{"cname": sourceapp, "cip": sourceip, "path": path, "method": method, "deadline": temp})
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(common.Str2byte(cerror.ErrReq.Error()))
 				return
 			}
-		}
-		//set timeout
-		start := time.Now()
-		var min int64
-		servertimeout := int64(s.getHandlerTimeout(method, path))
-		if servertimeout > 0 {
-			serverdl := start.UnixNano() + servertimeout
 			if clientdl != 0 {
-				//compare use the small one
-				if clientdl < serverdl {
-					min = clientdl
-				} else {
-					min = serverdl
-				}
-			} else {
-				//use serverdl
-				min = serverdl
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithDeadline(ctx, time.Unix(0, clientdl))
+				defer cancel()
 			}
-		} else if clientdl != 0 {
-			//use client timeout
-			min = clientdl
-		} else {
-			//no timeout
-			min = 0
-		}
-		if min != 0 {
-			if min < start.UnixNano()+int64(time.Millisecond) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusGatewayTimeout)
-				w.Write(common.Str2byte(cerror.ErrDeadlineExceeded.Error()))
-				end := time.Now()
-
-				log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+r.Context().Value(localport{}).(string), method, path, &start, &end, cerror.ErrDeadlineExceeded)
-				monitor.WebServerMonitor(sourceapp, method, path, cerror.ErrDeadlineExceeded, uint64(end.UnixNano()-start.UnixNano()))
-				return
-			}
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, min))
-			defer cancel()
 		}
 		//check server status
 		if !s.stop.AddOne() {
@@ -568,12 +523,13 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 			}
 			//tell peer self closed
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(int(cerror.ErrClosing.Httpcode))
-			w.Write(common.Str2byte(cerror.ErrClosing.Error()))
+			w.WriteHeader(int(cerror.ErrServerClosing.Httpcode))
+			w.Write(common.Str2byte(cerror.ErrServerClosing.Error()))
 			return
 		}
 		defer s.stop.DoneOne()
 		//logic
+		start := time.Now()
 		workctx := s.getContext(w, r, ctx, sourceapp, mdata, totalhandlers)
 		if _, ok := workctx.metadata["Client-IP"]; !ok {
 			workctx.metadata["Client-IP"] = sourceip
@@ -582,14 +538,14 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 			if e := recover(); e != nil {
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[web.server] client:", sourceapp+":"+sourceip, "path:", path, "method:", method, "panic:", e, "stack:", base64.StdEncoding.EncodeToString(stack[:n]))
+				log.Error(workctx, "[web.server] panic", map[string]interface{}{"cname": sourceapp, "cip": sourceip, "path": path, "method": method, "panic": e, "stack": base64.StdEncoding.EncodeToString(stack[:n])})
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write(common.Str2byte(cerror.ErrPanic.Error()))
 				workctx.e = cerror.ErrPanic
 			}
 			end := time.Now()
-			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+r.Context().Value(localport{}).(string), method, path, &start, &end, workctx.e)
+			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.self, host.Hostip+":"+r.Context().Value(localport{}).(string), method, path, &start, &end, workctx.e)
 			monitor.WebServerMonitor(sourceapp, method, path, workctx.e, uint64(end.UnixNano()-start.UnixNano()))
 			s.putContext(workctx)
 		}()

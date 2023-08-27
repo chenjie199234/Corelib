@@ -16,6 +16,14 @@ import (
 	"github.com/gomodule/redigo/redis"
 )
 
+// name_0(redis list):[data1,data2,data3...]
+// {name_0}_exist(redis string):1
+// name_1(redis list):[data1,data2,data3...]
+// {name_1}_exist(redis string):1
+// ...
+// name_n(redis list):[data1,data2,data3...]
+// {name_n}_exist(redis string):1
+
 var ErrTemporaryMQMissingName = errors.New("temporary mq missing name")
 var ErrTemporaryMQMissingGroup = errors.New("temporary mq missing group")
 
@@ -56,7 +64,7 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 				c, e := p.p.GetContext(context.Background())
 				if e != nil {
 					err = e
-					log.Error(nil, "[redis.TemporaryMQ.update] index:", index, "get connection:", e)
+					log.Error(nil, "[redis.TemporaryMQ.update] get connection failed", map[string]interface{}{"group": index, "error": e})
 					return
 				}
 				defer c.Close()
@@ -65,7 +73,7 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 				}
 				if e != nil {
 					err = e
-					log.Error(nil, "[redis.TemporaryMQ.update] index:", index, e)
+					log.Error(nil, "[redis.TemporaryMQ.update] update group expire failed", map[string]interface{}{"group": index, "error": e})
 				}
 			}(i)
 			if i%20 == 19 {
@@ -90,13 +98,13 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 				c, e := p.p.GetContext(context.Background())
 				if e != nil {
 					err = e
-					log.Error(nil, "[redis.TemporaryMQ.stop] index:", index, "get connection:", e)
+					log.Error(nil, "[redis.TemporaryMQ.stop] get connection failed", map[string]interface{}{"group": index, "error": e})
 					return
 				}
 				defer c.Close()
 				if _, e = c.(redis.ConnWithContext).DoContext(ctx, "DEL", listexist); e != nil {
 					err = e
-					log.Error(nil, "[redis.TemporaryMQ.stop] index:", index, e)
+					log.Error(nil, "[redis.TemporaryMQ.stop] delete group failed", map[string]interface{}{"group": index, "error": e})
 				}
 			}(i)
 			if i%20 == 19 {
@@ -169,7 +177,7 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 				default:
 				}
 				if c, e = p.p.GetContext(context.Background()); e != nil {
-					log.Error(nil, "[redis.TemporaryMQ.sub] get redis connection:", e)
+					log.Error(nil, "[redis.TemporaryMQ.sub] get connection failed", map[string]interface{}{"group": index, "error": e})
 					continue
 				}
 				lker.Lock()
@@ -189,10 +197,10 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 						select {
 						case <-cleanch:
 							if ee := errors.Unwrap(e); ee == nil || ee != net.ErrClosed {
-								log.Error(nil, "[redis.TemporaryMQ.sub] index:", index, e)
+								log.Error(nil, "[redis.TemporaryMQ.sub] read group failed", map[string]interface{}{"group": index, "error": e})
 							}
 						default:
-							log.Error(nil, "[redis.TemporaryMQ.sub] index:", index, e)
+							log.Error(nil, "[redis.TemporaryMQ.sub] read group failed", map[string]interface{}{"group": index, "error": e})
 						}
 						break
 					}
@@ -226,6 +234,7 @@ var hpubTemporaryMQ = ""
 // in redis cluster mode,group is used to shard data into different redis node
 // in redis slave master mode,group is better to be 1
 // sub and pub's group should be same
+// key is only used to shard data(hash)
 func (p *Pool) TemporaryMQPub(ctx context.Context, name string, group uint64, key string, value ...[]byte) error {
 	if len(value) == 0 {
 		return nil

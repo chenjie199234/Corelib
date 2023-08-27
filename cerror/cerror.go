@@ -117,8 +117,18 @@ func (this *Error) Error() string {
 	if this == nil {
 		return ""
 	}
-	d, _ := json.Marshal(this.Msg)
-	return "{\"code\":" + strconv.FormatInt(int64(this.Code), 10) + ",\"msg\":" + common.Byte2str(d) + "}"
+	special := false
+	for _, v := range this.Msg {
+		if v == '\\' || v == '"' {
+			special = true
+			break
+		}
+	}
+	if special {
+		d, _ := json.Marshal(this.Msg)
+		return "{\"code\":" + strconv.FormatInt(int64(this.Code), 10) + ",\"msg\":" + common.Byte2str(d) + "}"
+	}
+	return "{\"code\":" + strconv.FormatInt(int64(this.Code), 10) + ",\"msg\":\"" + this.Msg + "\"}"
 }
 func (this *Error) GRPCStatus() *status.Status {
 	return status.New(codes.Code(this.Httpcode), this.Error())

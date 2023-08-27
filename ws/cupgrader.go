@@ -60,7 +60,7 @@ func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header 
 			return
 		}
 		if prefix {
-			buf.AppendByteSlice(line)
+			buf.AppendBytes(line)
 			continue
 		}
 		if len(line) == 0 && buf.Len() == 0 {
@@ -74,7 +74,7 @@ func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header 
 			line = buf.Bytes()
 		} else {
 			//deal the buf+line
-			buf.AppendByteSlice(line)
+			buf.AppendBytes(line)
 			line = buf.Bytes()
 		}
 		//deal

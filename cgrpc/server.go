@@ -30,9 +30,9 @@ import (
 type OutsideHandler func(*Context)
 
 type ServerConfig struct {
-	GlobalTimeout  time.Duration     //global timeout for every rpc call(including connection establish time)
+	GlobalTimeout  time.Duration     //global timeout for every rpc call,<=0 means no timeout
 	ConnectTimeout time.Duration     //default 500ms
-	HeartPorbe     time.Duration     //default 1s
+	HeartPorbe     time.Duration     //default 10s,min 10s
 	MaxMsgLen      uint32            //default 64M,min 64k
 	Certs          map[string]string //mapkey: cert path,mapvalue: key path
 }
@@ -41,22 +41,19 @@ func (c *ServerConfig) validate() {
 	if c.ConnectTimeout <= 0 {
 		c.ConnectTimeout = 500 * time.Millisecond
 	}
-	if c.GlobalTimeout < 0 {
-		c.GlobalTimeout = 0
-	}
-	if c.HeartPorbe < time.Second {
-		c.HeartPorbe = time.Second
+	if c.HeartPorbe < time.Second*10 {
+		c.HeartPorbe = time.Second * 10
 	}
 	if c.MaxMsgLen == 0 {
 		c.MaxMsgLen = 1024 * 1024 * 64
-	} else if c.MaxMsgLen < 65535 {
-		c.MaxMsgLen = 65535
+	} else if c.MaxMsgLen < 65536 {
+		c.MaxMsgLen = 65536
 	}
 }
 
 type CGrpcServer struct {
 	c              *ServerConfig
-	selfappname    string //group.name
+	self           string
 	global         []OutsideHandler
 	ctxpool        *sync.Pool
 	server         *grpc.Server
@@ -66,9 +63,10 @@ type CGrpcServer struct {
 	totalreqnum    int64
 }
 
-func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, error) {
-	selfappname := selfgroup + "." + selfname
-	if e := name.FullCheck(selfappname); e != nil {
+func NewCGrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string) (*CGrpcServer, error) {
+	//pre check
+	selffullname, e := name.MakeFullName(selfproject, selfgroup, selfapp)
+	if e != nil {
 		return nil, e
 	}
 	if c == nil {
@@ -77,7 +75,7 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 	c.validate()
 	serverinstance := &CGrpcServer{
 		c:              c,
-		selfappname:    selfappname,
+		self:           selffullname,
 		global:         make([]OutsideHandler, 0),
 		ctxpool:        &sync.Pool{},
 		services:       make(map[string]*grpc.ServiceDesc),
@@ -103,7 +101,7 @@ func NewCGrpcServer(c *ServerConfig, selfgroup, selfname string) (*CGrpcServer, 
 			remoteaddr := conninfo.RemoteAddr.String()
 			peerip = remoteaddr[:strings.LastIndex(remoteaddr, ":")]
 		}
-		log.Error(nil, "[cgrpc.server] client:", peerip, "call path:", rpcinfo.FullMethodName, "doesn't exist")
+		log.Error(nil, "[cgrpc.server] path doesn't exist", map[string]interface{}{"cip": peerip, "path": rpcinfo.FullMethodName})
 		return cerror.ErrNoapi
 	}))
 	if c.ConnectTimeout != 0 {
@@ -209,8 +207,8 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 	return func(_ interface{}, ctx context.Context, decode func(interface{}) error, _ grpc.UnaryServerInterceptor) (resp interface{}, e error) {
 		gmd, ok := metadata.FromIncomingContext(ctx)
 		if ok {
-			if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != s.selfappname {
-				return nil, cerror.ErrClosing
+			if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != s.self {
+				return nil, cerror.ErrTarget
 			}
 		}
 		atomic.AddInt64(&s.totalreqnum, 1)
@@ -234,9 +232,9 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		sourcepath := "unknown"
 		if ok {
 			if data := gmd.Get("Core-Tracedata"); len(data) == 0 || data[0] == "" {
-				ctx = log.InitTrace(ctx, "", s.selfappname, host.Hostip, "GRPC", path, 0)
+				ctx = log.InitTrace(ctx, "", s.self, host.Hostip, "GRPC", path, 0)
 			} else if len(data) != 5 {
-				log.Error(nil, "[cgrpc.server] client:", sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format wrong")
+				log.Error(nil, "[cgrpc.server] tracedata format wrong", map[string]interface{}{"cip": sourceip, "path": path, "tracedata": data})
 				return nil, cerror.ErrReq
 			} else {
 				sourceapp = data[1]
@@ -244,10 +242,10 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				sourcepath = data[3]
 				clientdeep, e := strconv.Atoi(data[4])
 				if e != nil || sourceapp == "" || sourcemethod == "" || sourcepath == "" || clientdeep == 0 {
-					log.Error(nil, "[cgrpc.server] client:", sourceip, "path:", path, "method: GRPC error: tracedata:", data, "format wrong")
+					log.Error(nil, "[cgrpc.server] tracedata format wrong", map[string]interface{}{"cip": sourceip, "path": path, "tracedata": data})
 					return nil, cerror.ErrReq
 				}
-				ctx = log.InitTrace(ctx, data[0], s.selfappname, host.Hostip, "GRPC", path, clientdeep)
+				ctx = log.InitTrace(ctx, data[0], s.self, host.Hostip, "GRPC", path, clientdeep)
 			}
 		}
 		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
@@ -257,7 +255,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			if len(data) != 0 {
 				mdata = make(map[string]string)
 				if e := json.Unmarshal(common.Str2byte(data[0]), &mdata); e != nil {
-					log.Error(ctx, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC metadata:", data[0], "format wrong:", e)
+					log.Error(ctx, "[cgrpc.server] metadata format wrong", map[string]interface{}{"cname": sourceapp, "cip": sourceip, "path": path, "metadata": data[0]})
 					return nil, cerror.ErrReq
 				}
 			}
@@ -269,14 +267,6 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			ctx, cancel = context.WithDeadline(ctx, start.Add(servertimeout))
 			defer cancel()
 		}
-		if dl, ok := ctx.Deadline(); ok && dl.UnixNano() < start.UnixNano()+int64(time.Millisecond) {
-			resp = nil
-			e = cerror.ErrDeadlineExceeded
-			end := time.Now()
-			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+localaddr[strings.LastIndex(localaddr, ":")+1:], "GRPC", path, &start, &end, e)
-			monitor.GrpcServerMonitor(sourceapp, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
-			return
-		}
 		workctx := s.getcontext(ctx, path, sourceapp, remoteaddr, mdata, totalhandlers, decode)
 		if _, ok := workctx.metadata["Client-IP"]; !ok {
 			workctx.metadata["Client-IP"] = sourceip
@@ -285,12 +275,12 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			if e := recover(); e != nil {
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[cgrpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: GRPC panic:", e, "stack:", base64.StdEncoding.EncodeToString(stack[:n]))
+				log.Error(workctx, "[cgrpc.server] panic", map[string]interface{}{"cname": sourceapp, "cip": sourceip, "path": path, "panic": e, "stack": base64.StdEncoding.EncodeToString(stack[:n])})
 				workctx.e = cerror.ErrPanic
 				workctx.resp = nil
 			}
 			end := time.Now()
-			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+localaddr[strings.LastIndex(localaddr, ":")+1:], "GRPC", path, &start, &end, workctx.e)
+			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.self, host.Hostip+":"+localaddr[strings.LastIndex(localaddr, ":")+1:], "GRPC", path, &start, &end, workctx.e)
 			monitor.GrpcServerMonitor(sourceapp, "GRPC", path, workctx.e, uint64(end.UnixNano()-start.UnixNano()))
 			resp = workctx.resp
 			if workctx.e != nil {
@@ -336,9 +326,9 @@ func (s *CGrpcServer) HandleConn(ctx context.Context, stat stats.ConnStats) {
 	switch stat.(type) {
 	case *stats.ConnBegin:
 		atomic.AddInt32(&s.clientnum, 1)
-		log.Info(nil, "[cgrpc.server] client:", peerip, "online")
+		log.Info(nil, "[cgrpc.server] online", map[string]interface{}{"cip": peerip})
 	case *stats.ConnEnd:
 		atomic.AddInt32(&s.clientnum, -1)
-		log.Info(nil, "[cgrpc.server] client:", peerip, "offline")
+		log.Info(nil, "[cgrpc.server] offline", map[string]interface{}{"cip": peerip})
 	}
 }

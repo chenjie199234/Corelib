@@ -21,83 +21,83 @@ func Test_Super(t *testing.T) {
 		Cmd:  "./main",
 		Args: nil,
 	}
-	if e := s.CreateGroup("testgroup", "testname", "xxx", buildcmds, runcmd); e != nil {
+	if e := s.CreateApp("project", "group", "app", "xxx", buildcmds, runcmd); e != nil {
 		panic(e)
 	}
 	for {
 		time.Sleep(time.Second)
-		if ginfo, e := s.GetGroupInfo("testgroup", "testname"); e == nil {
-			if ginfo.Status == g_CLOSING {
-				panic("init group failed")
-			} else if ginfo.Status == g_BUILDFAILED {
+		if ainfo, e := s.GetAppInfo("project", "group", "name"); e == nil {
+			if ainfo.Status == a_CLOSING {
+				panic("init failed")
+			} else if ainfo.Status == a_BUILDFAILED {
 				break
 			}
 		}
 	}
-	if e := s.BuildGroup("testgroup", "testname", "ajdklasdklbnakshd", ""); e != nil {
+	if e := s.BuildApp("project", "group", "name", "ajdklasdklbnakshd"); e != nil {
 		panic(e)
 	}
 	for {
 		time.Sleep(time.Second)
-		if ginfo, e := s.GetGroupInfo("testgroup", "testname"); e == nil {
-			if ginfo.Status == g_BUILDFAILED {
+		if ainfo, e := s.GetAppInfo("project", "group", "name"); e == nil {
+			if ainfo.Status == a_BUILDFAILED {
 				t.Log("build failed")
 				break
-			} else if ginfo.Status == g_BUILDSUCCESS {
+			} else if ainfo.Status == a_BUILDSUCCESS {
 				panic("should build failed but build success")
 			}
 		}
 	}
-	if e := s.BuildGroup("testgroup", "testname", "master", ""); e != nil {
+	if e := s.BuildApp("project", "group", "name", "master"); e != nil {
 		panic(e)
 	}
 	for {
 		time.Sleep(time.Second)
-		if ginfo, e := s.GetGroupInfo("testgroup", "testname"); e == nil {
-			if ginfo.Status == g_BUILDSUCCESS {
+		if ainfo, e := s.GetAppInfo("project", "group", "name"); e == nil {
+			if ainfo.Status == a_BUILDSUCCESS {
 				t.Log("build success")
-				d, _ := json.Marshal(ginfo)
+				d, _ := json.Marshal(ainfo)
 				t.Log(string(d))
 				break
-			} else if ginfo.Status == g_BUILDFAILED {
+			} else if ainfo.Status == a_BUILDFAILED {
 				panic("should build success but build failed")
 			}
 		}
 	}
-	if e := s.UpdateGroup("testgroup", "testname"); e != nil {
+	if e := s.UpdateApp("project", "group", "name"); e != nil {
 		panic(e)
 	}
 	for {
 		time.Sleep(time.Second)
-		if ginfo, e := s.GetGroupInfo("testgroup", "testname"); e == nil {
-			if ginfo.Status == g_UPDATESUCCESS || ginfo.Status == g_BUILDSUCCESS {
+		if ainfo, e := s.GetAppInfo("project", "group", "name"); e == nil {
+			if ainfo.Status == a_UPDATESUCCESS || ainfo.Status == a_BUILDSUCCESS {
 				t.Log("update success")
-				d, _ := json.Marshal(ginfo)
+				d, _ := json.Marshal(ainfo)
 				t.Log(string(d))
 				break
-			} else if ginfo.Status == g_UPDATEFAILED {
+			} else if ainfo.Status == a_UPDATEFAILED {
 				panic("update failed")
 			}
 		}
 	}
 	ppid := 0
-	if e := s.StartProcess("testgroup", "testname", true); e != nil {
+	if e := s.StartAppProcess("project", "group", "name", true); e != nil {
 		panic("start error:" + e.Error())
 	}
 	for {
 		time.Sleep(time.Second)
-		if ginfo, e := s.GetGroupInfo("testgroup", "testname"); e == nil {
-			if len(ginfo.Pinfo) > 0 {
-				if ginfo.Pinfo[0].Status == p_STARTING {
+		if ainfo, e := s.GetAppInfo("project", "group", "name"); e == nil {
+			if len(ainfo.ProcessInfo) > 0 {
+				if ainfo.ProcessInfo[0].Status == p_STARTING {
 					t.Log("process is starting")
 				}
-				if ginfo.Pinfo[0].Status == p_CLOSING {
+				if ainfo.ProcessInfo[0].Status == p_CLOSING {
 					panic("start process error")
 				}
-				if ginfo.Pinfo[0].Status == p_WORKING {
-					ppid = int(ginfo.Pinfo[0].Ppid)
+				if ainfo.ProcessInfo[0].Status == p_WORKING {
+					ppid = int(ainfo.ProcessInfo[0].Ppid)
 					t.Log("process start success")
-					d, _ := json.Marshal(ginfo)
+					d, _ := json.Marshal(ainfo)
 					t.Log(string(d))
 					break
 				}
@@ -105,70 +105,70 @@ func Test_Super(t *testing.T) {
 		}
 	}
 	_ = ppid
-	if e := s.RestartProcess("testgroup", "testname", 1); e != nil {
+	if e := s.RestartAppProcess("project", "group", "name", 1); e != nil {
 		panic("restart error:" + e.Error())
 	}
 	for {
 		time.Sleep(time.Second)
-		if ginfo, e := s.GetGroupInfo("testgroup", "testname"); e == nil {
-			if len(ginfo.Pinfo) > 0 {
-				if ginfo.Pinfo[0].Status == p_WORKING && ppid != int(ginfo.Pinfo[0].Ppid) {
-					ppid = int(ginfo.Pinfo[0].Ppid)
+		if ainfo, e := s.GetAppInfo("project", "group", "name"); e == nil {
+			if len(ainfo.ProcessInfo) > 0 {
+				if ainfo.ProcessInfo[0].Status == p_WORKING && ppid != int(ainfo.ProcessInfo[0].Ppid) {
+					ppid = int(ainfo.ProcessInfo[0].Ppid)
 					t.Log("restart success")
-					d, _ := json.Marshal(ginfo)
+					d, _ := json.Marshal(ainfo)
 					t.Log(string(d))
 					break
 				}
 			}
 		}
 	}
-	if e := s.StopProcess("testgroup", "testname", 1); e != nil {
+	if e := s.StopAppProcess("project", "group", "name", 1); e != nil {
 		panic("stop error:" + e.Error())
 	}
 	for {
 		time.Sleep(time.Second)
-		if ginfo, e := s.GetGroupInfo("testgroup", "testname"); e == nil {
-			if len(ginfo.Pinfo) == 0 {
+		if ainfo, e := s.GetAppInfo("project", "group", "name"); e == nil {
+			if len(ainfo.ProcessInfo) == 0 {
 				t.Log("stop success")
 				break
 			}
 		}
 	}
-	if e := s.StartProcess("testgroup", "testname", true); e != nil {
+	if e := s.StartAppProcess("project", "group", "name", true); e != nil {
 		panic("start error:" + e.Error())
 	}
 	for {
 		time.Sleep(time.Second)
-		if ginfo, e := s.GetGroupInfo("testgroup", "testname"); e == nil {
-			if len(ginfo.Pinfo) > 0 {
-				if ginfo.Pinfo[0].Status == p_STARTING {
+		if ainfo, e := s.GetAppInfo("project", "group", "name"); e == nil {
+			if len(ainfo.ProcessInfo) > 0 {
+				if ainfo.ProcessInfo[0].Status == p_STARTING {
 					t.Log("process is starting")
 				}
-				if ginfo.Pinfo[0].Status == p_CLOSING {
+				if ainfo.ProcessInfo[0].Status == p_CLOSING {
 					panic("start process error")
 				}
-				if ginfo.Pinfo[0].Status == p_WORKING {
-					ppid = int(ginfo.Pinfo[0].Ppid)
+				if ainfo.ProcessInfo[0].Status == p_WORKING {
+					ppid = int(ainfo.ProcessInfo[0].Ppid)
 					t.Log("process start success")
-					d, _ := json.Marshal(ginfo)
+					d, _ := json.Marshal(ainfo)
 					t.Log(string(d))
 					break
 				}
 			}
 		}
 	}
-	if e := s.DeleteGroup("testgroup", "testname"); e != nil {
+	if e := s.DeleteApp("project", "group", "name"); e != nil {
 		panic("del error:" + e.Error())
 	}
 	for {
 		time.Sleep(time.Second)
-		ginfo, e := s.GetGroupInfo("testgroup", "testname")
-		if e != nil && e.Error() == "[groupinfo] group doesn't exist" {
+		ainfo, e := s.GetAppInfo("project", "group", "name")
+		if e != nil && e.Error() == "[GetAppInfo] app doesn't exist" {
 			t.Log("deleted")
 			break
 		} else {
 			t.Log("not deleted")
-			d, _ := json.Marshal(ginfo)
+			d, _ := json.Marshal(ainfo)
 			t.Log(string(d))
 		}
 	}

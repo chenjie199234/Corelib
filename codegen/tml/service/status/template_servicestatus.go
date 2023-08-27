@@ -1,32 +1,33 @@
 package status
 
 import (
-	"fmt"
 	"os"
 	"text/template"
 )
 
-const text = `package status
+const txt = `package status
 
 import (
 	"context"
 	"time"
 
-	//"{{.}}/config"
+	// "{{.}}/config"
 	"{{.}}/api"
 	statusdao "{{.}}/dao/status"
-	//"{{.}}/ecode"
+	// "{{.}}/ecode"
 
-	//"github.com/chenjie199234/Corelib/cgrpc"
-	//"github.com/chenjie199234/Corelib/crpc"
-	//"github.com/chenjie199234/Corelib/log"
-	//"github.com/chenjie199234/Corelib/web"
+	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/util/graceful"
+	"github.com/chenjie199234/Corelib/util/host"
+	// "github.com/chenjie199234/Corelib/cgrpc"
+	// "github.com/chenjie199234/Corelib/crpc"
+	// "github.com/chenjie199234/Corelib/log"
+	// "github.com/chenjie199234/Corelib/web"
 )
 
 // Service subservice for status business
 type Service struct {
-	stop      *graceful.Graceful
+	stop *graceful.Graceful
 
 	statusDao *statusdao.Dao
 }
@@ -42,17 +43,31 @@ func Start() *Service {
 }
 
 // Ping -
-func (s *Service) Ping(ctx context.Context,in *api.Pingreq) (*api.Pingresp, error) {
+func (s *Service) Ping(ctx context.Context, in *api.Pingreq) (*api.Pingresp, error) {
 	//if _, ok := ctx.(*crpc.Context); ok {
-	//        log.Info("this is a crpc call")
+	//        log.Info("this is a crpc call", nil)
 	//}
 	//if _, ok := ctx.(*cgrpc.Context); ok {
-	//        log.Info("this is a cgrpc call")
+	//        log.Info("this is a cgrpc call", nil)
 	//}
 	//if _, ok := ctx.(*web.Context); ok {
-	//        log.Info("this is a web call")
+	//        log.Info("this is a web call", nil)
 	//}
-	return &api.Pingresp{ClientTimestamp: in.Timestamp, ServerTimestamp: time.Now().UnixNano()}, nil
+	totalmem, lastmem, maxmem := monitor.GetMEM()
+	lastcpu, maxcpu, avgcpu := monitor.GetCPU()
+	return &api.Pingresp{
+		ClientTimestamp: in.Timestamp,
+		ServerTimestamp: time.Now().UnixNano(),
+		TotalMem:        totalmem,
+		CurMemUsage:     lastmem,
+		MaxMemUsage:     maxmem,
+		CpuNum:          monitor.CPUNum,
+		CurCpuUsage:     lastcpu,
+		AvgCpuUsage:     avgcpu,
+		MaxCpuUsage:     maxcpu,
+		Host:            host.Hostname,
+		Ip:              host.Hostip,
+	}, nil
 }
 
 // Stop -
@@ -60,31 +75,25 @@ func (s *Service) Stop() {
 	s.stop.Close(nil, nil)
 }`
 
-const path = "./service/status/"
-const name = "service.go"
-
-var tml *template.Template
-var file *os.File
-
-func init() {
-	var e error
-	tml, e = template.New("status").Parse(text)
+func CreatePathAndFile(packagename string) {
+	if e := os.MkdirAll("./service/status/", 0755); e != nil {
+		panic("mkdir ./service/status/ error: " + e.Error())
+	}
+	servicetemplate, e := template.New("./service/status/service.go").Parse(txt)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./service/status/service.go template error: " + e.Error())
 	}
-}
-func CreatePathAndFile() {
-	var e error
-	if e = os.MkdirAll(path, 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path, e))
-	}
-	file, e = os.OpenFile(path+name, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e := os.OpenFile("./service/status/service.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+name, e))
+		panic("open ./service/status/service.go error: " + e.Error())
 	}
-}
-func Execute(PackageName string) {
-	if e := tml.Execute(file, PackageName); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+name, e))
+	if e := servicetemplate.Execute(file, packagename); e != nil {
+		panic("write ./service/status/service.go error: " + e.Error())
+	}
+	if e := file.Sync(); e != nil {
+		panic("sync ./service/status/service.go error: " + e.Error())
+	}
+	if e := file.Close(); e != nil {
+		panic("close ./service/status/service.go error: " + e.Error())
 	}
 }

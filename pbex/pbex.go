@@ -7,6 +7,16 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
+func NeedValidate(message *protogen.Message) bool {
+	if MessageHasEnum(message) {
+		return true
+	}
+	if MessageHasPBEX(message) {
+		return true
+	}
+	return false
+}
+
 // check the message's field has pbex or not
 // this will check the nest messages too
 func MessageHasPBEX(message *protogen.Message) bool {
@@ -22,17 +32,18 @@ func messagecheck(message *protogen.Message, checked map[string]*struct{}) bool 
 		if FieldHasPBEX(field) {
 			return true
 		}
-		if field.Desc.Kind() == protoreflect.MessageKind {
-			if !field.Desc.IsMap() {
-				//self is a message
-				if messagecheck(field.Message, checked) {
-					return true
-				}
-			} else if field.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
-				//self is a map and the map's value is a message
-				if messagecheck(field.Message.Fields[1].Message, checked) {
-					return true
-				}
+		if field.Desc.Kind() != protoreflect.MessageKind {
+			continue
+		}
+		if !field.Desc.IsMap() {
+			//self is a message
+			if messagecheck(field.Message, checked) {
+				return true
+			}
+		} else if field.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
+			//self is a map and the map's value is a message
+			if messagecheck(field.Message.Fields[1].Message, checked) {
+				return true
 			}
 		}
 	}
@@ -42,12 +53,62 @@ func messagecheck(message *protogen.Message, checked map[string]*struct{}) bool 
 // check the message has oneof or not
 // this will check the nest messages too
 func MessageHasOneof(message *protogen.Message) bool {
-	if len(message.Oneofs) > 0 {
-		return true
+	checked := make(map[string]*struct{})
+	return hasoneof(message, checked)
+}
+func hasoneof(message *protogen.Message, checked map[string]*struct{}) bool {
+	if _, ok := checked[message.GoIdent.String()]; ok {
+		return false
 	}
+	checked[message.GoIdent.String()] = nil
 	for _, field := range message.Fields {
-		if field.Desc.Kind() == protoreflect.MessageKind {
-			if MessageHasOneof(field.Message) {
+		if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
+			return true
+		}
+		if field.Desc.Kind() != protoreflect.MessageKind {
+			continue
+		}
+		if !field.Desc.IsMap() {
+			//self is a message
+			if hasoneof(field.Message, checked) {
+				return true
+			}
+		} else if field.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
+			//self is a map and the map's value is message
+			if hasoneof(field.Message.Fields[1].Message, checked) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// check the message has enum or not
+// this will check the nest messages too
+func MessageHasEnum(message *protogen.Message) bool {
+	checked := make(map[string]*struct{})
+	return hasenum(message, checked)
+}
+func hasenum(message *protogen.Message, checked map[string]*struct{}) bool {
+	if _, ok := checked[message.GoIdent.String()]; ok {
+		return false
+	}
+	checked[message.GoIdent.String()] = nil
+	for _, field := range message.Fields {
+		if field.Enum != nil {
+			return true
+		}
+		if field.Desc.Kind() != protoreflect.MessageKind {
+			continue
+		}
+		if !field.Desc.IsMap() {
+			//self is a message
+			if hasenum(field.Message, checked) {
+				return true
+			}
+		} else if field.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
+			//self is a map and the map's value is message
+			if hasenum(field.Message.Fields[1].Message, checked) {
 				return true
 			}
 		}
@@ -59,9 +120,9 @@ func MessageHasOneof(message *protogen.Message) bool {
 // this will check the nest messages too
 func OneOfHasPBEX(message *protogen.Message) bool {
 	checked := make(map[string]*struct{})
-	return oneofcheck(message, checked)
+	return oneofpbex(message, checked)
 }
-func oneofcheck(message *protogen.Message, checked map[string]*struct{}) bool {
+func oneofpbex(message *protogen.Message, checked map[string]*struct{}) bool {
 	if _, ok := checked[message.GoIdent.String()]; ok {
 		return false
 	}
@@ -70,17 +131,18 @@ func oneofcheck(message *protogen.Message, checked map[string]*struct{}) bool {
 		if field.Oneof != nil && !field.Desc.HasOptionalKeyword() && FieldHasPBEX(field) {
 			return true
 		}
-		if field.Desc.Kind() == protoreflect.MessageKind {
-			if !field.Desc.IsMap() {
-				//self is a message
-				if oneofcheck(field.Message, checked) {
-					return true
-				}
-			} else if field.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
-				//self is a map and the map's value is message
-				if oneofcheck(field.Message, checked) {
-					return true
-				}
+		if field.Desc.Kind() != protoreflect.MessageKind {
+			continue
+		}
+		if !field.Desc.IsMap() {
+			//self is a message
+			if oneofpbex(field.Message, checked) {
+				return true
+			}
+		} else if field.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
+			//self is a map and the map's value is message
+			if oneofpbex(field.Message, checked) {
+				return true
 			}
 		}
 	}
@@ -159,7 +221,14 @@ func FieldHasPBEX(field *protogen.Field) bool {
 		}
 	case protoreflect.EnumKind:
 		//enum or []enum
-		return true
+		if proto.HasExtension(fop, E_EnumIn) ||
+			proto.HasExtension(fop, E_EnumNotIn) ||
+			proto.HasExtension(fop, E_EnumGt) ||
+			proto.HasExtension(fop, E_EnumGte) ||
+			proto.HasExtension(fop, E_EnumLt) ||
+			proto.HasExtension(fop, E_EnumLte) {
+			return true
+		}
 	case protoreflect.BytesKind:
 		//[]bytes or [][]bytes
 		fallthrough
@@ -238,7 +307,14 @@ func FieldHasPBEX(field *protogen.Field) bool {
 		}
 		switch value.Desc.Kind() {
 		case protoreflect.EnumKind:
-			return true
+			if proto.HasExtension(fop, E_MapValueEnumIn) ||
+				proto.HasExtension(fop, E_MapValueEnumNotIn) ||
+				proto.HasExtension(fop, E_MapValueEnumGt) ||
+				proto.HasExtension(fop, E_MapValueEnumGte) ||
+				proto.HasExtension(fop, E_MapValueEnumLt) ||
+				proto.HasExtension(fop, E_MapValueEnumLte) {
+				return true
+			}
 		case protoreflect.BoolKind:
 			if proto.HasExtension(fop, E_MapValueBoolEq) {
 				return true

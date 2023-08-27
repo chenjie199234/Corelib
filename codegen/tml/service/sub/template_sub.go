@@ -1,25 +1,24 @@
 package sub
 
 import (
-	"fmt"
 	"os"
 	"text/template"
 )
 
-const text = `package {{.Sname}}
+const txt = `package {{.Sname}}
 
 import (
 	"context"
 
-	"{{.PackageName}}/config"
 	"{{.PackageName}}/api"
+	"{{.PackageName}}/config"
 	{{.Sname}}dao "{{.PackageName}}/dao/{{.Sname}}"
 	"{{.PackageName}}/ecode"
 
-	//"github.com/chenjie199234/Corelib/cgrpc"
-	//"github.com/chenjie199234/Corelib/crpc"
-	//"github.com/chenjie199234/Corelib/log"
-	//"github.com/chenjie199234/Corelib/web"
+	// "github.com/chenjie199234/Corelib/cgrpc"
+	// "github.com/chenjie199234/Corelib/crpc"
+	// "github.com/chenjie199234/Corelib/log"
+	// "github.com/chenjie199234/Corelib/web"
 	"github.com/chenjie199234/Corelib/util/graceful"
 )
 
@@ -44,36 +43,34 @@ func (s *Service) Stop() {
 	s.stop.Close(nil, nil)
 }`
 
-const path = "./service/"
-
-var tml *template.Template
-var file *os.File
-
 type data struct {
 	PackageName string
-	ProjectName string
 	Sname       string
 }
 
-func init() {
-	var e error
-	tml, e = template.New("sub").Parse(text)
+func CreatePathAndFile(packagename, sname string) {
+	tmp := &data{
+		PackageName: packagename,
+		Sname:       sname,
+	}
+	if e := os.MkdirAll("./service/"+sname+"/", 0755); e != nil {
+		panic("mkdir ./service/" + sname + "/ error: " + e.Error())
+	}
+	servicetemplate, e := template.New("./service/" + sname + "/service.go").Parse(txt)
 	if e != nil {
-		panic(fmt.Sprintf("create template error:%s", e))
+		panic("parse ./service/" + sname + "/service.go template error: " + e.Error())
 	}
-}
-func CreatePathAndFile(sname string) {
-	var e error
-	if e = os.MkdirAll(path+sname+"/", 0755); e != nil {
-		panic(fmt.Sprintf("make dir:%s error:%s", path+sname, e))
-	}
-	file, e = os.OpenFile(path+sname+"/service.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e := os.OpenFile("./service/"+sname+"/service.go", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic(fmt.Sprintf("make file:%s error:%s", path+sname+"/service.go", e))
+		panic("open ./service/" + sname + "/service.go error: " + e.Error())
 	}
-}
-func Execute(PackageName, ProjectName, Sname string) {
-	if e := tml.Execute(file, &data{PackageName: PackageName, Sname: Sname}); e != nil {
-		panic(fmt.Sprintf("write content into file:%s error:%s", path+Sname+"/"+Sname+".go", e))
+	if e := servicetemplate.Execute(file, tmp); e != nil {
+		panic("write ./service/" + sname + "/service.go error: " + e.Error())
+	}
+	if e := file.Sync(); e != nil {
+		panic("sync ./service/" + sname + "/service.go error: " + e.Error())
+	}
+	if e := file.Close(); e != nil {
+		panic("close ./service/" + sname + "/service.go error: " + e.Error())
 	}
 }

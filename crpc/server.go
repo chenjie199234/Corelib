@@ -25,22 +25,16 @@ import (
 type OutsideHandler func(*Context)
 
 type ServerConfig struct {
-	GlobalTimeout  time.Duration     //global timeout for every rpc call
+	GlobalTimeout  time.Duration     //global timeout for every rpc call,<=0 means no timeout
 	ConnectTimeout time.Duration     //default 500ms
 	HeartPorbe     time.Duration     //default 1s,3 probe missing means disconnect
 	MaxMsgLen      uint32            //default 64M,min 64k
 	Certs          map[string]string //mapkey: cert path,mapvalue: key path
 }
 
-func (c *ServerConfig) validate() {
-	if c.GlobalTimeout < 0 {
-		c.GlobalTimeout = 0
-	}
-}
-
 type CrpcServer struct {
 	c              *ServerConfig
-	selfappname    string
+	self           string
 	tlsc           *tls.Config
 	global         []OutsideHandler
 	ctxpool        *sync.Pool
@@ -55,18 +49,18 @@ type client struct {
 	calls     map[uint64]context.CancelFunc
 }
 
-func NewCrpcServer(c *ServerConfig, selfgroup, selfname string) (*CrpcServer, error) {
-	selfappname := selfgroup + "." + selfname
-	if e := name.FullCheck(selfappname); e != nil {
+func NewCrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string) (*CrpcServer, error) {
+	//pre check
+	selffullname, e := name.MakeFullName(selfproject, selfgroup, selfapp)
+	if e != nil {
 		return nil, e
 	}
 	if c == nil {
 		c = &ServerConfig{}
 	}
-	c.validate()
 	serverinstance := &CrpcServer{
 		c:              c,
-		selfappname:    selfappname,
+		self:           selffullname,
 		global:         make([]OutsideHandler, 0, 10),
 		ctxpool:        &sync.Pool{},
 		handler:        make(map[string]func(context.Context, *stream.Peer, *Msg), 10),
@@ -133,7 +127,7 @@ func (s *CrpcServer) tellAllPeerSelfClosed() {
 			c.RLock()
 			d, _ := proto.Marshal(&Msg{
 				Callid: c.maxcallid + 1,
-				Error:  cerror.ErrClosing,
+				Error:  cerror.ErrServerClosing,
 			})
 			c.maxcallid = 0
 			p.SendMessage(nil, d, nil, nil)
@@ -167,7 +161,8 @@ func (s *CrpcServer) Use(globalMids ...OutsideHandler) {
 }
 
 // thread unsafe
-func (s *CrpcServer) RegisterHandler(path string, handlers ...OutsideHandler) {
+func (s *CrpcServer) RegisterHandler(sname, mname string, handlers ...OutsideHandler) {
+	path := "/" + sname + "/" + mname
 	s.handler[path] = s.insidehandler(path, handlers...)
 }
 
@@ -181,59 +176,44 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 		sourcemethod := "unknown"
 		sourcepath := "unknown"
 		if len(msg.Tracedata) == 0 || msg.Tracedata["TraceID"] == "" {
-			ctx = log.InitTrace(ctx, "", s.selfappname, host.Hostip, "CRPC", msg.Path, 0)
+			ctx = log.InitTrace(ctx, "", s.self, host.Hostip, "CRPC", msg.Path, 0)
 		} else {
 			sourceapp = msg.Tracedata["SourceApp"]
 			sourcemethod = msg.Tracedata["SourceMethod"]
 			sourcepath = msg.Tracedata["SourcePath"]
 			clientdeep, e := strconv.Atoi(msg.Tracedata["Deep"])
 			if e != nil || sourceapp == "" || sourcemethod == "" || sourcepath == "" || clientdeep == 0 {
-				log.Error(nil, "[crpc.server] client:", sourceip, "path:", path, "method: CRPC error: tracedata:", msg.Tracedata, "format wrong")
+				log.Error(nil, "[crpc.server] tracedata format wrong", map[string]interface{}{"cip": sourceip, "path": path, "tracedata": msg.Tracedata})
 				p.Close()
 				return
 			}
-			ctx = log.InitTrace(ctx, msg.Tracedata["TraceID"], s.selfappname, host.Hostip, "CRPC", msg.Path, clientdeep)
+			ctx = log.InitTrace(ctx, msg.Tracedata["TraceID"], s.self, host.Hostip, "CRPC", msg.Path, clientdeep)
 		}
 		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
-		//var globaldl int64
 		start := time.Now()
-		var min int64
-		servertimeout := int64(s.getHandlerTimeout(path))
-		if servertimeout > 0 {
-			serverdl := time.Now().UnixNano() + servertimeout
+		if servertimeout := int64(s.getHandlerTimeout(path)); servertimeout > 0 {
+			serverdl := start.UnixNano() + servertimeout
 			if msg.Deadline != 0 {
 				//compare use the small one
 				if msg.Deadline < serverdl {
-					min = msg.Deadline
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithDeadline(ctx, time.Unix(0, msg.Deadline))
+					defer cancel()
 				} else {
-					min = serverdl
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithDeadline(ctx, time.Unix(0, serverdl))
+					defer cancel()
 				}
 			} else {
 				//use server timeout
-				min = serverdl
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithDeadline(ctx, time.Unix(0, serverdl))
+				defer cancel()
 			}
 		} else if msg.Deadline != 0 {
 			//use client timeout
-			min = msg.Deadline
-		} else {
-			//no timeout
-			min = 0
-		}
-		if min != 0 {
-			if min < start.UnixNano()+int64(time.Millisecond) {
-				msg.Path = ""
-				msg.Deadline = 0
-				msg.Body = nil
-				msg.Error = cerror.ErrDeadlineExceeded
-				msg.Metadata = nil
-				msg.Tracedata = nil
-				end := time.Now()
-				log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+p.GetLocalPort(), "CRPC", path, &start, &end, msg.Error)
-				monitor.CrpcServerMonitor(sourceapp, "CRPC", path, msg.Error, uint64(end.UnixNano()-start.UnixNano()))
-				return
-			}
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, min))
+			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, msg.Deadline))
 			defer cancel()
 		}
 		//logic
@@ -245,7 +225,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 			if e := recover(); e != nil {
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[crpc.server] client:", sourceapp+":"+sourceip, "path:", path, "method: CRPC panic:", e, "stack:", base64.StdEncoding.EncodeToString(stack[:n]))
+				log.Error(workctx, "[crpc.server] panic", map[string]interface{}{"cname": sourceapp, "cip": sourceapp, "path": path, "panic": e, "stack": base64.StdEncoding.EncodeToString(stack[:n])})
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
@@ -277,7 +257,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 				}
 			}
 			end := time.Now()
-			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.selfappname, host.Hostip+":"+p.GetLocalPort(), "CRPC", path, &start, &end, msg.Error)
+			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.self, host.Hostip+":"+p.GetLocalPort(), "CRPC", path, &start, &end, msg.Error)
 			monitor.CrpcServerMonitor(sourceapp, "CRPC", path, msg.Error, uint64(end.UnixNano()-start.UnixNano()))
 			s.putContext(workctx)
 		}()
@@ -291,7 +271,7 @@ func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]b
 		//self closing
 		return nil, false
 	}
-	if common.Byte2str(peerVerifyData) != s.selfappname {
+	if common.Byte2str(peerVerifyData) != s.self {
 		return nil, false
 	}
 	return nil, true
@@ -303,7 +283,7 @@ func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 		//tel all peers self closed
 		d, _ := proto.Marshal(&Msg{
 			Callid: 0,
-			Error:  cerror.ErrClosing,
+			Error:  cerror.ErrServerClosing,
 		})
 		p.SendMessage(nil, d, nil, nil)
 	}
@@ -312,13 +292,13 @@ func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 		calls:     make(map[uint64]context.CancelFunc),
 	}
 	p.SetData(unsafe.Pointer(c))
-	log.Info(nil, "[crpc.server.onlinefunc] client:", p.GetRealPeerIP(), "online")
+	log.Info(nil, "[crpc.server] online", map[string]interface{}{"cip": p.GetRealPeerIP()})
 	return true
 }
 func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
-		log.Error(nil, "[crpc.server.userfunc] client:", p.GetRealPeerIP(), "data format wrong:", e)
+		log.Error(nil, "[crpc.server] userdata format wrong", map[string]interface{}{"cip": p.GetRealPeerIP()})
 		p.Close()
 		return
 	}
@@ -333,7 +313,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	}
 	handler, ok := s.handler[msg.Path]
 	if !ok {
-		log.Error(nil, "[crpc.server.userfunc] client:", p.GetRealPeerIP(), "call path:", msg.Path, "doesn't exist")
+		log.Error(nil, "[crpc.server] path doesn't exist", map[string]interface{}{"cip": p.GetRealPeerIP(), "path": msg.Path})
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
@@ -342,7 +322,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d, nil, nil); e != nil {
-			log.Error(nil, "[crpc.server.userfunc] send message to client:", p.GetRealPeerIP(), e)
+			log.Error(nil, "[crpc.server] send message failed", map[string]interface{}{"cip": p.GetRealPeerIP(), "path": msg.Path, "error": e})
 		}
 		return
 	}
@@ -353,12 +333,12 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
-		msg.Error = cerror.ErrClosing
+		msg.Error = cerror.ErrServerClosing
 		msg.Metadata = nil
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d, nil, nil); e != nil {
-			log.Error(nil, "[crpc.server.userfunc] send messge to client:", p.GetRealPeerIP(), e)
+			log.Error(nil, "[crpc.server] send message failed", map[string]interface{}{"cip": p.GetRealPeerIP(), "path": msg.Path, "error": e})
 		}
 		return
 	}
@@ -368,12 +348,12 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
-		msg.Error = cerror.ErrClosing
+		msg.Error = cerror.ErrServerClosing
 		msg.Metadata = nil
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d, nil, nil); e != nil {
-			log.Error(nil, "[crpc.server.userfunc] send message to client:", p.GetRealPeerIP(), e)
+			log.Error(nil, "[crpc.server] send message failed", map[string]interface{}{"cip": p.GetRealPeerIP(), "path": msg.Path, "error": e})
 		}
 		return
 	}
@@ -393,5 +373,5 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	}()
 }
 func (s *CrpcServer) offlinefunc(p *stream.Peer) {
-	log.Info(nil, "[crpc.server.offlinefunc] client:", p.GetRealPeerIP(), "offline")
+	log.Info(nil, "[crpc.server] offline", map[string]interface{}{"cip": p.GetRealPeerIP()})
 }

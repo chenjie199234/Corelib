@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -1165,8 +1166,13 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 	}
 	g.P("}")
 	g.P("------------------------------------------------------------------------------------------------------------")
-	for _, v := range newmessage {
-		jsondoc(g, v, true, skipoptions, checked)
+	keys := make([]string, 0, len(newmessage))
+	for k := range newmessage {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		jsondoc(g, newmessage[k], true, skipoptions, checked)
 	}
 	return
 }
@@ -2194,7 +2200,12 @@ func formdoc(g *protogen.GeneratedFile, m *protogen.Message) {
 	}
 	g.P("------------------------------------------------------------------------------------------------------------")
 	checked := make(map[string]*struct{})
-	for _, v := range newmessage {
-		jsondoc(g, v, true, false, checked)
+	keys := make([]string, 0, len(newmessage))
+	for k := range newmessage {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		jsondoc(g, newmessage[k], true, false, checked)
 	}
 }

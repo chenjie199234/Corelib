@@ -1,10 +1,12 @@
 package web
 
 import (
+	"context"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/chenjie199234/Corelib/container/trie"
 	"github.com/chenjie199234/Corelib/log"
@@ -13,12 +15,16 @@ import (
 )
 
 type router struct {
-	getTree              *trie.Trie[http.HandlerFunc]
-	postTree             *trie.Trie[http.HandlerFunc]
-	putTree              *trie.Trie[http.HandlerFunc]
-	patchTree            *trie.Trie[http.HandlerFunc]
-	deleteTree           *trie.Trie[http.HandlerFunc]
-	rewrite              map[string]map[string]string //first key method,second key old path,value new path
+	getTree    *trie.Trie[http.HandlerFunc]
+	postTree   *trie.Trie[http.HandlerFunc]
+	putTree    *trie.Trie[http.HandlerFunc]
+	patchTree  *trie.Trie[http.HandlerFunc]
+	deleteTree *trie.Trie[http.HandlerFunc]
+	//first key method,second key old path,value new path
+	rewrite map[string]map[string]string
+	//first key method,second key path,value timeout,value <= 0 means no timeout
+	//first key:'default',second key:'default',the value is the default timeout
+	timeout              map[string]map[string]time.Duration
 	notFoundHandler      http.HandlerFunc
 	srcPermissionHandler http.HandlerFunc
 	optionsHandler       http.HandlerFunc
@@ -33,6 +39,7 @@ func newRouter(srcroot string) *router {
 		patchTree:  trie.NewTrie[http.HandlerFunc](),
 		deleteTree: trie.NewTrie[http.HandlerFunc](),
 		rewrite:    make(map[string]map[string]string),
+		timeout:    make(map[string]map[string]time.Duration),
 	}
 	if srcroot != "" {
 		r.srcroot = os.DirFS(srcroot)
@@ -163,21 +170,62 @@ func (r *router) Put(path string, handler http.HandlerFunc) {
 func (r *router) Delete(path string, handler http.HandlerFunc) {
 	r.putTree.Set(cleanPath(path), handler)
 }
+
+// first key method,second key old path,value new path
 func (r *router) updaterewrite(rewrite map[string]map[string]string) {
-	r.rewrite = rewrite
+	if rewrite == nil {
+		r.rewrite = make(map[string]map[string]string)
+	} else {
+		r.rewrite = rewrite
+	}
 }
-func (r *router) checkrewrite(originurl, method string) (newurl string, ok bool) {
+
+// first key method,second key path,value timeout,value <= 0 means no timeout
+// first key:'default',second key:'default',the value is the default timeout
+func (r *router) updatetimeout(timeout map[string]map[string]time.Duration) {
+	if timeout == nil {
+		r.timeout = make(map[string]map[string]time.Duration)
+	} else {
+		r.timeout = timeout
+	}
+}
+
+func (r *router) checkrewrite(oldpath, method string) (newpath string, ok bool) {
 	rewrite := r.rewrite
 	paths, ok := rewrite[method]
 	if !ok {
 		return
 	}
-	newurl, ok = paths[originurl]
+	newpath, ok = paths[oldpath]
 	return
+}
+func (r *router) checktimeout(path, method string) time.Duration {
+	timeout := r.timeout
+	paths, ok := timeout[method]
+	if !ok {
+		if paths, ok = timeout["default"]; !ok {
+			return 0
+		}
+		if v, ok := paths["default"]; ok {
+			return v
+		}
+		return 0
+	}
+	if v, ok := paths[path]; ok {
+		return v
+	} else if v, ok = paths["default"]; ok {
+		return v
+	}
+	return 0
 }
 func (r *router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	if url, ok := r.checkrewrite(req.URL.Path, req.Method); ok {
 		req.URL.Path = url
+	}
+	if timeout := r.checktimeout(req.URL.Path, req.Method); timeout > 0 {
+		ctx, cancel := context.WithTimeout(req.Context(), timeout)
+		defer cancel()
+		req = req.WithContext(ctx)
 	}
 	var handler http.HandlerFunc
 	var cleanurl string
@@ -232,7 +280,7 @@ func (r *router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 			} else {
 				r.srcPermissionHandler(resp, req)
 			}
-		} else if fileinfo, e := file.Stat(); e != nil || fileinfo.IsDir() {
+		} else if fileinfo, e := file.Stat(); e != nil || !fileinfo.Mode().IsRegular() {
 			r.notFoundHandler(resp, req)
 			file.Close()
 		} else {
@@ -243,43 +291,43 @@ func (r *router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 }
 func (r *router) printPath() {
 	for path := range r.getTree.GetAll() {
-		log.Info(nil, "[web.server] GET:", path)
+		log.Info(nil, "[web.server] GET: "+path, nil)
 	}
 	if rewrite, ok := r.rewrite["GET"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] GET:", ourl, "=>", nurl)
+			log.Info(nil, "[web.server] GET: "+ourl+" => "+nurl, nil)
 		}
 	}
 	for path := range r.postTree.GetAll() {
-		log.Info(nil, "[web.server] POST:", path)
+		log.Info(nil, "[web.server] POST: "+path, nil)
 	}
 	if rewrite, ok := r.rewrite["POST"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] POST:", ourl, "=>", nurl)
+			log.Info(nil, "[web.server] POST: "+ourl+" => "+nurl, nil)
 		}
 	}
 	for path := range r.putTree.GetAll() {
-		log.Info(nil, "[web.server] PUT:", path)
+		log.Info(nil, "[web.server] PUT: "+path, nil)
 	}
 	if rewrite, ok := r.rewrite["PUT"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] PUT:", ourl, "=>", nurl)
+			log.Info(nil, "[web.server] PUT: "+ourl+" => "+nurl, nil)
 		}
 	}
 	for path := range r.patchTree.GetAll() {
-		log.Info(nil, "[web.server] PATCH:", path)
+		log.Info(nil, "[web.server] PATCH: "+path, nil)
 	}
 	if rewrite, ok := r.rewrite["PATCH"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] PATCH:", ourl, "=>", nurl)
+			log.Info(nil, "[web.server] PATCH: "+ourl+" => "+nurl, nil)
 		}
 	}
 	for path := range r.deleteTree.GetAll() {
-		log.Info(nil, "[web.server] DELETE:", path)
+		log.Info(nil, "[web.server] DELETE: "+path, nil)
 	}
 	if rewrite, ok := r.rewrite["DELETE"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] DELETE:", ourl, "=>", nurl)
+			log.Info(nil, "[web.server] DELETE: "+ourl+" => "+nurl, nil)
 		}
 	}
 }

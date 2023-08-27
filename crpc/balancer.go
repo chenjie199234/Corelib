@@ -10,6 +10,9 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/discover"
+	"github.com/chenjie199234/Corelib/internal/picker"
+	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/stream"
 	"google.golang.org/protobuf/proto"
 )
@@ -19,7 +22,7 @@ type corelibBalancer struct {
 	lker             *sync.RWMutex
 	serversRaw       []byte
 	servers          map[string]*ServerForPick //key server addr
-	pservers         []*ServerForPick
+	picker           picker.PI
 	lastResolveError error
 }
 type ServerForPick struct {
@@ -33,14 +36,11 @@ type ServerForPick struct {
 	lker *sync.Mutex
 	reqs map[uint64]*req //all reqs to this server
 
-	Pickinfo *pickinfo
+	Pickinfo *picker.ServerPickInfo
 }
-type pickinfo struct {
-	LastFailTime   int64  //last fail timestamp nanosecond
-	Activecalls    int32  //current active calls
-	DServerNum     int32  //this app registered on how many discoveryservers
-	DServerOffline int64  //
-	Addition       []byte //addition info register on register center
+
+func (s *ServerForPick) GetServerPickInfo() *picker.ServerPickInfo {
+	return s.Pickinfo
 }
 
 func (s *ServerForPick) getpeer() *stream.Peer {
@@ -59,7 +59,7 @@ func (s *ServerForPick) Pickable() bool {
 func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 	p := s.getpeer()
 	if p == nil {
-		return errPickAgain
+		return cerror.ErrClosed
 	}
 	beforeSend := func(_ *stream.Peer) {
 		s.lker.Lock()
@@ -77,7 +77,7 @@ func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 		if e == stream.ErrMsgLarge {
 			e = cerror.ErrReqmsgLen
 		} else if e == stream.ErrConnClosed {
-			e = errPickAgain
+			e = cerror.ErrClosed
 			s.caspeer(p, nil)
 		} else if e == context.DeadlineExceeded {
 			e = cerror.ErrDeadlineExceeded
@@ -102,21 +102,22 @@ func newCorelibBalancer(c *CrpcClient) *corelibBalancer {
 		lker:       &sync.RWMutex{},
 		serversRaw: nil,
 		servers:    make(map[string]*ServerForPick),
+		picker:     picker.NewPicker(),
 	}
 }
 
 func (b *corelibBalancer) ResolverError(e error) {
 	b.lastResolveError = e
 }
-func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
+func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData) {
 	b.lastResolveError = nil
 	d, _ := json.Marshal(all)
 	b.lker.Lock()
 	defer func() {
-		if len(b.servers) == 0 || len(b.pservers) > 0 {
-			b.c.resolver.wake(false)
+		if len(b.servers) == 0 || b.picker.ServerLen() > 0 {
+			b.c.resolver.Wake(resolver.CALL)
 		}
-		b.c.resolver.wake(true)
+		b.c.resolver.Wake(resolver.SYSTEM)
 		b.lker.Unlock()
 	}()
 	if bytes.Equal(b.serversRaw, d) {
@@ -147,8 +148,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*RegisterData) {
 				peer:     nil,
 				lker:     &sync.Mutex{},
 				reqs:     make(map[uint64]*req, 10),
-				Pickinfo: &pickinfo{
-					LastFailTime:   0,
+				Pickinfo: &picker.ServerPickInfo{
 					Activecalls:    0,
 					DServerNum:     int32(len(registerdata.DServers)),
 					DServerOffline: 0,
@@ -210,7 +210,7 @@ func (b *corelibBalancer) ReconnectCheck(server *ServerForPick) bool {
 	b.lker.Unlock()
 	time.Sleep(time.Millisecond * 100)
 	//need to check server register status
-	b.c.resolver.wait(context.Background(), true)
+	b.c.resolver.Wait(context.Background(), resolver.SYSTEM)
 	b.lker.Lock()
 	if len(server.dservers) == 0 {
 		//server already unregister,remove server
@@ -222,43 +222,49 @@ func (b *corelibBalancer) ReconnectCheck(server *ServerForPick) bool {
 	return true
 }
 
-// reason - true,online
-// reason - false,offline
-func (b *corelibBalancer) RebuildPicker(reason bool) {
+// OnOff - true,online
+// OnOff - false,offline
+func (b *corelibBalancer) RebuildPicker(OnOff bool) {
 	b.lker.Lock()
-	tmp := make([]*ServerForPick, 0, len(b.servers))
+	tmp := make([]picker.ServerForPick, 0, len(b.servers))
 	for _, server := range b.servers {
 		if server.Pickable() {
 			tmp = append(tmp, server)
 		}
 	}
-	b.pservers = tmp
-	if reason {
-		b.c.resolver.wake(false)
+	b.picker.UpdateServers(tmp)
+	if OnOff {
+		//when online server,wake the block call
+		b.c.resolver.Wake(resolver.CALL)
 	}
 	b.lker.Unlock()
 }
-func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
+func (b *corelibBalancer) Pick(ctx context.Context) (server *ServerForPick, done func(), e error) {
 	refresh := false
 	for {
-		server := b.c.c.Picker(b.pservers)
+		server, done := b.picker.Pick()
 		if server != nil {
-			return server, nil
+			if dl, ok := ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
+				//at least 5ms for net lag and server logic
+				done()
+				return nil, nil, cerror.ErrDeadlineExceeded
+			}
+			return server.(*ServerForPick), done, nil
 		}
 		if refresh {
 			if b.lastResolveError != nil {
-				return nil, b.lastResolveError
+				return nil, done, b.lastResolveError
 			}
-			return nil, cerror.ErrNoserver
+			return nil, nil, cerror.ErrNoserver
 		}
-		if e := b.c.resolver.wait(ctx, false); e != nil {
+		if e := b.c.resolver.Wait(ctx, resolver.CALL); e != nil {
 			if e == context.DeadlineExceeded {
-				return nil, cerror.ErrDeadlineExceeded
+				return nil, nil, cerror.ErrDeadlineExceeded
 			} else if e == context.Canceled {
-				return nil, cerror.ErrCanceled
+				return nil, nil, cerror.ErrCanceled
 			} else {
 				//this is impossible
-				return nil, cerror.ConvertStdError(e)
+				return nil, nil, cerror.ConvertStdError(e)
 			}
 		}
 		refresh = true

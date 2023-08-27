@@ -42,7 +42,7 @@ func MakeToken(ctx context.Context, puber, deployenv, runenv, data string) strin
 	})
 	ciphertext, e := secure.AesEncrypt(tokensecret, t)
 	if e != nil {
-		log.Error(ctx, "[token.make]", e)
+		log.Error(ctx, "[token.make] token secret length less then 32", nil)
 		return ""
 	}
 	return base64.StdEncoding.EncodeToString(ciphertext)
