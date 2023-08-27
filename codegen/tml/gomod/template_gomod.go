@@ -13,7 +13,7 @@ const txt = `module {{.}}
 go 1.21
 
 require (
-	github.com/chenjie199234/admin main
+	github.com/chenjie199234/admin v0.0.5
 	github.com/chenjie199234/Corelib %s
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-sql-driver/mysql v1.7.1
