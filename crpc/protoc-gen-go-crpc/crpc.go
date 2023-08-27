@@ -145,7 +145,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 		g.P("}")
 		g.P("if preferJSON{")
-		g.P("respd,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{AllowPartial: true,UseProtoNames: true, UseEnumNumbers: true}.Marshal(resp)")
+		g.P("respd,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{AllowPartial: true,UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true}.Marshal(resp)")
 		g.P("ctx.Write(respd)")
 		g.P("}else{")
 		g.P("respd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
