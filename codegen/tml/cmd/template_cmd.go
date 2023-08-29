@@ -216,6 +216,8 @@ if "%1" == "sub" (
 	goto :sub
 )
 
+goto :help
+
 :pb
 	del >nul 2>nul .\api\*.pb.go
 	del >nul 2>nul .\api\*.md

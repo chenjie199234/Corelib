@@ -19,8 +19,8 @@
 	linux/max: 	终端切换工作目录到项目目录,执行 ./cmd.sh pb
 	windows: 	终端切换工作目录到项目目录,执行 ./cmd.bat pb
 ### 4.创建子服务
-	linux/mac: 	终端切换工作目录到项目目录,执行 ./cmd.sh new "sub service name"
-	windows: 	终端切换工作目录到项目目录,执行 ./cmd.bat new "sub service name"
+	linux/mac: 	终端切换工作目录到项目目录,执行 ./cmd.sh sub "sub service name"
+	windows: 	终端切换工作目录到项目目录,执行 ./cmd.bat sub "sub service name"
 ### 5.更新kuberneters配置
 	linux/mac: 	终端切换工作目录到项目目录,执行 ./cmd.sh kube
 	windows: 	终端切换工作目录到项目目录,执行 ./cmd.bat kube

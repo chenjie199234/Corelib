@@ -39,13 +39,13 @@ MONITOR                                 是否开启系统监控采集,0关闭,1
 CONFIG_TYPE                             配置类型:0-使用本地配置.1-使用远程配置中心config服务
 REMOTE_CONFIG_SERVICE_PROJECT           当CONFIG_TYPE为1时,远程配置中心服务的项目,[a-z][0-9],第一个字符必须是[a-z]
 REMOTE_CONFIG_SERVICE_GROUP             当CONFIG_TYPE为1时,远程配置中心服务的项目组,[a-z][0-9],第一个字符必须是[a-z]
-REMOTE_CONFIG_SERVICE_WEB_HOST          当CONFIG_TYPE为1时,远程配置中心服务的host
+REMOTE_CONFIG_SERVICE_WEB_HOST          当CONFIG_TYPE为1时,远程配置中心服务的host,不带scheme(是否启用tls取决于NewConfigSdk时是否传入tls.Config)
 REMOTE_CONFIG_SERVICE_WEB_PORT          当CONFIG_TYPE为1时,远程配置中心服务的端口,默认为80/443(取决于NewConfigSdk时是否使用tls)
 REMOTE_CONFIG_SECRET                    当CONFIG_TYPE为1时,远程配置中心配置的密钥
 
 PERMISSION_SERVICE_PROJECT              权限控制中心的项目(按需设置),[a-z][0-9],第一个字符必须是[a-z]
 PERMISSION_SERVICE_GROUP                权限控制中心的项目组(按需设置),[a-z][0-9],第一个字符必须是[a-z]
-PERMISSION_SERVICE_WEB_HOST             权限控制中心的host(按需设置)
+PERMISSION_SERVICE_WEB_HOST             权限控制中心的host(按需设置),不带scheme(是否启用tls取决于NewConfigSdk时是否传入tls.Config)
 PERMISSION_SERVICE_WEB_PORT             权限控制中心的端口(按需设置),默认为80/443(取决于NewPermissionSdk时是否使用tls)
 
 $$$
