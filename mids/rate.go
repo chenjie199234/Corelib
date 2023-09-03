@@ -165,7 +165,7 @@ func checkrate(ctx context.Context, infos [][3]interface{}) bool {
 			md := metadata.GetMetadata(ctx)
 			session, ok := md["Session-User"]
 			if !ok {
-				log.Error(ctx, "[rate] missing token when check session's rate,make sure the session midware is before the rate midware", nil)
+				log.Error(ctx, "[rate] missing session when check session's rate,make sure the session midware is before the rate midware", nil)
 				return false
 			}
 			rates[info[0].(string)+"_"+session] = [2]uint64{info[1].(uint64), info[2].(uint64)}
