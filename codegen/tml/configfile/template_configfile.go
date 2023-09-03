@@ -121,8 +121,15 @@ const app = `{
 	},
 	"handler_rate":{
 		"/{{.}}.exampleservice/examplemethod":[{
-			"method":["GET","GRPC","CRPC"],
-			"max_per_sec":10
+			"methods":["GET","GRPC","CRPC"],
+			"max_rate":10,
+			"period":1,
+			"rate_type":"path"
+		},{
+			"methods":["GET","GRPC","CRPC"],
+			"max_rate":10,
+			"period":1,
+			"rate_type":"token"
 		}]
 	},
 	"accesses":{

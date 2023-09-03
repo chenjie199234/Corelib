@@ -8,10 +8,10 @@ import (
 
 func Test_Rate(t *testing.T) {
 	UpdateRateRedisUrl("redis://127.0.0.1:6379")
-	UpdateRateConfig(map[string][]*PathRateConfig{
+	UpdateRateConfig(MultiPathRateConfigs{
 		"/abc": {
-			{Method: []string{"GET", "POST", "PUT", "DELETE", "PATCH", "GRPC", "CRPC"}, MaxPerSec: 2},
-			{Method: []string{"GRPC"}, MaxPerSec: 1},
+			{Methods: []string{"GET", "POST", "PUT", "DELETE", "PATCH", "GRPC", "CRPC"}, MaxRate: 2, Period: 1, RateType: "path"},
+			{Methods: []string{"GRPC"}, MaxRate: 1, Period: 1, RateType: "path"},
 		},
 	})
 	if pass := HttpGetRate(context.Background(), "/abc"); !pass {
@@ -20,10 +20,10 @@ func Test_Rate(t *testing.T) {
 	if pass := GrpcRate(context.Background(), "/abc"); !pass {
 		t.Fatal("should pass rate check")
 	}
-	UpdateRateConfig(map[string][]*PathRateConfig{
+	UpdateRateConfig(MultiPathRateConfigs{
 		"/abc": {
-			{Method: []string{"GET", "POST", "PUT", "DELETE", "PATCH", "GRPC", "CRPC"}, MaxPerSec: 2},
-			{Method: []string{"GRPC"}, MaxPerSec: 2},
+			{Methods: []string{"GET", "POST", "PUT", "DELETE", "PATCH", "GRPC", "CRPC"}, MaxRate: 2, Period: 1, RateType: "path"},
+			{Methods: []string{"GRPC"}, MaxRate: 2, Period: 1, RateType: "path"},
 		},
 	})
 	if pass := GrpcRate(context.Background(), "/abc"); pass {

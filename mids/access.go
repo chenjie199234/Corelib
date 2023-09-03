@@ -29,8 +29,10 @@ type access struct {
 	patch map[string]map[string]string
 	del   map[string]map[string]string
 }
-type PathAccessConfig struct {
-	Method   []string          `json:"method"`   //GRPC,CRPC,GET,POST,PUT,PATCH,DELETE
+type MultiPathAccessConfigs map[string]SinglePathAccessConfig //map's key:path
+type SinglePathAccessConfig []*PathAccessRule                 //one path can have multi access rule
+type PathAccessRule struct {
+	Methods  []string          `json:"methods"`  //GRPC,CRPC,GET,POST,PUT,PATCH,DELETE
 	Accesses map[string]string `json:"accesses"` //key accessid,value accesskey,all method above share these accesses
 }
 
@@ -41,7 +43,7 @@ func init() {
 }
 
 // key path
-func UpdateAccessConfig(c map[string][]*PathAccessConfig) {
+func UpdateAccessConfig(c MultiPathAccessConfigs) {
 	grpc := make(map[string]map[string]string)
 	crpc := make(map[string]map[string]string)
 	get := make(map[string]map[string]string)
@@ -49,57 +51,62 @@ func UpdateAccessConfig(c map[string][]*PathAccessConfig) {
 	put := make(map[string]map[string]string)
 	patch := make(map[string]map[string]string)
 	del := make(map[string]map[string]string)
-	for path, cc := range c {
-		for _, ccc := range cc {
-			for _, method := range ccc.Method {
+	for path, pathaccessrules := range c {
+		if path == "" {
+			path = "/"
+		} else if path[0] != '/' {
+			path = "/" + path
+		}
+		for _, pathaccessrule := range pathaccessrules {
+			for _, method := range pathaccessrule.Methods {
 				switch strings.ToUpper(method) {
 				case "GRPC":
 					if _, ok := grpc[path]; !ok {
 						grpc[path] = make(map[string]string)
 					}
-					for accessid, accesskey := range ccc.Accesses {
+					for accessid, accesskey := range pathaccessrule.Accesses {
 						grpc[path][accessid] = accesskey
 					}
 				case "CRPC":
 					if _, ok := crpc[path]; !ok {
 						crpc[path] = make(map[string]string)
 					}
-					for accessid, accesskey := range ccc.Accesses {
+					for accessid, accesskey := range pathaccessrule.Accesses {
 						crpc[path][accessid] = accesskey
 					}
 				case "GET":
 					if _, ok := get[path]; !ok {
 						get[path] = make(map[string]string)
 					}
-					for accessid, accesskey := range ccc.Accesses {
+					for accessid, accesskey := range pathaccessrule.Accesses {
 						get[path][accessid] = accesskey
 					}
 				case "POST":
 					if _, ok := post[path]; !ok {
 						post[path] = make(map[string]string)
 					}
-					for accessid, accesskey := range ccc.Accesses {
+					for accessid, accesskey := range pathaccessrule.Accesses {
 						post[path][accessid] = accesskey
 					}
 				case "PUT":
 					if _, ok := put[path]; !ok {
 						put[path] = make(map[string]string)
 					}
-					for accessid, accesskey := range ccc.Accesses {
+					for accessid, accesskey := range pathaccessrule.Accesses {
 						put[path][accessid] = accesskey
 					}
 				case "PATCH":
 					if _, ok := patch[path]; !ok {
 						patch[path] = make(map[string]string)
 					}
-					for accessid, accesskey := range ccc.Accesses {
+					for accessid, accesskey := range pathaccessrule.Accesses {
 						patch[path][accessid] = accesskey
 					}
 				case "DELETE":
 					if _, ok := del[path]; !ok {
 						del[path] = make(map[string]string)
 					}
-					for accessid, accesskey := range ccc.Accesses {
+					for accessid, accesskey := range pathaccessrule.Accesses {
 						del[path][accessid] = accesskey
 					}
 				}

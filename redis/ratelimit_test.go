@@ -14,7 +14,7 @@ func Test_Ratelimit(t *testing.T) {
 		ConnTimeout: time.Second,
 		IOTimeout:   time.Second,
 	})
-	pass, e := client.RateLimitSecondMax(context.Background(), map[string]uint64{"test1": 2, "test2": 1})
+	pass, e := client.RateLimit(context.Background(), map[string][2]uint64{"test1": {2, 1}, "test2": {1, 1}})
 	if e != nil {
 		t.Fatal(e)
 		return
@@ -23,7 +23,7 @@ func Test_Ratelimit(t *testing.T) {
 		t.Fatal("should pass")
 		return
 	}
-	pass, e = client.RateLimitSecondMax(context.Background(), map[string]uint64{"test1": 2, "test2": 1})
+	pass, e = client.RateLimit(context.Background(), map[string][2]uint64{"test1": {2, 1}, "test2": {1, 1}})
 	if e != nil {
 		t.Fatal(e)
 		return
@@ -32,7 +32,7 @@ func Test_Ratelimit(t *testing.T) {
 		t.Fatal("should not pass")
 		return
 	}
-	pass, e = client.RateLimitSecondMax(context.Background(), map[string]uint64{"test1": 2, "test2": 2})
+	pass, e = client.RateLimit(context.Background(), map[string][2]uint64{"test1": {2, 1}, "test2": {2, 1}})
 	if e != nil {
 		t.Fatal(e)
 		return
@@ -42,7 +42,7 @@ func Test_Ratelimit(t *testing.T) {
 		return
 	}
 	time.Sleep(time.Millisecond * 400)
-	pass, e = client.RateLimitSecondMax(context.Background(), map[string]uint64{"test1": 3, "test2": 3})
+	pass, e = client.RateLimit(context.Background(), map[string][2]uint64{"test1": {3, 1}, "test2": {3, 1}})
 	if e != nil {
 		t.Fatal(e)
 		return
@@ -52,7 +52,7 @@ func Test_Ratelimit(t *testing.T) {
 		return
 	}
 	time.Sleep(time.Millisecond * 601)
-	pass, e = client.RateLimitSecondMax(context.Background(), map[string]uint64{"test1": 2, "test2": 2})
+	pass, e = client.RateLimit(context.Background(), map[string][2]uint64{"test1": {2, 1}, "test2": {2, 1}})
 	if e != nil {
 		t.Fatal(e)
 		return

@@ -46,6 +46,7 @@ func token(ctx *crpc.Context) {
 	md["Token-DeployEnv"] = t.DeployEnv
 	md["Token-RunEnv"] = t.RunEnv
 	md["Token-Puber"] = t.Puber
+	md["Token-User"] = t.UserID
 	md["Token-Data"] = t.Data
 }
 func session(ctx *crpc.Context) {
@@ -55,11 +56,12 @@ func session(ctx *crpc.Context) {
 		ctx.Abort(cerror.ErrSession)
 		return
 	}
-	sessiondata, pass := publicmids.VerifySession(ctx, sessionstr)
+	userid, sessiondata, pass := publicmids.VerifySession(ctx, sessionstr)
 	if !pass {
 		ctx.Abort(cerror.ErrSession)
 		return
 	}
+	md["Session-User"] = userid
 	md["Session-Data"] = sessiondata
 }
 func accesskey(ctx *crpc.Context) {

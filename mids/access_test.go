@@ -9,12 +9,11 @@ import (
 
 func Test_Accesssign(t *testing.T) {
 	UpdateReplayDefendRedisUrl("redis://127.0.0.1:6379")
-	c := make(map[string][]*PathAccessConfig)
-	c["/abc"] = append(c["/abc"], &PathAccessConfig{
-		Method:   []string{"GET", "GRPC", "CRPC"},
-		Accesses: map[string]string{"1": "1"},
+	UpdateAccessConfig(MultiPathAccessConfigs{
+		"/abc": {
+			{Methods: []string{"GET", "GRPC", "CRPC"}, Accesses: map[string]string{"1": "1"}},
+		},
 	})
-	UpdateAccessConfig(c)
 	querys := make(url.Values)
 	querys.Add("a", "我 = 们")
 	querys.Add("a", "ad = asd")

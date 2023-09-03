@@ -2,24 +2,26 @@ package mids
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/redis"
 )
 
 type rate struct {
 	p     *redis.Pool
-	grpc  map[string][][2]interface{} //key path
-	crpc  map[string][][2]interface{} //key path
-	get   map[string][][2]interface{} //key path
-	post  map[string][][2]interface{} //key path
-	put   map[string][][2]interface{} //key path
-	patch map[string][][2]interface{} //key path
-	del   map[string][][2]interface{} //key path
+	grpc  map[string][][3]interface{} //key path
+	crpc  map[string][][3]interface{} //key path
+	get   map[string][][3]interface{} //key path
+	post  map[string][][3]interface{} //key path
+	put   map[string][][3]interface{} //key path
+	patch map[string][][3]interface{} //key path
+	del   map[string][][3]interface{} //key path
 }
 
 var rateinstance *rate
@@ -28,9 +30,14 @@ func init() {
 	rateinstance = &rate{}
 }
 
-type PathRateConfig struct {
-	Method    []string `json:"method"`      //GRPC,CRPC,GET,POST,PUT,PATCH,DELETE
-	MaxPerSec uint64   `json:"max_per_sec"` //all methods above share this rate
+type MultiPathRateConfigs map[string]SinglePathRateConfig //map's key:path
+type SinglePathRateConfig []*PathRateRule                 // one path can have multi rate rules
+type PathRateRule struct {
+	Methods []string `json:"methods"` //CRPC,GRPC,GET,POST,PUT,PATCH,DELETE
+	//MaxRate per Period(uint second)
+	MaxRate  uint64 `json:"max_rate"`  //all methods above share this rate
+	Period   uint64 `json:"period"`    //uint second
+	RateType string `json:"rate_type"` //path,token,session
 }
 
 func UpdateRateRedisUrl(redisurl string) {
@@ -64,54 +71,65 @@ func UpdateRateRedisInstance(p *redis.Pool) {
 }
 
 // key path
-func UpdateRateConfig(c map[string][]*PathRateConfig) {
-	grpc := make(map[string][][2]interface{})  //key path
-	crpc := make(map[string][][2]interface{})  //key path
-	get := make(map[string][][2]interface{})   //key path
-	post := make(map[string][][2]interface{})  //key path
-	put := make(map[string][][2]interface{})   //key path
-	patch := make(map[string][][2]interface{}) //key path
-	del := make(map[string][][2]interface{})   //key path
-	for path, cc := range c {
-		for _, ccc := range cc {
-			var rateinfo [2]interface{}
-			rateinfo[0] = "{" + path + "}_" + strings.Join(ccc.Method, "_")
-			rateinfo[1] = ccc.MaxPerSec
-			for _, m := range ccc.Method {
+func UpdateRateConfig(c MultiPathRateConfigs) {
+	grpc := make(map[string][][3]interface{})  //key path
+	crpc := make(map[string][][3]interface{})  //key path
+	get := make(map[string][][3]interface{})   //key path
+	post := make(map[string][][3]interface{})  //key path
+	put := make(map[string][][3]interface{})   //key path
+	patch := make(map[string][][3]interface{}) //key path
+	del := make(map[string][][3]interface{})   //key path
+	for path, pathraterules := range c {
+		if path == "" {
+			path = "/"
+		} else if path[0] != '/' {
+			path = "/" + path
+		}
+		for _, pathraterule := range pathraterules {
+			if pathraterule.RateType != "path" && pathraterule.RateType != "token" && pathraterule.RateType != "session" {
+				log.Error(nil, "[rate] rate config's rate_type must be path/token/session", map[string]interface{}{"path": path, "rate_type": pathraterule.RateType})
+				return
+			}
+
+			var rateinfo [3]interface{}
+			rateinfo[0] = pathraterule.RateType + "_rate_{" + path + "}_" + strings.Join(pathraterule.Methods, "_") + "_" + strconv.FormatUint(pathraterule.Period, 10)
+			rateinfo[1] = pathraterule.MaxRate
+			rateinfo[2] = pathraterule.Period
+			for _, m := range pathraterule.Methods {
 				switch strings.ToUpper(m) {
 				case "GRPC":
 					if _, ok := grpc[path]; !ok {
-						grpc[path] = make([][2]interface{}, 0, 3)
+						grpc[path] = make([][3]interface{}, 0, 3)
 					}
 					grpc[path] = append(grpc[path], rateinfo)
 				case "CRPC":
 					if _, ok := crpc[path]; !ok {
-						crpc[path] = make([][2]interface{}, 0, 3)
+						crpc[path] = make([][3]interface{}, 0, 3)
 					}
 					crpc[path] = append(crpc[path], rateinfo)
 				case "GET":
 					if _, ok := get[path]; !ok {
-						get[path] = make([][2]interface{}, 0, 3)
+						get[path] = make([][3]interface{}, 0, 3)
 					}
 					get[path] = append(get[path], rateinfo)
 				case "POST":
 					if _, ok := post[path]; !ok {
-						post[path] = make([][2]interface{}, 0, 3)
+						post[path] = make([][3]interface{}, 0, 3)
 					}
 					post[path] = append(post[path], rateinfo)
 				case "PUT":
 					if _, ok := put[path]; !ok {
-						put[path] = make([][2]interface{}, 0, 3)
+						put[path] = make([][3]interface{}, 0, 3)
 					}
 					put[path] = append(put[path], rateinfo)
 				case "PATCH":
 					if _, ok := patch[path]; !ok {
-						patch[path] = make([][2]interface{}, 0, 3)
+						patch[path] = make([][3]interface{}, 0, 3)
 					}
 					patch[path] = append(patch[path], rateinfo)
 				case "DELETE":
 					if _, ok := del[path]; !ok {
-						del[path] = make([][2]interface{}, 0, 3)
+						del[path] = make([][3]interface{}, 0, 3)
 					}
 					del[path] = append(del[path], rateinfo)
 				}
@@ -127,19 +145,37 @@ func UpdateRateConfig(c map[string][]*PathRateConfig) {
 	rateinstance.del = del
 }
 
-func checkrate(ctx context.Context, infos [][2]interface{}) bool {
+func checkrate(ctx context.Context, infos [][3]interface{}) bool {
 	redisclient := rateinstance.p
 	if redisclient == nil {
 		log.Error(ctx, "[rate] redis missing", nil)
 		return false
 	}
-	rates := make(map[string]uint64)
+	rates := make(map[string][2]uint64)
 	for _, info := range infos {
-		rates[info[0].(string)] = info[1].(uint64)
+		if strings.HasPrefix(info[0].(string), "token_rate") {
+			md := metadata.GetMetadata(ctx)
+			token, ok := md["Token-User"]
+			if !ok {
+				log.Error(ctx, "[rate] missing token when check token's rate,make sure the token midware is before the rate midware", nil)
+				return false
+			}
+			rates[info[0].(string)+"_"+token] = [2]uint64{info[1].(uint64), info[2].(uint64)}
+		} else if strings.HasPrefix(info[0].(string), "session_rate") {
+			md := metadata.GetMetadata(ctx)
+			session, ok := md["Session-User"]
+			if !ok {
+				log.Error(ctx, "[rate] missing token when check session's rate,make sure the session midware is before the rate midware", nil)
+				return false
+			}
+			rates[info[0].(string)+"_"+session] = [2]uint64{info[1].(uint64), info[2].(uint64)}
+		} else {
+			rates[info[0].(string)] = [2]uint64{info[1].(uint64), info[2].(uint64)}
+		}
 	}
-	pass, e := redisclient.RateLimitSecondMax(ctx, rates)
+	pass, e := redisclient.RateLimit(ctx, rates)
 	if e != nil {
-		log.Error(ctx, "[rate] update redis failed", map[string]interface{}{"error": e})
+		log.Error(ctx, "[rate] redis op failed", map[string]interface{}{"error": e})
 	}
 	return pass
 }

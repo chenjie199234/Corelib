@@ -7,15 +7,19 @@ import (
 )
 
 func Test_Token(t *testing.T) {
+	userid := "userid1"
 	data := "dajsldjlashdohasobncasbjkdhaosjdoasjdoiajsodjnlajsnckjbakjsdashdjkasdoqhwofhbihdbvisadofjaoasdjlasjdlajsldjoaisjdoajsodijasdjlaksjdlkajsldjlaksjdlaslsdlaksjdlajsldjalsjdlasjdlajlsdjalsjdlasjdlasjdlkasjldkajsldkjalskdjlkjdlsjdoas"
 	UpdateTokenConfig("123", time.Second)
-	tokenstr := MakeToken(context.Background(), "corelib", "ali", "test", data)
+	tokenstr := MakeToken(context.Background(), "corelib", "ali", "test", userid, data)
 	if tokenstr == "" {
 		t.Fatal("should make token success")
 	}
 	token := VerifyToken(context.Background(), tokenstr)
 	if token == nil {
 		t.Fatal("should verify token success")
+	}
+	if token.UserID != userid {
+		t.Fatal("data broken")
 	}
 	if token.Data != data {
 		t.Fatal("data broken")

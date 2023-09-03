@@ -111,30 +111,30 @@ func ExtendSession(ctx context.Context, userid string, expire time.Duration) boo
 	return true
 }
 
-func VerifySession(ctx context.Context, sessionstr string) (string, bool) {
+func VerifySession(ctx context.Context, sessionstr string) (string, string, bool) {
 	redisclient := sessionredis
 	if redisclient == nil {
 		log.Error(ctx, "[session.verify] redis missing", nil)
-		return "", false
+		return "", "", false
 	}
 	index := strings.LastIndex(sessionstr, ",")
 	if index == -1 {
-		return "", false
+		return "", "", false
 	}
 	userid := sessionstr[:index]
 	sessionid := sessionstr[index+1:]
 	if !strings.HasPrefix(userid, "userid=") {
-		return "", false
+		return "", "", false
 	}
 	if !strings.HasPrefix(sessionid, "sessionid=") {
-		return "", false
+		return "", "", false
 	}
 	userid = userid[7:]
 	sessionid = sessionid[10:]
 	conn, e := redisclient.GetContext(ctx)
 	if e != nil {
 		log.Error(ctx, "[session.verify] get redis conn failed", map[string]interface{}{"error": e})
-		return "", false
+		return "", "", false
 	}
 	defer conn.Close()
 	str, e := redis.String(conn.DoContext(ctx, "GET", "session_"+userid))
@@ -142,13 +142,13 @@ func VerifySession(ctx context.Context, sessionstr string) (string, bool) {
 		if e != redis.ErrNil {
 			log.Error(ctx, "[session.verify] read session data failed", map[string]interface{}{"error": e})
 		}
-		return "", false
+		return "", "", false
 	}
-	if !strings.HasPrefix(str, sessionid) {
-		return "", false
+	if !strings.HasPrefix(str, sessionid+"_") {
+		return "", "", false
 	}
 	if len(str) < 17 {
-		return "", false
+		return "", "", false
 	}
-	return str[17:], true
+	return userid, str[17:], true
 }

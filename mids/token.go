@@ -14,6 +14,7 @@ type Token struct {
 	Puber     string `json:"p"`
 	DeployEnv string `json:"d_env"` //deploy location,example: ali-xxx,aws-xxx
 	RunEnv    string `json:"r_env"` //example: test,dev,prod...
+	UserID    string `json:"u"`
 	Data      string `json:"d"`
 	Start     uint64 `json:"s"` //timestamp,unit is second
 	End       uint64 `json:"e"` //timestamp,unit is second
@@ -29,13 +30,14 @@ func UpdateTokenConfig(secret string, expire time.Duration) {
 
 // return empty means make token failed
 // put the return data in web's Token header or metadata's Token field
-func MakeToken(ctx context.Context, puber, deployenv, runenv, data string) string {
+func MakeToken(ctx context.Context, puber, deployenv, runenv, userid, data string) string {
 	start := time.Now()
 	end := start.Add(tokenexpire)
 	t, _ := json.Marshal(&Token{
 		Puber:     puber,
 		DeployEnv: deployenv,
 		RunEnv:    runenv,
+		UserID:    userid,
 		Data:      data,
 		Start:     uint64(start.Unix()),
 		End:       uint64(end.Unix()),
