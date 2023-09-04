@@ -1,4 +1,4 @@
-package once
+package oneshot
 
 import (
 	"fmt"
