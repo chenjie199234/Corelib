@@ -342,13 +342,18 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		}
 		return
 	}
-	if !s.stop.AddOne() {
+	if e := s.stop.Add(1); e != nil {
 		c.Unlock()
-		//tell peer self closed
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
-		msg.Error = cerror.ErrServerClosing
+		if e == graceful.ErrClosing {
+			//tell peer self closed
+			msg.Error = cerror.ErrServerClosing
+		} else {
+			//tell peer self busy
+			msg.Error = cerror.ErrBusy
+		}
 		msg.Metadata = nil
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)

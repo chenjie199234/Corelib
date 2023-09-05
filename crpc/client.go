@@ -199,8 +199,11 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 }
 
 func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata map[string]string) ([]byte, error) {
-	if !c.stop.AddOne() {
-		return nil, cerror.ErrClientClosing
+	if e := c.stop.Add(1); e != nil {
+		if e == graceful.ErrClosing {
+			return nil, cerror.ErrClientClosing
+		}
+		return nil, cerror.ErrBusy
 	}
 	defer c.stop.DoneOne()
 	msg := &Msg{

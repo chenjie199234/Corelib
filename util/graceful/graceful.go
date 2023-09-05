@@ -1,6 +1,7 @@
 package graceful
 
 import (
+	"errors"
 	"math"
 	"sync/atomic"
 )
@@ -17,16 +18,23 @@ func New() *Graceful {
 	}
 }
 
-// return false,add failed,this Graceful is closing
-// return true,add success,this Graceful is working
-func (g *Graceful) AddOne() bool {
+var ErrClosing = errors.New("[Graceful.Add] closing")
+var ErrMax = errors.New("[Graceful.Add] out of bounds")
+
+func (g *Graceful) Add(delta uint16) error {
+	if delta == 0 {
+		panic("[Graceful.Add] delta is 0")
+	}
 	for {
 		old := atomic.LoadInt64(&g.progress)
 		if old < 0 {
-			return false
+			return ErrClosing
 		}
-		if atomic.CompareAndSwapInt64(&g.progress, old, old+1) {
-			return true
+		if old+int64(delta) < 0 {
+			return ErrMax
+		}
+		if atomic.CompareAndSwapInt64(&g.progress, old, old+int64(delta)) {
+			return nil
 		}
 	}
 }

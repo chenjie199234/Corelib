@@ -228,8 +228,11 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		header.Set("Core-Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
 	header.Del("Origin")
-	if !c.stop.AddOne() {
-		return nil, cerror.ErrClientClosing
+	if e := c.stop.Add(1); e != nil {
+		if e == graceful.ErrClosing {
+			return nil, cerror.ErrClientClosing
+		}
+		return nil, cerror.ErrBusy
 	}
 	defer c.stop.DoneOne()
 	for {

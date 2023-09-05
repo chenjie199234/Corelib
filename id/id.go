@@ -6,22 +6,22 @@ import (
 	"time"
 )
 
-//2020-05-21 13:14:00
-const offset uint64 = 1590066840
+// 2023-05-21 13:14:00(UTC)
+const offset uint64 = 1684646040
 
 var lasttime uint64
 var serverid uint64
 var rollback uint64
 
-//64bit data
-//00000000000000000000000000000000         000000                000                    00000000000000000000000
-//----32 bit timestamp(second)----------6bit rollback-----3bit serverid------------------------23bit id-------
-//-----can support 136 years---------rollback 60 seconds---can support 8 servers-----can make 8,000,000+ ids in one second per server
+// 64bit data
+// 00000000000000000000000000000000         000000                000                    00000000000000000000000
+// ----32 bit timestamp(second)----------6bit rollback-----3bit serverid------------------------23bit id-------
+// -----can support 136 years---------rollback 60 seconds---can support 8 servers-----can make 8,000,000+ ids in one second per server
 var base uint64
 
 var inited int64
 
-//thread safe
+// thread safe
 func New(sid uint64) {
 	if atomic.SwapInt64(&inited, 1) == 1 {
 		return
@@ -82,14 +82,14 @@ func checkserverid(id uint64) bool {
 	return false
 }
 
-var ERRMAX = errors.New("[ID.GetID]Max id was used up in this second")
+var ERRMAX = errors.New("[ID.GetID] no more ids in this second")
 
 func GetID() (uint64, error) {
 	_, end, e := GetIDs(1)
 	return end, e
 }
 
-//range is [start,end],including start and end,if delta is 1,start = end
+// range is [start,end],including start and end,if delta is 1,start = end
 func GetIDs(delta uint16) (start uint64, end uint64, e error) {
 	if delta == 0 {
 		delta += 1

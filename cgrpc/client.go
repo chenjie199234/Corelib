@@ -153,8 +153,11 @@ func (c *CGrpcClient) Close(force bool) {
 var ClientClosed = errors.New("[cgrpc.client] closed")
 
 func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, resp interface{}, metadata map[string]string) error {
-	if !c.stop.AddOne() {
-		return ClientClosed
+	if e := c.stop.Add(1); e != nil {
+		if e == graceful.ErrClosing {
+			return cerror.ErrClientClosing
+		}
+		return cerror.ErrBusy
 	}
 	defer c.stop.DoneOne()
 	if c.c.GlobalTimeout > 0 {

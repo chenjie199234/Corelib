@@ -516,15 +516,22 @@ func (s *WebServer) insideHandler(method, path string, handlers []OutsideHandler
 			}
 		}
 		//check server status
-		if !s.stop.AddOne() {
+		if e := s.stop.Add(1); e != nil {
 			if s.c.WaitCloseMode == 0 {
 				//refresh close wait
 				s.closetimer.Reset(s.c.WaitCloseTime)
 			}
-			//tell peer self closed
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(int(cerror.ErrServerClosing.Httpcode))
-			w.Write(common.Str2byte(cerror.ErrServerClosing.Error()))
+			if e == graceful.ErrClosing {
+				//tell peer self closed
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(int(cerror.ErrServerClosing.Httpcode))
+				w.Write(common.Str2byte(cerror.ErrServerClosing.Error()))
+			} else {
+				//tell peer self busy
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(int(cerror.ErrBusy.Httpcode))
+				w.Write(common.Str2byte(cerror.ErrBusy.Error()))
+			}
 			return
 		}
 		defer s.stop.DoneOne()

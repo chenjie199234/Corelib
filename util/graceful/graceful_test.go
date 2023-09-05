@@ -9,7 +9,7 @@ import (
 
 func Test_Graceful(t *testing.T) {
 	g := New()
-	g.AddOne()
+	g.Add(1)
 	start := time.Now().Unix()
 	go func() {
 		defer g.DoneOne()
