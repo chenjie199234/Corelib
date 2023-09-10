@@ -53,21 +53,21 @@ func CreatePathAndFile(packagename, projectname, sname string) {
 	if e := os.MkdirAll("./api/", 0755); e != nil {
 		panic("mkdir ./api/ error: " + e.Error())
 	}
-	prototemplate, e := template.New("./api/" + sname + ".proto").Parse(txt)
+	prototemplate, e := template.New("./api/" + projectname + "_" + sname + ".proto").Parse(txt)
 	if e != nil {
-		panic("parse ./api/" + sname + ".proto error: " + e.Error())
+		panic("parse ./api/" + projectname + "_" + sname + ".proto error: " + e.Error())
 	}
-	file, e := os.OpenFile("./api/"+sname+".proto", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, e := os.OpenFile("./api/"+projectname+"_"+sname+".proto", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic("open ./api/" + sname + ".proto error: " + e.Error())
+		panic("open ./api/" + projectname + "_" + sname + ".proto error: " + e.Error())
 	}
 	if e := prototemplate.Execute(file, tmp); e != nil {
-		panic("write ./api/" + sname + ".proto error: " + e.Error())
+		panic("write ./api/" + projectname + "_" + sname + ".proto error: " + e.Error())
 	}
 	if e := file.Sync(); e != nil {
-		panic("sync ./api/" + sname + ".proto error: " + e.Error())
+		panic("sync ./api/" + projectname + "_" + sname + ".proto error: " + e.Error())
 	}
 	if e := file.Close(); e != nil {
-		panic("close ./api/" + sname + ".proto error: " + e.Error())
+		panic("close ./api/" + projectname + "_" + sname + ".proto error: " + e.Error())
 	}
 }
