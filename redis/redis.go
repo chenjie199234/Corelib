@@ -20,9 +20,9 @@ type Config struct {
 	//0: default 100
 	MaxOpen uint16 `json:"max_open"`
 	//<=0: connection has no idle timeout
-	MaxIdletime time.Duration `json:"max_idletime"`
+	MaxConnIdletime time.Duration `json:"max_conn_idletime"`
 	//<=0: default 5s
-	ConnTimeout time.Duration `json:"conn_timeout"`
+	DialTimeout time.Duration `json:"dial_timeout"`
 	//<=0: no timeout
 	IOTimeout time.Duration `json:"io_time"`
 }
@@ -32,28 +32,28 @@ type Client struct {
 }
 
 // if tlsc is not nil,the tls will be actived
-func NewRedis(c *Config, tlsc *tls.Config) *Client {
+func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 	gredisc := &gredis.UniversalOptions{
 		Addrs:                 c.Addrs,
 		ClientName:            c.RedisName,
 		Username:              c.UserName,
 		Password:              c.Password,
-		DialTimeout:           c.ConnTimeout,
+		DialTimeout:           c.DialTimeout,
 		ReadTimeout:           c.IOTimeout,
 		WriteTimeout:          c.IOTimeout,
 		ContextTimeoutEnabled: true,
 		PoolSize:              int(c.MaxOpen),
 		MinIdleConns:          1,
-		ConnMaxIdleTime:       c.MaxIdletime,
+		ConnMaxIdleTime:       c.MaxConnIdletime,
 		TLSConfig:             tlsc,
 	}
 	if c.MaxOpen == 0 {
 		gredisc.PoolSize = 100
 	}
-	if c.ConnTimeout <= 0 {
+	if c.DialTimeout <= 0 {
 		gredisc.DialTimeout = time.Second * 5
 	}
-	if c.MaxIdletime <= 0 {
+	if c.MaxConnIdletime <= 0 {
 		gredisc.ConnMaxIdleTime = -1
 	}
 	if c.IOTimeout <= 0 {
@@ -62,5 +62,5 @@ func NewRedis(c *Config, tlsc *tls.Config) *Client {
 	}
 	client := &Client{gredis.NewUniversalClient(gredisc)}
 	//TODO add otel
-	return client
+	return client, nil
 }

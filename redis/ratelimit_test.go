@@ -7,13 +7,13 @@ import (
 )
 
 func Test_Ratelimit(t *testing.T) {
-	client := NewRedis(&Config{
-		RedisName:   "test",
-		Addrs:       []string{"127.0.0.1:6379"},
-		MaxOpen:     256,
-		MaxIdletime: time.Second,
-		ConnTimeout: time.Second,
-		IOTimeout:   time.Second,
+	client, _ := NewRedis(&Config{
+		RedisName:       "test",
+		Addrs:           []string{"127.0.0.1:6379"},
+		MaxOpen:         256,
+		MaxConnIdletime: time.Second,
+		DialTimeout:     time.Second,
+		IOTimeout:       time.Second,
 	}, nil)
 	pass, e := client.RateLimit(context.Background(), map[string][2]uint64{"test1": {2, 5}, "test2": {1, 5}})
 	if e != nil {

@@ -7,13 +7,13 @@ import (
 )
 
 func Test_Bloom(t *testing.T) {
-	client := NewRedis(&Config{
-		RedisName:   "test",
-		Addrs:       []string{"127.0.0.1:6379"},
-		MaxOpen:     256,
-		MaxIdletime: time.Minute * 5,
-		ConnTimeout: time.Second,
-		IOTimeout:   time.Second,
+	client, _ := NewRedis(&Config{
+		RedisName:       "test",
+		Addrs:           []string{"127.0.0.1:6379"},
+		MaxOpen:         256,
+		MaxConnIdletime: time.Minute * 5,
+		DialTimeout:     time.Second,
+		IOTimeout:       time.Second,
 	}, nil)
 	e := client.NewBloom(context.Background(), "testbloom", 10, 1024, 86400)
 	if e != nil {

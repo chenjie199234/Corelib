@@ -9,13 +9,13 @@ import (
 )
 
 func Test_TemporaryMQ(t *testing.T) {
-	client := NewRedis(&Config{
-		RedisName:   "test",
-		Addrs:       []string{"127.0.0.1:6379"},
-		MaxOpen:     256,
-		MaxIdletime: time.Minute * 5,
-		ConnTimeout: time.Second,
-		IOTimeout:   time.Second,
+	client, _ := NewRedis(&Config{
+		RedisName:       "test",
+		Addrs:           []string{"127.0.0.1:6379"},
+		MaxOpen:         256,
+		MaxConnIdletime: time.Minute * 5,
+		DialTimeout:     time.Second,
+		IOTimeout:       time.Second,
 	}, nil)
 	lker := &sync.Mutex{}
 	r := make(map[string]int, 1000)

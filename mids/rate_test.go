@@ -9,14 +9,13 @@ import (
 )
 
 func Test_Rate(t *testing.T) {
-	client := redis.NewRedis(&redis.Config{
-		RedisName:   "test",
-		Addrs:       []string{"127.0.0.1:6379"},
-		MaxIdle:     100,
-		MaxOpen:     256,
-		MaxIdletime: time.Minute * 5,
-		ConnTimeout: time.Second,
-		IOTimeout:   time.Second,
+	client, _ := redis.NewRedis(&redis.Config{
+		RedisName:       "test",
+		Addrs:           []string{"127.0.0.1:6379"},
+		MaxOpen:         256,
+		MaxConnIdletime: time.Minute * 5,
+		DialTimeout:     time.Second,
+		IOTimeout:       time.Second,
 	}, nil)
 	UpdateRateRedisInstance(client)
 	UpdateRateConfig(MultiPathRateConfigs{
