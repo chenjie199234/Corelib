@@ -8,7 +8,7 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
 
-	"github.com/redis/go-redis/v9"
+	gredis "github.com/redis/go-redis/v9"
 )
 
 //group(redis sorted set): task1(priority1) task2(priority2) task3(priority3)... // if priority <0 this task's is interrupted,can't sub,but can pub
@@ -29,11 +29,11 @@ import (
 // one specific group will only work on one redis node when in cluster mode
 // different groups may work on different redis node when in cluster mode(depend on the group name)
 
-var pubPMQ *redis.Script
-var finishPMQ *redis.Script
+var pubPMQ *gredis.Script
+var finishPMQ *gredis.Script
 
 func init() {
-	pubPMQ = redis.NewScript(`if(not redis.call("ZSCORE",KEYS[1],ARGV[1]))
+	pubPMQ = gredis.NewScript(`if(not redis.call("ZSCORE",KEYS[1],ARGV[1]))
 then
 	return -2
 end
@@ -46,7 +46,7 @@ for i=2,#ARGV,1 do
 end
 return 0`)
 
-	finishPMQ = redis.NewScript(`if(not redis.call("ZSCORE",KEYS[1],ARGV[1]))
+	finishPMQ = gredis.NewScript(`if(not redis.call("ZSCORE",KEYS[1],ARGV[1]))
 then
 	redis.call("DEL",KEYS[2])
 	for i=3,#KEYS,1 do
@@ -81,7 +81,7 @@ func (c *Client) PriorityMQSetTask(ctx context.Context, group, task string, prio
 	if task == "" {
 		return ErrPriorityMQTaskMissing
 	}
-	_, e := c.ZAdd(ctx, group, redis.Z{Score: float64(priority), Member: task}).Result()
+	_, e := c.ZAdd(ctx, group, gredis.Z{Score: float64(priority), Member: task}).Result()
 	return e
 }
 
@@ -187,7 +187,7 @@ func (c *Client) priorityMQSubHandle(ctx context.Context, group, channel string,
 			//stopped
 			return
 		}
-		tasks, e = c.ZRevRangeByScore(ctx, group, &redis.ZRangeBy{Min: "0", Max: "+inf"}).Result()
+		tasks, e = c.ZRevRangeByScore(ctx, group, &gredis.ZRangeBy{Min: "0", Max: "+inf"}).Result()
 		if e != nil {
 			log.Error(ctx, "[redis.priorityMQSubHandle] get tasks failed", map[string]interface{}{"group": group, "error": e})
 			continue
@@ -206,7 +206,7 @@ func (c *Client) priorityMQSubHandle(ctx context.Context, group, channel string,
 		}
 		if result, e = c.BLPop(ctx, time.Second, keys...).Result(); e == nil {
 			handle(result[0][len(group)+3:len(result[0])-len(channel)-1], common.Str2byte(result[1]))
-		} else if ee, ok := e.(interface{ Timeout() bool }); (!ok || !ee.Timeout()) && e != redis.Nil {
+		} else if ee, ok := e.(interface{ Timeout() bool }); (!ok || !ee.Timeout()) && e != gredis.Nil {
 			log.Error(ctx, "[redis.priorityMQSubHandle] sub tasks failed", map[string]interface{}{"group": group, "channel": channel, "error": e})
 		} else {
 			e = nil

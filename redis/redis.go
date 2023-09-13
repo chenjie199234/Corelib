@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"time"
 
-	"github.com/redis/go-redis/v9"
+	gredis "github.com/redis/go-redis/v9"
 )
 
 type Config struct {
@@ -28,12 +28,12 @@ type Config struct {
 }
 
 type Client struct {
-	redis.UniversalClient
+	gredis.UniversalClient
 }
 
 // if tlsc is not nil,the tls will be actived
 func NewRedis(c *Config, tlsc *tls.Config) *Client {
-	client := &Client{redis.NewUniversalClient(&redis.UniversalOptions{
+	client := &Client{gredis.NewUniversalClient(&gredis.UniversalOptions{
 		Addrs:                 c.Addrs,
 		ClientName:            c.RedisName,
 		Username:              c.UserName,

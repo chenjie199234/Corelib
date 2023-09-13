@@ -8,7 +8,7 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/egroup"
 
-	"github.com/redis/go-redis/v9"
+	gredis "github.com/redis/go-redis/v9"
 )
 
 // {bloomname_1}_bkdr: redis bitset
@@ -27,12 +27,12 @@ import (
 // {bloomname_n}_sdbm: redis bitset
 // {bloomname_n}_exist: redis string
 
-var initBloom *redis.Script
-var setBloom *redis.Script
-var checkBloom *redis.Script
+var initBloom *gredis.Script
+var setBloom *gredis.Script
+var checkBloom *gredis.Script
 
 func init() {
-	initBloom = redis.NewScript(`if(redis.call("EXISTS",KEYS[7])==0)
+	initBloom = gredis.NewScript(`if(redis.call("EXISTS",KEYS[7])==0)
 then
 	redis.call("SETBIT",KEYS[1],ARGV[1],1)
 	redis.call("SETBIT",KEYS[2],ARGV[1],1)
@@ -56,7 +56,7 @@ then
 end
 return 0`)
 
-	setBloom = redis.NewScript(`if(redis.call("EXISTS",KEYS[7])==0)
+	setBloom = gredis.NewScript(`if(redis.call("EXISTS",KEYS[7])==0)
 then
 	return -1
 end
@@ -82,7 +82,7 @@ then
 end
 return 1`)
 
-	checkBloom = redis.NewScript(`if(redis.call("EXISTS",KEYS[7])==0)
+	checkBloom = gredis.NewScript(`if(redis.call("EXISTS",KEYS[7])==0)
 then
 	return -1
 end

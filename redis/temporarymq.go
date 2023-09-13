@@ -10,7 +10,7 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
 
-	"github.com/redis/go-redis/v9"
+	gredis "github.com/redis/go-redis/v9"
 )
 
 // name_0(redis list):[data1,data2,data3...]
@@ -25,15 +25,15 @@ var ErrTemporaryMQMissingName = errors.New("temporary mq missing name")
 var ErrTemporaryMQMissingGroup = errors.New("temporary mq missing group")
 var ErrTemporaryMQMissingReceiver = errors.New("temporary mq missing receiver")
 
-var expireTMQ *redis.Script
-var pubTMQ *redis.Script
+var expireTMQ *gredis.Script
+var pubTMQ *gredis.Script
 
 func init() {
-	expireTMQ = redis.NewScript(`redis.call("SETEX",KEYS[2],16,1)
+	expireTMQ = gredis.NewScript(`redis.call("SETEX",KEYS[2],16,1)
 redis.call("EXPIRE",KEYS[1],16)
 return "OK"`)
 
-	pubTMQ = redis.NewScript(`if(redis.call("EXISTS",KEYS[2])==0)
+	pubTMQ = gredis.NewScript(`if(redis.call("EXISTS",KEYS[2])==0)
 then
 	return -1
 end
@@ -148,7 +148,7 @@ func (c *Client) temporaryMQSubHandle(ctx context.Context, mqname string, index 
 		}
 		if result, e = c.BLPop(ctx, time.Second, listname).Result(); e == nil {
 			handler(common.Str2byte(result[1]))
-		} else if ee, ok := e.(interface{ Timeout() bool }); (!ok || !ee.Timeout()) && e != redis.Nil {
+		} else if ee, ok := e.(interface{ Timeout() bool }); (!ok || !ee.Timeout()) && e != gredis.Nil {
 			log.Error(ctx, "[redis.temporaryMQSubHandle] failed", map[string]interface{}{"group": index, "error": e})
 		} else {
 			e = nil

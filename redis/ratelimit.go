@@ -3,13 +3,13 @@ package redis
 import (
 	"context"
 
-	"github.com/redis/go-redis/v9"
+	gredis "github.com/redis/go-redis/v9"
 )
 
-var rate *redis.Script
+var rate *gredis.Script
 
 func init() {
-	rate = redis.NewScript(`local time=redis.call("TIME")
+	rate = gredis.NewScript(`local time=redis.call("TIME")
 for i=1,#KEYS,1 do
 	while(true)
 	do
