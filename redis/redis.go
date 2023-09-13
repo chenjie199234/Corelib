@@ -17,12 +17,9 @@ type Config struct {
 	//if redis version is under 6.0,only need password
 	UserName string `json:"user_name"`
 	Password string `json:"password"`
-	//this is the pool's buf for every addr
-	//if this is 0,no connections will be reused
-	//because the pool's buf is 0,no connections can be buffed
-	MaxIdle uint16 `json:"max_idle"`
+	//0: default 100
 	MaxOpen uint16 `json:"max_open"`
-	//<=0: no idletime
+	//<=0: connection has no idle timeout
 	MaxIdletime time.Duration `json:"max_idletime"`
 	//<=0: default 5s
 	ConnTimeout time.Duration `json:"conn_timeout"`
@@ -46,15 +43,18 @@ func NewRedis(c *Config, tlsc *tls.Config) *Client {
 		WriteTimeout:          c.IOTimeout,
 		ContextTimeoutEnabled: true,
 		PoolSize:              int(c.MaxOpen),
-		MaxIdleConns:          int(c.MaxIdle),
+		MinIdleConns:          1,
 		ConnMaxIdleTime:       c.MaxIdletime,
 		TLSConfig:             tlsc,
+	}
+	if c.MaxOpen == 0 {
+		gredisc.PoolSize = 100
 	}
 	if c.ConnTimeout <= 0 {
 		gredisc.DialTimeout = time.Second * 5
 	}
 	if c.MaxIdletime <= 0 {
-		gredisc.ConnMaxIdleTime = 0
+		gredisc.ConnMaxIdleTime = -1
 	}
 	if c.IOTimeout <= 0 {
 		gredisc.ReadTimeout = -1

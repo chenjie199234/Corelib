@@ -12,7 +12,6 @@ func Test_PriorityMQ(t *testing.T) {
 	client := NewRedis(&Config{
 		RedisName:   "test",
 		Addrs:       []string{"127.0.0.1:6379"},
-		MaxIdle:     100,
 		MaxOpen:     256,
 		MaxIdletime: time.Minute * 5,
 		ConnTimeout: time.Second,

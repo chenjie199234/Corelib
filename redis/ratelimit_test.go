@@ -10,7 +10,6 @@ func Test_Ratelimit(t *testing.T) {
 	client := NewRedis(&Config{
 		RedisName:   "test",
 		Addrs:       []string{"127.0.0.1:6379"},
-		MaxIdle:     100,
 		MaxOpen:     256,
 		MaxIdletime: time.Second,
 		ConnTimeout: time.Second,
