@@ -20,7 +20,7 @@ import (
 )
 
 type access struct {
-	p     *redis.Pool
+	c     *redis.Client
 	grpc  map[string]map[string]string //first key path,second key accessid,value accesskey
 	crpc  map[string]map[string]string
 	get   map[string]map[string]string
@@ -121,31 +121,11 @@ func UpdateAccessConfig(c MultiPathAccessConfigs) {
 	accessInstance.patch = patch
 	accessInstance.del = del
 }
-func UpdateReplayDefendRedisUrl(redisurl string) {
-	var newp *redis.Pool
-	if redisurl != "" {
-		newp = redis.NewRedis(&redis.Config{
-			RedisName:   "replay_defend_redis",
-			URL:         redisurl,
-			MaxOpen:     0,    //means no limit
-			MaxIdle:     1024, //the pool's buf
-			MaxIdletime: time.Minute,
-			ConnTimeout: time.Second,
-			IOTimeout:   time.Second,
-		})
-	} else {
+func UpdateReplayDefendRedisInstance(c *redis.Client) {
+	if c == nil {
 		log.Warning(nil, "[access.sign] redis missing,replay attack may happened", nil)
 	}
-	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&accessInstance.p)), unsafe.Pointer(newp)))
-	if oldp != nil {
-		oldp.Close()
-	}
-}
-func UpdateReplayDefendRedisInstance(p *redis.Pool) {
-	if p == nil {
-		log.Warning(nil, "[access.sign] redis missing,replay attack may happened", nil)
-	}
-	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&accessInstance.p)), unsafe.Pointer(p)))
+	oldp := (*redis.Client)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&accessInstance.c)), unsafe.Pointer(c)))
 	if oldp != nil {
 		oldp.Close()
 	}
@@ -370,28 +350,22 @@ func VerifyAccessSign(ctx context.Context, method, path string, querys url.Value
 	if base64.StdEncoding.EncodeToString(reqdigest[:]) != sign {
 		return false
 	}
-	redisclient := accessInstance.p
+	redisclient := accessInstance.c
 	if redisclient == nil {
 		//if there is no replay defend redis
 		//jump this check
 		return true
 	}
 	//check replay attack
-	conn, e := redisclient.GetContext(ctx)
+	status, e := redisclient.SetNX(ctx, nonce, 1, time.Second*5).Result()
 	if e != nil {
-		log.Error(ctx, "[access.sign] get redis conn failed when check replay attack", map[string]interface{}{"error": e})
+		log.Error(ctx, "[access.sign] replay attack check failed", map[string]interface{}{"error": e})
 		return false
 	}
-	defer conn.Close()
-	if _, e := redis.String(conn.DoContext(ctx, "SET", nonce, 1, "EX", 5, "NX")); e != nil {
-		if e != redis.ErrNil {
-			log.Error(ctx, "[access.sign] write redis failed when check replay attack", map[string]interface{}{"error": e})
-		} else {
-			log.Error(ctx, "[access.sign] replay attack", map[string]interface{}{"nonce": nonce})
-		}
-		return false
+	if !status {
+		log.Error(ctx, "[access.sign] replay attack", map[string]interface{}{"nonce": nonce})
 	}
-	return true
+	return status
 }
 func parseSignstr(signstr string) (accessid string, nonce string, timestamp int64, headers []string, mdkeys []string, sign string) {
 	if !strings.HasPrefix(signstr, "A=") {

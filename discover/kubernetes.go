@@ -31,7 +31,7 @@ type KubernetesD struct {
 	watcher       watch.Interface
 
 	sync.RWMutex
-	addrs     map[string]*RegisterData
+	addrs     map[string]*struct{}
 	lasterror error
 }
 
@@ -111,44 +111,46 @@ func (d *KubernetesD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 func (d *KubernetesD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
 	d.RLock()
 	defer d.RUnlock()
-	if pt == NotNeed {
-		return d.addrs, d.lasterror
-	}
 	r := make(map[string]*RegisterData)
-	for k, v := range d.addrs {
+	reg := &RegisterData{
+		DServers: map[string]*struct{}{"kubernetes": nil},
+		Addition: nil,
+	}
+	for addr := range d.addrs {
 		switch pt {
+		case NotNeed:
 		case Crpc:
 			if d.crpcport > 0 {
-				if strings.Contains(k, ":") {
+				if strings.Contains(addr, ":") {
 					//ipv6
-					k = "[" + k + "]:" + strconv.Itoa(d.crpcport)
+					addr = "[" + addr + "]:" + strconv.Itoa(d.crpcport)
 				} else {
 					//ipv4
-					k = k + ":" + strconv.Itoa(d.crpcport)
+					addr = addr + ":" + strconv.Itoa(d.crpcport)
 				}
 			}
 		case Cgrpc:
 			if d.cgrpcport > 0 {
-				if strings.Contains(k, ":") {
+				if strings.Contains(addr, ":") {
 					//ipv6
-					k = "[" + k + "]:" + strconv.Itoa(d.cgrpcport)
+					addr = "[" + addr + "]:" + strconv.Itoa(d.cgrpcport)
 				} else {
 					//ipv4
-					k = k + ":" + strconv.Itoa(d.cgrpcport)
+					addr = addr + ":" + strconv.Itoa(d.cgrpcport)
 				}
 			}
 		case Web:
 			if d.webport > 0 {
-				if strings.Contains(k, ":") {
+				if strings.Contains(addr, ":") {
 					//ipv6
-					k = "[" + k + "]:" + strconv.Itoa(d.webport)
+					addr = "[" + addr + "]:" + strconv.Itoa(d.webport)
 				} else {
 					//ipv4
-					k = k + ":" + strconv.Itoa(d.webport)
+					addr = addr + ":" + strconv.Itoa(d.webport)
 				}
 			}
 		}
-		r[k] = v
+		r[addr] = reg
 	}
 	return r, d.lasterror
 }
@@ -197,7 +199,7 @@ func (d *KubernetesD) list() (resourceVersion string) {
 			continue
 		}
 		resourceVersion = pods.ResourceVersion
-		tmp := make(map[string]*RegisterData)
+		tmp := make(map[string]*struct{}, len(pods.Items))
 		for _, item := range pods.Items {
 			if item.Status.PodIP == "" {
 				continue
@@ -213,10 +215,7 @@ func (d *KubernetesD) list() (resourceVersion string) {
 				}
 			}
 			if find {
-				tmp[item.Status.PodIP] = &RegisterData{
-					DServers: map[string]*struct{}{"kube": nil},
-					Addition: nil,
-				}
+				tmp[item.Status.PodIP] = nil
 			}
 		}
 		d.Lock()
@@ -303,10 +302,7 @@ func (d *KubernetesD) watch(resourceVersion string) {
 				}
 				if find {
 					d.Lock()
-					d.addrs[pod.Status.PodIP] = &RegisterData{
-						DServers: map[string]*struct{}{"kube": nil},
-						Addition: nil,
-					}
+					d.addrs[pod.Status.PodIP] = nil
 					d.lasterror = nil
 					for notice := range d.notices {
 						select {

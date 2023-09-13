@@ -5,10 +5,22 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
+
+	"github.com/chenjie199234/Corelib/redis"
 )
 
 func Test_Accesssign(t *testing.T) {
-	UpdateReplayDefendRedisUrl("redis://127.0.0.1:6379")
+	client := redis.NewRedis(&redis.Config{
+		RedisName:   "test",
+		Addrs:       []string{"127.0.0.1:6379"},
+		MaxIdle:     100,
+		MaxOpen:     256,
+		MaxIdletime: time.Minute * 5,
+		ConnTimeout: time.Second,
+		IOTimeout:   time.Second,
+	}, nil)
+	UpdateReplayDefendRedisInstance(client)
 	UpdateAccessConfig(MultiPathAccessConfigs{
 		"/abc": {
 			{Methods: []string{"GET", "GRPC", "CRPC"}, Accesses: map[string]string{"1": "1"}},

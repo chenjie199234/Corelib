@@ -4,10 +4,21 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/chenjie199234/Corelib/redis"
 )
 
 func Test_Rate(t *testing.T) {
-	UpdateRateRedisUrl("redis://127.0.0.1:6379")
+	client := redis.NewRedis(&redis.Config{
+		RedisName:   "test",
+		Addrs:       []string{"127.0.0.1:6379"},
+		MaxIdle:     100,
+		MaxOpen:     256,
+		MaxIdletime: time.Minute * 5,
+		ConnTimeout: time.Second,
+		IOTimeout:   time.Second,
+	}, nil)
+	UpdateRateRedisInstance(client)
 	UpdateRateConfig(MultiPathRateConfigs{
 		"/abc": {
 			{Methods: []string{"GET", "POST", "PUT", "DELETE", "PATCH", "GRPC", "CRPC"}, MaxRate: 2, Period: 1, RateType: "path"},

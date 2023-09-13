@@ -4,10 +4,21 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/chenjie199234/Corelib/redis"
 )
 
 func Test_Session(t *testing.T) {
-	UpdateSessionRedisUrl("redis://127.0.0.1:6379")
+	client := redis.NewRedis(&redis.Config{
+		RedisName:   "test",
+		Addrs:       []string{"127.0.0.1:6379"},
+		MaxIdle:     100,
+		MaxOpen:     256,
+		MaxIdletime: time.Minute * 5,
+		ConnTimeout: time.Second,
+		IOTimeout:   time.Second,
+	}, nil)
+	UpdateSessionRedisInstance(client)
 	UpdateSessionConfig(time.Second)
 	sessionstr := MakeSession(context.Background(), "1", "123")
 	if sessionstr == "" {

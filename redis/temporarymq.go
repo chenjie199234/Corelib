@@ -2,18 +2,15 @@ package redis
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
 	"errors"
-	"net"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
-	"github.com/gomodule/redigo/redis"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // name_0(redis list):[data1,data2,data3...]
@@ -26,123 +23,65 @@ import (
 
 var ErrTemporaryMQMissingName = errors.New("temporary mq missing name")
 var ErrTemporaryMQMissingGroup = errors.New("temporary mq missing group")
+var ErrTemporaryMQMissingReceiver = errors.New("temporary mq missing receiver")
+
+var expireTMQ *redis.Script
+var pubTMQ *redis.Script
 
 func init() {
-	pubsha1 := sha1.Sum(common.Str2byte(pubTemporaryMQ))
-	hpubTemporaryMQ = hex.EncodeToString(pubsha1[:])
+	expireTMQ = redis.NewScript(`redis.call("SETEX",KEYS[2],16,1)
+redis.call("EXPIRE",KEYS[1],16)
+return "OK"`)
 
-	expiresha1 := sha1.Sum(common.Str2byte(expireTemporaryMQ))
-	hexpireTemporaryMQ = hex.EncodeToString(expiresha1[:])
+	pubTMQ = redis.NewScript(`if(redis.call("EXISTS",KEYS[2])==0)
+then
+	return -1
+end
+redis.call("EXPIRE",KEYS[1],16)
+for i=1,#ARGV,1 do
+	redis.call("rpush",KEYS[1],ARGV[i])
+end
+redis.call("EXPIRE",KEYS[1],16)
+return #ARGV`)
 }
 
-const expireTemporaryMQ = `redis.call("SETEX",KEYS[2],16,1)
-redis.call("EXPIRE",KEYS[1],16)`
-
-var hexpireTemporaryMQ = ""
-
-// in redis cluster mode,group is used to shard data into different redis node
+// Warning!this module will take group*2 redis connections,be careful of the client's MaxOpen
+// in redis cluster mode,group is used to split data into different redis node
 // in redis slave master mode,group is better to be 1
-// sub and pub's group should be same
-// stop will stop the sub immediately,the mq's empty or not will not effect the stop
-// so there maybe data left in the mq,and it will be expired within 16s
-func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)) (stop func(), e error) {
-	if name == "" {
+// sub and pub's mqname and group should be same
+// stop will stop the sub immediately,even if there are datas int the mq,the left datas will be expired within 16s
+func (c *Client) TemporaryMQSub(mqname string, group uint64, subhandler func([]byte)) (stop func(), e error) {
+	if mqname == "" {
 		return nil, ErrTemporaryMQMissingName
 	}
 	if group == 0 {
 		return nil, ErrTemporaryMQMissingGroup
 	}
-	update := func(ctx context.Context) error {
-		var err error
-		wg := sync.WaitGroup{}
-		for i := uint64(0); i < group; i++ {
-			wg.Add(1)
-			go func(index uint64) {
-				defer wg.Done()
-				listname := name + "_" + strconv.FormatUint(index, 10)
-				listexist := "{" + listname + "}_exist"
-				c, e := p.p.GetContext(context.Background())
-				if e != nil {
-					err = e
-					log.Error(nil, "[redis.TemporaryMQ.update] get connection failed", map[string]interface{}{"group": index, "error": e})
-					return
-				}
-				defer c.Close()
-				if _, e = c.(redis.ConnWithContext).DoContext(ctx, "EVALSHA", hexpireTemporaryMQ, 2, listname, listexist); e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
-					_, e = c.(redis.ConnWithContext).DoContext(ctx, "EVAL", expireTemporaryMQ, 2, listname, listexist)
-				}
-				if e != nil {
-					err = e
-					log.Error(nil, "[redis.TemporaryMQ.update] update group expire failed", map[string]interface{}{"group": index, "error": e})
-				}
-			}(i)
-			if i%20 == 19 {
-				wg.Wait()
-			}
-		}
-		wg.Wait()
-		return err
-	}
-	if e := update(context.Background()); e != nil {
+	if e := c.temporaryMQSubRefresh(context.Background(), mqname, group); e != nil {
 		return nil, e
 	}
-	clean := func(ctx context.Context) error {
-		var err error
-		wg := sync.WaitGroup{}
-		for i := uint64(0); i < group; i++ {
-			wg.Add(1)
-			go func(index uint64) {
-				defer wg.Done()
-				listname := name + "_" + strconv.FormatUint(index, 10)
-				listexist := "{" + listname + "}_exist"
-				c, e := p.p.GetContext(context.Background())
-				if e != nil {
-					err = e
-					log.Error(nil, "[redis.TemporaryMQ.stop] get connection failed", map[string]interface{}{"group": index, "error": e})
-					return
-				}
-				defer c.Close()
-				if _, e = c.(redis.ConnWithContext).DoContext(ctx, "DEL", listexist); e != nil {
-					err = e
-					log.Error(nil, "[redis.TemporaryMQ.stop] delete group failed", map[string]interface{}{"group": index, "error": e})
-				}
-			}(i)
-			if i%20 == 19 {
-				wg.Wait()
-			}
-		}
-		wg.Wait()
-		return err
-	}
-	cleanch := make(chan *struct{})
+	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
-	lker := &sync.Mutex{}
-	conns := make(map[redis.Conn]*struct{}, group)
+	stop = func() {
+		cancel()
+		wg.Wait()
+	}
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		tmer := time.NewTimer(time.Second * 5)
 		for {
 			select {
-			case <-cleanch:
-				//stop the pub
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-				clean(ctx)
-				cancel()
-				//stop the timer
+			case <-ctx.Done():
+				//stop
 				tmer.Stop()
-				//stop the sub
-				lker.Lock()
-				for conn := range conns {
-					conn.Close()
-				}
-				lker.Unlock()
-				wg.Done()
+				c.temporaryMQSubClean(context.Background(), mqname, group)
 				return
 			case <-tmer.C:
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second*4)
-				e := update(ctx)
-				cancel()
-				if e != nil {
+				//refresh
+				if e := c.temporaryMQSubRefresh(ctx, mqname, group); e != nil && ctx.Err() != nil {
+					break
+				} else if e != nil {
 					tmer.Reset(time.Millisecond * 500)
 				} else {
 					tmer.Reset(time.Second * 5)
@@ -150,110 +89,96 @@ func (p *Pool) TemporaryMQSub(name string, group uint64, subhandler func([]byte)
 			}
 		}
 	}()
-	stop = func() {
-		close(cleanch)
-		wg.Wait()
-	}
 	for i := uint64(0); i < group; i++ {
 		wg.Add(1)
 		go func(index uint64) {
 			defer wg.Done()
-			listname := name + "_" + strconv.FormatUint(index, 10)
-			var c redis.Conn
-			var e error
-			for {
-				if e != nil {
-					select {
-					case <-cleanch:
-						return
-					default:
-					}
-					//reconnect
-					time.Sleep(time.Millisecond * 10)
-				}
-				select {
-				case <-cleanch:
-					return
-				default:
-				}
-				if c, e = p.p.GetContext(context.Background()); e != nil {
-					log.Error(nil, "[redis.TemporaryMQ.sub] get connection failed", map[string]interface{}{"group": index, "error": e})
-					continue
-				}
-				lker.Lock()
-				select {
-				case <-cleanch:
-					lker.Unlock()
-					c.Close()
-					return
-				default:
-				}
-				conns[c] = nil
-				lker.Unlock()
-				var data [][]byte
-				for {
-					data, e = redis.ByteSlices(c.(redis.ConnWithTimeout).DoWithTimeout(0, "BLPOP", listname, 0))
-					if e != nil {
-						select {
-						case <-cleanch:
-							if ee := errors.Unwrap(e); ee == nil || ee != net.ErrClosed {
-								log.Error(nil, "[redis.TemporaryMQ.sub] read group failed", map[string]interface{}{"group": index, "error": e})
-							}
-						default:
-							log.Error(nil, "[redis.TemporaryMQ.sub] read group failed", map[string]interface{}{"group": index, "error": e})
-						}
-						break
-					}
-					if subhandler != nil {
-						subhandler(data[1])
-					}
-				}
-				lker.Lock()
-				delete(conns, c)
-				lker.Unlock()
-				c.Close()
-			}
+			c.temporaryMQSubHandle(ctx, mqname, index, subhandler)
 		}(i)
 	}
 	return
 }
+func (c *Client) temporaryMQSubRefresh(ctx context.Context, mqname string, group uint64) error {
+	var err error
+	wg := sync.WaitGroup{}
+	for i := uint64(0); i < group; i++ {
+		wg.Add(1)
+		go func(index uint64) {
+			defer wg.Done()
+			listname := mqname + "_" + strconv.FormatUint(index, 10)
+			listexist := "{" + listname + "}_exist"
+			if _, e := expireTMQ.Run(ctx, c, []string{listname, listexist}).Result(); e != nil {
+				log.Error(ctx, "[redis.temporaryMQSubRefresh] failed", map[string]interface{}{"group": index, "error": e})
+				err = e
+			}
+		}(i)
+	}
+	wg.Wait()
+	return err
+}
+func (c *Client) temporaryMQSubClean(ctx context.Context, mqname string, group uint64) error {
+	var err error
+	wg := sync.WaitGroup{}
+	for i := uint64(0); i < group; i++ {
+		wg.Add(1)
+		go func(index uint64) {
+			defer wg.Done()
+			listname := mqname + "_" + strconv.FormatUint(index, 10)
+			listexist := "{" + listname + "}_exist"
+			if _, e := c.Del(ctx, listexist).Result(); e != nil {
+				log.Error(ctx, "[redis.TemporaryMQSubClean] failed", map[string]interface{}{"group": index, "error": e})
+				err = e
+			}
+		}(i)
+	}
+	wg.Wait()
+	return err
+}
+func (c *Client) temporaryMQSubHandle(ctx context.Context, mqname string, index uint64, handler func([]byte)) {
+	listname := mqname + "_" + strconv.FormatUint(index, 10)
+	var result []string
+	var e error
+	for {
+		if e != nil && ctx.Err() == nil {
+			time.Sleep(time.Millisecond * 10)
+		}
+		if ctx.Err() != nil {
+			//stopped
+			return
+		}
+		if result, e = c.BLPop(ctx, time.Second, listname).Result(); e == nil {
+			handler(common.Str2byte(result[1]))
+		} else if ee, ok := e.(interface{ Timeout() bool }); (!ok || !ee.Timeout()) && e != redis.Nil {
+			log.Error(ctx, "[redis.temporaryMQSubHandle] failed", map[string]interface{}{"group": index, "error": e})
+		} else {
+			e = nil
+		}
+	}
+}
 
-const pubTemporaryMQ = `if(redis.call("EXISTS",KEYS[2])==0)
-then
-	return
-end
-redis.call("EXPIRE",KEYS[1],16)
-for i=1,#ARGV,1 do
-	redis.call("rpush",KEYS[1],ARGV[i])
-end
-redis.call("EXPIRE",KEYS[1],16)
-return #ARGV`
-
-var hpubTemporaryMQ = ""
-
-// in redis cluster mode,group is used to shard data into different redis node
+// in redis cluster mode,group is used to split data into different redis node
 // in redis slave master mode,group is better to be 1
-// sub and pub's group should be same
-// key is only used to shard data(hash)
-func (p *Pool) TemporaryMQPub(ctx context.Context, name string, group uint64, key string, value ...[]byte) error {
-	if len(value) == 0 {
+// sub and pub's mqname and group should be same
+// key is only used to caculate the data's group(hash)
+func (c *Client) TemporaryMQPub(ctx context.Context, mqname string, group uint64, key string, values ...[]byte) error {
+	if len(values) == 0 {
 		return nil
 	}
-	c, e := p.p.GetContext(ctx)
-	if e != nil {
-		return e
+	if mqname == "" {
+		return ErrTemporaryMQMissingName
 	}
-	defer c.Close()
-	listname := name + "_" + strconv.FormatUint(common.BkdrhashString(key, group), 10)
+	if group == 0 {
+		return ErrTemporaryMQMissingGroup
+	}
+	listname := mqname + "_" + strconv.FormatUint(common.BkdrhashString(key, group), 10)
 	listexist := "{" + listname + "}_exist"
-	args := make([]interface{}, 0, 4+len(value))
-	args = append(args, hpubTemporaryMQ, 2, listname, listexist)
-	for _, v := range value {
-		args = append(args, v)
+	tmp := make([]interface{}, 0, len(values))
+	for _, v := range values {
+		tmp = append(tmp, v)
 	}
-	if _, e = c.(redis.ConnWithContext).DoContext(ctx, "EVALSHA", args...); e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
-		args[0] = pubTemporaryMQ
-		_, e = redis.Int(c.(redis.ConnWithContext).DoContext(ctx, "EVAL", args...))
+	r, e := pubTMQ.Run(ctx, c, []string{listname, listexist}, tmp...).Int()
+	if r == -1 {
+		e = ErrTemporaryMQMissingReceiver
 	}
 	return e
 }

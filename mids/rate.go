@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"time"
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/log"
@@ -14,7 +13,7 @@ import (
 )
 
 type rate struct {
-	p     *redis.Pool
+	c     *redis.Client
 	grpc  map[string][][3]interface{} //key path
 	crpc  map[string][][3]interface{} //key path
 	get   map[string][][3]interface{} //key path
@@ -40,31 +39,11 @@ type PathRateRule struct {
 	RateType string `json:"rate_type"` //path,token,session
 }
 
-func UpdateRateRedisUrl(redisurl string) {
-	var newp *redis.Pool
-	if redisurl != "" {
-		newp = redis.NewRedis(&redis.Config{
-			RedisName:   "rate_redis",
-			URL:         redisurl,
-			MaxOpen:     0,    //means no limit
-			MaxIdle:     1024, //the pool's buf
-			MaxIdletime: time.Minute,
-			ConnTimeout: time.Second * 5,
-			IOTimeout:   time.Second * 5,
-		})
-	} else {
+func UpdateRateRedisInstance(c *redis.Client) {
+	if c == nil {
 		log.Warning(nil, "[rate] redis missing,all rate check will be failed", nil)
 	}
-	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.p)), unsafe.Pointer(newp)))
-	if oldp != nil {
-		oldp.Close()
-	}
-}
-func UpdateRateRedisInstance(p *redis.Pool) {
-	if p == nil {
-		log.Warning(nil, "[rate] redis missing,all rate check will be failed", nil)
-	}
-	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.p)), unsafe.Pointer(p)))
+	oldp := (*redis.Client)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.c)), unsafe.Pointer(c)))
 	if oldp != nil {
 		oldp.Close()
 	}
@@ -146,7 +125,7 @@ func UpdateRateConfig(c MultiPathRateConfigs) {
 }
 
 func checkrate(ctx context.Context, infos [][3]interface{}) bool {
-	redisclient := rateinstance.p
+	redisclient := rateinstance.c
 	if redisclient == nil {
 		log.Error(ctx, "[rate] redis missing", nil)
 		return false

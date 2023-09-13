@@ -25,12 +25,11 @@ type DnsD struct {
 	status    int32 //0-idle,1-discover,2-stop
 
 	sync.RWMutex
-	addrs     map[string]*RegisterData
+	addrs     []string
 	lasterror error
 }
 
 // interval min is 1s,default is 10s
-// if silent is true,means no logs
 func NewDNSDiscover(targetproject, targetgroup, targetapp, host string, interval time.Duration, crpcport, cgrpcport, webport int) (DI, error) {
 	targetfullname, e := name.MakeFullName(targetproject, targetgroup, targetapp)
 	if e != nil {
@@ -92,44 +91,46 @@ func (d *DnsD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 func (d *DnsD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
 	d.RLock()
 	defer d.RUnlock()
-	if pt == NotNeed {
-		return d.addrs, d.lasterror
-	}
 	r := make(map[string]*RegisterData)
-	for k, v := range d.addrs {
+	reg := &RegisterData{
+		DServers: map[string]*struct{}{"dns": nil},
+		Addition: nil,
+	}
+	for _, addr := range d.addrs {
 		switch pt {
+		case NotNeed:
 		case Crpc:
 			if d.crpcport > 0 {
-				if strings.Contains(k, ":") {
+				if strings.Contains(addr, ":") {
 					//ipv6
-					k = "[" + k + "]:" + strconv.Itoa(d.crpcport)
+					addr = "[" + addr + "]:" + strconv.Itoa(d.crpcport)
 				} else {
 					//ipv4
-					k = k + ":" + strconv.Itoa(d.crpcport)
+					addr = addr + ":" + strconv.Itoa(d.crpcport)
 				}
 			}
 		case Cgrpc:
 			if d.cgrpcport > 0 {
-				if strings.Contains(k, ":") {
+				if strings.Contains(addr, ":") {
 					//ipv6
-					k = "[" + k + "]:" + strconv.Itoa(d.cgrpcport)
+					addr = "[" + addr + "]:" + strconv.Itoa(d.cgrpcport)
 				} else {
 					//ipv4
-					k = k + ":" + strconv.Itoa(d.cgrpcport)
+					addr = addr + ":" + strconv.Itoa(d.cgrpcport)
 				}
 			}
 		case Web:
 			if d.webport > 0 {
-				if strings.Contains(k, ":") {
+				if strings.Contains(addr, ":") {
 					//ipv6
-					k = "[" + k + "]:" + strconv.Itoa(d.webport)
+					addr = "[" + addr + "]:" + strconv.Itoa(d.webport)
 				} else {
 					//ipv4
-					k = k + ":" + strconv.Itoa(d.webport)
+					addr = addr + ":" + strconv.Itoa(d.webport)
 				}
 			}
 		}
-		r[k] = v
+		r[addr] = reg
 	}
 	return r, d.lasterror
 }
@@ -177,15 +178,8 @@ func (d *DnsD) run() {
 			d.Unlock()
 			continue
 		}
-		tmp := make(map[string]*RegisterData)
-		for _, addr := range addrs {
-			tmp[addr] = &RegisterData{
-				DServers: map[string]*struct{}{"dns": nil},
-				Addition: nil,
-			}
-		}
 		d.Lock()
-		d.addrs = tmp
+		d.addrs = addrs
 		d.lasterror = nil
 		atomic.CompareAndSwapInt32(&d.status, 1, 0)
 		for notice := range d.notices {

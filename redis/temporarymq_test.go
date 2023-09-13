@@ -3,31 +3,61 @@ package redis
 import (
 	"context"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
 
 func Test_TemporaryMQ(t *testing.T) {
-	pool := NewRedis(&Config{
+	client := NewRedis(&Config{
 		RedisName:   "test",
-		URL:         "redis://127.0.0.1:6379",
-		MaxOpen:     100,
-		MaxIdletime: time.Minute * 10,
+		Addrs:       []string{"127.0.0.1:6379"},
+		MaxIdle:     100,
+		MaxOpen:     256,
+		MaxIdletime: time.Minute * 5,
 		ConnTimeout: time.Second,
 		IOTimeout:   time.Second,
-	})
-	cancel, e := pool.TemporaryMQSub("test", 31, func(data []byte) {
-		t.Log(string(data))
+	}, nil)
+	lker := &sync.Mutex{}
+	r := make(map[string]int, 1000)
+	done := make(chan *struct{}, 1)
+	cancel, e := client.TemporaryMQSub("test", 20, func(data []byte) {
+		lker.Lock()
+		if v, ok := r[string(data)]; ok {
+			r[string(data)] = v + 1
+		} else {
+			r[string(data)] = 1
+		}
+		if len(r) == 1000 {
+			select {
+			case done <- nil:
+			default:
+			}
+		}
+		lker.Unlock()
 	})
 	if e != nil {
 		t.Fatal(e)
 	}
-	for i := 0; i < 100; i++ {
-		e := pool.TemporaryMQPub(context.Background(), "test", 31, strconv.Itoa(i), strconv.AppendInt(nil, int64(i), 10))
+	//wait 30s the test the suber's refresh
+	time.Sleep(time.Second * 30)
+	for i := 0; i < 1000; i++ {
+		e := client.TemporaryMQPub(context.Background(), "test", 20, strconv.Itoa(i), strconv.AppendInt(nil, int64(i), 10))
 		if e != nil {
 			t.Fatal(e)
 		}
 	}
-	time.Sleep(time.Second * 5)
+	t.Log("start sub")
+	<-done
+	t.Log("finish sub")
 	cancel()
+	for i := 0; i < 1000; i++ {
+		s := strconv.Itoa(i)
+		v, ok := r[s]
+		if !ok {
+			t.Fatal("missing: " + s)
+		} else if v != 1 {
+			t.Fatal("count wrong: " + s + " count: " + strconv.Itoa(v))
+		}
+	}
 }

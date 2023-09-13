@@ -2,19 +2,14 @@ package redis
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
-	"strings"
 
-	"github.com/gomodule/redigo/redis"
+	"github.com/redis/go-redis/v9"
 )
 
-func init() {
-	h := sha1.Sum([]byte(rate))
-	hrate = hex.EncodeToString(h[:])
-}
+var rate *redis.Script
 
-const rate = `local time=redis.call("TIME")
+func init() {
+	rate = redis.NewScript(`local time=redis.call("TIME")
 for i=1,#KEYS,1 do
 	while(true)
 	do
@@ -36,38 +31,24 @@ for i=1,#KEYS,1 do
 	redis.call("RPUSH",KEYS[i],(time[1]+period)*1000000+time[2])
 	redis.call("EXPIRE",KEYS[i],period)
 end
-return 1`
-
-var hrate = ""
+return 1`)
+}
 
 // return true-all pass,false-at least one busy
 // rates: key:source name,value(max rate per period):first element:max rate,second element:period(uint second)
 // If rates have multi key and value pairs,means all source name should pass it's rate check at the same time
 // Warning!In redis cluster mode,multi key should route to the same redis node!Please set the source name carefully
-func (p *Pool) RateLimit(ctx context.Context, rates map[string][2]uint64) (bool, error) {
-	args := make([]interface{}, len(rates)*3+2)
-	args[0] = hrate
-	args[1] = len(rates)
-	index := 2
+func (c *Client) RateLimit(ctx context.Context, rates map[string][2]uint64) (bool, error) {
+	keys := make([]string, len(rates))
+	values := make([]interface{}, len(rates)*2)
+	i := 0
 	for k, v := range rates {
-		if v[0] == 0 {
-			return false, nil
-		}
-		args[index] = k
-		args[index+len(rates)] = v[0]
-		args[index+len(rates)*2] = v[1]
-		index++
+		keys[i] = k
+		values[i] = v[0]
+		values[i+len(rates)] = v[1]
+		i++
 	}
-	c, e := p.p.GetContext(ctx)
-	if e != nil {
-		return false, e
-	}
-	defer c.Close()
-	r, e := redis.Int(c.(redis.ConnWithContext).DoContext(ctx, "EVALSHA", args...))
-	if e != nil && strings.HasPrefix(e.Error(), "NOSCRIPT") {
-		args[0] = rate
-		r, e = redis.Int(c.(redis.ConnWithContext).DoContext(ctx, "EVAL", args...))
-	}
+	r, e := rate.Run(ctx, c, keys, values...).Int()
 	if e != nil {
 		return false, e
 	}

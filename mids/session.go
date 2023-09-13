@@ -13,37 +13,17 @@ import (
 	"github.com/chenjie199234/Corelib/redis"
 )
 
-var sessionredis *redis.Pool
+var sessionredis *redis.Client
 var sessionexpire time.Duration
 
 func UpdateSessionConfig(expire time.Duration) {
 	sessionexpire = expire
 }
-func UpdateSessionRedisUrl(redisurl string) {
-	var newp *redis.Pool
-	if redisurl != "" {
-		newp = redis.NewRedis(&redis.Config{
-			RedisName:   "session_redis",
-			URL:         redisurl,
-			MaxOpen:     0,    //means no limit
-			MaxIdle:     1024, //the pool's buf
-			MaxIdletime: time.Minute,
-			ConnTimeout: time.Second,
-			IOTimeout:   time.Second,
-		})
-	} else {
+func UpdateSessionRedisInstance(c *redis.Client) {
+	if c == nil {
 		log.Warning(nil, "[session] redis missing,all session event will be failed", nil)
 	}
-	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&sessionredis)), unsafe.Pointer(newp)))
-	if oldp != nil {
-		oldp.Close()
-	}
-}
-func UpdateSessionRedisInstance(p *redis.Pool) {
-	if p == nil {
-		log.Warning(nil, "[session] redis missing,all session event will be failed", nil)
-	}
-	oldp := (*redis.Pool)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&sessionredis)), unsafe.Pointer(p)))
+	oldp := (*redis.Client)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&sessionredis)), unsafe.Pointer(c)))
 	if oldp != nil {
 		oldp.Close()
 	}
@@ -60,14 +40,8 @@ func MakeSession(ctx context.Context, userid, data string) string {
 	result := make([]byte, 8)
 	rand.Read(result)
 	sessionid := hex.EncodeToString(result)
-	conn, e := redisclient.GetContext(ctx)
-	if e != nil {
-		log.Error(ctx, "[session.make] get redis conn failed", map[string]interface{}{"error": e})
-		return ""
-	}
-	defer conn.Close()
-	if _, e = conn.DoContext(ctx, "PSETEX", "session_"+userid, sessionexpire.Milliseconds(), sessionid+"_"+data); e != nil {
-		log.Error(ctx, "[session.make] write session data failed", map[string]interface{}{"error": e})
+	if _, e := redisclient.SetEx(ctx, "session_"+userid, sessionid+"_"+data, sessionexpire).Result(); e != nil {
+		log.Error(ctx, "[session.make] write session data failed", map[string]interface{}{"userid": userid, "error": e})
 		return ""
 	}
 	return "userid=" + userid + ",sessionid=" + sessionid
@@ -79,14 +53,8 @@ func CleanSession(ctx context.Context, userid string) bool {
 		log.Error(ctx, "[session.clean] redis missing", nil)
 		return false
 	}
-	conn, e := redisclient.GetContext(ctx)
-	if e != nil {
-		log.Error(ctx, "[session.clean] get redis conn failed", map[string]interface{}{"error": e})
-		return false
-	}
-	defer conn.Close()
-	if _, e = conn.DoContext(ctx, "DEL", "session_"+userid); e != nil {
-		log.Error(ctx, "[session.clean] delete session data failed", map[string]interface{}{"error": e})
+	if _, e := redisclient.Del(ctx, "session_"+userid).Result(); e != nil {
+		log.Error(ctx, "[session.clean] delete session data failed", map[string]interface{}{"userid": userid, "error": e})
 		return false
 	}
 	return true
@@ -98,14 +66,8 @@ func ExtendSession(ctx context.Context, userid string, expire time.Duration) boo
 		log.Error(ctx, "[session.extend] redis missing", nil)
 		return false
 	}
-	conn, e := redisclient.GetContext(ctx)
-	if e != nil {
-		log.Error(ctx, "[session.extend] get redis conn failed", map[string]interface{}{"error": e})
-		return false
-	}
-	defer conn.Close()
-	if _, e = conn.DoContext(ctx, "PEXPIRE", "session_"+userid, expire.Milliseconds()); e != nil {
-		log.Error(ctx, "[session.extend] update session data failed", map[string]interface{}{"error": e})
+	if _, e := redisclient.Expire(ctx, "session_"+userid, expire).Result(); e != nil {
+		log.Error(ctx, "[session.extend] update session data failed", map[string]interface{}{"userid": userid, "error": e})
 		return false
 	}
 	return true
@@ -131,17 +93,9 @@ func VerifySession(ctx context.Context, sessionstr string) (string, string, bool
 	}
 	userid = userid[7:]
 	sessionid = sessionid[10:]
-	conn, e := redisclient.GetContext(ctx)
+	str, e := redisclient.Get(ctx, "session_"+userid).Result()
 	if e != nil {
-		log.Error(ctx, "[session.verify] get redis conn failed", map[string]interface{}{"error": e})
-		return "", "", false
-	}
-	defer conn.Close()
-	str, e := redis.String(conn.DoContext(ctx, "GET", "session_"+userid))
-	if e != nil {
-		if e != redis.ErrNil {
-			log.Error(ctx, "[session.verify] read session data failed", map[string]interface{}{"error": e})
-		}
+		log.Error(ctx, "[session.verify] read session data failed", map[string]interface{}{"userid": userid, "error": e})
 		return "", "", false
 	}
 	if !strings.HasPrefix(str, sessionid+"_") {
