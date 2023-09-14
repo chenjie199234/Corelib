@@ -8,9 +8,9 @@ import (
 const dao = `package {{.}}
 
 import (
-	credis "github.com/chenjie199234/Corelib/redis"
 	cmongo "github.com/chenjie199234/Corelib/mongo"
 	cmysql "github.com/chenjie199234/Corelib/mysql"
+	credis "github.com/chenjie199234/Corelib/redis"
 )
 
 // Dao this is a data operation layer to operate {{.}} service's data

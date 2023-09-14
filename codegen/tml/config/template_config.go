@@ -240,9 +240,9 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/redis"
 	"github.com/chenjie199234/Corelib/mongo"
 	"github.com/chenjie199234/Corelib/mysql"
+	"github.com/chenjie199234/Corelib/redis"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/segmentio/kafka-go"
