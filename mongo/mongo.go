@@ -37,10 +37,10 @@ type Client struct {
 // if tlsc is not nil,the tls will be actived
 func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	var opts *goptions.ClientOptions
+	opts = goptions.Client()
 	if c.MongoName != "" {
 		opts = opts.SetAppName(c.MongoName)
 	}
-	opts = goptions.Client()
 	opts = opts.SetHosts(c.Addrs)
 	opts = opts.SetReplicaSet(c.ReplicaSet)
 	if c.UserName != "" && c.Password != "" {
