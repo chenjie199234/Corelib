@@ -7,6 +7,7 @@ import (
 
 	gmongo "go.mongodb.org/mongo-driver/mongo"
 	goptions "go.mongodb.org/mongo-driver/mongo/options"
+	greadpref "go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 type Config struct {
@@ -80,6 +81,9 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	}
 	client, e := gmongo.Connect(context.Background(), opts)
 	if e != nil {
+		return nil, e
+	}
+	if e = client.Ping(context.Background(), greadpref.Primary()); e != nil {
 		return nil, e
 	}
 	//TODO add otel

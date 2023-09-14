@@ -1,7 +1,6 @@
 package mysql
 
 import (
-	"context"
 	"testing"
 	"time"
 )
@@ -16,12 +15,8 @@ func Test_Mysql(t *testing.T) {
 		DialTimeout:     time.Second,
 		IOTimeout:       time.Second,
 	}
-	db, e := NewMysql(c, nil)
+	_, e := NewMysql(c, nil)
 	if e != nil {
-		t.Fatal(e)
-		return
-	}
-	if e = db.PingContext(context.Background()); e != nil {
 		t.Fatal(e)
 		return
 	}

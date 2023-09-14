@@ -1,11 +1,8 @@
 package mongo
 
 import (
-	"context"
 	"testing"
 	"time"
-
-	greadpref "go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 func Test_Mongo(t *testing.T) {
@@ -18,12 +15,8 @@ func Test_Mongo(t *testing.T) {
 		DialTimeout:     time.Second,
 		IOTimeout:       time.Second,
 	}
-	db, e := NewMongo(c, nil)
+	_, e := NewMongo(c, nil)
 	if e != nil {
-		t.Fatal(e)
-		return
-	}
-	if e = db.Ping(context.Background(), greadpref.Primary()); e != nil {
 		t.Fatal(e)
 		return
 	}

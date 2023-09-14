@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"context"
 	"crypto/tls"
 	"database/sql"
 	"time"
@@ -78,6 +79,9 @@ func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 		db.SetMaxOpenConns(int(c.MaxOpen))
 	}
 	db.SetConnMaxIdleTime(c.MaxConnIdletime)
+	if e = db.PingContext(context.Background()); e != nil {
+		return nil, e
+	}
 	//TODO add otel
 	return &Client{db}, nil
 }

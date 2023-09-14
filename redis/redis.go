@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"context"
 	"crypto/tls"
 	"time"
 
@@ -62,6 +63,9 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 		gredisc.WriteTimeout = -1
 	}
 	client := &Client{gredis.NewUniversalClient(gredisc)}
+	if _, e := client.Ping(context.Background()).Result(); e != nil {
+		return nil, e
+	}
 	//TODO add otel
 	return client, nil
 }

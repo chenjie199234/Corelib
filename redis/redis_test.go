@@ -1,7 +1,6 @@
 package redis
 
 import (
-	"context"
 	"testing"
 	"time"
 )
@@ -15,12 +14,8 @@ func Test_Redis(t *testing.T) {
 		DialTimeout:     time.Second,
 		IOTimeout:       time.Second,
 	}
-	db, e := NewRedis(c, nil)
+	_, e := NewRedis(c, nil)
 	if e != nil {
-		t.Fatal(e)
-		return
-	}
-	if _, e = db.Ping(context.Background()).Result(); e != nil {
 		t.Fatal(e)
 		return
 	}
