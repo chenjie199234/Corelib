@@ -7,35 +7,35 @@ import (
 
 const source = `{
 	"cgrpc_server":{
-		"connect_timeout":"200ms",
+		"connect_timeout":"500ms",
 		"global_timeout":"500ms",
 		"heart_probe":"10s",
 		"certs":{
 		}
 	},
 	"cgrpc_client":{
-		"connect_timeout":"200ms",
+		"connect_timeout":"500ms",
 		"global_timeout":"0",
 		"heart_probe":"10s"
 	},
 	"crpc_server":{
-		"connect_timeout":"200ms",
+		"connect_timeout":"500ms",
 		"global_timeout":"500ms",
-		"heart_probe":"3s",
+		"heart_probe":"10s",
 		"certs":{
 		}
 	},
 	"crpc_client":{
-		"connect_timeout":"200ms",
+		"connect_timeout":"500ms",
 		"global_timeout":"0",
-		"heart_probe":"3s"
+		"heart_probe":"10s"
 	},
 	"web_server":{
 		"close_mode":0,
-		"connect_timeout":"200ms",
+		"connect_timeout":"500ms",
 		"global_timeout":"500ms",
-		"idle_timeout":"10s",
-		"heart_probe":"3s",
+		"idle_timeout":"30s",
+		"heart_probe":"10s",
 		"src_root":"",
 		"certs":{
 		},
@@ -48,8 +48,8 @@ const source = `{
 	"web_client":{
 		"connect_timeout":"200ms",
 		"global_timeout":"0",
-		"idle_timeout":"10s",
-		"heart_probe":"3s"
+		"idle_timeout":"30s",
+		"heart_probe":"10s"
 	},
 	"mongo":{
 		"example_mongo":{
@@ -77,7 +77,7 @@ const source = `{
 			"dial_timeout":"250ms"
 			"charset":"",
 			"collation":"",
-			"parse_time":true,
+			"parse_time":true
 		}
 	},
 	"redis":{
@@ -101,8 +101,8 @@ const source = `{
 			"auth_method":3,
 			"compress_method":2,
 			"io_timeout":"500ms",
-			"dial_timeout":"250ms"
-			"topic_name":"example_topic",
+			"dial_timeout":"250ms",
+			"topic_name":"example_topic"
 		}
 	],
 	"kafka_sub":[
@@ -116,7 +116,7 @@ const source = `{
 			"start_offset":-2,
 			"commit_interval":"0s"
 			"topic_name":"example_topic",
-			"group_name":"example_group",
+			"group_name":"example_group"
 		}
 	]
 }`
