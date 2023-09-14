@@ -9,6 +9,7 @@ import (
 
 type Config struct {
 	RedisName string `json:"redis_name"`
+	//only support tcp socket
 	//ip:port or host:port
 	//if there is only one addr,the simple redis client will be created
 	//if there are many addrs,the cluster redis client will be created
@@ -34,8 +35,8 @@ type Client struct {
 // if tlsc is not nil,the tls will be actived
 func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 	gredisc := &gredis.UniversalOptions{
-		Addrs:                 c.Addrs,
 		ClientName:            c.RedisName,
+		Addrs:                 c.Addrs,
 		Username:              c.UserName,
 		Password:              c.Password,
 		DialTimeout:           c.DialTimeout,

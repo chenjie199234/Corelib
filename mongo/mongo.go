@@ -5,12 +5,13 @@ import (
 	"crypto/tls"
 	"time"
 
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	gmongo "go.mongodb.org/mongo-driver/mongo"
+	goptions "go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type Config struct {
 	MongoName string `json:"mongo_name"`
+	//only support tcp socket
 	//ip:port or host:port
 	Addrs []string `json:"addrs"`
 	//only the replica set mode need to set this
@@ -30,20 +31,23 @@ type Config struct {
 	IOTimeout time.Duration `json:"io_timeout"`
 }
 type Client struct {
-	*mongo.Client
+	*gmongo.Client
 }
 
+// if tlsc is not nil,the tls will be actived
 func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
-	var opts *options.ClientOptions
-	opts = options.Client()
-	opts = opts.SetAppName(c.MongoName)
+	var opts *goptions.ClientOptions
+	if c.MongoName != "" {
+		opts = opts.SetAppName(c.MongoName)
+	}
+	opts = goptions.Client()
 	opts = opts.SetHosts(c.Addrs)
 	opts = opts.SetReplicaSet(c.ReplicaSet)
 	if c.UserName != "" && c.Password != "" {
 		if c.AuthDB == "" {
 			c.AuthDB = "admin"
 		}
-		opts = opts.SetAuth(options.Credential{
+		opts = opts.SetAuth(goptions.Credential{
 			AuthMechanism:           "",
 			AuthMechanismProperties: nil,
 			AuthSource:              c.AuthDB,
@@ -74,7 +78,7 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	if tlsc != nil {
 		opts = opts.SetTLSConfig(tlsc)
 	}
-	client, e := mongo.Connect(context.Background(), opts)
+	client, e := gmongo.Connect(context.Background(), opts)
 	if e != nil {
 		return nil, e
 	}

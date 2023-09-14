@@ -3,6 +3,7 @@ module github.com/chenjie199234/Corelib
 go 1.21
 
 require (
+	github.com/go-sql-driver/mysql v1.7.1
 	github.com/redis/go-redis/v9 v9.1.0
 	github.com/shirou/gopsutil/v3 v3.23.8
 	go.mongodb.org/mongo-driver v1.12.1
