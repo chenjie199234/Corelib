@@ -11,7 +11,7 @@ func Test_Mongo(t *testing.T) {
 		Addrs:           []string{"127.0.0.1:27017"},
 		ReplicaSet:      "",
 		MaxOpen:         256,
-		MaxConnIdleTime: time.Minute * 5,
+		MaxConnIdletime: time.Minute * 5,
 		DialTimeout:     time.Second,
 		IOTimeout:       time.Second,
 	}

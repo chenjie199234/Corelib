@@ -53,56 +53,70 @@ const source = `{
 	},
 	"mongo":{
 		"example_mongo":{
-			"url":"[mongodb/mongodb+srv]://[username:password@]host1,...,hostN[/dbname][?param1=value1&...&paramN=valueN]",
+			"addrs":["127.0.0.1:27017"],
+			"tls":false,
+			"user_name":"",
+			"password":"",
+			"auth_db":"",
+			"replica_set":"",
 			"max_open":256,
-			"max_idletime":"10m",
+			"max_conn_idletime":"5m",
 			"io_timeout":"500ms",
-			"conn_timeout":"250ms"
+			"dial_timeout":"250ms"
 		}
 	},
-	"sql":{
-		"example_sql":{
-			"url":"[username:password@][protocol(address)]/[dbname][?param1=value1&...&paramN=valueN]",
+	"mysql":{
+		"example_mysql":{
+			"addr":"127.0.0.1:3306",
+			"tls":false,
+			"user_name":"",
+			"password":"",
 			"max_open":256,
-			"max_idle":100,
-			"max_idletime":"10m",
+			"max_conn_idletime":"5m",
 			"io_timeout":"500ms",
-			"conn_timeout":"250ms"
+			"dial_timeout":"250ms"
+			"charset":"",
+			"collation":"",
+			"parse_time":true,
 		}
 	},
 	"redis":{
 		"example_redis":{
-			"url":"[redis/rediss]://[[username:]password@]host[/dbindex]",
+			"addrs":["127.0.0.1:6379"],
+			"tls":false,
+			"user_name":"",
+			"password":"",
 			"max_open":256,
-			"max_idle":100,
-			"max_idletime":"10m",
+			"max_conn_idletime":"5m",
 			"io_timeout":"500ms",
-			"conn_timeout":"250ms"
+			"dial_timeout":"250ms"
 		}
 	},
 	"kafka_pub":[
 		{
 			"addrs":["127.0.0.1:12345"],
+			"tls":false,
 			"username":"example",
 			"password":"example",
 			"auth_method":3,
 			"compress_method":2,
-			"topic_name":"example_topic",
 			"io_timeout":"500ms",
-			"conn_timeout":"250ms"
+			"dial_timeout":"250ms"
+			"topic_name":"example_topic",
 		}
 	],
 	"kafka_sub":[
 		{
 			"addrs":["127.0.0.1:12345"],
+			"tls":false,
 			"username":"example",
 			"password":"example",
 			"auth_method":3,
-			"topic_name":"example_topic",
-			"group_name":"example_group",
-			"conn_timeout":"250ms",
+			"dial_timeout":"250ms",
 			"start_offset":-2,
 			"commit_interval":"0s"
+			"topic_name":"example_topic",
+			"group_name":"example_group",
 		}
 	]
 }`

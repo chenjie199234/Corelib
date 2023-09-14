@@ -25,7 +25,7 @@ type Config struct {
 	//0: default 100
 	MaxOpen uint16 `json:"max_open"`
 	//<=0: no idletime
-	MaxConnIdleTime time.Duration `json:"max_conn_idletime"`
+	MaxConnIdletime time.Duration `json:"max_conn_idletime"`
 	//<=0: default 5s
 	DialTimeout time.Duration `json:"dial_timeout"`
 	//<=0: no timeout
@@ -63,8 +63,8 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	} else {
 		opts = opts.SetMaxPoolSize(uint64(c.MaxOpen))
 	}
-	if c.MaxConnIdleTime > 0 {
-		opts = opts.SetMaxConnIdleTime(c.MaxConnIdleTime)
+	if c.MaxConnIdletime > 0 {
+		opts = opts.SetMaxConnIdleTime(c.MaxConnIdletime)
 	} else {
 		opts = opts.SetMaxConnIdleTime(0)
 	}

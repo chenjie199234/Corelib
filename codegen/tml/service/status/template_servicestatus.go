@@ -37,7 +37,7 @@ func Start() *Service {
 	return &Service{
 		stop: graceful.New(),
 
-		//statusDao: statusdao.NewDao(config.GetSql("status_sql"), config.GetRedis("status_redis"), config.GetMongo("status_mongo")),
+		//statusDao: statusdao.NewDao(config.GetMysql("status_mysql"), config.GetRedis("status_redis"), config.GetMongo("status_mongo")),
 		statusDao: statusdao.NewDao(nil, nil, nil),
 	}
 }

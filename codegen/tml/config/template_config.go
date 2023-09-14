@@ -121,13 +121,13 @@ import (
 // AppConfig can hot update
 // this is the config used for this app
 type AppConfig struct {
-	HandlerTimeout     map[string]map[string]ctime.Duration      $json:"handler_timeout"$      //first key path,second key method(GET,POST,PUT,PATCH,DELETE,CRPC,GRPC),value timeout
-	WebPathRewrite     map[string]map[string]string              $json:"web_path_rewrite"$     //first key method(GET,POST,PUT,PATCH,DELETE),second key origin url,value new url
-	HandlerRate        publicmids.MultiPathRateConfigs           $json:"handler_rate"$         //key:path
-	Accesses           publicmids.MultiPathAccessConfigs         $json:"accesses"$             //key:path
-	TokenSecret        string                                    $json:"token_secret"$         //if don't need token check,this can be ingored
-	SessionTokenExpire ctime.Duration                            $json:"session_token_expire"$ //if don't need session and token check,this can be ignored
-	Service            *ServiceConfig                            $json:"service"$
+	HandlerTimeout     map[string]map[string]ctime.Duration $json:"handler_timeout"$      //first key path,second key method(GET,POST,PUT,PATCH,DELETE,CRPC,GRPC),value timeout
+	WebPathRewrite     map[string]map[string]string         $json:"web_path_rewrite"$     //first key method(GET,POST,PUT,PATCH,DELETE),second key origin url,value new url
+	HandlerRate        publicmids.MultiPathRateConfigs      $json:"handler_rate"$         //key:path
+	Accesses           publicmids.MultiPathAccessConfigs    $json:"accesses"$             //key:path
+	TokenSecret        string                               $json:"token_secret"$         //if don't need token check,this can be ingored
+	SessionTokenExpire ctime.Duration                       $json:"session_token_expire"$ //if don't need session and token check,this can be ignored
+	Service            *ServiceConfig                       $json:"service"$
 }
 type ServiceConfig struct {
 	//add your config here
@@ -233,9 +233,7 @@ func initremoteapp(notice func(*AppConfig), wait chan *struct{}) (stopwatch func
 const sourcetxt = `package config
 
 import (
-	"context"
 	"crypto/tls"
-	"database/sql"
 	"encoding/json"
 	"os"
 	"sync"
@@ -243,15 +241,13 @@ import (
 
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
+	"github.com/chenjie199234/Corelib/mongo"
+	"github.com/chenjie199234/Corelib/mysql"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
-	"github.com/go-sql-driver/mysql"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/plain"
 	"github.com/segmentio/kafka-go/sasl/scram"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 // sourceConfig can't hot update
@@ -262,8 +258,8 @@ type sourceConfig struct {
 	CrpcClient  *CrpcClientConfig       $json:"crpc_client"$
 	WebServer   *WebServerConfig        $json:"web_server"$
 	WebClient   *WebClientConfig        $json:"web_client"$
-	Mongo       map[string]*MongoConfig $json:"mongo"$ //key example:xxx_mongo
-	Sql         map[string]*SqlConfig   $json:"sql"$   //key example:xx_sql
+	Mongo       map[string]*MongoConfig $json:"mongo"$ //key example:xx_mongo
+	Mysql       map[string]*MysqlConfig $json:"mysql"$ //key example:xx_mysql
 	Redis       map[string]*RedisConfig $json:"redis"$ //key example:xx_redis
 	KafkaPub    []*KafkaPubConfig       $json:"kafka_pub"$
 	KafkaSub    []*KafkaSubConfig       $json:"kafka_sub"$
@@ -273,30 +269,30 @@ type sourceConfig struct {
 type CGrpcServerConfig struct {
 	ConnectTimeout ctime.Duration    $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
 	GlobalTimeout  ctime.Duration    $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
-	HeartProbe     ctime.Duration    $json:"heart_probe"$     //default 1.5s
+	HeartProbe     ctime.Duration    $json:"heart_probe"$     //default 5s
 	Certs          map[string]string $json:"certs"$           //key cert path,value private key path,if this is not empty,tls will be used
 }
 
 // CGrpcClientConfig
 type CGrpcClientConfig struct {
-	ConnectTimeout ctime.Duration $json:"connect_timeout"$   //default 500ms,max time to finish the handshake
-	GlobalTimeout  ctime.Duration $json:"global_timeout"$ //max time to handle the request,0 means no default timeout
-	HeartProbe     ctime.Duration $json:"heart_probe"$    //default 1.5s
+	ConnectTimeout ctime.Duration $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
+	GlobalTimeout  ctime.Duration $json:"global_timeout"$  //max time to handle the request,0 means no default timeout
+	HeartProbe     ctime.Duration $json:"heart_probe"$     //default 5s
 }
 
 // CrpcServerConfig -
 type CrpcServerConfig struct {
 	ConnectTimeout ctime.Duration    $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
 	GlobalTimeout  ctime.Duration    $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
-	HeartProbe     ctime.Duration    $json:"heart_probe"$     //default 1.5s
+	HeartProbe     ctime.Duration    $json:"heart_probe"$     //default 5s
 	Certs          map[string]string $json:"certs"$           //key cert path,value private key path,if this is not empty,tls will be used
 }
 
 // CrpcClientConfig -
 type CrpcClientConfig struct {
-	ConnectTimeout ctime.Duration $json:"connect_timeout"$   //default 500ms,max time to finish the handshake
-	GlobalTimeout  ctime.Duration $json:"global_timeout"$ //max time to handle the request,0 means no default timeout
-	HeartProbe     ctime.Duration $json:"heart_probe"$    //default 1.5s
+	ConnectTimeout ctime.Duration $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
+	GlobalTimeout  ctime.Duration $json:"global_timeout"$  //max time to handle the request,0 means no default timeout
+	HeartProbe     ctime.Duration $json:"heart_probe"$     //default 5s
 }
 
 // WebServerConfig -
@@ -304,8 +300,8 @@ type WebServerConfig struct {
 	CloseMode      int               $json:"close_mode"$
 	ConnectTimeout ctime.Duration    $json:"connect_timeout"$ //default 500ms,max time to finish the handshake and read each whole request
 	GlobalTimeout  ctime.Duration    $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
-	IdleTimeout    ctime.Duration    $json:"idle_timeout"$    //default 5s
-	HeartProbe     ctime.Duration    $json:"heart_probe"$     //default 1.5s
+	IdleTimeout    ctime.Duration    $json:"idle_timeout"$    //default 10s
+	HeartProbe     ctime.Duration    $json:"heart_probe"$     //default 5s
 	SrcRoot        string            $json:"src_root"$
 	Certs          map[string]string $json:"certs"$ //key cert path,value private key path,if this is not empty,tls will be used
 	//cors
@@ -321,64 +317,76 @@ type WebCorsConfig struct {
 
 // WebClientConfig -
 type WebClientConfig struct {
-	ConnectTimeout ctime.Duration $json:"connect_timeout"$   //default 500ms,max time to finish the handshake
-	GlobalTimeout  ctime.Duration $json:"global_timeout"$ //max time to handle the request,0 means no default timeout
-	IdleTimeout    ctime.Duration $json:"idle_timeout"$   //default 5s
-	HeartProbe     ctime.Duration $json:"heart_probe"$    //default 1.5s
+	ConnectTimeout ctime.Duration $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
+	GlobalTimeout  ctime.Duration $json:"global_timeout"$  //max time to handle the request,0 means no default timeout
+	IdleTimeout    ctime.Duration $json:"idle_timeout"$    //default 10s
+	HeartProbe     ctime.Duration $json:"heart_probe"$     //default 5s 
 }
 
 // RedisConfig -
 type RedisConfig struct {
-	URL         string         $json:"url"$          //[redis/rediss]://[[username:]password@]host/[dbindex]
-	MaxOpen     uint16         $json:"max_open"$     //if this is 0,means no limit //this will overwrite the param in url
-	MaxIdle     uint16         $json:"max_idle"$     //defaule 100   //this will overwrite the param in url
-	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 10min //this will overwrite the param in url
-	IOTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms //this will overwrite the param in url
-	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms //this will overwrite the param in url
+	//if there is only one addr,the simple redis client will be created
+	//if there are many addrs,the cluster redis client will be created
+	Addrs           []string       $json:"addrs"$ //ip:port or host:port
+	TLS             bool           $json:"tls"$
+	UserName        string         $json:"user_name"$
+	Password        string         $json:"password"$
+	MaxOpen         uint16         $json:"max_open"$          //default 100
+	MaxConnIdletime ctime.Duration $json:"max_conn_idletime"$ //default 5min
+	IOTimeout       ctime.Duration $json:"io_timeout"$        //default 500ms
+	DialTimeout     ctime.Duration $json:"dial_timeout"$      //default 250ms
 }
 
-// SqlConfig -
-type SqlConfig struct {
-	URL         string         $json:"url"$          //[username:password@][protocol(address)]/[dbname][?param1=value1&...&paramN=valueN]
-	MaxOpen     uint16         $json:"max_open"$     //if this is 0,means no limit //this will overwrite the param in url
-	MaxIdle     uint16         $json:"max_idle"$     //default 100   //this will overwrite the param in url
-	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 10min //this will overwrite the param in url
-	IOTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms //this will overwrite the param in url
-	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms //this will overwrite the param in url
+// MysqlConfig -
+type MysqlConfig struct {
+	Addr            string         $json:"addr"$ //ip:port or host:port
+	TLS             bool           $json:"tls"$
+	UserName        string         $json:"user_name"$
+	Password        string         $json:"password"$
+	MaxOpen         uint16         $json:"max_open"$          //default 100
+	MaxConnIdletime ctime.Duration $json:"max_conn_idletime"$ //default 5min
+	IOTimeout       ctime.Duration $json:"io_timeout"$        //default 500ms
+	DialTimeout     ctime.Duration $json:"dial_timeout"$      //default 250ms
+	Charset         string         $json:"charset"$           //default utf8mb4
+	Collation       string         $json:"collation"$         //default utf8mb4_general_ci
+	ParseTime       bool           $json:"parse_time"$
 }
 
 // MongoConfig -
 type MongoConfig struct {
-	URL         string         $json:"url"$          //[mongodb/mongodb+srv]://[username:password@]host1,...,hostN/[dbname][?param1=value1&...&paramN=valueN]
-	MaxOpen     uint64         $json:"max_open"$     //if this is 0,means no limit //this will overwrite the param in url
-	MaxIdletime ctime.Duration $json:"max_idletime"$ //default 10min //this will overwrite the param in url
-	IOTimeout   ctime.Duration $json:"io_timeout"$   //default 500ms //this will overwrite the param in url
-	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms //this will overwrite the param in url
+	Addrs           []string       $json:"addrs"$ //ip:port or host:port
+	TLS             bool           $json:"tls"$
+	UserName        string         $json:"user_name"$
+	Password        string         $json:"password"$
+	AuthDB          string         $json:"auth_db"$           //default admin
+	ReplicaSet      string         $json:"replica_set"$       //only ReplicaSet mode need to set this
+	MaxOpen         uint16         $json:"max_open"$          //default 100
+	MaxConnIdletime ctime.Duration $json:"max_conn_idletime"$ //default 5min
+	IOTimeout       ctime.Duration $json:"io_timeout"$        //default 500ms
+	DialTimeout     ctime.Duration $json:"dial_timeout"$      //default 250ms
 }
 
 // KafkaPubConfig -
 type KafkaPubConfig struct {
-	Addrs          []string       $json:"addrs"$
+	Addrs          []string       $json:"addrs"$ //ip:port or host:port
 	TLS            bool           $json:"tls"$
 	Username       string         $json:"username"$
 	Passwd         string         $json:"password"$
 	AuthMethod     int            $json:"auth_method"$     //1-plain,2-scram sha256,3-scram sha512
 	CompressMethod int            $json:"compress_method"$ //0-none,1-gzip,2-snappy,3-lz4,4-zstd
+	IOTimeout      ctime.Duration $json:"io_timeout"$      //default 500ms
+	DialTimeout    ctime.Duration $json:"dial_timeout"$    //default 250ms
 	TopicName      string         $json:"topic_name"$
-	IOTimeout      ctime.Duration $json:"io_timeout"$   //default 500ms
-	ConnTimeout    ctime.Duration $json:"conn_timeout"$ //default 250ms
 }
 
 // KafkaSubConfig -
 type KafkaSubConfig struct {
-	Addrs       []string       $json:"addrs"$
+	Addrs       []string       $json:"addrs"$ //ip:port or host:port
 	TLS         bool           $json:"tls"$
 	Username    string         $json:"username"$
 	Passwd      string         $json:"password"$
-	AuthMethod  int            $json:"auth_method"$ //1-plain,2-scram sha256,3-scram sha512
-	TopicName   string         $json:"topic_name"$
-	GroupName   string         $json:"group_name"$
-	ConnTimeout ctime.Duration $json:"conn_timeout"$ //default 250ms
+	AuthMethod  int            $json:"auth_method"$  //1-plain,2-scram sha256,3-scram sha512
+	DialTimeout ctime.Duration $json:"dial_timeout"$ //default 250ms
 	//when there is no offset in a partition(add partition or first time to use the topic)
 	//-1 will sub from the newest
 	//-2 will sub from the firt
@@ -387,6 +395,8 @@ type KafkaSubConfig struct {
 	//if this is 0,commit is synced,and effective is slow.
 	//if this is not 0,commit is asynced,effective is high,but will cause duplicate sub when the program crash
 	CommitInterval ctime.Duration $json:"commit_interval"$
+	TopicName      string         $json:"topic_name"$
+	GroupName      string         $json:"group_name"$
 }
 
 // SC total source config instance
@@ -394,9 +404,9 @@ var sc *sourceConfig
 
 var mongos map[string]*mongo.Client
 
-var sqls map[string]*sql.DB
+var mysqls map[string]*mysql.Client
 
-var rediss map[string]*redis.Pool
+var rediss map[string]*redis.Client
 
 var kafkaSubers map[string]*kafka.Reader
 
@@ -487,7 +497,7 @@ func initsource() {
 	}()
 	wg.Add(1)
 	go func() {
-		initsql()
+		initmysql()
 		wg.Done()
 	}()
 	wg.Add(1)
@@ -507,7 +517,7 @@ func initgrpcserver() {
 		sc.CGrpcServer = &CGrpcServerConfig{
 			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-			HeartProbe:     ctime.Duration(1500 * time.Millisecond),
+			HeartProbe:     ctime.Duration(time.Second * 5),
 		}
 	} else {
 		if sc.CGrpcServer.ConnectTimeout <= 0 {
@@ -517,7 +527,7 @@ func initgrpcserver() {
 			sc.CGrpcServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if sc.CGrpcServer.HeartProbe <= 0 {
-			sc.CGrpcServer.HeartProbe = ctime.Duration(1500 * time.Millisecond)
+			sc.CGrpcServer.HeartProbe = ctime.Duration(time.Second * 5)
 		}
 	}
 }
@@ -526,7 +536,7 @@ func initgrpcclient() {
 		sc.CGrpcClient = &CGrpcClientConfig{
 			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-			HeartProbe:     ctime.Duration(time.Millisecond * 1500),
+			HeartProbe:     ctime.Duration(time.Second* 5),
 		}
 	} else {
 		if sc.CGrpcClient.ConnectTimeout <= 0 {
@@ -536,7 +546,7 @@ func initgrpcclient() {
 			sc.CGrpcClient.GlobalTimeout = 0
 		}
 		if sc.CGrpcClient.HeartProbe <= 0 {
-			sc.CGrpcClient.HeartProbe = ctime.Duration(time.Millisecond * 1500)
+			sc.CGrpcClient.HeartProbe = ctime.Duration(time.Second * 5)
 		}
 	}
 }
@@ -545,7 +555,7 @@ func initcrpcserver() {
 		sc.CrpcServer = &CrpcServerConfig{
 			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-			HeartProbe:     ctime.Duration(1500 * time.Millisecond),
+			HeartProbe:     ctime.Duration(time.Second * 5),
 		}
 	} else {
 		if sc.CrpcServer.ConnectTimeout <= 0 {
@@ -555,7 +565,7 @@ func initcrpcserver() {
 			sc.CrpcServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if sc.CrpcServer.HeartProbe <= 0 {
-			sc.CrpcServer.HeartProbe = ctime.Duration(1500 * time.Millisecond)
+			sc.CrpcServer.HeartProbe = ctime.Duration(time.Second * 5)
 		}
 	}
 }
@@ -564,7 +574,7 @@ func initcrpcclient() {
 		sc.CrpcClient = &CrpcClientConfig{
 			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-			HeartProbe:     ctime.Duration(time.Millisecond * 1500),
+			HeartProbe:     ctime.Duration(time.Second * 5),
 		}
 	} else {
 		if sc.CrpcClient.ConnectTimeout <= 0 {
@@ -574,7 +584,7 @@ func initcrpcclient() {
 			sc.CrpcClient.GlobalTimeout = 0
 		}
 		if sc.CrpcClient.HeartProbe <= 0 {
-			sc.CrpcClient.HeartProbe = ctime.Duration(time.Millisecond * 1500)
+			sc.CrpcClient.HeartProbe = ctime.Duration(time.Second * 5)
 		}
 	}
 
@@ -584,8 +594,8 @@ func initwebserver() {
 		sc.WebServer = &WebServerConfig{
 			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-			IdleTimeout:    ctime.Duration(time.Second * 5),
-			HeartProbe:     ctime.Duration(time.Millisecond * 1500),
+			IdleTimeout:    ctime.Duration(time.Second * 10),
+			HeartProbe:     ctime.Duration(time.Second * 5),
 			SrcRoot:        "./src",
 			Cors: &WebCorsConfig{
 				CorsOrigin: []string{"*"},
@@ -601,10 +611,10 @@ func initwebserver() {
 			sc.WebServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if sc.WebServer.IdleTimeout <= 0 {
-			sc.WebServer.IdleTimeout = ctime.Duration(time.Second * 5)
+			sc.WebServer.IdleTimeout = ctime.Duration(time.Second * 10)
 		}
 		if sc.WebServer.HeartProbe <= 0 {
-			sc.WebServer.HeartProbe = ctime.Duration(time.Millisecond * 1500)
+			sc.WebServer.HeartProbe = ctime.Duration(time.Second * 5)
 		}
 		if sc.WebServer.Cors == nil {
 			sc.WebServer.Cors = &WebCorsConfig{
@@ -620,8 +630,8 @@ func initwebclient() {
 		sc.WebClient = &WebClientConfig{
 			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
 			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-			IdleTimeout:    ctime.Duration(time.Second * 5),
-			HeartProbe:     ctime.Duration(time.Millisecond * 1500),
+			IdleTimeout:    ctime.Duration(time.Second * 10),
+			HeartProbe:     ctime.Duration(time.Second * 5),
 		}
 	} else {
 		if sc.WebClient.ConnectTimeout <= 0 {
@@ -631,10 +641,10 @@ func initwebclient() {
 			sc.WebClient.GlobalTimeout = 0
 		}
 		if sc.WebClient.IdleTimeout <= 0 {
-			sc.WebClient.IdleTimeout = ctime.Duration(time.Second * 5)
+			sc.WebClient.IdleTimeout = ctime.Duration(time.Second * 10)
 		}
 		if sc.WebClient.HeartProbe <= 0 {
-			sc.WebClient.HeartProbe = ctime.Duration(time.Millisecond * 1500)
+			sc.WebClient.HeartProbe = ctime.Duration(time.Second * 5)
 		}
 	}
 }
@@ -643,47 +653,53 @@ func initredis(){
 		if k == "example_redis" {
 			continue
 		}
-		if redisc.MaxIdle == 0 {
-			redisc.MaxIdle = 100
+		if len(redisc.Addrs) == 0 {
+			redisc.Addrs = []string{"127.0.0.1:6379"}
 		}
-		if redisc.MaxIdletime == 0 {
-			redisc.MaxIdletime = ctime.Duration(time.Minute * 10)
+		if redisc.MaxConnIdletime <= 0 {
+			redisc.MaxConnIdletime = ctime.Duration(time.Minute * 5)
 		}
-		if redisc.IOTimeout == 0 {
+		if redisc.IOTimeout <= 0 {
 			redisc.IOTimeout = ctime.Duration(time.Millisecond * 500)
 		}
-		if redisc.ConnTimeout == 0 {
-			redisc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
+		if redisc.DialTimeout <= 0 {
+			redisc.DialTimeout = ctime.Duration(time.Millisecond * 250)
 		}
 	}
-	rediss = make(map[string]*redis.Pool, len(sc.Redis))
-	for k, redisc := range sc.Redis {
+	rediss = make(map[string]*redis.Client, len(sc.Redis))
+	lker := sync.Mutex{}
+	wg := sync.WaitGroup{}
+	for k, v := range sc.Redis {
 		if k == "example_redis" {
 			continue
 		}
-		rediss[k] = redis.NewRedis(&redis.Config{
-			RedisName:   k,
-			URL:         redisc.URL,
-			MaxIdle:     redisc.MaxIdle,
-			MaxOpen:     redisc.MaxOpen,
-			MaxIdletime: redisc.MaxIdletime.StdDuration(),
-			ConnTimeout: redisc.ConnTimeout.StdDuration(),
-			IOTimeout:   redisc.IOTimeout.StdDuration(),
-		})
-	}
-	wg := &sync.WaitGroup{}
-	for k, v := range rediss {
 		redisname := k
-		redisclient := v
+		redisc := v
 		wg.Add(1)
-		go func() {
-			if e := redisclient.Ping(context.Background()); e != nil {
-				wg.Done()
-				log.Error(nil, "[config.initredis] ping failed", map[string]interface{}{"redis": redisname, "error": e})
+		go func(){
+			defer wg.Done()
+			var tlsc *tls.Config
+			if redisc.TLS {
+				tlsc = &tls.Config{}
+			}
+			c, e := redis.NewRedis(&redis.Config{
+				RedisName:       redisname,
+				UserName:        redisc.UserName,
+				Password:        redisc.Password,
+				Addrs:           redisc.Addrs,
+				MaxOpen:         redisc.MaxOpen,
+				MaxConnIdletime: redisc.MaxConnIdletime.StdDuration(),
+				DialTimeout:     redisc.DialTimeout.StdDuration(),
+				IOTimeout:       redisc.IOTimeout.StdDuration(),
+			}, tlsc)
+			if e != nil {
+				log.Error(nil, "[config.initredis] failed", map[string]interface{}{"redis": redisname, "error": e})
 				Close()
 				os.Exit(1)
 			}
-			wg.Done()
+			lker.Lock()
+			rediss[redisname] = c
+			lker.Unlock()
 		}()
 	}
 	wg.Wait()
@@ -693,104 +709,114 @@ func initmongo(){
 		if k == "example_mongo" {
 			continue
 		}
-		if mongoc.MaxIdletime == 0 {
-			mongoc.MaxIdletime = ctime.Duration(time.Minute * 10)
+		if len(mongoc.Addrs) == 0 {
+			mongoc.Addrs = []string{"127.0.0.1:27017"}
+		}
+		if mongoc.MaxConnIdletime == 0 {
+			mongoc.MaxConnIdletime = ctime.Duration(time.Minute * 5)
 		}
 		if mongoc.IOTimeout == 0 {
 			mongoc.IOTimeout = ctime.Duration(time.Millisecond * 500)
 		}
-		if mongoc.ConnTimeout == 0 {
-			mongoc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
+		if mongoc.DialTimeout == 0 {
+			mongoc.DialTimeout = ctime.Duration(time.Millisecond * 250)
 		}
 	}
 	mongos = make(map[string]*mongo.Client, len(sc.Mongo))
-	for k, mongoc := range sc.Mongo {
+	lker := sync.Mutex{}
+	wg := sync.WaitGroup{}
+	for k, v := range sc.Mongo {
 		if k == "example_mongo" {
 			continue
 		}
-		op := options.Client().ApplyURI(mongoc.URL)
-		op = op.SetConnectTimeout(mongoc.ConnTimeout.StdDuration())
-		op = op.SetMaxConnIdleTime(mongoc.MaxIdletime.StdDuration())
-		op = op.SetMaxPoolSize(mongoc.MaxOpen)
-		op = op.SetTimeout(mongoc.IOTimeout.StdDuration())
-		db, e := mongo.Connect(nil, op)
-		if e != nil {
-			log.Error(nil, "[config.initmongo] open failed", map[string]interface{}{"mongodb": k, "error": e})
-			Close()
-			os.Exit(1)
-		}
-		mongos[k] = db
-	}
-	wg := &sync.WaitGroup{}
-	for k, v := range mongos {
 		mongoname := k
-		mongoclient := v
+		mongoc := v
 		wg.Add(1)
-		go func() {
-			if e := mongoclient.Ping(context.Background(), readpref.Primary()); e != nil {
-				wg.Done()
-				log.Error(nil, "[config.initmongo] ping failed", map[string]interface{}{"mongodb": mongoname, "error": e})
+		go func(){
+			defer wg.Done()
+			var tlsc *tls.Config
+			if mongoc.TLS {
+				tlsc = &tls.Config{}
+			}
+			c, e := mongo.NewMongo(&mongo.Config{
+				MongoName:       mongoname,
+				Addrs:           mongoc.Addrs,
+				ReplicaSet:      mongoc.ReplicaSet,
+				UserName:        mongoc.UserName,
+				Password:        mongoc.Password,
+				AuthDB:          mongoc.AuthDB,
+				MaxOpen:         mongoc.MaxOpen,
+				MaxConnIdletime: mongoc.MaxConnIdletime.StdDuration(),
+				DialTimeout:     mongoc.DialTimeout.StdDuration(),
+				IOTimeout:       mongoc.IOTimeout.StdDuration(),
+			}, tlsc)
+			if e != nil {
+				log.Error(nil, "[config.initmongo] failed", map[string]interface{}{"mongo": mongoname, "error": e})
 				Close()
 				os.Exit(1)
 			}
-			wg.Done()
+			lker.Lock()
+			mongos[mongoname] = c
+			lker.Unlock()
 		}()
 	}
 	wg.Wait()
 }
-func initsql(){
-	for _, sqlc := range sc.Sql {
-		if sqlc.MaxIdle == 0 {
-			sqlc.MaxIdle = 100
-		}
-		if sqlc.MaxIdletime == 0 {
-			sqlc.MaxIdletime = ctime.Duration(time.Minute * 10)
-		}
-		if sqlc.IOTimeout == 0 {
-			sqlc.IOTimeout = ctime.Duration(time.Millisecond * 500)
-		}
-		if sqlc.ConnTimeout == 0 {
-			sqlc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
-		}
-	}
-	sqls = make(map[string]*sql.DB, len(sc.Sql))
-	for k, sqlc := range sc.Sql {
-		if k == "example_sql" {
+func initmysql(){
+	for k, mysqlc := range sc.Mysql {
+		if k == "example_mysql" {
 			continue
 		}
-		tmpc, e := mysql.ParseDSN(sqlc.URL)
-		if e != nil {
-			log.Error(nil, "[config.initsql] url format wrong", map[string]interface{}{"mysql": k, "error": e})
-			Close()
-			os.Exit(1)
+		if mysqlc.Addr == "" {
+			mysqlc.Addr = "127.0.0.1:3306"
 		}
-		tmpc.Timeout = sqlc.ConnTimeout.StdDuration()
-		tmpc.ReadTimeout = sqlc.IOTimeout.StdDuration()
-		tmpc.WriteTimeout = sqlc.IOTimeout.StdDuration()
-		db, e := sql.Open("mysql", tmpc.FormatDSN())
-		if e != nil {
-			log.Error(nil, "[config.initsql] open failed", map[string]interface{}{"mysql": k, "error": e})
-			Close()
-			os.Exit(1)
+		if mysqlc.MaxConnIdletime == 0 {
+			mysqlc.MaxConnIdletime = ctime.Duration(time.Minute * 5)
 		}
-		db.SetMaxOpenConns(int(sqlc.MaxOpen))
-		db.SetMaxIdleConns(int(sqlc.MaxIdle))
-		db.SetConnMaxIdleTime(sqlc.MaxIdletime.StdDuration())
-		sqls[k] = db
+		if mysqlc.IOTimeout == 0 {
+			mysqlc.IOTimeout = ctime.Duration(time.Millisecond * 500)
+		}
+		if mysqlc.DialTimeout == 0 {
+			mysqlc.DialTimeout = ctime.Duration(time.Millisecond * 250)
+		}
 	}
-	wg := &sync.WaitGroup{}
-	for k, v := range sqls {
-		sqlname := k
-		sqlclient := v
+	mysqls = make(map[string]*mysql.Client, len(sc.Mysql))
+	lker := sync.Mutex{}
+	wg := sync.WaitGroup{}
+	for k, v := range sc.Mysql {
+		if k == "example_mysql" {
+			continue
+		}
+		mysqlname := k
+		mysqlc := v
 		wg.Add(1)
-		go func() {
-			if e := sqlclient.PingContext(context.Background()); e != nil {
-				wg.Done()
-				log.Error(nil, "[config.initsql] ping failed", map[string]interface{}{"mysql": sqlname, "error": e})
+		go func(){
+			defer wg.Done()
+			var tlsc *tls.Config
+			if mysqlc.TLS {
+				tlsc = &tls.Config{}
+			}
+			c, e := mysql.NewMysql(&mysql.Config{
+				MysqlName:       mysqlname,
+				Addr:            mysqlc.Addr,
+				UserName:        mysqlc.UserName,
+				Password:        mysqlc.Password,
+				Charset:         mysqlc.Charset,
+				Collation:       mysqlc.Collation,
+				ParseTime:       mysqlc.ParseTime,
+				MaxOpen:         mysqlc.MaxOpen,
+				MaxConnIdletime: mysqlc.MaxConnIdletime.StdDuration(),
+				DialTimeout:     mysqlc.DialTimeout.StdDuration(),
+				IOTimeout:       mysqlc.IOTimeout.StdDuration(),
+			}, tlsc)
+			if e != nil {
+				log.Error(nil, "[config.initmysql] failed", map[string]interface{}{"mysql": mysqlname, "error": e})
 				Close()
 				os.Exit(1)
 			}
-			wg.Done()
+			lker.Lock()
+			mysqls[mysqlname] = c
+			lker.Unlock()
 		}()
 	}
 	wg.Wait()
@@ -811,8 +837,8 @@ func initkafkapub(){
 		if pubc.IOTimeout == 0 {
 			pubc.IOTimeout = ctime.Duration(time.Millisecond * 500)
 		}
-		if pubc.ConnTimeout == 0 {
-			pubc.IOTimeout = ctime.Duration(time.Millisecond * 250)
+		if pubc.DialTimeout == 0 {
+			pubc.DialTimeout = ctime.Duration(time.Millisecond * 250)
 		}
 	}
 	kafkaPubers = make(map[string]*kafka.Writer, len(sc.KafkaPub))
@@ -821,7 +847,7 @@ func initkafkapub(){
 			continue
 		}
 		dialer := &kafka.Dialer{
-			Timeout:   pubc.ConnTimeout.StdDuration(),
+			Timeout:   pubc.DialTimeout.StdDuration(),
 			DualStack: true,
 		}
 		if pubc.TLS {
@@ -884,8 +910,8 @@ func initkafkasub(){
 			Close()
 			os.Exit(1)
 		}
-		if subc.ConnTimeout == 0 {
-			subc.ConnTimeout = ctime.Duration(time.Millisecond * 250)
+		if subc.DialTimeout == 0 {
+			subc.DialTimeout = ctime.Duration(time.Millisecond * 250)
 		}
 	}
 	kafkaSubers = make(map[string]*kafka.Reader, len(sc.KafkaSub))
@@ -894,7 +920,7 @@ func initkafkasub(){
 			continue
 		}
 		dialer := &kafka.Dialer{
-			Timeout:   subc.ConnTimeout.StdDuration(),
+			Timeout:   subc.DialTimeout.StdDuration(),
 			DualStack: true,
 		}
 		if subc.TLS {
@@ -967,15 +993,15 @@ func GetMongo(mongoname string) *mongo.Client {
 	return mongos[mongoname]
 }
 
-// GetSql get a mysql db client by db's instance name
+// GetMysql get a mysql db client by db's instance name
 // return nil means not exist
-func GetSql(mysqlname string) *sql.DB {
-	return sqls[mysqlname]
+func GetMysql(mysqlname string) *mysql.Client {
+	return mysqls[mysqlname]
 }
 
 // GetRedis get a redis client by redis's instance name
 // return nil means not exist
-func GetRedis(redisname string) *redis.Pool {
+func GetRedis(redisname string) *redis.Client {
 	return rediss[redisname]
 }
 
