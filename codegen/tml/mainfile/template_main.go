@@ -23,6 +23,10 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	publicmids "github.com/chenjie199234/Corelib/mids"
 	_ "github.com/chenjie199234/Corelib/monitor"
+
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/redis/go-redis/v9"
+	_ "go.mongodb.org/mongo-driver/mongo"
 )
 
 func main() {
