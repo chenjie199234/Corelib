@@ -593,7 +593,7 @@ func initredis(){
 	rediss = make(map[string]*redis.Client, len(sc.Redis))
 	lker := sync.Mutex{}
 	wg := sync.WaitGroup{}
-	for _, v := range sc.Redis {
+	for k, v := range sc.Redis {
 		if k == "example_redis" {
 			continue
 		}
@@ -640,7 +640,7 @@ func initmongo(){
 	mongos = make(map[string]*mongo.Client, len(sc.Mongo))
 	lker := sync.Mutex{}
 	wg := sync.WaitGroup{}
-	for _, v := range sc.Mongo {
+	for k, v := range sc.Mongo {
 		if k == "example_mongo" {
 			continue
 		}
@@ -687,7 +687,7 @@ func initmysql(){
 	mysqls = make(map[string]*mysql.Client, len(sc.Mysql))
 	lker := sync.Mutex{}
 	wg := sync.WaitGroup{}
-	for _, v := range sc.Mysql {
+	for k, v := range sc.Mysql {
 		if k == "example_mysql" {
 			continue
 		}
