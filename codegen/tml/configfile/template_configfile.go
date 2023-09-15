@@ -91,34 +91,7 @@ const source = `{
 			"io_timeout":"500ms",
 			"dial_timeout":"250ms"
 		}
-	},
-	"kafka_pub":[
-		{
-			"addrs":["127.0.0.1:12345"],
-			"tls":false,
-			"username":"example",
-			"password":"example",
-			"auth_method":3,
-			"compress_method":2,
-			"io_timeout":"500ms",
-			"dial_timeout":"250ms",
-			"topic_name":"example_topic"
-		}
-	],
-	"kafka_sub":[
-		{
-			"addrs":["127.0.0.1:12345"],
-			"tls":false,
-			"username":"example",
-			"password":"example",
-			"auth_method":3,
-			"dial_timeout":"250ms",
-			"start_offset":-2,
-			"commit_interval":"0s"
-			"topic_name":"example_topic",
-			"group_name":"example_group"
-		}
-	]
+	}
 }`
 const app = `{
 	"handler_timeout":{

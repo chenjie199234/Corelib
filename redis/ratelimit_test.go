@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/chenjie199234/Corelib/util/ctime"
 )
 
 func Test_Ratelimit(t *testing.T) {
@@ -11,9 +13,9 @@ func Test_Ratelimit(t *testing.T) {
 		RedisName:       "test",
 		Addrs:           []string{"127.0.0.1:6379"},
 		MaxOpen:         256,
-		MaxConnIdletime: time.Second,
-		DialTimeout:     time.Second,
-		IOTimeout:       time.Second,
+		MaxConnIdletime: ctime.Duration(time.Minute * 5),
+		DialTimeout:     ctime.Duration(time.Second),
+		IOTimeout:       ctime.Duration(time.Second),
 	}, nil)
 	pass, e := client.RateLimit(context.Background(), map[string][2]uint64{"test1": {2, 5}, "test2": {1, 5}})
 	if e != nil {

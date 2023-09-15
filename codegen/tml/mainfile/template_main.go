@@ -26,7 +26,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/redis/go-redis/v9"
-	_ "github.com/segmentio/kafka-go"
 	_ "go.mongodb.org/mongo-driver/mongo"
 )
 

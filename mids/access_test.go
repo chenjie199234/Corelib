@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/redis"
+	"github.com/chenjie199234/Corelib/util/ctime"
 )
 
 func Test_Accesssign(t *testing.T) {
@@ -15,9 +16,9 @@ func Test_Accesssign(t *testing.T) {
 		RedisName:       "test",
 		Addrs:           []string{"127.0.0.1:6379"},
 		MaxOpen:         256,
-		MaxConnIdletime: time.Minute * 5,
-		DialTimeout:     time.Second,
-		IOTimeout:       time.Second,
+		MaxConnIdletime: ctime.Duration(time.Minute * 5),
+		DialTimeout:     ctime.Duration(time.Second),
+		IOTimeout:       ctime.Duration(time.Second),
 	}, nil)
 	UpdateReplayDefendRedisInstance(client)
 	UpdateAccessConfig(MultiPathAccessConfigs{

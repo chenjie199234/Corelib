@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"time"
 
+	"github.com/chenjie199234/Corelib/util/ctime"
+
 	gmongo "go.mongodb.org/mongo-driver/mongo"
 	goptions "go.mongodb.org/mongo-driver/mongo/options"
 	greadpref "go.mongodb.org/mongo-driver/mongo/readpref"
@@ -25,11 +27,11 @@ type Config struct {
 	//0: default 100
 	MaxOpen uint16 `json:"max_open"`
 	//<=0: no idletime
-	MaxConnIdletime time.Duration `json:"max_conn_idletime"`
+	MaxConnIdletime ctime.Duration `json:"max_conn_idletime"`
 	//<=0: default 5s
-	DialTimeout time.Duration `json:"dial_timeout"`
+	DialTimeout ctime.Duration `json:"dial_timeout"`
 	//<=0: no timeout
-	IOTimeout time.Duration `json:"io_timeout"`
+	IOTimeout ctime.Duration `json:"io_timeout"`
 }
 type Client struct {
 	*gmongo.Client
@@ -64,17 +66,17 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 		opts = opts.SetMaxPoolSize(uint64(c.MaxOpen))
 	}
 	if c.MaxConnIdletime > 0 {
-		opts = opts.SetMaxConnIdleTime(c.MaxConnIdletime)
+		opts = opts.SetMaxConnIdleTime(c.MaxConnIdletime.StdDuration())
 	} else {
 		opts = opts.SetMaxConnIdleTime(0)
 	}
 	if c.DialTimeout <= 0 {
 		opts = opts.SetConnectTimeout(time.Second * 5)
 	} else {
-		opts = opts.SetConnectTimeout(c.DialTimeout)
+		opts = opts.SetConnectTimeout(c.DialTimeout.StdDuration())
 	}
 	if c.IOTimeout > 0 {
-		opts = opts.SetTimeout(c.IOTimeout)
+		opts = opts.SetTimeout(c.IOTimeout.StdDuration())
 	}
 	if tlsc != nil {
 		opts = opts.SetTLSConfig(tlsc)

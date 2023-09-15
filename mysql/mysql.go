@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/chenjie199234/Corelib/util/ctime"
+
 	gmysql "github.com/go-sql-driver/mysql"
 )
 
@@ -25,11 +27,11 @@ type Config struct {
 	//0: default 100
 	MaxOpen uint16 `json:"max_open"`
 	//<=0: no idletime
-	MaxConnIdletime time.Duration `json:"max_conn_idletime"`
+	MaxConnIdletime ctime.Duration `json:"max_conn_idletime"`
 	//<=0: default 5s
-	DialTimeout time.Duration `json:"dial_timeout"`
+	DialTimeout ctime.Duration `json:"dial_timeout"`
 	//<=0: no timeout
-	IOTimeout time.Duration `json:"io_timeout"`
+	IOTimeout ctime.Duration `json:"io_timeout"`
 }
 type Client struct {
 	*sql.DB
@@ -60,11 +62,11 @@ func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 	if c.DialTimeout <= 0 {
 		gmysqlc.Timeout = time.Second * 5
 	} else {
-		gmysqlc.Timeout = c.DialTimeout
+		gmysqlc.Timeout = c.DialTimeout.StdDuration()
 	}
 	if c.IOTimeout > 0 {
-		gmysqlc.ReadTimeout = c.IOTimeout
-		gmysqlc.WriteTimeout = c.IOTimeout
+		gmysqlc.ReadTimeout = c.IOTimeout.StdDuration()
+		gmysqlc.WriteTimeout = c.IOTimeout.StdDuration()
 	}
 	gmysqlc.CheckConnLiveness = true
 	gmysqlc.ParseTime = c.ParseTime
@@ -78,7 +80,7 @@ func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 	} else {
 		db.SetMaxOpenConns(int(c.MaxOpen))
 	}
-	db.SetConnMaxIdleTime(c.MaxConnIdletime)
+	db.SetConnMaxIdleTime(c.MaxConnIdletime.StdDuration())
 	if e = db.PingContext(context.Background()); e != nil {
 		return nil, e
 	}

@@ -3,6 +3,8 @@ package redis
 import (
 	"testing"
 	"time"
+
+	"github.com/chenjie199234/Corelib/util/ctime"
 )
 
 func Test_Redis(t *testing.T) {
@@ -10,9 +12,9 @@ func Test_Redis(t *testing.T) {
 		RedisName:       "test",
 		Addrs:           []string{"127.0.0.1:6379"},
 		MaxOpen:         256,
-		MaxConnIdletime: time.Second,
-		DialTimeout:     time.Second,
-		IOTimeout:       time.Second,
+		MaxConnIdletime: ctime.Duration(time.Minute * 5),
+		DialTimeout:     ctime.Duration(time.Second),
+		IOTimeout:       ctime.Duration(time.Second),
 	}
 	_, e := NewRedis(c, nil)
 	if e != nil {

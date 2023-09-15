@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"time"
 
+	"github.com/chenjie199234/Corelib/util/ctime"
+
 	gredis "github.com/redis/go-redis/v9"
 )
 
@@ -22,11 +24,11 @@ type Config struct {
 	//0: default 100
 	MaxOpen uint16 `json:"max_open"`
 	//<=0: connection has no idle timeout
-	MaxConnIdletime time.Duration `json:"max_conn_idletime"`
+	MaxConnIdletime ctime.Duration `json:"max_conn_idletime"`
 	//<=0: default 5s
-	DialTimeout time.Duration `json:"dial_timeout"`
+	DialTimeout ctime.Duration `json:"dial_timeout"`
 	//<=0: no timeout
-	IOTimeout time.Duration `json:"io_time"`
+	IOTimeout ctime.Duration `json:"io_timeout"`
 }
 
 type Client struct {
@@ -40,13 +42,13 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 		Addrs:                 c.Addrs,
 		Username:              c.UserName,
 		Password:              c.Password,
-		DialTimeout:           c.DialTimeout,
-		ReadTimeout:           c.IOTimeout,
-		WriteTimeout:          c.IOTimeout,
+		DialTimeout:           c.DialTimeout.StdDuration(),
+		ReadTimeout:           c.IOTimeout.StdDuration(),
+		WriteTimeout:          c.IOTimeout.StdDuration(),
 		ContextTimeoutEnabled: true,
 		PoolSize:              int(c.MaxOpen),
 		MinIdleConns:          1,
-		ConnMaxIdleTime:       c.MaxConnIdletime,
+		ConnMaxIdleTime:       c.MaxConnIdletime.StdDuration(),
 		TLSConfig:             tlsc,
 	}
 	if c.MaxOpen == 0 {
