@@ -38,9 +38,7 @@ then
 	return -1
 end
 redis.call("EXPIRE",KEYS[1],16)
-for i=1,#ARGV,1 do
-	redis.call("rpush",KEYS[1],ARGV[i])
-end
+redis.call("RPUSH",KEYS[1],unpack(ARGV))
 redis.call("EXPIRE",KEYS[1],16)
 return #ARGV`)
 }
@@ -160,7 +158,7 @@ func (c *Client) temporaryMQSubHandle(ctx context.Context, mqname string, index 
 // in redis slave master mode,group is better to be 1
 // sub and pub's mqname and group should be same
 // key is only used to caculate the data's group(hash)
-func (c *Client) TemporaryMQPub(ctx context.Context, mqname string, group uint64, key string, values ...[]byte) error {
+func (c *Client) TemporaryMQPub(ctx context.Context, mqname string, group uint64, key string, values ...interface{}) error {
 	if len(values) == 0 {
 		return nil
 	}
@@ -172,11 +170,7 @@ func (c *Client) TemporaryMQPub(ctx context.Context, mqname string, group uint64
 	}
 	listname := mqname + "_" + strconv.FormatUint(common.BkdrhashString(key, group), 10)
 	listexist := "{" + listname + "}_exist"
-	tmp := make([]interface{}, 0, len(values))
-	for _, v := range values {
-		tmp = append(tmp, v)
-	}
-	r, e := pubTMQ.Run(ctx, c, []string{listname, listexist}, tmp...).Int()
+	r, e := pubTMQ.Run(ctx, c, []string{listname, listexist}, values...).Int()
 	if r == -1 {
 		e = ErrTemporaryMQMissingReceiver
 	}

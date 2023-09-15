@@ -33,7 +33,8 @@ var pubPMQ *gredis.Script
 var finishPMQ *gredis.Script
 
 func init() {
-	pubPMQ = gredis.NewScript(`if(not redis.call("ZSCORE",KEYS[1],ARGV[1]))
+	pubPMQ = gredis.NewScript(`local task=string.sub(KEYS[2],#KEYS[1]+4)
+if(not redis.call("ZSCORE",KEYS[1],task))
 then
 	return -2
 end
@@ -41,9 +42,7 @@ if(redis.call("EXISTS",KEYS[2])==1)
 then
 	return -1
 end
-for i=2,#ARGV,1 do
-	redis.call("RPUSH",KEYS[3],ARGV[i])
-end
+redis.call("RPUSH",KEYS[3],unpack(ARGV))
 return 0`)
 
 	finishPMQ = gredis.NewScript(`if(not redis.call("ZSCORE",KEYS[1],ARGV[1]))
@@ -123,7 +122,7 @@ func (c *Client) PriorityMQFinishTaskPub(ctx context.Context, group, task string
 	return finishPMQ.Run(ctx, c, keys, task).Int()
 }
 
-func (c *Client) PriorityMQPub(ctx context.Context, group, task, channel string, datas ...[]byte) error {
+func (c *Client) PriorityMQPub(ctx context.Context, group, task, channel string, datas ...interface{}) error {
 	if group == "" {
 		return ErrPriorityMQGroupMissing
 	}
@@ -138,12 +137,7 @@ func (c *Client) PriorityMQPub(ctx context.Context, group, task, channel string,
 	}
 	taskkey := "{" + group + "}_" + task
 	channelkey := "{" + group + "}_" + task + "_" + channel
-	tmp := make([]interface{}, 0, 1+len(datas))
-	tmp = append(tmp, task)
-	for _, v := range datas {
-		tmp = append(tmp, v)
-	}
-	r, e := pubPMQ.Run(ctx, c, []string{group, taskkey, channelkey}, tmp...).Int()
+	r, e := pubPMQ.Run(ctx, c, []string{group, taskkey, channelkey}, datas...).Int()
 	if e != nil {
 		return e
 	}

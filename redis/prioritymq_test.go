@@ -18,7 +18,7 @@ func Test_PriorityMQ(t *testing.T) {
 		IOTimeout:       time.Second,
 	}, nil)
 
-	//testtask's status is interrupted now
+	// testtask's status is interrupted now
 	if e := client.PriorityMQSetTask(context.Background(), "testgroup", "testtask", -1); e != nil {
 		t.Fatal(e)
 		return
@@ -32,8 +32,8 @@ func Test_PriorityMQ(t *testing.T) {
 		}
 		t.Log("can sub now")
 	}()
-	channel1 := make([][]byte, 0, 500)
-	channel2 := make([][]byte, 0, 500)
+	channel1 := make([]interface{}, 0, 500)
+	channel2 := make([]interface{}, 0, 500)
 	for i := 0; i < 1000; i++ {
 		if i%2 == 0 {
 			channel1 = append(channel1, strconv.AppendInt(nil, int64(i), 10))
