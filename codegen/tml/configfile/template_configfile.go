@@ -46,15 +46,15 @@ const source = `{
 		}
 	},
 	"web_client":{
-		"connect_timeout":"200ms",
+		"connect_timeout":"500ms",
 		"global_timeout":"0",
 		"idle_timeout":"30s",
 		"heart_probe":"10s"
 	},
 	"mongo":{
 		"example_mongo":{
-			"addrs":["127.0.0.1:27017"],
 			"tls":false,
+			"addrs":["127.0.0.1:27017"],
 			"user_name":"",
 			"password":"",
 			"auth_db":"",
@@ -67,14 +67,14 @@ const source = `{
 	},
 	"mysql":{
 		"example_mysql":{
-			"addr":"127.0.0.1:3306",
 			"tls":false,
+			"addr":"127.0.0.1:3306",
 			"user_name":"",
 			"password":"",
 			"max_open":256,
 			"max_conn_idletime":"5m",
 			"io_timeout":"500ms",
-			"dial_timeout":"250ms"
+			"dial_timeout":"250ms",
 			"charset":"",
 			"collation":"",
 			"parse_time":true
@@ -82,8 +82,8 @@ const source = `{
 	},
 	"redis":{
 		"example_redis":{
-			"addrs":["127.0.0.1:6379"],
 			"tls":false,
+			"addrs":["127.0.0.1:6379"],
 			"user_name":"",
 			"password":"",
 			"max_open":256,
