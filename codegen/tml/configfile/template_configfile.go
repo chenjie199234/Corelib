@@ -8,6 +8,7 @@ import (
 const source = `{
 	"cgrpc_server":{
 		"connect_timeout":"500ms",
+		"idle_timeout":"0",
 		"global_timeout":"500ms",
 		"heart_probe":"10s",
 		"certs":{
@@ -15,11 +16,13 @@ const source = `{
 	},
 	"cgrpc_client":{
 		"connect_timeout":"500ms",
+		"idle_timeout":"0",
 		"global_timeout":"0",
 		"heart_probe":"10s"
 	},
 	"crpc_server":{
 		"connect_timeout":"500ms",
+		"idle_timeout":"0",
 		"global_timeout":"500ms",
 		"heart_probe":"10s",
 		"certs":{
@@ -27,6 +30,7 @@ const source = `{
 	},
 	"crpc_client":{
 		"connect_timeout":"500ms",
+		"idle_timeout":"0",
 		"global_timeout":"0",
 		"heart_probe":"10s"
 	},

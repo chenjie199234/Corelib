@@ -436,6 +436,7 @@ func initgrpcserver() {
 				ConnectTimeout: ctime.Duration(time.Millisecond * 500),
 				GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
 				HeartProbe:     ctime.Duration(time.Second * 5),
+				IdleTimeout:    0,
 			},
 		}
 	} else {
@@ -457,6 +458,7 @@ func initgrpcclient() {
 				ConnectTimeout: ctime.Duration(time.Millisecond * 500),
 				GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
 				HeartProbe:     ctime.Duration(time.Second* 5),
+				IdleTimeout:    0,
 			},
 		}
 	} else {
@@ -478,6 +480,7 @@ func initcrpcserver() {
 				ConnectTimeout: ctime.Duration(time.Millisecond * 500),
 				GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
 				HeartProbe:     ctime.Duration(time.Second * 5),
+				IdleTimeout:    0,
 			},
 		}
 	} else {
@@ -499,6 +502,7 @@ func initcrpcclient() {
 				ConnectTimeout: ctime.Duration(time.Millisecond * 500),
 				GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
 				HeartProbe:     ctime.Duration(time.Second * 5),
+				IdleTimeout:    0,
 			},
 		}
 	} else {

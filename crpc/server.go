@@ -34,6 +34,8 @@ type ServerConfig struct {
 	//time for connection establish(include dial time,handshake time and verify time)
 	//default 500ms
 	ConnectTimeout ctime.Duration `json:"connect_timeout"`
+	//connection will be closed if it is not actived after this time,<=0 means no idletimeout
+	IdleTimeout ctime.Duration `json:"idle_timeout"`
 	//min 1s,default 1s,3 probe missing means disconnect
 	HeartProbe ctime.Duration `json:"heart_probe"`
 	//min 64k,default 64M
@@ -78,6 +80,7 @@ func NewCrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tlsc
 		stop:           graceful.New(),
 	}
 	instancec := &stream.InstanceConfig{
+		RecvIdleTimeout:    c.IdleTimeout.StdDuration(),
 		HeartprobeInterval: c.HeartProbe.StdDuration(),
 		TcpC: &stream.TcpConfig{
 			ConnectTimeout: c.ConnectTimeout.StdDuration(),

@@ -42,6 +42,8 @@ type ClientConfig struct {
 	//time for connection establich(include dial time,handshake time and verify time)
 	//default 500ms
 	ConnectTimeout ctime.Duration `json:"connect_timeout"`
+	//connection will be closed if it is not actived after this time,<=0 means no idletimeout
+	IdleTimeout ctime.Duration `json:"idle_timeout"`
 	//min 1s,default 1s,3 probe missing means disconnect
 	HeartProbe ctime.Duration `json:"heart_probe"`
 	//min 64k,default 64M
@@ -51,6 +53,9 @@ type ClientConfig struct {
 func (c *ClientConfig) validate() {
 	if c.ConnectTimeout <= 0 {
 		c.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
+	}
+	if c.IdleTimeout < 0 {
+		c.IdleTimeout = 0
 	}
 	if c.HeartProbe.StdDuration() < time.Second {
 		c.HeartProbe = ctime.Duration(time.Second)
@@ -119,6 +124,9 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 			MaxDelay:  time.Millisecond * 100,
 		}, //reconnect immediately when disconnect,reconnect delay 100ms when connect failed
 	}))
+	if c.IdleTimeout > 0 {
+		opts = append(opts, grpc.WithIdleTimeout(c.IdleTimeout.StdDuration()))
+	}
 	opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{Time: c.HeartProbe.StdDuration(), Timeout: c.HeartProbe.StdDuration() * 3, PermitWithoutStream: true}))
 	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(int(c.MaxMsgLen))))
 	//balancer
