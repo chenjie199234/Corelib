@@ -40,7 +40,7 @@ type ServerConfig struct {
 	//default 500ms
 	ConnectTimeout ctime.Duration `json:"connnect_timeout"`
 	//min 1s,default 1s,3 probe missing means disconnect
-	HeartPorbe ctime.Duration `json:"heart_probe"`
+	HeartProbe ctime.Duration `json:"heart_probe"`
 	//min 64k,default 64M
 	MaxMsgLen uint32 `json:"max_msg_len"`
 }
@@ -49,8 +49,8 @@ func (c *ServerConfig) validate() {
 	if c.ConnectTimeout <= 0 {
 		c.ConnectTimeout = ctime.Duration(500 * time.Millisecond)
 	}
-	if c.HeartPorbe.StdDuration() < time.Second {
-		c.HeartPorbe = ctime.Duration(time.Second)
+	if c.HeartProbe.StdDuration() < time.Second {
+		c.HeartProbe = ctime.Duration(time.Second)
 	}
 	if c.MaxMsgLen == 0 {
 		c.MaxMsgLen = 1024 * 1024 * 64
@@ -117,7 +117,7 @@ func NewCGrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tls
 		return cerror.ErrNoapi
 	}))
 	opts = append(opts, grpc.ConnectionTimeout(c.ConnectTimeout.StdDuration()))
-	opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{Time: c.HeartPorbe.StdDuration(), Timeout: c.HeartPorbe.StdDuration() * 3}))
+	opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{Time: c.HeartProbe.StdDuration(), Timeout: c.HeartProbe.StdDuration() * 3}))
 	opts = append(opts, grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: time.Millisecond * 999, PermitWithoutStream: true}))
 	if tlsc != nil {
 		opts = append(opts, grpc.Creds(credentials.NewTLS(tlsc)))

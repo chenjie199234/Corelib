@@ -35,7 +35,7 @@ type ServerConfig struct {
 	//default 500ms
 	ConnectTimeout ctime.Duration `json:"connnect_timeout"`
 	//min 1s,default 1s,3 probe missing means disconnect
-	HeartPorbe ctime.Duration `json:"heart_probe"`
+	HeartProbe ctime.Duration `json:"heart_probe"`
 	//min 64k,default 64M
 	MaxMsgLen uint32 `json:"max_msg_len"`
 }
@@ -78,7 +78,7 @@ func NewCrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tlsc
 		stop:           graceful.New(),
 	}
 	instancec := &stream.InstanceConfig{
-		HeartprobeInterval: c.HeartPorbe.StdDuration(),
+		HeartprobeInterval: c.HeartProbe.StdDuration(),
 		TcpC: &stream.TcpConfig{
 			ConnectTimeout: c.ConnectTimeout.StdDuration(),
 			MaxMsgLen:      c.MaxMsgLen,

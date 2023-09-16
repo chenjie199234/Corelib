@@ -239,12 +239,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chenjie199234/Corelib/cgrpc"
+	"github.com/chenjie199234/Corelib/crpc"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/mongo"
 	"github.com/chenjie199234/Corelib/mysql"
 	"github.com/chenjie199234/Corelib/redis"
-	"github.com/chenjie199234/Corelib/cgrpc"
-	"github.com/chenjie199234/Corelib/crpc"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 )
@@ -432,9 +432,11 @@ func initsource() {
 func initgrpcserver() {
 	if sc.CGrpcServer == nil {
 		sc.CGrpcServer = &CGrpcServerConfig{
-			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
-			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-			HeartProbe:     ctime.Duration(time.Second * 5),
+			ServerConfig: &cgrpc.ServerConfig{
+				ConnectTimeout: ctime.Duration(time.Millisecond * 500),
+				GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
+				HeartProbe:     ctime.Duration(time.Second * 5),
+			},
 		}
 	} else {
 		if sc.CGrpcServer.ConnectTimeout <= 0 {
@@ -451,9 +453,11 @@ func initgrpcserver() {
 func initgrpcclient() {
 	if sc.CGrpcClient == nil {
 		sc.CGrpcClient = &CGrpcClientConfig{
-			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
-			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-			HeartProbe:     ctime.Duration(time.Second* 5),
+			ClientConfig: &cgrpc.ClientConfig{
+				ConnectTimeout: ctime.Duration(time.Millisecond * 500),
+				GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
+				HeartProbe:     ctime.Duration(time.Second* 5),
+			},
 		}
 	} else {
 		if sc.CGrpcClient.ConnectTimeout <= 0 {
@@ -470,9 +474,11 @@ func initgrpcclient() {
 func initcrpcserver() {
 	if sc.CrpcServer == nil {
 		sc.CrpcServer = &CrpcServerConfig{
-			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
-			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-			HeartProbe:     ctime.Duration(time.Second * 5),
+			ServerConfig: &crpc.ServerConfig{
+				ConnectTimeout: ctime.Duration(time.Millisecond * 500),
+				GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
+				HeartProbe:     ctime.Duration(time.Second * 5),
+			},
 		}
 	} else {
 		if sc.CrpcServer.ConnectTimeout <= 0 {
@@ -489,9 +495,11 @@ func initcrpcserver() {
 func initcrpcclient() {
 	if sc.CrpcClient == nil {
 		sc.CrpcClient = &CrpcClientConfig{
-			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
-			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-			HeartProbe:     ctime.Duration(time.Second * 5),
+			ClientConfig: &crpc.ClientConfig{
+				ConnectTimeout: ctime.Duration(time.Millisecond * 500),
+				GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
+				HeartProbe:     ctime.Duration(time.Second * 5),
+			},
 		}
 	} else {
 		if sc.CrpcClient.ConnectTimeout <= 0 {
