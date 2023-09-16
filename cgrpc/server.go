@@ -38,7 +38,7 @@ type ServerConfig struct {
 	GlobalTimeout ctime.Duration `json:"global_timeout"`
 	//time for connection establish(include dial time,handshake time and verify time)
 	//default 500ms
-	ConnectTimeout ctime.Duration `json:"connnect_timeout"`
+	ConnectTimeout ctime.Duration `json:"connect_timeout"`
 	//min 1s,default 1s,3 probe missing means disconnect
 	HeartProbe ctime.Duration `json:"heart_probe"`
 	//min 64k,default 64M
