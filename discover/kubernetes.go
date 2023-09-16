@@ -52,7 +52,6 @@ func initKubernetesClient() {
 	}
 }
 
-// TODO WIP
 func NewKubernetesDiscover(targetproject, targetgroup, targetapp, namespace, labelselector string, crpcport, cgrpcport, webport int) (DI, error) {
 	targetfullname, e := name.MakeFullName(targetproject, targetgroup, targetapp)
 	if e != nil {

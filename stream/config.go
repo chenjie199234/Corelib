@@ -41,8 +41,11 @@ type HandleUserdataFunc func(p *Peer, userdata []byte)
 type HandleOfflineFunc func(p *Peer)
 
 type TcpConfig struct {
-	ConnectTimeout time.Duration //default 500ms,//include connect time,handshake time and verify time
-	MaxMsgLen      uint32        //default 64M,min 64k
+	//time for connection establish(include dial time,handshake time and verify time)
+	//default 500ms
+	ConnectTimeout time.Duration
+	//min 64k,default 64M
+	MaxMsgLen uint32
 }
 
 var defaultTcpConfig = &TcpConfig{
@@ -80,18 +83,22 @@ func (c *TcpServerOnlyConfig) validate() {
 
 type InstanceConfig struct {
 	//3 probe missing means disconnect
-	HeartprobeInterval time.Duration //default 1s
-	//only reveice heartbeat msg and no more userdata msg is idle
+	//min 1s,default 1s
+	HeartprobeInterval time.Duration
+	//recv idle means no userdata msg received
+	//every userdata msg will refresh the timeout(only userdata msg)
 	//0 means no idle timeout
-	//every userdata msg will recycle the timeout
+	//default 0
 	RecvIdleTimeout time.Duration
-	//if this is not 0,this must > HeartprobeInterval,this is useful for slow read attact
-	SendIdleTimeout time.Duration //default HeartprobeInterval * 1.5
+	//every msg's send will refresh the timeout(all kind of msg)
+	//min HeartprobeInterval * 3,default HeartprobeInterval * 3
+	SendIdleTimeout time.Duration
 
 	//split connections into groups
 	//every group will have an independence RWMutex to control online and offline
 	//every group will have an independence goruntine to check nodes' heart timeout in this group
-	GroupNum uint32 //default 1 num
+	//min 1,default 1
+	GroupNum uint32
 
 	//specify the tcp socket connection's config
 	TcpC       *TcpConfig
@@ -118,8 +125,8 @@ func (c *InstanceConfig) validate() {
 	if c.RecvIdleTimeout < 0 {
 		c.RecvIdleTimeout = 0
 	}
-	if c.SendIdleTimeout <= c.HeartprobeInterval {
-		c.SendIdleTimeout = time.Duration(float64(c.HeartprobeInterval) * 1.5)
+	if c.SendIdleTimeout < c.HeartprobeInterval*3 {
+		c.SendIdleTimeout = c.HeartprobeInterval * 3
 	}
 	if c.GroupNum == 0 {
 		c.GroupNum = 1

@@ -16,7 +16,8 @@ const (
 	_RSV3            = 0b00010000
 	_RSV2            = 0b00100000
 	_RSV1            = 0b01000000
-	_FIN_MASK        = 0b10000000
+	_FIN             = 0b10000000
+	_MASK            = 0b10000000
 )
 
 func (op OPCode) IsPing() bool {
@@ -36,6 +37,7 @@ var ErrNotWS = errors.New("not a websocket connection")
 var ErrRequestLineFormat = errors.New("http request line format wrong")
 var ErrResponseLineFormat = errors.New("http response line format wrong")
 var ErrHttpVersion = errors.New("http version wrong")
+var ErrHttpMethod = errors.New("http method wrong")
 var ErrHeaderLineFormat = errors.New("http header line format wrong")
 var ErrSign = errors.New("sign error")
 

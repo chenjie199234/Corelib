@@ -28,7 +28,7 @@ func Test_Wsclient(t *testing.T) {
 				UserdataFunc: tcpclienthandleuserdata,
 				OfflineFunc:  tcpclienthandleoffline,
 			})
-			tcpclientinstance.StartClient("ws://127.0.0.1:9234", []byte{'t', 'e', 's', 't', 'c'}, nil)
+			tcpclientinstance.StartClient("127.0.0.1:9234", true, []byte{'t', 'e', 's', 't', 'c'}, nil)
 			time.Sleep(time.Millisecond)
 		}
 	}()

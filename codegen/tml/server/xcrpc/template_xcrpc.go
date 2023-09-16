@@ -8,6 +8,7 @@ import (
 const txt = `package xcrpc
 
 import (
+	"crypto/tls"
 	"strings"
 	"time"
 
@@ -27,14 +28,21 @@ var s *crpc.CrpcServer
 // StartCrpcServer -
 func StartCrpcServer() {
 	c := config.GetCrpcServerConfig()
-	crpcc := &crpc.ServerConfig{
-		ConnectTimeout: time.Duration(c.ConnectTimeout),
-		GlobalTimeout:  time.Duration(c.GlobalTimeout),
-		HeartPorbe:     time.Duration(c.HeartProbe),
-		Certs:          c.Certs,
+	var tlsc *tls.Config
+	if len(c.Certs) > 0 {
+		certificates := make([]tls.Certificate, 0, len(c.Certs))
+		for cert, key := range c.Certs {
+			temp, e := tls.LoadX509KeyPair(cert, key)
+			if e != nil {
+				log.Error(nil, "[xcrpc] load cert failed:",map[string]interface{}{"cert": cert, "key": key, "error": e})
+				return 
+			}
+			certificates = append(certificates, temp)
+		}
+		tlsc = &tls.Config{Certificates: certificates}
 	}
 	var e error
-	if s, e = crpc.NewCrpcServer(crpcc, model.Project, model.Group, model.Name); e != nil {
+	if s, e = crpc.NewCrpcServer(c.ServerConfig, model.Project, model.Group, model.Name, tlsc); e != nil {
 		log.Error(nil, "[xcrpc] new server failed", map[string]interface{}{"error": e})
 		return
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
@@ -33,18 +34,26 @@ import (
 )
 
 type ClientConfig struct {
-	GlobalTimeout  time.Duration //global timeout for every rpc call,<=0 means no timeout
-	ConnectTimeout time.Duration //default 500ms
-	HeartProbe     time.Duration //default 10s,min 10s
-	MaxMsgLen      uint32        //default 64M,min 64k
+	//the default timeout for every rpc call,<=0 means no timeout
+	//if ctx's Deadline exist and GlobalTimeout > 0,the min(time.Now().Add(GlobalTimeout) ,ctx.Deadline()) will be used as the final deadline
+	//if ctx's Deadline not exist and GlobalTimeout > 0 ,the time.Now().Add(GlobalTimeout) will be used as the final deadline
+	//if ctx's deadline not exist and GlobalTimeout <=0,means no deadline
+	GlobalTimeout ctime.Duration `json:"global_timeout"`
+	//time for connection establich(include dial time,handshake time and verify time)
+	//default 500ms
+	ConnectTimeout ctime.Duration `json:"connect_timeout"`
+	//min 1s,default 1s,3 probe missing means disconnect
+	HeartProbe ctime.Duration `json:"heart_probe"`
+	//min 64k,default 64M
+	MaxMsgLen uint32 `json:"max_msg_len"`
 }
 
 func (c *ClientConfig) validate() {
 	if c.ConnectTimeout <= 0 {
-		c.ConnectTimeout = time.Millisecond * 500
+		c.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
 	}
-	if c.HeartProbe < time.Second*10 {
-		c.HeartProbe = time.Second * 10
+	if c.HeartProbe.StdDuration() < time.Second {
+		c.HeartProbe = ctime.Duration(time.Second)
 	}
 	if c.MaxMsgLen == 0 {
 		c.MaxMsgLen = 1024 * 1024 * 64
@@ -104,13 +113,13 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(client.tlsc)))
 	}
 	opts = append(opts, grpc.WithConnectParams(grpc.ConnectParams{
-		MinConnectTimeout: c.ConnectTimeout,
+		MinConnectTimeout: c.ConnectTimeout.StdDuration(),
 		Backoff: backoff.Config{
 			BaseDelay: time.Millisecond * 100,
 			MaxDelay:  time.Millisecond * 100,
 		}, //reconnect immediately when disconnect,reconnect delay 100ms when connect failed
 	}))
-	opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{Time: c.HeartProbe, Timeout: c.HeartProbe*3 + c.HeartProbe/3}))
+	opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{Time: c.HeartProbe.StdDuration(), Timeout: c.HeartProbe.StdDuration() * 3, PermitWithoutStream: true}))
 	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(int(c.MaxMsgLen))))
 	//balancer
 	balancer.Register(&balancerBuilder{c: client})
@@ -162,7 +171,7 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 	defer c.stop.DoneOne()
 	if c.c.GlobalTimeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout))
+		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
 		defer cancel()
 	}
 	md := gmetadata.New(nil)
@@ -242,7 +251,7 @@ func transGrpcError(e error) *cerror.Error {
 	case codes.DataLoss:
 		return cerror.MakeError(-1, http.StatusNotFound, s.Message())
 	case codes.Unauthenticated:
-		return cerror.MakeError(-1, http.StatusServiceUnavailable, s.Message())
+		return cerror.MakeError(-1, http.StatusUnauthorized, s.Message())
 	default:
 		ee := cerror.ConvertErrorstr(s.Message())
 		ee.SetHttpcode(int32(s.Code()))

@@ -70,20 +70,12 @@ func UpdateAPI(ac *config.AppConfig) {
 
 func GetCGrpcClientConfig() *cgrpc.ClientConfig {
 	gc := config.GetCGrpcClientConfig()
-	return &cgrpc.ClientConfig{
-		ConnectTimeout:   time.Duration(gc.ConnectTimeout),
-		GlobalTimeout:    time.Duration(gc.GlobalTimeout),
-		HeartProbe:       time.Duration(gc.HeartProbe),
-	}
+	return gc.ClientConfig
 }
 
 func GetCrpcClientConfig() *crpc.ClientConfig {
 	rc := config.GetCrpcClientConfig()
-	return &crpc.ClientConfig{
-		ConnectTimeout:   time.Duration(rc.ConnectTimeout),
-		GlobalTimeout:    time.Duration(rc.GlobalTimeout),
-		HeartProbe:       time.Duration(rc.HeartProbe),
-	}
+	return rc.ClientConfig
 }
 
 func GetWebClientConfig() *web.ClientConfig {

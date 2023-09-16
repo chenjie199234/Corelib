@@ -56,11 +56,11 @@ func Test_Client(t *testing.T) {
 			time.Sleep(time.Second)
 			data := []byte("123456789abcdefg")
 			for len(data) > 0 {
-				if e := WriteMsg(conn, data[:1], len(data) == 1, len(data) == 9, true); e != nil {
-					panic("write msg error:" + e.Error())
-				}
 				if e := WritePing(conn, []byte("client ping"), true); e != nil {
 					panic("write ping error:" + e.Error())
+				}
+				if e := WriteMsg(conn, data[:1], len(data) == 1, len(data) == 15, true); e != nil {
+					panic("write msg error:" + e.Error())
 				}
 				data = data[1:]
 			}

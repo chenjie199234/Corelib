@@ -7,7 +7,6 @@ import (
 	"errors"
 	"math"
 	"net"
-	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -19,15 +18,19 @@ import (
 
 var ErrServerClosed = errors.New("[Stream.server] closed")
 
-// 1.one addr can both support raw tcp or websocket connections
-// 2.websocket's 'host','path','origin' etc which from http will be ignored
-// 3.both raw tcp or websocket use websocket's data frame format to communicate with the client
-// 4.if tlsc is not nil,tls handshake is required
-// 5.websocket need websocket's handshake,raw tcp doesn't need
-// 6.message can be masked or not masked,both can be supported
+// listenaddr: host:port or ip:port
+// 1.one addr can both support raw tcp and websocket connections
+// 2.websocket's 'host','path','origin' etc which from http will be ignored,works just like a raw tcp connection
+// 3.both raw tcp and websocket use websocket's data frame format to communicate with the client
+// 4.websocket need websocket's handshake,raw tcp doesn't need
+// 5.client's message can be masked or not masked,both can be supported
+// 6.if tlsc is not nil,the tls will be actived
 func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
-	if tlsc != nil && len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
-		return errors.New("[Stream.StartServer] tls certificate setting missing")
+	if tlsc != nil {
+		if len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
+			return errors.New("[Stream.StartServer] tls certificate setting missing")
+		}
+		tlsc = tlsc.Clone()
 	}
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
@@ -160,7 +163,6 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 			if len(serververifydata) > maxPieceLen {
 				data = serververifydata[:maxPieceLen]
 				serververifydata = serververifydata[maxPieceLen:]
-
 			} else {
 				data = serververifydata
 				serververifydata = nil
@@ -198,42 +200,29 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 	return
 }
 
-// 1.raw tcp client,serveraddr's format is [tcp/tcps]://[host/ip]:port
-// 2.websocket client,serveraddr's format is [ws/wss]://[host/ip]:port/path
-// 3.both raw tcp or websocket use websocket's data frame format to communicate with the server
-// 4.if tlsc is not nil,tls handshake is required
-// 5.websocket need websocket's handshake,raw tcp doesn't need
-// 6.message can be masked or not masked,both can be supported
-func (this *Instance) StartClient(serveraddr string, verifydata []byte, tlsc *tls.Config) bool {
+// serveraddr: host:port or ip:port
+// 1.both raw tcp and websocket use websocket's data frame format to communicate with the server
+// 2.if tlsc is not nil,the tls will be actived
+func (this *Instance) StartClient(serveraddr string, websocket bool, verifydata []byte, tlsc *tls.Config) bool {
 	if 4+uint64(len(verifydata)) > uint64(math.MaxUint32) {
 		log.Error(nil, "[Stream.StartClient] client verify data too large", nil)
 		return false
 	}
-	u, e := url.Parse(serveraddr)
-	if e != nil {
-		log.Error(nil, "[Stream.StartClient] serveraddr format wrong,should be [tcp/tcps]://[host/ip]:port or [ws/wss]://[host/ip]:port/path", map[string]interface{}{"sip": serveraddr, "error": e})
-		return false
-	}
-	if u.Scheme != "tcp" && u.Scheme != "tcps" && u.Scheme != "ws" && u.Scheme != "wss" {
-		log.Error(nil, "[Stream.StartClient] unknown scheme,should be tcp/tcps/ws/wss", map[string]interface{}{"sip": serveraddr})
-		return false
-	}
-	if (u.Scheme == "tcps" || u.Scheme == "wss") && tlsc == nil {
-		tlsc = &tls.Config{}
+	if tlsc != nil {
+		tlsc = tlsc.Clone()
+		if tlsc.ServerName == "" {
+			if index := strings.LastIndex(serveraddr, ":"); index == -1 {
+				tlsc.ServerName = serveraddr
+			} else {
+				tlsc.ServerName = serveraddr[:index]
+			}
+		}
 	}
 	if this.mng.Finishing() {
 		return false
 	}
-	if tlsc != nil && tlsc.ServerName == "" {
-		tlsc = tlsc.Clone()
-		if index := strings.LastIndex(u.Host, ":"); index == -1 {
-			tlsc.ServerName = u.Host
-		} else {
-			tlsc.ServerName = u.Host[:index]
-		}
-	}
 	dl := time.Now().Add(this.c.TcpC.ConnectTimeout)
-	conn, e := (&net.Dialer{Deadline: dl}).Dial("tcp", u.Host)
+	conn, e := (&net.Dialer{Deadline: dl}).Dial("tcp", serveraddr)
 	if e != nil {
 		log.Error(nil, "[Stream.StartClient] dial failed", map[string]interface{}{"sip": serveraddr, "error": e})
 		return false
@@ -241,8 +230,8 @@ func (this *Instance) StartClient(serveraddr string, verifydata []byte, tlsc *tl
 	//disable system's keep alive probe
 	//use self's heartbeat probe
 	(conn.(*net.TCPConn)).SetKeepAlive(false)
-	p := newPeer(this.c.TcpC.MaxMsgLen, _PEER_SERVER, u.Host)
-	if u.Scheme == "tcps" || u.Scheme == "wss" {
+	p := newPeer(this.c.TcpC.MaxMsgLen, _PEER_SERVER, serveraddr)
+	if tlsc != nil {
 		p.c = tls.Client(conn, tlsc)
 	} else {
 		p.c = conn
@@ -251,7 +240,7 @@ func (this *Instance) StartClient(serveraddr string, verifydata []byte, tlsc *tl
 	p.c.SetDeadline(dl)
 	ctx, cancel := context.WithDeadline(p, dl)
 	defer cancel()
-	if u.Scheme == "tcps" || u.Scheme == "wss" {
+	if tlsc != nil {
 		//tls handshake
 		if e := p.c.(*tls.Conn).HandshakeContext(ctx); e != nil {
 			log.Error(nil, "[Stream.StartClient] tls handshake failed", map[string]interface{}{"sip": serveraddr, "error": e})
@@ -261,9 +250,9 @@ func (this *Instance) StartClient(serveraddr string, verifydata []byte, tlsc *tl
 			return false
 		}
 	}
-	if u.Scheme == "ws" || u.Scheme == "wss" {
+	if websocket {
 		//websocket handshake
-		header, e := ws.Cupgrade(p.cr, p.c, u.Host, u.Path)
+		header, e := ws.Cupgrade(p.cr, p.c, serveraddr, "/")
 		if e != nil {
 			log.Error(nil, "[Stream.StartClient] upgrade websocket failed", map[string]interface{}{"sip": serveraddr, "error": e})
 			p.c.Close()

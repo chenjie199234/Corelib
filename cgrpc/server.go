@@ -18,8 +18,10 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -30,19 +32,25 @@ import (
 type OutsideHandler func(*Context)
 
 type ServerConfig struct {
-	GlobalTimeout  time.Duration     //global timeout for every rpc call,<=0 means no timeout
-	ConnectTimeout time.Duration     //default 500ms
-	HeartPorbe     time.Duration     //default 10s,min 10s
-	MaxMsgLen      uint32            //default 64M,min 64k
-	Certs          map[string]string //mapkey: cert path,mapvalue: key path
+	//the default timeout for every rpc call,<=0 means no timeout
+	//if specific path's timeout setted by UpdateHandlerTimeout,this specific path will ignore the GlobalTimeout
+	//the client's deadline will also effect the rpc call's final deadline
+	GlobalTimeout ctime.Duration `json:"global_timeout"`
+	//time for connection establish(include dial time,handshake time and verify time)
+	//default 500ms
+	ConnectTimeout ctime.Duration `json:"connnect_timeout"`
+	//min 1s,default 1s,3 probe missing means disconnect
+	HeartPorbe ctime.Duration `json:"heart_probe"`
+	//min 64k,default 64M
+	MaxMsgLen uint32 `json:"max_msg_len"`
 }
 
 func (c *ServerConfig) validate() {
 	if c.ConnectTimeout <= 0 {
-		c.ConnectTimeout = 500 * time.Millisecond
+		c.ConnectTimeout = ctime.Duration(500 * time.Millisecond)
 	}
-	if c.HeartPorbe < time.Second*10 {
-		c.HeartPorbe = time.Second * 10
+	if c.HeartPorbe.StdDuration() < time.Second {
+		c.HeartPorbe = ctime.Duration(time.Second)
 	}
 	if c.MaxMsgLen == 0 {
 		c.MaxMsgLen = 1024 * 1024 * 64
@@ -63,7 +71,11 @@ type CGrpcServer struct {
 	totalreqnum    int64
 }
 
-func NewCGrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string) (*CGrpcServer, error) {
+// if tlsc is not nil,the tls will be actived
+func NewCGrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tlsc *tls.Config) (*CGrpcServer, error) {
+	if tlsc != nil && len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
+		return nil, errors.New("[cgrpc.NewCGrpcServer] tls certificate setting missing")
+	}
 	//pre check
 	selffullname, e := name.MakeFullName(selfproject, selfgroup, selfapp)
 	if e != nil {
@@ -104,20 +116,11 @@ func NewCGrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string) (*C
 		log.Error(nil, "[cgrpc.server] path doesn't exist", map[string]interface{}{"cip": peerip, "path": rpcinfo.FullMethodName})
 		return cerror.ErrNoapi
 	}))
-	if c.ConnectTimeout != 0 {
-		opts = append(opts, grpc.ConnectionTimeout(c.ConnectTimeout))
-	}
-	opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{Time: c.HeartPorbe, Timeout: c.HeartPorbe*3 + c.HeartPorbe/3}))
-	if len(c.Certs) > 0 {
-		certificates := make([]tls.Certificate, 0, len(c.Certs))
-		for cert, key := range c.Certs {
-			temp, e := tls.LoadX509KeyPair(cert, key)
-			if e != nil {
-				return nil, errors.New("[cgrpc.server] load cert: " + cert + " key: " + key + " " + e.Error())
-			}
-			certificates = append(certificates, temp)
-		}
-		opts = append(opts, grpc.Creds(credentials.NewTLS(&tls.Config{Certificates: certificates})))
+	opts = append(opts, grpc.ConnectionTimeout(c.ConnectTimeout.StdDuration()))
+	opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{Time: c.HeartPorbe.StdDuration(), Timeout: c.HeartPorbe.StdDuration() * 3}))
+	opts = append(opts, grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: time.Millisecond * 999, PermitWithoutStream: true}))
+	if tlsc != nil {
+		opts = append(opts, grpc.Creds(credentials.NewTLS(tlsc)))
 	}
 	serverinstance.server = grpc.NewServer(opts...)
 	return serverinstance, nil
@@ -173,7 +176,7 @@ func (this *CGrpcServer) getHandlerTimeout(path string) time.Duration {
 	if t, ok := this.handlerTimeout[path]; ok {
 		return t
 	}
-	return this.c.GlobalTimeout
+	return this.c.GlobalTimeout.StdDuration()
 }
 
 // thread unsafe

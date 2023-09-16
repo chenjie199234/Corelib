@@ -34,7 +34,7 @@ func decodeFirstSecond(reader *bufio.Reader) (fin, rsv1, rsv2, rsv3 bool, opcode
 	if e != nil {
 		return
 	}
-	if b&_FIN_MASK > 0 {
+	if b&_FIN > 0 {
 		fin = true
 	}
 	if b&_RSV1 > 0 {
@@ -57,7 +57,7 @@ func decodeFirstSecond(reader *bufio.Reader) (fin, rsv1, rsv2, rsv3 bool, opcode
 		return
 	}
 	b, e = reader.ReadByte()
-	if b&_FIN_MASK > 0 {
+	if b&_MASK > 0 {
 		mask = true
 	}
 	payloadlen = uint32(b & 0b01111111)
@@ -147,7 +147,8 @@ func Read(reader *bufio.Reader, msgbuf *pool.Buffer, maxmsglen uint32, ctlbuf *p
 				return opcode, nil
 			}
 			continue
-		} else if opcode.IsControl() {
+		}
+		if opcode.IsControl() {
 			var maskkey *pool.Buffer
 			if mask {
 				maskkey = pool.GetBuffer()
@@ -181,7 +182,7 @@ func Read(reader *bufio.Reader, msgbuf *pool.Buffer, maxmsglen uint32, ctlbuf *p
 		}
 		ctlbuf.Reset()
 		if fin {
-			return 0, nil
+			return _BINARY, nil
 		}
 	}
 }

@@ -16,26 +16,34 @@ import (
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
+
 	"google.golang.org/protobuf/proto"
 )
 
 type OutsideHandler func(*Context)
 
 type ServerConfig struct {
-	GlobalTimeout  time.Duration     //global timeout for every rpc call,<=0 means no timeout
-	ConnectTimeout time.Duration     //default 500ms
-	HeartPorbe     time.Duration     //default 1s,3 probe missing means disconnect
-	MaxMsgLen      uint32            //default 64M,min 64k
-	Certs          map[string]string //mapkey: cert path,mapvalue: key path
+	//the default timeout for every rpc call,<=0 means no timeout
+	//if specific path's timeout setted by UpdateHandlerTimeout,this specific path will ignore the GlobalTimeout
+	//the client's deadline will also effect the rpc call's final deadline
+	GlobalTimeout ctime.Duration `json:"global_timeout"`
+	//time for connection establish(include dial time,handshake time and verify time)
+	//default 500ms
+	ConnectTimeout ctime.Duration `json:"connnect_timeout"`
+	//min 1s,default 1s,3 probe missing means disconnect
+	HeartPorbe ctime.Duration `json:"heart_probe"`
+	//min 64k,default 64M
+	MaxMsgLen uint32 `json:"max_msg_len"`
 }
 
 type CrpcServer struct {
 	c              *ServerConfig
-	self           string
 	tlsc           *tls.Config
+	self           string
 	global         []OutsideHandler
 	ctxpool        *sync.Pool
 	handler        map[string]func(context.Context, *stream.Peer, *Msg)
@@ -49,7 +57,8 @@ type client struct {
 	calls     map[uint64]context.CancelFunc
 }
 
-func NewCrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string) (*CrpcServer, error) {
+// if tlsc is not nil,the tls will be actived
+func NewCrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tlsc *tls.Config) (*CrpcServer, error) {
 	//pre check
 	selffullname, e := name.MakeFullName(selfproject, selfgroup, selfapp)
 	if e != nil {
@@ -60,6 +69,7 @@ func NewCrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string) (*Cr
 	}
 	serverinstance := &CrpcServer{
 		c:              c,
+		tlsc:           tlsc,
 		self:           selffullname,
 		global:         make([]OutsideHandler, 0, 10),
 		ctxpool:        &sync.Pool{},
@@ -67,21 +77,10 @@ func NewCrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string) (*Cr
 		handlerTimeout: make(map[string]time.Duration),
 		stop:           graceful.New(),
 	}
-	if len(c.Certs) != 0 {
-		certificates := make([]tls.Certificate, 0, len(c.Certs))
-		for cert, key := range c.Certs {
-			temp, e := tls.LoadX509KeyPair(cert, key)
-			if e != nil {
-				return nil, errors.New("[crpc.server] load cert:" + cert + " key:" + key + " " + e.Error())
-			}
-			certificates = append(certificates, temp)
-		}
-		serverinstance.tlsc = &tls.Config{Certificates: certificates}
-	}
 	instancec := &stream.InstanceConfig{
-		HeartprobeInterval: c.HeartPorbe,
+		HeartprobeInterval: c.HeartPorbe.StdDuration(),
 		TcpC: &stream.TcpConfig{
-			ConnectTimeout: c.ConnectTimeout,
+			ConnectTimeout: c.ConnectTimeout.StdDuration(),
 			MaxMsgLen:      c.MaxMsgLen,
 		},
 	}
@@ -152,7 +151,7 @@ func (this *CrpcServer) getHandlerTimeout(path string) time.Duration {
 	if t, ok := this.handlerTimeout[path]; ok {
 		return t
 	}
-	return this.c.GlobalTimeout
+	return this.c.GlobalTimeout.StdDuration()
 }
 
 // thread unsafe

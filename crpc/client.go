@@ -17,17 +17,27 @@ import (
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
+
 	"google.golang.org/protobuf/proto"
 )
 
 type ClientConfig struct {
-	GlobalTimeout  time.Duration //global timeout for every rpc call,<=0 means no timeout
-	ConnectTimeout time.Duration //default 500ms
-	HeartProbe     time.Duration //default 1s,3 probe missing means disconnect
-	MaxMsgLen      uint32        //default 64M,min 64k
+	//the default timeout for every rpc call,<=0 means no timeout
+	//if ctx's Deadline exist and GlobalTimeout > 0,the min(time.Now().Add(GlobalTimeout) ,ctx.Deadline()) will be used as the final deadline
+	//if ctx's Deadline not exist and GlobalTimeout > 0 ,the time.Now().Add(GlobalTimeout) will be used as the final deadline
+	//if ctx's deadline not exist and GlobalTimeout <=0,means no deadline
+	GlobalTimeout ctime.Duration `json:"global_timeout"`
+	//time for connection establich(include dial time,handshake time and verify time)
+	//default 500ms
+	ConnectTimeout ctime.Duration `json:"connect_timeout"`
+	//min 1s,default 1s,3 probe missing means disconnect
+	HeartProbe ctime.Duration `json:"heart_probe"`
+	//min 64k,default 64M
+	MaxMsgLen uint32 `json:"max_msg_len"`
 }
 
 type CrpcClient struct {
@@ -79,9 +89,9 @@ func NewCrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfa
 	client.balancer = newCorelibBalancer(client)
 	client.resolver = resolver.NewCorelibResolver(client.balancer, client.discover, discover.Crpc)
 	instancec := &stream.InstanceConfig{
-		HeartprobeInterval: c.HeartProbe,
+		HeartprobeInterval: c.HeartProbe.StdDuration(),
 		TcpC: &stream.TcpConfig{
-			ConnectTimeout: c.ConnectTimeout,
+			ConnectTimeout: c.ConnectTimeout.StdDuration(),
 			MaxMsgLen:      c.MaxMsgLen,
 		},
 	}
@@ -123,13 +133,7 @@ func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 		//can't reconnect to server
 		return
 	}
-	var addr string
-	if c.tlsc != nil {
-		addr = "tcps://" + server.addr
-	} else {
-		addr = "tcp://" + server.addr
-	}
-	if !c.instance.StartClient(addr, common.Str2byte(c.server), c.tlsc) {
+	if !c.instance.StartClient(server.addr, false, common.Str2byte(c.server), c.tlsc) {
 		go c.start(server, true)
 	}
 }
@@ -226,7 +230,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 	}
 	if c.c.GlobalTimeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout))
+		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
 		defer cancel()
 	}
 	if dl, ok := ctx.Deadline(); ok {

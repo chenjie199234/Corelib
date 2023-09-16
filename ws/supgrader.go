@@ -68,6 +68,10 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 				e = ErrRequestLineFormat
 				return
 			}
+			if !bytes.Equal(pieces[0], []byte{'G', 'E', 'T'}) {
+				e = ErrHttpMethod
+				return
+			}
 			if !bytes.Equal(pieces[2], []byte{'H', 'T', 'T', 'P', '/', '1', '.', '1'}) {
 				e = ErrHttpVersion
 				return

@@ -243,6 +243,8 @@ import (
 	"github.com/chenjie199234/Corelib/mongo"
 	"github.com/chenjie199234/Corelib/mysql"
 	"github.com/chenjie199234/Corelib/redis"
+	"github.com/chenjie199234/Corelib/cgrpc"
+	"github.com/chenjie199234/Corelib/crpc"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 )
@@ -262,32 +264,24 @@ type sourceConfig struct {
 
 // CGrpcServerConfig
 type CGrpcServerConfig struct {
-	ConnectTimeout ctime.Duration    $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
-	GlobalTimeout  ctime.Duration    $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
-	HeartProbe     ctime.Duration    $json:"heart_probe"$     //default 5s
-	Certs          map[string]string $json:"certs"$           //key cert path,value private key path,if this is not empty,tls will be used
+	Certs map[string]string $json:"certs"$ //key cert path,value private key path,if this is not empty,tls will be used
+	*cgrpc.ServerConfig
 }
 
 // CGrpcClientConfig
 type CGrpcClientConfig struct {
-	ConnectTimeout ctime.Duration $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
-	GlobalTimeout  ctime.Duration $json:"global_timeout"$  //max time to handle the request,0 means no default timeout
-	HeartProbe     ctime.Duration $json:"heart_probe"$     //default 5s
+	*cgrpc.ClientConfig
 }
 
 // CrpcServerConfig -
 type CrpcServerConfig struct {
-	ConnectTimeout ctime.Duration    $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
-	GlobalTimeout  ctime.Duration    $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
-	HeartProbe     ctime.Duration    $json:"heart_probe"$     //default 5s
-	Certs          map[string]string $json:"certs"$           //key cert path,value private key path,if this is not empty,tls will be used
+	Certs map[string]string $json:"certs"$ //key cert path,value private key path,if this is not empty,tls will be used
+	*crpc.ServerConfig
 }
 
 // CrpcClientConfig -
 type CrpcClientConfig struct {
-	ConnectTimeout ctime.Duration $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
-	GlobalTimeout  ctime.Duration $json:"global_timeout"$  //max time to handle the request,0 means no default timeout
-	HeartProbe     ctime.Duration $json:"heart_probe"$     //default 5s
+	*crpc.ClientConfig
 }
 
 // WebServerConfig -

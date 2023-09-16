@@ -30,9 +30,9 @@ import (
 
 func makeheader(buf *pool.Buffer, fin, firstpiece, mask bool, length uint64, msgtype uint8) (maskkey []byte) {
 	if fin && firstpiece {
-		buf.AppendByte(_FIN_MASK | msgtype)
+		buf.AppendByte(_FIN | msgtype)
 	} else if fin {
-		buf.AppendByte(uint8(_FIN_MASK | _CONTINUE))
+		buf.AppendByte(uint8(_FIN | _CONTINUE))
 	} else if !firstpiece {
 		buf.AppendByte(uint8(_CONTINUE))
 	} else {
@@ -48,7 +48,7 @@ func makeheader(buf *pool.Buffer, fin, firstpiece, mask bool, length uint64, msg
 		payload = 127
 	}
 	if mask {
-		buf.AppendByte(_FIN_MASK | payload)
+		buf.AppendByte(_MASK | payload)
 	} else {
 		buf.AppendByte(payload)
 	}
