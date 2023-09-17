@@ -344,7 +344,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	}
 
 	//Server Register
-	g.P("func Register", serverName, "(engine *", g.QualifiedGoIdent(webPackage.Ident("WebServer")), ",svc ", serverName, ",allmids map[string]", g.QualifiedGoIdent(webPackage.Ident("OutsideHandler")), "){")
+	g.P("func Register", serverName, "(router *", g.QualifiedGoIdent(webPackage.Ident("Router")), ",svc ", serverName, ",allmids map[string]", g.QualifiedGoIdent(webPackage.Ident("OutsideHandler")), "){")
 	g.P("//avoid lint")
 	g.P("_=allmids")
 	for _, method := range service.Methods {
@@ -385,29 +385,29 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("mids = append(mids,", fname, ")")
 			switch httpmetohd {
 			case http.MethodGet:
-				g.P("engine.Get(", pathname, ",mids...)")
+				g.P("router.Get(", pathname, ",mids...)")
 			case http.MethodDelete:
-				g.P("engine.Delete(", pathname, ",mids...)")
+				g.P("router.Delete(", pathname, ",mids...)")
 			case http.MethodPost:
-				g.P("engine.Post(", pathname, ",mids...)")
+				g.P("router.Post(", pathname, ",mids...)")
 			case http.MethodPut:
-				g.P("engine.Put(", pathname, ",mids...)")
+				g.P("router.Put(", pathname, ",mids...)")
 			case http.MethodPatch:
-				g.P("engine.Patch(", pathname, ",mids...)")
+				g.P("router.Patch(", pathname, ",mids...)")
 			}
 			g.P("}")
 		} else {
 			switch httpmetohd {
 			case http.MethodGet:
-				g.P("engine.Get(", pathname, ",", fname, ")")
+				g.P("router.Get(", pathname, ",", fname, ")")
 			case http.MethodDelete:
-				g.P("engine.Delete(", pathname, ",", fname, ")")
+				g.P("router.Delete(", pathname, ",", fname, ")")
 			case http.MethodPost:
-				g.P("engine.Post(", pathname, ",", fname, ")")
+				g.P("router.Post(", pathname, ",", fname, ")")
 			case http.MethodPut:
-				g.P("engine.Put(", pathname, ",", fname, ")")
+				g.P("router.Put(", pathname, ",", fname, ")")
 			case http.MethodPatch:
-				g.P("engine.Patch(", pathname, ",", fname, ")")
+				g.P("router.Patch(", pathname, ",", fname, ")")
 			}
 		}
 	}
