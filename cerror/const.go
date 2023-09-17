@@ -17,6 +17,8 @@ var (
 	ErrClosed          = &Error{Code: 1007, Httpcode: http.StatusInternalServerError, Msg: "connection closed"}
 	ErrReqmsgLen       = &Error{Code: 1008, Httpcode: http.StatusBadRequest, Msg: "req msg too large"}
 	ErrRespmsgLen      = &Error{Code: 1009, Httpcode: http.StatusInternalServerError, Msg: "resp msg too large"}
+
+	ErrCors = &Error{Code: 2001, Httpcode: http.StatusForbidden, Msg: "Cors forbidden"}
 )
 
 // business,start from 10000

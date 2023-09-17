@@ -34,7 +34,7 @@ type ClientConfig struct {
 	//time for connection establich(include dial time,handshake time and verify time)
 	//default 500ms
 	ConnectTimeout ctime.Duration `json:"connect_timeout"`
-	//connection will be closed if it is not actived after this time,<=0 means no idletimeout
+	//connection will be closed if it is not actived after this time,<=0 means no idletimeout,if >0 min is HeartProbe
 	IdleTimeout ctime.Duration `json:"idle_timeout"`
 	//min 1s,default 1s,3 probe missing means disconnect
 	HeartProbe ctime.Duration `json:"heart_probe"`

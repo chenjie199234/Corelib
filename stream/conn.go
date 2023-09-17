@@ -34,7 +34,7 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 	}
 	laddr, e := net.ResolveTCPAddr("tcp", listenaddr)
 	if e != nil {
-		return errors.New("[Stream.StartServer] resolve tcp addr: " + listenaddr + " " + e.Error())
+		return errors.New("[Stream.StartServer] resolve tcp addr: " + listenaddr + " error:" + e.Error())
 	}
 	this.Lock()
 	if this.mng.Finishing() {
@@ -44,7 +44,7 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 	var tmplistener *net.TCPListener
 	if tmplistener, e = net.ListenTCP("tcp", laddr); e != nil {
 		this.Unlock()
-		return errors.New("[Stream.StartServer] listen tcp addr: " + listenaddr + " " + e.Error())
+		return errors.New("[Stream.StartServer] listen tcp addr: " + listenaddr + " error:" + e.Error())
 	}
 	this.listeners = append(this.listeners, tmplistener)
 	this.Unlock()

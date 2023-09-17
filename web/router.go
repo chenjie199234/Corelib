@@ -2,57 +2,35 @@ package web
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"os"
-	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/container/trie"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/graceful"
+	"github.com/chenjie199234/Corelib/util/host"
 )
 
-type router struct {
+type Router struct {
+	s          *WebServer
+	globalmids []OutsideHandler
 	getTree    *trie.Trie[http.HandlerFunc]
 	postTree   *trie.Trie[http.HandlerFunc]
 	putTree    *trie.Trie[http.HandlerFunc]
 	patchTree  *trie.Trie[http.HandlerFunc]
 	deleteTree *trie.Trie[http.HandlerFunc]
-	//first key method,second key old path,value new path
-	rewrite map[string]map[string]string
-	//first key method,second key path,value timeout,value <= 0 means no timeout
-	//first key:'default',second key:'default',the value is the default timeout
-	timeout              map[string]map[string]time.Duration
-	notFoundHandler      http.HandlerFunc
-	srcPermissionHandler http.HandlerFunc
-	optionsHandler       http.HandlerFunc
-	srcroot              fs.FS
-}
-
-func newRouter(srcroot string) *router {
-	r := &router{
-		getTree:    trie.NewTrie[http.HandlerFunc](),
-		postTree:   trie.NewTrie[http.HandlerFunc](),
-		putTree:    trie.NewTrie[http.HandlerFunc](),
-		patchTree:  trie.NewTrie[http.HandlerFunc](),
-		deleteTree: trie.NewTrie[http.HandlerFunc](),
-		rewrite:    make(map[string]map[string]string),
-		timeout:    make(map[string]map[string]time.Duration),
-	}
-	if srcroot != "" {
-		r.srcroot = os.DirFS(srcroot)
-	}
-	return r
-}
-
-func (r *router) UpdateSrcRoot(srcroot string) {
-	if srcroot == "" {
-		r.srcroot = nil
-	} else {
-		r.srcroot = os.DirFS(srcroot)
-	}
+	srcroot    fs.FS
 }
 
 // the first character must be slash(/)
@@ -155,179 +133,406 @@ func cleanPath(origin string) string {
 	return string(buf[:realpos])
 }
 
-func (r *router) Get(path string, handler http.HandlerFunc) {
-	r.getTree.Set(cleanPath(path), handler)
-}
-func (r *router) Post(path string, handler http.HandlerFunc) {
-	r.postTree.Set(cleanPath(path), handler)
-}
-func (r *router) Patch(path string, handler http.HandlerFunc) {
-	r.patchTree.Set(cleanPath(path), handler)
-}
-func (r *router) Put(path string, handler http.HandlerFunc) {
-	r.putTree.Set(cleanPath(path), handler)
-}
-func (r *router) Delete(path string, handler http.HandlerFunc) {
-	r.putTree.Set(cleanPath(path), handler)
+// thread unsafe
+func (r *Router) Use(globalMids ...OutsideHandler) {
+	r.globalmids = append(r.globalmids, globalMids...)
 }
 
-// first key method,second key old path,value new path
-func (r *router) updaterewrite(rewrite map[string]map[string]string) {
-	if rewrite == nil {
-		r.rewrite = make(map[string]map[string]string)
-	} else {
-		r.rewrite = rewrite
+// thread unsafe
+func (r *Router) Get(path string, handlers []OutsideHandler) {
+	path = cleanPath(path)
+	r.getTree.Set(path, r.insideHandler(path, "GET", handlers))
+}
+
+// thread unsafe
+func (r *Router) Post(path string, handlers []OutsideHandler) {
+	path = cleanPath(path)
+	r.postTree.Set(path, r.insideHandler(path, "POST", handlers))
+}
+
+// thread unsafe
+func (r *Router) Patch(path string, handlers []OutsideHandler) {
+	path = cleanPath(path)
+	r.patchTree.Set(path, r.insideHandler(path, "PATCH", handlers))
+}
+
+// thread unsafe
+func (r *Router) Put(path string, handlers []OutsideHandler) {
+	path = cleanPath(path)
+	r.putTree.Set(path, r.insideHandler(path, "PUT", handlers))
+}
+
+// thread unsafe
+func (r *Router) Delete(path string, handlers []OutsideHandler) {
+	path = cleanPath(path)
+	r.putTree.Set(path, r.insideHandler(path, "DELETE", handlers))
+}
+func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) http.HandlerFunc {
+	totalhandlers := make([]OutsideHandler, len(r.globalmids)+len(handlers))
+	copy(totalhandlers, r.globalmids)
+	copy(totalhandlers[len(r.globalmids):], handlers)
+	return func(resp http.ResponseWriter, req *http.Request) {
+		//target
+		if target := req.Header.Get("Core-Target"); target != "" && target != r.s.self {
+			//this is not the required server.tell peer self closed
+			resp.Header().Set("Content-Type", "application/json")
+			resp.WriteHeader(int(cerror.ErrTarget.Httpcode))
+			resp.Write(common.Str2byte(cerror.ErrTarget.Error()))
+			return
+		}
+		//trace
+		var ctx context.Context
+		sourceip := realip(req)
+		sourceapp := "unknown"
+		sourcemethod := "unknown"
+		sourcepath := "unknown"
+		if tracestr := req.Header.Get("Core-Tracedata"); tracestr != "" {
+			tracedata := make(map[string]string)
+			if e := json.Unmarshal(common.Str2byte(tracestr), &tracedata); e != nil {
+				log.Error(nil, "[web.server] tracedata format wrong", map[string]interface{}{"cip": sourceip, "path": path, "method": method, "tracedata": tracestr})
+				resp.Header().Set("Content-Type", "application/json")
+				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
+				resp.Write(common.Str2byte(cerror.ErrReq.Error()))
+				return
+			}
+			if len(tracedata) == 0 || tracedata["TraceID"] == "" {
+				ctx = log.InitTrace(req.Context(), "", r.s.self, host.Hostip, method, path, 0)
+			} else {
+				sourceapp = tracedata["SourceApp"]
+				sourcemethod = tracedata["SourceMethod"]
+				sourcepath = tracedata["SourcePath"]
+				clientdeep, e := strconv.Atoi(tracedata["Deep"])
+				if e != nil || sourceapp == "" || sourcemethod == "" || sourcepath == "" || clientdeep == 0 {
+					log.Error(nil, "[web.server] tracedata format wrong", map[string]interface{}{"cip": sourceip, "path": path, "method": method, "tracedata": tracestr})
+					resp.Header().Set("Content-Type", "application/json")
+					resp.WriteHeader(int(cerror.ErrReq.Httpcode))
+					resp.Write(common.Str2byte(cerror.ErrReq.Error()))
+					return
+				}
+				ctx = log.InitTrace(req.Context(), tracedata["TraceID"], r.s.self, host.Hostip, method, path, clientdeep)
+			}
+		} else {
+			ctx = log.InitTrace(req.Context(), "", r.s.self, host.Hostip, method, path, 0)
+		}
+		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
+		var mdata map[string]string
+		if mdstr := req.Header.Get("Core-Metadata"); mdstr != "" {
+			mdata = make(map[string]string)
+			if e := json.Unmarshal(common.Str2byte(mdstr), &mdata); e != nil {
+				log.Error(ctx, "[web.server] metadata format wrong", map[string]interface{}{"cname": sourceapp, "cip": sourceip, "path": path, "method": method, "metadata": mdstr})
+				resp.Header().Set("Content-Type", "application/json")
+				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
+				resp.Write(common.Str2byte(cerror.ErrReq.Error()))
+				return
+			}
+		}
+		//client timeout
+		if temp := req.Header.Get("Core-Deadline"); temp != "" {
+			clientdl, e := strconv.ParseInt(temp, 10, 64)
+			if e != nil {
+				log.Error(ctx, "[web.server] deadline format wrong", map[string]interface{}{"cname": sourceapp, "cip": sourceip, "path": path, "method": method, "deadline": temp})
+				resp.Header().Set("Content-Type", "application/json")
+				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
+				resp.Write(common.Str2byte(cerror.ErrReq.Error()))
+				return
+			}
+			if clientdl != 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithDeadline(ctx, time.Unix(0, clientdl))
+				defer cancel()
+			}
+		}
+		//check server status
+		if e := r.s.stop.Add(1); e != nil {
+			if r.s.c.WaitCloseMode == 0 {
+				//refresh close wait
+				r.s.closetimer.Reset(r.s.c.WaitCloseTime.StdDuration())
+			}
+			if e == graceful.ErrClosing {
+				//tell peer self closed
+				resp.Header().Set("Content-Type", "application/json")
+				resp.WriteHeader(int(cerror.ErrServerClosing.Httpcode))
+				resp.Write(common.Str2byte(cerror.ErrServerClosing.Error()))
+			} else {
+				//tell peer self busy
+				resp.Header().Set("Content-Type", "application/json")
+				resp.WriteHeader(int(cerror.ErrBusy.Httpcode))
+				resp.Write(common.Str2byte(cerror.ErrBusy.Error()))
+			}
+			return
+		}
+		defer r.s.stop.DoneOne()
+		//logic
+		start := time.Now()
+		workctx := r.s.getContext(resp, req, ctx, sourceapp, mdata, totalhandlers)
+		if _, ok := workctx.metadata["Client-IP"]; !ok {
+			workctx.metadata["Client-IP"] = sourceip
+		}
+		didpanic := true
+		defer func() {
+			if didpanic {
+				if e := recover(); e != nil {
+					stack := make([]byte, 1024)
+					n := runtime.Stack(stack, false)
+					log.Error(workctx, "[web.server] panic", map[string]interface{}{"cname": sourceapp, "cip": sourceip, "path": path, "method": method, "panic": e, "stack": base64.StdEncoding.EncodeToString(stack[:n])})
+					resp.Header().Set("Content-Type", "application/json")
+					resp.WriteHeader(http.StatusInternalServerError)
+					resp.Write(common.Str2byte(cerror.ErrPanic.Error()))
+					workctx.e = cerror.ErrPanic
+				}
+			}
+			end := time.Now()
+			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, r.s.self, host.Hostip+":"+req.Context().Value(localport{}).(string), method, path, &start, &end, workctx.e)
+			monitor.WebServerMonitor(sourceapp, method, path, workctx.e, uint64(end.UnixNano()-start.UnixNano()))
+			r.s.putContext(workctx)
+		}()
+		workctx.run()
+		didpanic = false
 	}
 }
-
-// first key method,second key path,value timeout,value <= 0 means no timeout
-// first key:'default',second key:'default',the value is the default timeout
-func (r *router) updatetimeout(timeout map[string]map[string]time.Duration) {
-	if timeout == nil {
-		r.timeout = make(map[string]map[string]time.Duration)
+func (r *Router) notFoundHandler(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNotFound)
+	w.Write(common.Str2byte(cerror.ErrNotExist.Error()))
+	log.Error(nil, "[web.server] path not exist", map[string]interface{}{"cip": realip(req), "path": req.URL.Path, "method": req.Method})
+}
+func (r *Router) srcFileHandler(resp http.ResponseWriter, req *http.Request) {
+	path := req.URL.Path
+	if path == "/" {
+		path = "/index.html"
+	}
+	if file, e := r.srcroot.Open(path[1:]); e != nil {
+		if os.IsNotExist(e) {
+			resp.Header().Set("Content-Type", "application/json")
+			resp.WriteHeader(int(cerror.ErrNotExist.Httpcode))
+			resp.Write(common.Str2byte(cerror.ErrNotExist.Error()))
+			log.Error(nil, "[web.server] static src file not exist", map[string]interface{}{"cip": realip(req), "path": req.URL.Path, "method": req.Method})
+		} else {
+			resp.Header().Set("Content-Type", "application/json")
+			resp.WriteHeader(int(cerror.ErrSystem.Httpcode))
+			resp.Write(common.Str2byte(cerror.ErrSystem.Error()))
+			log.Error(nil, "[web.server] open static src file failed", map[string]interface{}{"cip": realip(req), "path": req.URL.Path, "method": req.Method, "error": e})
+		}
+	} else if fileinfo, e := file.Stat(); e != nil {
+		resp.Header().Set("Content-Type", "application/json")
+		resp.WriteHeader(int(cerror.ErrSystem.Httpcode))
+		resp.Write(common.Str2byte(cerror.ErrSystem.Error()))
+		log.Error(nil, "[web.server] get static src file info failed", map[string]interface{}{"cip": realip(req), "path": req.URL.Path, "method": req.Method, "error": e})
+		file.Close()
+	} else if !fileinfo.Mode().IsRegular() {
+		resp.Header().Set("Content-Type", "application/json")
+		resp.WriteHeader(int(cerror.ErrNotExist.Httpcode))
+		resp.Write(common.Str2byte(cerror.ErrNotExist.Error()))
+		log.Error(nil, "[web.server] static src file not exist", map[string]interface{}{"cip": realip(req), "path": req.URL.Path, "method": req.Method})
+		file.Close()
 	} else {
-		r.timeout = timeout
+		http.ServeContent(resp, req, fileinfo.Name(), fileinfo.ModTime(), file.(*os.File))
+		file.Close()
 	}
 }
-
-func (r *router) checkrewrite(oldpath, method string) (newpath string, ok bool) {
-	rewrite := r.rewrite
-	paths, ok := rewrite[method]
-	if !ok {
+func (r *Router) corsOptions(resp http.ResponseWriter, req *http.Request) {
+	origin := strings.TrimSpace(req.Header.Get("Origin"))
+	if origin == "" {
+		resp.WriteHeader(http.StatusNoContent)
 		return
 	}
-	newpath, ok = paths[oldpath]
+	resp.Header().Add("Vary", "Origin")
+	for _, v := range r.s.c.CorsAllowedOrigins {
+		if v == "*" {
+			resp.Header().Set("Access-Control-Allow-Origin", "*")
+			break
+		} else if v == origin {
+			resp.Header().Set("Access-Control-Allow-Origin", origin)
+			break
+		} else if strings.Contains(v, "*") {
+			pieces := strings.Split(v, "*")
+			index := 0
+			for _, piece := range pieces {
+				if len(piece) == 0 {
+					continue
+				}
+				i := strings.Index(origin[index:], piece)
+				if i == -1 {
+					break
+				}
+				index += i + len(piece)
+			}
+			if index == len(origin) {
+				resp.Header().Set("Access-Control-Allow-Origin", origin)
+				break
+			}
+		}
+	}
+	if resp.Header().Get("Access-Control-Allow-Origin") == "" {
+		resp.WriteHeader(http.StatusForbidden)
+		log.Error(nil, "[web.server] cors check failed", map[string]interface{}{"cip": realip(req), "path": req.URL.Path, "method": req.Method})
+		return
+	}
+	if r.s.c.CorsAllowCredentials {
+		resp.Header().Set("Access-Control-Allow-Credentials", "true")
+	}
+	resp.Header().Add("Vary", "Access-Control-Request-Method")
+	resp.Header().Add("Vary", "Access-Control-Request-Headers")
+	resp.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+	if len(r.s.c.CorsAllowedHeaders) == 1 && r.s.c.CorsAllowedHeaders[0] == "*" {
+		resp.Header().Set("Access-Control-Allow-Headers", "*")
+	} else if len(r.s.c.CorsAllowedHeaders) > 0 {
+		resp.Header().Set("Access-Control-Allow-Headers", strings.Join(r.s.c.CorsAllowedHeaders, ","))
+	}
+	if r.s.c.CorsMaxAge > 0 {
+		resp.Header().Set("Access-Control-Max-Age", strconv.Itoa(int(r.s.c.CorsMaxAge.StdDuration().Seconds())))
+	}
+	resp.WriteHeader(http.StatusNoContent)
 	return
 }
-func (r *router) checktimeout(path, method string) time.Duration {
-	timeout := r.timeout
-	paths, ok := timeout[method]
-	if !ok {
-		if paths, ok = timeout["default"]; !ok {
-			return 0
-		}
-		if v, ok := paths["default"]; ok {
-			return v
-		}
-		return 0
+func (r *Router) corsNormal(resp http.ResponseWriter, req *http.Request) bool {
+	origin := strings.TrimSpace(req.Header.Get("Origin"))
+	if origin == "" {
+		return true
 	}
-	if v, ok := paths[path]; ok {
-		return v
-	} else if v, ok = paths["default"]; ok {
-		return v
+	resp.Header().Add("Vary", "Origin")
+	for _, v := range r.s.c.CorsAllowedOrigins {
+		if v == "*" {
+			resp.Header().Set("Access-Control-Allow-Origin", "*")
+			break
+		} else if v == origin {
+			resp.Header().Set("Access-Control-Allow-Origin", origin)
+			break
+		} else if strings.Contains(v, "*") {
+			pieces := strings.Split(v, "*")
+			index := 0
+			for _, piece := range pieces {
+				if len(piece) == 0 {
+					continue
+				}
+				i := strings.Index(origin[index:], piece)
+				if i == -1 {
+					break
+				}
+				index += i + len(piece)
+			}
+			if index == len(origin) {
+				resp.Header().Set("Access-Control-Allow-Origin", origin)
+				break
+			}
+		}
 	}
-	return 0
+	if resp.Header().Get("Access-Control-Allow-Origin") == "" {
+		resp.Header().Set("Content-Type", "application/json")
+		resp.WriteHeader(int(cerror.ErrCors.Httpcode))
+		resp.Write(common.Str2byte(cerror.ErrCors.Error()))
+		log.Error(nil, "[web.server] cors check failed", map[string]interface{}{"cip": realip(req), "path": req.URL.Path, "method": req.Method})
+		return false
+	}
+	if r.s.c.CorsAllowCredentials {
+		resp.Header().Set("Access-Control-Allow-Credentials", "true")
+	}
+	if len(r.s.c.CorsExposeHeaders) == 1 && r.s.c.CorsExposeHeaders[0] == "*" {
+		resp.Header().Set("Access-Control-Expose-Headers", "*")
+	} else if len(r.s.c.CorsExposeHeaders) > 0 {
+		resp.Header().Set("Access-Control-Expose-Headers", strings.Join(r.s.c.CorsExposeHeaders, ","))
+	}
+	return true
 }
-func (r *router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
-	if url, ok := r.checkrewrite(req.URL.Path, req.Method); ok {
+
+func (r *Router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	if req.Method == http.MethodOptions {
+		realmethod := strings.ToUpper(req.Header.Get("Access-Control-Request-Method"))
+		if url, ok := r.s.checkRewrite(req.URL.Path, realmethod); ok {
+			req.URL.Path = url
+		}
+		r.corsOptions(resp, req)
+		return
+	}
+	if url, ok := r.s.checkRewrite(req.URL.Path, req.Method); ok {
 		req.URL.Path = url
 	}
-	if timeout := r.checktimeout(req.URL.Path, req.Method); timeout > 0 {
-		ctx, cancel := context.WithTimeout(req.Context(), timeout)
-		defer cancel()
-		req = req.WithContext(ctx)
+	if !r.corsNormal(resp, req) {
+		return
 	}
 	var handler http.HandlerFunc
-	var cleanurl string
-	if req.Method == http.MethodOptions {
-		handler = r.optionsHandler
-	} else {
-		var ok bool
+	var ok bool
+	switch req.Method {
+	case http.MethodGet:
+		handler, ok = r.getTree.Get(req.URL.Path)
+	case http.MethodPost:
+		handler, ok = r.postTree.Get(req.URL.Path)
+	case http.MethodPut:
+		handler, ok = r.putTree.Get(req.URL.Path)
+	case http.MethodPatch:
+		handler, ok = r.patchTree.Get(req.URL.Path)
+	case http.MethodDelete:
+		handler, ok = r.deleteTree.Get(req.URL.Path)
+	}
+	if !ok {
+		req.URL.Path = cleanPath(req.URL.Path)
 		switch req.Method {
 		case http.MethodGet:
-			handler, ok = r.getTree.Get(req.URL.Path)
+			handler, _ = r.getTree.Get(req.URL.Path)
 		case http.MethodPost:
-			handler, ok = r.postTree.Get(req.URL.Path)
+			handler, _ = r.postTree.Get(req.URL.Path)
 		case http.MethodPut:
-			handler, ok = r.putTree.Get(req.URL.Path)
+			handler, _ = r.putTree.Get(req.URL.Path)
 		case http.MethodPatch:
-			handler, ok = r.patchTree.Get(req.URL.Path)
+			handler, _ = r.patchTree.Get(req.URL.Path)
 		case http.MethodDelete:
-			handler, ok = r.deleteTree.Get(req.URL.Path)
-		}
-		if !ok {
-			cleanurl = cleanPath(req.URL.Path)
-			switch req.Method {
-			case http.MethodGet:
-				handler, _ = r.getTree.Get(cleanurl)
-			case http.MethodPost:
-				handler, _ = r.postTree.Get(cleanurl)
-			case http.MethodPut:
-				handler, _ = r.putTree.Get(cleanurl)
-			case http.MethodPatch:
-				handler, _ = r.patchTree.Get(cleanurl)
-			case http.MethodDelete:
-				handler, _ = r.deleteTree.Get(cleanurl)
-			}
+			handler, _ = r.deleteTree.Get(req.URL.Path)
 		}
 	}
-	if handler != nil {
-		handler(resp, req)
-	} else if r.srcroot == nil {
+	if handler == nil && (r.srcroot == nil || req.Method != http.MethodGet) {
 		r.notFoundHandler(resp, req)
-	} else if req.Method != http.MethodGet {
-		r.notFoundHandler(resp, req)
+		return
+	} else if handler == nil {
+		//handler static source file
+		handler = r.srcFileHandler
+	}
+	timeout := r.s.checkTimeout(req.URL.Path, req.Method)
+	if timeout > 0 {
+		http.TimeoutHandler(handler, timeout, cerror.ErrDeadlineExceeded.Error()).ServeHTTP(resp, req)
 	} else {
-		//src root exist,no api handler,the request is GET,try to serve static resource
-		if cleanurl == "/" {
-			cleanurl = "/index.html"
-		}
-		srcroot := r.srcroot
-		file, e := srcroot.Open(cleanurl[1:])
-		if e != nil {
-			if os.IsNotExist(e) {
-				r.notFoundHandler(resp, req)
-			} else {
-				r.srcPermissionHandler(resp, req)
-			}
-		} else if fileinfo, e := file.Stat(); e != nil || !fileinfo.Mode().IsRegular() {
-			r.notFoundHandler(resp, req)
-			file.Close()
-		} else {
-			http.ServeContent(resp, req, filepath.Base(cleanurl), fileinfo.ModTime(), file.(*os.File))
-			file.Close()
-		}
+		handler(resp, req)
 	}
 }
-func (r *router) printPath() {
+func (r *Router) printPath() {
+	rewrite := r.s.rewrite
 	for path := range r.getTree.GetAll() {
-		log.Info(nil, "[web.server] GET: "+path, nil)
+		log.Info(nil, "[web.server] router", map[string]interface{}{"method": "GET", "path": path})
 	}
-	if rewrite, ok := r.rewrite["GET"]; ok {
+	if rewrite, ok := rewrite["GET"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] GET: "+ourl+" => "+nurl, nil)
+			log.Info(nil, "[web.server] router", map[string]interface{}{"method": "GET", "path": nurl, "origin_path": ourl})
 		}
 	}
 	for path := range r.postTree.GetAll() {
-		log.Info(nil, "[web.server] POST: "+path, nil)
+		log.Info(nil, "[web.server] router", map[string]interface{}{"method": "POST", "path": path})
 	}
-	if rewrite, ok := r.rewrite["POST"]; ok {
+	if rewrite, ok := rewrite["POST"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] POST: "+ourl+" => "+nurl, nil)
+			log.Info(nil, "[web.server] router", map[string]interface{}{"method": "POST", "path": nurl, "origin_path": ourl})
 		}
 	}
 	for path := range r.putTree.GetAll() {
-		log.Info(nil, "[web.server] PUT: "+path, nil)
+		log.Info(nil, "[web.server] router", map[string]interface{}{"method": "PUT", "path": path})
 	}
-	if rewrite, ok := r.rewrite["PUT"]; ok {
+	if rewrite, ok := rewrite["PUT"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] PUT: "+ourl+" => "+nurl, nil)
+			log.Info(nil, "[web.server] router", map[string]interface{}{"method": "PUT", "path": nurl, "origin_path": ourl})
 		}
 	}
 	for path := range r.patchTree.GetAll() {
-		log.Info(nil, "[web.server] PATCH: "+path, nil)
+		log.Info(nil, "[web.server] router", map[string]interface{}{"method": "PATCH", "path": path})
 	}
-	if rewrite, ok := r.rewrite["PATCH"]; ok {
+	if rewrite, ok := rewrite["PATCH"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] PATCH: "+ourl+" => "+nurl, nil)
+			log.Info(nil, "[web.server] router", map[string]interface{}{"method": "PATCH", "path": nurl, "origin_path": ourl})
 		}
 	}
 	for path := range r.deleteTree.GetAll() {
-		log.Info(nil, "[web.server] DELETE: "+path, nil)
+		log.Info(nil, "[web.server] router", map[string]interface{}{"method": "DELETE", "path": path})
 	}
-	if rewrite, ok := r.rewrite["DELETE"]; ok {
+	if rewrite, ok := rewrite["DELETE"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] DELETE: "+ourl+" => "+nurl, nil)
+			log.Info(nil, "[web.server] router", map[string]interface{}{"method": "DELETE", "path": nurl, "origin_path": ourl})
 		}
 	}
 }

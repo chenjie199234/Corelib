@@ -87,8 +87,7 @@ type InstanceConfig struct {
 	HeartprobeInterval time.Duration
 	//recv idle means no userdata msg received
 	//every userdata msg will refresh the timeout(only userdata msg)
-	//0 means no idle timeout
-	//default 0
+	//<=0 means no idle timeout,if >0 min is HeartprobeInterval
 	RecvIdleTimeout time.Duration
 	//every msg's send will refresh the timeout(all kind of msg)
 	//min HeartprobeInterval * 3,default HeartprobeInterval * 3
@@ -124,6 +123,8 @@ func (c *InstanceConfig) validate() {
 	}
 	if c.RecvIdleTimeout < 0 {
 		c.RecvIdleTimeout = 0
+	} else if c.RecvIdleTimeout > 0 && c.RecvIdleTimeout < c.HeartprobeInterval {
+		c.RecvIdleTimeout = c.HeartprobeInterval
 	}
 	if c.SendIdleTimeout < c.HeartprobeInterval*3 {
 		c.SendIdleTimeout = c.HeartprobeInterval * 3

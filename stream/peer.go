@@ -87,7 +87,7 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 		p.c.Close()
 		return
 	}
-	if recvidle != 0 && now-atomic.LoadInt64(&p.recvidlestart) > int64(recvidle) {
+	if recvidle > 0 && now-atomic.LoadInt64(&p.recvidlestart) > int64(recvidle) {
 		//recv idle timeout
 		if p.peertype == _PEER_CLIENT {
 			log.Error(nil, "[Stream.checkheart] recv idle timeout:", map[string]interface{}{"cip": p.c.RemoteAddr().String()})
@@ -97,7 +97,7 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 		p.c.Close()
 		return
 	}
-	//send heart beat data
+	//send heart probe data
 	go func() {
 		tmp := pool.GetBuffer()
 		defer pool.PutBuffer(tmp)
