@@ -3,6 +3,8 @@ package mongo
 import (
 	"context"
 	"crypto/tls"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/chenjie199234/Corelib/util/ctime"
@@ -14,8 +16,12 @@ import (
 
 type Config struct {
 	MongoName string `json:"mongo_name"`
-	//only support tcp socket
-	//ip:port or host:port
+	//if this is not empty,mongodb+srv mode will be actived
+	//this is used to search mongodb servers' addrs by dns's SRV records,format: _{SRVName}._tcp.{Addr[0]}
+	//if you want to use mongodb+srv mode and you don't known the SRVName,try to set it to 'mongodb'
+	SRVName string `json:"srv_name"`
+	//if SRVName is not empty,Addrs can only contain 1 element and it must be host without port
+	//if SRVName is empty,this is the mongodb servers' addrs,ip:port or host:port
 	Addrs []string `json:"addrs"`
 	//only the replica set mode need to set this
 	//shard mode and standalone mode set this empty
@@ -44,7 +50,18 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	if c.MongoName != "" {
 		opts = opts.SetAppName(c.MongoName)
 	}
-	opts = opts.SetHosts(c.Addrs)
+	if c.SRVName != "" {
+		opts = opts.SetSRVServiceName(c.SRVName)
+		if len(c.Addrs) != 1 {
+			return nil, errors.New("addrs can only has 1 element when srv_name is not empty")
+		}
+		if strings.Contains(c.Addrs[0], ",") || strings.Contains(c.Addrs[0], ":") {
+			return nil, errors.New("addr must be a host without port and scheme when srv_name is not empty")
+		}
+		opts = opts.ApplyURI("mongodb+srv://" + c.Addrs[0])
+	} else {
+		opts = opts.SetHosts(c.Addrs)
+	}
 	opts = opts.SetReplicaSet(c.ReplicaSet)
 	if c.UserName != "" && c.Password != "" {
 		if c.AuthDB == "" {
