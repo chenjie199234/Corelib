@@ -59,6 +59,7 @@ const source = `{
 	"mongo":{
 		"example_mongo":{
 			"tls":false,
+			"specific_ca_paths":["./example.pem"],
 			"addrs":["127.0.0.1:27017"],
 			"user_name":"",
 			"password":"",
@@ -73,6 +74,7 @@ const source = `{
 	"mysql":{
 		"example_mysql":{
 			"tls":false,
+			"specific_ca_paths":["./example.pem"],
 			"addr":"127.0.0.1:3306",
 			"user_name":"",
 			"password":"",
@@ -88,6 +90,7 @@ const source = `{
 	"redis":{
 		"example_redis":{
 			"tls":false,
+			"specific_ca_paths":["./example.pem"],
 			"addrs":["127.0.0.1:6379"],
 			"user_name":"",
 			"password":"",
