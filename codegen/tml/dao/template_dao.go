@@ -28,11 +28,18 @@ func NewApi() error {
 	//	return e
 	//}
 
+	//if need tls,you need to specific the config
+	//var exampletlsc *tls.Config
+	// if needtls {
+	// 	exampletlsc = &tls.Config{}
+	// 	...
+	// }
+
 	cgrpcc := config.GetCGrpcClientConfig().ClientConfig
 	_ = cgrpcc //avoid unuse
 
 	//init cgrpc client below
-	//examplecgrpc, e = cgrpc.NewCGrpcClient(cgrpcc, examplediscover, model.Project, model.Group, model.Name, "exampleproject", "examplegroup", "examplename", nil)
+	//examplecgrpc, e = cgrpc.NewCGrpcClient(cgrpcc, examplediscover, model.Project, model.Group, model.Name, "exampleproject", "examplegroup", "examplename", exampletlsc)
 	//if e != nil {
 	//         return e
 	//}
@@ -42,7 +49,7 @@ func NewApi() error {
 	_ = crpcc //avoid unuse
 
 	//init crpc client below
-	//examplecrpc, e = crpc.NewCrpcClient(crpcc, examplediscover, model.Project, model.Group, model.Name, "exampleproject", "examplegroup", "examplename", nil)
+	//examplecrpc, e = crpc.NewCrpcClient(crpcc, examplediscover, model.Project, model.Group, model.Name, "exampleproject", "examplegroup", "examplename", exampletlsc)
 	//if e != nil {
 	// 	return e
 	//}
@@ -52,7 +59,7 @@ func NewApi() error {
 	_ = webc //avoid unuse
 
 	//init web client below
-	//exampleweb, e = web.NewWebClient(webc, examplediscover, model.Project, model.Group, model.Name, "exampleproject", "examplegroup", "examplename", nil)
+	//exampleweb, e = web.NewWebClient(webc, examplediscover, model.Project, model.Group, model.Name, "exampleproject", "examplegroup", "examplename", exampletlsc)
 	//if e != nil {
 	// 	return e
 	//}

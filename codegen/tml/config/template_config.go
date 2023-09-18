@@ -234,6 +234,7 @@ const sourcetxt = `package config
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"os"
 	"sync"
@@ -520,7 +521,7 @@ func initwebserver() {
 				CorsExposeHeaders:    []string{"*"},
 				CorsAllowCredentials: false,
 				CorsMaxAge:           ctime.Duration(time.Minute * 30),
-				SrcRoot:              "./src",
+				SrcRootPath:          "./src",
 			},
 		}
 	} else {
