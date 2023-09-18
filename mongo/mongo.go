@@ -20,7 +20,7 @@ type Config struct {
 	//this is used to search mongodb servers' addrs by dns's SRV records,format: _{SRVName}._tcp.{Addr[0]}
 	//if you want to use mongodb+srv mode and you don't known the SRVName,try to set it to 'mongodb'
 	SRVName string `json:"srv_name"`
-	//if SRVName is not empty,Addrs can only contain 1 element and it must be host without port
+	//if SRVName is not empty,Addrs can only contain 1 element and it must be a host without port and scheme
 	//if SRVName is empty,this is the mongodb servers' addrs,ip:port or host:port
 	Addrs []string `json:"addrs"`
 	//only the replica set mode need to set this
