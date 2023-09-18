@@ -83,6 +83,9 @@ type CGrpcClient struct {
 
 // if tlsc is not nil,the tls will be actived
 func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfapp, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*CGrpcClient, error) {
+	if tlsc != nil {
+		tlsc = tlsc.Clone()
+	}
 	//pre check
 	serverfullname, e := name.MakeFullName(serverproject, servergroup, serverapp)
 	if e != nil {
@@ -95,13 +98,13 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 	if c == nil {
 		c = &ClientConfig{}
 	}
+	c.validate()
 	if d == nil {
 		return nil, errors.New("[cgrpc.client] missing discover in config")
 	}
 	if !d.CheckTarget(serverfullname) {
 		return nil, errors.New("[cgrpc.client] discover's target app not match")
 	}
-	c.validate()
 	client := &CGrpcClient{
 		self:     selffullname,
 		server:   serverfullname,

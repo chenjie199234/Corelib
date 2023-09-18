@@ -438,13 +438,13 @@ func (r *Router) corsNormal(resp http.ResponseWriter, req *http.Request) bool {
 func (r *Router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	if req.Method == http.MethodOptions {
 		realmethod := strings.ToUpper(req.Header.Get("Access-Control-Request-Method"))
-		if url, ok := r.s.checkRewrite(req.URL.Path, realmethod); ok {
+		if url, ok := r.s.getHandlerRewrite(req.URL.Path, realmethod); ok {
 			req.URL.Path = url
 		}
 		r.corsOptions(resp, req)
 		return
 	}
-	if url, ok := r.s.checkRewrite(req.URL.Path, req.Method); ok {
+	if url, ok := r.s.getHandlerRewrite(req.URL.Path, req.Method); ok {
 		req.URL.Path = url
 	}
 	if !r.corsNormal(resp, req) {
@@ -486,7 +486,7 @@ func (r *Router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		//handler static source file
 		handler = r.srcFileHandler
 	}
-	timeout := r.s.checkTimeout(req.URL.Path, req.Method)
+	timeout := r.s.getHandlerTimeout(req.URL.Path, req.Method)
 	if timeout > 0 {
 		http.TimeoutHandler(handler, timeout, cerror.ErrDeadlineExceeded.Error()).ServeHTTP(resp, req)
 	} else {
@@ -494,7 +494,7 @@ func (r *Router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	}
 }
 func (r *Router) printPath() {
-	rewrite := r.s.rewrite
+	rewrite := r.s.handlerRewrite
 	for path := range r.getTree.GetAll() {
 		log.Info(nil, "[web.server] router", map[string]interface{}{"method": "GET", "path": path})
 	}

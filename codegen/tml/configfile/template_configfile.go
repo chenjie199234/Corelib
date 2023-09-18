@@ -35,25 +35,26 @@ const source = `{
 		"heart_probe":"10s"
 	},
 	"web_server":{
-		"close_mode":0,
+		"wait_close_mode":0,
+		"wait_close_time":"1s",
 		"connect_timeout":"500ms",
 		"global_timeout":"500ms",
-		"idle_timeout":"30s",
-		"heart_probe":"10s",
+		"idle_timeout":"5s",
+		"max_request_header":4096,
+		"cors_allowed_origins":["*"],
+		"cors_allowed_headers":["*"],
+		"cors_expose_headers":["*"],
+		"cors_allow_credentials":false,
+		"cors_max_age":"30m",
 		"src_root":"",
 		"certs":{
-		},
-		"web_cors":{
-			"cors_origin":["*"],
-			"cors_header":["*"],
-			"cors_expose":[]
 		}
 	},
 	"web_client":{
 		"connect_timeout":"500ms",
 		"global_timeout":"0",
-		"idle_timeout":"30s",
-		"heart_probe":"10s"
+		"idle_timeout":"5s",
+		"max_response_header":4096
 	},
 	"mongo":{
 		"example_mongo":{

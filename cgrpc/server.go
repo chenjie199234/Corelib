@@ -78,8 +78,11 @@ type CGrpcServer struct {
 
 // if tlsc is not nil,the tls will be actived
 func NewCGrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tlsc *tls.Config) (*CGrpcServer, error) {
-	if tlsc != nil && len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
-		return nil, errors.New("[cgrpc.NewCGrpcServer] tls certificate setting missing")
+	if tlsc != nil {
+		if len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
+			return nil, errors.New("[cgrpc.NewCGrpcServer] tls certificate setting missing")
+		}
+		tlsc = tlsc.Clone()
 	}
 	//pre check
 	selffullname, e := name.MakeFullName(selfproject, selfgroup, selfapp)
@@ -169,14 +172,22 @@ func (s *CGrpcServer) StopCGrpcServer(force bool) {
 	}
 }
 
-// key path,value timeout(if timeout <= 0 means no timeout)
-func (this *CGrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
+// first key path,second key method,value timeout(if timeout <= 0 means no timeout)
+func (this *CGrpcServer) UpdateHandlerTimeout(timeout map[string]map[string]time.Duration) {
 	tmp := make(map[string]time.Duration)
-	for path, timeout := range htcs {
-		if len(path) == 0 || path[0] != '/' {
-			path = "/" + path
+	for path := range timeout {
+		for method := range timeout[path] {
+			if method != "GRPC" {
+				continue
+			}
+			if path == "" {
+				continue
+			}
+			if path[0] != '/' {
+				path = "/" + path
+			}
+			tmp[path] = timeout[path][method]
 		}
-		tmp[path] = timeout
 	}
 	this.handlerTimeout = tmp
 }

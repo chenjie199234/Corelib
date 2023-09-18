@@ -7,6 +7,7 @@ import (
 	"errors"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -138,14 +139,22 @@ func (s *CrpcServer) tellAllPeerSelfClosed() {
 	})
 }
 
-// key path,value timeout(if timeout <= 0 means no timeout)
-func (this *CrpcServer) UpdateHandlerTimeout(htcs map[string]time.Duration) {
+// first key path,second key method,value timeout(if timeout <= 0 means no timeout)
+func (this *CrpcServer) UpdateHandlerTimeout(timeout map[string]map[string]time.Duration) {
 	tmp := make(map[string]time.Duration)
-	for path, timeout := range htcs {
-		if len(path) == 0 || path[0] != '/' {
-			path = "/" + path
+	for path := range timeout {
+		for method := range timeout[path] {
+			if strings.ToUpper(method) != "CRPC" {
+				continue
+			}
+			if path == "" {
+				continue
+			}
+			if path[0] != '/' {
+				path = "/" + path
+			}
+			tmp[path] = timeout[path][method]
 		}
-		tmp[path] = timeout
 	}
 	this.handlerTimeout = tmp
 }

@@ -42,8 +42,8 @@ type ServerConfig struct {
 	ConnectTimeout ctime.Duration `json:"connect_timeout"`
 	//connection will be closed if it is not actived after this time,<=0 means no idletimeout
 	IdleTimeout ctime.Duration `json:"idle_timeout"`
-	//min 2048,max 65536
-	MaxHeader            uint     `json:"max_header"`
+	//min 2048,max 65536,unit byte
+	MaxRequestHeader     uint     `json:"max_request_header"`
 	CorsAllowedOrigins   []string `json:"cors_allowed_origins"`
 	CorsAllowedHeaders   []string `json:"cors_allowed_headers"`
 	CorsExposeHeaders    []string `json:"cors_expose_headers"`
@@ -67,10 +67,10 @@ func (c *ServerConfig) validate() {
 	if c.IdleTimeout < 0 {
 		c.IdleTimeout = 0
 	}
-	if c.MaxHeader < 2048 {
-		c.MaxHeader = 2048
-	} else if c.MaxHeader > 65536 {
-		c.MaxHeader = 65536
+	if c.MaxRequestHeader < 2048 {
+		c.MaxRequestHeader = 2048
+	} else if c.MaxRequestHeader > 65536 {
+		c.MaxRequestHeader = 65536
 	}
 	//allow origin
 	if len(c.CorsAllowedOrigins) > 0 {
@@ -141,16 +141,16 @@ func (c *ServerConfig) validate() {
 }
 
 type WebServer struct {
-	self       string
-	c          *ServerConfig
-	tlsc       *tls.Config
-	ctxpool    *sync.Pool
-	clientnum  int32 //without hijacked
-	stop       *graceful.Graceful
-	closetimer *time.Timer
-	s          *http.Server
-	timeout    map[string]map[string]time.Duration
-	rewrite    map[string]map[string]string
+	self           string
+	c              *ServerConfig
+	tlsc           *tls.Config
+	ctxpool        *sync.Pool
+	clientnum      int32 //without hijacked
+	stop           *graceful.Graceful
+	closetimer     *time.Timer
+	s              *http.Server
+	handlerTimeout map[string]map[string]time.Duration //first key method,second key path,value timeout,<=0 means no timeout
+	handlerRewrite map[string]map[string]string        //first key method,second key origin url,value new url
 }
 
 type localport struct{}
@@ -174,20 +174,20 @@ func NewWebServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tlsc 
 	c.validate()
 	//new server
 	instance := &WebServer{
-		self:       selffullname,
-		c:          c,
-		tlsc:       tlsc,
-		ctxpool:    &sync.Pool{},
-		stop:       graceful.New(),
-		closetimer: time.NewTimer(0),
-		timeout:    make(map[string]map[string]time.Duration),
-		rewrite:    make(map[string]map[string]string),
+		self:           selffullname,
+		c:              c,
+		tlsc:           tlsc,
+		ctxpool:        &sync.Pool{},
+		stop:           graceful.New(),
+		closetimer:     time.NewTimer(0),
+		handlerTimeout: make(map[string]map[string]time.Duration),
+		handlerRewrite: make(map[string]map[string]string),
 	}
 	instance.s = &http.Server{
 		TLSConfig:         tlsc,
 		ReadHeaderTimeout: c.ConnectTimeout.StdDuration(),
 		IdleTimeout:       c.IdleTimeout.StdDuration(),
-		MaxHeaderBytes:    int(c.MaxHeader),
+		MaxHeaderBytes:    int(c.MaxRequestHeader),
 		ConnState: func(c net.Conn, s http.ConnState) {
 			if s == http.StateNew {
 				atomic.AddInt32(&instance.clientnum, 1)
@@ -227,8 +227,8 @@ func (s *WebServer) SetRouter(r *Router) {
 		s.s.Handler = h2c.NewHandler(r, &http2.Server{
 			NewWriteScheduler:         func() http2.WriteScheduler { return http2.NewPriorityWriteScheduler(nil) },
 			IdleTimeout:               s.c.IdleTimeout.StdDuration(),
-			MaxDecoderHeaderTableSize: uint32(s.c.MaxHeader),
-			MaxEncoderHeaderTableSize: uint32(s.c.MaxHeader),
+			MaxDecoderHeaderTableSize: uint32(s.c.MaxRequestHeader),
+			MaxEncoderHeaderTableSize: uint32(s.c.MaxRequestHeader),
 		})
 	}
 	r.printPath()
@@ -296,10 +296,10 @@ func (s *WebServer) UpdateHandlerRewrite(rewrite map[string]map[string]string) {
 			tmp[method][originurl] = cleanPath(newurl)
 		}
 	}
-	s.rewrite = tmp
+	s.handlerRewrite = tmp
 }
-func (s *WebServer) checkRewrite(oldpath, method string) (newpath string, ok bool) {
-	rewrite := s.rewrite
+func (s *WebServer) getHandlerRewrite(oldpath, method string) (newpath string, ok bool) {
+	rewrite := s.handlerRewrite
 	paths, ok := rewrite[method]
 	if !ok {
 		return
@@ -308,29 +308,31 @@ func (s *WebServer) checkRewrite(oldpath, method string) (newpath string, ok boo
 	return
 }
 
-// first key method,second key path,value timeout(if timeout <= 0 means no timeout)
-func (s *WebServer) UpdateHandlerTimeout(htcs map[string]map[string]time.Duration) {
+// first key path,second method,value timeout(if timeout <= 0 means no timeout)
+func (s *WebServer) UpdateHandlerTimeout(timeout map[string]map[string]time.Duration) {
 	tmp := make(map[string]map[string]time.Duration)
-	for method, paths := range htcs {
-		method = strings.ToUpper(method)
-		if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
-			continue
-		}
-		for path, timeout := range paths {
+	for path := range timeout {
+		for method := range timeout[path] {
+			if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
+				continue
+			}
+			if path == "" {
+				continue
+			}
+			if path[0] != '/' {
+				path = "/" + path
+			}
 			if _, ok := tmp[method]; !ok {
 				tmp[method] = make(map[string]time.Duration)
 			}
-			if len(path) == 0 || path[0] != '/' {
-				path = "/" + path
-			}
-			tmp[method][path] = timeout
+			tmp[method][path] = timeout[path][method]
 		}
 	}
-	s.timeout = tmp
+	s.handlerTimeout = tmp
 }
 
-func (s *WebServer) checkTimeout(path, method string) time.Duration {
-	timeout := s.timeout
+func (s *WebServer) getHandlerTimeout(path, method string) time.Duration {
+	timeout := s.handlerTimeout
 	paths, ok := timeout[method]
 	if !ok {
 		return s.c.GlobalTimeout.StdDuration()

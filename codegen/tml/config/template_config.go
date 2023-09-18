@@ -241,6 +241,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cgrpc"
 	"github.com/chenjie199234/Corelib/crpc"
+	"github.com/chenjie199234/Corelib/web"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/mongo"
 	"github.com/chenjie199234/Corelib/mysql"
@@ -286,30 +287,13 @@ type CrpcClientConfig struct {
 
 // WebServerConfig -
 type WebServerConfig struct {
-	CloseMode      int               $json:"close_mode"$
-	ConnectTimeout ctime.Duration    $json:"connect_timeout"$ //default 500ms,max time to finish the handshake and read each whole request
-	GlobalTimeout  ctime.Duration    $json:"global_timeout"$  //default 500ms,max time to handle the request,unless the specific handle timeout is used in HandlerTimeout in AppConfig,handler's timeout will also be effected by caller's deadline
-	IdleTimeout    ctime.Duration    $json:"idle_timeout"$    //default 10s
-	HeartProbe     ctime.Duration    $json:"heart_probe"$     //default 5s
-	SrcRoot        string            $json:"src_root"$
-	Certs          map[string]string $json:"certs"$ //key cert path,value private key path,if this is not empty,tls will be used
-	//cors
-	Cors *WebCorsConfig $json:"cors"$
-}
-
-// WebCorsConfig -
-type WebCorsConfig struct {
-	CorsOrigin []string $json:"cors_origin"$
-	CorsHeader []string $json:"cors_header"$
-	CorsExpose []string $json:"cors_expose"$
+	Certs map[string]string $json:"certs"$ //key cert path,value private key path,if this is not empty,tls will be used
+	*web.ServerConfig
 }
 
 // WebClientConfig -
 type WebClientConfig struct {
-	ConnectTimeout ctime.Duration $json:"connect_timeout"$ //default 500ms,max time to finish the handshake
-	GlobalTimeout  ctime.Duration $json:"global_timeout"$  //max time to handle the request,0 means no default timeout
-	IdleTimeout    ctime.Duration $json:"idle_timeout"$    //default 10s
-	HeartProbe     ctime.Duration $json:"heart_probe"$     //default 5s 
+	*web.ClientConfig
 }
 
 // RedisConfig -
@@ -521,18 +505,25 @@ func initcrpcclient() {
 func initwebserver() {
 	if sc.WebServer == nil {
 		sc.WebServer = &WebServerConfig{
-			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
-			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-			IdleTimeout:    ctime.Duration(time.Second * 10),
-			HeartProbe:     ctime.Duration(time.Second * 5),
-			SrcRoot:        "./src",
-			Cors: &WebCorsConfig{
-				CorsOrigin: []string{"*"},
-				CorsHeader: []string{"*"},
-				CorsExpose: nil,
-			},
+			ServerConfig: &web.ServerConfig{
+				WaitCloseMode: 0
+				WaitCloseTime:        ctime.Duration(time.Second),
+				ConnectTimeout:       ctime.Duration(time.Millisecond * 500),
+				GlobalTimeout:        ctime.Duration(time.Millisecond * 500),
+				IdleTimeout:          ctime.Duration(time.Second * 5),
+				MaxRequestHeader:     2048,
+				CorsAllowedOrigins:   []string{"*"},
+				CorsAllowedHeaders:   []string{"*"},
+				CorsExposeHeaders:    []string{"*"},
+				CorsAllowCredentials: false,
+				CorsMaxAge:           ctime.Duration(time.Minute * 30),
+				SrcRoot:              "./src"
+			}
 		}
 	} else {
+		if sc.WebServer.WaitCloseMode != 0 && sc.WebServer.WaitCloseMode != 1 {
+			panic("")
+		}
 		if sc.WebServer.ConnectTimeout <= 0 {
 			sc.WebServer.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
 		}
@@ -540,27 +531,19 @@ func initwebserver() {
 			sc.WebServer.GlobalTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 		if sc.WebServer.IdleTimeout <= 0 {
-			sc.WebServer.IdleTimeout = ctime.Duration(time.Second * 10)
-		}
-		if sc.WebServer.HeartProbe <= 0 {
-			sc.WebServer.HeartProbe = ctime.Duration(time.Second * 5)
-		}
-		if sc.WebServer.Cors == nil {
-			sc.WebServer.Cors = &WebCorsConfig{
-				CorsOrigin: []string{"*"},
-				CorsHeader: []string{"*"},
-				CorsExpose: nil,
-			}
+			sc.WebServer.IdleTimeout = ctime.Duration(time.Second * 5)
 		}
 	}
 }
 func initwebclient() {
 	if sc.WebClient == nil {
 		sc.WebClient = &WebClientConfig{
-			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
-			GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-			IdleTimeout:    ctime.Duration(time.Second * 10),
-			HeartProbe:     ctime.Duration(time.Second * 5),
+			ClientConfig: &web.ClientConfig{
+				ConnectTimeout:    ctime.Duration(time.Millisecond * 500),
+				GlobalTimeout:     ctime.Duration(time.Millisecond * 500),
+				IdleTimeout:       ctime.Duration(time.Second * 5),
+				MaxResponseHeader: 4096,
+			}
 		}
 	} else {
 		if sc.WebClient.ConnectTimeout <= 0 {
@@ -570,10 +553,7 @@ func initwebclient() {
 			sc.WebClient.GlobalTimeout = 0
 		}
 		if sc.WebClient.IdleTimeout <= 0 {
-			sc.WebClient.IdleTimeout = ctime.Duration(time.Second * 10)
-		}
-		if sc.WebClient.HeartProbe <= 0 {
-			sc.WebClient.HeartProbe = ctime.Duration(time.Second * 5)
+			sc.WebClient.IdleTimeout = ctime.Duration(time.Second * 5)
 		}
 	}
 }

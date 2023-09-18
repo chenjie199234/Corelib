@@ -65,20 +65,10 @@ func StartCrpcServer() {
 
 // UpdateHandlerTimeout -
 // first key path,second key method,value timeout duration
-func UpdateHandlerTimeout(hts map[string]map[string]ctime.Duration) {
-	if s == nil {
-		return
+func UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
+	if s != nil {
+		s.UpdateHandlerTimeout(timeout)
 	}
-	cc := make(map[string]time.Duration)
-	for path, methods := range hts {
-		for method, timeout := range methods {
-			method = strings.ToUpper(method)
-			if method == "CRPC" {
-				cc[path] = timeout.StdDuration()
-			}
-		}
-	}
-	s.UpdateHandlerTimeout(cc)
 }
 
 // StopCrpcServer force - false(graceful),true(not graceful)

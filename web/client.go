@@ -19,38 +19,38 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
 )
 
 type ClientConfig struct {
-	ConnectTimeout time.Duration //default 500ms
-	GlobalTimeout  time.Duration //request's max handling time
-	HeartProbe     time.Duration //tcp keep alive probe interval,'< 0' disable keep alive,'= 0' will be set to default 15s,min is 1s
-	//if this is negative,it is same as disable keep alive,each request will take a new tcp connection,when request finish,tcp closed
-	//if this is 0,means useless,connection will keep alive until it is closed
-	IdleTimeout time.Duration
-	MaxHeader   uint
+	//the default timeout for every web call,<=0 means no timeout
+	//if ctx's Deadline exist and GlobalTimeout > 0,the min(time.Now().Add(GlobalTimeout) ,ctx.Deadline()) will be used as the final deadline
+	//if ctx's Deadline not exist and GlobalTimeout > 0 ,the time.Now().Add(GlobalTimeout) will be used as the final deadline
+	//if ctx's deadline not exist and GlobalTimeout <=0,means no deadline
+	GlobalTimeout ctime.Duration `json:"global_timeout"`
+	//time for connection establish(include dial time,handshake time)
+	//default 500ms
+	ConnectTimeout ctime.Duration `json:"connect_timeout"`
+	//connection will be closed if it is not actived after this time,<=0 means no idletimeout
+	IdleTimeout ctime.Duration `json:"idle_timeout"`
+	//min 2048,max 65536,unit byte
+	MaxResponseHeader uint `json:"max_response_header"`
 }
 
 func (c *ClientConfig) validate() {
-	if c.GlobalTimeout < 0 {
-		c.GlobalTimeout = 0
-	}
 	if c.ConnectTimeout <= 0 {
-		c.ConnectTimeout = time.Millisecond * 500
+		c.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
 	}
-	if c.HeartProbe == 0 {
-		c.HeartProbe = time.Second * 15
-	} else if c.HeartProbe > 0 && c.HeartProbe < time.Second {
-		c.HeartProbe = time.Second
+	if c.IdleTimeout < 0 {
+		c.IdleTimeout = 0
 	}
-	if c.MaxHeader == 0 {
-		c.MaxHeader = 2048
-	}
-	if c.MaxHeader > 65536 {
-		c.MaxHeader = 65536
+	if c.MaxResponseHeader == 0 {
+		c.MaxResponseHeader = 2048
+	} else if c.MaxResponseHeader > 65536 {
+		c.MaxResponseHeader = 65536
 	}
 }
 
@@ -59,6 +59,7 @@ type WebClient struct {
 	server string
 	c      *ClientConfig
 	tlsc   *tls.Config
+	dialer *net.Dialer
 	client *http.Client
 
 	resolver *resolver.CorelibResolver
@@ -70,6 +71,9 @@ type WebClient struct {
 
 // if tlsc is not nil,the tls will be actived
 func NewWebClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfapp, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*WebClient, error) {
+	if tlsc != nil {
+		tlsc = tlsc.Clone()
+	}
 	//pre check
 	serverfullname, e := name.MakeFullName(serverproject, servergroup, serverapp)
 	if e != nil {
@@ -82,46 +86,82 @@ func NewWebClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfap
 	if c == nil {
 		c = &ClientConfig{}
 	}
+	c.validate()
 	if d == nil {
 		return nil, errors.New("[web.client] missing discover")
 	}
 	if !d.CheckTarget(serverfullname) {
 		return nil, errors.New("[web.client] discover's target app not match")
 	}
-	c.validate()
-	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   c.ConnectTimeout,
-			KeepAlive: c.HeartProbe,
-		}).DialContext,
-		TLSClientConfig:        tlsc,
-		TLSHandshakeTimeout:    c.ConnectTimeout,
-		ForceAttemptHTTP2:      true,
-		MaxIdleConnsPerHost:    128,
-		IdleConnTimeout:        c.IdleTimeout,
-		MaxResponseHeaderBytes: int64(c.MaxHeader),
-	}
-	if c.HeartProbe < 0 {
-		transport.DisableKeepAlives = true
-	}
+
 	client := &WebClient{
 		self:   selffullname,
 		server: serverfullname,
 		c:      c,
 		tlsc:   tlsc,
-		client: &http.Client{
-			Transport: transport,
-			Timeout:   c.GlobalTimeout,
-		},
+		dialer: &net.Dialer{},
 
 		discover: d,
 
 		stop: graceful.New(),
 	}
+	client.client = &http.Client{
+		Transport: &http.Transport{
+			Proxy:                  http.ProxyFromEnvironment,
+			DialContext:            client.dial,
+			DialTLSContext:         client.dialtls,
+			TLSClientConfig:        tlsc,
+			ForceAttemptHTTP2:      true,
+			MaxIdleConnsPerHost:    256,
+			IdleConnTimeout:        c.IdleTimeout.StdDuration(),
+			MaxResponseHeaderBytes: int64(c.MaxResponseHeader),
+		},
+	}
 	client.balancer = newCorelibBalancer(client)
 	client.resolver = resolver.NewCorelibResolver(client.balancer, client.discover, discover.Web)
 	return client, nil
+}
+
+// this is for http.Transport
+func (c *WebClient) dial(ctx context.Context, network, addr string) (net.Conn, error) {
+	if c.c.ConnectTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.c.ConnectTimeout.StdDuration())
+		defer cancel()
+	}
+	conn, e := c.dialer.DialContext(ctx, network, addr)
+	if e != nil {
+		log.Error(ctx, "[web.client] dial failed", map[string]interface{}{"sname": c.server, "sip": addr, "error": e})
+	}
+	return conn, e
+}
+
+// this is for http.Transport
+func (c *WebClient) dialtls(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, _, e := net.SplitHostPort(addr)
+	if e != nil {
+		return nil, e
+	}
+	if c.c.ConnectTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.c.ConnectTimeout.StdDuration())
+		defer cancel()
+	}
+	conn, e := c.dialer.DialContext(ctx, network, addr)
+	if e != nil {
+		log.Error(ctx, "[web.client] dial failed", map[string]interface{}{"sname": c.server, "sip": addr, "error": e})
+		return nil, e
+	}
+	tmptlsc := c.tlsc.Clone()
+	if tmptlsc.ServerName == "" {
+		tmptlsc.ServerName = host
+	}
+	tc := tls.Client(conn, tmptlsc)
+	if e = tc.HandshakeContext(ctx); e != nil {
+		log.Error(ctx, "[web.client] tls handshake failed", map[string]interface{}{"sname": c.server, "sip": addr, "error": e})
+		return nil, e
+	}
+	return tc, nil
 }
 
 func (c *WebClient) Close(force bool) {
@@ -165,7 +205,7 @@ func (c *WebClient) Delete(ctx context.Context, path, query string, header http.
 // "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
 func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
 	if len(body) != 0 {
-		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewBuffer(body))
+		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewReader(body))
 	}
 	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil)
 }
@@ -173,7 +213,7 @@ func (c *WebClient) Post(ctx context.Context, path, query string, header http.He
 // "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
 func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
 	if len(body) != 0 {
-		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewBuffer(body))
+		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewReader(body))
 	}
 	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil)
 }
@@ -181,7 +221,7 @@ func (c *WebClient) Put(ctx context.Context, path, query string, header http.Hea
 // "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
 func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
 	if len(body) != 0 {
-		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewBuffer(body))
+		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewReader(body))
 	}
 	return c.call(http.MethodPatch, ctx, path, query, header, metadata, nil)
 }
@@ -220,7 +260,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	header.Set("Core-Tracedata", common.Byte2str(tracedata))
 	if c.c.GlobalTimeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout))
+		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
 		defer cancel()
 	}
 	dl, ok := ctx.Deadline()
