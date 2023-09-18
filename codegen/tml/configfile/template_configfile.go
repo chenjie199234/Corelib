@@ -60,6 +60,7 @@ const source = `{
 		"example_mongo":{
 			"tls":false,
 			"specific_ca_paths":["./example.pem"],
+			"srv_name":"",
 			"addrs":["127.0.0.1:27017"],
 			"user_name":"",
 			"password":"",
