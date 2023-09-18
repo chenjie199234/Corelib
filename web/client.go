@@ -168,6 +168,22 @@ func (c *WebClient) dialtls(ctx context.Context, network, addr string) (net.Conn
 	}
 	return tc, nil
 }
+func (c *WebClient) ResolveNow() {
+	c.resolver.Now()
+}
+
+// get the server's addrs from the discover.DI(the param in NewCrpcClient)
+// version can be int64 or string(should only be used with == or !=)
+func (c *WebClient) GetServerIps() (ips []string, version interface{}, lasterror error) {
+	tmp, version, e := c.discover.GetAddrs(discover.NotNeed)
+	ips = make([]string, 0, len(tmp))
+	for k := range tmp {
+		ips = append(ips, k)
+	}
+	lasterror = e
+	return
+
+}
 
 func (c *WebClient) Close(force bool) {
 	if force {

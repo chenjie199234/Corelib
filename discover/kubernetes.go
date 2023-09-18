@@ -32,6 +32,7 @@ type KubernetesD struct {
 
 	sync.RWMutex
 	addrs     map[string]*struct{}
+	version   string
 	lasterror error
 }
 
@@ -107,7 +108,7 @@ func (d *KubernetesD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 		d.Unlock()
 	}
 }
-func (d *KubernetesD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
+func (d *KubernetesD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, error) {
 	d.RLock()
 	defer d.RUnlock()
 	r := make(map[string]*RegisterData)
@@ -151,7 +152,7 @@ func (d *KubernetesD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
 		}
 		r[addr] = reg
 	}
-	return r, d.lasterror
+	return r, d.version, d.lasterror
 }
 func (d *KubernetesD) Stop() {
 	if atomic.SwapInt32(&d.status, 2) == 2 {
@@ -173,9 +174,10 @@ func (d *KubernetesD) run() {
 		}
 		d.Unlock()
 	}()
-	d.watch(d.list())
+	d.list()
+	d.watch()
 }
-func (d *KubernetesD) list() (resourceVersion string) {
+func (d *KubernetesD) list() {
 	for {
 		if atomic.LoadInt32(&d.status) == 2 {
 			log.Info(nil, "[discover.kubernetes] discover stopped", map[string]interface{}{"namespace": d.namespace, "labelselector": d.labelselector})
@@ -197,7 +199,7 @@ func (d *KubernetesD) list() (resourceVersion string) {
 			time.Sleep(time.Millisecond * 100)
 			continue
 		}
-		resourceVersion = pods.ResourceVersion
+		d.version = pods.ResourceVersion
 		tmp := make(map[string]*struct{}, len(pods.Items))
 		for _, item := range pods.Items {
 			if item.Status.PodIP == "" {
@@ -232,7 +234,7 @@ func (d *KubernetesD) list() (resourceVersion string) {
 	}
 	return
 }
-func (d *KubernetesD) watch(resourceVersion string) {
+func (d *KubernetesD) watch() {
 	if d.lasterror != nil {
 		//list failed
 		return
@@ -248,7 +250,7 @@ func (d *KubernetesD) watch(resourceVersion string) {
 			d.lasterror = cerror.ErrDiscoverStopped
 			return
 		}
-		opts := metav1.ListOptions{LabelSelector: d.labelselector, Watch: true, ResourceVersion: resourceVersion}
+		opts := metav1.ListOptions{LabelSelector: d.labelselector, Watch: true, ResourceVersion: d.version}
 		if d.watcher, e = kubeclient.CoreV1().Pods(d.namespace).Watch(context.Background(), opts); e != nil {
 			d.Lock()
 			d.lasterror = e
@@ -302,6 +304,7 @@ func (d *KubernetesD) watch(resourceVersion string) {
 				if find {
 					d.Lock()
 					d.addrs[pod.Status.PodIP] = nil
+					d.version = pod.ResourceVersion
 					d.lasterror = nil
 					for notice := range d.notices {
 						select {
@@ -311,7 +314,6 @@ func (d *KubernetesD) watch(resourceVersion string) {
 					}
 					d.Unlock()
 				}
-				resourceVersion = pod.ResourceVersion
 			case watch.Deleted:
 				pod := event.Object.(*v1.Pod)
 				if pod.Status.PodIP == "" {
@@ -319,6 +321,7 @@ func (d *KubernetesD) watch(resourceVersion string) {
 				}
 				d.Lock()
 				delete(d.addrs, pod.Status.PodIP)
+				d.version = pod.ResourceVersion
 				d.lasterror = nil
 				for notice := range d.notices {
 					select {
@@ -327,9 +330,9 @@ func (d *KubernetesD) watch(resourceVersion string) {
 					}
 				}
 				d.Unlock()
-				resourceVersion = pod.ResourceVersion
 			case watch.Bookmark:
-				resourceVersion = event.Object.(interface{ GetResourceVersion() string }).GetResourceVersion()
+				// don't update the version
+				// d.version = event.Object.(interface{ GetResourceVersion() string }).GetResourceVersion()
 			case watch.Error:
 				failed = true
 				d.Lock()

@@ -1,9 +1,7 @@
 package web
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"sync"
 	"time"
 
@@ -16,37 +14,27 @@ import (
 type corelibBalancer struct {
 	c                *WebClient
 	lker             *sync.RWMutex
-	serversRaw       []byte
+	version          discover.Version
 	servers          map[string]*ServerForPick //key server addr
 	picker           picker.PI
 	lastResolveError error
 }
-type ServerForPick struct {
-	addr     string
-	dservers map[string]*struct{} //this app registered on which discovery server
-
-	Pickinfo *picker.ServerPickInfo
-}
-
-func (s *ServerForPick) GetServerPickInfo() *picker.ServerPickInfo {
-	return s.Pickinfo
-}
 
 func newCorelibBalancer(c *WebClient) *corelibBalancer {
 	return &corelibBalancer{
-		c:          c,
-		lker:       &sync.RWMutex{},
-		serversRaw: nil,
-		servers:    make(map[string]*ServerForPick),
-		picker:     picker.NewPicker(),
+		c:       c,
+		lker:    &sync.RWMutex{},
+		servers: make(map[string]*ServerForPick),
+		picker:  picker.NewPicker(),
 	}
 }
 func (b *corelibBalancer) ResolverError(e error) {
 	b.lastResolveError = e
 }
-func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData) {
+
+// version can only be int64 or string(should only be used with != or ==)
+func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData, version discover.Version) {
 	b.lastResolveError = nil
-	d, _ := json.Marshal(all)
 	b.lker.Lock()
 	defer func() {
 		b.rebuildpicker()
@@ -55,10 +43,10 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData)
 		b.c.resolver.Wake(resolver.SYSTEM)
 		b.lker.Unlock()
 	}()
-	if bytes.Equal(b.serversRaw, d) {
+	if discover.SameVersion(b.version, version) {
 		return
 	}
-	b.serversRaw = d
+	b.version = version
 	//offline app
 	for _, server := range b.servers {
 		if _, ok := all[server.addr]; !ok {

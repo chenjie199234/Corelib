@@ -26,6 +26,7 @@ type DnsD struct {
 
 	sync.RWMutex
 	addrs     []string
+	version   int64
 	lasterror error
 }
 
@@ -88,7 +89,7 @@ func (d *DnsD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 	}
 }
 
-func (d *DnsD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
+func (d *DnsD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, error) {
 	d.RLock()
 	defer d.RUnlock()
 	r := make(map[string]*RegisterData)
@@ -132,7 +133,7 @@ func (d *DnsD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
 		}
 		r[addr] = reg
 	}
-	return r, d.lasterror
+	return r, d.version, d.lasterror
 }
 func (d *DnsD) Stop() {
 	if atomic.SwapInt32(&d.status, 2) == 2 {
@@ -179,7 +180,26 @@ func (d *DnsD) run() {
 			continue
 		}
 		d.Lock()
-		d.addrs = addrs
+		different := len(addrs) != len(d.addrs)
+		if !different {
+			for _, newaddr := range addrs {
+				find := false
+				for _, oldaddr := range d.addrs {
+					if newaddr == oldaddr {
+						find = true
+						break
+					}
+				}
+				if !find {
+					different = true
+					break
+				}
+			}
+		}
+		if different {
+			d.addrs = addrs
+			d.version = time.Now().UnixNano()
+		}
 		d.lasterror = nil
 		atomic.CompareAndSwapInt32(&d.status, 1, 0)
 		for notice := range d.notices {

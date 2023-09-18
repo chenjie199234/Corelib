@@ -33,13 +33,20 @@ func (b *resolverBuilder) Scheme() string {
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 type balancerWraper struct {
-	cc gresolver.ClientConn
+	cc      gresolver.ClientConn
+	version discover.Version
 }
 
 func (b *balancerWraper) ResolverError(e error) {
 	b.cc.ReportError(e)
 }
-func (b *balancerWraper) UpdateDiscovery(all map[string]*discover.RegisterData) {
+
+// version can be int64 or string(should only be used with != or ==)
+func (b *balancerWraper) UpdateDiscovery(all map[string]*discover.RegisterData, version discover.Version) {
+	if discover.SameVersion(b.version, version) {
+		return
+	}
+	b.version = version
 	s := gresolver.State{
 		Endpoints: make([]gresolver.Endpoint, 0, 1),
 	}
@@ -90,24 +97,6 @@ type corelibBalancer struct {
 	servers          map[string]*ServerForPick
 	picker           picker.PI
 	lastResolveError error
-}
-
-type ServerForPick struct {
-	addr     string
-	subconn  balancer.SubConn
-	dservers map[string]*struct{} //this app registered on which discovery server
-	status   int32
-	closing  bool
-
-	Pickinfo *picker.ServerPickInfo
-}
-
-func (s *ServerForPick) GetServerPickInfo() *picker.ServerPickInfo {
-	return s.Pickinfo
-}
-
-func (s *ServerForPick) Pickable() bool {
-	return s.status == int32(connectivity.Ready) && !s.closing
 }
 
 // UpdateClientConnState and SubConn's StateListener are called sync by ccBalancerWrapper

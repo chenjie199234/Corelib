@@ -147,6 +147,9 @@ type BeforeSend func(*Peer)
 type AfterSend func(*Peer, error)
 
 // SendMessage will return ErrMsgLarge/ErrConnClosed/context.Canceled/context.DeadlineExceeded
+// there may be lots of goroutines calling this function at the same time,but only one goroutine can be actived once,others need to be block and wait
+// the bs(before send) will be called before the caller is really ready to send the data(it is not block now)
+// the as(after send) will be called after the caller finishs the send
 func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, as AfterSend) error {
 	if len(userdata) == 0 {
 		return nil

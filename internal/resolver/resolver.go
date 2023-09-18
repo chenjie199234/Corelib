@@ -12,7 +12,8 @@ import (
 
 type Balancer interface {
 	ResolverError(error)
-	UpdateDiscovery(map[string]*discover.RegisterData) //key:addr
+	//key:addr
+	UpdateDiscovery(datas map[string]*discover.RegisterData, version discover.Version)
 }
 
 type CorelibResolver struct {
@@ -55,7 +56,7 @@ func NewCorelibResolver(b Balancer, d discover.DI, pt discover.PortType) *Coreli
 					r.Wake(SYSTEM)
 					return
 				}
-				all, e := d.GetAddrs(pt)
+				all, version, e := d.GetAddrs(pt)
 				if e != nil {
 					b.ResolverError(e)
 					r.Wake(CALL)
@@ -66,7 +67,7 @@ func NewCorelibResolver(b Balancer, d discover.DI, pt discover.PortType) *Coreli
 							delete(all, k)
 						}
 					}
-					b.UpdateDiscovery(all)
+					b.UpdateDiscovery(all, version)
 				}
 			}
 		}

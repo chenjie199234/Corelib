@@ -111,8 +111,10 @@ func (c *CrpcClient) ResolveNow() {
 	c.resolver.Now()
 }
 
-func (c *CrpcClient) GetServerIps() (ips []string, lasterror error) {
-	tmp, e := c.discover.GetAddrs(discover.NotNeed)
+// get the server's addrs from the discover.DI(the param in NewCrpcClient)
+// version can be int64 or string(should only be used with == or !=)
+func (c *CrpcClient) GetServerIps() (ips []string, version interface{}, lasterror error) {
+	tmp, version, e := c.discover.GetAddrs(discover.NotNeed)
 	ips = make([]string, 0, len(tmp))
 	for k := range tmp {
 		ips = append(ips, k)

@@ -15,8 +15,9 @@ func Test_Discover(t *testing.T) {
 		defer cancel()
 		for {
 			<-ch
-			addrs, e := d.GetAddrs(Web)
+			addrs, version, e := d.GetAddrs(Web)
 			t.Logf("addrs:%v\n", addrs)
+			t.Logf("version:%v\n", version)
 			t.Logf("lasterror:%v\n", e)
 		}
 	}()

@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/util/name"
@@ -11,13 +12,14 @@ import (
 
 type StaticD struct {
 	target    string
-	addrs     []string
 	crpcport  int
 	cgrpcport int
 	webport   int
 	notices   map[chan *struct{}]*struct{}
 
 	sync.RWMutex
+	addrs     []string
+	version   int64
 	lasterror error
 }
 
@@ -30,6 +32,7 @@ func NewStaticDiscover(targetproject, targetgroup, targetapp string, addrs []str
 	return &StaticD{
 		target:    targetfullname,
 		addrs:     addrs,
+		version:   time.Now().UnixNano(),
 		crpcport:  crpcport,
 		cgrpcport: cgrpcport,
 		webport:   webport,
@@ -63,7 +66,7 @@ func (d *StaticD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 		d.Unlock()
 	}
 }
-func (d *StaticD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
+func (d *StaticD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, error) {
 	d.RLock()
 	defer d.RUnlock()
 	r := make(map[string]*RegisterData)
@@ -107,7 +110,7 @@ func (d *StaticD) GetAddrs(pt PortType) (map[string]*RegisterData, error) {
 		}
 		r[addr] = reg
 	}
-	return r, d.lasterror
+	return r, d.version, d.lasterror
 }
 func (d *StaticD) Stop() {
 	d.Lock()
