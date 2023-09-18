@@ -133,6 +133,8 @@ func (c *WebClient) dial(ctx context.Context, network, addr string) (net.Conn, e
 	conn, e := c.dialer.DialContext(ctx, network, addr)
 	if e != nil {
 		log.Error(ctx, "[web.client] dial failed", map[string]interface{}{"sname": c.server, "sip": addr, "error": e})
+	} else {
+		log.Info(ctx, "[web.client] online", map[string]interface{}{"sname": c.server, "sip": addr})
 	}
 	return conn, e
 }
@@ -161,6 +163,8 @@ func (c *WebClient) dialtls(ctx context.Context, network, addr string) (net.Conn
 	if e = tc.HandshakeContext(ctx); e != nil {
 		log.Error(ctx, "[web.client] tls handshake failed", map[string]interface{}{"sname": c.server, "sip": addr, "error": e})
 		return nil, e
+	} else {
+		log.Info(ctx, "[web.client] online", map[string]interface{}{"sname": c.server, "sip": addr})
 	}
 	return tc, nil
 }
