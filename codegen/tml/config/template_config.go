@@ -518,7 +518,7 @@ func initwebserver() {
 				CorsAllowCredentials: false,
 				CorsMaxAge:           ctime.Duration(time.Minute * 30),
 				SrcRoot:              "./src",
-			}
+			},
 		}
 	} else {
 		if sc.WebServer.WaitCloseMode != 0 && sc.WebServer.WaitCloseMode != 1 {
