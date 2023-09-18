@@ -116,6 +116,7 @@ func NewWebClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfap
 			IdleConnTimeout:        c.IdleTimeout.StdDuration(),
 			MaxResponseHeaderBytes: int64(c.MaxResponseHeader),
 		},
+		Timeout: c.GlobalTimeout.StdDuration(),
 	}
 	client.balancer = newCorelibBalancer(client)
 	client.resolver = resolver.NewCorelibResolver(client.balancer, client.discover, discover.Web)
@@ -258,16 +259,21 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		"Deep":         strconv.Itoa(selfdeep),
 	})
 	header.Set("Core-Tracedata", common.Byte2str(tracedata))
-	if c.c.GlobalTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
-		defer cancel()
+	var dl time.Time
+	var ok bool
+	if dl, ok = ctx.Deadline(); ok {
+		if c.c.GlobalTimeout > 0 {
+			clientdl := time.Now().Add(c.c.GlobalTimeout.StdDuration())
+			if dl.After(clientdl) {
+				dl = clientdl
+			}
+		}
+	} else if c.c.GlobalTimeout > 0 {
+		dl = time.Now().Add(c.c.GlobalTimeout.StdDuration())
 	}
-	dl, ok := ctx.Deadline()
-	if ok {
+	if !dl.IsZero() {
 		header.Set("Core-Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
-	header.Del("Origin")
 	if e := c.stop.Add(1); e != nil {
 		if e == graceful.ErrClosing {
 			return nil, cerror.ErrClientClosing
