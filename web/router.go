@@ -139,31 +139,31 @@ func (r *Router) Use(globalMids ...OutsideHandler) {
 }
 
 // thread unsafe
-func (r *Router) Get(path string, handlers []OutsideHandler) {
+func (r *Router) Get(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
 	r.getTree.Set(path, r.insideHandler(path, "GET", handlers))
 }
 
 // thread unsafe
-func (r *Router) Post(path string, handlers []OutsideHandler) {
+func (r *Router) Post(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
 	r.postTree.Set(path, r.insideHandler(path, "POST", handlers))
 }
 
 // thread unsafe
-func (r *Router) Patch(path string, handlers []OutsideHandler) {
+func (r *Router) Patch(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
 	r.patchTree.Set(path, r.insideHandler(path, "PATCH", handlers))
 }
 
 // thread unsafe
-func (r *Router) Put(path string, handlers []OutsideHandler) {
+func (r *Router) Put(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
 	r.putTree.Set(path, r.insideHandler(path, "PUT", handlers))
 }
 
 // thread unsafe
-func (r *Router) Delete(path string, handlers []OutsideHandler) {
+func (r *Router) Delete(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
 	r.putTree.Set(path, r.insideHandler(path, "DELETE", handlers))
 }

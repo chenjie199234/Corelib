@@ -8,9 +8,7 @@ import (
 const txt = `package xweb
 
 import (
-	"net/http"
-	"strings"
-	"time"
+	"crypto/tls"
 
 	"{{.}}/api"
 	"{{.}}/config"

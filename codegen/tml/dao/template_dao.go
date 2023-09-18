@@ -8,8 +8,6 @@ import (
 const txt = `package dao
 
 import (
-	"time"
-
 	// "{{.}}/model"
 	"{{.}}/config"
 
@@ -80,13 +78,7 @@ func GetCrpcClientConfig() *crpc.ClientConfig {
 
 func GetWebClientConfig() *web.ClientConfig {
 	wc := config.GetWebClientConfig()
-	return &web.ClientConfig{
-		ConnectTimeout: time.Duration(wc.ConnectTimeout),
-		GlobalTimeout:  time.Duration(wc.GlobalTimeout),
-		IdleTimeout:    time.Duration(wc.IdleTimeout),
-		HeartProbe:     time.Duration(wc.HeartProbe),
-		MaxHeader:      2048,
-	}
+	return wc.ClientConfig
 }`
 
 func CreatePathAndFile(packagename string) {

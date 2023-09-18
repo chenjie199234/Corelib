@@ -309,10 +309,10 @@ func (s *WebServer) getHandlerRewrite(oldpath, method string) (newpath string, o
 }
 
 // first key path,second method,value timeout(if timeout <= 0 means no timeout)
-func (s *WebServer) UpdateHandlerTimeout(timeout map[string]map[string]time.Duration) {
+func (s *WebServer) UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
 	tmp := make(map[string]map[string]time.Duration)
 	for path := range timeout {
-		for method := range timeout[path] {
+		for method, to := range timeout[path] {
 			if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
 				continue
 			}
@@ -325,7 +325,7 @@ func (s *WebServer) UpdateHandlerTimeout(timeout map[string]map[string]time.Dura
 			if _, ok := tmp[method]; !ok {
 				tmp[method] = make(map[string]time.Duration)
 			}
-			tmp[method][path] = timeout[path][method]
+			tmp[method][path] = to.StdDuration()
 		}
 	}
 	s.handlerTimeout = tmp

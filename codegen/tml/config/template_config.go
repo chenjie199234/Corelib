@@ -241,13 +241,13 @@ import (
 
 	"github.com/chenjie199234/Corelib/cgrpc"
 	"github.com/chenjie199234/Corelib/crpc"
-	"github.com/chenjie199234/Corelib/web"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/mongo"
 	"github.com/chenjie199234/Corelib/mysql"
 	"github.com/chenjie199234/Corelib/redis"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
+	"github.com/chenjie199234/Corelib/web"
 )
 
 // sourceConfig can't hot update
@@ -506,7 +506,7 @@ func initwebserver() {
 	if sc.WebServer == nil {
 		sc.WebServer = &WebServerConfig{
 			ServerConfig: &web.ServerConfig{
-				WaitCloseMode: 0
+				WaitCloseMode:        0,
 				WaitCloseTime:        ctime.Duration(time.Second),
 				ConnectTimeout:       ctime.Duration(time.Millisecond * 500),
 				GlobalTimeout:        ctime.Duration(time.Millisecond * 500),
@@ -517,12 +517,14 @@ func initwebserver() {
 				CorsExposeHeaders:    []string{"*"},
 				CorsAllowCredentials: false,
 				CorsMaxAge:           ctime.Duration(time.Minute * 30),
-				SrcRoot:              "./src"
+				SrcRoot:              "./src",
 			}
 		}
 	} else {
 		if sc.WebServer.WaitCloseMode != 0 && sc.WebServer.WaitCloseMode != 1 {
-			panic("")
+			log.Error(nil, "[config.initwebserver] wait_close_mode must be 0 or 1", nil)
+			Close()
+			os.Exit(1)
 		}
 		if sc.WebServer.ConnectTimeout <= 0 {
 			sc.WebServer.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
@@ -543,7 +545,7 @@ func initwebclient() {
 				GlobalTimeout:     ctime.Duration(time.Millisecond * 500),
 				IdleTimeout:       ctime.Duration(time.Second * 5),
 				MaxResponseHeader: 4096,
-			}
+			},
 		}
 	} else {
 		if sc.WebClient.ConnectTimeout <= 0 {

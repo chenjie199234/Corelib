@@ -9,8 +9,6 @@ const txt = `package xgrpc
 
 import (
 	"crypto/tls"
-	"strings"
-	"time"
 
 	"{{.}}/api"
 	"{{.}}/config"
