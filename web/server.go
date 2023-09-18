@@ -51,7 +51,7 @@ type ServerConfig struct {
 	//client's Options request cache time,<=0 means ignore this setting(depend on the client's default)
 	CorsMaxAge ctime.Duration `json:"cors_max_age"`
 	//static source files(.html .js .css...)'s root path,empty means no static source file
-	SrcRoot string `json:"src_root"`
+	SrcRootPath string `json:"src_root_path"`
 }
 
 func (c *ServerConfig) validate() {
@@ -213,8 +213,8 @@ func (s *WebServer) NewRouter() *Router {
 		patchTree:  trie.NewTrie[http.HandlerFunc](),
 		deleteTree: trie.NewTrie[http.HandlerFunc](),
 	}
-	if s.c.SrcRoot != "" {
-		router.srcroot = os.DirFS(s.c.SrcRoot)
+	if s.c.SrcRootPath != "" {
+		router.srcroot = os.DirFS(s.c.SrcRootPath)
 	}
 	return router
 }

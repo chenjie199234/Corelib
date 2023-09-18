@@ -46,7 +46,7 @@ const source = `{
 		"cors_expose_headers":["*"],
 		"cors_allow_credentials":false,
 		"cors_max_age":"30m",
-		"src_root":"",
+		"src_root_path":"",
 		"certs":{
 		}
 	},

@@ -8,13 +8,12 @@ import (
 const txt = `package dao
 
 import (
-	// "{{.}}/model"
 	"{{.}}/config"
-
-	"github.com/chenjie199234/Corelib/cgrpc"
-	"github.com/chenjie199234/Corelib/crpc"
-	"github.com/chenjie199234/Corelib/web"
+	// "{{.}}/model"
 	// "github.com/chenjie199234/Corelib/discover"
+	// "github.com/chenjie199234/Corelib/cgrpc"
+	// "github.com/chenjie199234/Corelib/crpc"
+	// "github.com/chenjie199234/Corelib/web"
 )
 
 //var ExampleCGrpcApi example.ExampleCGrpcClient
@@ -29,7 +28,7 @@ func NewApi() error {
 	//	return e
 	//}
 
-	cgrpcc := GetCGrpcClientConfig()
+	cgrpcc := config.GetCGrpcClientConfig().ClientConfig
 	_ = cgrpcc //avoid unuse
 
 	//init cgrpc client below
@@ -39,7 +38,7 @@ func NewApi() error {
 	//}
 	//ExampleCGrpcApi = example.NewExampleCGrpcClient(examplecgrpc)
 
-	crpcc := GetCrpcClientConfig()
+	crpcc := config.GetCrpcClientConfig().ClientConfig
 	_ = crpcc //avoid unuse
 
 	//init crpc client below
@@ -49,7 +48,7 @@ func NewApi() error {
 	//}
 	//ExampleCrpcApi = example.NewExampleCrpcClient(examplecrpc)
 
-	webc := GetWebClientConfig()
+	webc := config.GetWebClientConfig().ClientConfig
 	_ = webc //avoid unuse
 
 	//init web client below
@@ -64,21 +63,6 @@ func NewApi() error {
 
 func UpdateAPI(ac *config.AppConfig) {
 
-}
-
-func GetCGrpcClientConfig() *cgrpc.ClientConfig {
-	gc := config.GetCGrpcClientConfig()
-	return gc.ClientConfig
-}
-
-func GetCrpcClientConfig() *crpc.ClientConfig {
-	rc := config.GetCrpcClientConfig()
-	return rc.ClientConfig
-}
-
-func GetWebClientConfig() *web.ClientConfig {
-	wc := config.GetWebClientConfig()
-	return wc.ClientConfig
 }`
 
 func CreatePathAndFile(packagename string) {

@@ -298,19 +298,22 @@ type WebClientConfig struct {
 
 // RedisConfig -
 type RedisConfig struct {
-	TLS bool $json:"tls"$
+	TLS             bool     $json:"tls"$
+	SpecificCAPaths []string $json:"specific_ca_paths"$ //only when TLS is true,this will be effective,if this is empty,system's ca will be used
 	*redis.Config
 }
 
 // MysqlConfig -
 type MysqlConfig struct {
-	TLS bool $json:"tls"$
+	TLS             bool     $json:"tls"$
+	SpecificCAPaths []string $json:"specific_ca_paths"$ //only when TLS is true,this will be effective,if this is empty,system's ca will be used
 	*mysql.Config
 }
 
 // MongoConfig -
 type MongoConfig struct {
-	TLS bool $json:"tls"$
+	TLS             bool     $json:"tls"$
+	SpecificCAPaths []string $json:"specific_ca_paths"$ //only when TLS is true,this will be effective,if this is empty,system's ca will be used
 	*mongo.Config
 }
 
@@ -592,6 +595,22 @@ func initredis(){
 			var tlsc *tls.Config
 			if redisc.TLS {
 				tlsc = &tls.Config{}
+				if len(redisc.SpecificCAPaths) > 0 {
+					tlsc.RootCAs = x509.NewCertPool()
+					for _, certpath := range redisc.SpecificCAPaths {
+						cert, e := os.ReadFile(certpath)
+						if e != nil {
+							log.Error(nil, "[config.initredis] read specific cert failed", map[string]interface{}{"redis": redisc.RedisName, "cert_path": certpath, "error": e})
+							Close()
+							os.Exit(1)
+						}
+						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
+							log.Error(nil, "[config.initredis] specific cert load failed", map[string]interface{}{"redis": redisc.RedisName, "cert_path": certpath, "error": e})
+							Close()
+							os.Exit(1)
+						}
+					}
+				}
 			}
 			c, e := redis.NewRedis(redisc.Config, tlsc)
 			if e != nil {
@@ -639,6 +658,22 @@ func initmongo(){
 			var tlsc *tls.Config
 			if mongoc.TLS {
 				tlsc = &tls.Config{}
+				if len(mongoc.SpecificCAPaths) > 0 {
+					tlsc.RootCAs = x509.NewCertPool()
+					for _, certpath := range mongoc.SpecificCAPaths {
+						cert, e := os.ReadFile(certpath)
+						if e != nil {
+							log.Error(nil, "[config.initmongo] read specific cert failed", map[string]interface{}{"mongo": mongoc.MongoName, "cert_path": certpath, "error": e})
+							Close()
+							os.Exit(1)
+						}
+						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
+							log.Error(nil, "[config.initmongo] specific cert load failed", map[string]interface{}{"mongo": mongoc.MongoName, "cert_path": certpath, "error": e})
+							Close()
+							os.Exit(1)
+						}
+					}
+				}
 			}
 			c, e := mongo.NewMongo(mongoc.Config, tlsc)
 			if e != nil {
@@ -686,6 +721,22 @@ func initmysql(){
 			var tlsc *tls.Config
 			if mysqlc.TLS {
 				tlsc = &tls.Config{}
+				if len(mysqlc.SpecificCAPaths) > 0 {
+					tlsc.RootCAs = x509.NewCertPool()
+					for _, certpath := range mysqlc.SpecificCAPaths {
+						cert, e := os.ReadFile(certpath)
+						if e != nil {
+							log.Error(nil, "[config.initmysql] read specific cert failed", map[string]interface{}{"mysql": mysqlc.MysqlName, "cert_path": certpath, "error": e})
+							Close()
+							os.Exit(1)
+						}
+						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
+							log.Error(nil, "[config.initmysql] specific cert load failed", map[string]interface{}{"mysql": mysqlc.MysqlName, "cert_path": certpath, "error": e})
+							Close()
+							os.Exit(1)
+						}
+					}
+				}
 			}
 			c, e := mysql.NewMysql(mysqlc.Config, tlsc)
 			if e != nil {
