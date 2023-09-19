@@ -14,21 +14,36 @@ import (
 	greadpref "go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
+// mongodb has 2 way to connect to the servers:
+// way 1: mongodb://username:password@addr1:port,addr2:port,addr3:port.../
+//
+//	in this mode,the driver will connect direct to the addr1,addr2 and addr3
+//	you need to set SRVName with empty and set all addr port pair in Addrs in the Config
+//	if this is a ReplicaSet cluster,the ReplicaSet is also need to be setted
+//	if the mongodb server has specific auth db,the AuthDB nedd to be setted(default is admin)
+//
+// way 2: mongodb+srv://username:password@host/
+//
+//	in this mode,the driver will search the dns records to get the addrs and connect params
+//	search dns's SRV records for addrs: nslookup -qt=srv _SRVName._tcp.host
+//	searcn dns's TXT records for connect params: nslookup -qt=txt _SRVName._tcp.host
+//	you need to set SRVName and put the host in Addrs in the Config,if you don't known the SRVName,try to set it to 'mongodb'
+//	the other settings in Config will overwrite the connect params getted from the dns
 type Config struct {
 	MongoName string `json:"mongo_name"`
 	//if this is not empty,mongodb+srv mode will be actived
 	//this is used to search mongodb servers' addrs from dns's SRV records,e.g.: nslookup -qt=srv _SRVName._tcp.Addr[0]
-	//this is also used to search mongodb servers' connect prarms from dns's TXT records,e.g.: nslookup -qt=txt _SRVName._tcp.Addr[0]
+	//this is used to search mongodb servers' connect prarms from dns's TXT records,e.g.: nslookup -qt=txt _SRVName._tcp.Addr[0]
 	//if you want to use mongodb+srv mode and you don't known the SRVName,try to set it to 'mongodb'
 	SRVName string `json:"srv_name"`
 	//if SRVName is not empty,Addrs can only contain 1 element and it must be a host without port and scheme
 	//if SRVName is empty,this is the mongodb servers' addrs,ip:port or host:port
 	Addrs []string `json:"addrs"`
 	//only the ReplicaSet cluster need to set this
-	//Warning!In mongodb+srv mode,this will overwrite the connect params from dns's TXT records,see comment in SRVName
+	//in mongodb+srv mode,this will overwrite the connect params getted from dns
 	ReplicaSet string `json:"replica_set"`
 	//default admin
-	//Warning!In mongodb+srv mode,this will overwrite the connect params from dns's TXT records,see comment in SRVName
+	//in mongodb+srv mode,this will overwrite the connect params getted from dns
 	AuthDB   string `json:"auth_db"`
 	UserName string `json:"user_name"`
 	Password string `json:"password"`
