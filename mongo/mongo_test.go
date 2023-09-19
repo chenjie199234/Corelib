@@ -10,7 +10,7 @@ import (
 func Test_Mongo(t *testing.T) {
 	c := &Config{
 		MongoName:       "test",
-		SRVName:         "",
+		MongoDBSRV:      false,
 		Addrs:           []string{"127.0.0.1:27017"},
 		ReplicaSet:      "",
 		UserName:        "",

@@ -14,36 +14,18 @@ import (
 	greadpref "go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
-// mongodb has 2 way to connect to the servers:
-// way 1: mongodb://username:password@addr1:port,addr2:port,addr3:port.../
-//
-//	in this mode,the driver will connect direct to the addr1,addr2 and addr3
-//	you need to set SRVName with empty and set all addr port pair in Addrs in the Config
-//	if this is a ReplicaSet cluster,the ReplicaSet is also need to be setted
-//	if the mongodb server has specific auth db,the AuthDB nedd to be setted(default is admin)
-//
-// way 2: mongodb+srv://username:password@host/
-//
-//	in this mode,the driver will search the dns records to get the addrs and connect params
-//	search dns's SRV records for addrs: nslookup -qt=srv _SRVName._tcp.host
-//	searcn dns's TXT records for connect params: nslookup -qt=txt _SRVName._tcp.host
-//	you need to set SRVName and put the host in Addrs in the Config,if you don't known the SRVName,try to set it to 'mongodb'
-//	the other settings in Config will overwrite the connect params getted from the dns
 type Config struct {
 	MongoName string `json:"mongo_name"`
-	//if this is not empty,mongodb+srv mode will be actived
-	//this is used to search mongodb servers' addrs from dns's SRV records,e.g.: nslookup -qt=srv _SRVName._tcp.Addr[0]
-	//this is used to search mongodb servers' connect prarms from dns's TXT records,e.g.: nslookup -qt=txt _SRVName._tcp.Addr[0]
-	//if you want to use mongodb+srv mode and you don't known the SRVName,try to set it to 'mongodb'
-	SRVName string `json:"srv_name"`
-	//if SRVName is not empty,Addrs can only contain 1 element and it must be a host without port and scheme
-	//if SRVName is empty,this is the mongodb servers' addrs,ip:port or host:port
+	//start the mongodb+srv mode,this will use dns to search mongodb servers' addrs
+	//step 1: dns's TXT records: nslookip -qt=txt Addrs[0] => get the connect params,this may contain srvservicename,if not,the srvservicename will be 'mongodb' by default
+	//step 2: dns's SRV records: nslookup -qt=srv _srvservicename._tcp.Addrs[0] => get the mongodb servers' addrs and port
+	MongoDBSRV bool `json:"mongodb_srv"`
+	//if MongoDBSRV is true,Addrs can only contain 1 element and it must be a host without port and scheme
+	//if MongoDBSRV is false,this is the mongodb servers' addrs,ip:port or host:port
 	Addrs []string `json:"addrs"`
 	//only the ReplicaSet cluster need to set this
-	//in mongodb+srv mode,this will overwrite the connect params getted from dns
 	ReplicaSet string `json:"replica_set"`
 	//default admin
-	//in mongodb+srv mode,this will overwrite the connect params getted from dns
 	AuthDB   string `json:"auth_db"`
 	UserName string `json:"user_name"`
 	Password string `json:"password"`
@@ -60,7 +42,7 @@ type Client struct {
 	*gmongo.Client
 }
 
-// if tlsc is not nil,the tls will be actived
+// if MongoDBSRV is true or tlsc is not nil,the tls will be actived
 // the json tag will be supported
 func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	var opts *goptions.ClientOptions
@@ -69,28 +51,8 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 		opts = opts.SetAppName(c.MongoName)
 	}
 	opts = opts.SetBSONOptions(&goptions.BSONOptions{UseJSONStructTags: true})
-	if c.SRVName != "" {
-		opts = opts.SetSRVServiceName(c.SRVName)
-		if len(c.Addrs) != 1 {
-			return nil, errors.New("addrs can only has 1 element when srv_name is not empty")
-		}
-		if strings.Contains(c.Addrs[0], ",") || strings.Contains(c.Addrs[0], ":") {
-			return nil, errors.New("addr must be a host without port and scheme when srv_name is not empty")
-		}
-		opts = opts.ApplyURI("mongodb+srv://" + c.Addrs[0])
-	} else {
-		opts = opts.SetHosts(c.Addrs)
-	}
-	opts = opts.SetReplicaSet(c.ReplicaSet)
-	if c.UserName != "" && c.Password != "" {
-		opts = opts.SetAuth(goptions.Credential{
-			AuthMechanism:           "",
-			AuthMechanismProperties: nil,
-			AuthSource:              c.AuthDB,
-			Username:                c.UserName,
-			Password:                c.Password,
-			PasswordSet:             true,
-		})
+	if c.ReplicaSet != "" {
+		opts = opts.SetReplicaSet(c.ReplicaSet)
 	}
 	opts = opts.SetMinPoolSize(1)
 	if c.MaxOpen == 0 {
@@ -111,6 +73,43 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	if c.IOTimeout > 0 {
 		opts = opts.SetTimeout(c.IOTimeout.StdDuration())
 	}
+	if c.MongoDBSRV {
+		if len(c.Addrs) != 1 || strings.Contains(c.Addrs[0], ":") || strings.Contains(c.Addrs[0], ",") {
+			return nil, errors.New("when mongodb_srv is true,addrs can only contain 1 element and it must be a host without port and scheme")
+		}
+		//start the mongodb+srv mode
+		//this will overwrite the above setting if the dns's TXT records have
+		if c.UserName != "" && c.Password != "" {
+			if c.AuthDB != "" {
+				//specific the authSource
+				opts = opts.ApplyURI("mongodb+srv://" + c.UserName + ":" + c.Password + "@" + c.Addrs[0] + "/?authSource=" + c.AuthDB)
+			} else {
+				//use the authSource in dns's TXT records or use the default 'admin'
+				opts = opts.ApplyURI("mongodb+srv://" + c.UserName + ":" + c.Password + "@" + c.Addrs[0])
+			}
+		} else {
+			opts = opts.ApplyURI("mongodb+srv://" + c.Addrs[0])
+		}
+	} else {
+		if len(c.Addrs) == 0 {
+			return nil, errors.New("missing addrs")
+		}
+		opts = opts.SetHosts(c.Addrs)
+		if c.UserName != "" && c.Password != "" {
+			if c.AuthDB == "" {
+				c.AuthDB = "admin"
+			}
+			opts = opts.SetAuth(goptions.Credential{
+				AuthMechanism:           "",
+				AuthMechanismProperties: nil,
+				AuthSource:              c.AuthDB,
+				Username:                c.UserName,
+				Password:                c.Password,
+				PasswordSet:             true,
+			})
+		}
+	}
+	//if we have the specific tls config,then use the specific one
 	if tlsc != nil {
 		opts = opts.SetTLSConfig(tlsc)
 	}
