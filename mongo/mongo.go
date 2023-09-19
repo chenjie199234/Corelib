@@ -61,6 +61,7 @@ type Client struct {
 }
 
 // if tlsc is not nil,the tls will be actived
+// the json tag will be supported
 func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	var opts *goptions.ClientOptions
 	opts = goptions.Client()
