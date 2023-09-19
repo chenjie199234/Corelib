@@ -17,19 +17,21 @@ import (
 type Config struct {
 	MongoName string `json:"mongo_name"`
 	//if this is not empty,mongodb+srv mode will be actived
-	//this is used to search mongodb servers' addrs by dns's SRV records,format: _{SRVName}._tcp.{Addr[0]}
+	//this is used to search mongodb servers' addrs from dns's SRV records,e.g.: nslookup -qt=srv _SRVName._tcp.Addr[0]
+	//this is also used to search mongodb servers' connect prarms from dns's TXT records,e.g.: nslookup -qt=txt _SRVName._tcp.Addr[0]
 	//if you want to use mongodb+srv mode and you don't known the SRVName,try to set it to 'mongodb'
 	SRVName string `json:"srv_name"`
 	//if SRVName is not empty,Addrs can only contain 1 element and it must be a host without port and scheme
 	//if SRVName is empty,this is the mongodb servers' addrs,ip:port or host:port
 	Addrs []string `json:"addrs"`
-	//only the replica set mode need to set this
-	//shard mode and standalone mode set this empty
+	//only the ReplicaSet cluster need to set this
+	//Warning!In mongodb+srv mode,this will overwrite the connect params from dns's TXT records,see comment in SRVName
 	ReplicaSet string `json:"replica_set"`
-	UserName   string `json:"user_name"`
-	Password   string `json:"password"`
 	//default admin
-	AuthDB string `json:"auth_db"`
+	//Warning!In mongodb+srv mode,this will overwrite the connect params from dns's TXT records,see comment in SRVName
+	AuthDB   string `json:"auth_db"`
+	UserName string `json:"user_name"`
+	Password string `json:"password"`
 	//0: default 100
 	MaxOpen uint16 `json:"max_open"`
 	//<=0: no idletime
@@ -50,6 +52,7 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	if c.MongoName != "" {
 		opts = opts.SetAppName(c.MongoName)
 	}
+	opts = opts.SetBSONOptions(&goptions.BSONOptions{UseJSONStructTags: true})
 	if c.SRVName != "" {
 		opts = opts.SetSRVServiceName(c.SRVName)
 		if len(c.Addrs) != 1 {
@@ -64,9 +67,6 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	}
 	opts = opts.SetReplicaSet(c.ReplicaSet)
 	if c.UserName != "" && c.Password != "" {
-		if c.AuthDB == "" {
-			c.AuthDB = "admin"
-		}
 		opts = opts.SetAuth(goptions.Credential{
 			AuthMechanism:           "",
 			AuthMechanismProperties: nil,
