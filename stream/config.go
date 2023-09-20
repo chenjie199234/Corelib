@@ -42,20 +42,20 @@ type HandleOfflineFunc func(p *Peer)
 
 type TcpConfig struct {
 	//time for connection establish(include dial time,handshake time and verify time)
-	//default 500ms
+	//default 3s
 	ConnectTimeout time.Duration
 	//min 64k,default 64M
 	MaxMsgLen uint32
 }
 
 var defaultTcpConfig = &TcpConfig{
-	ConnectTimeout: 500 * time.Millisecond,
+	ConnectTimeout: time.Second * 3,
 	MaxMsgLen:      1024 * 1024 * 64,
 }
 
 func (c *TcpConfig) validate() {
 	if c.ConnectTimeout <= 0 {
-		c.ConnectTimeout = 500 * time.Millisecond
+		c.ConnectTimeout = 3 * time.Second
 	}
 	if c.MaxMsgLen == 0 {
 		c.MaxMsgLen = 1024 * 1024 * 64
@@ -83,7 +83,7 @@ func (c *TcpServerOnlyConfig) validate() {
 
 type InstanceConfig struct {
 	//3 probe missing means disconnect
-	//min 1s,default 1s
+	//min 1s,default 5s
 	HeartprobeInterval time.Duration
 	//recv idle means no userdata msg received
 	//every userdata msg will refresh the timeout(only userdata msg)
@@ -118,7 +118,9 @@ type InstanceConfig struct {
 }
 
 func (c *InstanceConfig) validate() {
-	if c.HeartprobeInterval < time.Second {
+	if c.HeartprobeInterval <= 0 {
+		c.HeartprobeInterval = time.Second * 5
+	} else if c.HeartprobeInterval < time.Second {
 		c.HeartprobeInterval = time.Second
 	}
 	if c.RecvIdleTimeout < 0 {
