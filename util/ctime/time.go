@@ -32,7 +32,7 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 	}
 	return ErrDurationFormatWrong
 }
-func (d *Duration) MarshalJSON() ([]byte, error) {
+func (d Duration) MarshalJSON() ([]byte, error) {
 	dd := d.StdDuration()
 	b := make([]byte, 0, 50)
 	b = append(b, '"')
@@ -97,7 +97,7 @@ func (d *Duration) UnmarshalText(data []byte) error {
 	}
 	return ErrDurationFormatWrong
 }
-func (d *Duration) MarshalText() ([]byte, error) {
+func (d Duration) MarshalText() ([]byte, error) {
 	dd := d.StdDuration()
 	b := make([]byte, 0, 50)
 	b = append(b, '"')
