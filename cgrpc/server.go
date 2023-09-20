@@ -37,11 +37,11 @@ type ServerConfig struct {
 	//the client's deadline will also effect the rpc call's final deadline
 	GlobalTimeout ctime.Duration `json:"global_timeout"`
 	//time for connection establish(include dial time,handshake time and verify time)
-	//default 500ms
+	//default 3s
 	ConnectTimeout ctime.Duration `json:"connect_timeout"`
 	//connection will be closed if it is not actived after this time,<=0 means no idletimeout
 	IdleTimeout ctime.Duration `json:"idle_timeout"`
-	//min 1s,default 1s,3 probe missing means disconnect
+	//min 1s,default 5s,3 probe missing means disconnect
 	HeartProbe ctime.Duration `json:"heart_probe"`
 	//min 64k,default 64M
 	MaxMsgLen uint32 `json:"max_msg_len"`
@@ -49,12 +49,14 @@ type ServerConfig struct {
 
 func (c *ServerConfig) validate() {
 	if c.ConnectTimeout <= 0 {
-		c.ConnectTimeout = ctime.Duration(500 * time.Millisecond)
+		c.ConnectTimeout = ctime.Duration(3 * time.Second)
 	}
 	if c.IdleTimeout < 0 {
 		c.IdleTimeout = 0
 	}
-	if c.HeartProbe.StdDuration() < time.Second {
+	if c.HeartProbe <= 0 {
+		c.HeartProbe = ctime.Duration(time.Second * 5)
+	} else if c.HeartProbe.StdDuration() < time.Second {
 		c.HeartProbe = ctime.Duration(time.Second)
 	}
 	if c.MaxMsgLen == 0 {

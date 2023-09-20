@@ -38,7 +38,7 @@ type ServerConfig struct {
 	//the client's deadline will also effect the web call's final deadline
 	GlobalTimeout ctime.Duration `json:"global_timeout"`
 	//time for connection establish(include dial time,handshake time and read http header time)
-	//default 500ms
+	//default 3s
 	ConnectTimeout ctime.Duration `json:"connect_timeout"`
 	//connection will be closed if it is not actived after this time,<=0 means no idletimeout
 	IdleTimeout ctime.Duration `json:"idle_timeout"`
@@ -59,7 +59,7 @@ func (c *ServerConfig) validate() {
 		c.WaitCloseTime = ctime.Duration(time.Second)
 	}
 	if c.ConnectTimeout <= 0 {
-		c.ConnectTimeout = ctime.Duration(500 * time.Millisecond)
+		c.ConnectTimeout = ctime.Duration(3 * time.Second)
 	}
 	if c.GlobalTimeout < 0 {
 		c.GlobalTimeout = 0

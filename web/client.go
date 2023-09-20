@@ -32,7 +32,7 @@ type ClientConfig struct {
 	//if ctx's deadline not exist and GlobalTimeout <=0,means no deadline
 	GlobalTimeout ctime.Duration `json:"global_timeout"`
 	//time for connection establish(include dial time,handshake time)
-	//default 500ms
+	//default 3s
 	ConnectTimeout ctime.Duration `json:"connect_timeout"`
 	//connection will be closed if it is not actived after this time,<=0 means no idletimeout
 	IdleTimeout ctime.Duration `json:"idle_timeout"`
@@ -42,7 +42,7 @@ type ClientConfig struct {
 
 func (c *ClientConfig) validate() {
 	if c.ConnectTimeout <= 0 {
-		c.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
+		c.ConnectTimeout = ctime.Duration(time.Second * 3)
 	}
 	if c.IdleTimeout < 0 {
 		c.IdleTimeout = 0
