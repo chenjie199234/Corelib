@@ -34,41 +34,39 @@ func NewCorelibResolver(b Balancer, d discover.DI, pt discover.PortType) *Coreli
 		stop:    make(chan *struct{}),
 	}
 	go func() {
+		dnotice, cancel := d.GetNotice()
+		defer cancel()
 		for {
-			dnotice, cancel := d.GetNotice()
-			defer cancel()
-			for {
-				var ok bool
-				select {
-				case _, ok = <-dnotice:
-					if !ok {
-						b.ResolverError(cerror.ErrDiscoverStopped)
-						r.Wake(CALL)
-						r.Wake(SYSTEM)
-						<-r.stop
-						b.ResolverError(cerror.ErrClientClosing)
-						r.Wake(CALL)
-						r.Wake(SYSTEM)
-					}
-				case <-r.stop:
+			var ok bool
+			select {
+			case _, ok = <-dnotice:
+				if !ok {
+					b.ResolverError(cerror.ErrDiscoverStopped)
+					r.Wake(CALL)
+					r.Wake(SYSTEM)
+					<-r.stop
 					b.ResolverError(cerror.ErrClientClosing)
 					r.Wake(CALL)
 					r.Wake(SYSTEM)
-					return
 				}
-				all, version, e := d.GetAddrs(pt)
-				if e != nil {
-					b.ResolverError(e)
-					r.Wake(CALL)
-					r.Wake(SYSTEM)
-				} else {
-					for k, v := range all {
-						if v == nil || len(v.DServers) == 0 {
-							delete(all, k)
-						}
+			case <-r.stop:
+				b.ResolverError(cerror.ErrClientClosing)
+				r.Wake(CALL)
+				r.Wake(SYSTEM)
+				return
+			}
+			all, version, e := d.GetAddrs(pt)
+			if e != nil {
+				b.ResolverError(e)
+				r.Wake(CALL)
+				r.Wake(SYSTEM)
+			} else {
+				for k, v := range all {
+					if v == nil || len(v.DServers) == 0 {
+						delete(all, k)
 					}
-					b.UpdateDiscovery(all, version)
 				}
+				b.UpdateDiscovery(all, version)
 			}
 		}
 	}()

@@ -24,6 +24,7 @@ type Config struct {
 	//if MongoDBSRV is false,this is the mongodb servers' addrs,ip:port or host:port
 	Addrs []string `json:"addrs"`
 	//only the ReplicaSet cluster need to set this
+	//in mongodb+srv mode,this will be overwrite by the dns's TXT records,if the dns's TXT records contain ReplicaSet setting
 	ReplicaSet string `json:"replica_set"`
 	//default admin
 	AuthDB   string `json:"auth_db"`
