@@ -20,6 +20,15 @@ var (
 
 	ErrCors = &Error{Code: 2001, Httpcode: http.StatusForbidden, Msg: "Cors forbidden"}
 )
+var (
+	ErrDBDataConflict = &Error{Code: 9001, Httpcode: http.StatusInternalServerError, Msg: "db data conflict"}
+	ErrDBDataBroken   = &Error{Code: 9002, Httpcode: http.StatusInternalServerError, Msg: "db data broken"}
+
+	ErrCacheDataConflict = &Error{Code: 9101, Httpcode: http.StatusInternalServerError, Msg: "cache data conflict"}
+	ErrCacheDataBroken   = &Error{Code: 9102, Httpcode: http.StatusInternalServerError, Msg: "cache data broken"}
+
+	ErrMQDataBroken = &Error{Code: 9201, Httpcode: http.StatusInternalServerError, Msg: "message queue data broken"}
+)
 
 // business,start from 10000
 var (
