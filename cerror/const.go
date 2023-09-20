@@ -21,30 +21,35 @@ var (
 	ErrCors = &Error{Code: 2001, Httpcode: http.StatusForbidden, Msg: "Cors forbidden"}
 )
 var (
-	ErrDBDataConflict = &Error{Code: 9001, Httpcode: http.StatusInternalServerError, Msg: "db data conflict"}
-	ErrDBDataBroken   = &Error{Code: 9002, Httpcode: http.StatusInternalServerError, Msg: "db data broken"}
+	ErrDataConflict = &Error{Code: 9001, Httpcode: http.StatusInternalServerError, Msg: "data conflict"}
+	ErrDataBroken   = &Error{Code: 9002, Httpcode: http.StatusInternalServerError, Msg: "data broken"}
 
-	ErrCacheDataConflict = &Error{Code: 9101, Httpcode: http.StatusInternalServerError, Msg: "cache data conflict"}
-	ErrCacheDataBroken   = &Error{Code: 9102, Httpcode: http.StatusInternalServerError, Msg: "cache data broken"}
+	ErrDBDataConflict = &Error{Code: 9101, Httpcode: http.StatusInternalServerError, Msg: "db data conflict"}
+	ErrDBDataBroken   = &Error{Code: 9102, Httpcode: http.StatusInternalServerError, Msg: "db data broken"}
 
-	ErrMQDataBroken = &Error{Code: 9201, Httpcode: http.StatusInternalServerError, Msg: "message queue data broken"}
+	ErrCacheDataConflict = &Error{Code: 9201, Httpcode: http.StatusInternalServerError, Msg: "cache data conflict"}
+	ErrCacheDataBroken   = &Error{Code: 9202, Httpcode: http.StatusInternalServerError, Msg: "cache data broken"}
+
+	ErrMQDataBroken = &Error{Code: 9301, Httpcode: http.StatusInternalServerError, Msg: "message queue data broken"}
 )
 
 // business,start from 10000
 var (
-	ErrUnknown    = &Error{Code: 10000, Httpcode: http.StatusInternalServerError, Msg: "unknown"}
-	ErrReq        = &Error{Code: 10001, Httpcode: http.StatusBadRequest, Msg: "request error"}
-	ErrResp       = &Error{Code: 10002, Httpcode: http.StatusInternalServerError, Msg: "response error"}
-	ErrSystem     = &Error{Code: 10003, Httpcode: http.StatusInternalServerError, Msg: "system error"}
-	ErrToken      = &Error{Code: 10004, Httpcode: http.StatusUnauthorized, Msg: "token wrong"}
-	ErrSession    = &Error{Code: 10005, Httpcode: http.StatusUnauthorized, Msg: "session wrong"}
-	ErrKey        = &Error{Code: 10006, Httpcode: http.StatusUnauthorized, Msg: "key wrong"}
-	ErrSign       = &Error{Code: 10007, Httpcode: http.StatusUnauthorized, Msg: "sign wrong"}
-	ErrPermission = &Error{Code: 10008, Httpcode: http.StatusForbidden, Msg: "permission denie"}
-	ErrTooFast    = &Error{Code: 10009, Httpcode: http.StatusForbidden, Msg: "too fast"}
-	ErrBan        = &Error{Code: 10010, Httpcode: http.StatusForbidden, Msg: "ban"}
-	ErrBusy       = &Error{Code: 10011, Httpcode: http.StatusServiceUnavailable, Msg: "busy"}
-	ErrNotExist   = &Error{Code: 10012, Httpcode: http.StatusNotFound, Msg: "not exist"}
+	ErrUnknown        = &Error{Code: 10000, Httpcode: http.StatusInternalServerError, Msg: "unknown"}
+	ErrReq            = &Error{Code: 10001, Httpcode: http.StatusBadRequest, Msg: "request error"}
+	ErrResp           = &Error{Code: 10002, Httpcode: http.StatusInternalServerError, Msg: "response error"}
+	ErrSystem         = &Error{Code: 10003, Httpcode: http.StatusInternalServerError, Msg: "system error"}
+	ErrToken          = &Error{Code: 10004, Httpcode: http.StatusUnauthorized, Msg: "token wrong"}
+	ErrSession        = &Error{Code: 10005, Httpcode: http.StatusUnauthorized, Msg: "session wrong"}
+	ErrKey            = &Error{Code: 10006, Httpcode: http.StatusUnauthorized, Msg: "key wrong"}
+	ErrSign           = &Error{Code: 10007, Httpcode: http.StatusUnauthorized, Msg: "sign wrong"}
+	ErrPermission     = &Error{Code: 10008, Httpcode: http.StatusForbidden, Msg: "permission denie"}
+	ErrTooFast        = &Error{Code: 10009, Httpcode: http.StatusForbidden, Msg: "too fast"}
+	ErrBan            = &Error{Code: 10010, Httpcode: http.StatusForbidden, Msg: "ban"}
+	ErrBusy           = &Error{Code: 10011, Httpcode: http.StatusServiceUnavailable, Msg: "busy"}
+	ErrNotExist       = &Error{Code: 10012, Httpcode: http.StatusNotFound, Msg: "not exist"}
+	ErrPasswordWrong  = &Error{Code: 10013, Httpcode: http.StatusBadRequest, Msg: "password wrong"}
+	ErrPasswordLength = &Error{Code: 10014, Httpcode: http.StatusBadRequest, Msg: "password length must <=31"}
 )
 
 // convert std error,always -1

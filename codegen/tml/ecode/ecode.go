@@ -14,11 +14,13 @@ import (
 
 var (
 	ErrServerClosing     = cerror.ErrServerClosing     //1000  // http code 449 Warning!! Client will retry on this error,be careful to use this error
-	ErrDBDataConflict    = cerror.ErrDBDataConflict    //9001  // http code 500
-	ErrDBDataBroken      = cerror.ErrDBDataBroken      //9002  // http code 500
-	ErrCacheDataConflict = cerror.ErrCacheDataConflict //9101  // http code 500
-	ErrCacheDataBroken   = cerror.ErrCacheDataBroken   //9102  // http code 500
-	ErrMQDataBroken      = cerror.ErrMQDataBroken      //9201  // http code 500
+	ErrDataConflict      = cerror.ErrDataConflict      //9001  // http code 500
+	ErrDataBroken        = cerror.ErrDataBroken        //9002  // http code 500
+	ErrDBDataConflict    = cerror.ErrDBDataConflict    //9101  // http code 500
+	ErrDBDataBroken      = cerror.ErrDBDataBroken      //9102  // http code 500
+	ErrCacheDataConflict = cerror.ErrCacheDataConflict //9201  // http code 500
+	ErrCacheDataBroken   = cerror.ErrCacheDataBroken   //9202  // http code 500
+	ErrMQDataBroken      = cerror.ErrMQDataBroken      //9301  // http code 500
 	ErrUnknown           = cerror.ErrUnknown           //10000 // http code 500
 	ErrReq               = cerror.ErrReq               //10001 // http code 400
 	ErrResp              = cerror.ErrResp              //10002 // http code 500
@@ -32,6 +34,8 @@ var (
 	ErrBan               = cerror.ErrBan               //10010 // http code 403
 	ErrBusy              = cerror.ErrBusy              //10011 // http code 503
 	ErrNotExist          = cerror.ErrNotExist          //10012 // http code 404
+	ErrPasswordWrong     = cerror.ErrPasswordWrong     //10013 // http code 400
+	ErrPasswordLength    = cerror.ErrPasswordLength    //10014 // http code 400
 
 	ErrBusiness1 = cerror.MakeError(20001, http.StatusBadRequest, "business error 1")
 )

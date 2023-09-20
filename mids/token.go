@@ -2,7 +2,6 @@ package mids
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"time"
 
@@ -42,19 +41,15 @@ func MakeToken(ctx context.Context, puber, deployenv, runenv, userid, data strin
 		Start:     uint64(start.Unix()),
 		End:       uint64(end.Unix()),
 	})
-	ciphertext, e := secure.AesEncrypt(tokensecret, t)
+	tokenstr, e := secure.AesEncrypt(tokensecret, t)
 	if e != nil {
-		log.Error(ctx, "[token.make] token secret length less then 32", nil)
+		log.Error(ctx, "[token.make] failed", map[string]interface{}{"error": e})
 		return ""
 	}
-	return base64.StdEncoding.EncodeToString(ciphertext)
+	return tokenstr
 }
 func VerifyToken(ctx context.Context, tokenstr string) *Token {
-	ciphertext, e := base64.StdEncoding.DecodeString(tokenstr)
-	if e != nil {
-		return nil
-	}
-	plaintext, e := secure.AesDecrypt(tokensecret, ciphertext)
+	plaintext, e := secure.AesDecrypt(tokensecret, tokenstr)
 	if e != nil {
 		return nil
 	}

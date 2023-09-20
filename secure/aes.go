@@ -1,49 +1,55 @@
 package secure
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"errors"
+	"encoding/hex"
 
+	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-var ErrAesSecretLength = errors.New("secret length must less then 32")
-var ErrAesSecretWrong = errors.New("secret wrong")
-var ErrAesCipherTextBroken = errors.New("cipher text broken")
-
-const _NONCE_SIZE = 16
-
-// max secret length 31
-func AesDecrypt(secret string, ciphertext []byte) ([]byte, error) {
-	if len(secret) >= 32 {
-		return nil, ErrAesSecretLength
+func AesEncrypt(password string, plaintxt []byte) (string, error) {
+	if len(password) >= 32 {
+		return "", cerror.ErrPasswordLength
 	}
-	if len(ciphertext) <= _NONCE_SIZE || (len(ciphertext)-_NONCE_SIZE)%aes.BlockSize != 0 {
-		return nil, ErrAesCipherTextBroken
-	}
-	s := padding(common.Str2byte(secret), 32)
+	s := padding(common.Str2byte(password), 32)
 	block, _ := aes.NewCipher(s)
-	aead, _ := cipher.NewGCMWithNonceSize(block, _NONCE_SIZE)
-	plaintext, e := aead.Open(nil, ciphertext[:_NONCE_SIZE], ciphertext[_NONCE_SIZE:], nil)
-	if e != nil {
-		return nil, ErrAesSecretWrong
+	aead, _ := cipher.NewGCM(block)
+	nonce := make([]byte, aead.NonceSize())
+	rand.Read(nonce)
+	ciphertext := aead.Seal(nil, nonce, plaintxt, nil)
+	return hex.EncodeToString(append(nonce, ciphertext...)), nil
+}
+func AesDecrypt(password string, ciphertxt string) ([]byte, error) {
+	if len(password) >= 32 {
+		return nil, cerror.ErrPasswordLength
 	}
-	return unpadding(plaintext, aes.BlockSize), nil
+	tmp, e := hex.DecodeString(ciphertxt)
+	if e != nil {
+		return nil, cerror.ErrDataBroken
+	}
+	s := padding(common.Str2byte(password), 32)
+	block, _ := aes.NewCipher(s)
+	aead, _ := cipher.NewGCM(block)
+	plaintext, e := aead.Open(nil, tmp[:aead.NonceSize()], tmp[aead.NonceSize():], nil)
+	if e != nil {
+		return nil, cerror.ErrPasswordWrong
+	}
+	return plaintext, nil
 }
 
-// max secret length 31
-func AesEncrypt(secret string, plaintext []byte) ([]byte, error) {
-	if len(secret) >= 32 {
-		return nil, ErrAesSecretLength
+func padding(origin []byte, size uint8) []byte {
+	padding := int(size) - len(origin)%int(size)
+	return append(origin, bytes.Repeat([]byte{byte(padding)}, padding)...)
+}
+func unpadding(origin []byte, size uint8) []byte {
+	length := len(origin)
+	unpadding := uint8(origin[length-1])
+	if unpadding > size {
+		return nil
 	}
-	s := padding(common.Str2byte(secret), 32)
-	tmp := padding(plaintext, uint8(aes.BlockSize))
-	block, _ := aes.NewCipher(s)
-	aead, _ := cipher.NewGCMWithNonceSize(block, _NONCE_SIZE)
-	nonce := make([]byte, _NONCE_SIZE)
-	rand.Read(nonce)
-	ciphertext := aead.Seal(nil, nonce, tmp, nil)
-	return append(nonce, ciphertext...), nil
+	return origin[:(length - int(unpadding))]
 }
