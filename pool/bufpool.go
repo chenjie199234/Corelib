@@ -392,29 +392,45 @@ func (b *Buffer) AppendStdDurationPointers(data []*time.Duration) {
 }
 func (b *Buffer) AppendDuration(data ctime.Duration) {
 	d := time.Duration(data)
+	if d == 0 {
+		*b = append(*b, "0s"...)
+		return
+	}
 	//hour
-	*b = strconv.AppendInt(*b, int64(d/time.Hour), 10)
-	*b = append(*b, 'h')
-	d = d % time.Hour
+	if d/time.Hour > 0 {
+		*b = strconv.AppendInt(*b, int64(d/time.Hour), 10)
+		*b = append(*b, 'h')
+		d = d % time.Hour
+	}
 	//minute
-	*b = strconv.AppendInt(*b, int64(d/time.Minute), 10)
-	*b = append(*b, 'm')
-	d = d % time.Minute
+	if d/time.Minute > 0 {
+		*b = strconv.AppendInt(*b, int64(d/time.Minute), 10)
+		*b = append(*b, 'm')
+		d = d % time.Minute
+	}
 	//second
-	*b = strconv.AppendInt(*b, int64(d/time.Second), 10)
-	*b = append(*b, 's')
-	d = d % time.Second
+	if d/time.Second > 0 {
+		*b = strconv.AppendInt(*b, int64(d/time.Second), 10)
+		*b = append(*b, 's')
+		d = d % time.Second
+	}
 	//millisecond
-	*b = strconv.AppendInt(*b, int64(d/time.Millisecond), 10)
-	*b = append(*b, "ms"...)
-	d = d % time.Millisecond
+	if d/time.Millisecond > 0 {
+		*b = strconv.AppendInt(*b, int64(d/time.Millisecond), 10)
+		*b = append(*b, "ms"...)
+		d = d % time.Millisecond
+	}
 	//microsecond
-	*b = strconv.AppendInt(*b, int64(d/time.Microsecond), 10)
-	*b = append(*b, "us"...)
-	d = d % time.Microsecond
+	if d/time.Microsecond > 0 {
+		*b = strconv.AppendInt(*b, int64(d/time.Microsecond), 10)
+		*b = append(*b, "us"...)
+		d = d % time.Microsecond
+	}
 	//nanosecond
-	*b = strconv.AppendInt(*b, int64(d), 10)
-	*b = append(*b, "ns"...)
+	if d > 0 {
+		*b = strconv.AppendInt(*b, int64(d), 10)
+		*b = append(*b, "ns"...)
+	}
 }
 func (b *Buffer) AppendDurations(data []ctime.Duration) {
 	if data == nil {

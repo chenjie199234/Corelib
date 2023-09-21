@@ -35,6 +35,10 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 func (d Duration) MarshalJSON() ([]byte, error) {
 	dd := d.StdDuration()
 	b := make([]byte, 0, 50)
+	if dd == 0 {
+		b = append(b, "\"0s\""...)
+		return b, nil
+	}
 	b = append(b, '"')
 	//hour
 	if dd/time.Hour > 0 {
@@ -70,9 +74,6 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 	if dd > 0 {
 		b = strconv.AppendInt(b, int64(dd), 10)
 		b = append(b, "ns"...)
-	}
-	if len(b) == 1 {
-		b = append(b, "0s"...)
 	}
 	b = append(b, '"')
 	return b, nil

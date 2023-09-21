@@ -3,7 +3,6 @@ package ctime
 import (
 	"encoding/json"
 	"testing"
-	//"time"
 )
 
 type TData struct {

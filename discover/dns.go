@@ -10,6 +10,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/name"
 )
 
@@ -160,7 +161,7 @@ func (d *DnsD) run() {
 		case <-tker.C:
 		}
 		if atomic.LoadInt32(&d.status) == 2 {
-			log.Info(nil, "[discover.dns] discover stopped", map[string]interface{}{"host": d.host})
+			log.Info(nil, "[discover.dns] discover stopped", map[string]interface{}{"host": d.host, "interval": ctime.Duration(d.interval)})
 			d.lasterror = cerror.ErrDiscoverStopped
 			return
 		}

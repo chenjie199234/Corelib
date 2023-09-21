@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/name"
 )
 
@@ -115,10 +116,13 @@ func (d *StaticD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, erro
 func (d *StaticD) Stop() {
 	d.Lock()
 	defer d.Unlock()
-	d.lasterror = cerror.ErrDiscoverStopped
-	for notice := range d.notices {
-		delete(d.notices, notice)
-		close(notice)
+	if d.lasterror != cerror.ErrDiscoverStopped {
+		log.Info(nil, "[discover.static] discover stopped", map[string]interface{}{"addrs": d.addrs})
+		d.lasterror = cerror.ErrDiscoverStopped
+		for notice := range d.notices {
+			delete(d.notices, notice)
+			close(notice)
+		}
 	}
 }
 func (d *StaticD) CheckTarget(target string) bool {
