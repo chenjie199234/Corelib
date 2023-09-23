@@ -156,7 +156,7 @@ func initlocalapp(notice func(*AppConfig)) {
 		os.Exit(1)
 	}
 	validateAppConfig(AC)
-	log.Info(nil, "[config.local.app] update success", log.Any("config": AC))
+	log.Info(nil, "[config.local.app] update success", log.Any("config", AC))
 	if notice != nil {
 		notice(AC)
 	}
@@ -201,7 +201,7 @@ func initlocalapp(notice func(*AppConfig)) {
 				if !ok {
 					return
 				}
-				log.Error(nil, "[config.local.app] hot update watcher failed", log.Cerror(err))
+				log.Error(nil, "[config.local.app] hot update watcher failed", log.CError(err))
 			}
 		}
 	}()
@@ -601,7 +601,7 @@ func initredis(){
 					for _, certpath := range redisc.SpecificCAPaths {
 						cert, e := os.ReadFile(certpath)
 						if e != nil {
-							log.Error(nil, "[config.initredis] read specific cert failed"
+							log.Error(nil, "[config.initredis] read specific cert failed",
 								log.String("redis", redisc.RedisName), log.String("cert_path", certpath), log.CError(e))
 							Close()
 							os.Exit(1)
