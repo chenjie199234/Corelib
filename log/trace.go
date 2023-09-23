@@ -84,7 +84,7 @@ func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string,
 	if traceid == "" {
 		return
 	}
-	attrs := make([]slog.Attr, 0)
+	attrs := make([]any, 0)
 	attrs = append(attrs, Group("trace", slog.String("id", traceid)), slog.Int("deep", deep))
 	attrs = append(attrs, slog.Int64("start", start.UnixNano()))
 	attrs = append(attrs, slog.Int64("end", end.UnixNano()))

@@ -83,19 +83,19 @@ func GetLloger() *glog.Logger {
 	return slog.NewLogLogger(slog.NewJSONHandler(target, &slog.HandlerOptions{AddSource: true, Level: level}), level)
 }
 
-func Debug(ctx context.Context, msg string, attrs ...slog.Attr) {
+func Debug(ctx context.Context, msg string, attrs ...any) {
 	innerlog(ctx, slog.LevelDebug, msg, attrs...)
 }
-func Info(ctx context.Context, msg string, attrs ...slog.Attr) {
+func Info(ctx context.Context, msg string, attrs ...any) {
 	innerlog(ctx, slog.LevelInfo, msg, attrs...)
 }
-func Warn(ctx context.Context, msg string, attrs ...slog.Attr) {
+func Warn(ctx context.Context, msg string, attrs ...any) {
 	innerlog(ctx, slog.LevelWarn, msg, attrs...)
 }
-func Error(ctx context.Context, msg string, attrs ...slog.Attr) {
+func Error(ctx context.Context, msg string, attrs ...any) {
 	innerlog(ctx, slog.LevelError, msg, attrs...)
 }
-func innerlog(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr) {
+func innerlog(ctx context.Context, level slog.Level, msg string, attrs ...any) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -110,7 +110,7 @@ func innerlog(ctx context.Context, level slog.Level, msg string, attrs ...slog.A
 	//skip runtime.Callers ,this function ,and innerlog's caller
 	runtime.Callers(3, pcs[:])
 	r := slog.NewRecord(time.Now(), level, msg, pcs[0])
-	r.AddAttrs(attrs...)
+	r.Add(attrs...)
 	sloger.Handler().Handle(ctx, r)
 }
 func String(key, value string) slog.Attr {
