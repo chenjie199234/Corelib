@@ -882,7 +882,7 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t\tif(element==null||element==undefined){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
 				g.P("\t\t\t}")
-				g.P("\t\t\ts+=element+','")
+				g.P("\t\t\ts+=element.toString()+','")
 				g.P("\t\t}")
 				g.P("\t\ts=s.substr(0,s.length-1)+'],'")
 				g.P("\t}")
@@ -890,7 +890,7 @@ func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
 				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
 				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":'+msg.", f.Desc.Name(), "+','")
+				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":'+msg.", f.Desc.Name(), ".toString()+','")
 				g.P("\t}")
 			}
 		case protoreflect.StringKind:
@@ -1442,14 +1442,14 @@ func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
 				g.P("\t\t\tif(element==null||element==undefined){")
 				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
 				g.P("\t\t\t}")
-				g.P("\t\t\ts+='", f.Desc.Name(), "='+element+'&'")
+				g.P("\t\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(element.toString())+'&'")
 				g.P("\t\t}")
 				g.P("\t}")
 			} else {
 				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
 				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
 				g.P("\t}else{")
-				g.P("\t\ts+='", f.Desc.Name(), "='+msg.", f.Desc.Name(), "+'&'")
+				g.P("\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(msg.", f.Desc.Name(), ".toString())+'&'")
 				g.P("\t}")
 			}
 		case protoreflect.StringKind:
