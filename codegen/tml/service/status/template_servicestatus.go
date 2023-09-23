@@ -45,13 +45,13 @@ func Start() *Service {
 // Ping -
 func (s *Service) Ping(ctx context.Context, in *api.Pingreq) (*api.Pingresp, error) {
 	//if _, ok := ctx.(*crpc.Context); ok {
-	//        log.Info("this is a crpc call", nil)
+	//        log.Info("this is a crpc call")
 	//}
 	//if _, ok := ctx.(*cgrpc.Context); ok {
-	//        log.Info("this is a cgrpc call", nil)
+	//        log.Info("this is a cgrpc call")
 	//}
 	//if _, ok := ctx.(*web.Context); ok {
-	//        log.Info("this is a web call", nil)
+	//        log.Info("this is a web call")
 	//}
 	totalmem, lastmem, maxmem := monitor.GetMEM()
 	lastcpu, maxcpu, avgcpu := monitor.GetCPU()

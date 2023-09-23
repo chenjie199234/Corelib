@@ -32,7 +32,7 @@ func StartCrpcServer() {
 		for cert, key := range c.Certs {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
-				log.Error(nil, "[xcrpc] load cert failed:",map[string]interface{}{"cert": cert, "key": key, "error": e})
+				log.Error(nil, "[xcrpc] load cert failed:", log.String("cert", cert), log.String("key", key), log.CError(e))
 				return 
 			}
 			certificates = append(certificates, temp)
@@ -41,7 +41,7 @@ func StartCrpcServer() {
 	}
 	var e error
 	if s, e = crpc.NewCrpcServer(c.ServerConfig, model.Project, model.Group, model.Name, tlsc); e != nil {
-		log.Error(nil, "[xcrpc] new server failed", map[string]interface{}{"error": e})
+		log.Error(nil, "[xcrpc] new server failed", log.CError(e))
 		return
 	}
 	UpdateHandlerTimeout(config.AC.HandlerTimeout)
@@ -55,10 +55,10 @@ func StartCrpcServer() {
 	//api.RegisterExampleCrpcServer(s, service.SvcExample,mids.AllMids())
 
 	if e = s.StartCrpcServer(":9000"); e != nil && e != crpc.ErrServerClosed {
-		log.Error(nil, "[xcrpc] start server failed", map[string]interface{}{"error": e})
+		log.Error(nil, "[xcrpc] start server failed", log.CError(e))
 		return
 	}
-	log.Info(nil, "[xcrpc] server closed", nil)
+	log.Info(nil, "[xcrpc] server closed")
 }
 
 // UpdateHandlerTimeout -

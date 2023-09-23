@@ -53,7 +53,7 @@ func Init(notice func(c *AppConfig)) {
 				sourceinit = true
 				stopwatchsource()
 			case <-tmer.C:
-				log.Error(nil, "[config.Init] timeout", nil)
+				log.Error(nil, "[config.Init] timeout")
 				Close()
 				os.Exit(1)
 			}
@@ -77,18 +77,18 @@ func initenv() {
 	if str, ok := os.LookupEnv("CONFIG_TYPE"); ok && str != "<CONFIG_TYPE>" && str != "" {
 		configtype, e := strconv.Atoi(str)
 		if e != nil || (configtype != 0 && configtype != 1 && configtype != 2) {
-			log.Error(nil, "[config.initenv] env CONFIG_TYPE must be number in [0,1,2]", nil)
+			log.Error(nil, "[config.initenv] env CONFIG_TYPE must be number in [0,1,2]")
 			Close()
 			os.Exit(1)
 		}
 		EC.ConfigType = &configtype
 	} else {
-		log.Warning(nil, "[config.initenv] missing env CONFIG_TYPE", nil)
+		log.Warn(nil, "[config.initenv] missing env CONFIG_TYPE")
 	}
 	if EC.ConfigType != nil && *EC.ConfigType == 1 {
 		var e error
 		if RemoteConfigSdk, e = configsdk.NewConfigSdk(model.Project, model.Group, model.Name, nil); e != nil {
-			log.Error(nil, "[config.initenv] new remote config sdk failed", map[string]interface{}{"error": e})
+			log.Error(nil, "[config.initenv] new remote config sdk failed", log.CError(e))
 			Close()
 			os.Exit(1)
 		}
@@ -96,12 +96,12 @@ func initenv() {
 	if str, ok := os.LookupEnv("RUN_ENV"); ok && str != "<RUN_ENV>" && str != "" {
 		EC.RunEnv = &str
 	} else {
-		log.Warning(nil, "[config.initenv] missing env RUN_ENV", nil)
+		log.Warn(nil, "[config.initenv] missing env RUN_ENV")
 	}
 	if str, ok := os.LookupEnv("DEPLOY_ENV"); ok && str != "<DEPLOY_ENV>" && str != "" {
 		EC.DeployEnv = &str
 	} else {
-		log.Warning(nil, "[config.initenv] missing env DEPLOY_ENV", nil)
+		log.Warn(nil, "[config.initenv] missing env DEPLOY_ENV")
 	}
 }`
 const apptxt = `package config
@@ -145,29 +145,29 @@ var watcher *fsnotify.Watcher
 func initlocalapp(notice func(*AppConfig)) {
 	data, e := os.ReadFile("./AppConfig.json")
 	if e != nil {
-		log.Error(nil, "[config.local.app] read config file failed", map[string]interface{}{"error": e})
+		log.Error(nil, "[config.local.app] read config file failed", log.CError(e))
 		Close()
 		os.Exit(1)
 	}
 	AC = &AppConfig{}
 	if e = json.Unmarshal(data, AC); e != nil {
-		log.Error(nil, "[config.local.app] config file format wrong", map[string]interface{}{"error": e})
+		log.Error(nil, "[config.local.app] config file format wrong", log.CError(e))
 		Close()
 		os.Exit(1)
 	}
 	validateAppConfig(AC)
-	log.Info(nil, "[config.local.app] update success", map[string]interface{}{"config": AC})
+	log.Info(nil, "[config.local.app] update success", log.Any("config": AC))
 	if notice != nil {
 		notice(AC)
 	}
 	watcher, e = fsnotify.NewWatcher()
 	if e != nil {
-		log.Error(nil, "[config.local.app] create watcher for hot update failed", map[string]interface{}{"error": e})
+		log.Error(nil, "[config.local.app] create watcher for hot update failed", log.CError(e))
 		Close()
 		os.Exit(1)
 	}
 	if e = watcher.Add("./"); e != nil {
-		log.Error(nil, "[config.local.app] create watcher for hot update failed", map[string]interface{}{"error": e})
+		log.Error(nil, "[config.local.app] create watcher for hot update failed", log.CError(e))
 		Close()
 		os.Exit(1)
 	}
@@ -183,16 +183,16 @@ func initlocalapp(notice func(*AppConfig)) {
 				}
 				data, e := os.ReadFile("./AppConfig.json")
 				if e != nil {
-					log.Error(nil, "[config.local.app] hot update read config file failed", map[string]interface{}{"error": e})
+					log.Error(nil, "[config.local.app] hot update read config file failed", log.CError(e))
 					continue
 				}
 				c := &AppConfig{}
 				if e = json.Unmarshal(data, c); e != nil {
-					log.Error(nil, "[config.local.app] hot update config file format wrong", map[string]interface{}{"error": e})
+					log.Error(nil, "[config.local.app] hot update config file format wrong", log.CError(e))
 					continue
 				}
 				validateAppConfig(c)
-				log.Info(nil, "[config.local.app] update success", map[string]interface{}{"config": c})
+				log.Info(nil, "[config.local.app] update success", log.Any("config", c))
 				if notice != nil {
 					notice(c)
 				}
@@ -201,7 +201,7 @@ func initlocalapp(notice func(*AppConfig)) {
 				if !ok {
 					return
 				}
-				log.Error(nil, "[config.local.app] hot update watcher failed", map[string]interface{}{"error": err})
+				log.Error(nil, "[config.local.app] hot update watcher failed", log.Cerror(err))
 			}
 		}
 	}()
@@ -210,16 +210,16 @@ func initremoteapp(notice func(*AppConfig), wait chan *struct{}) (stopwatch func
 	return RemoteConfigSdk.Watch("AppConfig", func(key, keyvalue, keytype string) {
 		//only support json
 		if keytype != "json" {
-			log.Error(nil, "[config.remote.app] config data can only support json format", nil)
+			log.Error(nil, "[config.remote.app] config data can only support json format")
 			return
 		}
 		c := &AppConfig{}
 		if e := json.Unmarshal(common.Str2byte(keyvalue), c); e != nil {
-			log.Error(nil, "[config.remote.app] config data format wrong", map[string]interface{}{"error": e})
+			log.Error(nil, "[config.remote.app] config data format wrong", log.CError(e))
 			return
 		}
 		validateAppConfig(c)
-		log.Info(nil, "[config.remote.app] update success", map[string]interface{}{"config": c})
+		log.Info(nil, "[config.remote.app] update success", log.Any("config", c))
 		if notice != nil {
 			notice(c)
 		}
@@ -330,24 +330,24 @@ var rediss map[string]*redis.Client
 func initlocalsource() {
 	data, e := os.ReadFile("./SourceConfig.json")
 	if e != nil {
-		log.Error(nil, "[config.local.source] read config file failed", map[string]interface{}{"error": e})
+		log.Error(nil, "[config.local.source] read config file failed", log.CError(e))
 		Close()
 		os.Exit(1)
 	}
 	sc = &sourceConfig{}
 	if e = json.Unmarshal(data, sc); e != nil {
-		log.Error(nil, "[config.local.source] config file format wrong", map[string]interface{}{"error": e})
+		log.Error(nil, "[config.local.source] config file format wrong", log.CError(e))
 		Close()
 		os.Exit(1)
 	}
-	log.Info(nil, "[config.local.source] update success", map[string]interface{}{"config": sc})
+	log.Info(nil, "[config.local.source] update success", log.Any("config", sc))
 	initsource()
 }
 func initremotesource(wait chan *struct{}) (stopwatch func()) {
 	return RemoteConfigSdk.Watch("SourceConfig", func(key, keyvalue, keytype string) {
 		//only support json
 		if keytype != "json" {
-			log.Error(nil, "[config.remote.source] config data can only support json format", nil)
+			log.Error(nil, "[config.remote.source] config data can only support json format")
 			return
 		}
 		//source config only init once
@@ -356,11 +356,11 @@ func initremotesource(wait chan *struct{}) (stopwatch func()) {
 		}
 		c := &sourceConfig{}
 		if e := json.Unmarshal(common.Str2byte(keyvalue), c); e != nil {
-			log.Error(nil, "[config.remote.source] config data format wrong", map[string]interface{}{"error": e})
+			log.Error(nil, "[config.remote.source] config data format wrong", log.CError(e))
 			return
 		}
 		sc = c
-		log.Info(nil, "[config.remote.source] update success", map[string]interface{}{"config": sc})
+		log.Info(nil, "[config.remote.source] update success", log.Any("config", sc)
 		initsource()
 		select {
 		case wait <- nil:
@@ -526,7 +526,7 @@ func initwebserver() {
 		}
 	} else {
 		if sc.WebServer.WaitCloseMode != 0 && sc.WebServer.WaitCloseMode != 1 {
-			log.Error(nil, "[config.initwebserver] wait_close_mode must be 0 or 1", nil)
+			log.Error(nil, "[config.initwebserver] wait_close_mode must be 0 or 1")
 			Close()
 			os.Exit(1)
 		}
@@ -601,12 +601,14 @@ func initredis(){
 					for _, certpath := range redisc.SpecificCAPaths {
 						cert, e := os.ReadFile(certpath)
 						if e != nil {
-							log.Error(nil, "[config.initredis] read specific cert failed", map[string]interface{}{"redis": redisc.RedisName, "cert_path": certpath, "error": e})
+							log.Error(nil, "[config.initredis] read specific cert failed"
+								log.String("redis", redisc.RedisName), log.String("cert_path", certpath), log.CError(e))
 							Close()
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
-							log.Error(nil, "[config.initredis] specific cert load failed", map[string]interface{}{"redis": redisc.RedisName, "cert_path": certpath, "error": e})
+							log.Error(nil, "[config.initredis] specific cert load failed",
+								log.String("redis", redisc.RedisName), log.String("cert_path", certpath), log.CError(e))
 							Close()
 							os.Exit(1)
 						}
@@ -615,7 +617,8 @@ func initredis(){
 			}
 			c, e := redis.NewRedis(redisc.Config, tlsc)
 			if e != nil {
-				log.Error(nil, "[config.initredis] failed", map[string]interface{}{"redis": redisc.RedisName, "error": e})
+				log.Error(nil, "[config.initredis] failed",
+					log.String("redis", redisc.RedisName), log.CError(e))
 				Close()
 				os.Exit(1)
 			}
@@ -664,12 +667,14 @@ func initmongo(){
 					for _, certpath := range mongoc.SpecificCAPaths {
 						cert, e := os.ReadFile(certpath)
 						if e != nil {
-							log.Error(nil, "[config.initmongo] read specific cert failed", map[string]interface{}{"mongo": mongoc.MongoName, "cert_path": certpath, "error": e})
+							log.Error(nil, "[config.initmongo] read specific cert failed",
+								log.String("mongo", mongoc.MongoName), log.String("cert_path", certpath), log.CError(e))
 							Close()
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
-							log.Error(nil, "[config.initmongo] specific cert load failed", map[string]interface{}{"mongo": mongoc.MongoName, "cert_path": certpath, "error": e})
+							log.Error(nil, "[config.initmongo] specific cert load failed",
+								log.String("mongo", mongoc.MongoName), log.String("cert_path", certpath), log.CError(e))
 							Close()
 							os.Exit(1)
 						}
@@ -678,7 +683,7 @@ func initmongo(){
 			}
 			c, e := mongo.NewMongo(mongoc.Config, tlsc)
 			if e != nil {
-				log.Error(nil, "[config.initmongo] failed", map[string]interface{}{"mongo": mongoc.MongoName, "error": e})
+				log.Error(nil, "[config.initmongo] failed", log.String("mongo", mongoc.MongoName), log.CError(e))
 				Close()
 				os.Exit(1)
 			}
@@ -727,12 +732,14 @@ func initmysql(){
 					for _, certpath := range mysqlc.SpecificCAPaths {
 						cert, e := os.ReadFile(certpath)
 						if e != nil {
-							log.Error(nil, "[config.initmysql] read specific cert failed", map[string]interface{}{"mysql": mysqlc.MysqlName, "cert_path": certpath, "error": e})
+							log.Error(nil, "[config.initmysql] read specific cert failed",
+								log.String("mysql", mysqlc.MysqlName), log.String("cert_path", certpath), log.CError(e))
 							Close()
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
-							log.Error(nil, "[config.initmysql] specific cert load failed", map[string]interface{}{"mysql": mysqlc.MysqlName, "cert_path": certpath, "error": e})
+							log.Error(nil, "[config.initmysql] specific cert load failed",
+								log.String("mysql", mysqlc.MysqlName), log.String("cert_path", certpath), log.CError(e))
 							Close()
 							os.Exit(1)
 						}
@@ -741,7 +748,7 @@ func initmysql(){
 			}
 			c, e := mysql.NewMysql(mysqlc.Config, tlsc)
 			if e != nil {
-				log.Error(nil, "[config.initmysql] failed", map[string]interface{}{"mysql": mysqlc.MysqlName, "error": e})
+				log.Error(nil, "[config.initmysql] failed", log.String("mysql", mysqlc.MysqlName), log.CError(e))
 				Close()
 				os.Exit(1)
 			}

@@ -32,7 +32,7 @@ func StartWebServer() {
 		for cert, key := range c.Certs {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
-				log.Error(nil, "[xweb] load cert failed:",map[string]interface{}{"cert": cert, "key": key, "error": e})
+				log.Error(nil, "[xweb] load cert failed:", log.String("cert", cert), log.String("key", key), log.CError(e))
 				return 
 			}
 			certificates = append(certificates, temp)
@@ -41,7 +41,7 @@ func StartWebServer() {
 	}
 	var e error
 	if s, e = web.NewWebServer(c.ServerConfig, model.Project, model.Group, model.Name, tlsc); e != nil {
-		log.Error(nil, "[xweb] new server failed", map[string]interface{}{"error": e})
+		log.Error(nil, "[xweb] new server failed", log.CError(e))
 		return
 	}
 	UpdateHandlerTimeout(config.AC.HandlerTimeout)
@@ -59,10 +59,10 @@ func StartWebServer() {
 
 	s.SetRouter(r)
 	if e = s.StartWebServer(":8000"); e != nil && e != web.ErrServerClosed {
-		log.Error(nil, "[xweb] start server failed", map[string]interface{}{"error": e})
+		log.Error(nil, "[xweb] start server failed", log.CError(e))
 		return
 	}
-	log.Info(nil, "[xweb] server closed", nil)
+	log.Info(nil, "[xweb] server closed")
 }
 
 // UpdateHandlerTimeout -
