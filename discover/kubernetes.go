@@ -180,7 +180,7 @@ func (d *KubernetesD) run() {
 func (d *KubernetesD) list() {
 	for {
 		if atomic.LoadInt32(&d.status) == 2 {
-			log.Info(nil, "[discover.kubernetes] discover stopped", map[string]interface{}{"namespace": d.namespace, "labelselector": d.labelselector})
+			log.Info(nil, "[discover.kubernetes] discover stopped", log.String("namespace", d.namespace), log.String("labelselector", d.labelselector))
 			d.lasterror = cerror.ErrDiscoverStopped
 			return
 		}
@@ -195,7 +195,7 @@ func (d *KubernetesD) list() {
 				}
 			}
 			d.Unlock()
-			log.Error(nil, "[discover.kubernetes] list failed", map[string]interface{}{"namespace": d.namespace, "labelselector": d.labelselector, "error": e})
+			log.Error(nil, "[discover.kubernetes] list failed", log.String("namespace", d.namespace), log.String("labelselector", d.labelselector), log.CError(e))
 			time.Sleep(time.Millisecond * 100)
 			continue
 		}
@@ -246,7 +246,7 @@ func (d *KubernetesD) watch() {
 			time.Sleep(retrayDealy)
 		}
 		if atomic.LoadInt32(&d.status) == 2 {
-			log.Info(nil, "[discover.kubernetes] discover stopped", map[string]interface{}{"namespace": d.namespace, "labelselector": d.labelselector})
+			log.Info(nil, "[discover.kubernetes] discover stopped", log.String("namespace", d.namespace), log.String("labelselector", d.labelselector))
 			d.lasterror = cerror.ErrDiscoverStopped
 			return
 		}
@@ -261,13 +261,13 @@ func (d *KubernetesD) watch() {
 				}
 			}
 			d.Unlock()
-			log.Error(nil, "[discover.kubernetes] watch failed", map[string]interface{}{"namespace": d.namespace, "labelselector": d.labelselector, "error": e})
+			log.Error(nil, "[discover.kubernetes] watch failed", log.String("namespace", d.namespace), log.String("labelselector", d.labelselector), log.CError(e))
 			retrayDealy = time.Millisecond * 100
 			continue
 		}
 		if atomic.LoadInt32(&d.status) == 2 {
 			d.watcher.Stop()
-			log.Info(nil, "[discover.kubernetes] discover stopped", map[string]interface{}{"namespace": d.namespace, "labelselector": d.labelselector})
+			log.Info(nil, "[discover.kubernetes] discover stopped", log.String("namespace", d.namespace), log.String("labelselector", d.labelselector))
 			d.lasterror = cerror.ErrDiscoverStopped
 			return
 		}
@@ -276,7 +276,7 @@ func (d *KubernetesD) watch() {
 			event, ok := <-d.watcher.ResultChan()
 			if !ok {
 				if atomic.LoadInt32(&d.status) == 2 {
-					log.Info(nil, "[discover.kubernetes] discover stopped", map[string]interface{}{"namespace": d.namespace, "labelselector": d.labelselector})
+					log.Info(nil, "[discover.kubernetes] discover stopped", log.String("namespace", d.namespace), log.String("labelselector", d.labelselector))
 					d.lasterror = cerror.ErrDiscoverStopped
 					return
 				}
@@ -344,7 +344,7 @@ func (d *KubernetesD) watch() {
 					}
 				}
 				d.Unlock()
-				log.Error(nil, "[discover.kubernetes] watch failed", map[string]interface{}{"error": d.lasterror})
+				log.Error(nil, "[discover.kubernetes] watch failed", log.CError(e))
 				if e, ok := d.lasterror.(*apierrors.StatusError); ok && e.ErrStatus.Details != nil {
 					retrayDealy = time.Duration(e.ErrStatus.Details.RetryAfterSeconds) * time.Second
 				} else {

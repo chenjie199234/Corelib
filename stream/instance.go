@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-const maxPieceLen = 65530
+const maxPieceLen = 65500 //ensure every piece of data < 64k
 
 type Instance struct {
 	c *InstanceConfig

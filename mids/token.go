@@ -43,7 +43,7 @@ func MakeToken(ctx context.Context, puber, deployenv, runenv, userid, data strin
 	})
 	tokenstr, e := secure.AesEncrypt(tokensecret, t)
 	if e != nil {
-		log.Error(ctx, "[token.make] failed", map[string]interface{}{"error": e})
+		log.Error(ctx, "[token.make] failed", log.CError(e))
 		return ""
 	}
 	return tokenstr

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"io"
+	"log/slog"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -42,21 +43,22 @@ type app struct {
 	processes   map[uint64]*process
 	plker       *sync.RWMutex
 	logfile     *rotatefile.RotateFile
+	sloger      *slog.Logger
 	notice      chan uint64
 }
 
 func (a *app) startApp() {
-	log(a.logfile, "start init", nil)
+	a.sloger.Info("start init")
 	a.status = a_UPDATING
 	if !a.clone() {
 		a.status = a_CLOSING
 		a.s.notice <- a.project + "." + a.group + "." + a.app
-		log(a.logfile, "init failed", nil)
+		a.sloger.Error("init failed")
 		return
 	}
 	atomic.StoreInt32(&a.opstatus, 0)
 	a.status = a_UPDATESUCCESS
-	log(a.logfile, "init success", nil)
+	a.sloger.Info("init success")
 	go func() {
 		defer func() {
 			a.logfile.Close()
@@ -87,22 +89,22 @@ func (a *app) updateApp() {
 	if a.status == a_CLOSING {
 		return
 	}
-	log(a.logfile, "start update", nil)
+	a.sloger.Info("start update")
 	a.status = a_UPDATING
 	//reset all changes
 	if !a.cancelmodify() {
 		a.status = a_UPDATEFAILED
-		log(a.logfile, "update failed", nil)
+		a.sloger.Error("update failed")
 		return
 	}
 	//fetch data
 	if !a.fetch() {
 		a.status = a_UPDATEFAILED
-		log(a.logfile, "update failed", nil)
+		a.sloger.Error("update failed")
 		return
 	}
 	a.status = a_UPDATESUCCESS
-	log(a.logfile, "update success", nil)
+	a.sloger.Info("update success")
 }
 func (a *app) buildApp(commitid string) {
 	if atomic.SwapInt32(&a.opstatus, 1) == 1 {
@@ -112,33 +114,33 @@ func (a *app) buildApp(commitid string) {
 	if a.status == a_CLOSING {
 		return
 	}
-	log(a.logfile, "start build", nil)
+	a.sloger.Info("start build")
 	if a.bincommitid == commitid {
-		log(a.logfile, "build success", map[string]interface{}{"commitid": commitid})
+		a.sloger.Info("build success")
 		return
 	}
 	a.status = a_UPDATING
 	//reset all changes
 	if !a.cancelmodify() {
 		a.status = a_UPDATEFAILED
-		log(a.logfile, "build failed", map[string]interface{}{"commitid": commitid})
+		a.sloger.Error("build failed", "commitid", commitid)
 		return
 	}
 	//switch to new changes
 	if !a.checkout(commitid) {
 		a.status = a_UPDATEFAILED
-		log(a.logfile, "build failed", map[string]interface{}{"commitid": commitid})
+		a.sloger.Error("build failed", "commitid", commitid)
 		return
 	}
 	//build
 	if !a.build() {
 		a.status = a_BUILDFAILED
-		log(a.logfile, "build failed", map[string]interface{}{"commitid": commitid})
+		a.sloger.Error("build failed", "commitid", commitid)
 		return
 	}
 	a.status = a_BUILDSUCCESS
 	a.bincommitid = commitid
-	log(a.logfile, "build success", map[string]interface{}{"commitid": commitid})
+	a.sloger.Info("build success", "commitid", commitid)
 }
 func (a *app) stopApp(del bool) {
 	if atomic.SwapInt32(&a.opstatus, 1) == 1 {
@@ -164,7 +166,7 @@ func (a *app) stopApp(del bool) {
 // git clone -q <url> ./
 func (a *app) clone() bool {
 	cmd := exec.Command("git", "clone", "-q", a.url, "./")
-	log(a.logfile, "start:git clone -q "+a.url, map[string]interface{}{"operation": "clone"})
+	a.sloger.Info("start:git clone -q "+a.url, "operation", "clone")
 	if !a.git(cmd, "clone") {
 		return false
 	}
@@ -191,7 +193,7 @@ func (a *app) clone() bool {
 // git fetch -q
 func (a *app) fetch() bool {
 	cmd := exec.Command("git", "fetch", "-q")
-	log(a.logfile, "start:git fetch -q", map[string]interface{}{"operation": "fetch"})
+	a.sloger.Info("start:git fetch -q", "operation", "fetch")
 	if !a.git(cmd, "fetch") {
 		return false
 	}
@@ -218,46 +220,46 @@ func (a *app) fetch() bool {
 // git branch -r --format="%(refname:strip=3) %(objectname:short)"
 func (a *app) branch() bool {
 	cmd := exec.Command("git", "branch", "-r", "--format=\"%(refname:strip=3) %(objectname:short)\"")
-	log(a.logfile, "start:git branch -r --format=\"%(refname:strip=3) %(objectname:short)\"", map[string]interface{}{"operation": "listbranch"})
+	a.sloger.Info("start:git branch -r --format=\"%(refname:strip=3) %(objectname:short)\"", "operation", "listbranch")
 	return a.git(cmd, "listbranch")
 }
 
 // git tag --format="%(refname:strip=2) %(objectname:short)"
 func (a *app) tag() bool {
 	cmd := exec.Command("git", "tag", "--format=\"%(refname:strip=2) %(objectname:short)\"")
-	log(a.logfile, "start:git tag --format=\"%(refname:strip=2) %(objectname:short)\"", map[string]interface{}{"operation": "listtag"})
+	a.sloger.Info("start:git tag --format=\"%(refname:strip=2) %(objectname:short)\"", "operation", "listtag")
 	return a.git(cmd, "listtag")
 }
 
 // git checkout -q .
 func (a *app) cancelmodify() bool {
 	cmd := exec.Command("git", "checkout", "-q", ".")
-	log(a.logfile, "start:git checkout -q .", map[string]interface{}{"operation": "cancelmodify"})
+	a.sloger.Info("start:git checkout -q .", "operation", "cancelmodify")
 	return a.git(cmd, "cancelmodify")
 }
 
 // git checkout -q <commitid>
 func (a *app) checkout(commitid string) bool {
 	cmd := exec.Command("git", "checkout", "-q", commitid)
-	log(a.logfile, "start:git checkout -q "+commitid, map[string]interface{}{"operation": "checkout"})
+	a.sloger.Info("start:git checkout -q "+commitid, "operation", "checkout")
 	return a.git(cmd, "checkout")
 }
 func (a *app) git(cmd *exec.Cmd, operation string) bool {
 	cmd.Dir = "./app/" + a.project + "." + a.group + "." + a.app
 	tempout, e := cmd.StdoutPipe()
 	if e != nil {
-		log(a.logfile, "pipe stdout failed", map[string]interface{}{"operation": operation, "error": e})
+		a.sloger.Error("pipe stdout failed", "operation", operation, "error", e)
 		return false
 	}
 	temperr, e := cmd.StderrPipe()
 	if e != nil {
-		log(a.logfile, "pipe stderr failed", map[string]interface{}{"operation": operation, "error": e})
+		a.sloger.Error("pipe stderr failed", "operation", operation, "error", e)
 		return false
 	}
 	outreader := bufio.NewReaderSize(tempout, 4096)
 	errreader := bufio.NewReaderSize(temperr, 4096)
 	if e = cmd.Start(); e != nil {
-		log(a.logfile, "start cmd process failed", map[string]interface{}{"operation": operation, "error": e})
+		a.sloger.Error("start cmd process failed", "operation", operation, "error", e)
 		return false
 	}
 	wg := &sync.WaitGroup{}
@@ -267,7 +269,7 @@ func (a *app) git(cmd *exec.Cmd, operation string) bool {
 		for {
 			line, _, e := outreader.ReadLine()
 			if e != nil && e != io.EOF {
-				log(a.logfile, "read stdout failed", map[string]interface{}{"operation": operation, "error": e})
+				a.sloger.Error("read stdout failed", "operation", operation, "error", e)
 				break
 			} else if e != nil {
 				break
@@ -282,7 +284,7 @@ func (a *app) git(cmd *exec.Cmd, operation string) bool {
 				pieces := strings.Split(strings.TrimSpace(common.Byte2str(line)), " ")
 				result[pieces[0]] = pieces[1]
 			}
-			log(a.logfile, "stdout:"+common.Byte2str(line), map[string]interface{}{"operation": operation})
+			a.sloger.Info("stdout:"+common.Byte2str(line), "operation", operation)
 		}
 		if operation == "listbranch" {
 			a.allbranch = result
@@ -296,21 +298,21 @@ func (a *app) git(cmd *exec.Cmd, operation string) bool {
 		for {
 			line, _, e := errreader.ReadLine()
 			if e != nil && e != io.EOF {
-				log(a.logfile, "read stderr failed", map[string]interface{}{"operation": operation, "error": e})
+				a.sloger.Error("read stderr failed", "operation", operation, "error", e)
 				break
 			} else if e != nil {
 				break
 			}
-			log(a.logfile, "stderr:"+common.Byte2str(line), map[string]interface{}{"operation": operation})
+			a.sloger.Error("stderr:"+common.Byte2str(line), "operation", operation)
 		}
 		wg.Done()
 	}()
 	wg.Wait()
 	if e = cmd.Wait(); e != nil {
-		log(a.logfile, "run cmd process failed", map[string]interface{}{"operation": operation, "error": e})
+		a.sloger.Error("run cmd process failed", "operation", operation, "error", e)
 		return false
 	}
-	log(a.logfile, "success", map[string]interface{}{"operation": operation})
+	a.sloger.Info("success", "operation", operation)
 	return true
 }
 func (a *app) build() bool {
@@ -318,21 +320,21 @@ func (a *app) build() bool {
 		cmd := exec.Command(buildcmd.Cmd, buildcmd.Args...)
 		cmd.Env = buildcmd.Env
 		cmd.Dir = "./app/" + a.project + "." + a.group + "." + a.app
-		log(a.logfile, "start:build", map[string]interface{}{"cmd": buildcmd.Cmd, "args": buildcmd.Args, "env": buildcmd.Env})
+		a.sloger.Info("start:build", "cmd", buildcmd.Cmd, "args", buildcmd.Args, "env", buildcmd.Env)
 		tempout, e := cmd.StdoutPipe()
 		if e != nil {
-			log(a.logfile, "pipe stdout failed", map[string]interface{}{"operation": "build", "error": e})
+			a.sloger.Error("pipe stdout failed", "operation", "build", "error", e)
 			return false
 		}
 		temperr, e := cmd.StderrPipe()
 		if e != nil {
-			log(a.logfile, "pipe stderr failed", map[string]interface{}{"operation": "build", "error": e})
+			a.sloger.Error("pipe stderr failed", "operation", "build", "error", e)
 			return false
 		}
 		outreader := bufio.NewReaderSize(tempout, 4096)
 		errreader := bufio.NewReaderSize(temperr, 4096)
 		if e = cmd.Start(); e != nil {
-			log(a.logfile, "start cmd process failed", map[string]interface{}{"operation": "build", "error": e})
+			a.sloger.Error("start cmd process failed", "operation", "build", "error", e)
 			return false
 		}
 		wg := &sync.WaitGroup{}
@@ -341,12 +343,12 @@ func (a *app) build() bool {
 			for {
 				line, _, e := outreader.ReadLine()
 				if e != nil && e != io.EOF {
-					log(a.logfile, "read stdout failed", map[string]interface{}{"operation": "build", "error": e})
+					a.sloger.Error("read stdout failed", "operation", "build", "error", e)
 					break
 				} else if e != nil {
 					break
 				}
-				log(a.logfile, "stdout:"+common.Byte2str(line), map[string]interface{}{"operation": "build"})
+				a.sloger.Info("stdout:"+common.Byte2str(line), "operation", "build")
 			}
 			wg.Done()
 		}()
@@ -354,18 +356,18 @@ func (a *app) build() bool {
 			for {
 				line, _, e := errreader.ReadLine()
 				if e != nil && e != io.EOF {
-					log(a.logfile, "read stdout failed", map[string]interface{}{"operation": "build", "error": e})
+					a.sloger.Error("read stdout failed", "operation", "build", "error", e)
 					break
 				} else if e != nil {
 					break
 				}
-				log(a.logfile, "stderr:"+common.Byte2str(line), map[string]interface{}{"operation": "build"})
+				a.sloger.Error("stderr:"+common.Byte2str(line), "operation", "build")
 			}
 			wg.Done()
 		}()
 		wg.Wait()
 		if e = cmd.Wait(); e != nil {
-			log(a.logfile, "run cmd process failed", map[string]interface{}{"operation": "build", "error": e})
+			a.sloger.Error("run cmd process failed", "operation", "build", "error", e)
 			return false
 		}
 	}

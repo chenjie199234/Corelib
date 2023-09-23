@@ -96,7 +96,7 @@ func getTotalMEM() (cgroup bool) {
 func cgroupMEM() {
 	usagestr, e := os.ReadFile("/sys/fs/cgroup/memory/memory.usage_in_bytes")
 	if e != nil {
-		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes failed", map[string]interface{}{"error": e})
+		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes failed", log.CError(e))
 		return
 	}
 	//drop \n
@@ -105,7 +105,7 @@ func cgroupMEM() {
 	}
 	usage, e := strconv.ParseUint(common.Byte2str(usagestr), 10, 64)
 	if e != nil {
-		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes data format wrong", map[string]interface{}{"usage_in_bytes": usagestr})
+		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes data format wrong", log.String("usage_in_bytes", common.Byte2str(usagestr)))
 		return
 	}
 	LastUsageMEM = usage

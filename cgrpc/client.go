@@ -14,6 +14,7 @@ import (
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
+	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
@@ -116,6 +117,7 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 		stop:     graceful.New(),
 	}
 	opts := make([]grpc.DialOption, 0, 10)
+	opts = append(opts, grpc.WithRecvBufferPool(pool.GetPool()))
 	opts = append(opts, grpc.WithDisableRetry())
 	if tlsc == nil {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))

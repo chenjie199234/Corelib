@@ -28,15 +28,15 @@ import (
 // |                     Payload Data continued ...              |
 // +-------------------------------------------------------------+
 
-func makeheader(buf *pool.Buffer, fin, firstpiece, mask bool, length uint64, msgtype uint8) (maskkey []byte) {
+func makeheader(buf *[]byte, fin, firstpiece, mask bool, length uint64, msgtype uint8) (maskkey []byte) {
 	if fin && firstpiece {
-		buf.AppendByte(_FIN | msgtype)
+		*buf = append(*buf, _FIN|msgtype)
 	} else if fin {
-		buf.AppendByte(uint8(_FIN | _CONTINUE))
+		*buf = append(*buf, uint8(_FIN|_CONTINUE))
 	} else if !firstpiece {
-		buf.AppendByte(uint8(_CONTINUE))
+		*buf = append(*buf, uint8(_CONTINUE))
 	} else {
-		buf.AppendByte(msgtype)
+		*buf = append(*buf, msgtype)
 	}
 	var payload uint8
 	switch {
@@ -48,37 +48,38 @@ func makeheader(buf *pool.Buffer, fin, firstpiece, mask bool, length uint64, msg
 		payload = 127
 	}
 	if mask {
-		buf.AppendByte(_MASK | payload)
+		*buf = append(*buf, _MASK|payload)
 	} else {
-		buf.AppendByte(payload)
+		*buf = append(*buf, payload)
 	}
 	switch payload {
 	case 127:
-		buf.Growth(10)
-		binary.BigEndian.PutUint64(buf.Bytes()[2:], uint64(length))
+		*buf = (*buf)[:10]
+		binary.BigEndian.PutUint64((*buf)[2:], uint64(length))
 	case 126:
-		buf.Growth(4)
-		binary.BigEndian.PutUint16(buf.Bytes()[2:], uint16(length))
+		*buf = (*buf)[:4]
+		binary.BigEndian.PutUint16((*buf)[2:], uint16(length))
 	}
 	if mask {
-		buf.Growth(uint32(buf.Len()) + 4)
-		rand.Read(buf.Bytes()[buf.Len()-4:])
-		maskkey = buf.Bytes()[buf.Len()-4:]
+		*buf = (*buf)[:len(*buf)+4]
+		rand.Read((*buf)[len(*buf)-4:])
+		maskkey = (*buf)[len(*buf)-4:]
 	}
 	return
 }
 
 // RFC 6455: all message from client to server must be masked
 func WriteMsg(conn net.Conn, data []byte, fin, firstpiece, mask bool) error {
-	buf := pool.GetBuffer()
-	defer pool.PutBuffer(buf)
-	maskkey := makeheader(buf, fin, firstpiece, mask, uint64(len(data)), uint8(_BINARY))
-	headlen := buf.Len()
-	buf.AppendBytes(data)
+	buf := pool.GetPool().Get(len(data) + 14)
+	defer pool.GetPool().Put(&buf)
+	buf = buf[:0]
+	maskkey := makeheader(&buf, fin, firstpiece, mask, uint64(len(data)), uint8(_BINARY))
+	headlen := len(buf)
+	buf = append(buf, data...)
 	if mask {
-		domask(buf.Bytes()[headlen:], maskkey)
+		domask(buf[headlen:], maskkey)
 	}
-	if _, e := conn.Write(buf.Bytes()); e != nil {
+	if _, e := conn.Write(buf); e != nil {
 		return e
 	}
 	return nil
@@ -90,15 +91,16 @@ func WritePing(conn net.Conn, data []byte, mask bool) error {
 	if len(data) > 125 {
 		return ErrMsgLarge
 	}
-	buf := pool.GetBuffer()
-	defer pool.PutBuffer(buf)
-	maskkey := makeheader(buf, true, true, mask, uint64(len(data)), uint8(_PING))
-	headlen := buf.Len()
-	buf.AppendBytes(data)
+	buf := pool.GetPool().Get(6 + len(data))
+	defer pool.GetPool().Put(&buf)
+	buf = buf[:0]
+	maskkey := makeheader(&buf, true, true, mask, uint64(len(data)), uint8(_PING))
+	headlen := len(buf)
+	buf = append(buf, data...)
 	if mask {
-		domask(buf.Bytes()[headlen:], maskkey)
+		domask(buf[headlen:], maskkey)
 	}
-	if _, e := conn.Write(buf.Bytes()); e != nil {
+	if _, e := conn.Write(buf); e != nil {
 		return e
 	}
 	return nil
@@ -110,15 +112,16 @@ func WritePong(conn net.Conn, data []byte, mask bool) error {
 	if len(data) > 125 {
 		return ErrMsgLarge
 	}
-	buf := pool.GetBuffer()
-	defer pool.PutBuffer(buf)
-	maskkey := makeheader(buf, true, true, mask, uint64(len(data)), uint8(_PONG))
-	headlen := buf.Len()
-	buf.AppendBytes(data)
+	buf := pool.GetPool().Get(6 + len(data))
+	defer pool.GetPool().Put(&buf)
+	buf = buf[:0]
+	maskkey := makeheader(&buf, true, true, mask, uint64(len(data)), uint8(_PONG))
+	headlen := len(buf)
+	buf = append(buf, data...)
 	if mask {
-		domask(buf.Bytes()[headlen:], maskkey)
+		domask(buf[headlen:], maskkey)
 	}
-	if _, e := conn.Write(buf.Bytes()); e != nil {
+	if _, e := conn.Write(buf); e != nil {
 		return e
 	}
 	return nil

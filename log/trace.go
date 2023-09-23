@@ -2,15 +2,11 @@ package log
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
+	"log/slog"
 	"math/rand"
-	"os"
 	"strconv"
 	"time"
 
-	"github.com/chenjie199234/Corelib/cerror"
-	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/util/host"
 )
 
@@ -20,25 +16,6 @@ const (
 	CLIENT ROLE = "client"
 	SERVER ROLE = "server"
 )
-
-type TraceLog struct {
-	TraceId    string `json:"_tid"` //the whole trace route
-	TraceDeep  int    `json:"_tdeep"`
-	Start      int64  `json:"start"` //nanosecond
-	End        int64  `json:"end"`   //nanosecond
-	HostName   string `json:"host_name"`
-	Role       string `json:"role"`
-	FromApp    string `json:"from_app"`
-	FromIP     string `json:"from_ip"`
-	FromMethod string `json:"from_method"`
-	FromPath   string `json:"from_path"`
-	ToApp      string `json:"to_app"`
-	ToIP       string `json:"to_ip"`
-	ToMethod   string `json:"to_method"`
-	ToPath     string `json:"to_path"`
-	ErrCode    int32  `json:"err_code"`
-	ErrMsg     string `json:"err_msg"`
-}
 
 type tracekey struct{}
 
@@ -107,67 +84,20 @@ func Trace(ctx context.Context, role ROLE, toapp, toip, tomethod, topath string,
 	if traceid == "" {
 		return
 	}
-	ecode := int32(0)
-	emsg := ""
-	if ee := cerror.ConvertStdError(e); ee != nil {
-		ecode = int32(ee.Code)
-		emsg = ee.Msg
-	}
-	buf := pool.GetBuffer()
-	buf.AppendString("{\"_lv\":\"TRACE\",\"_tid\":\"")
-	buf.AppendString(traceid)
-	buf.AppendString("\",\"_tdeep\":")
-	buf.AppendInt(deep)
-	buf.AppendString(",\"start\":")
-	buf.AppendInt64(start.UnixNano())
-	buf.AppendString(",\"end\":")
-	buf.AppendInt64(end.UnixNano())
-	buf.AppendString(",\"host_name\":\"")
-	buf.AppendString(host.Hostname)
-	buf.AppendString("\",\"role\":\"")
-	buf.AppendString(string(role))
-	buf.AppendString("\",\"from_app\":\"")
-	buf.AppendString(fromapp)
-	buf.AppendString("\",\"from_ip\":\"")
-	buf.AppendString(fromip)
-	buf.AppendString("\",\"from_method\":\"")
-	buf.AppendString(frommethod)
-	buf.AppendString("\",\"from_path\":\"")
-	buf.AppendString(frompath)
-	buf.AppendString("\",\"to_app\":\"")
-	buf.AppendString(toapp)
-	buf.AppendString("\",\"to_ip\":\"")
-	buf.AppendString(toip)
-	buf.AppendString("\",\"to_method\":\"")
-	buf.AppendString(tomethod)
-	buf.AppendString("\",\"to_path\":\"")
-	buf.AppendString(topath)
-	buf.AppendString("\",\"err_msg\":\"")
-	special := false
-	for _, v := range emsg {
-		if v == '\\' || v == '"' {
-			special = true
-			break
-		}
-	}
-	if special {
-		d, _ := json.Marshal(emsg)
-		buf.AppendBytes(d)
-	} else {
-		buf.AppendString(emsg)
-	}
-	buf.AppendString("\",\"err_code\":")
-	buf.AppendInt32(ecode)
-	buf.AppendString("}\n")
-	if target&1 > 0 {
-		os.Stderr.Write(buf.Bytes())
-	}
-	if target&2 > 0 {
-		if _, e := rf.WriteBuf(buf); e != nil {
-			fmt.Printf("[trace] write rotate file error: %s with data: %s\n", e, buf.String())
-			pool.PutBuffer(buf)
-		}
-	} else {
-		pool.PutBuffer(buf)
-	}
+	attrs := make([]slog.Attr, 0)
+	attrs = append(attrs, Group("trace", slog.String("id", traceid)), slog.Int("deep", deep))
+	attrs = append(attrs, slog.Int64("start", start.UnixNano()))
+	attrs = append(attrs, slog.Int64("end", end.UnixNano()))
+	attrs = append(attrs, slog.String("host_name", host.Hostname))
+	attrs = append(attrs, slog.String("role", string(role)))
+	attrs = append(attrs, slog.String("from_app", fromapp))
+	attrs = append(attrs, slog.String("from_ip", fromip))
+	attrs = append(attrs, slog.String("from_method", frommethod))
+	attrs = append(attrs, slog.String("from_path", frompath))
+	attrs = append(attrs, slog.String("to_app", toapp))
+	attrs = append(attrs, slog.String("to_ip", toip))
+	attrs = append(attrs, slog.String("to_method", tomethod))
+	attrs = append(attrs, slog.String("to_path", topath))
+	attrs = append(attrs, CError(e))
+	innerlog(ctx, slog.LevelInfo, "trace", attrs...)
 }

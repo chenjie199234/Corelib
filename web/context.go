@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
@@ -49,6 +50,9 @@ func (s *WebServer) putContext(ctx *Context) {
 	}
 	ctx.r = nil
 	ctx.w = nil
+	if ctx.bodyerr != nil {
+		pool.GetPool().Put(&ctx.body)
+	}
 	ctx.body = nil
 	ctx.bodyerr = nil
 	s.ctxpool.Put(ctx)
@@ -196,6 +200,9 @@ func (c *Context) GetContentLanguage() string {
 func (c *Context) GetContentLength() int64 {
 	return c.r.ContentLength
 }
+func (c *Context) GetTransferEncoding() string {
+	return c.r.Header.Get("Transfer-Encoding")
+}
 func (c *Context) GetAcceptType() string {
 	return c.r.Header.Get("Accept")
 }
@@ -248,6 +255,25 @@ func (c *Context) GetBody() ([]byte, error) {
 	if c.body != nil || c.bodyerr != nil {
 		return c.body, c.bodyerr
 	}
-	c.body, c.bodyerr = io.ReadAll(c.r.Body)
+	b := pool.GetPool().Get(0)
+	for {
+		n, e := c.r.Body.Read(b[len(b):cap(b)])
+		b = b[:len(b)+n]
+		if e != nil && e == io.EOF {
+			break
+		}
+		if e != nil {
+			c.bodyerr = e
+			pool.GetPool().Put(&b)
+			break
+		}
+		if len(b) == cap(b) {
+			//need more buf
+			b = pool.CheckCap(&b, len(b)+1)
+		}
+	}
+	if c.bodyerr == nil {
+		c.body = b
+	}
 	return c.body, c.bodyerr
 }

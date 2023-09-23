@@ -162,14 +162,14 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 					case connectivity.Shutdown:
 						if oldstatus == int32(connectivity.Ready) {
 							//offline
-							log.Info(nil, "[cgrpc.client] offline", map[string]interface{}{"sname": b.c.server, "sip": server.addr})
+							log.Info(nil, "[cgrpc.client] offline", log.String("sname", b.c.server), log.String("sip", server.addr))
 							b.rebuildpicker(false)
 						}
 						delete(b.servers, addr.Addr)
 					case connectivity.Idle:
 						if oldstatus == int32(connectivity.Ready) {
 							//offline
-							log.Info(nil, "[cgrpc.client] offline", map[string]interface{}{"sname": b.c.server, "sip": server.addr})
+							log.Info(nil, "[cgrpc.client] offline", log.String("sname", b.c.server), log.String("sip", server.addr))
 							b.rebuildpicker(false)
 						}
 						if len(server.dservers) == 0 {
@@ -182,13 +182,13 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 						}
 					case connectivity.Ready:
 						//online
-						log.Info(nil, "[cgrpc.client] online", map[string]interface{}{"sname": b.c.server, "sip": server.addr})
+						log.Info(nil, "[cgrpc.client] online", log.String("sname", b.c.server), log.String("sip", server.addr))
 						b.rebuildpicker(true)
 					case connectivity.TransientFailure:
 						//connect failed
-						log.Error(nil, "[cgrpc.client] connect failed", map[string]interface{}{"sname": b.c.server, "sip": server.addr, "error": s.ConnectionError})
+						log.Error(nil, "[cgrpc.client] connect failed", log.String("sname", b.c.server), log.String("sip", server.addr), log.CError(s.ConnectionError))
 					case connectivity.Connecting:
-						log.Info(nil, "[cgrpc.client] connecting", map[string]interface{}{"sname": b.c.server, "sip": server.addr})
+						log.Info(nil, "[cgrpc.client] connecting", log.String("sname", b.c.server), log.String("sip", server.addr))
 					}
 				},
 			})

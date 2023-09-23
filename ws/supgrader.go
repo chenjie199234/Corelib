@@ -31,8 +31,8 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 	var accept string
 	var check uint8
 	header = make(http.Header)
-	buf := pool.GetBuffer()
-	defer pool.PutBuffer(buf)
+	buf := pool.GetPool().Get(0)
+	defer pool.GetPool().Put(&buf)
 	for {
 		line, prefix, err := reader.ReadLine()
 		if e != nil {
@@ -40,22 +40,30 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 			return
 		}
 		if prefix {
-			buf.AppendBytes(line)
+			if len(buf)+len(line) <= cap(buf) {
+				buf = append(buf, line...)
+			} else {
+				e = ErrHeaderLineFormat
+				return
+			}
 			continue
 		}
-		if len(line) == 0 && buf.Len() == 0 {
+		if len(line) == 0 && len(buf) == 0 {
 			//finish the header
 			break
 		}
-		if buf.Len() == 0 {
+		if len(buf) == 0 {
 			//deal the line
 		} else if len(line) == 0 {
 			//deal the buf
-			line = buf.Bytes()
-		} else {
+			line = buf
+		} else if len(buf)+len(line) <= cap(buf) {
 			//deal the buf+line
-			buf.AppendBytes(line)
-			line = buf.Bytes()
+			buf = append(buf, line...)
+			line = buf
+		} else {
+			e = ErrHeaderLineFormat
+			return
 		}
 		//deal
 		if path == "" {
@@ -127,20 +135,20 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 				header.Add(string(pieces[0]), string(pieces[1]))
 			}
 		}
-		buf.Reset()
+		buf = buf[:0]
 	}
 	if check != 0b00011111 {
 		e = ErrHeaderLineFormat
 		return
 	}
-	buf.AppendString("HTTP/1.1 101 Switching Protocols\r\n")
-	buf.AppendString("Upgrade: websocket\r\n")
-	buf.AppendString("Connection: Upgrade\r\n")
-	buf.AppendString("Sec-WebSocket-Version: 13\r\n")
-	buf.AppendString("Sec-WebSocket-Accept: ")
-	buf.AppendString(accept)
-	buf.AppendString("\r\n\r\n")
-	if _, e = writer.Write(buf.Bytes()); e != nil {
+	buf = append(buf, "HTTP/1.1 101 Switching Protocols\r\n"...)
+	buf = append(buf, "Upgrade: websocket\r\n"...)
+	buf = append(buf, "Connection: Upgrade\r\n"...)
+	buf = append(buf, "Sec-WebSocket-Version: 13\r\n"...)
+	buf = append(buf, "Sec-WebSocket-Accept: "...)
+	buf = append(buf, accept...)
+	buf = append(buf, "\r\n\r\n"...)
+	if _, e = writer.Write(buf); e != nil {
 		return
 	}
 	return

@@ -117,7 +117,7 @@ func (d *StaticD) Stop() {
 	d.Lock()
 	defer d.Unlock()
 	if d.lasterror != cerror.ErrDiscoverStopped {
-		log.Info(nil, "[discover.static] discover stopped", map[string]interface{}{"addrs": d.addrs})
+		log.Info(nil, "[discover.static] discover stopped", log.Any("addrs", d.addrs))
 		d.lasterror = cerror.ErrDiscoverStopped
 		for notice := range d.notices {
 			delete(d.notices, notice)

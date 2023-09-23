@@ -70,9 +70,9 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	if now-atomic.LoadInt64(&p.lastactive) > int64(heart) {
 		//heartbeat timeout
 		if p.peertype == _PEER_CLIENT {
-			log.Error(nil, "[Stream.checkheart] heart timeout", map[string]interface{}{"cip": p.c.RemoteAddr().String()})
+			log.Error(nil, "[Stream.checkheart] heart timeout", log.String("cip", p.c.RemoteAddr().String()))
 		} else {
-			log.Error(nil, "[Stream.checkheart] heart timeout", map[string]interface{}{"sip": p.c.RemoteAddr().String()})
+			log.Error(nil, "[Stream.checkheart] heart timeout", log.String("sip", p.c.RemoteAddr().String()))
 		}
 		p.c.Close()
 		return
@@ -80,9 +80,9 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	if now-atomic.LoadInt64(&p.sendidlestart) > int64(sendidle) {
 		//send idle timeout
 		if p.peertype == _PEER_CLIENT {
-			log.Error(nil, "[Stream.checkheart] send idle timeout", map[string]interface{}{"cip": p.c.RemoteAddr().String()})
+			log.Error(nil, "[Stream.checkheart] send idle timeout", log.String("cip", p.c.RemoteAddr().String()))
 		} else {
-			log.Error(nil, "[Stream.checkheart] send idle timeout", map[string]interface{}{"sip": p.c.RemoteAddr().String()})
+			log.Error(nil, "[Stream.checkheart] send idle timeout", log.String("sip", p.c.RemoteAddr().String()))
 		}
 		p.c.Close()
 		return
@@ -90,24 +90,23 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	if recvidle > 0 && now-atomic.LoadInt64(&p.recvidlestart) > int64(recvidle) {
 		//recv idle timeout
 		if p.peertype == _PEER_CLIENT {
-			log.Error(nil, "[Stream.checkheart] recv idle timeout:", map[string]interface{}{"cip": p.c.RemoteAddr().String()})
+			log.Error(nil, "[Stream.checkheart] recv idle timeout:", log.String("cip", p.c.RemoteAddr().String()))
 		} else {
-			log.Error(nil, "[Stream.checkheart] recv idle timeout:", map[string]interface{}{"sip": p.c.RemoteAddr().String()})
+			log.Error(nil, "[Stream.checkheart] recv idle timeout:", log.String("sip", p.c.RemoteAddr().String()))
 		}
 		p.c.Close()
 		return
 	}
 	//send heart probe data
 	go func() {
-		tmp := pool.GetBuffer()
-		defer pool.PutBuffer(tmp)
-		tmp.Resize(8)
-		binary.BigEndian.PutUint64(tmp.Bytes(), uint64(now))
-		if e := ws.WritePing(p.c, tmp.Bytes(), false); e != nil {
+		buf := pool.GetPool().Get(8)
+		defer pool.GetPool().Put(&buf)
+		binary.BigEndian.PutUint64(buf, uint64(now))
+		if e := ws.WritePing(p.c, buf, false); e != nil {
 			if p.peertype == _PEER_CLIENT {
-				log.Error(nil, "[Stream.checkheart] write ping to client failed", map[string]interface{}{"cip": p.c.RemoteAddr().String(), "error": e})
+				log.Error(nil, "[Stream.checkheart] write ping to client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 			} else {
-				log.Error(nil, "[Stream.checkheart] write ping to server failed", map[string]interface{}{"sip": p.c.RemoteAddr().String(), "error": e})
+				log.Error(nil, "[Stream.checkheart] write ping to server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 			}
 			p.c.Close()
 			return
@@ -179,9 +178,9 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 		}
 		if e := ws.WriteMsg(p.c, data, userdata == nil, first, false); e != nil {
 			if p.peertype == _PEER_CLIENT {
-				log.Error(ctx, "[Stream.SendMessage] write to client failed", map[string]interface{}{"cip": p.c.RemoteAddr().String(), "error": e})
+				log.Error(ctx, "[Stream.SendMessage] write to client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 			} else {
-				log.Error(ctx, "[Stream.SendMessage] write to server failed", map[string]interface{}{"sip": p.c.RemoteAddr().String(), "error": e})
+				log.Error(ctx, "[Stream.SendMessage] write to server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 			}
 			p.c.Close()
 			if as != nil {

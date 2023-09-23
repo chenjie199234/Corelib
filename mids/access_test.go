@@ -43,16 +43,16 @@ func Test_Accesssign(t *testing.T) {
 	headers.Add("header1", "header1")
 	headers.Add("header1", "我们")
 	headers.Add("header2", "你们")
-	if !VerifyAccessSign(context.Background(), "GRPC", "/abc", querys, headers, metadata, nil, signstr) {
+	if !VerifyAccessSign(context.Background(), "GRPC", "/abc", querys, headers, metadata, nil, signstr, "127.0.0.1") {
 		t.Fatal("should pass")
 	}
-	if VerifyAccessSign(context.Background(), "GRPC", "/abc", querys, headers, metadata, nil, signstr) {
+	if VerifyAccessSign(context.Background(), "GRPC", "/abc", querys, headers, metadata, nil, signstr, "127.0.0.1") {
 		t.Fatal("should not pass")
 	}
-	if VerifyAccessSign(context.Background(), "GET", "/abc", querys, headers, metadata, nil, signstr) {
+	if VerifyAccessSign(context.Background(), "GET", "/abc", querys, headers, metadata, nil, signstr, "127.0.0.1") {
 		t.Fatal("should not pass")
 	}
-	if VerifyAccessSign(context.Background(), "GRPC", "/a", querys, headers, metadata, nil, signstr) {
+	if VerifyAccessSign(context.Background(), "GRPC", "/a", querys, headers, metadata, nil, signstr, "127.0.0.1") {
 		t.Fatal("should not pass")
 	}
 }

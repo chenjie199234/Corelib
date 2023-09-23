@@ -24,30 +24,30 @@ func Test_Client(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		msgbuf := pool.GetBuffer()
-		ctlbuf := pool.GetBuffer()
+		msgbuf := pool.GetPool().Get(0)
+		ctlbuf := pool.GetPool().Get(0)
 		for {
-			opcode, e := Read(reader, msgbuf, 65535, ctlbuf, false)
+			opcode, e := Read(reader, &msgbuf, 65535, &ctlbuf, false)
 			if e != nil {
 				panic("read error:" + e.Error())
 			}
 			switch {
 			case opcode.IsPing():
-				fmt.Println(ctlbuf.String())
-				if e := WritePong(conn, ctlbuf.Bytes(), true); e != nil {
+				fmt.Println(string(ctlbuf))
+				if e := WritePong(conn, ctlbuf, true); e != nil {
 					panic("write pong error:" + e.Error())
 				}
-				ctlbuf.Reset()
+				ctlbuf = ctlbuf[:0]
 			case opcode.IsPong():
-				fmt.Println(string(ctlbuf.Bytes()))
-				ctlbuf.Reset()
+				fmt.Println(string(ctlbuf))
+				ctlbuf = ctlbuf[:0]
 			case opcode.IsClose():
-				ctlbuf.Reset()
+				ctlbuf = ctlbuf[:0]
 				conn.Close()
 				return
 			default:
-				fmt.Println(string(msgbuf.Bytes()))
-				msgbuf.Reset()
+				fmt.Println(string(msgbuf))
+				msgbuf = msgbuf[:0]
 			}
 		}
 	}()

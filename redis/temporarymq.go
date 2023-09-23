@@ -106,7 +106,7 @@ func (c *Client) temporaryMQSubRefresh(ctx context.Context, mqname string, group
 			listname := mqname + "_" + strconv.FormatUint(index, 10)
 			listexist := "{" + listname + "}_exist"
 			if _, e := expireTMQ.Run(ctx, c, []string{listname, listexist}).Result(); e != nil {
-				log.Error(ctx, "[redis.temporaryMQSubRefresh] failed", map[string]interface{}{"group": index, "error": e})
+				log.Error(ctx, "[redis.temporaryMQSubRefresh] failed", log.Uint64("group", index), log.CError(e))
 				err = e
 			}
 		}(i)
@@ -124,7 +124,7 @@ func (c *Client) temporaryMQSubClean(ctx context.Context, mqname string, group u
 			listname := mqname + "_" + strconv.FormatUint(index, 10)
 			listexist := "{" + listname + "}_exist"
 			if _, e := c.Del(ctx, listexist).Result(); e != nil {
-				log.Error(ctx, "[redis.TemporaryMQSubClean] failed", map[string]interface{}{"group": index, "error": e})
+				log.Error(ctx, "[redis.TemporaryMQSubClean] failed", log.Uint64("group", index), log.CError(e))
 				err = e
 			}
 		}(i)
@@ -147,7 +147,7 @@ func (c *Client) temporaryMQSubHandle(ctx context.Context, mqname string, index 
 		if result, e = c.BLPop(ctx, time.Second, listname).Result(); e == nil {
 			handler(common.Str2byte(result[1]))
 		} else if ee, ok := e.(interface{ Timeout() bool }); (!ok || !ee.Timeout()) && e != gredis.Nil {
-			log.Error(ctx, "[redis.temporaryMQSubHandle] failed", map[string]interface{}{"group": index, "error": e})
+			log.Error(ctx, "[redis.temporaryMQSubHandle] failed", log.Uint64("group", index), log.CError(e))
 		} else {
 			e = nil
 		}

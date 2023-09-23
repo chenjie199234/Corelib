@@ -2,6 +2,7 @@ package superd
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -138,6 +139,7 @@ func (s *Super) CreateApp(project, groupname, appname, url string, buildcmds []*
 		if e != nil {
 			return errors.New("[CreateApp] " + e.Error())
 		}
+		a.sloger = slog.New(slog.NewJSONHandler(a.logfile, &slog.HandlerOptions{AddSource: true}).WithGroup("attrs"))
 		s.apps[fullappname] = a
 		go a.startApp()
 		return nil

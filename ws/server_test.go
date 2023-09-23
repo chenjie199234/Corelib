@@ -34,34 +34,34 @@ func Test_Server(t *testing.T) {
 					WritePing(c, []byte("server ping"), false)
 				}
 			}()
-			msgbuf := pool.GetBuffer()
-			ctlbuf := pool.GetBuffer()
+			msgbuf := pool.GetPool().Get(0)
+			ctlbuf := pool.GetPool().Get(0)
 			for {
-				opcode, e := Read(reader, msgbuf, 100, ctlbuf, true)
+				opcode, e := Read(reader, &msgbuf, 100, &ctlbuf, true)
 				if e != nil {
 					panic("read error:" + e.Error())
 				}
 				switch {
 				case opcode.IsPing():
-					fmt.Println(ctlbuf.String())
-					if e := WritePong(conn, ctlbuf.Bytes(), false); e != nil {
+					fmt.Println(string(ctlbuf))
+					if e := WritePong(conn, ctlbuf, false); e != nil {
 						panic("write pong error:" + e.Error())
 					}
-					ctlbuf.Reset()
+					ctlbuf = ctlbuf[:0]
 				case opcode.IsPong():
-					fmt.Println(string(ctlbuf.Bytes()))
-					ctlbuf.Reset()
+					fmt.Println(string(ctlbuf))
+					ctlbuf = ctlbuf[:0]
 				case opcode.IsClose():
-					fmt.Println(string(ctlbuf.Bytes()))
+					fmt.Println(string(ctlbuf))
 					c.Close()
-					ctlbuf.Reset()
+					ctlbuf = ctlbuf[:0]
 					return
 				default:
-					fmt.Println(string(msgbuf.Bytes()))
-					if e := WriteMsg(conn, msgbuf.Bytes(), true, true, false); e != nil {
+					fmt.Println(string(msgbuf))
+					if e := WriteMsg(conn, msgbuf, true, true, false); e != nil {
 						panic("write msg error:" + e.Error())
 					}
-					msgbuf.Reset()
+					msgbuf = msgbuf[:0]
 				}
 			}
 		}(conn)

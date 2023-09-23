@@ -20,36 +20,39 @@ import (
 // reader := bufio.NewReader(conn)
 // Cupgrade(reader, conn)
 func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header http.Header, e error) {
-	buf := pool.GetBuffer()
-	defer pool.PutBuffer(buf)
-	buf.AppendString("GET ")
+	buf := pool.GetPool().Get(150 + len(host) + len(path))
+	defer pool.GetPool().Put(&buf)
+	buf = buf[:0]
+	buf = append(buf, "GET "...)
 	if path == "" {
-		buf.AppendString("/ HTTP/1.1\r\n")
+		buf = append(buf, "/ HTTP/1.1\r\n"...)
 	} else if path[0] != '/' {
-		buf.AppendByte('/')
-		buf.AppendString(path)
-		buf.AppendString(" HTTP/1.1\r\n")
+		buf = append(buf, '/')
+		buf = append(buf, path...)
+		buf = append(buf, " HTTP/1.1\r\n"...)
 	} else {
-		buf.AppendString(path)
-		buf.AppendString(" HTTP/1.1\r\n")
+		buf = append(buf, path...)
+		buf = append(buf, " HTTP/1.1\r\n"...)
 	}
-	buf.AppendString("host: ")
-	buf.AppendString(host)
-	buf.AppendString("\r\n")
-	buf.AppendString("connection: Upgrade\r\n")
-	buf.AppendString("upgrade: websocket\r\n")
-	buf.AppendString("sec-websocket-version: 13\r\n")
-	buf.AppendString("sec-webSocket-key: ")
-	nonce := make([]byte, 16)
-	rand.Read(nonce)
-	noncestr := base64.StdEncoding.EncodeToString(nonce)
-	buf.AppendString(noncestr)
-	buf.AppendString("\r\n")
-	buf.AppendString("\r\n")
-	if _, e = writer.Write(buf.Bytes()); e != nil {
+	buf = append(buf, "host: "...)
+	buf = append(buf, host...)
+	buf = append(buf, "\r\n"...)
+	buf = append(buf, "connection: Upgrade\r\n"...)
+	buf = append(buf, "upgrade: websocket\r\n"...)
+	buf = append(buf, "sec-websocket-version: 13\r\n"...)
+	buf = append(buf, "sec-webSocket-key: "...)
+	curlen := len(buf)
+	buf = buf[:curlen+base64.StdEncoding.EncodedLen(16)]
+	rand.Read(buf[curlen+base64.StdEncoding.EncodedLen(16)-16:])
+	base64.StdEncoding.Encode(buf[curlen:], buf[curlen+base64.StdEncoding.EncodedLen(16)-16:])
+	nonce := make([]byte, base64.StdEncoding.EncodedLen(16))
+	copy(nonce, buf[curlen:]) //copy the base64 nonce
+	buf = append(buf, "\r\n"...)
+	buf = append(buf, "\r\n"...)
+	if _, e = writer.Write(buf); e != nil {
 		return
 	}
-	buf.Reset()
+	buf = buf[:0]
 	var check uint8
 	first := true
 	header = make(http.Header)
@@ -60,22 +63,30 @@ func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header 
 			return
 		}
 		if prefix {
-			buf.AppendBytes(line)
+			if len(buf)+len(line) <= cap(buf) {
+				buf = append(buf, line...)
+			} else {
+				e = ErrHeaderLineFormat
+				return
+			}
 			continue
 		}
-		if len(line) == 0 && buf.Len() == 0 {
+		if len(line) == 0 && len(buf) == 0 {
 			//finish the header
 			break
 		}
-		if buf.Len() == 0 {
+		if len(buf) == 0 {
 			//deal the line
 		} else if len(line) == 0 {
 			//deal the buf
-			line = buf.Bytes()
-		} else {
+			line = buf
+		} else if len(buf)+len(line) <= cap(buf) {
 			//deal the buf+line
-			buf.AppendBytes(line)
-			line = buf.Bytes()
+			buf = append(buf, line...)
+			line = buf
+		} else {
+			e = ErrHeaderLineFormat
+			return
 		}
 		//deal
 		if first {
@@ -135,7 +146,7 @@ func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header 
 			case "sec-websocket-accept":
 				check |= 0b00001000
 				h := sha1.New()
-				h.Write(common.Str2byte(noncestr))
+				h.Write(nonce)
 				h.Write([]byte{'2', '5', '8', 'E', 'A', 'F', 'A', '5', '-', 'E', '9', '1', '4', '-', '4', '7', 'D', 'A', '-', '9', '5', 'C', 'A', '-', 'C', '5', 'A', 'B', '0', 'D', 'C', '8', '5', 'B', '1', '1'})
 				if base64.StdEncoding.EncodeToString(h.Sum(nil)) != common.Byte2str(pieces[1]) {
 					e = ErrSign
@@ -149,7 +160,7 @@ func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header 
 				header.Add(string(pieces[0]), string(pieces[1]))
 			}
 		}
-		buf.Reset()
+		buf = buf[:0]
 	}
 	if check != 0b00001111 {
 		e = ErrHeaderLineFormat

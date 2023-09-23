@@ -22,7 +22,7 @@ type RotateFile struct {
 	buffile    *bufio.Writer
 	curlen     int64
 	notice     chan struct{}
-	caslist    *list.List[*pool.Buffer]
+	caslist    *list.List[[]byte]
 	rotate     chan struct{}
 	rlker      *sync.Mutex
 	rotateret  map[chan error]struct{}
@@ -49,7 +49,7 @@ func NewRotateFile(path, name string) (*RotateFile, error) {
 		buffile:   bufio.NewWriterSize(tempfile, 4096),
 		curlen:    0,
 		notice:    make(chan struct{}, 1),
-		caslist:   list.NewList[*pool.Buffer](),
+		caslist:   list.NewList[[]byte](),
 		rotate:    make(chan struct{}, 1),
 		rlker:     &sync.Mutex{},
 		rotateret: make(map[chan error]struct{}),
@@ -93,13 +93,13 @@ func (f *RotateFile) run() {
 	}
 	write := func() bool {
 		if tmp, ok := f.caslist.Pop(nil); ok {
-			buf := (*pool.Buffer)(tmp)
-			if n, e := f.buffile.Write(buf.Bytes()); e != nil {
+			buf := tmp
+			if n, e := f.buffile.Write(buf); e != nil {
 				fmt.Println("[rotatefile.run] write error: " + e.Error())
 			} else {
 				f.curlen += int64(n)
 			}
-			pool.PutBuffer(buf)
+			pool.GetPool().Put(&buf)
 			return true
 		}
 		return false
@@ -219,28 +219,14 @@ func (f *RotateFile) Write(data []byte) (int, error) {
 	if atomic.LoadInt32(&f.status) == 0 {
 		return 0, fmt.Errorf("[rotatefile.Write] rotate file closed")
 	}
-	buf := pool.GetBuffer()
-	buf.AppendBytes(data)
+	buf := pool.GetPool().Get(len(data))
+	copy(buf, data)
 	f.caslist.Push(buf)
 	select {
 	case f.notice <- struct{}{}:
 	default:
 	}
 	return len(data), nil
-}
-func (f *RotateFile) WriteBuf(data *pool.Buffer) (int, error) {
-	if data.Len() == 0 {
-		return 0, nil
-	}
-	if atomic.LoadInt32(&f.status) == 0 {
-		return 0, fmt.Errorf("[rotatefile.WriteBuf] rotate file closed")
-	}
-	f.caslist.Push(data)
-	select {
-	case f.notice <- struct{}{}:
-	default:
-	}
-	return data.Len(), nil
 }
 
 func (f *RotateFile) Close() {

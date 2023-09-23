@@ -75,35 +75,38 @@ func decodeFirstSecond(reader *bufio.Reader) (fin, rsv1, rsv2, rsv3 bool, opcode
 //	var conn net.Conn
 //	... get the conn
 //	reader := bufio.NewReader(conn)
-//	msgbuf := pool.GetBuffer()
-//	ctlbuf := pool.GetBuffer()
+//	msgbuf := pool.GetPool().Get(0)
+//	defer pool.GetPool().Put(&msgbuf)
+//	ctlbuf := pool.GetPool().Get(0)
+//	defer pool.GetPool().Put(&ctlbuf)
 //	for{
-//		ctlcode, e :=Read(reader,msgbuf,ctlbuf)
+//		ctlcode, e :=Read(reader, &msgbuf, your_max_msg_length_limit, &ctlbuf)
 //		if ctlcode.IsPing() {
-//			ping msg
-//			ping := ctlbuf.Bytes()
+//			//ping msg
+//			ping := ctlbuf
 //			... logic
-//			ctlbuf.Reset()
+//			ctlbuf = ctlbuf[:0]
 //		}else if ctlcode.IsPong() {
-//			pong msg
-//			pong := ctlbuf.Bytes()
+//			//pong msg
+//			pong := ctlbuf
 //			... logic
-//			ctlbuf.Reset()
+//			ctlbuf = ctlbuf[:0]
 //		}else if ctlcode.IsClose() {
-//			close msg
-//			close := ctlbuf.Bytes()
+//			//close msg
+//			close := ctlbuf
 //			... logic
-//			ctlbuf.Reset()
+//			ctlbuf = ctlbuf[:0]
 //		}else{
-//			this is the msg
-//			msg := msgbuf.Bytes()
+//			//this is the msg
+//			msg := msgbuf
 //			... logic
-//			msgbuf.Reset()
+//			msgbuf = msgbuf[:0]
 //		}
 //	}
 //
 // RFC 6455: all message from client to server must be masked
-func Read(reader *bufio.Reader, msgbuf *pool.Buffer, maxmsglen uint32, ctlbuf *pool.Buffer, mustmask bool) (ctlcode OPCode, e error) {
+// ctlbuf's cap must >= 131
+func Read(reader *bufio.Reader, msgbuf *[]byte, maxmsglen uint32, ctlbuf *[]byte, mustmask bool) (ctlcode OPCode, e error) {
 	for {
 		fin, _, _, _, opcode, mask, payloadlen, err := decodeFirstSecond(reader)
 		if err != nil {
@@ -114,34 +117,34 @@ func Read(reader *bufio.Reader, msgbuf *pool.Buffer, maxmsglen uint32, ctlbuf *p
 		}
 		switch payloadlen {
 		case 127:
-			ctlbuf.Resize(8)
-			if _, err := io.ReadFull(reader, ctlbuf.Bytes()); err != nil {
+			*ctlbuf = (*ctlbuf)[:8]
+			if _, err := io.ReadFull(reader, *ctlbuf); err != nil {
 				return 0, err
 			}
-			tmplen := binary.BigEndian.Uint64(ctlbuf.Bytes())
+			tmplen := binary.BigEndian.Uint64(*ctlbuf)
 			if tmplen > math.MaxUint32 {
 				return 0, ErrMsgLarge
 			}
 			payloadlen = uint32(tmplen)
-			ctlbuf.Reset()
+			*ctlbuf = (*ctlbuf)[:0]
 		case 126:
-			ctlbuf.Resize(2)
-			if _, err := io.ReadFull(reader, ctlbuf.Bytes()); err != nil {
+			*ctlbuf = (*ctlbuf)[:2]
+			if _, err := io.ReadFull(reader, *ctlbuf); err != nil {
 				return 0, err
 			}
-			payloadlen = uint32(binary.BigEndian.Uint16(ctlbuf.Bytes()))
-			ctlbuf.Reset()
+			payloadlen = uint32(binary.BigEndian.Uint16(*ctlbuf))
+			*ctlbuf = (*ctlbuf)[:0]
 		}
-		if payloadlen > maxmsglen || (!opcode.IsControl() && uint64(msgbuf.Len())+uint64(payloadlen) > uint64(maxmsglen)) {
+		if payloadlen > maxmsglen || (!opcode.IsControl() && uint64(len(*msgbuf))+uint64(payloadlen) > uint64(maxmsglen)) {
 			return 0, ErrMsgLarge
 		}
 		if payloadlen == 0 {
 			if mask {
-				ctlbuf.Resize(4)
-				if _, err := io.ReadFull(reader, ctlbuf.Bytes()); err != nil {
+				*ctlbuf = (*ctlbuf)[:4]
+				if _, err := io.ReadFull(reader, *ctlbuf); err != nil {
 					return 0, err
 				}
-				ctlbuf.Reset()
+				*ctlbuf = (*ctlbuf)[:0]
 			}
 			if fin {
 				return opcode, nil
@@ -149,38 +152,37 @@ func Read(reader *bufio.Reader, msgbuf *pool.Buffer, maxmsglen uint32, ctlbuf *p
 			continue
 		}
 		if opcode.IsControl() {
-			var maskkey *pool.Buffer
+			var maskkey []byte
 			if mask {
-				maskkey = pool.GetBuffer()
-				defer pool.PutBuffer(maskkey)
-				maskkey.Resize(4)
-				if _, err := io.ReadFull(reader, maskkey.Bytes()); err != nil {
+				maskkey = pool.GetPool().Get(4)
+				defer pool.GetPool().Put(&maskkey)
+				if _, err := io.ReadFull(reader, maskkey); err != nil {
 					return 0, err
 				}
 			}
-			ctlbuf.Resize(payloadlen)
-			if _, err := io.ReadFull(reader, ctlbuf.Bytes()); err != nil {
+			*ctlbuf = (*ctlbuf)[:payloadlen]
+			if _, err := io.ReadFull(reader, *ctlbuf); err != nil {
 				return 0, err
 			}
 			if mask {
-				domask(ctlbuf.Bytes(), maskkey.Bytes())
+				domask(*ctlbuf, maskkey)
 			}
 			return opcode, nil
 		}
 		if mask {
-			ctlbuf.Resize(4)
-			if _, err := io.ReadFull(reader, ctlbuf.Bytes()); err != nil {
+			*ctlbuf = (*ctlbuf)[:4]
+			if _, err := io.ReadFull(reader, *ctlbuf); err != nil {
 				return 0, err
 			}
 		}
-		msgbuf.Growth(uint32(msgbuf.Len()) + payloadlen)
-		if _, e = io.ReadFull(reader, msgbuf.Bytes()[uint32(msgbuf.Len())-payloadlen:]); e != nil {
+		*msgbuf = pool.CheckCap(msgbuf, len(*msgbuf)+int(payloadlen))
+		if _, e = io.ReadFull(reader, (*msgbuf)[uint32(len(*msgbuf))-payloadlen:]); e != nil {
 			return
 		}
 		if mask {
-			domask(msgbuf.Bytes()[uint32(msgbuf.Len())-payloadlen:], ctlbuf.Bytes())
+			domask((*msgbuf)[uint32(len(*msgbuf))-payloadlen:], *ctlbuf)
 		}
-		ctlbuf.Reset()
+		*ctlbuf = (*ctlbuf)[:0]
 		if fin {
 			return _BINARY, nil
 		}

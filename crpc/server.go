@@ -194,7 +194,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 			sourcepath = msg.Tracedata["SourcePath"]
 			clientdeep, e := strconv.Atoi(msg.Tracedata["Deep"])
 			if e != nil || sourceapp == "" || sourcemethod == "" || sourcepath == "" || clientdeep == 0 {
-				log.Error(nil, "[crpc.server] tracedata format wrong", map[string]interface{}{"cip": sourceip, "path": path, "tracedata": msg.Tracedata})
+				log.Error(nil, "[crpc.server] tracedata format wrong", log.String("cip", sourceip), log.String("path", path), log.Any("tracedata", msg.Tracedata))
 				p.Close()
 				return
 			}
@@ -236,7 +236,12 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 			if e := recover(); e != nil {
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[crpc.server] panic", map[string]interface{}{"cname": sourceapp, "cip": sourceapp, "path": path, "panic": e, "stack": base64.StdEncoding.EncodeToString(stack[:n])})
+				log.Error(workctx, "[crpc.server] panic",
+					log.String("cname", sourceapp),
+					log.String("cip", sourceip),
+					log.String("path", path),
+					log.Any("panic", e),
+					log.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
@@ -303,13 +308,13 @@ func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 		calls:     make(map[uint64]context.CancelFunc),
 	}
 	p.SetData(unsafe.Pointer(c))
-	log.Info(nil, "[crpc.server] online", map[string]interface{}{"cip": p.GetRealPeerIP()})
+	log.Info(nil, "[crpc.server] online", log.String("cip", p.GetRealPeerIP()))
 	return true
 }
 func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
-		log.Error(nil, "[crpc.server] userdata format wrong", map[string]interface{}{"cip": p.GetRealPeerIP()})
+		log.Error(nil, "[crpc.server] userdata format wrong", log.String("cip", p.GetRealPeerIP()))
 		p.Close()
 		return
 	}
@@ -324,7 +329,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	}
 	handler, ok := s.handler[msg.Path]
 	if !ok {
-		log.Error(nil, "[crpc.server] path doesn't exist", map[string]interface{}{"cip": p.GetRealPeerIP(), "path": msg.Path})
+		log.Error(nil, "[crpc.server] path doesn't exist", log.String("cip", p.GetRealPeerIP()), log.String("path", msg.Path))
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
@@ -333,7 +338,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d, nil, nil); e != nil {
-			log.Error(nil, "[crpc.server] send message failed", map[string]interface{}{"cip": p.GetRealPeerIP(), "path": msg.Path, "error": e})
+			log.Error(nil, "[crpc.server] send message failed", log.String("cip", p.GetRealPeerIP()), log.String("path", msg.Path), log.CError(e))
 		}
 		return
 	}
@@ -349,7 +354,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d, nil, nil); e != nil {
-			log.Error(nil, "[crpc.server] send message failed", map[string]interface{}{"cip": p.GetRealPeerIP(), "path": msg.Path, "error": e})
+			log.Error(nil, "[crpc.server] send message failed", log.String("cip", p.GetRealPeerIP()), log.String("path", msg.Path), log.CError(e))
 		}
 		return
 	}
@@ -369,7 +374,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d, nil, nil); e != nil {
-			log.Error(nil, "[crpc.server] send message failed", map[string]interface{}{"cip": p.GetRealPeerIP(), "path": msg.Path, "error": e})
+			log.Error(nil, "[crpc.server] send message failed", log.String("cip", p.GetRealPeerIP()), log.String("path", msg.Path), log.CError(e))
 		}
 		return
 	}
@@ -389,5 +394,5 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	}()
 }
 func (s *CrpcServer) offlinefunc(p *stream.Peer) {
-	log.Info(nil, "[crpc.server] offline", map[string]interface{}{"cip": p.GetRealPeerIP()})
+	log.Info(nil, "[crpc.server] offline", log.String("cip", p.GetRealPeerIP()))
 }

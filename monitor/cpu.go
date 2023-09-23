@@ -148,7 +148,7 @@ var cpuUsageLastTime int64
 func cgroupCPU(now int64) {
 	usagestr, e := os.ReadFile("/sys/fs/cgroup/cpu/cpuacct.usage")
 	if e != nil {
-		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage failed", map[string]interface{}{"error": e})
+		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage failed", log.CError(e))
 		return
 	}
 	if usagestr[len(usagestr)-1] == 10 {
@@ -156,7 +156,7 @@ func cgroupCPU(now int64) {
 	}
 	usage, e := strconv.ParseInt(common.Byte2str(usagestr), 10, 64)
 	if e != nil {
-		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage data format wrong", map[string]interface{}{"usage": usagestr})
+		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage data format wrong", log.String("usage", common.Byte2str(usagestr)))
 		return
 	}
 	oldUsage := cpuUsageLast

@@ -123,7 +123,7 @@ func UpdateAccessConfig(c MultiPathAccessConfigs) {
 }
 func UpdateReplayDefendRedisInstance(c *redis.Client) {
 	if c == nil {
-		log.Warning(nil, "[access.sign] redis missing,replay attack may happened", nil)
+		log.Warn(nil, "[access.sign] redis missing,replay attack may happened")
 	}
 	oldp := (*redis.Client)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&accessInstance.c)), unsafe.Pointer(c)))
 	if oldp != nil {
@@ -152,7 +152,7 @@ func VerifyAccessKey(ctx context.Context, method, path, accesskey string) bool {
 		return false
 	}
 	if tmp == nil {
-		log.Error(ctx, "[access.key] missing init,please use UpdateAccessConfig first", nil)
+		log.Error(ctx, "[access.key] missing init,please use UpdateAccessConfig first")
 		return false
 	}
 	accesses, ok := tmp[path]
@@ -167,34 +167,63 @@ func VerifyAccessKey(ctx context.Context, method, path, accesskey string) bool {
 	return false
 }
 
-// put the return data in web's AccessSign header or metadata's AccessSign field
+// put the return data in web's Sign header or metadata's Sign field
 func MakeAccessSign(accessid, accesskey, method, path string, querys url.Values, headers http.Header, metadata map[string]string, body []byte) string {
 	nonce := rand.Int63()
 	timestamp := time.Now().Unix()
-	buf := pool.GetBuffer()
-	defer pool.PutBuffer(buf)
-	buf.AppendString(accesskey)
-	buf.AppendByte('\n')
-	buf.AppendInt64(nonce)
-	buf.AppendByte('\n')
-	buf.AppendInt64(timestamp)
-	buf.AppendByte('\n')
-	buf.AppendString(method)
-	buf.AppendByte('\n')
+	buf := pool.GetPool().Get(len(accesskey) + len(path) + 51)
+	defer pool.GetPool().Put(&buf)
+	buf = buf[:0]
+	buf = append(buf, accesskey...)
+	buf = append(buf, '\n')
+	buf = strconv.AppendInt(buf, nonce, 10)
+	buf = append(buf, '\n')
+	buf = strconv.AppendInt(buf, timestamp, 10)
+	buf = append(buf, '\n')
+	buf = append(buf, method...)
+	buf = append(buf, '\n')
 	if path == "" {
-		buf.AppendByte('/')
+		buf = append(buf, '/')
 	} else {
 		if path[0] != '/' {
-			buf.AppendByte('/')
+			buf = append(buf, '/')
 		}
-		buf.AppendString(path)
+		buf = append(buf, path...)
 		if path[len(path)-1] != '/' {
-			buf.AppendByte('/')
+			buf = append(buf, '/')
 		}
 	}
-	buf.AppendByte('\n')
-	buf.AppendString(querys.Encode())
-	buf.AppendByte('\n')
+	buf = append(buf, '\n')
+
+	//query
+	querykeys := make([]string, 0, len(querys))
+	tmpquerys := make(map[string][]string)
+	for k, vs := range querys {
+		querykeys = append(querykeys, k)
+		sort.Strings(vs)
+		tmpquerys[k] = vs
+	}
+	sort.Strings(querykeys)
+	for i, querykey := range querykeys {
+		vs := tmpquerys[querykey]
+		for j, v := range vs {
+			ek := url.QueryEscape(querykey)
+			ev := url.QueryEscape(v)
+			if i != 0 || j != 0 {
+				buf = pool.CheckCap(&buf, len(buf)+len(ek)+len(ek)+2)
+				buf = append(buf, '&')
+			} else {
+				buf = pool.CheckCap(&buf, len(buf)+len(ek)+len(ek)+1)
+			}
+			buf = append(buf, ek...)
+			buf = append(buf, '=')
+			buf = append(buf, ev...)
+		}
+	}
+	buf = pool.CheckCap(&buf, len(buf)+1)
+	buf = append(buf, '\n')
+
+	//header
 	headerkeys := make([]string, 0, len(headers))
 	tmpheaders := make(map[string][]string)
 	for k, vs := range headers {
@@ -210,58 +239,64 @@ func MakeAccessSign(accessid, accesskey, method, path string, querys url.Values,
 	for _, headerkey := range headerkeys {
 		vs := tmpheaders[headerkey]
 		for _, v := range vs {
-			buf.AppendString(headerkey)
-			buf.AppendByte(':')
-			buf.AppendString(v)
-			buf.AppendByte('\n')
+			buf = pool.CheckCap(&buf, len(buf)+len(headerkey)+len(v)+2)
+			buf = append(buf, headerkey...)
+			buf = append(buf, ':')
+			buf = append(buf, v...)
+			buf = append(buf, '\n')
 		}
 	}
+
+	//metadata
 	mdkeys := make([]string, 0, len(metadata))
 	for k := range metadata {
 		mdkeys = append(mdkeys, k)
 	}
 	sort.Strings(mdkeys)
 	for _, mdkey := range mdkeys {
-		buf.AppendString(mdkey)
-		buf.AppendByte(':')
-		buf.AppendString(metadata[mdkey])
-		buf.AppendByte('\n')
+		v := metadata[mdkey]
+		buf = pool.CheckCap(&buf, len(buf)+len(mdkey)+len(v)+2)
+		buf = append(buf, mdkey...)
+		buf = append(buf, ':')
+		buf = append(buf, v...)
+		buf = append(buf, '\n')
 	}
-	buf.AppendByte('\n')
+
+	//body
 	bodydigest := sha256.Sum256(body)
-	buf.AppendString(base64.StdEncoding.EncodeToString(bodydigest[:]))
-	reqdigest := sha256.Sum256(buf.Bytes())
+	buf = pool.CheckCap(&buf, len(buf)+base64.StdEncoding.EncodedLen(sha256.Size))
+	curlen := len(buf)
+	buf = buf[:curlen+base64.StdEncoding.EncodedLen(sha256.Size)]
+	base64.StdEncoding.Encode(buf[curlen:], bodydigest[:])
+
+	//all request
+	reqdigest := sha256.Sum256(buf)
 	sign := base64.StdEncoding.EncodeToString(reqdigest[:])
-	buf.Reset()
-	buf.AppendString("A=")
-	buf.AppendString(accessid)
-	buf.AppendByte(',')
-	buf.AppendString("N=")
-	buf.AppendInt64(nonce)
-	buf.AppendByte(',')
-	buf.AppendString("T=")
-	buf.AppendInt64(timestamp)
-	buf.AppendByte(',')
-	buf.AppendString("H=")
+
+	buf = buf[:0]
+	buf = append(buf, "A="...)
+	buf = append(buf, accessid...)
+	buf = append(buf, ",N="...)
+	buf = strconv.AppendInt(buf, nonce, 10)
+	buf = append(buf, ",T="...)
+	buf = strconv.AppendInt(buf, timestamp, 10)
+	buf = append(buf, ",H="...)
 	for i, headerkey := range headerkeys {
-		buf.AppendString(headerkey)
-		if i != len(headerkey)-1 {
-			buf.AppendByte(';')
+		if i != 0 {
+			buf = append(buf, ';')
 		}
+		buf = append(buf, headerkey...)
 	}
-	buf.AppendByte(',')
-	buf.AppendString("M=")
+	buf = append(buf, ",M="...)
 	for i, mdkey := range mdkeys {
-		buf.AppendString(mdkey)
-		if i != len(mdkeys)-1 {
-			buf.AppendByte(';')
+		if i != 0 {
+			buf = append(buf, ';')
 		}
+		buf = append(buf, mdkey...)
 	}
-	buf.AppendByte(',')
-	buf.AppendString("S=")
-	buf.AppendString(sign)
-	signstr := buf.CopyString()
-	pool.PutBuffer(buf)
+	buf = append(buf, ",S="...)
+	buf = append(buf, sign...)
+	signstr := string(buf)
 	return signstr
 }
 func getAccesses(ctx context.Context, method, path, accessid string) string {
@@ -285,7 +320,7 @@ func getAccesses(ctx context.Context, method, path, accessid string) string {
 		return ""
 	}
 	if tmp == nil {
-		log.Error(ctx, "[access.sign] missing init,please use UpdateAccessConfig first", nil)
+		log.Error(ctx, "[access.sign] missing init,please use UpdateAccessConfig first")
 		return ""
 	}
 	accesses, ok := tmp[path]
@@ -294,7 +329,7 @@ func getAccesses(ctx context.Context, method, path, accessid string) string {
 	}
 	return accesses[accessid]
 }
-func VerifyAccessSign(ctx context.Context, method, path string, querys url.Values, headers http.Header, metadata map[string]string, body []byte, signstr string) bool {
+func VerifyAccessSign(ctx context.Context, method, path string, querys url.Values, headers http.Header, metadata map[string]string, body []byte, signstr string, clientip string) bool {
 	accessid, nonce, timestamp, headerkeys, mdkeys, sign := parseSignstr(signstr)
 	now := time.Now().Unix()
 	if accessid == "" || nonce == "" || timestamp+5 < now || sign == "" {
@@ -304,49 +339,89 @@ func VerifyAccessSign(ctx context.Context, method, path string, querys url.Value
 	if accesskey == "" {
 		return false
 	}
-	buf := pool.GetBuffer()
-	defer pool.PutBuffer(buf)
-	buf.AppendString(accesskey)
-	buf.AppendByte('\n')
-	buf.AppendString(nonce)
-	buf.AppendByte('\n')
-	buf.AppendInt64(timestamp)
-	buf.AppendByte('\n')
-	buf.AppendString(method)
-	buf.AppendByte('\n')
+	buf := pool.GetPool().Get(len(accesskey) + len(nonce) + len(path) + 32)
+	defer pool.GetPool().Put(&buf)
+	buf = buf[:0]
+	buf = append(buf, accesskey...)
+	buf = append(buf, '\n')
+	buf = append(buf, nonce...)
+	buf = append(buf, '\n')
+	buf = strconv.AppendInt(buf, timestamp, 10)
+	buf = append(buf, '\n')
+	buf = append(buf, method...)
+	buf = append(buf, '\n')
 	if path == "" {
-		buf.AppendByte('/')
+		buf = append(buf, '/')
 	} else {
 		if path[0] != '/' {
-			buf.AppendByte('/')
+			buf = append(buf, '/')
 		}
-		buf.AppendString(path)
+		buf = append(buf, path...)
 		if path[len(path)-1] != '/' {
-			buf.AppendByte('/')
+			buf = append(buf, '/')
 		}
 	}
-	buf.AppendByte('\n')
-	buf.AppendString(querys.Encode())
-	buf.AppendByte('\n')
+	buf = append(buf, '\n')
+
+	//query
+	querykeys := make([]string, 0, len(querys))
+	tmpquerys := make(map[string][]string)
+	for k, vs := range querys {
+		querykeys = append(querykeys, k)
+		sort.Strings(vs)
+		tmpquerys[k] = vs
+	}
+	sort.Strings(querykeys)
+	for i, querykey := range querykeys {
+		vs := tmpquerys[querykey]
+		for j, v := range vs {
+			ek := url.QueryEscape(querykey)
+			ev := url.QueryEscape(v)
+			if i != 0 || j != 0 {
+				buf = pool.CheckCap(&buf, len(buf)+len(ek)+len(ev)+2)
+				buf = append(buf, '&')
+			} else {
+				buf = pool.CheckCap(&buf, len(buf)+len(ek)+len(ev)+1)
+			}
+			buf = append(buf, ek...)
+			buf = append(buf, '=')
+			buf = append(buf, ev...)
+		}
+	}
+	buf = pool.CheckCap(&buf, len(buf)+1)
+	buf = append(buf, '\n')
+
+	//header
 	for _, headerkey := range headerkeys {
 		vs := headers.Values(headerkey)
 		for _, v := range vs {
-			buf.AppendString(headerkey)
-			buf.AppendByte(':')
-			buf.AppendString(v)
-			buf.AppendByte('\n')
+			buf = pool.CheckCap(&buf, len(buf)+len(headerkey)+len(v)+2)
+			buf = append(buf, headerkey...)
+			buf = append(buf, ':')
+			buf = append(buf, v...)
+			buf = append(buf, '\n')
 		}
 	}
+
+	//metadata
 	for _, mdkey := range mdkeys {
-		buf.AppendString(mdkey)
-		buf.AppendByte(':')
-		buf.AppendString(metadata[mdkey])
-		buf.AppendByte('\n')
+		v := metadata[mdkey]
+		buf = pool.CheckCap(&buf, len(buf)+len(mdkey)+len(v)+2)
+		buf = append(buf, mdkey...)
+		buf = append(buf, ':')
+		buf = append(buf, v...)
+		buf = append(buf, '\n')
 	}
-	buf.AppendByte('\n')
+
+	//body
 	bodydigest := sha256.Sum256(body)
-	buf.AppendString(base64.StdEncoding.EncodeToString(bodydigest[:]))
-	reqdigest := sha256.Sum256(buf.Bytes())
+	buf = pool.CheckCap(&buf, len(buf)+base64.StdEncoding.EncodedLen(sha256.Size))
+	curlen := len(buf)
+	buf = buf[:curlen+base64.StdEncoding.EncodedLen(sha256.Size)]
+	base64.StdEncoding.Encode(buf[curlen:], bodydigest[:])
+
+	//all request
+	reqdigest := sha256.Sum256(buf)
 	if base64.StdEncoding.EncodeToString(reqdigest[:]) != sign {
 		return false
 	}
@@ -359,11 +434,11 @@ func VerifyAccessSign(ctx context.Context, method, path string, querys url.Value
 	//check replay attack
 	status, e := redisclient.SetNX(ctx, nonce, 1, time.Second*5).Result()
 	if e != nil {
-		log.Error(ctx, "[access.sign] replay attack check failed", map[string]interface{}{"error": e})
+		log.Error(ctx, "[access.sign] replay attack check failed", log.CError(e))
 		return false
 	}
 	if !status {
-		log.Error(ctx, "[access.sign] replay attack", map[string]interface{}{"nonce": nonce})
+		log.Error(ctx, "[access.sign] replay attack", log.String("cip", clientip))
 	}
 	return status
 }

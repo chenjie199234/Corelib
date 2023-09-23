@@ -78,7 +78,7 @@ func (c *ServerConfig) validate() {
 		for _, v := range c.CorsAllowedOrigins {
 			if v == "*" {
 				if c.CorsAllowCredentials {
-					log.Warning(nil, "[web.server] when cors_allow_credentials is true in config,the wildcard '*' in cors_allowed_origins will be ignored", nil)
+					log.Warn(nil, "[web.server] when cors_allow_credentials is true in config,the wildcard '*' in cors_allowed_origins will be ignored")
 					continue
 				} else {
 					c.CorsAllowedOrigins = []string{"*"}
@@ -104,7 +104,7 @@ func (c *ServerConfig) validate() {
 				undup = nil
 				break
 			} else if v == "*" {
-				log.Warning(nil, "[web.server] when cors_allow_credentials is true in config,the wildcard '*' in cors_allowed_headers is treated as the literal header name '*',without special semantics", nil)
+				log.Warn(nil, "[web.server] when cors_allow_credentials is true in config,the wildcard '*' in cors_allowed_headers is treated as the literal header name '*',without special semantics")
 			}
 			undup[http.CanonicalHeaderKey(v)] = nil
 		}
@@ -124,7 +124,7 @@ func (c *ServerConfig) validate() {
 				undup = nil
 				break
 			} else if v == "*" {
-				log.Warning(nil, "[web.server] when cors_allow_credentials is true in config,the wildcard '*' in cors_expose_headers is treated as the literal header name '*',without special semantics", nil)
+				log.Warn(nil, "[web.server] when cors_allow_credentials is true in config,the wildcard '*' in cors_expose_headers is treated as the literal header name '*',without special semantics")
 			}
 			undup[http.CanonicalHeaderKey(v)] = nil
 		}

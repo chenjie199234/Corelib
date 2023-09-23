@@ -183,7 +183,7 @@ func (c *Client) priorityMQSubHandle(ctx context.Context, group, channel string,
 		}
 		tasks, e = c.ZRevRangeByScore(ctx, group, &gredis.ZRangeBy{Min: "0", Max: "+inf"}).Result()
 		if e != nil {
-			log.Error(ctx, "[redis.priorityMQSubHandle] get tasks failed", map[string]interface{}{"group": group, "error": e})
+			log.Error(ctx, "[redis.priorityMQSubHandle] get tasks failed", log.String("group", group), log.CError(e))
 			continue
 		}
 		if len(tasks) == 0 && ctx.Err() == nil {
@@ -201,7 +201,7 @@ func (c *Client) priorityMQSubHandle(ctx context.Context, group, channel string,
 		if result, e = c.BLPop(ctx, time.Second, keys...).Result(); e == nil {
 			handle(result[0][len(group)+3:len(result[0])-len(channel)-1], common.Str2byte(result[1]))
 		} else if ee, ok := e.(interface{ Timeout() bool }); (!ok || !ee.Timeout()) && e != gredis.Nil {
-			log.Error(ctx, "[redis.priorityMQSubHandle] sub tasks failed", map[string]interface{}{"group": group, "channel": channel, "error": e})
+			log.Error(ctx, "[redis.priorityMQSubHandle] sub tasks failed", log.String("group", group), log.String("channel", channel), log.CError(e))
 		} else {
 			e = nil
 		}
