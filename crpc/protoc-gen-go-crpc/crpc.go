@@ -110,7 +110,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(reqbody,req);e!=nil{")
 		g.P("req.Reset()")
 		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(reqbody,req);e!=nil{")
-		g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] json and proto format decode both failed\", nil)")
+		g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] json and proto format decode both failed\")")
 		g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 		g.P("return")
 		g.P("}")
@@ -120,7 +120,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("}else if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(reqbody,req);e!=nil{")
 		g.P("req.Reset()")
 		g.P("if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(reqbody,req);e!=nil{")
-		g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] json and proto format decode both failed\", nil)")
+		g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] json and proto format decode both failed\")")
 		g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 		g.P("return")
 		g.P("}else{")
@@ -130,7 +130,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 
 		if pbex.NeedValidate(method.Input) {
 			g.P("if errstr := req.Validate(); errstr != \"\" {")
-			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "]\", map[string]interface{}{\"error\": errstr})")
+			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] validate failed\",", g.QualifiedGoIdent(logPackage.Ident("String")), "(\"validate\",errstr))")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 			g.P("return")
 			g.P("}")
