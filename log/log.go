@@ -70,7 +70,21 @@ func init() {
 			level = slog.LevelError
 		}
 	}
-	sloger = slog.New(slog.NewJSONHandler(target, &slog.HandlerOptions{AddSource: true, Level: level}).WithGroup("attrs"))
+	replace := func(groups []string, attr slog.Attr) slog.Attr {
+		if len(groups) == 0 && attr.Key == "function" {
+			return slog.Attr{}
+		}
+		if len(groups) == 0 && attr.Key == slog.SourceKey {
+			s := attr.Value.Any().(*slog.Source)
+			if index := strings.Index(s.File, "corelib@v"); index != -1 {
+				s.File = s.File[index:]
+			} else if index = strings.Index(s.File, "Corelib@v"); index != -1 {
+				s.File = s.File[index:]
+			}
+		}
+		return attr
+	}
+	sloger = slog.New(slog.NewJSONHandler(target, &slog.HandlerOptions{AddSource: true, Level: level, ReplaceAttr: replace}).WithGroup("attrs"))
 }
 
 // get slog.Logger,usually this is not used,Debug,Info,Warn,Error is prefered
