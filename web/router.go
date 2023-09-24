@@ -137,31 +137,31 @@ func (r *Router) Use(globalMids ...OutsideHandler) {
 // thread unsafe
 func (r *Router) Get(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
-	r.getTree.Set(path, r.insideHandler(path, "GET", handlers))
+	r.getTree.Set(path, r.insideHandler("GET", path, handlers))
 }
 
 // thread unsafe
 func (r *Router) Post(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
-	r.postTree.Set(path, r.insideHandler(path, "POST", handlers))
+	r.postTree.Set(path, r.insideHandler("POST", path, handlers))
 }
 
 // thread unsafe
 func (r *Router) Patch(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
-	r.patchTree.Set(path, r.insideHandler(path, "PATCH", handlers))
+	r.patchTree.Set(path, r.insideHandler("PATCH", path, handlers))
 }
 
 // thread unsafe
 func (r *Router) Put(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
-	r.putTree.Set(path, r.insideHandler(path, "PUT", handlers))
+	r.putTree.Set(path, r.insideHandler("PUT", path, handlers))
 }
 
 // thread unsafe
 func (r *Router) Delete(path string, handlers ...OutsideHandler) {
 	path = cleanPath(path)
-	r.putTree.Set(path, r.insideHandler(path, "DELETE", handlers))
+	r.putTree.Set(path, r.insideHandler("DELETE", path, handlers))
 }
 func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) http.HandlerFunc {
 	totalhandlers := make([]OutsideHandler, len(r.globalmids)+len(handlers))
