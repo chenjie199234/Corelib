@@ -176,6 +176,7 @@ func Read(reader *bufio.Reader, msgbuf *[]byte, maxmsglen uint32, ctlbuf *[]byte
 			}
 		}
 		*msgbuf = pool.CheckCap(msgbuf, len(*msgbuf)+int(payloadlen))
+		*msgbuf = (*msgbuf)[:len(*msgbuf)+int(payloadlen)]
 		if _, e = io.ReadFull(reader, (*msgbuf)[uint32(len(*msgbuf))-payloadlen:]); e != nil {
 			return
 		}

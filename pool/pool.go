@@ -44,19 +44,19 @@ func next(reqsize, nowcap uint64) uint64 {
 
 // this will return a []byte who's len() == length,but the cap() >= length
 func (p *innerPool) Get(length int) []byte {
-	b, ok := p.buf.Get().(*[]byte)
+	b, ok := p.buf.Get().([]byte)
 	if ok {
-		if cap(*b) > length {
-			*b = (*b)[:length]
-			return *b
+		if cap(b) > length {
+			b = b[:length]
+			return b
 		}
-		p.buf.Put(b)
+		p.buf.Put(&b)
 	}
 	return make([]byte, length, next(uint64(length), begin))
 }
 func (p *innerPool) Put(b *[]byte) {
 	*b = (*b)[:0]
-	p.buf.Put(b)
+	p.buf.Put(*b)
 }
 func CheckCap(b *[]byte, length int) []byte {
 	if length > cap(*b) {

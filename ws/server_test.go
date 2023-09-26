@@ -2,6 +2,7 @@ package ws
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"net"
 	"testing"
@@ -37,7 +38,7 @@ func Test_Server(t *testing.T) {
 			msgbuf := pool.GetPool().Get(0)
 			ctlbuf := pool.GetPool().Get(0)
 			for {
-				opcode, e := Read(reader, &msgbuf, 100, &ctlbuf, true)
+				opcode, e := Read(reader, &msgbuf, 1024, &ctlbuf, true)
 				if e != nil {
 					panic("read error:" + e.Error())
 				}
@@ -57,7 +58,11 @@ func Test_Server(t *testing.T) {
 					ctlbuf = ctlbuf[:0]
 					return
 				default:
-					fmt.Println(string(msgbuf))
+					fmt.Println("msglen:", len(msgbuf))
+					if !bytes.Equal(msgbuf, bytes.Repeat([]byte("a"), 513)) {
+						fmt.Println(string(msgbuf))
+						panic("msg broken")
+					}
 					if e := WriteMsg(conn, msgbuf, true, true, false); e != nil {
 						panic("write msg error:" + e.Error())
 					}

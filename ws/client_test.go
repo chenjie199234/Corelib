@@ -2,6 +2,7 @@ package ws
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"net"
 	"sync"
@@ -46,7 +47,11 @@ func Test_Client(t *testing.T) {
 				conn.Close()
 				return
 			default:
-				fmt.Println(string(msgbuf))
+				fmt.Println("msg len:", len(msgbuf))
+				if len(msgbuf) != 513 || !bytes.Equal(msgbuf, bytes.Repeat([]byte("a"), 513)) {
+					fmt.Println(string(msgbuf))
+					panic("msg broken")
+				}
 				msgbuf = msgbuf[:0]
 			}
 		}
@@ -54,15 +59,25 @@ func Test_Client(t *testing.T) {
 	go func() {
 		for {
 			time.Sleep(time.Second)
-			data := []byte("123456789abcdefg")
+			data := bytes.Repeat([]byte("a"), 513)
 			for len(data) > 0 {
 				if e := WritePing(conn, []byte("client ping"), true); e != nil {
 					panic("write ping error:" + e.Error())
 				}
-				if e := WriteMsg(conn, data[:1], len(data) == 1, len(data) == 15, true); e != nil {
+				var piece []byte
+				if len(data) > 32 {
+					piece = data[:32]
+				} else {
+					piece = data
+				}
+				if e := WriteMsg(conn, piece, len(data) <= 32, len(data) == 513, true); e != nil {
 					panic("write msg error:" + e.Error())
 				}
-				data = data[1:]
+				if len(data) > 32 {
+					data = data[32:]
+				} else {
+					data = nil
+				}
 			}
 		}
 	}()
