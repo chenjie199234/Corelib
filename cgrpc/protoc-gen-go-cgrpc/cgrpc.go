@@ -208,7 +208,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("}")
 
 		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
-		g.P("if e:=c.cc.Call(ctx,", pathname, ",req,resp,", metadataPackage.Ident("GetMetadata"), "(ctx));e!=nil{")
+		g.P("if e:=c.cc.Call(ctx,", pathname, ",req,resp,", metadataPackage.Ident("GetMetadata"), "(ctx),\"\");e!=nil{")
 		g.P("return nil,e")
 		g.P("}")
 		g.P("return resp, nil")
