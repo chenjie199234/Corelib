@@ -213,41 +213,81 @@ func forbiddenHeader(header http.Header) bool {
 	return false
 }
 
+// forceaddr: most of the time this should be empty
+//
+//	if it is not empty,this request will try to transport to this specific addr's server
+//	if this specific server doesn't exist,cerror.ErrNoSpecificServer will return
+//	if the DI is static:the forceaddr can be addr in the DI's addrs list
+//	if the DI is dns:the forceaddr can be addr in the dns resolve result
+//	if the DI is kubernetes:the forceaddr can be addr in the endpoints
+//
 // "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
-func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (resp *http.Response, e error) {
-	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil)
+func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string, forceaddr string) (resp *http.Response, e error) {
+	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil, forceaddr)
 }
 
+// forceaddr: most of the time this should be empty
+//
+//	if it is not empty,this request will try to transport to this specific addr's server
+//	if this specific server doesn't exist,cerror.ErrNoSpecificServer will return
+//	if the DI is static:the forceaddr can be addr in the DI's addrs list
+//	if the DI is dns:the forceaddr can be addr in the dns resolve result
+//	if the DI is kubernetes:the forceaddr can be addr in the endpoints
+//
 // "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
-func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (resp *http.Response, e error) {
-	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
+func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string, forceaddr string) (resp *http.Response, e error) {
+	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil, forceaddr)
 }
 
+// forceaddr: most of the time this should be empty
+//
+//	if it is not empty,this request will try to transport to this specific addr's server
+//	if this specific server doesn't exist,cerror.ErrNoSpecificServer will return
+//	if the DI is static:the forceaddr can be addr in the DI's addrs list
+//	if the DI is dns:the forceaddr can be addr in the dns resolve result
+//	if the DI is kubernetes:the forceaddr can be addr in the endpoints
+//
 // "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
-func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
+func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte, forceaddr string) (resp *http.Response, e error) {
 	if len(body) != 0 {
-		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewReader(body))
+		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewReader(body), forceaddr)
 	}
-	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil)
+	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil, forceaddr)
 }
 
+// forceaddr: most of the time this should be empty
+//
+//	if it is not empty,this request will try to transport to this specific addr's server
+//	if this specific server doesn't exist,cerror.ErrNoSpecificServer will return
+//	if the DI is static:the forceaddr can be addr in the DI's addrs list
+//	if the DI is dns:the forceaddr can be addr in the dns resolve result
+//	if the DI is kubernetes:the forceaddr can be addr in the endpoints
+//
 // "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
-func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
+func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte, forceaddr string) (resp *http.Response, e error) {
 	if len(body) != 0 {
-		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewReader(body))
+		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewReader(body), forceaddr)
 	}
-	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil)
+	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil, forceaddr)
 }
 
+// forceaddr: most of the time this should be empty
+//
+//	if it is not empty,this request will try to transport to this specific addr's server
+//	if this specific server doesn't exist,cerror.ErrNoSpecificServer will return
+//	if the DI is static:the forceaddr can be addr in the DI's addrs list
+//	if the DI is dns:the forceaddr can be addr in the dns resolve result
+//	if the DI is kubernetes:the forceaddr can be addr in the endpoints
+//
 // "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
-func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
+func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte, forceaddr string) (resp *http.Response, e error) {
 	if len(body) != 0 {
-		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewReader(body))
+		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewReader(body), forceaddr)
 	}
-	return c.call(http.MethodPatch, ctx, path, query, header, metadata, nil)
+	return c.call(http.MethodPatch, ctx, path, query, header, metadata, nil, forceaddr)
 }
 
-func (c *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body io.Reader) (*http.Response, error) {
+func (c *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body io.Reader, forceaddr string) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, cerror.MakeError(-1, 400, "forbidden header")
 	}
@@ -303,7 +343,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	defer c.stop.DoneOne()
 	for {
 		start := time.Now()
-		server, done, e := c.balancer.Pick(ctx)
+		server, done, e := c.balancer.Pick(ctx, forceaddr)
 		if e != nil {
 			return nil, e
 		}

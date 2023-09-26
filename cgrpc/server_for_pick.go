@@ -20,6 +20,9 @@ type ServerForPick struct {
 func (s *ServerForPick) GetServerPickInfo() *picker.ServerPickInfo {
 	return s.Pickinfo
 }
+func (s *ServerForPick) GetServerAddr() string {
+	return s.addr
+}
 
 func (s *ServerForPick) Pickable() bool {
 	return s.status == int32(connectivity.Ready) && !s.closing

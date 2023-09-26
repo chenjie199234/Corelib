@@ -207,7 +207,14 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	go c.start(server, true)
 }
 
-func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata map[string]string) ([]byte, error) {
+// forceaddr: most of the time this should be empty
+//
+//	if it is not empty,this request will try to transport to this specific addr's server
+//	if this specific server doesn't exist,cerror.ErrNoSpecificServer will return
+//	if the DI is static:the forceaddr can be addr in the DI's addrs list
+//	if the DI is dns:the forceaddr can be addr in the dns resolve result
+//	if the DI is kubernetes:the forceaddr can be addr in the endpoints
+func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata map[string]string, forceaddr string) ([]byte, error) {
 	if e := c.stop.Add(1); e != nil {
 		if e == graceful.ErrClosing {
 			return nil, cerror.ErrClientClosing
@@ -244,7 +251,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 	r := c.getreq(msg)
 	for {
 		start := time.Now()
-		server, done, e := c.balancer.Pick(ctx)
+		server, done, e := c.balancer.Pick(ctx, forceaddr)
 		if e != nil {
 			return nil, e
 		}

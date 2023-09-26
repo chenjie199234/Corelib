@@ -178,7 +178,14 @@ func (c *CGrpcClient) Close(force bool) {
 
 var ClientClosed = errors.New("[cgrpc.client] closed")
 
-func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, resp interface{}, metadata map[string]string) error {
+// forceaddr: most of the time this should be empty
+//
+//	if it is not empty,this request will try to transport to this specific addr's server
+//	if this specific server doesn't exist,cerror.ErrNoSpecificServer will return
+//	if the DI is static:the forceaddr can be addr in the DI's addrs list
+//	if the DI is dns:the forceaddr can be addr in the dns resolve result
+//	if the DI is kubernetes:the forceaddr can be addr in the endpoints
+func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, resp interface{}, metadata map[string]string, forceaddr string) error {
 	if e := c.stop.Add(1); e != nil {
 		if e == graceful.ErrClosing {
 			return cerror.ErrClientClosing
@@ -186,6 +193,13 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 		return cerror.ErrBusy
 	}
 	defer c.stop.DoneOne()
+
+	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
+	if traceid == "" {
+		ctx = log.InitTrace(ctx, "", c.self, host.Hostip, "unknown", "unknown", 0)
+		traceid, _, _, selfmethod, selfpath, selfdeep = log.GetTrace(ctx)
+	}
+	ctx = context.WithValue(ctx, forceaddrkey{}, forceaddr)
 	if c.c.GlobalTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
@@ -195,11 +209,6 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 	if len(metadata) != 0 {
 		d, _ := json.Marshal(metadata)
 		md.Set("Core-Metadata", common.Byte2str(d))
-	}
-	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
-	if traceid == "" {
-		ctx = log.InitTrace(ctx, "", c.self, host.Hostip, "unknown", "unknown", 0)
-		traceid, _, _, selfmethod, selfpath, selfdeep = log.GetTrace(ctx)
 	}
 	md.Set("Core-Tracedata", traceid, c.self, selfmethod, selfpath, strconv.Itoa(selfdeep))
 	md.Set("Core-Target", c.server)

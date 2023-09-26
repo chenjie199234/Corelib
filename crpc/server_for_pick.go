@@ -30,6 +30,9 @@ type ServerForPick struct {
 func (s *ServerForPick) GetServerPickInfo() *picker.ServerPickInfo {
 	return s.Pickinfo
 }
+func (s *ServerForPick) GetServerAddr() string {
+	return s.addr
+}
 
 func (s *ServerForPick) getpeer() *stream.Peer {
 	return (*stream.Peer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.peer))))

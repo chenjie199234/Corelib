@@ -14,3 +14,7 @@ type ServerForPick struct {
 func (s *ServerForPick) GetServerPickInfo() *picker.ServerPickInfo {
 	return s.Pickinfo
 }
+
+func (s *ServerForPick) GetServerAddr() string {
+	return s.addr
+}

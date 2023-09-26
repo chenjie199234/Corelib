@@ -269,9 +269,10 @@ func (b *corelibBalancer) rebuildpicker(OnOff bool) {
 }
 
 func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	forceaddr := info.Ctx.Value(forceaddrkey{}).(string)
 	refresh := false
 	for {
-		server, done := b.picker.Pick()
+		server, done := b.picker.Pick(forceaddr)
 		if server != nil {
 			if dl, ok := info.Ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic
@@ -293,6 +294,9 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 			if b.lastResolveError != nil {
 				return balancer.PickResult{}, b.lastResolveError
 			}
+			if forceaddr != "" {
+				return balancer.PickResult{}, cerror.ErrNoSpecificserver
+			}
 			return balancer.PickResult{}, cerror.ErrNoserver
 		}
 		if e := b.c.resolver.Wait(info.Ctx, resolver.CALL); e != nil {
@@ -308,3 +312,5 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 		refresh = true
 	}
 }
+
+type forceaddrkey struct{}

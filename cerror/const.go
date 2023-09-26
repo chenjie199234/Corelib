@@ -7,16 +7,17 @@ import (
 
 // system,start from 1000
 var (
-	ErrServerClosing   = &Error{Code: 1000, Httpcode: 449, Msg: "server is closing,retry this request"}
-	ErrClientClosing   = &Error{Code: 1001, Httpcode: http.StatusServiceUnavailable, Msg: "using closed clinet"}
-	ErrTarget          = &Error{Code: 1002, Httpcode: http.StatusServiceUnavailable, Msg: "wrong server,check the server group and name"}
-	ErrNoapi           = &Error{Code: 1003, Httpcode: http.StatusNotImplemented, Msg: "api not implement"}
-	ErrPanic           = &Error{Code: 1004, Httpcode: http.StatusServiceUnavailable, Msg: "server panic"}
-	ErrNoserver        = &Error{Code: 1005, Httpcode: http.StatusServiceUnavailable, Msg: "no servers"}
-	ErrDiscoverStopped = &Error{Code: 1006, Httpcode: http.StatusInternalServerError, Msg: "discover stopped"}
-	ErrClosed          = &Error{Code: 1007, Httpcode: http.StatusInternalServerError, Msg: "connection closed"}
-	ErrReqmsgLen       = &Error{Code: 1008, Httpcode: http.StatusBadRequest, Msg: "req msg too large"}
-	ErrRespmsgLen      = &Error{Code: 1009, Httpcode: http.StatusInternalServerError, Msg: "resp msg too large"}
+	ErrServerClosing    = &Error{Code: 1000, Httpcode: 449, Msg: "server is closing,retry this request"}
+	ErrClientClosing    = &Error{Code: 1001, Httpcode: http.StatusServiceUnavailable, Msg: "using closed clinet"}
+	ErrTarget           = &Error{Code: 1002, Httpcode: http.StatusServiceUnavailable, Msg: "wrong server,check the server group and name"}
+	ErrNoapi            = &Error{Code: 1003, Httpcode: http.StatusNotImplemented, Msg: "api not implement"}
+	ErrPanic            = &Error{Code: 1004, Httpcode: http.StatusServiceUnavailable, Msg: "server panic"}
+	ErrNoSpecificserver = &Error{Code: 1005, Httpcode: http.StatusServiceUnavailable, Msg: "no specific server"}
+	ErrNoserver         = &Error{Code: 1006, Httpcode: http.StatusServiceUnavailable, Msg: "no servers"}
+	ErrDiscoverStopped  = &Error{Code: 1007, Httpcode: http.StatusInternalServerError, Msg: "discover stopped"}
+	ErrClosed           = &Error{Code: 1008, Httpcode: http.StatusInternalServerError, Msg: "connection closed"}
+	ErrReqmsgLen        = &Error{Code: 1009, Httpcode: http.StatusBadRequest, Msg: "req msg too large"}
+	ErrRespmsgLen       = &Error{Code: 1010, Httpcode: http.StatusInternalServerError, Msg: "resp msg too large"}
 
 	ErrCors = &Error{Code: 2001, Httpcode: http.StatusForbidden, Msg: "Cors forbidden"}
 )

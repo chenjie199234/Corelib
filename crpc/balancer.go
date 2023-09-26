@@ -163,10 +163,10 @@ func (b *corelibBalancer) RebuildPicker(OnOff bool) {
 	}
 	b.lker.Unlock()
 }
-func (b *corelibBalancer) Pick(ctx context.Context) (server *ServerForPick, done func(), e error) {
+func (b *corelibBalancer) Pick(ctx context.Context, forceaddr string) (server *ServerForPick, done func(), e error) {
 	refresh := false
 	for {
-		server, done := b.picker.Pick()
+		server, done := b.picker.Pick(forceaddr)
 		if server != nil {
 			if dl, ok := ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic
@@ -178,6 +178,9 @@ func (b *corelibBalancer) Pick(ctx context.Context) (server *ServerForPick, done
 		if refresh {
 			if b.lastResolveError != nil {
 				return nil, done, b.lastResolveError
+			}
+			if forceaddr != "" {
+				return nil, nil, cerror.ErrNoSpecificserver
 			}
 			return nil, nil, cerror.ErrNoserver
 		}

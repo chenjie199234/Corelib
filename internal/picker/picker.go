@@ -10,11 +10,13 @@ import (
 type PI interface {
 	ServerLen() int
 	UpdateServers([]ServerForPick)
-	Pick() (server ServerForPick, done func())
+	//if the forceaddr is not empty,picker will try to return this specific addr's server,if not exist,nil will return
+	Pick(forceaddr string) (server ServerForPick, done func())
 }
 type ServerForPick interface {
 	//shouldn't return nil
 	GetServerPickInfo() *ServerPickInfo
+	GetServerAddr() string
 }
 
 type ServerPickInfo struct {
@@ -42,8 +44,20 @@ func (p *Picker) ServerLen() int {
 func (p *Picker) UpdateServers(servers []ServerForPick) {
 	p.servers = servers
 }
-func (p *Picker) Pick() (server ServerForPick, done func()) {
+
+// if the forceaddr is not empty,picker will try to return this specific addr's server,if not exist,nil will return
+func (p *Picker) Pick(forceaddr string) (server ServerForPick, done func()) {
 	if len(p.servers) == 0 {
+		return nil, nil
+	}
+	if forceaddr != "" {
+		for _, v := range p.servers {
+			server := v
+			if server.GetServerAddr() != forceaddr {
+				continue
+			}
+			return server, func() { atomic.AddUint32(&(server.GetServerPickInfo().Activecalls), math.MaxUint32) }
+		}
 		return nil, nil
 	}
 	var normal1, normal2, danger1, danger2, nightmare1, nightmare2 ServerForPick
