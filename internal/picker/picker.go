@@ -3,6 +3,8 @@ package picker
 import (
 	"math"
 	"math/rand"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -53,8 +55,26 @@ func (p *Picker) Pick(forceaddr string) (server ServerForPick, done func()) {
 	if forceaddr != "" {
 		for _, v := range p.servers {
 			server := v
-			if server.GetServerAddr() != forceaddr {
+			serveraddr := server.GetServerAddr()
+			var tail string
+			if strings.HasPrefix(serveraddr, forceaddr) {
+				//ipv4
+				tail = serveraddr[len(forceaddr):]
+			} else if strings.HasPrefix(serveraddr, "["+forceaddr+"]") {
+				//ipv6
+				tail = serveraddr[len(forceaddr)+2:]
+			} else {
 				continue
+			}
+			//port
+			if len(tail) > 0 {
+				if tail[0] != ':' {
+					continue
+				}
+				tail = tail[1:]
+				if _, e := strconv.Atoi(tail); e != nil {
+					continue
+				}
 			}
 			return server, func() { atomic.AddUint32(&(server.GetServerPickInfo().Activecalls), math.MaxUint32) }
 		}
