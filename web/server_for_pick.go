@@ -21,5 +21,5 @@ func (s *ServerForPick) GetServerAddr() string {
 }
 
 func (s *ServerForPick) Pickable() bool {
-	return s.closing
+	return !s.closing
 }
