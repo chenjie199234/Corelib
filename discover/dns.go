@@ -96,7 +96,6 @@ func (d *DnsD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, error) 
 	r := make(map[string]*RegisterData)
 	reg := &RegisterData{
 		DServers: map[string]*struct{}{"dns": nil},
-		Addition: nil,
 	}
 	for _, addr := range d.addrs {
 		switch pt {

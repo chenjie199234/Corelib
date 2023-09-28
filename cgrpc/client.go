@@ -13,7 +13,7 @@ import (
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/monitor"
+	cmetadata "github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	gmetadata "google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	gresolver "google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 )
@@ -117,6 +116,8 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 		stop:     graceful.New(),
 	}
 	opts := make([]grpc.DialOption, 0, 10)
+	opts = append(opts, grpc.WithChainUnaryInterceptor(client.gracefulInterceptor, client.mdInterceptor, client.traceInterceptor, client.timeoutInterceptor, client.callInterceptor))
+	opts = append(opts, grpc.WithChainStreamInterceptor())
 	opts = append(opts, grpc.WithRecvBufferPool(pool.GetPool()))
 	opts = append(opts, grpc.WithDisableRetry())
 	if tlsc == nil {
@@ -142,11 +143,10 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 	opts = append(opts, grpc.WithDefaultServiceConfig("{\"loadBalancingConfig\":[{\"corelib\":{}}]}"))
 	//resolver
 	gresolver.Register(&resolverBuilder{c: client})
-	conn, e := grpc.Dial("corelib:///"+serverapp, opts...)
+	client.conn, e = grpc.Dial("corelib:///"+serverapp, opts...)
 	if e != nil {
 		return nil, e
 	}
-	client.conn = conn
 	return client, nil
 }
 
@@ -169,14 +169,15 @@ func (c *CGrpcClient) GetServerIps() (ips []string, version interface{}, lasterr
 // force - false graceful,wait all requests finish,true - not graceful,close all connections immediately
 func (c *CGrpcClient) Close(force bool) {
 	if force {
-		c.resolver.Close()
 		c.conn.Close()
 	} else {
-		c.stop.Close(c.resolver.Close, func() { c.conn.Close() })
+		c.stop.Close(nil, func() { c.conn.Close() })
 	}
 }
 
 var ClientClosed = errors.New("[cgrpc.client] closed")
+
+type forceaddrkey struct{}
 
 // forceaddr: most of the time this should be empty
 //
@@ -185,7 +186,24 @@ var ClientClosed = errors.New("[cgrpc.client] closed")
 //	if the DI is static:the forceaddr can be addr in the DI's addrs list
 //	if the DI is dns:the forceaddr can be addr in the dns resolve result
 //	if the DI is kubernetes:the forceaddr can be addr in the endpoints
-func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, resp interface{}, metadata map[string]string, forceaddr string) error {
+func WithForceAddr(ctx context.Context, forceaddr string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, forceaddrkey{}, forceaddr)
+}
+
+func (c *CGrpcClient) Invoke(ctx context.Context, path string, req, reply any, opts ...grpc.CallOption) error {
+	return c.conn.Invoke(ctx, path, req, reply, opts...)
+}
+
+// TDOD
+func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	stream, e := c.conn.NewStream(ctx, desc, path, opts...)
+	return stream, transGrpcError(e)
+}
+
+func (c *CGrpcClient) gracefulInterceptor(ctx context.Context, path string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	if e := c.stop.Add(1); e != nil {
 		if e == graceful.ErrClosing {
 			return cerror.ErrClientClosing
@@ -193,48 +211,46 @@ func (c *CGrpcClient) Call(ctx context.Context, path string, req interface{}, re
 		return cerror.ErrBusy
 	}
 	defer c.stop.DoneOne()
-
+	return invoker(ctx, path, req, reply, cc, opts...)
+}
+func (c *CGrpcClient) mdInterceptor(ctx context.Context, path string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	cmd := cmetadata.GetMetadata(ctx)
+	gmd := gmetadata.New(nil)
+	gmd.Set("Core-Target", c.server)
+	if len(cmd) > 0 {
+		d, _ := json.Marshal(cmd)
+		gmd.Set("Core-Metadata", common.Byte2str(d))
+	}
+	ctx = gmetadata.NewOutgoingContext(ctx, gmd)
+	return invoker(ctx, path, req, reply, cc, opts...)
+}
+func (c *CGrpcClient) traceInterceptor(ctx context.Context, path string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	gmd, _ := gmetadata.FromOutgoingContext(ctx)
 	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
 	if traceid == "" {
 		ctx = log.InitTrace(ctx, "", c.self, host.Hostip, "unknown", "unknown", 0)
 		traceid, _, _, selfmethod, selfpath, selfdeep = log.GetTrace(ctx)
 	}
-	ctx = context.WithValue(ctx, forceaddrkey{}, forceaddr)
+	gmd.Set("Core-Tracedata", traceid, c.self, selfmethod, selfpath, strconv.Itoa(selfdeep))
+	return invoker(ctx, path, req, reply, cc, opts...)
+}
+func (c *CGrpcClient) timeoutInterceptor(ctx context.Context, path string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	if c.c.GlobalTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
 		defer cancel()
 	}
-	md := gmetadata.New(nil)
-	if len(metadata) != 0 {
-		d, _ := json.Marshal(metadata)
-		md.Set("Core-Metadata", common.Byte2str(d))
-	}
-	md.Set("Core-Tracedata", traceid, c.self, selfmethod, selfpath, strconv.Itoa(selfdeep))
-	md.Set("Core-Target", c.server)
-	ctx = gmetadata.NewOutgoingContext(ctx, md)
+	return invoker(ctx, path, req, reply, cc, opts...)
+}
+func (c *CGrpcClient) callInterceptor(ctx context.Context, path string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	for {
-		start := time.Now()
-		p := &peer.Peer{}
-		e := transGrpcError(c.conn.Invoke(ctx, path, req, resp, grpc.Peer(p)))
-		end := time.Now()
-		if p.Addr == nil {
-			//pick error or create stream unretryable error,req doesn't send
-		} else {
-			//req send,recv error
-			log.Trace(ctx, log.CLIENT, c.server, p.Addr.String(), "GRPC", path, &start, &end, e)
-			monitor.GrpcClientMonitor(c.server, "GRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
-		}
-		if cerror.Equal(e, cerror.ErrServerClosing) {
+		e := transGrpcError(invoker(ctx, path, req, reply, cc, opts...))
+		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 			continue
-		}
-		if e == nil {
-			return nil
 		}
 		return e
 	}
 }
-
 func transGrpcError(e error) *cerror.Error {
 	if e == nil {
 		return nil

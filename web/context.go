@@ -5,15 +5,18 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/metadata"
+	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-func (s *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context.Context, peername string, metadata map[string]string, handlers []OutsideHandler) *Context {
+func (s *WebServer) getContext(c context.Context, w http.ResponseWriter, r *http.Request, peername string, handlers []OutsideHandler) *Context {
 	ctx, ok := s.ctxpool.Get().(*Context)
 	if !ok {
 		ctx = &Context{
@@ -21,13 +24,9 @@ func (s *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context
 			w:        w,
 			r:        r,
 			peername: peername,
-			metadata: metadata,
 			handlers: handlers,
 			finish:   0,
 			e:        nil,
-		}
-		if metadata == nil {
-			ctx.metadata = make(map[string]string)
 		}
 		return ctx
 	}
@@ -35,9 +34,6 @@ func (s *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context
 	ctx.w = w
 	ctx.r = r
 	ctx.peername = peername
-	if metadata != nil {
-		ctx.metadata = metadata
-	}
 	ctx.handlers = handlers
 	ctx.finish = 0
 	ctx.e = nil
@@ -45,9 +41,6 @@ func (s *WebServer) getContext(w http.ResponseWriter, r *http.Request, c context
 }
 
 func (s *WebServer) putContext(ctx *Context) {
-	for k := range ctx.metadata {
-		delete(ctx.metadata, k)
-	}
 	ctx.r = nil
 	ctx.w = nil
 	if ctx.bodyerr != nil {
@@ -63,7 +56,6 @@ type Context struct {
 	w        http.ResponseWriter
 	r        *http.Request
 	peername string
-	metadata map[string]string
 	handlers []OutsideHandler
 	finish   int32
 	body     []byte
@@ -86,6 +78,7 @@ func (c *Context) Abort(e error) {
 	}
 	c.e = cerror.ConvertStdError(e)
 	if c.e != nil {
+		c.w.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
 		c.w.Header().Set("Content-Type", "application/json")
 		if c.e.Httpcode < 400 || c.e.Httpcode > 999 {
 			panic("[web.Context.Abort] httpcode must in [400,999]")
@@ -99,6 +92,7 @@ func (c *Context) Write(contenttype string, msg []byte) {
 	if !atomic.CompareAndSwapInt32(&c.finish, 0, 1) {
 		return
 	}
+	c.w.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
 	c.w.Header().Set("Content-Type", contenttype)
 	c.w.WriteHeader(http.StatusOK)
 	c.w.Write(msg)
@@ -142,9 +136,6 @@ func (c *Context) GetMethod() string {
 func (c *Context) GetBasicAuth() (string, string, bool) {
 	return c.r.BasicAuth()
 }
-func (c *Context) GetMetadata() map[string]string {
-	return c.metadata
-}
 func (c *Context) GetHeaders() http.Header {
 	return c.r.Header
 }
@@ -169,7 +160,8 @@ func (c *Context) GetRealPeerIp() string {
 // if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
 // if failed,the direct peer's ip will be returned(maybe a proxy)
 func (c *Context) GetClientIp() string {
-	return c.metadata["Client-IP"]
+	md := metadata.GetMetadata(c.Context)
+	return md["Client-IP"]
 }
 
 func realip(r *http.Request) string {

@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/metadata"
 	publicmids "github.com/chenjie199234/Corelib/mids"
 	"github.com/chenjie199234/Corelib/web"
 )
@@ -55,7 +56,7 @@ func rate(ctx *web.Context) {
 	}
 }
 func token(ctx *web.Context) {
-	md := ctx.GetMetadata()
+	md := metadata.GetMetadata(ctx)
 	tokenstr := ctx.GetHeader("Token")
 	if tokenstr == "" {
 		tokenstr = md["Token"]
@@ -78,7 +79,7 @@ func token(ctx *web.Context) {
 	md["Token-Data"] = t.Data
 }
 func session(ctx *web.Context) {
-	md := ctx.GetMetadata()
+	md := metadata.GetMetadata(ctx)
 	sessionstr := ctx.GetHeader("Session")
 	if sessionstr == "" {
 		sessionstr = md["Session"]
@@ -98,7 +99,7 @@ func session(ctx *web.Context) {
 	md["Session-Data"] = sessiondata
 }
 func accesskey(ctx *web.Context) {
-	md := ctx.GetMetadata()
+	md := metadata.GetMetadata(ctx)
 	accesskey := ctx.GetHeader("Access-Key")
 	if accesskey == "" {
 		accesskey = md["Access-Key"]

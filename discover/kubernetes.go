@@ -114,7 +114,6 @@ func (d *KubernetesD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, 
 	r := make(map[string]*RegisterData)
 	reg := &RegisterData{
 		DServers: map[string]*struct{}{"kubernetes": nil},
-		Addition: nil,
 	}
 	for addr := range d.addrs {
 		switch pt {

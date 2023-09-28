@@ -14,6 +14,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -127,14 +128,14 @@ func (s *CrpcServer) tellAllPeerSelfClosed() {
 	s.instance.RangePeers(func(p *stream.Peer) {
 		if tmpdata := p.GetData(); tmpdata != nil {
 			c := (*client)(tmpdata)
-			c.RLock()
+			c.Lock()
 			d, _ := proto.Marshal(&Msg{
 				Callid: c.maxcallid + 1,
 				Error:  cerror.ErrServerClosing,
 			})
 			c.maxcallid = 0
 			p.SendMessage(nil, d, nil, nil)
-			c.RUnlock()
+			c.Unlock()
 		}
 	})
 }
@@ -227,13 +228,17 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, msg.Deadline))
 			defer cancel()
 		}
-		//logic
-		workctx := s.getContext(ctx, p, msg, totalhandlers)
-		if _, ok := workctx.metadata["Client-IP"]; !ok {
-			workctx.metadata["Client-IP"] = sourceip
+		if msg.Metadata == nil {
+			msg.Metadata = map[string]string{"Client-IP": sourceip}
+		} else if _, ok := msg.Metadata["Client-IP"]; !ok {
+			msg.Metadata["Client-IP"] = sourceip
 		}
+		//logic
+		workctx := s.getContext(metadata.SetMetadata(ctx, msg.Metadata), p, msg, totalhandlers)
+		paniced := true
 		defer func() {
-			if e := recover(); e != nil {
+			if paniced {
+				e := recover()
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
 				log.Error(workctx, "[crpc.server] panic",
@@ -249,6 +254,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 				msg.Metadata = nil
 				msg.Tracedata = nil
 			}
+			msg.Metadata = map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(workctx, d, nil, nil); e != nil {
 				if e == stream.ErrMsgLarge {
@@ -256,7 +262,6 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 					msg.Deadline = 0
 					msg.Body = nil
 					msg.Error = cerror.ErrRespmsgLen
-					msg.Metadata = nil
 					msg.Tracedata = nil
 					d, _ = proto.Marshal(msg)
 					if e = p.SendMessage(workctx, d, nil, nil); e != nil {
@@ -278,6 +283,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 			s.putContext(workctx)
 		}()
 		workctx.run()
+		paniced = false
 	}
 }
 
@@ -296,7 +302,7 @@ func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]b
 // return false will close the connection
 func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
 	if s.stop.Closing() {
-		//tel all peers self closed
+		//tel peer self closed
 		d, _ := proto.Marshal(&Msg{
 			Callid: 0,
 			Error:  cerror.ErrServerClosing,
@@ -334,7 +340,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Deadline = 0
 		msg.Body = nil
 		msg.Error = cerror.ErrNoapi
-		msg.Metadata = nil
+		msg.Metadata = map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d, nil, nil); e != nil {

@@ -16,6 +16,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/log"
+	cmetadata "github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -26,7 +27,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/metadata"
+	gmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 )
 
@@ -104,14 +105,14 @@ func NewCGrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tls
 		services:       make(map[string]*grpc.ServiceDesc),
 		handlerTimeout: make(map[string]time.Duration),
 	}
-	opts := make([]grpc.ServerOption, 0, 6)
+	opts := make([]grpc.ServerOption, 0, 10)
 	opts = append(opts, grpc.RecvBufferPool(pool.GetPool()))
 	opts = append(opts, grpc.MaxRecvMsgSize(int(c.MaxMsgLen)))
 	opts = append(opts, grpc.StatsHandler(serverinstance))
 	opts = append(opts, grpc.UnknownServiceHandler(func(_ interface{}, stream grpc.ServerStream) error {
 		ctx := stream.Context()
 		rpcinfo := ctx.Value(serverrpckey{}).(*stats.RPCTagInfo)
-		gmd, ok := metadata.FromIncomingContext(ctx)
+		gmd, ok := gmetadata.FromIncomingContext(ctx)
 		peerip := ""
 		if ok {
 			if forward := gmd.Get("X-Forwarded-For"); len(forward) > 0 && len(forward[0]) > 0 {
@@ -232,7 +233,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 	copy(totalhandlers, s.global)
 	copy(totalhandlers[len(s.global):], handlers)
 	return func(_ interface{}, ctx context.Context, decode func(interface{}) error, _ grpc.UnaryServerInterceptor) (resp interface{}, e error) {
-		gmd, ok := metadata.FromIncomingContext(ctx)
+		gmd, ok := gmetadata.FromIncomingContext(ctx)
 		if ok {
 			if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != s.self {
 				return nil, cerror.ErrTarget
@@ -240,6 +241,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		}
 		atomic.AddInt64(&s.totalreqnum, 1)
 		defer atomic.AddInt64(&s.totalreqnum, -1)
+		//trace
 		conninfo := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)
 		remoteaddr := conninfo.RemoteAddr.String()
 		localaddr := conninfo.LocalAddr.String()
@@ -276,12 +278,13 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			}
 		}
 		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
-		var mdata map[string]string
+		//metadata
+		var cmd map[string]string
 		if ok {
 			data := gmd.Get("Core-Metadata")
 			if len(data) != 0 {
-				mdata = make(map[string]string)
-				if e := json.Unmarshal(common.Str2byte(data[0]), &mdata); e != nil {
+				cmd = make(map[string]string)
+				if e := json.Unmarshal(common.Str2byte(data[0]), &cmd); e != nil {
 					log.Error(ctx, "[cgrpc.server] metadata format wrong",
 						log.String("cname", sourceapp),
 						log.String("cip", sourceip),
@@ -291,6 +294,12 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				}
 			}
 		}
+		if cmd == nil {
+			cmd = map[string]string{"Client-IP": sourceip}
+		} else if _, ok := cmd["Client-IP"]; !ok {
+			cmd["Client-IP"] = sourceip
+		}
+		//timeout
 		start := time.Now()
 		servertimeout := s.getHandlerTimeout(path)
 		if servertimeout > 0 {
@@ -298,12 +307,11 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			ctx, cancel = context.WithDeadline(ctx, start.Add(servertimeout))
 			defer cancel()
 		}
-		workctx := s.getcontext(ctx, path, sourceapp, remoteaddr, mdata, totalhandlers, decode)
-		if _, ok := workctx.metadata["Client-IP"]; !ok {
-			workctx.metadata["Client-IP"] = sourceip
-		}
+		workctx := s.getcontext(cmetadata.SetMetadata(ctx, cmd), path, sourceapp, remoteaddr, totalhandlers, decode)
+		paniced := true
 		defer func() {
-			if e := recover(); e != nil {
+			if paniced {
+				e := recover()
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
 				log.Error(workctx, "[cgrpc.server] panic",
@@ -315,6 +323,8 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				workctx.e = cerror.ErrPanic
 				workctx.resp = nil
 			}
+
+			grpc.SetTrailer(ctx, gmetadata.New(map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}))
 			end := time.Now()
 			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.self, host.Hostip+":"+localaddr[strings.LastIndex(localaddr, ":")+1:], "GRPC", path, &start, &end, workctx.e)
 			monitor.GrpcServerMonitor(sourceapp, "GRPC", path, workctx.e, uint64(end.UnixNano()-start.UnixNano()))
@@ -324,6 +334,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			}
 		}()
 		workctx.run()
+		paniced = false
 		return
 	}
 }
@@ -346,7 +357,7 @@ func (s *CGrpcServer) HandleConn(ctx context.Context, stat stats.ConnStats) {
 	if !ok {
 		return
 	}
-	gmd, ok := metadata.FromIncomingContext(ctx)
+	gmd, ok := gmetadata.FromIncomingContext(ctx)
 	peerip := ""
 	if ok {
 		if forward := gmd.Get("X-Forwarded-For"); len(forward) > 0 && len(forward[0]) > 0 {

@@ -15,6 +15,7 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/container/trie"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -170,7 +171,6 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 	return func(resp http.ResponseWriter, req *http.Request) {
 		//target
 		if target := req.Header.Get("Core-Target"); target != "" && target != r.s.self {
-			//this is not the required server.tell peer self closed
 			resp.Header().Set("Content-Type", "application/json")
 			resp.WriteHeader(int(cerror.ErrTarget.Httpcode))
 			resp.Write(common.Str2byte(cerror.ErrTarget.Error()))
@@ -219,10 +219,10 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 			ctx = log.InitTrace(req.Context(), "", r.s.self, host.Hostip, method, path, 0)
 		}
 		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
-		var mdata map[string]string
+		var md map[string]string
 		if mdstr := req.Header.Get("Core-Metadata"); mdstr != "" {
-			mdata = make(map[string]string)
-			if e := json.Unmarshal(common.Str2byte(mdstr), &mdata); e != nil {
+			md = make(map[string]string)
+			if e := json.Unmarshal(common.Str2byte(mdstr), &md); e != nil {
 				log.Error(ctx, "[web.server] metadata format wrong",
 					log.String("cname", sourceapp),
 					log.String("cip", sourceip),
@@ -234,6 +234,11 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 				resp.Write(common.Str2byte(cerror.ErrReq.Error()))
 				return
 			}
+		}
+		if md == nil {
+			md = map[string]string{"Client-IP": sourceip}
+		} else if _, ok := md["Client-IP"]; !ok {
+			md["Client-IP"] = sourceip
 		}
 		//client timeout
 		if temp := req.Header.Get("Core-Deadline"); temp != "" {
@@ -278,28 +283,25 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 		defer r.s.stop.DoneOne()
 		//logic
 		start := time.Now()
-		workctx := r.s.getContext(resp, req, ctx, sourceapp, mdata, totalhandlers)
-		if _, ok := workctx.metadata["Client-IP"]; !ok {
-			workctx.metadata["Client-IP"] = sourceip
-		}
-		didpanic := true
+		workctx := r.s.getContext(metadata.SetMetadata(ctx, md), resp, req, sourceapp, totalhandlers)
+		paniced := true
 		defer func() {
-			if didpanic {
-				if e := recover(); e != nil {
-					stack := make([]byte, 1024)
-					n := runtime.Stack(stack, false)
-					log.Error(workctx, "[web.server] panic",
-						log.String("cname", sourceapp),
-						log.String("cip", sourceip),
-						log.String("path", path),
-						log.String("method", method),
-						log.Any("panic", e),
-						log.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
-					resp.Header().Set("Content-Type", "application/json")
-					resp.WriteHeader(http.StatusInternalServerError)
-					resp.Write(common.Str2byte(cerror.ErrPanic.Error()))
-					workctx.e = cerror.ErrPanic
-				}
+			if paniced {
+				e := recover()
+				stack := make([]byte, 1024)
+				n := runtime.Stack(stack, false)
+				log.Error(workctx, "[web.server] panic",
+					log.String("cname", sourceapp),
+					log.String("cip", sourceip),
+					log.String("path", path),
+					log.String("method", method),
+					log.Any("panic", e),
+					log.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
+				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
+				resp.Header().Set("Content-Type", "application/json")
+				resp.WriteHeader(http.StatusInternalServerError)
+				resp.Write(common.Str2byte(cerror.ErrPanic.Error()))
+				workctx.e = cerror.ErrPanic
 			}
 			end := time.Now()
 			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, r.s.self, host.Hostip+":"+req.Context().Value(localport{}).(string), method, path, &start, &end, workctx.e)
@@ -307,7 +309,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 			r.s.putContext(workctx)
 		}()
 		workctx.run()
-		didpanic = false
+		paniced = false
 	}
 }
 func (r *Router) notFoundHandler(w http.ResponseWriter, req *http.Request) {

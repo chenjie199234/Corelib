@@ -3,6 +3,7 @@ package mids
 import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/cgrpc"
+	"github.com/chenjie199234/Corelib/metadata"
 	publicmids "github.com/chenjie199234/Corelib/mids"
 )
 
@@ -32,7 +33,7 @@ func rate(ctx *cgrpc.Context) {
 	}
 }
 func token(ctx *cgrpc.Context) {
-	md := ctx.GetMetadata()
+	md := metadata.GetMetadata(ctx)
 	tokenstr := md["Token"]
 	if tokenstr == "" {
 		ctx.Abort(cerror.ErrToken)
@@ -50,7 +51,7 @@ func token(ctx *cgrpc.Context) {
 	md["Token-Data"] = t.Data
 }
 func session(ctx *cgrpc.Context) {
-	md := ctx.GetMetadata()
+	md := metadata.GetMetadata(ctx)
 	sessionstr := md["Session"]
 	if sessionstr == "" {
 		ctx.Abort(cerror.ErrSession)
@@ -65,7 +66,7 @@ func session(ctx *cgrpc.Context) {
 	md["Session-Data"] = sessiondata
 }
 func accesskey(ctx *cgrpc.Context) {
-	md := ctx.GetMetadata()
+	md := metadata.GetMetadata(ctx)
 	accesskey := md["Access-Key"]
 	if accesskey == "" {
 		ctx.Abort(cerror.ErrKey)

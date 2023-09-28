@@ -5,10 +5,11 @@ import (
 	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/metadata"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-func (s *CGrpcServer) getcontext(c context.Context, path string, peername string, remoteaddr string, metadata map[string]string, handlers []OutsideHandler, d func(interface{}) error) *Context {
+func (s *CGrpcServer) getcontext(c context.Context, path string, peername string, remoteaddr string, handlers []OutsideHandler, d func(interface{}) error) *Context {
 	ctx, ok := s.ctxpool.Get().(*Context)
 	if !ok {
 		ctx = &Context{
@@ -18,13 +19,9 @@ func (s *CGrpcServer) getcontext(c context.Context, path string, peername string
 			path:       path,
 			peername:   peername,
 			remoteaddr: remoteaddr,
-			metadata:   metadata,
 			resp:       nil,
 			e:          nil,
 			finish:     0,
-		}
-		if metadata == nil {
-			ctx.metadata = make(map[string]string)
 		}
 		return ctx
 	}
@@ -34,18 +31,12 @@ func (s *CGrpcServer) getcontext(c context.Context, path string, peername string
 	ctx.path = path
 	ctx.peername = peername
 	ctx.remoteaddr = remoteaddr
-	if metadata != nil {
-		ctx.metadata = metadata
-	}
 	ctx.resp = nil
 	ctx.e = nil
 	ctx.finish = 0
 	return ctx
 }
 func (s *CGrpcServer) putcontext(ctx *Context) {
-	for k := range ctx.metadata {
-		delete(ctx.metadata, k)
-	}
 	s.ctxpool.Put(ctx)
 }
 
@@ -56,7 +47,6 @@ type Context struct {
 	path       string
 	peername   string
 	remoteaddr string
-	metadata   map[string]string
 	resp       interface{}
 	e          *cerror.Error
 	finish     int32
@@ -111,8 +101,6 @@ func (c *Context) GetRemoteAddr() string {
 // if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
 // if failed,the direct peer's ip will be returned(maybe a proxy)
 func (c *Context) GetClientIp() string {
-	return c.metadata["Client-IP"]
-}
-func (c *Context) GetMetadata() map[string]string {
-	return c.metadata
+	md := metadata.GetMetadata(c.Context)
+	return md["Client-IP"]
 }

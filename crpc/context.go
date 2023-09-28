@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
 )
@@ -16,37 +17,26 @@ func (s *CrpcServer) getContext(c context.Context, p *stream.Peer, msg *Msg, han
 			Context:  c,
 			peer:     p,
 			msg:      msg,
-			metadata: msg.Metadata,
 			handlers: handlers,
 			finish:   0,
-		}
-		if msg.Metadata == nil {
-			ctx.metadata = make(map[string]string)
 		}
 		return ctx
 	}
 	ctx.Context = c
 	ctx.peer = p
 	ctx.msg = msg
-	if msg.Metadata != nil {
-		ctx.metadata = msg.Metadata
-	}
 	ctx.handlers = handlers
 	ctx.finish = 0
 	return ctx
 }
 
 func (s *CrpcServer) putContext(ctx *Context) {
-	for k := range ctx.metadata {
-		delete(ctx.metadata, k)
-	}
 	s.ctxpool.Put(ctx)
 }
 
 type Context struct {
 	context.Context
 	msg      *Msg
-	metadata map[string]string
 	peer     *stream.Peer
 	handlers []OutsideHandler
 	finish   int32
@@ -113,11 +103,9 @@ func (c *Context) GetRemoteAddr() string {
 // if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
 // if failed,the direct peer's ip will be returned(maybe a proxy)
 func (c *Context) GetClientIp() string {
-	return c.metadata["Client-IP"]
+	md := metadata.GetMetadata(c.Context)
+	return md["Client-IP"]
 }
 func (c *Context) GetPeerMaxMsgLen() uint32 {
 	return c.peer.GetPeerMaxMsgLen()
-}
-func (c *Context) GetMetadata() map[string]string {
-	return c.metadata
 }

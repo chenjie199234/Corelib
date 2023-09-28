@@ -16,7 +16,7 @@ type corelibBalancer struct {
 	lker             *sync.RWMutex
 	version          discover.Version
 	servers          map[string]*ServerForPick //key server addr
-	picker           picker.PI
+	picker           *picker.Picker
 	lastResolveError error
 }
 
@@ -25,7 +25,7 @@ func newCorelibBalancer(c *CrpcClient) *corelibBalancer {
 		c:       c,
 		lker:    &sync.RWMutex{},
 		servers: make(map[string]*ServerForPick),
-		picker:  picker.NewPicker(),
+		picker:  picker.NewPicker(nil),
 	}
 }
 
@@ -53,8 +53,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData,
 		if _, ok := all[server.addr]; !ok {
 			//this app unregistered
 			server.dservers = nil
-			server.Pickinfo.DServerNum = 0
-			server.Pickinfo.DServerOffline = time.Now().UnixNano()
+			server.Pickinfo.SetDiscoverServerOffline(0)
 		}
 	}
 	//online app or update app's dservers
@@ -72,39 +71,38 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData,
 				peer:     nil,
 				lker:     &sync.Mutex{},
 				reqs:     make(map[uint64]*req, 10),
-				Pickinfo: &picker.ServerPickInfo{
-					Activecalls:    0,
-					DServerNum:     int32(len(registerdata.DServers)),
-					DServerOffline: 0,
-					Addition:       registerdata.Addition,
-				},
+				Pickinfo: &picker.ServerPickInfo{},
 			}
+			server.Pickinfo.SetDiscoverServerOnline(uint32(len(registerdata.DServers)))
 			b.servers[addr] = server
 			go b.c.start(server, false)
 		} else if registerdata == nil || len(registerdata.DServers) == 0 {
 			//this is not a new register and this register is offline
 			server.dservers = nil
-			server.Pickinfo.DServerNum = 0
-			server.Pickinfo.DServerOffline = time.Now().UnixNano()
+			server.Pickinfo.SetDiscoverServerOffline(0)
 		} else {
 			//this is not a new register
 			//unregister on which discovery server
+			dserveroffline := false
 			for dserver := range server.dservers {
 				if _, ok := registerdata.DServers[dserver]; !ok {
-					server.Pickinfo.DServerOffline = time.Now().UnixNano()
+					dserveroffline = true
 					break
 				}
 			}
 			//register on which new discovery server
 			for dserver := range registerdata.DServers {
 				if _, ok := server.dservers[dserver]; !ok {
-					server.Pickinfo.DServerOffline = 0
+					dserveroffline = false
 					break
 				}
 			}
 			server.dservers = registerdata.DServers
-			server.Pickinfo.Addition = registerdata.Addition
-			server.Pickinfo.DServerNum = int32(len(registerdata.DServers))
+			if dserveroffline {
+				server.Pickinfo.SetDiscoverServerOffline(uint32(len(registerdata.DServers)))
+			} else {
+				server.Pickinfo.SetDiscoverServerOnline(uint32(len(registerdata.DServers)))
+			}
 		}
 	}
 }
@@ -150,27 +148,27 @@ func (b *corelibBalancer) ReconnectCheck(server *ServerForPick) bool {
 // OnOff - false,offline
 func (b *corelibBalancer) RebuildPicker(OnOff bool) {
 	b.lker.Lock()
+	defer b.lker.Unlock()
 	tmp := make([]picker.ServerForPick, 0, len(b.servers))
 	for _, server := range b.servers {
 		if server.Pickable() {
 			tmp = append(tmp, server)
 		}
 	}
-	b.picker.UpdateServers(tmp)
+	b.picker = picker.NewPicker(tmp)
 	if OnOff {
 		//when online server,wake the block call
 		b.c.resolver.Wake(resolver.CALL)
 	}
-	b.lker.Unlock()
 }
-func (b *corelibBalancer) Pick(ctx context.Context, forceaddr string) (server *ServerForPick, done func(), e error) {
+func (b *corelibBalancer) Pick(ctx context.Context, forceaddr string) (server *ServerForPick, done func(cpuusage float64, successwastetime uint64, success bool), e error) {
 	refresh := false
 	for {
 		server, done := b.picker.Pick(forceaddr)
 		if server != nil {
 			if dl, ok := ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic
-				done()
+				done(0, 0, false)
 				return nil, nil, cerror.ErrDeadlineExceeded
 			}
 			return server.(*ServerForPick), done, nil

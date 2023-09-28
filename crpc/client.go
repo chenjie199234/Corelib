@@ -14,6 +14,7 @@ import (
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -173,16 +174,21 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	if msg.Error != nil && cerror.Equal(msg.Error, cerror.ErrServerClosing) {
 		//update pickable status
 		server.setpeer(nil)
+		server.closing = true
+		//set the lowest pick priority
+		server.Pickinfo.SetDiscoverServerOffline(0)
 		//all calls' callid big and equal then this msg's callid are unprocessed
 		for callid, req := range server.reqs {
 			if callid >= msg.Callid {
-				req.respdata = msg.Body
+				req.respmd = nil
+				req.respdata = nil
 				req.err = msg.Error
 				req.finish <- nil
 				delete(server.reqs, callid)
 			}
 		}
 	} else if req, ok := server.reqs[msg.Callid]; ok {
+		req.respmd = msg.Metadata
 		req.respdata = msg.Body
 		req.err = msg.Error
 		req.finish <- nil
@@ -207,14 +213,8 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	go c.start(server, true)
 }
 
-// forceaddr: most of the time this should be empty
-//
-//	if it is not empty,this request will try to transport to this specific addr's server
-//	if this specific server doesn't exist,cerror.ErrNoSpecificServer will return
-//	if the DI is static:the forceaddr can be addr in the DI's addrs list
-//	if the DI is dns:the forceaddr can be addr in the dns resolve result
-//	if the DI is kubernetes:the forceaddr can be addr in the endpoints
-func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata map[string]string, forceaddr string) ([]byte, error) {
+func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, error) {
+	forceaddr, _ := ctx.Value(forceaddrkey{}).(string)
 	if e := c.stop.Add(1); e != nil {
 		if e == graceful.ErrClosing {
 			return nil, cerror.ErrClientClosing
@@ -226,7 +226,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		Type:     MsgType_CALL,
 		Path:     path,
 		Body:     in,
-		Metadata: metadata,
+		Metadata: metadata.GetMetadata(ctx),
 	}
 	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
 	if traceid == "" {
@@ -257,7 +257,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		}
 		msg.Callid = atomic.AddUint64(&server.callid, 1)
 		if e = server.sendmessage(ctx, r); e != nil {
-			done()
+			done(0, 0, false)
 			end := time.Now()
 			log.Error(ctx, "[crpc.client] send message failed", log.String("sname", c.server), log.String("sip", server.addr), log.String("path", path), log.CError(e))
 			log.Trace(ctx, log.CLIENT, c.server, server.addr, "CRPC", path, &start, &end, e)
@@ -269,16 +269,17 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 		}
 		select {
 		case <-r.finish:
-			done()
 			end := time.Now()
+			cpuusage, _ := strconv.ParseFloat(r.respmd["Cpu-Usage"], 64)
+			done(cpuusage, uint64(end.UnixNano()-start.UnixNano()), r.err == nil)
 			log.Trace(ctx, log.CLIENT, c.server, server.addr, "CRPC", path, &start, &end, r.err)
 			monitor.CrpcClientMonitor(c.server, "CRPC", path, r.err, uint64(end.UnixNano()-start.UnixNano()))
 			if r.err != nil {
 				if cerror.Equal(r.err, cerror.ErrServerClosing) {
-					server.closing = true
 					//triger discovery
 					c.resolver.Now()
 					//server is closing,this req can be retry
+					r.respmd = nil
 					r.respdata = nil
 					r.err = nil
 					continue
@@ -290,7 +291,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 			//resp and err maybe both nil
 			return resp, e
 		case <-ctx.Done():
-			done()
+			done(0, 0, false)
 			server.lker.Lock()
 			delete(server.reqs, msg.Callid)
 			server.lker.Unlock()
@@ -316,10 +317,27 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, metadata 
 	}
 }
 
+type forceaddrkey struct{}
+
+// forceaddr: most of the time this should be empty
+//
+//	if it is not empty,this request will try to transport to this specific addr's server
+//	if this specific server doesn't exist,cerror.ErrNoSpecificServer will return
+//	if the DI is static:the forceaddr can be addr in the DI's addrs list
+//	if the DI is dns:the forceaddr can be addr in the dns resolve result
+//	if the DI is kubernetes:the forceaddr can be addr in the endpoints
+func WithForceAddr(ctx context.Context, forceaddr string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, forceaddrkey{}, forceaddr)
+}
+
 type req struct {
 	finish   chan *struct{}
 	reqdata  *Msg
 	respdata []byte
+	respmd   map[string]string
 	err      *cerror.Error
 }
 

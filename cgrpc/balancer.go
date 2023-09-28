@@ -2,6 +2,7 @@ package cgrpc
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -9,6 +10,7 @@ import (
 	"github.com/chenjie199234/Corelib/internal/picker"
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/monitor"
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
@@ -57,7 +59,6 @@ func (b *balancerWraper) UpdateDiscovery(all map[string]*discover.RegisterData, 
 			continue
 		}
 		addrattr := &attributes.Attributes{}
-		addrattr = addrattr.WithValue("addition", info.Addition)
 		addrattr = addrattr.WithValue("dservers", info.DServers)
 		serveraddrs = append(serveraddrs, gresolver.Address{
 			Addr:       addr,
@@ -81,7 +82,7 @@ func (b *balancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptio
 		c:       b.c,
 		cc:      cc,
 		servers: make(map[string]*ServerForPick),
-		picker:  picker.NewPicker(),
+		picker:  picker.NewPicker(nil),
 	}
 	cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: b.c.balancer})
 	return b.c.balancer
@@ -95,7 +96,7 @@ type corelibBalancer struct {
 	c                *CGrpcClient
 	cc               balancer.ClientConn
 	servers          map[string]*ServerForPick
-	picker           picker.PI
+	picker           *picker.Picker
 	lastResolveError error
 }
 
@@ -125,15 +126,13 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 		}
 		if !find {
 			server.dservers = nil
-			server.Pickinfo.DServerNum = 0
-			server.Pickinfo.DServerOffline = time.Now().UnixNano()
+			server.Pickinfo.SetDiscoverServerOffline(0)
 		}
 	}
 	//online or update
 	for _, v := range ss.ResolverState.Endpoints[0].Addresses {
 		addr := v
 		dservers, _ := addr.Attributes.Value("dservers").(map[string]*struct{})
-		addition, _ := addr.Attributes.Value("addition").([]byte)
 		server, ok := b.servers[addr.Addr]
 		if !ok {
 			//this is a new register
@@ -196,44 +195,44 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 				//this can only happened on client is closing
 				continue
 			}
-			b.servers[addr.Addr] = &ServerForPick{
+			server = &ServerForPick{
 				addr:     addr.Addr,
 				subconn:  sc,
 				dservers: dservers,
 				status:   int32(connectivity.Idle),
-				Pickinfo: &picker.ServerPickInfo{
-					Activecalls:    0,
-					DServerNum:     int32(len(dservers)),
-					DServerOffline: 0,
-					Addition:       addition,
-				},
+				Pickinfo: &picker.ServerPickInfo{},
 			}
+			server.Pickinfo.SetDiscoverServerOnline(uint32(len(dservers)))
+			b.servers[addr.Addr] = server
 			//subconn's Connect is async inside
 			sc.Connect()
 		} else if len(dservers) == 0 {
 			//this is not a new register and this register is offline
 			server.dservers = nil
-			server.Pickinfo.DServerNum = 0
-			server.Pickinfo.DServerOffline = time.Now().UnixNano()
+			server.Pickinfo.SetDiscoverServerOffline(0)
 		} else {
 			//this is not a new register
 			//unregister on which discovery server
+			dserveroffline := false
 			for dserver := range server.dservers {
 				if _, ok := dservers[dserver]; !ok {
-					server.Pickinfo.DServerOffline = time.Now().UnixNano()
+					dserveroffline = true
 					break
 				}
 			}
 			//register on which new discovery server
 			for dserver := range dservers {
 				if _, ok := server.dservers[dserver]; !ok {
-					server.Pickinfo.DServerOffline = 0
+					dserveroffline = false
 					break
 				}
 			}
 			server.dservers = dservers
-			server.Pickinfo.Addition = addition
-			server.Pickinfo.DServerNum = int32(len(dservers))
+			if dserveroffline {
+				server.Pickinfo.SetDiscoverServerOffline(uint32(len(dservers)))
+			} else {
+				server.Pickinfo.SetDiscoverServerOnline(uint32(len(dservers)))
+			}
 		}
 	}
 	return nil
@@ -260,7 +259,7 @@ func (b *corelibBalancer) rebuildpicker(OnOff bool) {
 			tmp = append(tmp, server)
 		}
 	}
-	b.picker.UpdateServers(tmp)
+	b.picker = picker.NewPicker(tmp)
 	if OnOff {
 		//when online server,wake the block call
 		b.c.resolver.Wake(resolver.CALL)
@@ -271,22 +270,35 @@ func (b *corelibBalancer) rebuildpicker(OnOff bool) {
 func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	forceaddr := info.Ctx.Value(forceaddrkey{}).(string)
 	refresh := false
+	start := time.Now()
 	for {
 		server, done := b.picker.Pick(forceaddr)
 		if server != nil {
 			if dl, ok := info.Ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic
-				done()
+				done(0, 0, false)
 				return balancer.PickResult{}, cerror.ErrDeadlineExceeded
 			}
 			return balancer.PickResult{
 				SubConn: server.(*ServerForPick).subconn,
 				Done: func(doneinfo balancer.DoneInfo) {
-					done()
-					if cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrServerClosing) || cerror.Equal(transGrpcError(doneinfo.Err), cerror.ErrTarget) {
+					end := time.Now()
+					e := transGrpcError(doneinfo.Err)
+					cpuusagestrs := doneinfo.Trailer.Get("Cpu-Usage")
+					var cpuusage float64
+					if len(cpuusagestrs) > 0 {
+						cpuusage, _ = strconv.ParseFloat(cpuusagestrs[0], 64)
+					}
+					done(cpuusage, uint64(end.UnixNano()-start.UnixNano()), e == nil)
+					if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
+						//update pickable status
 						server.(*ServerForPick).closing = true
+						//set the lowest pick priority
+						server.(*ServerForPick).Pickinfo.SetDiscoverServerOffline(0)
 						b.c.ResolveNow()
 					}
+					log.Trace(info.Ctx, log.CLIENT, b.c.server, server.GetServerAddr(), "GRPC", info.FullMethodName, &start, &end, e)
+					monitor.GrpcClientMonitor(b.c.server, "GRPC", info.FullMethodName, e, uint64(end.UnixNano()-start.UnixNano()))
 				},
 			}, nil
 		}
@@ -312,5 +324,3 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 		refresh = true
 	}
 }
-
-type forceaddrkey struct{}

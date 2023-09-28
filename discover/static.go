@@ -73,7 +73,6 @@ func (d *StaticD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, erro
 	r := make(map[string]*RegisterData)
 	reg := &RegisterData{
 		DServers: map[string]*struct{}{"static": nil},
-		Addition: nil,
 	}
 	for _, addr := range d.addrs {
 		switch pt {

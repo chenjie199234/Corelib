@@ -32,7 +32,6 @@ type RegisterData struct {
 	//app node register on which discovery server.
 	//if this is empty means this app node is offline.
 	DServers map[string]*struct{}
-	Addition []byte
 }
 
 func SameVersion(aversion, bversion Version) bool {

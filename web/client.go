@@ -213,18 +213,7 @@ func forbiddenHeader(header http.Header) bool {
 	return false
 }
 
-// forceaddr: most of the time this should be empty
-//
-//	if it is not empty,this request will try to transport to this specific addr's server
-//	if this specific server doesn't exist,cerror.ErrNoSpecificServer will return
-//	if the DI is static:the forceaddr can be addr in the DI's addrs list
-//	if the DI is dns:the forceaddr can be addr in the dns resolve result
-//	if the DI is kubernetes:the forceaddr can be addr in the endpoints
-//
-// "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
-func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string, forceaddr string) (resp *http.Response, e error) {
-	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil, forceaddr)
-}
+type forceaddrkey struct{}
 
 // forceaddr: most of the time this should be empty
 //
@@ -233,61 +222,49 @@ func (c *WebClient) Get(ctx context.Context, path, query string, header http.Hea
 //	if the DI is static:the forceaddr can be addr in the DI's addrs list
 //	if the DI is dns:the forceaddr can be addr in the dns resolve result
 //	if the DI is kubernetes:the forceaddr can be addr in the endpoints
-//
-// "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
-func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string, forceaddr string) (resp *http.Response, e error) {
-	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil, forceaddr)
-}
-
-// forceaddr: most of the time this should be empty
-//
-//	if it is not empty,this request will try to transport to this specific addr's server
-//	if this specific server doesn't exist,cerror.ErrNoSpecificServer will return
-//	if the DI is static:the forceaddr can be addr in the DI's addrs list
-//	if the DI is dns:the forceaddr can be addr in the dns resolve result
-//	if the DI is kubernetes:the forceaddr can be addr in the endpoints
-//
-// "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
-func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte, forceaddr string) (resp *http.Response, e error) {
-	if len(body) != 0 {
-		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewReader(body), forceaddr)
+func WithForceAddr(ctx context.Context, forceaddr string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil, forceaddr)
+	return context.WithValue(ctx, forceaddrkey{}, forceaddr)
 }
 
-// forceaddr: most of the time this should be empty
-//
-//	if it is not empty,this request will try to transport to this specific addr's server
-//	if this specific server doesn't exist,cerror.ErrNoSpecificServer will return
-//	if the DI is static:the forceaddr can be addr in the DI's addrs list
-//	if the DI is dns:the forceaddr can be addr in the dns resolve result
-//	if the DI is kubernetes:the forceaddr can be addr in the endpoints
-//
 // "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
-func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte, forceaddr string) (resp *http.Response, e error) {
-	if len(body) != 0 {
-		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewReader(body), forceaddr)
-	}
-	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil, forceaddr)
+func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (resp *http.Response, e error) {
+	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil)
 }
 
-// forceaddr: most of the time this should be empty
-//
-//	if it is not empty,this request will try to transport to this specific addr's server
-//	if this specific server doesn't exist,cerror.ErrNoSpecificServer will return
-//	if the DI is static:the forceaddr can be addr in the DI's addrs list
-//	if the DI is dns:the forceaddr can be addr in the dns resolve result
-//	if the DI is kubernetes:the forceaddr can be addr in the endpoints
-//
 // "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
-func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte, forceaddr string) (resp *http.Response, e error) {
-	if len(body) != 0 {
-		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewReader(body), forceaddr)
-	}
-	return c.call(http.MethodPatch, ctx, path, query, header, metadata, nil, forceaddr)
+func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (resp *http.Response, e error) {
+	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
 }
 
-func (c *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body io.Reader, forceaddr string) (*http.Response, error) {
+// "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
+func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
+	if len(body) != 0 {
+		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewReader(body))
+	}
+	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil)
+}
+
+// "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
+func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
+	if len(body) != 0 {
+		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewReader(body))
+	}
+	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil)
+}
+
+// "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
+func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
+	if len(body) != 0 {
+		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewReader(body))
+	}
+	return c.call(http.MethodPatch, ctx, path, query, header, metadata, nil)
+}
+
+func (c *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body io.Reader) (*http.Response, error) {
+	forceaddr, _ := ctx.Value(forceaddrkey{}).(string)
 	if forbiddenHeader(header) {
 		return nil, cerror.MakeError(-1, 400, "forbidden header")
 	}
@@ -354,21 +331,27 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			req, e = http.NewRequestWithContext(ctx, method, "http://"+server.addr+path+query, body)
 		}
 		if e != nil {
-			done()
+			done(0, 0, false)
 			e = cerror.ConvertStdError(e.(*url.Error).Unwrap())
 			return nil, e
 		}
 		req.Header = header
 		//start call
 		resp, e := c.client.Do(req)
-		done()
 		end := time.Now()
 		if e != nil {
+			done(0, 0, false)
 			e = cerror.ConvertStdError(e.(*url.Error).Unwrap())
 			log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
 			monitor.WebClientMonitor(c.server, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 			return nil, e
 		}
+		cpuusagestr := resp.Header.Get("Cpu-Usage")
+		var cpuusage float64
+		if cpuusagestr != "" {
+			cpuusage, _ = strconv.ParseFloat(cpuusagestr, 64)
+		}
+		done(cpuusage, uint64(end.UnixNano()-start.UnixNano()), resp.StatusCode/100 == 2)
 		if resp.StatusCode/100 != 2 {
 			respbody, e := io.ReadAll(resp.Body)
 			resp.Body.Close()
@@ -385,9 +368,11 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				tmpe.SetHttpcode(int32(resp.StatusCode))
 				e = tmpe
 			}
-			if resp.StatusCode == int(cerror.ErrServerClosing.Httpcode) && cerror.Equal(e, cerror.ErrServerClosing) {
-				log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, cerror.ErrServerClosing)
-				monitor.WebClientMonitor(c.server, method, path, cerror.ErrServerClosing, uint64(end.UnixNano()-start.UnixNano()))
+			if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
+				server.closing = true
+				server.Pickinfo.SetDiscoverServerOffline(0)
+				log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
+				monitor.WebClientMonitor(c.server, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 				continue
 			}
 			log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)

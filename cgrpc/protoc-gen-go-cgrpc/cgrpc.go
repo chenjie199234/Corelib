@@ -13,13 +13,10 @@ import (
 )
 
 const (
-	errorsPackage   = protogen.GoImportPath("errors")
-	regexpPackage   = protogen.GoImportPath("regexp")
 	contextPackage  = protogen.GoImportPath("context")
-	protoPackage    = protogen.GoImportPath("google.golang.org/protobuf/proto")
+	grpcPackage     = protogen.GoImportPath("google.golang.org/grpc")
 	cgrpcPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/cgrpc")
 	logPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/log")
-	commonPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
 	metadataPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/metadata")
 	cerrorPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/cerror")
 )
@@ -180,16 +177,16 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			continue
 		}
 		g.P(method.Comments.Leading,
-			method.GoName, "(", g.QualifiedGoIdent(contextPackage.Ident("Context")), ",*", g.QualifiedGoIdent(method.Input.GoIdent), ")(*", g.QualifiedGoIdent(method.Output.GoIdent), ",error)",
+			method.GoName, "(", g.QualifiedGoIdent(contextPackage.Ident("Context")), ",*", g.QualifiedGoIdent(method.Input.GoIdent), ",...", g.QualifiedGoIdent(grpcPackage.Ident("CallOption")), ")(*", g.QualifiedGoIdent(method.Output.GoIdent), ",error)",
 			method.Comments.Trailing)
 	}
 	g.P("}")
 	g.P()
 	g.P("type ", lowclientName, " struct{")
-	g.P("cc *", g.QualifiedGoIdent(cgrpcPackage.Ident("CGrpcClient")))
+	g.P("cc ", g.QualifiedGoIdent(grpcPackage.Ident("ClientConnInterface")))
 	g.P("}")
-	g.P("func New", clientName, "(c *", g.QualifiedGoIdent(cgrpcPackage.Ident("CGrpcClient")), ")(", clientName, "){")
-	g.P("return &", lowclientName, "{cc:c}")
+	g.P("func New", clientName, "(cc ", g.QualifiedGoIdent(grpcPackage.Ident("ClientConnInterface")), ")(", clientName, "){")
+	g.P("return &", lowclientName, "{cc:cc}")
 	g.P("}")
 	g.P()
 	// Client handler
@@ -201,14 +198,15 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		pathname := "_CGrpcPath" + service.GoName + method.GoName
 		p1 := "ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context"))
 		p2 := "req *" + g.QualifiedGoIdent(method.Input.GoIdent)
+		p3 := "opts ..." + g.QualifiedGoIdent(grpcPackage.Ident("CallOption"))
 		freturn := "(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
-		g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ")", freturn, "{")
+		g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ",", p3, ")", freturn, "{")
 		g.P("if req == nil {")
 		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
 		g.P("}")
 
 		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
-		g.P("if e:=c.cc.Call(ctx,", pathname, ",req,resp,", metadataPackage.Ident("GetMetadata"), "(ctx),\"\");e!=nil{")
+		g.P("if e:=c.cc.Invoke(ctx,", pathname, ",req,resp,opts...);e!=nil{")
 		g.P("return nil,e")
 		g.P("}")
 		g.P("return resp, nil")

@@ -33,6 +33,9 @@ func (s *ServerForPick) GetServerPickInfo() *picker.ServerPickInfo {
 func (s *ServerForPick) GetServerAddr() string {
 	return s.addr
 }
+func (s *ServerForPick) Pickable() bool {
+	return s.getpeer() != nil && !s.closing
+}
 
 func (s *ServerForPick) getpeer() *stream.Peer {
 	return (*stream.Peer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.peer))))
@@ -43,10 +46,6 @@ func (s *ServerForPick) setpeer(p *stream.Peer) {
 func (s *ServerForPick) caspeer(oldpeer, newpeer *stream.Peer) bool {
 	return atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&s.peer)), unsafe.Pointer(&oldpeer), unsafe.Pointer(newpeer))
 }
-func (s *ServerForPick) Pickable() bool {
-	return s.getpeer() != nil && !s.closing
-}
-
 func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 	p := s.getpeer()
 	if p == nil {

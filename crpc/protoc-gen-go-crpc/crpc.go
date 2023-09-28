@@ -14,15 +14,11 @@ import (
 )
 
 const (
-	errorsPackage    = protogen.GoImportPath("errors")
-	regexpPackage    = protogen.GoImportPath("regexp")
 	contextPackage   = protogen.GoImportPath("context")
 	protoPackage     = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	protojsonPackage = protogen.GoImportPath("google.golang.org/protobuf/encoding/protojson")
 	crpcPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/crpc")
 	logPackage       = protogen.GoImportPath("github.com/chenjie199234/Corelib/log")
-	commonPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
-	metadataPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/metadata")
 	cerrorPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/cerror")
 )
 
@@ -234,7 +230,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("}")
 
 		g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
-		g.P("respd,e:=c.cc.Call(ctx,", pathname, ",reqd,", metadataPackage.Ident("GetMetadata"), "(ctx),\"\")")
+		g.P("respd,e:=c.cc.Call(ctx,", pathname, ",reqd)")
 		g.P("if e != nil {")
 		g.P("return nil,e")
 		g.P("}")
