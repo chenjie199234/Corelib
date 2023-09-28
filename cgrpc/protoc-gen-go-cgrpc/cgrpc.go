@@ -13,12 +13,11 @@ import (
 )
 
 const (
-	contextPackage  = protogen.GoImportPath("context")
-	grpcPackage     = protogen.GoImportPath("google.golang.org/grpc")
-	cgrpcPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/cgrpc")
-	logPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/log")
-	metadataPackage = protogen.GoImportPath("github.com/chenjie199234/Corelib/metadata")
-	cerrorPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/cerror")
+	contextPackage = protogen.GoImportPath("context")
+	grpcPackage    = protogen.GoImportPath("google.golang.org/grpc")
+	cgrpcPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/cgrpc")
+	logPackage     = protogen.GoImportPath("github.com/chenjie199234/Corelib/log")
+	cerrorPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/cerror")
 )
 
 func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {

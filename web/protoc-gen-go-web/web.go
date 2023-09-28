@@ -16,11 +16,9 @@ import (
 )
 
 const (
-	errorsPackage    = protogen.GoImportPath("errors")
 	stringsPackage   = protogen.GoImportPath("strings")
 	urlPackage       = protogen.GoImportPath("net/url")
 	httpPackage      = protogen.GoImportPath("net/http")
-	regexpPackage    = protogen.GoImportPath("regexp")
 	ioPackage        = protogen.GoImportPath("io")
 	contextPackage   = protogen.GoImportPath("context")
 	base64Package    = protogen.GoImportPath("encoding/base64")
