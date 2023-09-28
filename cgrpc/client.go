@@ -248,6 +248,12 @@ func (c *CGrpcClient) callInterceptor(ctx context.Context, path string, req, rep
 		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 			continue
 		}
+		//after transGrpcError the e's type is *cerror.Error
+		//when it return to the error interface,will make the return value always not nil
+		//this is the interface's feature
+		if e == nil {
+			return nil
+		}
 		return e
 	}
 }

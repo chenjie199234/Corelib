@@ -214,6 +214,9 @@ func getDoneCallBack(s ServerForPick) func(cpuusage float64, successwastetime ui
 		if success {
 			//cpuusage
 			atomic.StoreUint64((*uint64)(unsafe.Pointer(&sinfo.cpuusage)), *(*uint64)(unsafe.Pointer(&cpuusage)))
+			if successwastetime == 0 {
+				successwastetime = 1 //min waste time 1 nano second
+			}
 			//success wastetime
 			atomic.AddUint64(&sinfo.successwastetime, successwastetime)
 			sinfo.addsuccess()
