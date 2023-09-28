@@ -800,9 +800,9 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("querystr:=", g.QualifiedGoIdent(commonPackage.Ident("Byte2str")), "(query)")
 			switch httpmetohd {
 			case http.MethodGet:
-				g.P("r,e:=c.cc.Get(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),\"\")")
+				g.P("r,e:=c.cc.Get(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			case http.MethodDelete:
-				g.P("r,e:=c.cc.Delete(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),\"\")")
+				g.P("r,e:=c.cc.Delete(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			}
 		} else {
 			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")
@@ -810,11 +810,11 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
 			switch httpmetohd {
 			case http.MethodPost:
-				g.P("r,e:=c.cc.Post(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd,\"\")")
+				g.P("r,e:=c.cc.Post(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			case http.MethodPut:
-				g.P("r,e:=c.cc.Put(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd,\"\")")
+				g.P("r,e:=c.cc.Put(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			case http.MethodPatch:
-				g.P("r,e:=c.cc.Patch(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd,\"\")")
+				g.P("r,e:=c.cc.Patch(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			}
 		}
 		g.P("if e != nil {")

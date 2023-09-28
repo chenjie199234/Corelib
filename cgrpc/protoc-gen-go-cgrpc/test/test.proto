@@ -6,8 +6,8 @@ import "pbex.proto";
 service test {
 	rpc hello(helloreq)returns(helloresp){
 		option (pbex.method)="get";
-		option (pbex.grpc_midwares)="user";
-		option (pbex.grpc_midwares)="limit";
+		option (pbex.cgrpc_midwares)="user";
+		option (pbex.cgrpc_midwares)="limit";
 	}
 }
 enum TestEnum {
