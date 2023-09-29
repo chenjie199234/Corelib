@@ -120,7 +120,7 @@ func NewWebClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfap
 	}
 	client.balancer = newCorelibBalancer(client)
 	client.resolver = resolver.NewCorelibResolver(client.balancer, client.discover, discover.Web)
-	client.resolver.Now()
+	client.resolver.Start()
 	return client, nil
 }
 

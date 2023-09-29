@@ -73,10 +73,7 @@ func (d *DnsD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 	ch := make(chan *struct{}, 1)
 	d.Lock()
 	if status := atomic.LoadInt32(&d.status); status == 0 {
-		select {
-		case ch <- nil:
-		default:
-		}
+		ch <- nil
 		d.notices[ch] = nil
 	} else if status == 1 {
 		d.notices[ch] = nil

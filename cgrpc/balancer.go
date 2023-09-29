@@ -24,10 +24,9 @@ type resolverBuilder struct {
 }
 
 func (b *resolverBuilder) Build(target gresolver.Target, cc gresolver.ClientConn, opts gresolver.BuildOptions) (gresolver.Resolver, error) {
-	r := resolver.NewCorelibResolver(&balancerWraper{cc: cc}, b.c.discover, discover.Cgrpc)
-	b.c.resolver = r
-	r.Now()
-	return r, nil
+	b.c.resolver = resolver.NewCorelibResolver(&balancerWraper{cc: cc}, b.c.discover, discover.Cgrpc)
+	b.c.resolver.Start()
+	return b.c.resolver, nil
 }
 
 func (b *resolverBuilder) Scheme() string {

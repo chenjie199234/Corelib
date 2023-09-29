@@ -19,6 +19,7 @@ type Balancer interface {
 type CorelibResolver struct {
 	b          Balancer
 	d          discover.DI
+	pt         discover.PortType
 	lker       *sync.Mutex
 	notices    map[WaitType]map[chan *struct{}]*struct{}
 	stop       chan *struct{}
@@ -26,39 +27,42 @@ type CorelibResolver struct {
 }
 
 func NewCorelibResolver(b Balancer, d discover.DI, pt discover.PortType) *CorelibResolver {
-	r := &CorelibResolver{
+	return &CorelibResolver{
 		b:       b,
 		d:       d,
+		pt:      pt,
 		lker:    &sync.Mutex{},
 		notices: make(map[WaitType]map[chan *struct{}]*struct{}, 5),
 		stop:    make(chan *struct{}),
 	}
+}
+func (r *CorelibResolver) Start() {
 	go func() {
-		dnotice, cancel := d.GetNotice()
+		dnotice, cancel := r.d.GetNotice()
 		defer cancel()
 		for {
 			var ok bool
 			select {
 			case _, ok = <-dnotice:
 				if !ok {
-					b.ResolverError(cerror.ErrDiscoverStopped)
+					r.b.ResolverError(cerror.ErrDiscoverStopped)
 					r.Wake(CALL)
 					r.Wake(SYSTEM)
 					<-r.stop
-					b.ResolverError(cerror.ErrClientClosing)
+					r.b.ResolverError(cerror.ErrClientClosing)
 					r.Wake(CALL)
 					r.Wake(SYSTEM)
 					return
 				}
 			case <-r.stop:
-				b.ResolverError(cerror.ErrClientClosing)
+				r.b.ResolverError(cerror.ErrClientClosing)
 				r.Wake(CALL)
 				r.Wake(SYSTEM)
 				return
 			}
-			all, version, e := d.GetAddrs(pt)
+			all, version, e := r.d.GetAddrs(r.pt)
 			if e != nil {
-				b.ResolverError(e)
+				r.b.ResolverError(e)
 				r.Wake(CALL)
 				r.Wake(SYSTEM)
 			} else {
@@ -67,11 +71,10 @@ func NewCorelibResolver(b Balancer, d discover.DI, pt discover.PortType) *Coreli
 						delete(all, k)
 					}
 				}
-				b.UpdateDiscovery(all, version)
+				r.b.UpdateDiscovery(all, version)
 			}
 		}
 	}()
-	return r
 }
 func (r *CorelibResolver) ResolveNow(gresolver.ResolveNowOptions) {
 	r.triger(nil, SYSTEM)
