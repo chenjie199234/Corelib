@@ -67,6 +67,17 @@ func (d *StaticD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 		d.Unlock()
 	}
 }
+func (d *StaticD) UpdateAddrs(addrs []string) {
+	d.Lock()
+	defer d.Unlock()
+	d.addrs = addrs
+	for notice := range d.notices {
+		select {
+		case notice <- nil:
+		default:
+		}
+	}
+}
 func (d *StaticD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, error) {
 	d.RLock()
 	defer d.RUnlock()
