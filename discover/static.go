@@ -107,6 +107,7 @@ func (d *StaticD) UpdateAddrs(addrs []string, crpcport, cgrpcport, webport int) 
 	}
 	if changed {
 		d.addrs = addrs
+		d.version = time.Now().UnixNano()
 		d.crpcport = crpcport
 		d.cgrpcport = cgrpcport
 		d.webport = webport
