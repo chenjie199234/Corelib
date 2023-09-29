@@ -13,12 +13,11 @@ import (
 
 type StaticD struct {
 	target    string
+	lker      *sync.RWMutex
+	notices   map[chan *struct{}]*struct{}
 	crpcport  int
 	cgrpcport int
 	webport   int
-	notices   map[chan *struct{}]*struct{}
-
-	lker      *sync.RWMutex
 	addrs     []string
 	version   int64
 	lasterror error
@@ -54,7 +53,10 @@ func (d *StaticD) Now() {
 	d.lker.RLock()
 	defer d.lker.RUnlock()
 	for notice := range d.notices {
-		notice <- nil
+		select {
+		case notice <- nil:
+		default:
+		}
 	}
 }
 

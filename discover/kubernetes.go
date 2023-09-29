@@ -75,8 +75,8 @@ func NewKubernetesDiscover(targetproject, targetgroup, targetapp, namespace, lab
 }
 func (d *KubernetesD) Now() {
 	if atomic.LoadInt32(&d.status) == 0 {
-		d.lker.Lock()
-		defer d.lker.Unlock()
+		d.lker.RLock()
+		defer d.lker.RUnlock()
 		for notice := range d.notices {
 			select {
 			case notice <- nil:
