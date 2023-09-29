@@ -91,14 +91,18 @@ func (d *KubernetesD) Now() {
 func (d *KubernetesD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 	ch := make(chan *struct{}, 1)
 	d.Lock()
-	d.notices[ch] = nil
-	d.Unlock()
-	if atomic.LoadInt32(&d.status) == 0 {
+	if status := atomic.LoadInt32(&d.status); status == 0 {
 		select {
 		case ch <- nil:
 		default:
 		}
+		d.notices[ch] = nil
+	} else if status == 1 {
+		d.notices[ch] = nil
+	} else {
+		close(ch)
 	}
+	d.Unlock()
 	return ch, func() {
 		d.Lock()
 		if _, ok := d.notices[ch]; ok {

@@ -62,9 +62,13 @@ func (d *StaticD) Now() {
 // 2.this discover stopped
 func (d *StaticD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 	ch := make(chan *struct{}, 1)
-	ch <- nil
 	d.Lock()
-	d.notices[ch] = nil
+	if d.lasterror == cerror.ErrDiscoverStopped {
+		close(ch)
+	} else {
+		ch <- nil
+		d.notices[ch] = nil
+	}
 	d.Unlock()
 	return ch, func() {
 		d.Lock()

@@ -48,6 +48,7 @@ func NewCorelibResolver(b Balancer, d discover.DI, pt discover.PortType) *Coreli
 					b.ResolverError(cerror.ErrClientClosing)
 					r.Wake(CALL)
 					r.Wake(SYSTEM)
+					return
 				}
 			case <-r.stop:
 				b.ResolverError(cerror.ErrClientClosing)
