@@ -25,7 +25,7 @@ type DnsD struct {
 	triger    chan *struct{}
 	status    int32 //0-idle,1-discover,2-stop
 
-	sync.RWMutex
+	lker      *sync.RWMutex
 	addrs     []string
 	version   int64
 	lasterror error
@@ -49,6 +49,7 @@ func NewDNSDiscover(targetproject, targetgroup, targetapp, host string, interval
 		interval:  interval,
 		notices:   make(map[chan *struct{}]*struct{}, 1),
 		triger:    make(chan *struct{}, 1),
+		lker:      &sync.RWMutex{},
 	}
 	d.triger <- nil
 	d.status = 1
@@ -71,7 +72,7 @@ func (d *DnsD) Now() {
 // 2.this discover stopped
 func (d *DnsD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 	ch := make(chan *struct{}, 1)
-	d.Lock()
+	d.lker.Lock()
 	if status := atomic.LoadInt32(&d.status); status == 0 {
 		ch <- nil
 		d.notices[ch] = nil
@@ -80,20 +81,20 @@ func (d *DnsD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 	} else {
 		close(ch)
 	}
-	d.Unlock()
+	d.lker.Unlock()
 	return ch, func() {
-		d.Lock()
+		d.lker.Lock()
 		if _, ok := d.notices[ch]; ok {
 			delete(d.notices, ch)
 			close(ch)
 		}
-		d.Unlock()
+		d.lker.Unlock()
 	}
 }
 
 func (d *DnsD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, error) {
-	d.RLock()
-	defer d.RUnlock()
+	d.lker.RLock()
+	defer d.lker.RUnlock()
 	r := make(map[string]*RegisterData)
 	reg := &RegisterData{
 		DServers: map[string]*struct{}{"dns": nil},
@@ -147,12 +148,12 @@ func (d *DnsD) Stop() {
 }
 func (d *DnsD) run() {
 	defer func() {
-		d.Lock()
+		d.lker.Lock()
 		for notice := range d.notices {
 			delete(d.notices, notice)
 			close(notice)
 		}
-		d.Unlock()
+		d.lker.Unlock()
 	}()
 	tker := time.NewTicker(d.interval)
 	for {
@@ -169,7 +170,7 @@ func (d *DnsD) run() {
 		addrs, e := net.LookupHost(d.host)
 		if e != nil {
 			log.Error(nil, "[discover.dns] look up failed", log.String("host", d.host), log.CError(e))
-			d.Lock()
+			d.lker.Lock()
 			d.lasterror = e
 			for notice := range d.notices {
 				select {
@@ -177,10 +178,10 @@ func (d *DnsD) run() {
 				default:
 				}
 			}
-			d.Unlock()
+			d.lker.Unlock()
 			continue
 		}
-		d.Lock()
+		d.lker.Lock()
 		different := len(addrs) != len(d.addrs)
 		if !different {
 			for _, newaddr := range addrs {
@@ -209,7 +210,7 @@ func (d *DnsD) run() {
 			default:
 			}
 		}
-		d.Unlock()
+		d.lker.Unlock()
 		for len(tker.C) > 0 {
 			<-tker.C
 		}

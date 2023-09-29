@@ -30,7 +30,7 @@ type KubernetesD struct {
 	status        int32 //0-idle,1-discover,2-stop
 	watcher       watch.Interface
 
-	sync.RWMutex
+	lker      *sync.RWMutex
 	addrs     map[string]*struct{}
 	version   string
 	lasterror error
@@ -68,14 +68,15 @@ func NewKubernetesDiscover(targetproject, targetgroup, targetapp, namespace, lab
 		webport:       webport,
 		notices:       make(map[chan *struct{}]*struct{}, 1),
 		status:        1,
+		lker:          &sync.RWMutex{},
 	}
 	go d.run()
 	return d, nil
 }
 func (d *KubernetesD) Now() {
 	if atomic.LoadInt32(&d.status) == 0 {
-		d.Lock()
-		defer d.Unlock()
+		d.lker.Lock()
+		defer d.lker.Unlock()
 		for notice := range d.notices {
 			select {
 			case notice <- nil:
@@ -90,7 +91,7 @@ func (d *KubernetesD) Now() {
 // 2.this discover stopped
 func (d *KubernetesD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 	ch := make(chan *struct{}, 1)
-	d.Lock()
+	d.lker.Lock()
 	if status := atomic.LoadInt32(&d.status); status == 0 {
 		ch <- nil
 		d.notices[ch] = nil
@@ -99,19 +100,19 @@ func (d *KubernetesD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 	} else {
 		close(ch)
 	}
-	d.Unlock()
+	d.lker.Unlock()
 	return ch, func() {
-		d.Lock()
+		d.lker.Lock()
 		if _, ok := d.notices[ch]; ok {
 			delete(d.notices, ch)
 			close(ch)
 		}
-		d.Unlock()
+		d.lker.Unlock()
 	}
 }
 func (d *KubernetesD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, error) {
-	d.RLock()
-	defer d.RUnlock()
+	d.lker.RLock()
+	defer d.lker.RUnlock()
 	r := make(map[string]*RegisterData)
 	reg := &RegisterData{
 		DServers: map[string]*struct{}{"kubernetes": nil},
@@ -167,12 +168,12 @@ func (d *KubernetesD) CheckTarget(target string) bool {
 }
 func (d *KubernetesD) run() {
 	defer func() {
-		d.Lock()
+		d.lker.Lock()
 		for notice := range d.notices {
 			delete(d.notices, notice)
 			close(notice)
 		}
-		d.Unlock()
+		d.lker.Unlock()
 	}()
 	d.list()
 	d.watch()
@@ -186,7 +187,7 @@ func (d *KubernetesD) list() {
 		}
 		pods, e := kubeclient.CoreV1().Pods(d.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: d.labelselector})
 		if e != nil {
-			d.Lock()
+			d.lker.Lock()
 			d.lasterror = e
 			for notice := range d.notices {
 				select {
@@ -194,7 +195,7 @@ func (d *KubernetesD) list() {
 				default:
 				}
 			}
-			d.Unlock()
+			d.lker.Unlock()
 			log.Error(nil, "[discover.kubernetes] list failed", log.String("namespace", d.namespace), log.String("labelselector", d.labelselector), log.CError(e))
 			time.Sleep(time.Millisecond * 100)
 			continue
@@ -219,7 +220,7 @@ func (d *KubernetesD) list() {
 				tmp[item.Status.PodIP] = nil
 			}
 		}
-		d.Lock()
+		d.lker.Lock()
 		d.addrs = tmp
 		d.lasterror = nil
 		atomic.StoreInt32(&d.status, 0)
@@ -229,7 +230,7 @@ func (d *KubernetesD) list() {
 			default:
 			}
 		}
-		d.Unlock()
+		d.lker.Unlock()
 		break
 	}
 	return
@@ -248,7 +249,7 @@ func (d *KubernetesD) watch() {
 		}
 		opts := metav1.ListOptions{LabelSelector: d.labelselector, Watch: true, ResourceVersion: d.version}
 		if d.watcher, e = kubeclient.CoreV1().Pods(d.namespace).Watch(context.Background(), opts); e != nil {
-			d.Lock()
+			d.lker.Lock()
 			d.lasterror = e
 			for notice := range d.notices {
 				select {
@@ -256,7 +257,7 @@ func (d *KubernetesD) watch() {
 				default:
 				}
 			}
-			d.Unlock()
+			d.lker.Unlock()
 			log.Error(nil, "[discover.kubernetes] watch failed", log.String("namespace", d.namespace), log.String("labelselector", d.labelselector), log.CError(e))
 			retrayDealy = time.Millisecond * 100
 			continue
@@ -298,7 +299,7 @@ func (d *KubernetesD) watch() {
 					}
 				}
 				if find {
-					d.Lock()
+					d.lker.Lock()
 					d.addrs[pod.Status.PodIP] = nil
 					d.version = pod.ResourceVersion
 					d.lasterror = nil
@@ -308,14 +309,14 @@ func (d *KubernetesD) watch() {
 						default:
 						}
 					}
-					d.Unlock()
+					d.lker.Unlock()
 				}
 			case watch.Deleted:
 				pod := event.Object.(*v1.Pod)
 				if pod.Status.PodIP == "" {
 					break
 				}
-				d.Lock()
+				d.lker.Lock()
 				delete(d.addrs, pod.Status.PodIP)
 				d.version = pod.ResourceVersion
 				d.lasterror = nil
@@ -325,13 +326,13 @@ func (d *KubernetesD) watch() {
 					default:
 					}
 				}
-				d.Unlock()
+				d.lker.Unlock()
 			case watch.Bookmark:
 				// don't update the version
 				// d.version = event.Object.(interface{ GetResourceVersion() string }).GetResourceVersion()
 			case watch.Error:
 				failed = true
-				d.Lock()
+				d.lker.Lock()
 				d.lasterror = apierrors.FromObject(event.Object)
 				for notice := range d.notices {
 					select {
@@ -339,7 +340,7 @@ func (d *KubernetesD) watch() {
 					default:
 					}
 				}
-				d.Unlock()
+				d.lker.Unlock()
 				log.Error(nil, "[discover.kubernetes] watch failed", log.CError(e))
 				if e, ok := d.lasterror.(*apierrors.StatusError); ok && e.ErrStatus.Details != nil {
 					retrayDealy = time.Duration(e.ErrStatus.Details.RetryAfterSeconds) * time.Second

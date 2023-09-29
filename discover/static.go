@@ -18,7 +18,7 @@ type StaticD struct {
 	webport   int
 	notices   map[chan *struct{}]*struct{}
 
-	sync.RWMutex
+	lker      *sync.RWMutex
 	addrs     []string
 	version   int64
 	lasterror error
@@ -46,12 +46,13 @@ func NewStaticDiscover(targetproject, targetgroup, targetapp string, addrs []str
 		cgrpcport: cgrpcport,
 		webport:   webport,
 		notices:   make(map[chan *struct{}]*struct{}),
+		lker:      &sync.RWMutex{},
 	}, nil
 }
 
 func (d *StaticD) Now() {
-	d.RLock()
-	defer d.RUnlock()
+	d.lker.RLock()
+	defer d.lker.RUnlock()
 	for notice := range d.notices {
 		notice <- nil
 	}
@@ -62,21 +63,21 @@ func (d *StaticD) Now() {
 // 2.this discover stopped
 func (d *StaticD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 	ch := make(chan *struct{}, 1)
-	d.Lock()
+	d.lker.Lock()
 	if d.lasterror == cerror.ErrDiscoverStopped {
 		close(ch)
 	} else {
 		ch <- nil
 		d.notices[ch] = nil
 	}
-	d.Unlock()
+	d.lker.Unlock()
 	return ch, func() {
-		d.Lock()
+		d.lker.Lock()
 		if _, ok := d.notices[ch]; ok {
 			delete(d.notices, ch)
 			close(ch)
 		}
-		d.Unlock()
+		d.lker.Unlock()
 	}
 }
 func (d *StaticD) UpdateAddrs(addrs []string, crpcport, cgrpcport, webport int) {
@@ -88,8 +89,8 @@ func (d *StaticD) UpdateAddrs(addrs []string, crpcport, cgrpcport, webport int) 
 	for k := range undup {
 		addrs = append(addrs, k)
 	}
-	d.Lock()
-	defer d.Unlock()
+	d.lker.Lock()
+	defer d.lker.Unlock()
 	changed := d.crpcport != crpcport ||
 		d.cgrpcport != cgrpcport ||
 		d.webport != webport ||
@@ -124,8 +125,8 @@ func (d *StaticD) UpdateAddrs(addrs []string, crpcport, cgrpcport, webport int) 
 	}
 }
 func (d *StaticD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, error) {
-	d.RLock()
-	defer d.RUnlock()
+	d.lker.RLock()
+	defer d.lker.RUnlock()
 	r := make(map[string]*RegisterData)
 	reg := &RegisterData{
 		DServers: map[string]*struct{}{"static": nil},
@@ -169,8 +170,8 @@ func (d *StaticD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, erro
 	return r, d.version, d.lasterror
 }
 func (d *StaticD) Stop() {
-	d.Lock()
-	defer d.Unlock()
+	d.lker.Lock()
+	defer d.lker.Unlock()
 	if d.lasterror != cerror.ErrDiscoverStopped {
 		log.Info(nil, "[discover.static] discover stopped", log.Any("addrs", d.addrs))
 		d.lasterror = cerror.ErrDiscoverStopped
