@@ -238,10 +238,6 @@ func (d *KubernetesD) list() {
 	return
 }
 func (d *KubernetesD) watch() {
-	if d.lasterror != nil {
-		//list failed
-		return
-	}
 	var e error
 	var retrayDealy time.Duration
 	for {
