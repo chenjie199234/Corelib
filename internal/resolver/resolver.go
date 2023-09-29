@@ -33,17 +33,6 @@ func NewCorelibResolver(b Balancer, d discover.DI, pt discover.PortType) *Coreli
 		notices: make(map[WaitType]map[chan *struct{}]*struct{}, 5),
 		stop:    make(chan *struct{}),
 	}
-	all, version, e := d.GetAddrs(pt)
-	if e != nil {
-		b.ResolverError(e)
-	} else {
-		for k, v := range all {
-			if v == nil || len(v.DServers) == 0 {
-				delete(all, k)
-			}
-		}
-		b.UpdateDiscovery(all, version)
-	}
 	go func() {
 		dnotice, cancel := d.GetNotice()
 		defer cancel()

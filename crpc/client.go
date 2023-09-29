@@ -91,6 +91,7 @@ func NewCrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfa
 	}
 	client.balancer = newCorelibBalancer(client)
 	client.resolver = resolver.NewCorelibResolver(client.balancer, client.discover, discover.Crpc)
+	client.resolver.Now()
 	instancec := &stream.InstanceConfig{
 		RecvIdleTimeout:    c.IdleTimeout.StdDuration(),
 		HeartprobeInterval: c.HeartProbe.StdDuration(),
