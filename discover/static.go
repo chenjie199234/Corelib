@@ -26,6 +26,14 @@ type StaticD struct {
 
 // addrs' key can be host(no scheme)/ipv4/ipv6
 func NewStaticDiscover(targetproject, targetgroup, targetapp string, addrs []string, crpcport, cgrpcport, webport int) (DI, error) {
+	undup := make(map[string]*struct{}, len(addrs))
+	for _, addr := range addrs {
+		undup[addr] = nil
+	}
+	addrs = make([]string, 0, len(undup))
+	for k := range undup {
+		addrs = append(addrs, k)
+	}
 	targetfullname, e := name.MakeFullName(targetproject, targetgroup, targetapp)
 	if e != nil {
 		return nil, e
@@ -67,14 +75,46 @@ func (d *StaticD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 		d.Unlock()
 	}
 }
-func (d *StaticD) UpdateAddrs(addrs []string) {
+func (d *StaticD) UpdateAddrs(addrs []string, crpcport, cgrpcport, webport int) {
+	undup := make(map[string]*struct{}, len(addrs))
+	for _, addr := range addrs {
+		undup[addr] = nil
+	}
+	addrs = make([]string, 0, len(undup))
+	for k := range undup {
+		addrs = append(addrs, k)
+	}
 	d.Lock()
 	defer d.Unlock()
-	d.addrs = addrs
-	for notice := range d.notices {
-		select {
-		case notice <- nil:
-		default:
+	changed := d.crpcport != crpcport ||
+		d.cgrpcport != cgrpcport ||
+		d.webport != webport ||
+		len(d.addrs) != len(addrs)
+	if !changed {
+		for i := range d.addrs {
+			find := false
+			for j := range addrs {
+				if d.addrs[i] == addrs[j] {
+					find = true
+					break
+				}
+			}
+			if !find {
+				changed = true
+				break
+			}
+		}
+	}
+	if changed {
+		d.addrs = addrs
+		d.crpcport = crpcport
+		d.cgrpcport = cgrpcport
+		d.webport = webport
+		for notice := range d.notices {
+			select {
+			case notice <- nil:
+			default:
+			}
 		}
 	}
 }
