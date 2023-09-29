@@ -247,8 +247,16 @@ func (b *corelibBalancer) ResolverError(e error) {
 func (b *corelibBalancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConnState) {
 }
 
-// current don't need to do anything
 func (b *corelibBalancer) Close() {
+	for _, server := range b.servers {
+		server.subconn.Shutdown()
+		log.Info(nil, "[cgrpc.client] offline", log.String("sname", b.c.server), log.String("sip", server.addr))
+	}
+	b.servers = make(map[string]*ServerForPick)
+	b.lastResolveError = cerror.ErrClientClosing
+	b.picker = picker.NewPicker(nil)
+	b.c.resolver.Wake(resolver.CALL)
+	b.c.resolver.Wake(resolver.SYSTEM)
 }
 
 // OnOff - true,online
