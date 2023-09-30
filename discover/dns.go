@@ -12,6 +12,7 @@ import (
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/name"
+	"golang.org/x/net/context"
 )
 
 type DnsD struct {
@@ -22,7 +23,10 @@ type DnsD struct {
 	cgrpcport int
 	webport   int
 	triger    chan *struct{}
-	status    int32
+	status    int32 //0 idle,1 discovering
+
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	lker      *sync.RWMutex
 	notices   map[chan *struct{}]*struct{}
@@ -52,6 +56,7 @@ func NewDNSDiscover(targetproject, targetgroup, targetapp, host string, interval
 		lker:      &sync.RWMutex{},
 		notices:   make(map[chan *struct{}]*struct{}, 1),
 	}
+	d.ctx, d.cancel = context.WithCancel(context.Background())
 	d.triger <- nil
 	go d.run()
 	return d, nil
@@ -67,13 +72,7 @@ func (d *DnsD) Now() {
 	}
 }
 func (d *DnsD) Stop() {
-	if atomic.SwapInt32(&d.status, 2) == 2 {
-		return
-	}
-	select {
-	case d.triger <- nil:
-	default:
-	}
+	d.cancel()
 }
 
 // don't close the returned channel,it will be closed in cases:
@@ -82,13 +81,16 @@ func (d *DnsD) Stop() {
 func (d *DnsD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 	ch := make(chan *struct{}, 1)
 	d.lker.Lock()
-	if status := atomic.LoadInt32(&d.status); status == 0 {
+	if d.status == 0 {
 		ch <- nil
 		d.notices[ch] = nil
-	} else if status == 1 {
-		d.notices[ch] = nil
 	} else {
-		close(ch)
+		select {
+		case <-d.ctx.Done():
+			close(ch)
+		default:
+			d.notices[ch] = nil
+		}
 	}
 	d.lker.Unlock()
 	return ch, func() {
@@ -159,16 +161,20 @@ func (d *DnsD) run() {
 	tker := time.NewTicker(d.interval)
 	for {
 		select {
+		case <-d.ctx.Done():
+			log.Info(nil, "[discover.dns] discover stopped", log.String("host", d.host), log.CDuration("interval", ctime.Duration(d.interval)))
+			d.lasterror = cerror.ErrDiscoverStopped
+			return
 		case <-d.triger:
 		case <-tker.C:
 		}
-		if atomic.LoadInt32(&d.status) == 2 {
+		d.status = 1
+		addrs, e := net.DefaultResolver.LookupHost(d.ctx, d.host)
+		if e != nil && cerror.Equal(e, cerror.ErrCanceled) {
 			log.Info(nil, "[discover.dns] discover stopped", log.String("host", d.host), log.CDuration("interval", ctime.Duration(d.interval)))
 			d.lasterror = cerror.ErrDiscoverStopped
 			return
 		}
-		atomic.CompareAndSwapInt32(&d.status, 0, 1)
-		addrs, e := net.LookupHost(d.host)
 		if e != nil {
 			log.Error(nil, "[discover.dns] look up failed", log.String("host", d.host), log.CDuration("interval", ctime.Duration(d.interval)), log.CError(e))
 			d.lker.Lock()
@@ -179,6 +185,7 @@ func (d *DnsD) run() {
 				default:
 				}
 			}
+			d.status = 0
 			d.lker.Unlock()
 			continue
 		}
@@ -204,13 +211,13 @@ func (d *DnsD) run() {
 			d.version = time.Now().UnixNano()
 		}
 		d.lasterror = nil
-		atomic.CompareAndSwapInt32(&d.status, 1, 0)
 		for notice := range d.notices {
 			select {
 			case notice <- nil:
 			default:
 			}
 		}
+		d.status = 0
 		d.lker.Unlock()
 		for len(tker.C) > 0 {
 			<-tker.C
