@@ -168,7 +168,7 @@ func CError(value error) slog.Attr {
 	if e == nil {
 		return slog.Any("error", nil)
 	}
-	return Group("error", slog.Uint64("code", uint64(e.Code)), slog.String("msg", e.Msg))
+	return Group("error", slog.Int64("code", int64(e.Code)), slog.String("msg", e.Msg))
 }
 
 func Group(key string, attrs ...slog.Attr) slog.Attr {
