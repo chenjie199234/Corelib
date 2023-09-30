@@ -294,7 +294,7 @@ func (b *corelibBalancer) rebuildpicker(serveraddr string, OnOff bool) {
 }
 
 func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	forceaddr := info.Ctx.Value(forceaddrkey{}).(string)
+	forceaddr, _ := info.Ctx.Value(forceaddrkey{}).(string)
 	refresh := false
 	start := time.Now()
 	for {

@@ -40,6 +40,9 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData,
 	b.lastResolveError = nil
 	b.lker.Lock()
 	defer func() {
+		for _, server := range b.servers {
+			server.closing = 0
+		}
 		b.rebuildpicker()
 		b.ww.Wake("CALL")
 		b.lker.Unlock()
