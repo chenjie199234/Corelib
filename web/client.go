@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -170,7 +171,7 @@ func (c *WebClient) dialtls(ctx context.Context, network, addr string) (net.Conn
 	return tc, nil
 }
 func (c *WebClient) ResolveNow() {
-	c.resolver.Now()
+	go c.resolver.Now()
 }
 
 // get the server's addrs from the discover.DI(the param in NewCrpcClient)
@@ -265,7 +266,6 @@ func (c *WebClient) Patch(ctx context.Context, path, query string, header http.H
 }
 
 func (c *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body io.Reader) (*http.Response, error) {
-	forceaddr, _ := ctx.Value(forceaddrkey{}).(string)
 	if forbiddenHeader(header) {
 		return nil, cerror.MakeError(-1, 400, "forbidden header")
 	}
@@ -321,7 +321,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	defer c.stop.DoneOne()
 	for {
 		start := time.Now()
-		server, done, e := c.balancer.Pick(ctx, forceaddr)
+		server, done, e := c.balancer.Pick(ctx)
 		if e != nil {
 			return nil, e
 		}
@@ -370,8 +370,14 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				e = tmpe
 			}
 			if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
-				server.closing = true
-				server.Pickinfo.SetDiscoverServerOffline(0)
+				if atomic.SwapInt32(&server.closing, 1) == 0 {
+					//set the lowest pick priority
+					server.Pickinfo.SetDiscoverServerOffline(0)
+					//rebuild picker
+					c.balancer.rebuildpicker()
+					//triger discover
+					c.resolver.Now()
+				}
 				log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
 				monitor.WebClientMonitor(c.server, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
 				continue

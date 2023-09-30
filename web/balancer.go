@@ -8,11 +8,12 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/picker"
-	"github.com/chenjie199234/Corelib/internal/resolver"
+	"github.com/chenjie199234/Corelib/util/waitwake"
 )
 
 type corelibBalancer struct {
 	c                *WebClient
+	ww               *waitwake.WaitWake
 	lker             *sync.RWMutex
 	version          discover.Version
 	servers          map[string]*ServerForPick //key server addr
@@ -23,6 +24,7 @@ type corelibBalancer struct {
 func newCorelibBalancer(c *WebClient) *corelibBalancer {
 	return &corelibBalancer{
 		c:       c,
+		ww:      waitwake.NewWaitWake(),
 		lker:    &sync.RWMutex{},
 		servers: make(map[string]*ServerForPick),
 		picker:  picker.NewPicker(nil),
@@ -30,6 +32,7 @@ func newCorelibBalancer(c *WebClient) *corelibBalancer {
 }
 func (b *corelibBalancer) ResolverError(e error) {
 	b.lastResolveError = e
+	b.ww.Wake("CALL")
 }
 
 // version can only be int64 or string(should only be used with != or ==)
@@ -38,9 +41,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData,
 	b.lker.Lock()
 	defer func() {
 		b.rebuildpicker()
-
-		b.c.resolver.Wake(resolver.CALL)
-		b.c.resolver.Wake(resolver.SYSTEM)
+		b.ww.Wake("CALL")
 		b.lker.Unlock()
 	}()
 	if discover.SameVersion(b.version, version) {
@@ -109,7 +110,8 @@ func (b *corelibBalancer) rebuildpicker() {
 	b.picker = picker.NewPicker(tmp)
 	return
 }
-func (b *corelibBalancer) Pick(ctx context.Context, forceaddr string) (*ServerForPick, func(cpuusage float64, successwastetime uint64, success bool), error) {
+func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, func(cpuusage float64, successwastetime uint64, success bool), error) {
+	forceaddr, _ := ctx.Value(forceaddrkey{}).(string)
 	refresh := false
 	for {
 		server, done := b.picker.Pick(forceaddr)
@@ -130,7 +132,7 @@ func (b *corelibBalancer) Pick(ctx context.Context, forceaddr string) (*ServerFo
 			}
 			return nil, nil, cerror.ErrNoserver
 		}
-		if e := b.c.resolver.Wait(ctx, resolver.CALL); e != nil {
+		if e := b.ww.Wait(ctx, "CALL", b.c.resolver.Now, nil); e != nil {
 			if e == context.DeadlineExceeded {
 				return nil, nil, cerror.ErrDeadlineExceeded
 			} else if e == context.Canceled {

@@ -12,7 +12,7 @@ type ServerForPick struct {
 	subconn  balancer.SubConn
 	dservers map[string]*struct{} //this app registered on which discovery server
 	status   int32
-	closing  bool
+	closing  int32
 
 	Pickinfo *picker.ServerPickInfo
 }
@@ -24,5 +24,5 @@ func (s *ServerForPick) GetServerAddr() string {
 	return s.addr
 }
 func (s *ServerForPick) Pickable() bool {
-	return s.status == int32(connectivity.Ready) && !s.closing
+	return s.status == int32(connectivity.Ready) && s.closing == 0
 }

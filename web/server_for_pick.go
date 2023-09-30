@@ -7,7 +7,7 @@ import (
 type ServerForPick struct {
 	addr     string
 	dservers map[string]*struct{} //this app registered on which discovery server
-	closing  bool
+	closing  int32
 
 	Pickinfo *picker.ServerPickInfo
 }
@@ -21,5 +21,5 @@ func (s *ServerForPick) GetServerAddr() string {
 }
 
 func (s *ServerForPick) Pickable() bool {
-	return !s.closing
+	return s.closing == 0
 }

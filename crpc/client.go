@@ -110,7 +110,7 @@ func NewCrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfa
 }
 
 func (c *CrpcClient) ResolveNow() {
-	c.resolver.Now()
+	go c.resolver.Now()
 }
 
 // get the server's addrs from the discover.DI(the param in NewCrpcClient)
@@ -158,7 +158,7 @@ func (c *CrpcClient) onlinefunc(p *stream.Peer) bool {
 	}
 	p.SetData(unsafe.Pointer(server))
 	server.setpeer(p)
-	c.balancer.RebuildPicker(true)
+	c.balancer.RebuildPicker(server.addr, true)
 	log.Info(nil, "[crpc.client] online", log.String("sname", c.server), log.String("sip", p.GetRemoteAddr()))
 	return true
 }
@@ -173,11 +173,14 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	}
 	server.lker.Lock()
 	if msg.Error != nil && cerror.Equal(msg.Error, cerror.ErrServerClosing) {
-		//update pickable status
-		server.setpeer(nil)
-		server.closing = true
-		//set the lowest pick priority
-		server.Pickinfo.SetDiscoverServerOffline(0)
+		if atomic.SwapInt32(&server.closing, 1) == 0 {
+			//set the lowest pick priority
+			server.Pickinfo.SetDiscoverServerOffline(0)
+			//rebuild picker
+			c.balancer.RebuildPicker(server.addr, false)
+			//triger discover
+			c.resolver.Now()
+		}
 		//all calls' callid big and equal then this msg's callid are unprocessed
 		for callid, req := range server.reqs {
 			if callid >= msg.Callid {
@@ -202,7 +205,7 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
 	log.Info(nil, "[crpc.client] offline", log.String("sname", c.server), log.String("sip", p.GetRemoteAddr()))
 	server.setpeer(nil)
-	c.balancer.RebuildPicker(false)
+	c.balancer.RebuildPicker(server.addr, false)
 	server.lker.Lock()
 	for callid, req := range server.reqs {
 		req.respdata = nil
@@ -215,7 +218,6 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 }
 
 func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, error) {
-	forceaddr, _ := ctx.Value(forceaddrkey{}).(string)
 	if e := c.stop.Add(1); e != nil {
 		if e == graceful.ErrClosing {
 			return nil, cerror.ErrClientClosing
@@ -252,7 +254,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 	r := c.getreq(msg)
 	for {
 		start := time.Now()
-		server, done, e := c.balancer.Pick(ctx, forceaddr)
+		server, done, e := c.balancer.Pick(ctx)
 		if e != nil {
 			return nil, e
 		}
@@ -277,8 +279,6 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 			monitor.CrpcClientMonitor(c.server, "CRPC", path, r.err, uint64(end.UnixNano()-start.UnixNano()))
 			if r.err != nil {
 				if cerror.Equal(r.err, cerror.ErrServerClosing) {
-					//triger discovery
-					c.resolver.Now()
 					//server is closing,this req can be retry
 					r.respmd = nil
 					r.respdata = nil

@@ -3,6 +3,8 @@ package cgrpc
 import (
 	"context"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -11,6 +13,7 @@ import (
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/monitor"
+	"github.com/chenjie199234/Corelib/util/waitwake"
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
@@ -81,6 +84,8 @@ func (b *balancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptio
 	b.c.balancer = &corelibBalancer{
 		c:       b.c,
 		cc:      cc,
+		ww:      waitwake.NewWaitWake(),
+		lker:    &sync.RWMutex{},
 		servers: make(map[string]*ServerForPick),
 		picker:  picker.NewPicker(nil),
 	}
@@ -95,6 +100,8 @@ func (b *balancerBuilder) Name() string {
 type corelibBalancer struct {
 	c                *CGrpcClient
 	cc               balancer.ClientConn
+	ww               *waitwake.WaitWake
+	lker             *sync.RWMutex
 	servers          map[string]*ServerForPick
 	picker           *picker.Picker
 	lastResolveError error
@@ -102,18 +109,22 @@ type corelibBalancer struct {
 
 // UpdateClientConnState and SubConn's StateListener are called sync by ccBalancerWrapper
 func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) error {
+	b.lker.Lock()
 	b.lastResolveError = nil
 	defer func() {
 		if len(b.servers) == 0 {
-			b.c.resolver.Wake(resolver.CALL)
+			b.ww.Wake("CALL")
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: b})
 		} else if b.picker.ServerLen() > 0 {
-			b.c.resolver.Wake(resolver.CALL)
+			b.ww.Wake("CALL")
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: b})
 		} else {
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: b})
 		}
-		b.c.resolver.Wake(resolver.SYSTEM)
+		for addr := range b.servers {
+			b.ww.Wake("SPECIFIC:" + addr)
+		}
+		b.lker.Unlock()
 	}()
 	//offline
 	for _, server := range b.servers {
@@ -142,6 +153,8 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 			sc, e := b.cc.NewSubConn([]gresolver.Address{addr}, balancer.NewSubConnOptions{
 				HealthCheckEnabled: true,
 				StateListener: func(s balancer.SubConnState) {
+					b.lker.Lock()
+					defer b.lker.Unlock()
 					server, ok := b.servers[addr.Addr]
 					if !ok {
 						return
@@ -162,18 +175,20 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 						if oldstatus == int32(connectivity.Ready) {
 							//offline
 							log.Info(nil, "[cgrpc.client] offline", log.String("sname", b.c.server), log.String("sip", server.addr))
-							b.rebuildpicker(false)
+							go b.rebuildpicker(server.addr, false)
 						}
 						delete(b.servers, addr.Addr)
+						b.ww.Wake("SPECIFIC:" + server.addr)
 					case connectivity.Idle:
 						if oldstatus == int32(connectivity.Ready) {
 							//offline
 							log.Info(nil, "[cgrpc.client] offline", log.String("sname", b.c.server), log.String("sip", server.addr))
-							b.rebuildpicker(false)
+							go b.rebuildpicker(server.addr, false)
 						}
 						if len(server.dservers) == 0 {
 							server.status = int32(connectivity.Shutdown)
 							delete(b.servers, addr.Addr)
+							b.ww.Wake("SPECIFIC:" + server.addr)
 							server.subconn.Shutdown()
 						} else {
 							//subconn's Connect is async inside
@@ -182,7 +197,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 					case connectivity.Ready:
 						//online
 						log.Info(nil, "[cgrpc.client] online", log.String("sname", b.c.server), log.String("sip", server.addr))
-						b.rebuildpicker(true)
+						go b.rebuildpicker(server.addr, true)
 					case connectivity.TransientFailure:
 						//connect failed
 						log.Error(nil, "[cgrpc.client] connect failed", log.String("sname", b.c.server), log.String("sip", server.addr), log.CError(s.ConnectionError))
@@ -240,6 +255,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 
 func (b *corelibBalancer) ResolverError(e error) {
 	b.lastResolveError = e
+	b.ww.Wake("CALL")
 }
 
 // Deprecated: replaced by StateListener in UpdateClientConnState's NewSubConn's options
@@ -254,25 +270,26 @@ func (b *corelibBalancer) Close() {
 	b.servers = make(map[string]*ServerForPick)
 	b.lastResolveError = cerror.ErrClientClosing
 	b.picker = picker.NewPicker(nil)
-	b.c.resolver.Wake(resolver.CALL)
-	b.c.resolver.Wake(resolver.SYSTEM)
+	b.ww.Wake("CALL")
 }
 
 // OnOff - true,online
 // OnOff - false,offline
-func (b *corelibBalancer) rebuildpicker(OnOff bool) {
+func (b *corelibBalancer) rebuildpicker(serveraddr string, OnOff bool) {
+	b.lker.RLock()
 	tmp := make([]picker.ServerForPick, 0, len(b.servers))
 	for _, server := range b.servers {
 		if server.Pickable() {
 			tmp = append(tmp, server)
 		}
 	}
+	b.lker.RUnlock()
 	b.picker = picker.NewPicker(tmp)
+	b.ww.Wake("SPECIFIC:" + serveraddr)
 	if OnOff {
 		//when online server,wake the block call
-		b.c.resolver.Wake(resolver.CALL)
+		b.ww.Wake("CALL")
 	}
-	return
 }
 
 func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
@@ -299,36 +316,63 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 					}
 					done(cpuusage, uint64(end.UnixNano()-start.UnixNano()), e == nil)
 					if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
-						//update pickable status
-						server.(*ServerForPick).closing = true
-						//set the lowest pick priority
-						server.(*ServerForPick).Pickinfo.SetDiscoverServerOffline(0)
-						b.c.ResolveNow()
+						if atomic.SwapInt32(&server.(*ServerForPick).closing, 1) == 0 {
+							//set the lowest pick priority
+							server.(*ServerForPick).Pickinfo.SetDiscoverServerOffline(0)
+							//rebuild picker
+							b.rebuildpicker(server.(*ServerForPick).addr, false)
+							//triger discover
+							b.c.resolver.Now()
+						}
 					}
 					log.Trace(info.Ctx, log.CLIENT, b.c.server, server.GetServerAddr(), "GRPC", info.FullMethodName, &start, &end, e)
 					monitor.GrpcClientMonitor(b.c.server, "GRPC", info.FullMethodName, e, uint64(end.UnixNano()-start.UnixNano()))
 				},
 			}, nil
 		}
-		if refresh {
+		if forceaddr == "" {
+			if refresh {
+				if b.lastResolveError != nil {
+					return balancer.PickResult{}, b.lastResolveError
+				}
+				return balancer.PickResult{}, cerror.ErrNoserver
+			}
+			if e := b.ww.Wait(info.Ctx, "CALL", b.c.resolver.Now, nil); e != nil {
+				if e == context.DeadlineExceeded {
+					return balancer.PickResult{}, cerror.ErrDeadlineExceeded
+				} else if e == context.Canceled {
+					return balancer.PickResult{}, cerror.ErrCanceled
+				} else {
+					//this is impossible
+					return balancer.PickResult{}, cerror.ConvertStdError(e)
+				}
+			}
+			refresh = true
+			continue
+		}
+
+		//maybe the forceaddr's server is connecting
+		b.lker.RLock()
+		s, ok := b.servers[forceaddr]
+		if refresh && !ok {
+			b.lker.RUnlock()
 			if b.lastResolveError != nil {
 				return balancer.PickResult{}, b.lastResolveError
 			}
-			if forceaddr != "" {
+			return balancer.PickResult{}, cerror.ErrNoSpecificserver
+		} else if ok {
+			if s.closing == 1 {
 				return balancer.PickResult{}, cerror.ErrNoSpecificserver
 			}
-			return balancer.PickResult{}, cerror.ErrNoserver
-		}
-		if e := b.c.resolver.Wait(info.Ctx, resolver.CALL); e != nil {
-			if e == context.DeadlineExceeded {
-				return balancer.PickResult{}, cerror.ErrDeadlineExceeded
-			} else if e == context.Canceled {
-				return balancer.PickResult{}, cerror.ErrCanceled
-			} else {
-				//this is impossible
+			//server is connecting
+			if e := b.ww.Wait(info.Ctx, "SPECIFIC:"+forceaddr, b.c.resolver.Now, b.lker.RUnlock); e != nil {
 				return balancer.PickResult{}, cerror.ConvertStdError(e)
 			}
+		} else if !refresh {
+			if e := b.ww.Wait(info.Ctx, "CALL", b.c.resolver.Now, b.lker.RUnlock); e != nil {
+				return balancer.PickResult{}, cerror.ConvertStdError(e)
+			}
+			refresh = true
 		}
-		refresh = true
 	}
 }

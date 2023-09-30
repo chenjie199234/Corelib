@@ -3,8 +3,6 @@ package picker
 import (
 	"math"
 	"math/rand"
-	"strconv"
-	"strings"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -23,6 +21,31 @@ type ServerPickInfo struct {
 	cpuusage                       float64
 	successfail                    uint64 //low 32bit is success,high 32bit is fail
 	successwastetime               uint64
+}
+
+func (spi *ServerPickInfo) Pick() func(cpuusage float64, successwastetime uint64, success bool) {
+	atomic.AddUint32(&(spi.activecalls), 1)
+	return func(cpuusage float64, successwastetime uint64, success bool) {
+		//success fail
+		if success {
+			//cpuusage
+			atomic.StoreUint64((*uint64)(unsafe.Pointer(&spi.cpuusage)), *(*uint64)(unsafe.Pointer(&cpuusage)))
+			if successwastetime == 0 {
+				successwastetime = 1 //min waste time 1 nano second
+			}
+			//success wastetime
+			atomic.AddUint64(&spi.successwastetime, successwastetime)
+			spi.addsuccess()
+		} else {
+			spi.addfail()
+			if cpuusage != 0 {
+				//cpuusage
+				atomic.StoreUint64((*uint64)(unsafe.Pointer(&spi.cpuusage)), *(*uint64)(unsafe.Pointer(&cpuusage)))
+			}
+		}
+		//activecalls
+		atomic.AddUint32(&(spi.activecalls), math.MaxUint32)
+	}
 }
 
 func (spi *ServerPickInfo) GetActiveCalls() uint32 {
@@ -113,31 +136,13 @@ func (p *Picker) Pick(forceaddr string) (ServerForPick, func(cpuusage float64, s
 		for _, v := range p.servers {
 			s := v
 			saddr := s.GetServerAddr()
-			var tail string
-			if strings.HasPrefix(saddr, forceaddr) {
-				//ipv4
-				tail = saddr[len(forceaddr):]
-			} else if strings.HasPrefix(saddr, "["+forceaddr+"]") {
-				//ipv6
-				tail = saddr[len(forceaddr)+2:]
-			} else {
+			if saddr != forceaddr {
 				continue
-			}
-			//port
-			if len(tail) > 0 {
-				if tail[0] != ':' {
-					continue
-				}
-				tail = tail[1:]
-				if _, e := strconv.Atoi(tail); e != nil {
-					continue
-				}
 			}
 			if !s.Pickable() {
 				return nil, nil
 			}
-			atomic.AddUint32(&(s.GetServerPickInfo().activecalls), 1)
-			return s, getDoneCallBack(s)
+			return s, s.GetServerPickInfo().Pick()
 		}
 		return nil, nil
 	}
@@ -204,33 +209,9 @@ func (p *Picker) Pick(forceaddr string) (ServerForPick, func(cpuusage float64, s
 	if s == nil {
 		return nil, nil
 	}
-	atomic.AddUint32(&(s.GetServerPickInfo().activecalls), 1)
-	return s, getDoneCallBack(s)
+	return s, s.GetServerPickInfo().Pick()
 }
-func getDoneCallBack(s ServerForPick) func(cpuusage float64, successwastetime uint64, success bool) {
-	sinfo := s.GetServerPickInfo()
-	return func(cpuusage float64, successwastetime uint64, success bool) {
-		//success fail
-		if success {
-			//cpuusage
-			atomic.StoreUint64((*uint64)(unsafe.Pointer(&sinfo.cpuusage)), *(*uint64)(unsafe.Pointer(&cpuusage)))
-			if successwastetime == 0 {
-				successwastetime = 1 //min waste time 1 nano second
-			}
-			//success wastetime
-			atomic.AddUint64(&sinfo.successwastetime, successwastetime)
-			sinfo.addsuccess()
-		} else {
-			sinfo.addfail()
-			if cpuusage != 0 {
-				//cpuusage
-				atomic.StoreUint64((*uint64)(unsafe.Pointer(&sinfo.cpuusage)), *(*uint64)(unsafe.Pointer(&cpuusage)))
-			}
-		}
-		//activecalls
-		atomic.AddUint32(&(s.GetServerPickInfo().activecalls), math.MaxUint32)
-	}
-}
+
 func (p *Picker) compare(a, b ServerForPick) ServerForPick {
 	aload := a.GetServerPickInfo().getload()
 	bload := b.GetServerPickInfo().getload()

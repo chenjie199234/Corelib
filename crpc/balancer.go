@@ -8,11 +8,12 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/picker"
-	"github.com/chenjie199234/Corelib/internal/resolver"
+	"github.com/chenjie199234/Corelib/util/waitwake"
 )
 
 type corelibBalancer struct {
 	c                *CrpcClient
+	ww               *waitwake.WaitWake
 	lker             *sync.RWMutex
 	version          discover.Version
 	servers          map[string]*ServerForPick //key server addr
@@ -23,6 +24,7 @@ type corelibBalancer struct {
 func newCorelibBalancer(c *CrpcClient) *corelibBalancer {
 	return &corelibBalancer{
 		c:       c,
+		ww:      waitwake.NewWaitWake(),
 		lker:    &sync.RWMutex{},
 		servers: make(map[string]*ServerForPick),
 		picker:  picker.NewPicker(nil),
@@ -31,6 +33,9 @@ func newCorelibBalancer(c *CrpcClient) *corelibBalancer {
 
 func (b *corelibBalancer) ResolverError(e error) {
 	b.lastResolveError = e
+	b.ww.Wake("CALL")
+	//this is only for ReconnectCheck
+	b.ww.Wake("SYSTEM")
 }
 
 // version can only be int64 or string(should only be used with != or ==)
@@ -39,9 +44,13 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData,
 	b.lker.Lock()
 	defer func() {
 		if len(b.servers) == 0 || b.picker.ServerLen() > 0 {
-			b.c.resolver.Wake(resolver.CALL)
+			b.ww.Wake("CALL")
 		}
-		b.c.resolver.Wake(resolver.SYSTEM)
+		//this is only for ReconnectCheck
+		b.ww.Wake("SYSTEM")
+		for addr := range b.servers {
+			b.ww.Wake("SPECIFIC:" + addr)
+		}
 		b.lker.Unlock()
 	}()
 	if discover.SameVersion(b.version, version) {
@@ -127,12 +136,13 @@ func (b *corelibBalancer) ReconnectCheck(server *ServerForPick) bool {
 		//server already unregister,remove server
 		delete(b.servers, server.addr)
 		b.lker.Unlock()
+		b.ww.Wake("SPECIFIC:" + server.addr)
 		return false
 	}
 	b.lker.Unlock()
 	time.Sleep(time.Millisecond * 100)
 	//need to check server register status
-	b.c.resolver.Wait(context.Background(), resolver.SYSTEM)
+	b.ww.Wait(context.Background(), "SYSTEM", b.c.resolver.Now, nil)
 	b.lker.Lock()
 	if len(server.dservers) == 0 {
 		//server already unregister,remove server
@@ -146,22 +156,24 @@ func (b *corelibBalancer) ReconnectCheck(server *ServerForPick) bool {
 
 // OnOff - true,online
 // OnOff - false,offline
-func (b *corelibBalancer) RebuildPicker(OnOff bool) {
-	b.lker.Lock()
-	defer b.lker.Unlock()
+func (b *corelibBalancer) RebuildPicker(serveraddr string, OnOff bool) {
+	b.lker.RLock()
 	tmp := make([]picker.ServerForPick, 0, len(b.servers))
 	for _, server := range b.servers {
 		if server.Pickable() {
 			tmp = append(tmp, server)
 		}
 	}
+	b.lker.RUnlock()
 	b.picker = picker.NewPicker(tmp)
+	b.ww.Wake("SPECIFIC:" + serveraddr)
 	if OnOff {
 		//when online server,wake the block call
-		b.c.resolver.Wake(resolver.CALL)
+		b.ww.Wake("CALL")
 	}
 }
-func (b *corelibBalancer) Pick(ctx context.Context, forceaddr string) (server *ServerForPick, done func(cpuusage float64, successwastetime uint64, success bool), e error) {
+func (b *corelibBalancer) Pick(ctx context.Context) (server *ServerForPick, done func(cpuusage float64, successwastetime uint64, success bool), e error) {
+	forceaddr, _ := ctx.Value(forceaddrkey{}).(string)
 	refresh := false
 	for {
 		server, done := b.picker.Pick(forceaddr)
@@ -173,25 +185,42 @@ func (b *corelibBalancer) Pick(ctx context.Context, forceaddr string) (server *S
 			}
 			return server.(*ServerForPick), done, nil
 		}
-		if refresh {
+		if forceaddr == "" {
+			if refresh {
+				if b.lastResolveError != nil {
+					return nil, done, b.lastResolveError
+				}
+				return nil, nil, cerror.ErrNoserver
+			}
+			if e := b.ww.Wait(ctx, "CALL", b.c.resolver.Now, nil); e != nil {
+				return nil, nil, cerror.ConvertStdError(e)
+			}
+			refresh = true
+			continue
+		}
+
+		//maybe the forceaddr's server is connecting
+		b.lker.RLock()
+		s, ok := b.servers[forceaddr]
+		if refresh && !ok {
+			b.lker.RUnlock()
 			if b.lastResolveError != nil {
 				return nil, done, b.lastResolveError
 			}
-			if forceaddr != "" {
+			return nil, nil, cerror.ErrNoSpecificserver
+		} else if ok {
+			if s.closing == 1 {
 				return nil, nil, cerror.ErrNoSpecificserver
 			}
-			return nil, nil, cerror.ErrNoserver
-		}
-		if e := b.c.resolver.Wait(ctx, resolver.CALL); e != nil {
-			if e == context.DeadlineExceeded {
-				return nil, nil, cerror.ErrDeadlineExceeded
-			} else if e == context.Canceled {
-				return nil, nil, cerror.ErrCanceled
-			} else {
-				//this is impossible
+			//server is connecting
+			if e := b.ww.Wait(ctx, "SPECIFIC:"+forceaddr, b.c.resolver.Now, b.lker.RUnlock); e != nil {
 				return nil, nil, cerror.ConvertStdError(e)
 			}
+		} else if !refresh {
+			if e := b.ww.Wait(ctx, "CALL", b.c.resolver.Now, b.lker.RUnlock); e != nil {
+				return nil, nil, cerror.ConvertStdError(e)
+			}
+			refresh = true
 		}
-		refresh = true
 	}
 }

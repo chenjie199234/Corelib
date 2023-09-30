@@ -151,7 +151,7 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 }
 
 func (c *CGrpcClient) ResolveNow() {
-	c.resolver.Now()
+	go c.resolver.Now()
 }
 
 // get the server's addrs from the discover.DI(the param in NewCGrpcClient)
