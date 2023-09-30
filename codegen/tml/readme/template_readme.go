@@ -37,21 +37,11 @@ DEPLOY_ENV                              部署环境,如:ali-kube-shanghai-1,ali
 MONITOR                                 是否开启系统监控采集,0关闭,1开启
 
 CONFIG_TYPE                             配置类型:0-使用本地配置.1-使用admin服务的远程配置中心功能
-REMOTE_CONFIG_SERVICE_PROJECT           当CONFIG_TYPE为1时,admin服务所属的项目,[a-z][0-9],第一个字符必须是[a-z]
-REMOTE_CONFIG_SERVICE_GROUP             当CONFIG_TYPE为1时,admin服务所属的项目组,[a-z][0-9],第一个字符必须是[a-z]
-REMOTE_CONFIG_SERVICE_WEB_HOST          当CONFIG_TYPE为1时,admin服务的host,不带scheme(是否启用tls取决于NewConfigSdk时是否传入tls.Config)
-REMOTE_CONFIG_SERVICE_WEB_PORT          当CONFIG_TYPE为1时,admin服务的web端口,默认为80/443(取决于NewConfigSdk时是否使用tls)
-REMOTE_CONFIG_SECRET                    当CONFIG_TYPE为1时,远程配置的密钥
-
-ADMIN_DISCOVER_SERVICE_PROJECT          当使用admin的服务发现功能时,admin服务所属的项目,[a-z][0-9],第一个字符必须是[a-z]
-ADMIN_DISCOVER_SERVICE_GROUP            当使用admin的服务发现功能时,admin服务所属的项目组,[a-z][0-9],第一个字符必须是[a-z]
-ADMIN_DISCOVER_SERVICE_WEB_HOST         当使用admin的服务发现功能时,admin服务的host,不带scheme(是否启用tls取决于NewConfigSdk时是否传入tls.Config)
-ADMIN_DISCOVER_SERVICE_WEB_PORT         当使用admin的服务发现功能时,admin服务的web端口,默认为80/443(取决于NewConfigSdk时是否使用tls)
-
-PERMISSION_SERVICE_PROJECT              当使用admin的权限控制功能时,admin服务所属的项目,[a-z][0-9],第一个字符必须是[a-z]
-PERMISSION_SERVICE_GROUP                当使用admin的权限控制功能时,admin服务所属的项目组,[a-z][0-9],第一个字符必须是[a-z]
-PERMISSION_SERVICE_WEB_HOST             当使用admin的权限控制功能时,admin服务的host,不带scheme(是否启用tls取决于NewConfigSdk时是否传入tls.Config)
-PERMISSION_SERVICE_WEB_PORT             当使用admin的权限控制功能时,admin服务的web端口,默认为80/443(取决于NewPermissionSdk时是否使用tls)
+REMOTE_CONFIG_SECRET                    当CONFIG_TYPE为1时,admin服务中,该服务使用的配置加密密钥,最长31个字符
+ADMIN_SERVICE_PROJECT                   当使用admin服务的远程配置中心,服务发现,权限管理功能时,需要设置该环境变量,该变量为admin服务所属的项目,[a-z][0-9],第一个字符必须是[a-z]
+ADMIN_SERVICE_GROUP                     当使用admin服务的远程配置中心,服务发现,权限管理功能时,需要设置该环境变量,该变量为admin服务所属的项目下的小组,[a-z][0-9],第一个字符必须是[a-z]
+ADMIN_SERVICE_WEB_HOST                  当使用admin服务的远程配置中心,服务发现,权限管理功能时,需要设置该环境变量,该变量为admin服务的host,不带scheme(tls取决于NewSdk时是否传入tls.Config)
+ADMIN_SERVICE_WEB_PORT                  当使用admin服务的远程配置中心,服务发现,权限管理功能时,需要设置该环境变量,该变量为admin服务的web端口,默认为80/443(取决于NewSdk时是否使用tls)
 
 $$$
 

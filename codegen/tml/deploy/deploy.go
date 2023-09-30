@@ -92,32 +92,16 @@ spec:
               value: <MONITOR>
             - name: CONFIG_TYPE
               value: <CONFIG_TYPE>
-            - name: REMOTE_CONFIG_SERVICE_PROJECT
-              value: <REMOTE_CONFIG_SERVICE_PROJECT>
-            - name: REMOTE_CONFIG_SERVICE_GROUP
-              value: <REMOTE_CONFIG_SERVICE_GROUP>
-            - name: REMOTE_CONFIG_SERVICE_WEB_HOST
-              value: <REMOTE_CONFIG_SERVICE_WEB_HOST>
-            - name: REMOTE_CONFIG_SERVICE_WEB_PORT
-              value: <REMOTE_CONFIG_SERVICE_WEB_PORT>
             - name: REMOTE_CONFIG_SECRET
               value: <REMOTE_CONFIG_SECRET>
-            - name: ADMIN_DISCOVER_SERVICE_PROJECT
-              value: <ADMIN_DISCOVER_SERVICE_PROJECT>
-            - name: ADMIN_DISCOVER_SERVICE_GROUP
-              value: <ADMIN_DISCOVER_SERVICE_GROUP>
-            - name: ADMIN_DISCOVER_SERVICE_WEB_HOST
-              value: <ADMIN_DISCOVER_SERVICE_WEB_HOST>
-            - name: ADMIN_DISCOVER_SERVICE_WEB_PORT
-              value: <PERMISSION_SERVICE_WEB_PORT>
-            - name: PERMISSION_SERVICE_PROJECT
-              value: <PERMISSION_SERVICE_PROJECT>
-            - name: PERMISSION_SERVICE_GROUP
-              value: <PERMISSION_SERVICE_GROUP>
-            - name: PERMISSION_SERVICE_WEB_HOST
-              value: <PERMISSION_SERVICE_WEB_HOST>
-            - name: PERMISSION_SERVICE_WEB_PORT
-              value: <PERMISSION_SERVICE_WEB_PORT>
+            - name: ADMIN_SERVICE_PROJECT
+              value: <ADMIN_SERVICE_PROJECT>
+            - name: ADMIN_SERVICE_GROUP
+              value: <ADMIN_SERVICE_GROUP>
+            - name: ADMIN_SERVICE_WEB_HOST
+              value: <ADMIN_SERVICE_WEB_HOST>
+            - name: ADMIN_SERVICE_WEB_PORT
+              value: <ADMIN_SERVICE_WEB_PORT>
           startupProbe:
             tcpSocket:
               port: 8000
