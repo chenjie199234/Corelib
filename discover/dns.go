@@ -17,15 +17,15 @@ import (
 type DnsD struct {
 	target    string
 	host      string
+	interval  time.Duration
 	crpcport  int
 	cgrpcport int
 	webport   int
-	interval  time.Duration
-	notices   map[chan *struct{}]*struct{}
 	triger    chan *struct{}
-	status    int32 //0-idle,1-discover,2-stop
+	status    int32
 
 	lker      *sync.RWMutex
+	notices   map[chan *struct{}]*struct{}
 	addrs     []string
 	version   int64
 	lasterror error
@@ -43,22 +43,31 @@ func NewDNSDiscover(targetproject, targetgroup, targetapp, host string, interval
 	d := &DnsD{
 		target:    targetfullname,
 		host:      host,
+		interval:  interval,
 		crpcport:  crpcport,
 		cgrpcport: cgrpcport,
 		webport:   webport,
-		interval:  interval,
-		notices:   make(map[chan *struct{}]*struct{}, 1),
 		triger:    make(chan *struct{}, 1),
+		status:    1,
 		lker:      &sync.RWMutex{},
+		notices:   make(map[chan *struct{}]*struct{}, 1),
 	}
 	d.triger <- nil
-	d.status = 1
 	go d.run()
 	return d, nil
 }
 
 func (d *DnsD) Now() {
 	if !atomic.CompareAndSwapInt32(&d.status, 0, 1) {
+		return
+	}
+	select {
+	case d.triger <- nil:
+	default:
+	}
+}
+func (d *DnsD) Stop() {
+	if atomic.SwapInt32(&d.status, 2) == 2 {
 		return
 	}
 	select {
@@ -137,15 +146,7 @@ func (d *DnsD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, error) 
 	}
 	return r, d.version, d.lasterror
 }
-func (d *DnsD) Stop() {
-	if atomic.SwapInt32(&d.status, 2) == 2 {
-		return
-	}
-	select {
-	case d.triger <- nil:
-	default:
-	}
-}
+
 func (d *DnsD) run() {
 	defer func() {
 		d.lker.Lock()
@@ -169,7 +170,7 @@ func (d *DnsD) run() {
 		atomic.CompareAndSwapInt32(&d.status, 0, 1)
 		addrs, e := net.LookupHost(d.host)
 		if e != nil {
-			log.Error(nil, "[discover.dns] look up failed", log.String("host", d.host), log.CError(e))
+			log.Error(nil, "[discover.dns] look up failed", log.String("host", d.host), log.CDuration("interval", ctime.Duration(d.interval)), log.CError(e))
 			d.lker.Lock()
 			d.lasterror = e
 			for notice := range d.notices {

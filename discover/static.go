@@ -59,6 +59,19 @@ func (d *StaticD) Now() {
 		}
 	}
 }
+func (d *StaticD) Stop() {
+	d.lker.Lock()
+	defer d.lker.Lock()
+	if d.lasterror == cerror.ErrDiscoverStopped {
+		return
+	}
+	d.lasterror = cerror.ErrDiscoverStopped
+	log.Info(nil, "[discover.static] discover stopped", log.Any("addrs", d.addrs))
+	for notice := range d.notices {
+		delete(d.notices, notice)
+		close(notice)
+	}
+}
 
 // don't close the returned channel,it will be closed in cases:
 // 1.the cancel function be called
@@ -170,18 +183,6 @@ func (d *StaticD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, erro
 		r[addr] = reg
 	}
 	return r, d.version, d.lasterror
-}
-func (d *StaticD) Stop() {
-	d.lker.Lock()
-	defer d.lker.Unlock()
-	if d.lasterror != cerror.ErrDiscoverStopped {
-		log.Info(nil, "[discover.static] discover stopped", log.Any("addrs", d.addrs))
-		d.lasterror = cerror.ErrDiscoverStopped
-		for notice := range d.notices {
-			delete(d.notices, notice)
-			close(notice)
-		}
-	}
 }
 func (d *StaticD) CheckTarget(target string) bool {
 	return target == d.target

@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -22,15 +21,17 @@ import (
 type KubernetesD struct {
 	target        string
 	namespace     string
+	fieldselector string
 	labelselector string
+	watcher       watch.Interface
 	crpcport      int
 	cgrpcport     int
 	webport       int
-	notices       map[chan *struct{}]*struct{}
-	status        int32 //0-idle,1-discover,2-stop
-	watcher       watch.Interface
+	ctx           context.Context
+	cancel        context.CancelFunc
 
 	lker      *sync.RWMutex
+	notices   map[chan *struct{}]*struct{}
 	addrs     map[string]*struct{}
 	version   string
 	lasterror error
@@ -53,7 +54,7 @@ func initKubernetesClient() {
 	}
 }
 
-func NewKubernetesDiscover(targetproject, targetgroup, targetapp, namespace, labelselector string, crpcport, cgrpcport, webport int) (DI, error) {
+func NewKubernetesDiscover(targetproject, targetgroup, targetapp, namespace, fieldselector, labelselector string, crpcport, cgrpcport, webport int) (DI, error) {
 	targetfullname, e := name.MakeFullName(targetproject, targetgroup, targetapp)
 	if e != nil {
 		return nil, e
@@ -62,27 +63,35 @@ func NewKubernetesDiscover(targetproject, targetgroup, targetapp, namespace, lab
 	d := &KubernetesD{
 		target:        targetfullname,
 		namespace:     namespace,
+		fieldselector: fieldselector,
 		labelselector: labelselector,
 		crpcport:      crpcport,
 		cgrpcport:     cgrpcport,
 		webport:       webport,
 		notices:       make(map[chan *struct{}]*struct{}, 1),
-		status:        1,
 		lker:          &sync.RWMutex{},
 	}
+	d.ctx, d.cancel = context.WithCancel(context.Background())
 	go d.run()
 	return d, nil
 }
 func (d *KubernetesD) Now() {
-	if atomic.LoadInt32(&d.status) == 0 {
-		d.lker.RLock()
-		defer d.lker.RUnlock()
-		for notice := range d.notices {
-			select {
-			case notice <- nil:
-			default:
-			}
+	d.lker.RLock()
+	defer d.lker.RUnlock()
+	if d.version == "" {
+		return
+	}
+	for notice := range d.notices {
+		select {
+		case notice <- nil:
+		default:
 		}
+	}
+}
+func (d *KubernetesD) Stop() {
+	d.cancel()
+	if d.watcher != nil {
+		d.watcher.Stop()
 	}
 }
 
@@ -92,13 +101,16 @@ func (d *KubernetesD) Now() {
 func (d *KubernetesD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 	ch := make(chan *struct{}, 1)
 	d.lker.Lock()
-	if status := atomic.LoadInt32(&d.status); status == 0 {
+	if d.version != "" {
 		ch <- nil
 		d.notices[ch] = nil
-	} else if status == 1 {
-		d.notices[ch] = nil
 	} else {
-		close(ch)
+		select {
+		case <-d.ctx.Done():
+			close(ch)
+		default:
+			d.notices[ch] = nil
+		}
 	}
 	d.lker.Unlock()
 	return ch, func() {
@@ -155,14 +167,6 @@ func (d *KubernetesD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, 
 	}
 	return r, d.version, d.lasterror
 }
-func (d *KubernetesD) Stop() {
-	if atomic.SwapInt32(&d.status, 2) == 2 {
-		return
-	}
-	if d.watcher != nil {
-		d.watcher.Stop()
-	}
-}
 func (d *KubernetesD) CheckTarget(target string) bool {
 	return target == d.target
 }
@@ -180,13 +184,21 @@ func (d *KubernetesD) run() {
 }
 func (d *KubernetesD) list() {
 	for {
-		if atomic.LoadInt32(&d.status) == 2 {
-			log.Info(nil, "[discover.kubernetes] discover stopped", log.String("namespace", d.namespace), log.String("labelselector", d.labelselector))
-			d.lasterror = cerror.ErrDiscoverStopped
-			return
-		}
-		pods, e := kubeclient.CoreV1().Pods(d.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: d.labelselector})
+		pods, e := kubeclient.CoreV1().Pods(d.namespace).List(d.ctx, metav1.ListOptions{LabelSelector: d.labelselector, FieldSelector: d.fieldselector})
 		if e != nil {
+			if cerror.Equal(e, cerror.ErrCanceled) {
+				log.Info(nil, "[discover.kubernetes] discover stopped",
+					log.String("namespace", d.namespace),
+					log.String("labelselector", d.labelselector),
+					log.String("fieldselector", d.fieldselector))
+				d.lasterror = cerror.ErrDiscoverStopped
+				return
+			}
+			log.Error(nil, "[discover.kubernetes] list failed",
+				log.String("namespace", d.namespace),
+				log.String("labelselector", d.labelselector),
+				log.String("fieldselector", d.fieldselector),
+				log.CError(e))
 			d.lker.Lock()
 			d.lasterror = e
 			for notice := range d.notices {
@@ -196,12 +208,10 @@ func (d *KubernetesD) list() {
 				}
 			}
 			d.lker.Unlock()
-			log.Error(nil, "[discover.kubernetes] list failed", log.String("namespace", d.namespace), log.String("labelselector", d.labelselector), log.CError(e))
 			time.Sleep(time.Millisecond * 100)
 			continue
 		}
-		d.version = pods.ResourceVersion
-		tmp := make(map[string]*struct{}, len(pods.Items))
+		addrs := make(map[string]*struct{}, len(pods.Items))
 		for _, item := range pods.Items {
 			if item.Status.PodIP == "" {
 				continue
@@ -217,13 +227,13 @@ func (d *KubernetesD) list() {
 				}
 			}
 			if find {
-				tmp[item.Status.PodIP] = nil
+				addrs[item.Status.PodIP] = nil
 			}
 		}
 		d.lker.Lock()
-		d.addrs = tmp
+		d.version = pods.ResourceVersion
+		d.addrs = addrs
 		d.lasterror = nil
-		atomic.StoreInt32(&d.status, 0)
 		for notice := range d.notices {
 			select {
 			case notice <- nil:
@@ -242,13 +252,27 @@ func (d *KubernetesD) watch() {
 		if retrayDealy != 0 {
 			time.Sleep(retrayDealy)
 		}
-		if atomic.LoadInt32(&d.status) == 2 {
-			log.Info(nil, "[discover.kubernetes] discover stopped", log.String("namespace", d.namespace), log.String("labelselector", d.labelselector))
-			d.lasterror = cerror.ErrDiscoverStopped
-			return
+		opts := metav1.ListOptions{
+			LabelSelector:        d.labelselector,
+			FieldSelector:        d.fieldselector,
+			Watch:                true,
+			ResourceVersion:      d.version,
+			ResourceVersionMatch: metav1.ResourceVersionMatchNotOlderThan,
 		}
-		opts := metav1.ListOptions{LabelSelector: d.labelselector, Watch: true, ResourceVersion: d.version}
-		if d.watcher, e = kubeclient.CoreV1().Pods(d.namespace).Watch(context.Background(), opts); e != nil {
+		if d.watcher, e = kubeclient.CoreV1().Pods(d.namespace).Watch(d.ctx, opts); e != nil {
+			if cerror.Equal(e, cerror.ErrCanceled) {
+				log.Info(nil, "[discover.kubernetes] discover stopped",
+					log.String("namespace", d.namespace),
+					log.String("labelselector", d.labelselector),
+					log.String("fieldselector", d.fieldselector))
+				d.lasterror = cerror.ErrDiscoverStopped
+				return
+			}
+			log.Error(nil, "[discover.kubernetes] watch failed",
+				log.String("namespace", d.namespace),
+				log.String("labelselector", d.labelselector),
+				log.String("fieldselector", d.fieldselector),
+				log.CError(e))
 			d.lker.Lock()
 			d.lasterror = e
 			for notice := range d.notices {
@@ -258,25 +282,38 @@ func (d *KubernetesD) watch() {
 				}
 			}
 			d.lker.Unlock()
-			log.Error(nil, "[discover.kubernetes] watch failed", log.String("namespace", d.namespace), log.String("labelselector", d.labelselector), log.CError(e))
 			retrayDealy = time.Millisecond * 100
 			continue
 		}
-		if atomic.LoadInt32(&d.status) == 2 {
-			d.watcher.Stop()
-			log.Info(nil, "[discover.kubernetes] discover stopped", log.String("namespace", d.namespace), log.String("labelselector", d.labelselector))
-			d.lasterror = cerror.ErrDiscoverStopped
-			return
-		}
 		failed := false
 		for {
-			event, ok := <-d.watcher.ResultChan()
-			if !ok {
-				if atomic.LoadInt32(&d.status) == 2 {
-					log.Info(nil, "[discover.kubernetes] discover stopped", log.String("namespace", d.namespace), log.String("labelselector", d.labelselector))
-					d.lasterror = cerror.ErrDiscoverStopped
-					return
+			var event watch.Event
+			var ok bool
+			select {
+			case <-d.ctx.Done():
+				log.Info(nil, "[discover.kubernetes] discover stopped",
+					log.String("namespace", d.namespace),
+					log.String("labelselector", d.labelselector),
+					log.String("fieldselector", d.fieldselector))
+				d.lasterror = cerror.ErrDiscoverStopped
+				return
+			case event, ok = <-d.watcher.ResultChan():
+				if !ok {
+					select {
+					case <-d.ctx.Done():
+						log.Info(nil, "[discover.kubernetes] discover stopped",
+							log.String("namespace", d.namespace),
+							log.String("labelselector", d.labelselector),
+							log.String("fieldselector", d.fieldselector))
+						d.lasterror = cerror.ErrDiscoverStopped
+						return
+					default:
+						//error happened
+						failed = true
+					}
 				}
+			}
+			if failed {
 				retrayDealy = 0
 				break
 			}
@@ -328,12 +365,13 @@ func (d *KubernetesD) watch() {
 				}
 				d.lker.Unlock()
 			case watch.Bookmark:
-				// don't update the version
-				// d.version = event.Object.(interface{ GetResourceVersion() string }).GetResourceVersion()
+				d.version = event.Object.(interface{ GetResourceVersion() string }).GetResourceVersion()
 			case watch.Error:
 				failed = true
+				e = apierrors.FromObject(event.Object)
+				log.Error(nil, "[discover.kubernetes] watch failed", log.CError(e))
 				d.lker.Lock()
-				d.lasterror = apierrors.FromObject(event.Object)
+				d.lasterror = e
 				for notice := range d.notices {
 					select {
 					case notice <- nil:
@@ -341,7 +379,6 @@ func (d *KubernetesD) watch() {
 					}
 				}
 				d.lker.Unlock()
-				log.Error(nil, "[discover.kubernetes] watch failed", log.CError(e))
 				if e, ok := d.lasterror.(*apierrors.StatusError); ok && e.ErrStatus.Details != nil {
 					retrayDealy = time.Duration(e.ErrStatus.Details.RetryAfterSeconds) * time.Second
 				} else {
