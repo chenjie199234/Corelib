@@ -130,7 +130,7 @@ const app = `{
 	},
 	"accesses":{
 		"/{{.}}.exampleservice/examplemethod":[{
-			"method":["GET","GRPC","CRPC"],
+			"methods":["GET","GRPC","CRPC"],
 			"accesses":{
 				"accessid":"accesskey"
 			}

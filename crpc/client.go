@@ -158,6 +158,7 @@ func (c *CrpcClient) onlinefunc(p *stream.Peer) bool {
 	}
 	p.SetData(unsafe.Pointer(server))
 	server.setpeer(p)
+	server.closing = 0
 	c.balancer.RebuildPicker(server.addr, true)
 	log.Info(nil, "[crpc.client] online", log.String("sname", c.server), log.String("sip", p.GetRemoteAddr()))
 	return true

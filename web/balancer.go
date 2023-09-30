@@ -97,6 +97,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData,
 			} else {
 				server.Pickinfo.SetDiscoverServerOnline(uint32(len(registerdata.DServers)))
 			}
+			server.closing = 0
 		}
 	}
 }

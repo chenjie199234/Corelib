@@ -118,7 +118,9 @@ func innerlog(ctx context.Context, level slog.Level, msg string, attrs ...any) {
 	}
 	if trace {
 		traceid, _, _, _, _, deep := GetTrace(ctx)
-		attrs = append(attrs, Group("trace", slog.String("id", traceid), slog.Int("deep", deep)))
+		if traceid != "" {
+			attrs = append(attrs, Group("trace", slog.String("id", traceid), slog.Int("deep", deep)))
+		}
 	}
 	var pcs [1]uintptr
 	//skip runtime.Callers ,this function ,and innerlog's caller

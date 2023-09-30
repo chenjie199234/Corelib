@@ -196,6 +196,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 						}
 					case connectivity.Ready:
 						//online
+						server.closing = 0
 						log.Info(nil, "[cgrpc.client] online", log.String("sname", b.c.server), log.String("sip", server.addr))
 						go b.rebuildpicker(server.addr, true)
 					case connectivity.TransientFailure:
