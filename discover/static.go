@@ -61,7 +61,7 @@ func (d *StaticD) Now() {
 }
 func (d *StaticD) Stop() {
 	d.lker.Lock()
-	defer d.lker.Lock()
+	defer d.lker.Unlock()
 	if d.lasterror == cerror.ErrDiscoverStopped {
 		return
 	}
