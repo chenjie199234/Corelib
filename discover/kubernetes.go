@@ -188,6 +188,7 @@ func (d *KubernetesD) list() {
 		if e != nil {
 			if cerror.Equal(e, cerror.ErrCanceled) {
 				log.Info(nil, "[discover.kubernetes] discover stopped",
+					log.String("target", d.target),
 					log.String("namespace", d.namespace),
 					log.String("labelselector", d.labelselector),
 					log.String("fieldselector", d.fieldselector))
@@ -195,6 +196,7 @@ func (d *KubernetesD) list() {
 				return
 			}
 			log.Error(nil, "[discover.kubernetes] list failed",
+				log.String("target", d.target),
 				log.String("namespace", d.namespace),
 				log.String("labelselector", d.labelselector),
 				log.String("fieldselector", d.fieldselector),
@@ -262,6 +264,7 @@ func (d *KubernetesD) watch() {
 		if d.watcher, e = kubeclient.CoreV1().Pods(d.namespace).Watch(d.ctx, opts); e != nil {
 			if cerror.Equal(e, cerror.ErrCanceled) {
 				log.Info(nil, "[discover.kubernetes] discover stopped",
+					log.String("target", d.target),
 					log.String("namespace", d.namespace),
 					log.String("labelselector", d.labelselector),
 					log.String("fieldselector", d.fieldselector))
@@ -269,6 +272,7 @@ func (d *KubernetesD) watch() {
 				return
 			}
 			log.Error(nil, "[discover.kubernetes] watch failed",
+				log.String("target", d.target),
 				log.String("namespace", d.namespace),
 				log.String("labelselector", d.labelselector),
 				log.String("fieldselector", d.fieldselector),
@@ -292,6 +296,7 @@ func (d *KubernetesD) watch() {
 			select {
 			case <-d.ctx.Done():
 				log.Info(nil, "[discover.kubernetes] discover stopped",
+					log.String("target", d.target),
 					log.String("namespace", d.namespace),
 					log.String("labelselector", d.labelselector),
 					log.String("fieldselector", d.fieldselector))
@@ -302,6 +307,7 @@ func (d *KubernetesD) watch() {
 					select {
 					case <-d.ctx.Done():
 						log.Info(nil, "[discover.kubernetes] discover stopped",
+							log.String("target", d.target),
 							log.String("namespace", d.namespace),
 							log.String("labelselector", d.labelselector),
 							log.String("fieldselector", d.fieldselector))
@@ -369,7 +375,12 @@ func (d *KubernetesD) watch() {
 			case watch.Error:
 				failed = true
 				e = apierrors.FromObject(event.Object)
-				log.Error(nil, "[discover.kubernetes] watch failed", log.CError(e))
+				log.Error(nil, "[discover.kubernetes] watch failed",
+					log.String("target", d.target),
+					log.String("namespace", d.namespace),
+					log.String("labelselector", d.labelselector),
+					log.String("fieldselector", d.fieldselector),
+					log.CError(e))
 				d.lker.Lock()
 				d.lasterror = e
 				for notice := range d.notices {

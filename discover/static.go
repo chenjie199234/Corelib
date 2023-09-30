@@ -66,7 +66,7 @@ func (d *StaticD) Stop() {
 		return
 	}
 	d.lasterror = cerror.ErrDiscoverStopped
-	log.Info(nil, "[discover.static] discover stopped", log.Any("addrs", d.addrs))
+	log.Info(nil, "[discover.static] discover stopped", log.String("target", d.target), log.Any("addrs", d.addrs))
 	for notice := range d.notices {
 		delete(d.notices, notice)
 		close(notice)

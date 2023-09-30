@@ -162,7 +162,10 @@ func (d *DnsD) run() {
 	for {
 		select {
 		case <-d.ctx.Done():
-			log.Info(nil, "[discover.dns] discover stopped", log.String("host", d.host), log.CDuration("interval", ctime.Duration(d.interval)))
+			log.Info(nil, "[discover.dns] discover stopped",
+				log.String("target", d.target),
+				log.String("host", d.host),
+				log.CDuration("interval", ctime.Duration(d.interval)))
 			d.lasterror = cerror.ErrDiscoverStopped
 			return
 		case <-d.triger:
@@ -171,12 +174,17 @@ func (d *DnsD) run() {
 		d.status = 1
 		addrs, e := net.DefaultResolver.LookupHost(d.ctx, d.host)
 		if e != nil && cerror.Equal(e, cerror.ErrCanceled) {
-			log.Info(nil, "[discover.dns] discover stopped", log.String("host", d.host), log.CDuration("interval", ctime.Duration(d.interval)))
+			log.Info(nil, "[discover.dns] discover stopped", log.String("target", d.target),
+				log.String("host", d.host),
+				log.CDuration("interval", ctime.Duration(d.interval)))
 			d.lasterror = cerror.ErrDiscoverStopped
 			return
 		}
 		if e != nil {
-			log.Error(nil, "[discover.dns] look up failed", log.String("host", d.host), log.CDuration("interval", ctime.Duration(d.interval)), log.CError(e))
+			log.Error(nil, "[discover.dns] look up failed", log.String("target", d.target),
+				log.String("host", d.host),
+				log.CDuration("interval", ctime.Duration(d.interval)),
+				log.CError(e))
 			d.lker.Lock()
 			d.lasterror = e
 			for notice := range d.notices {
