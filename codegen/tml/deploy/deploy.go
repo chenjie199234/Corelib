@@ -102,6 +102,14 @@ spec:
               value: <REMOTE_CONFIG_SERVICE_WEB_PORT>
             - name: REMOTE_CONFIG_SECRET
               value: <REMOTE_CONFIG_SECRET>
+            - name: ADMIN_DISCOVER_SERVICE_PROJECT
+              value: <ADMIN_DISCOVER_SERVICE_PROJECT>
+            - name: ADMIN_DISCOVER_SERVICE_GROUP
+              value: <ADMIN_DISCOVER_SERVICE_GROUP>
+            - name: ADMIN_DISCOVER_SERVICE_WEB_HOST
+              value: <ADMIN_DISCOVER_SERVICE_WEB_HOST>
+            - name: ADMIN_DISCOVER_SERVICE_WEB_PORT
+              value: <PERMISSION_SERVICE_WEB_PORT>
             - name: PERMISSION_SERVICE_PROJECT
               value: <PERMISSION_SERVICE_PROJECT>
             - name: PERMISSION_SERVICE_GROUP
