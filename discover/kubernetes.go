@@ -40,18 +40,18 @@ type KubernetesD struct {
 var lker sync.Mutex
 var kubeclient *kubernetes.Clientset
 
-func initKubernetesClient() {
-	if lker.TryLock() {
-		defer lker.Unlock()
-		if kubeclient != nil {
-			return
-		}
-		if c, e := rest.InClusterConfig(); e != nil {
-			panic(e)
-		} else if kubeclient, e = kubernetes.NewForConfig(c); e != nil {
-			panic(e)
-		}
+func initKubernetesClient() error {
+	lker.Lock()
+	defer lker.Unlock()
+	if kubeclient != nil {
+		return nil
 	}
+	if c, e := rest.InClusterConfig(); e != nil {
+		return e
+	} else if kubeclient, e = kubernetes.NewForConfig(c); e != nil {
+		return e
+	}
+	return nil
 }
 
 func NewKubernetesDiscover(targetproject, targetgroup, targetapp, namespace, fieldselector, labelselector string, crpcport, cgrpcport, webport int) (DI, error) {
@@ -59,7 +59,9 @@ func NewKubernetesDiscover(targetproject, targetgroup, targetapp, namespace, fie
 	if e != nil {
 		return nil, e
 	}
-	initKubernetesClient()
+	if e := initKubernetesClient(); e != nil {
+		return nil, e
+	}
 	d := &KubernetesD{
 		target:        targetfullname,
 		namespace:     namespace,
