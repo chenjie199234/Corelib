@@ -31,7 +31,7 @@ type EnvConfig struct {
 var EC *EnvConfig
 
 // RemoteConfigSdk -
-var RemoteConfigSdk *configsdk.Sdk
+var RemoteConfigSdk *configsdk.ConfigSdk
 
 // notice is a sync function
 // don't write block logic inside it
@@ -360,7 +360,7 @@ func initremotesource(wait chan *struct{}) (stopwatch func()) {
 			return
 		}
 		sc = c
-		log.Info(nil, "[config.remote.source] update success", log.Any("config", sc)
+		log.Info(nil, "[config.remote.source] update success", log.Any("config", sc))
 		initsource()
 		select {
 		case wait <- nil:
