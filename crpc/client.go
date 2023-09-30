@@ -160,7 +160,7 @@ func (c *CrpcClient) onlinefunc(p *stream.Peer) bool {
 	server.setpeer(p)
 	server.closing = 0
 	c.balancer.RebuildPicker(server.addr, true)
-	log.Info(nil, "[crpc.client] online", log.String("sname", c.server), log.String("sip", p.GetRemoteAddr()))
+	log.Info(nil, "[crpc.client] online", log.String("sname", c.server), log.String("sip", server.addr))
 	return true
 }
 
@@ -169,7 +169,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
-		log.Error(nil, "[crpc.client] userdata format wrong", log.String("sname", c.server), log.String("sip", p.GetRemoteAddr()))
+		log.Error(nil, "[crpc.client] userdata format wrong", log.String("sname", c.server), log.String("sip", server.addr))
 		return
 	}
 	server.lker.Lock()
@@ -204,7 +204,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 
 func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
-	log.Info(nil, "[crpc.client] offline", log.String("sname", c.server), log.String("sip", p.GetRemoteAddr()))
+	log.Info(nil, "[crpc.client] offline", log.String("sname", c.server), log.String("sip", server.addr))
 	server.setpeer(nil)
 	c.balancer.RebuildPicker(server.addr, false)
 	server.lker.Lock()
