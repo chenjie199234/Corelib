@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"errors"
 	"net"
 	"strconv"
 	"strings"
@@ -173,7 +174,7 @@ func (d *DnsD) run() {
 		}
 		d.status = 1
 		addrs, e := net.DefaultResolver.LookupHost(d.ctx, d.host)
-		if e != nil && cerror.Equal(e, cerror.ErrCanceled) {
+		if e != nil && cerror.Equal(errors.Unwrap(e), cerror.ErrCanceled) {
 			log.Info(nil, "[discover.dns] discover stopped", log.String("target", d.target),
 				log.String("host", d.host),
 				log.CDuration("interval", ctime.Duration(d.interval)))
