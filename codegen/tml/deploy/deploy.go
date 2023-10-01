@@ -102,6 +102,12 @@ spec:
               value: <ADMIN_SERVICE_WEB_HOST>
             - name: ADMIN_SERVICE_WEB_PORT
               value: <ADMIN_SERVICE_WEB_PORT>
+            - name: ADMIN_SERVICE_CONFIG_ACCESS_KEY
+              value: <ADMIN_SERVICE_CONFIG_ACCESS_KEY>
+            - name: ADMIN_SERVICE_DISCOVER_ACCESS_KEY
+              value: <ADMIN_SERVICE_DISCOVER_ACCESS_KEY>
+            - name: ADMIN_SERVICE_PERMISSION_ACCESS_KEY
+              value: <ADMIN_SERVICE_PERMISSION_ACCESS_KEY>
           startupProbe:
             tcpSocket:
               port: 8000
