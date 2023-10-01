@@ -69,11 +69,11 @@ func accesskey(ctx *cgrpc.Context) {
 	md := metadata.GetMetadata(ctx)
 	accesskey := md["Access-Key"]
 	if accesskey == "" {
-		ctx.Abort(cerror.ErrKey)
+		ctx.Abort(cerror.ErrAccessKey)
 		return
 	}
 	delete(md, "Access-Key")
 	if !publicmids.VerifyAccessKey(ctx, "GRPC", ctx.GetPath(), accesskey) {
-		ctx.Abort(cerror.ErrKey)
+		ctx.Abort(cerror.ErrAccessKey)
 	}
 }

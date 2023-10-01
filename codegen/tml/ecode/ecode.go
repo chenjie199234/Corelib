@@ -27,8 +27,8 @@ var (
 	ErrSystem            = cerror.ErrSystem            //10003 // http code 500
 	ErrToken             = cerror.ErrToken             //10004 // http code 401
 	ErrSession           = cerror.ErrSession           //10005 // http code 401
-	ErrKey               = cerror.ErrKey               //10006 // http code 401
-	ErrSign              = cerror.ErrSign              //10007 // http code 401
+	ErrAccessKey         = cerror.ErrAccessKey         //10006 // http code 401
+	ErrAccessSign        = cerror.ErrAccessSign        //10007 // http code 401
 	ErrPermission        = cerror.ErrPermission        //10008 // http code 403
 	ErrTooFast           = cerror.ErrTooFast           //10009 // http code 403
 	ErrBan               = cerror.ErrBan               //10010 // http code 403

@@ -106,10 +106,10 @@ func accesskey(ctx *web.Context) {
 		delete(md, "Access-Key")
 	}
 	if accesskey == "" {
-		ctx.Abort(cerror.ErrKey)
+		ctx.Abort(cerror.ErrAccessKey)
 		return
 	}
 	if !publicmids.VerifyAccessKey(ctx, ctx.GetMethod(), ctx.GetPath(), accesskey) {
-		ctx.Abort(cerror.ErrKey)
+		ctx.Abort(cerror.ErrAccessKey)
 	}
 }
