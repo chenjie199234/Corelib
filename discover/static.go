@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +34,7 @@ func NewStaticDiscover(targetproject, targetgroup, targetapp string, addrs []str
 	for k := range undup {
 		addrs = append(addrs, k)
 	}
+	slices.Sort(addrs)
 	targetfullname, e := name.MakeFullName(targetproject, targetgroup, targetapp)
 	if e != nil {
 		return nil, e
@@ -104,28 +106,10 @@ func (d *StaticD) UpdateAddrs(addrs []string, crpcport, cgrpcport, webport int) 
 	for k := range undup {
 		addrs = append(addrs, k)
 	}
+	slices.Sort(addrs)
 	d.lker.Lock()
 	defer d.lker.Unlock()
-	changed := d.crpcport != crpcport ||
-		d.cgrpcport != cgrpcport ||
-		d.webport != webport ||
-		len(d.addrs) != len(addrs)
-	if !changed {
-		for i := range d.addrs {
-			find := false
-			for j := range addrs {
-				if d.addrs[i] == addrs[j] {
-					find = true
-					break
-				}
-			}
-			if !find {
-				changed = true
-				break
-			}
-		}
-	}
-	if changed {
+	if d.crpcport != crpcport || d.cgrpcport != cgrpcport || d.webport != webport || !slices.Equal(addrs, d.addrs) {
 		d.addrs = addrs
 		d.version = time.Now().UnixNano()
 		d.crpcport = crpcport

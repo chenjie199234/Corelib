@@ -3,6 +3,7 @@ package discover
 import (
 	"errors"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -199,23 +200,8 @@ func (d *DnsD) run() {
 			continue
 		}
 		d.lker.Lock()
-		different := len(addrs) != len(d.addrs)
-		if !different {
-			for _, newaddr := range addrs {
-				find := false
-				for _, oldaddr := range d.addrs {
-					if newaddr == oldaddr {
-						find = true
-						break
-					}
-				}
-				if !find {
-					different = true
-					break
-				}
-			}
-		}
-		if different {
+		slices.Sort(addrs)
+		if !slices.Equal(addrs, d.addrs) {
 			d.addrs = addrs
 			d.version = time.Now().UnixNano()
 		}
