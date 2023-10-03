@@ -34,7 +34,7 @@ func main() {
 		//this is a notice callback every time appconfig changes
 		//this function works in sync mode
 		//don't write block logic inside this
-		dao.UpdateAPI(ac)
+		dao.UpdateAppConfig(ac)
 		xcrpc.UpdateHandlerTimeout(ac.HandlerTimeout)
 		xgrpc.UpdateHandlerTimeout(ac.HandlerTimeout)
 		xweb.UpdateHandlerTimeout(ac.HandlerTimeout)
