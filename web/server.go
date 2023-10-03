@@ -184,6 +184,7 @@ func NewWebServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tlsc 
 		handlerRewrite: make(map[string]map[string]string),
 	}
 	instance.s = &http.Server{
+		ErrorLog:          log.GetLloger(),
 		TLSConfig:         tlsc,
 		ReadHeaderTimeout: c.ConnectTimeout.StdDuration(),
 		IdleTimeout:       c.IdleTimeout.StdDuration(),
