@@ -115,7 +115,7 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 		stop:     graceful.New(),
 	}
 	opts := make([]grpc.DialOption, 0, 10)
-	opts = append(opts, grpc.WithChainUnaryInterceptor(client.gracefulInterceptor, client.mdInterceptor, client.timeoutInterceptor, client.callInterceptor))
+	opts = append(opts, grpc.WithChainUnaryInterceptor(client.gracefulInterceptor, client.timeoutInterceptor, client.callInterceptor))
 	opts = append(opts, grpc.WithChainStreamInterceptor())
 	opts = append(opts, grpc.WithRecvBufferPool(pool.GetPool()))
 	opts = append(opts, grpc.WithDisableRetry())
@@ -212,17 +212,6 @@ func (c *CGrpcClient) gracefulInterceptor(ctx context.Context, path string, req,
 	defer c.stop.DoneOne()
 	return invoker(ctx, path, req, reply, cc, opts...)
 }
-func (c *CGrpcClient) mdInterceptor(ctx context.Context, path string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	cmd := cmetadata.GetMetadata(ctx)
-	gmd := gmetadata.New(nil)
-	gmd.Set("Core-Target", c.server)
-	if len(cmd) > 0 {
-		d, _ := json.Marshal(cmd)
-		gmd.Set("Core-Metadata", common.Byte2str(d))
-	}
-	ctx = gmetadata.NewOutgoingContext(ctx, gmd)
-	return invoker(ctx, path, req, reply, cc, opts...)
-}
 func (c *CGrpcClient) timeoutInterceptor(ctx context.Context, path string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	if c.c.GlobalTimeout > 0 {
 		var cancel context.CancelFunc
@@ -232,7 +221,13 @@ func (c *CGrpcClient) timeoutInterceptor(ctx context.Context, path string, req, 
 	return invoker(ctx, path, req, reply, cc, opts...)
 }
 func (c *CGrpcClient) callInterceptor(ctx context.Context, path string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	gmd, _ := gmetadata.FromOutgoingContext(ctx)
+	cmd := cmetadata.GetMetadata(ctx)
+	gmd := gmetadata.New(nil)
+	gmd.Set("Core-Target", c.server)
+	if len(cmd) > 0 {
+		d, _ := json.Marshal(cmd)
+		gmd.Set("Core-Metadata", common.Byte2str(d))
+	}
 	for {
 		ctx, span := trace.NewSpan(ctx, "", trace.Client, nil)
 		if span.GetParentSpanData().IsEmpty() {
@@ -246,7 +241,7 @@ func (c *CGrpcClient) callInterceptor(ctx context.Context, path string, req, rep
 		span.GetSelfSpanData().SetStateKV("path", path)
 		gmd.Set("traceparent", span.GetSelfSpanData().FormatTraceParent())
 		gmd.Set("tracestate", span.GetParentSpanData().FormatTraceState())
-		e := transGrpcError(invoker(ctx, path, req, reply, cc, opts...))
+		e := transGrpcError(invoker(gmetadata.NewOutgoingContext(ctx, gmd), path, req, reply, cc, opts...))
 		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 			continue
 		}
