@@ -10,13 +10,14 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-func (s *CrpcServer) getContext(c context.Context, p *stream.Peer, msg *Msg, handlers []OutsideHandler) *Context {
+func (s *CrpcServer) getContext(c context.Context, p *stream.Peer, msg *Msg, realip string, handlers []OutsideHandler) *Context {
 	ctx, ok := s.ctxpool.Get().(*Context)
 	if !ok {
 		ctx = &Context{
 			Context:  c,
 			peer:     p,
 			msg:      msg,
+			realip:   realip,
 			handlers: handlers,
 			finish:   0,
 		}
@@ -25,6 +26,7 @@ func (s *CrpcServer) getContext(c context.Context, p *stream.Peer, msg *Msg, han
 	ctx.Context = c
 	ctx.peer = p
 	ctx.msg = msg
+	ctx.realip = realip
 	ctx.handlers = handlers
 	ctx.finish = 0
 	return ctx
@@ -38,6 +40,7 @@ type Context struct {
 	context.Context
 	msg      *Msg
 	peer     *stream.Peer
+	realip   string
 	handlers []OutsideHandler
 	finish   int32
 }
@@ -97,6 +100,11 @@ func (c *Context) GetBody() []byte {
 // get the direct peer's addr(maybe a proxy)
 func (c *Context) GetRemoteAddr() string {
 	return c.peer.GetRemoteAddr()
+}
+
+// get the real peer's ip which will not be confused by proxy
+func (c *Context) GetRealPeerIp() string {
+	return c.realip
 }
 
 // this function try to return the first caller's ip(mostly time it will be the user's ip)

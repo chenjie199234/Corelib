@@ -52,9 +52,7 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 		p := newPeer(this.c.TcpC.MaxMsgLen, _PEER_CLIENT, "")
 		conn, e := tmplistener.AcceptTCP()
 		if e != nil {
-			if ee, ok := e.(interface {
-				Temporary() bool
-			}); ok && ee.Temporary() {
+			if ee, ok := e.(net.Error); ok && ee.Temporary() {
 				log.Error(nil, "[Stream.StartServer] accept tcp connection failed", log.CError(e))
 				continue
 			}

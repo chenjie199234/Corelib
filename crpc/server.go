@@ -14,6 +14,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/log/trace"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
@@ -183,28 +184,73 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 	copy(totalhandlers, s.global)
 	copy(totalhandlers[len(s.global):], handlers)
 	return func(ctx context.Context, p *stream.Peer, msg *Msg) {
-		sourceip := p.GetRealPeerIP()
-		sourceapp := "unknown"
-		sourcemethod := "unknown"
-		sourcepath := "unknown"
-		if len(msg.Tracedata) == 0 || msg.Tracedata["TraceID"] == "" {
-			ctx = log.InitTrace(ctx, "", s.self, host.Hostip, "CRPC", msg.Path, 0)
+		peerip := p.GetRealPeerIP()
+		var span *trace.Span
+		if len(msg.Tracedata) == 0 || msg.Tracedata["TraceID"] == "" || msg.Tracedata["SpanID"] == "" {
+			ctx, span = trace.NewSpan(ctx, "", trace.Server, nil)
+			span.GetParentSpanData().SetStateKV("app", "unknown")
+			span.GetParentSpanData().SetStateKV("host", peerip)
+			span.GetParentSpanData().SetStateKV("method", "unknown")
+			span.GetParentSpanData().SetStateKV("path", "unknown")
 		} else {
-			sourceapp = msg.Tracedata["SourceApp"]
-			sourcemethod = msg.Tracedata["SourceMethod"]
-			sourcepath = msg.Tracedata["SourcePath"]
-			clientdeep, e := strconv.Atoi(msg.Tracedata["Deep"])
-			if e != nil || sourceapp == "" || sourcemethod == "" || sourcepath == "" || clientdeep == 0 {
-				log.Error(nil, "[crpc.server] tracedata format wrong", log.String("cip", sourceip), log.String("path", path), log.Any("tracedata", msg.Tracedata))
+			tid, e := trace.TraceIDFromHex(msg.Tracedata["TraceID"])
+			if e != nil {
+				log.Error(nil, "[crpc.server] trace data fromat wrong",
+					log.String("cip", peerip),
+					log.String("path", path),
+					log.String("trace_id", msg.Tracedata["TraceID"]))
 				p.Close()
 				return
 			}
-			ctx = log.InitTrace(ctx, msg.Tracedata["TraceID"], s.self, host.Hostip, "CRPC", msg.Path, clientdeep)
+			psid, e := trace.SpanIDFromHex(msg.Tracedata["SpanID"])
+			if e != nil {
+				log.Error(nil, "[crpc.server] trace data fromat wrong",
+					log.String("cip", peerip),
+					log.String("path", path),
+					log.String("p_span_id", msg.Tracedata["SpanID"]))
+				p.Close()
+				return
+			}
+			parent := trace.NewSpanData(tid, psid)
+			var app, host, method, path bool
+			for k, v := range msg.Tracedata {
+				if k == "TraceID" || k == "SpanID" {
+					continue
+				}
+				switch k {
+				case "SourceApp":
+					app = true
+				case "SourceHost":
+					host = true
+					peerip = v
+				case "SourceMethod":
+					method = true
+				case "SourcePath":
+					path = true
+				}
+				parent.SetStateKV(k, v)
+			}
+			if !app {
+				parent.SetStateKV("app", "unknown")
+			}
+			if !host {
+				parent.SetStateKV("host", peerip)
+			}
+			if !method {
+				parent.SetStateKV("method", "unknown")
+			}
+			if !path {
+				parent.SetStateKV("path", "unknown")
+			}
+			ctx, span = trace.NewSpan(ctx, "", trace.Server, parent)
 		}
-		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
-		start := time.Now()
+		span.GetSelfSpanData().SetStateKV("app", s.self)
+		span.GetSelfSpanData().SetStateKV("host", host.Hostip)
+		span.GetSelfSpanData().SetStateKV("method", "CRPC")
+		span.GetSelfSpanData().SetStateKV("path", path)
+
 		if servertimeout := int64(s.getHandlerTimeout(path)); servertimeout > 0 {
-			serverdl := start.UnixNano() + servertimeout
+			serverdl := time.Now().UnixNano() + servertimeout
 			if msg.Deadline != 0 {
 				//compare use the small one
 				if msg.Deadline < serverdl {
@@ -229,12 +275,12 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 			defer cancel()
 		}
 		if msg.Metadata == nil {
-			msg.Metadata = map[string]string{"Client-IP": sourceip}
+			msg.Metadata = map[string]string{"Client-IP": peerip}
 		} else if _, ok := msg.Metadata["Client-IP"]; !ok {
-			msg.Metadata["Client-IP"] = sourceip
+			msg.Metadata["Client-IP"] = peerip
 		}
 		//logic
-		workctx := s.getContext(metadata.SetMetadata(ctx, msg.Metadata), p, msg, totalhandlers)
+		workctx := s.getContext(metadata.SetMetadata(ctx, msg.Metadata), p, msg, peerip, totalhandlers)
 		paniced := true
 		defer func() {
 			if paniced {
@@ -242,8 +288,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
 				log.Error(workctx, "[crpc.server] panic",
-					log.String("cname", sourceapp),
-					log.String("cip", sourceip),
+					log.String("cip", peerip),
 					log.String("path", path),
 					log.Any("panic", e),
 					log.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
@@ -258,6 +303,10 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(workctx, d, nil, nil); e != nil {
 				if e == stream.ErrMsgLarge {
+					log.Error(workctx, "[crpc.server] write response failed",
+						log.String("cip", peerip),
+						log.String("path", path),
+						log.CError(cerror.ErrRespmsgLen))
 					msg.Path = ""
 					msg.Deadline = 0
 					msg.Body = nil
@@ -270,16 +319,28 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 						} else {
 							msg.Error = cerror.ConvertStdError(e)
 						}
+						log.Error(workctx, "[crpc.server] write response failed",
+							log.String("cip", peerip),
+							log.String("path", path),
+							log.CError(msg.Error))
 					}
 				} else if e == stream.ErrConnClosed {
+					log.Error(workctx, "[crpc.server] write response failed",
+						log.String("cip", peerip),
+						log.String("path", path),
+						log.CError(cerror.ErrClosed))
 					msg.Error = cerror.ErrClosed
 				} else {
 					msg.Error = cerror.ConvertStdError(e)
+					log.Error(workctx, "[crpc.server] write response failed",
+						log.String("cip", peerip),
+						log.String("path", path),
+						log.CError(msg.Error))
 				}
 			}
-			end := time.Now()
-			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.self, host.Hostip+":"+p.GetLocalPort(), "CRPC", path, &start, &end, msg.Error)
-			monitor.CrpcServerMonitor(sourceapp, "CRPC", path, msg.Error, uint64(end.UnixNano()-start.UnixNano()))
+			span.Finish(msg.Error)
+			peername, _ := span.GetParentSpanData().GetStateKV("app")
+			monitor.CrpcServerMonitor(peername, "CRPC", path, msg.Error, uint64(span.GetEnd()-span.GetStart()))
 			s.putContext(workctx)
 		}()
 		workctx.run()
@@ -344,7 +405,12 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d, nil, nil); e != nil {
-			log.Error(nil, "[crpc.server] send message failed", log.String("cip", p.GetRealPeerIP()), log.String("path", msg.Path), log.CError(e))
+			if e == stream.ErrMsgLarge {
+				e = cerror.ErrRespmsgLen
+			} else if e == stream.ErrConnClosed {
+				e = cerror.ErrClosed
+			}
+			log.Error(nil, "[crpc.server] write response failed", log.String("cip", p.GetRealPeerIP()), log.String("path", msg.Path), log.CError(e))
 		}
 		return
 	}
@@ -360,7 +426,12 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d, nil, nil); e != nil {
-			log.Error(nil, "[crpc.server] send message failed", log.String("cip", p.GetRealPeerIP()), log.String("path", msg.Path), log.CError(e))
+			if e == stream.ErrMsgLarge {
+				e = cerror.ErrRespmsgLen
+			} else if e == stream.ErrConnClosed {
+				e = cerror.ErrClosed
+			}
+			log.Error(nil, "[crpc.server] write response failed", log.String("cip", p.GetRealPeerIP()), log.String("path", msg.Path), log.CError(e))
 		}
 		return
 	}
@@ -380,7 +451,12 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		msg.Tracedata = nil
 		d, _ := proto.Marshal(msg)
 		if e := p.SendMessage(nil, d, nil, nil); e != nil {
-			log.Error(nil, "[crpc.server] send message failed", log.String("cip", p.GetRealPeerIP()), log.String("path", msg.Path), log.CError(e))
+			if e == stream.ErrMsgLarge {
+				e = cerror.ErrRespmsgLen
+			} else if e == stream.ErrConnClosed {
+				e = cerror.ErrClosed
+			}
+			log.Error(nil, "[crpc.server] write response failed", log.String("cip", p.GetRealPeerIP()), log.String("path", msg.Path), log.CError(e))
 		}
 		return
 	}

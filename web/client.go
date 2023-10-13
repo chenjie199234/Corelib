@@ -18,6 +18,7 @@ import (
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/log/trace"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
@@ -209,7 +210,10 @@ func forbiddenHeader(header http.Header) bool {
 	if header.Get("Core-Metadata") != "" {
 		return true
 	}
-	if header.Get("Core-Tracedata") != "" {
+	if header.Get("Traceparent") != "" {
+		return true
+	}
+	if header.Get("Tracestate") != "" {
 		return true
 	}
 	return false
@@ -231,17 +235,17 @@ func WithForceAddr(ctx context.Context, forceaddr string) context.Context {
 	return context.WithValue(ctx, forceaddrkey{}, forceaddr)
 }
 
-// "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
+// "Core-Deadline" "Core-Target" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (resp *http.Response, e error) {
 	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil)
 }
 
-// "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
+// "Core-Deadline" "Core-Target" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (resp *http.Response, e error) {
 	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
 }
 
-// "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
+// "Core-Deadline" "Core-Target" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewReader(body))
@@ -249,7 +253,7 @@ func (c *WebClient) Post(ctx context.Context, path, query string, header http.He
 	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil)
 }
 
-// "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
+// "Core-Deadline" "Core-Target" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewReader(body))
@@ -257,7 +261,7 @@ func (c *WebClient) Put(ctx context.Context, path, query string, header http.Hea
 	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil)
 }
 
-// "Core-Deadline" "Core-Target" "Core-Metadata" "Core-Tracedata" are forbidden in header
+// "Core-Deadline" "Core-Target" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewReader(body))
@@ -267,8 +271,16 @@ func (c *WebClient) Patch(ctx context.Context, path, query string, header http.H
 
 func (c *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body io.Reader) (*http.Response, error) {
 	if forbiddenHeader(header) {
-		return nil, cerror.MakeError(-1, 400, "forbidden header")
+		return nil, cerror.ErrReq
 	}
+	if e := c.stop.Add(1); e != nil {
+		if e == graceful.ErrClosing {
+			return nil, cerror.ErrClientClosing
+		}
+		return nil, cerror.ErrBusy
+	}
+	defer c.stop.DoneOne()
+
 	if path != "" && path[0] != '/' {
 		path = "/" + path
 	}
@@ -283,20 +295,6 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		d, _ := json.Marshal(metadata)
 		header.Set("Core-Metadata", common.Byte2str(d))
 	}
-
-	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
-	if traceid == "" {
-		ctx = log.InitTrace(ctx, "", c.self, host.Hostip, "unknown", "unknown", 0)
-		traceid, _, _, selfmethod, selfpath, selfdeep = log.GetTrace(ctx)
-	}
-	tracedata, _ := json.Marshal(map[string]string{
-		"TraceID":      traceid,
-		"SourceApp":    c.self,
-		"SourceMethod": selfmethod,
-		"SourcePath":   selfpath,
-		"Deep":         strconv.Itoa(selfdeep),
-	})
-	header.Set("Core-Tracedata", common.Byte2str(tracedata))
 	var dl time.Time
 	var ok bool
 	if dl, ok = ctx.Deadline(); ok {
@@ -312,15 +310,20 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	if !dl.IsZero() {
 		header.Set("Core-Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
-	if e := c.stop.Add(1); e != nil {
-		if e == graceful.ErrClosing {
-			return nil, cerror.ErrClientClosing
-		}
-		return nil, cerror.ErrBusy
-	}
-	defer c.stop.DoneOne()
 	for {
-		start := time.Now()
+		ctx, span := trace.NewSpan(ctx, "", trace.Client, nil)
+		if span.GetParentSpanData().IsEmpty() {
+			span.GetParentSpanData().SetStateKV("app", c.self)
+			span.GetParentSpanData().SetStateKV("host", host.Hostip)
+			span.GetParentSpanData().SetStateKV("method", "unknown")
+			span.GetParentSpanData().SetStateKV("path", "unknown")
+		}
+		span.GetSelfSpanData().SetStateKV("app", c.server)
+		span.GetSelfSpanData().SetStateKV("method", method)
+		span.GetSelfSpanData().SetStateKV("path", path)
+		header.Set("Traceparent", span.GetSelfSpanData().FormatTraceParent())
+		header.Set("Tracestate", span.GetParentSpanData().FormatTraceState())
+		//pick server
 		server, done, e := c.balancer.Pick(ctx)
 		if e != nil {
 			return nil, e
@@ -336,15 +339,16 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			e = cerror.ConvertStdError(e.(*url.Error).Unwrap())
 			return nil, e
 		}
+		span.GetSelfSpanData().SetStateKV("host", req.URL.Scheme+"://"+req.URL.Host)
 		req.Header = header
 		//start call
-		resp, e := c.client.Do(req)
-		end := time.Now()
+		var resp *http.Response
+		resp, e = c.client.Do(req)
 		if e != nil {
-			done(0, 0, false)
 			e = cerror.ConvertStdError(e.(*url.Error).Unwrap())
-			log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
-			monitor.WebClientMonitor(c.server, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
+			span.Finish(e)
+			done(0, 0, false)
+			monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
 			return nil, e
 		}
 		cpuusagestr := resp.Header.Get("Cpu-Usage")
@@ -352,42 +356,33 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		if cpuusagestr != "" {
 			cpuusage, _ = strconv.ParseFloat(cpuusagestr, 64)
 		}
-		done(cpuusage, uint64(end.UnixNano()-start.UnixNano()), resp.StatusCode/100 == 2)
 		if resp.StatusCode/100 != 2 {
-			respbody, e := io.ReadAll(resp.Body)
+			var respbody []byte
+			respbody, e = io.ReadAll(resp.Body)
 			resp.Body.Close()
 			if e != nil {
 				e = cerror.ConvertStdError(e)
-				log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
-				monitor.WebClientMonitor(c.server, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
-				return nil, e
-			}
-			if len(respbody) == 0 {
+			} else if len(respbody) == 0 {
 				e = cerror.MakeError(-1, int32(resp.StatusCode), http.StatusText(resp.StatusCode))
 			} else {
-				tmpe := cerror.ConvertErrorstr(common.Byte2str(respbody))
-				tmpe.SetHttpcode(int32(resp.StatusCode))
-				e = tmpe
+				e = cerror.ConvertErrorstr(common.Byte2str(respbody))
+				(e.(*cerror.Error)).SetHttpcode(int32(resp.StatusCode))
 			}
-			if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
-				if atomic.SwapInt32(&server.closing, 1) == 0 {
-					//set the lowest pick priority
-					server.Pickinfo.SetDiscoverServerOffline(0)
-					//rebuild picker
-					c.balancer.rebuildpicker()
-					//triger discover
-					c.resolver.Now()
-				}
-				log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
-				monitor.WebClientMonitor(c.server, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
-				continue
-			}
-			log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, e)
-			monitor.WebClientMonitor(c.server, method, path, e, uint64(end.UnixNano()-start.UnixNano()))
-			return nil, e
 		}
-		log.Trace(ctx, log.CLIENT, c.server, req.URL.Scheme+"://"+req.URL.Host, method, path, &start, &end, nil)
-		monitor.WebClientMonitor(c.server, method, path, nil, uint64(end.UnixNano()-start.UnixNano()))
-		return resp, nil
+		span.Finish(e)
+		done(cpuusage, uint64(span.GetEnd()-span.GetStart()), e == nil)
+		monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
+		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
+			if atomic.SwapInt32(&server.closing, 1) == 0 {
+				//set the lowest pick priority
+				server.Pickinfo.SetDiscoverServerOffline(0)
+				//rebuild picker
+				c.balancer.rebuildpicker()
+				//triger discover
+				c.resolver.Now()
+			}
+			continue
+		}
+		return resp, e
 	}
 }

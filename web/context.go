@@ -3,10 +3,8 @@ package web
 import (
 	"context"
 	"io"
-	"net"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -16,14 +14,14 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-func (s *WebServer) getContext(c context.Context, w http.ResponseWriter, r *http.Request, peername string, handlers []OutsideHandler) *Context {
+func (s *WebServer) getContext(c context.Context, w http.ResponseWriter, r *http.Request, realip string, handlers []OutsideHandler) *Context {
 	ctx, ok := s.ctxpool.Get().(*Context)
 	if !ok {
 		ctx = &Context{
 			Context:  c,
 			w:        w,
 			r:        r,
-			peername: peername,
+			realip:   realip,
 			handlers: handlers,
 			finish:   0,
 			e:        nil,
@@ -33,7 +31,7 @@ func (s *WebServer) getContext(c context.Context, w http.ResponseWriter, r *http
 	ctx.Context = c
 	ctx.w = w
 	ctx.r = r
-	ctx.peername = peername
+	ctx.realip = realip
 	ctx.handlers = handlers
 	ctx.finish = 0
 	ctx.e = nil
@@ -55,7 +53,7 @@ type Context struct {
 	context.Context
 	w        http.ResponseWriter
 	r        *http.Request
-	peername string
+	realip   string
 	handlers []OutsideHandler
 	finish   int32
 	body     []byte
@@ -142,9 +140,6 @@ func (c *Context) GetHeaders() http.Header {
 func (c *Context) GetHeader(key string) string {
 	return c.r.Header.Get(key)
 }
-func (c *Context) GetPeerName() string {
-	return c.peername
-}
 
 // get the direct peer's addr(maybe a proxy)
 func (c *Context) GetRemoteAddr() string {
@@ -153,7 +148,7 @@ func (c *Context) GetRemoteAddr() string {
 
 // get the real peer's ip which will not be confused by proxy
 func (c *Context) GetRealPeerIp() string {
-	return realip(c.r)
+	return c.realip
 }
 
 // this function try to return the first caller's ip(mostly time it will be the user's ip)
@@ -164,19 +159,6 @@ func (c *Context) GetClientIp() string {
 	return md["Client-IP"]
 }
 
-func realip(r *http.Request) string {
-	ip := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
-	if ip != "" {
-		ip = strings.TrimSpace(strings.Split(ip, ",")[0])
-		if ip != "" {
-			return ip
-		}
-	}
-	if ip = strings.TrimSpace(r.Header.Get("X-Real-Ip")); ip == "" {
-		ip, _, _ = net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	}
-	return ip
-}
 func (c *Context) GetUserAgent() string {
 	return c.r.Header.Get("User-Agent")
 }

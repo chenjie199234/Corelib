@@ -6,13 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
-	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/log/trace"
 	cmetadata "github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -116,7 +115,7 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 		stop:     graceful.New(),
 	}
 	opts := make([]grpc.DialOption, 0, 10)
-	opts = append(opts, grpc.WithChainUnaryInterceptor(client.gracefulInterceptor, client.mdInterceptor, client.traceInterceptor, client.timeoutInterceptor, client.callInterceptor))
+	opts = append(opts, grpc.WithChainUnaryInterceptor(client.gracefulInterceptor, client.mdInterceptor, client.timeoutInterceptor, client.callInterceptor))
 	opts = append(opts, grpc.WithChainStreamInterceptor())
 	opts = append(opts, grpc.WithRecvBufferPool(pool.GetPool()))
 	opts = append(opts, grpc.WithDisableRetry())
@@ -224,16 +223,6 @@ func (c *CGrpcClient) mdInterceptor(ctx context.Context, path string, req, reply
 	ctx = gmetadata.NewOutgoingContext(ctx, gmd)
 	return invoker(ctx, path, req, reply, cc, opts...)
 }
-func (c *CGrpcClient) traceInterceptor(ctx context.Context, path string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	gmd, _ := gmetadata.FromOutgoingContext(ctx)
-	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
-	if traceid == "" {
-		ctx = log.InitTrace(ctx, "", c.self, host.Hostip, "unknown", "unknown", 0)
-		traceid, _, _, selfmethod, selfpath, selfdeep = log.GetTrace(ctx)
-	}
-	gmd.Set("Core-Tracedata", traceid, c.self, selfmethod, selfpath, strconv.Itoa(selfdeep))
-	return invoker(ctx, path, req, reply, cc, opts...)
-}
 func (c *CGrpcClient) timeoutInterceptor(ctx context.Context, path string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	if c.c.GlobalTimeout > 0 {
 		var cancel context.CancelFunc
@@ -243,7 +232,20 @@ func (c *CGrpcClient) timeoutInterceptor(ctx context.Context, path string, req, 
 	return invoker(ctx, path, req, reply, cc, opts...)
 }
 func (c *CGrpcClient) callInterceptor(ctx context.Context, path string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	gmd, _ := gmetadata.FromOutgoingContext(ctx)
 	for {
+		ctx, span := trace.NewSpan(ctx, "", trace.Client, nil)
+		if span.GetParentSpanData().IsEmpty() {
+			span.GetParentSpanData().SetStateKV("app", c.self)
+			span.GetParentSpanData().SetStateKV("host", host.Hostip)
+			span.GetParentSpanData().SetStateKV("method", "unknown")
+			span.GetParentSpanData().SetStateKV("path", "unknown")
+		}
+		span.GetSelfSpanData().SetStateKV("app", c.server)
+		span.GetSelfSpanData().SetStateKV("method", "GRPC")
+		span.GetSelfSpanData().SetStateKV("path", path)
+		gmd.Set("traceparent", span.GetSelfSpanData().FormatTraceParent())
+		gmd.Set("tracestate", span.GetParentSpanData().FormatTraceState())
 		e := transGrpcError(invoker(ctx, path, req, reply, cc, opts...))
 		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 			continue

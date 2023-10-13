@@ -12,11 +12,12 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/log/trace"
 	"github.com/chenjie199234/Corelib/rotatefile"
 	"github.com/chenjie199234/Corelib/util/ctime"
 )
 
-var trace bool
+var logtrace bool
 var target io.Writer
 var level slog.Level
 var rf *rotatefile.RotateFile
@@ -27,7 +28,7 @@ func init() {
 	if str := os.Getenv("LOG_TRACE"); str != "" && str != "<LOG_TRACE>" && str != "0" && str != "1" {
 		panic("[log] os env LOG_TRACE error,must in [0,1]")
 	} else {
-		trace = str == "1"
+		logtrace = str == "1"
 	}
 	if str := strings.ToLower(os.Getenv("LOG_TARGET")); str != "std" && str != "file" && str != "" && str != "<LOG_TARGET>" {
 		panic("[log] os env LOG_TARGET error,must in [std(default),file]")
@@ -71,6 +72,13 @@ func init() {
 		}
 	}
 	replace := func(groups []string, attr slog.Attr) slog.Attr {
+		if len(groups) == 0 && attr.Key == "msg" {
+			msg, ok := attr.Value.Any().(string)
+			if ok && msg == "" {
+				return slog.Attr{}
+			}
+			return attr
+		}
 		if len(groups) == 0 && attr.Key == "function" {
 			return slog.Attr{}
 		}
@@ -85,6 +93,7 @@ func init() {
 		return attr
 	}
 	sloger = slog.New(slog.NewJSONHandler(target, &slog.HandlerOptions{AddSource: true, Level: level, ReplaceAttr: replace}).WithGroup("attrs"))
+	trace.SetSloger(sloger)
 }
 
 // get slog.Logger,usually this is not used,Debug,Info,Warn,Error is prefered
@@ -116,10 +125,9 @@ func innerlog(ctx context.Context, level slog.Level, msg string, attrs ...any) {
 	if !sloger.Enabled(ctx, level) {
 		return
 	}
-	if trace {
-		traceid, _, _, _, _, deep := GetTrace(ctx)
-		if traceid != "" {
-			attrs = append(attrs, Group("trace", slog.String("id", traceid), slog.Int("deep", deep)))
+	if logtrace {
+		if span := trace.SpanFromContext(ctx); span != nil {
+			attrs = append(attrs, slog.String("tid", span.GetSelfSpanData().GetTid().String()))
 		}
 	}
 	var pcs [1]uintptr
@@ -173,8 +181,8 @@ func CError(value error) slog.Attr {
 	return Group("error", slog.Int64("code", int64(e.Code)), slog.String("msg", e.Msg))
 }
 
-func Group(key string, attrs ...slog.Attr) slog.Attr {
-	return slog.Attr{Key: key, Value: slog.GroupValue(attrs...)}
+func Group(key string, attrs ...any) slog.Attr {
+	return slog.Group(key, attrs)
 }
 
 func Any(key string, value any) slog.Attr {

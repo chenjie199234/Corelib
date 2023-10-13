@@ -14,6 +14,7 @@ import (
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/log/trace"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
@@ -232,18 +233,6 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 		Body:     in,
 		Metadata: metadata.GetMetadata(ctx),
 	}
-	traceid, _, _, selfmethod, selfpath, selfdeep := log.GetTrace(ctx)
-	if traceid == "" {
-		ctx = log.InitTrace(ctx, "", c.self, host.Hostip, "unknown", "unknown", 0)
-		traceid, _, _, selfmethod, selfpath, selfdeep = log.GetTrace(ctx)
-	}
-	msg.Tracedata = map[string]string{
-		"TraceID":      traceid,
-		"SourceApp":    c.self,
-		"SourceMethod": selfmethod,
-		"SourcePath":   selfpath,
-		"Deep":         strconv.Itoa(selfdeep),
-	}
 	if c.c.GlobalTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
@@ -254,18 +243,41 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 	}
 	r := c.getreq(msg)
 	for {
-		start := time.Now()
+		ctx, span := trace.NewSpan(ctx, "", trace.Client, nil)
+		if span.GetParentSpanData().IsEmpty() {
+			span.GetParentSpanData().SetStateKV("app", c.self)
+			span.GetParentSpanData().SetStateKV("host", host.Hostip)
+			span.GetParentSpanData().SetStateKV("method", "unknown")
+			span.GetParentSpanData().SetStateKV("path", "unknown")
+		}
+		span.GetSelfSpanData().SetStateKV("app", c.server)
+		span.GetSelfSpanData().SetStateKV("method", "CRPC")
+		span.GetSelfSpanData().SetStateKV("path", path)
+		selfmethod, _ := span.GetParentSpanData().GetStateKV("method")
+		selfpath, _ := span.GetParentSpanData().GetStateKV("path")
+		msg.Tracedata = map[string]string{
+			"TraceID":      span.GetSelfSpanData().GetTid().String(),
+			"SpanID":       span.GetSelfSpanData().GetSid().String(),
+			"SourceApp":    c.self,
+			"SourceHost":   host.Hostip,
+			"SourceMethod": selfmethod,
+			"SourcePath":   selfpath,
+		}
 		server, done, e := c.balancer.Pick(ctx)
 		if e != nil {
 			return nil, e
 		}
+		span.GetSelfSpanData().SetStateKV("host", server.addr)
 		msg.Callid = atomic.AddUint64(&server.callid, 1)
 		if e = server.sendmessage(ctx, r); e != nil {
+			log.Error(ctx, "[crpc.client] send request failed",
+				log.String("sname", c.server),
+				log.String("sip", server.addr),
+				log.String("path", path),
+				log.CError(e))
+			span.Finish(e)
 			done(0, 0, false)
-			end := time.Now()
-			log.Error(ctx, "[crpc.client] send message failed", log.String("sname", c.server), log.String("sip", server.addr), log.String("path", path), log.CError(e))
-			log.Trace(ctx, log.CLIENT, c.server, server.addr, "CRPC", path, &start, &end, e)
-			monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
+			monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(span.GetEnd()-span.GetStart()))
 			if cerror.Equal(e, cerror.ErrClosed) {
 				continue
 			}
@@ -273,11 +285,10 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 		}
 		select {
 		case <-r.finish:
-			end := time.Now()
 			cpuusage, _ := strconv.ParseFloat(r.respmd["Cpu-Usage"], 64)
-			done(cpuusage, uint64(end.UnixNano()-start.UnixNano()), r.err == nil)
-			log.Trace(ctx, log.CLIENT, c.server, server.addr, "CRPC", path, &start, &end, r.err)
-			monitor.CrpcClientMonitor(c.server, "CRPC", path, r.err, uint64(end.UnixNano()-start.UnixNano()))
+			span.Finish(r.err)
+			done(cpuusage, uint64(span.GetEnd()-span.GetStart()), r.err == nil)
+			monitor.CrpcClientMonitor(c.server, "CRPC", path, r.err, uint64(span.GetEnd()-span.GetStart()))
 			if r.err != nil {
 				if cerror.Equal(r.err, cerror.ErrServerClosing) {
 					//server is closing,this req can be retry
@@ -293,27 +304,14 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 			//resp and err maybe both nil
 			return resp, e
 		case <-ctx.Done():
-			done(0, 0, false)
 			server.lker.Lock()
 			delete(server.reqs, msg.Callid)
 			server.lker.Unlock()
 			c.putreq(r)
-			if ctx.Err() == context.DeadlineExceeded {
-				e = cerror.ErrDeadlineExceeded
-			} else if ctx.Err() == context.Canceled {
-				e = cerror.ErrCanceled
-				canceldata, _ := proto.Marshal(&Msg{
-					Callid: msg.Callid,
-					Type:   MsgType_CANCEL,
-				})
-				go server.sendcancel(context.Background(), canceldata)
-			} else {
-				//this is impossible
-				e = cerror.ConvertStdError(ctx.Err())
-			}
-			end := time.Now()
-			log.Trace(ctx, log.CLIENT, c.server, server.addr, "CRPC", path, &start, &end, e)
-			monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(end.UnixNano()-start.UnixNano()))
+			e = cerror.ConvertStdError(ctx.Err())
+			span.Finish(e)
+			done(0, 0, false)
+			monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(span.GetEnd()-span.GetStart()))
 			return nil, e
 		}
 	}

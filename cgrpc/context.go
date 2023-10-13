@@ -6,10 +6,12 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/metadata"
+
+	"google.golang.org/grpc/stats"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-func (s *CGrpcServer) getcontext(c context.Context, path string, peername string, remoteaddr string, handlers []OutsideHandler, d func(interface{}) error) *Context {
+func (s *CGrpcServer) getcontext(c context.Context, path string, realip string, handlers []OutsideHandler, d func(interface{}) error) *Context {
 	ctx, ok := s.ctxpool.Get().(*Context)
 	if !ok {
 		ctx = &Context{
@@ -17,8 +19,7 @@ func (s *CGrpcServer) getcontext(c context.Context, path string, peername string
 			decodefunc: d,
 			handlers:   handlers,
 			path:       path,
-			peername:   peername,
-			remoteaddr: remoteaddr,
+			realip:     realip,
 			resp:       nil,
 			e:          nil,
 			finish:     0,
@@ -29,8 +30,7 @@ func (s *CGrpcServer) getcontext(c context.Context, path string, peername string
 	ctx.decodefunc = d
 	ctx.handlers = handlers
 	ctx.path = path
-	ctx.peername = peername
-	ctx.remoteaddr = remoteaddr
+	ctx.realip = realip
 	ctx.resp = nil
 	ctx.e = nil
 	ctx.finish = 0
@@ -45,8 +45,7 @@ type Context struct {
 	decodefunc func(interface{}) error
 	handlers   []OutsideHandler
 	path       string
-	peername   string
-	remoteaddr string
+	realip     string
 	resp       interface{}
 	e          *cerror.Error
 	finish     int32
@@ -88,13 +87,16 @@ func (c *Context) GetMethod() string {
 func (c *Context) GetPath() string {
 	return c.path
 }
-func (c *Context) GetPeerName() string {
-	return c.peername
-}
 
 // get the direct peer's addr(maybe a proxy)
 func (c *Context) GetRemoteAddr() string {
-	return c.remoteaddr
+	conninfo := c.Context.Value(serverconnkey{}).(*stats.ConnTagInfo)
+	return conninfo.RemoteAddr.String()
+}
+
+// get the real peer's ip which will not be confused by proxy
+func (c *Context) GetRealPeerIp() string {
+	return c.realip
 }
 
 // this function try to return the first caller's ip(mostly time it will be the user's ip)

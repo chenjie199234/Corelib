@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -15,6 +16,7 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/container/trie"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/log/trace"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/pool"
@@ -129,6 +131,19 @@ func cleanPath(origin string) string {
 	}
 	return string(buf[:realpos])
 }
+func realip(r *http.Request) string {
+	ip := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
+	if ip != "" {
+		ip = strings.TrimSpace(strings.Split(ip, ",")[0])
+		if ip != "" {
+			return ip
+		}
+	}
+	if ip = strings.TrimSpace(r.Header.Get("X-Real-Ip")); ip == "" {
+		ip, _, _ = net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	}
+	return ip
+}
 
 // thread unsafe
 func (r *Router) Use(globalMids ...OutsideHandler) {
@@ -178,81 +193,109 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 		}
 		//trace
 		var ctx context.Context
-		sourceip := realip(req)
-		sourceapp := "unknown"
-		sourcemethod := "unknown"
-		sourcepath := "unknown"
-		if tracestr := req.Header.Get("Core-Tracedata"); tracestr != "" {
-			tracedata := make(map[string]string)
-			if e := json.Unmarshal(common.Str2byte(tracestr), &tracedata); e != nil {
-				log.Error(nil, "[web.server] tracedata format wrong",
-					log.String("cip", sourceip),
+		var span *trace.Span
+		peerip := realip(req)
+		if traceparentstr := req.Header.Get("Traceparent"); traceparentstr != "" {
+			tid, psid, e := trace.ParseTraceParent(traceparentstr)
+			if e != nil {
+				log.Error(nil, "[web.server] trace data format wrong",
+					log.String("cip", peerip),
 					log.String("path", path),
 					log.String("method", method),
-					log.String("tracedata", tracestr))
+					log.String("trace_parent", traceparentstr))
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
 				resp.Write(common.Str2byte(cerror.ErrReq.Error()))
 				return
 			}
-			if len(tracedata) == 0 || tracedata["TraceID"] == "" {
-				ctx = log.InitTrace(req.Context(), "", r.s.self, host.Hostip, method, path, 0)
-			} else {
-				sourceapp = tracedata["SourceApp"]
-				sourcemethod = tracedata["SourceMethod"]
-				sourcepath = tracedata["SourcePath"]
-				clientdeep, e := strconv.Atoi(tracedata["Deep"])
-				if e != nil || sourceapp == "" || sourcemethod == "" || sourcepath == "" || clientdeep == 0 {
-					log.Error(nil, "[web.server] tracedata format wrong",
-						log.String("cip", sourceip),
+			parent := trace.NewSpanData(tid, psid)
+			if tracestatestr := req.Header.Get("Tracestate"); tracestatestr != "" {
+				tmp, e := trace.ParseTraceState(tracestatestr)
+				if e != nil {
+					log.Error(nil, "[web.server] trace data format wrong",
+						log.String("cip", peerip),
 						log.String("path", path),
 						log.String("method", method),
-						log.String("tracedata", tracestr))
+						log.String("trace_state", tracestatestr))
 					resp.Header().Set("Content-Type", "application/json")
 					resp.WriteHeader(int(cerror.ErrReq.Httpcode))
 					resp.Write(common.Str2byte(cerror.ErrReq.Error()))
 					return
 				}
-				ctx = log.InitTrace(req.Context(), tracedata["TraceID"], r.s.self, host.Hostip, method, path, clientdeep)
+				var app, host, method, path bool
+				for k, v := range tmp {
+					switch k {
+					case "app":
+						app = true
+					case "host":
+						host = true
+						peerip = v
+					case "method":
+						method = true
+					case "path":
+						path = true
+					}
+					parent.SetStateKV(k, v)
+				}
+				if !app {
+					parent.SetStateKV("app", "unknown")
+				}
+				if !host {
+					parent.SetStateKV("host", peerip)
+				}
+				if !method {
+					parent.SetStateKV("method", "unknown")
+				}
+				if !path {
+					parent.SetStateKV("path", "unknown")
+				}
 			}
+			ctx, span = trace.NewSpan(req.Context(), "", trace.Server, parent)
 		} else {
-			ctx = log.InitTrace(req.Context(), "", r.s.self, host.Hostip, method, path, 0)
+			ctx, span = trace.NewSpan(req.Context(), "", trace.Server, nil)
+			span.GetParentSpanData().SetStateKV("app", "unknown")
+			span.GetParentSpanData().SetStateKV("host", peerip)
+			span.GetParentSpanData().SetStateKV("method", "unknown")
+			span.GetParentSpanData().SetStateKV("path", "unknown")
 		}
-		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
+		span.GetSelfSpanData().SetStateKV("app", r.s.self)
+		span.GetSelfSpanData().SetStateKV("host", host.Hostip)
+		span.GetSelfSpanData().SetStateKV("method", method)
+		span.GetSelfSpanData().SetStateKV("path", path)
 		var md map[string]string
 		if mdstr := req.Header.Get("Core-Metadata"); mdstr != "" {
 			md = make(map[string]string)
 			if e := json.Unmarshal(common.Str2byte(mdstr), &md); e != nil {
-				log.Error(ctx, "[web.server] metadata format wrong",
-					log.String("cname", sourceapp),
-					log.String("cip", sourceip),
+				log.Error(ctx, "[web.server] meta data format wrong",
+					log.String("cip", peerip),
 					log.String("path", path),
 					log.String("method", method),
 					log.String("metadata", mdstr))
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
 				resp.Write(common.Str2byte(cerror.ErrReq.Error()))
+				span.Finish(cerror.ErrReq)
 				return
 			}
 		}
 		if md == nil {
-			md = map[string]string{"Client-IP": sourceip}
+			md = map[string]string{"Client-IP": peerip}
 		} else if _, ok := md["Client-IP"]; !ok {
-			md["Client-IP"] = sourceip
+			md["Client-IP"] = peerip
 		}
 		//client timeout
 		if temp := req.Header.Get("Core-Deadline"); temp != "" {
 			clientdl, e := strconv.ParseInt(temp, 10, 64)
 			if e != nil {
 				log.Error(ctx, "[web.server] deadline format wrong",
-					log.String("cname", sourceapp),
-					log.String("cip", sourceip),
+					log.String("cip", peerip),
 					log.String("path", path),
 					log.String("method", method),
 					log.String("deadline", temp))
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
 				resp.Write(common.Str2byte(cerror.ErrReq.Error()))
+				span.Finish(cerror.ErrReq)
 				return
 			}
 			if clientdl != 0 {
@@ -272,18 +315,19 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrServerClosing.Httpcode))
 				resp.Write(common.Str2byte(cerror.ErrServerClosing.Error()))
+				span.Finish(cerror.ErrServerClosing)
 			} else {
 				//tell peer self busy
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrBusy.Httpcode))
 				resp.Write(common.Str2byte(cerror.ErrBusy.Error()))
+				span.Finish(cerror.ErrBusy)
 			}
 			return
 		}
 		defer r.s.stop.DoneOne()
 		//logic
-		start := time.Now()
-		workctx := r.s.getContext(metadata.SetMetadata(ctx, md), resp, req, sourceapp, totalhandlers)
+		workctx := r.s.getContext(metadata.SetMetadata(ctx, md), resp, req, peerip, totalhandlers)
 		paniced := true
 		defer func() {
 			if paniced {
@@ -291,8 +335,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
 				log.Error(workctx, "[web.server] panic",
-					log.String("cname", sourceapp),
-					log.String("cip", sourceip),
+					log.String("cip", peerip),
 					log.String("path", path),
 					log.String("method", method),
 					log.Any("panic", e),
@@ -303,9 +346,9 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 				resp.Write(common.Str2byte(cerror.ErrPanic.Error()))
 				workctx.e = cerror.ErrPanic
 			}
-			end := time.Now()
-			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, r.s.self, host.Hostip+":"+req.Context().Value(localport{}).(string), method, path, &start, &end, workctx.e)
-			monitor.WebServerMonitor(sourceapp, method, path, workctx.e, uint64(end.UnixNano()-start.UnixNano()))
+			span.Finish(workctx.e)
+			peername, _ := span.GetParentSpanData().GetStateKV("app")
+			monitor.WebServerMonitor(peername, method, path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
 			r.s.putContext(workctx)
 		}()
 		workctx.run()

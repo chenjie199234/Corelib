@@ -12,6 +12,7 @@ import (
 	"github.com/chenjie199234/Corelib/internal/picker"
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/log/trace"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/util/waitwake"
 
@@ -294,9 +295,9 @@ func (b *corelibBalancer) rebuildpicker(serveraddr string, OnOff bool) {
 }
 
 func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	span := trace.SpanFromContext(info.Ctx)
 	forceaddr, _ := info.Ctx.Value(forceaddrkey{}).(string)
 	refresh := false
-	start := time.Now()
 	for {
 		server, done := b.picker.Pick(forceaddr)
 		if server != nil {
@@ -305,17 +306,19 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 				done(0, 0, false)
 				return balancer.PickResult{}, cerror.ErrDeadlineExceeded
 			}
+			span.GetSelfSpanData().SetStateKV("host", server.GetServerAddr())
 			return balancer.PickResult{
 				SubConn: server.(*ServerForPick).subconn,
 				Done: func(doneinfo balancer.DoneInfo) {
-					end := time.Now()
 					e := transGrpcError(doneinfo.Err)
 					cpuusagestrs := doneinfo.Trailer.Get("Cpu-Usage")
 					var cpuusage float64
 					if len(cpuusagestrs) > 0 {
 						cpuusage, _ = strconv.ParseFloat(cpuusagestrs[0], 64)
 					}
-					done(cpuusage, uint64(end.UnixNano()-start.UnixNano()), e == nil)
+					span.Finish(e)
+					done(cpuusage, uint64(span.GetEnd()-span.GetStart()), e == nil)
+					monitor.GrpcClientMonitor(b.c.server, "GRPC", info.FullMethodName, e, uint64(span.GetEnd()-span.GetStart()))
 					if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 						if atomic.SwapInt32(&server.(*ServerForPick).closing, 1) == 0 {
 							//set the lowest pick priority
@@ -326,8 +329,6 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 							b.c.resolver.Now()
 						}
 					}
-					log.Trace(info.Ctx, log.CLIENT, b.c.server, server.GetServerAddr(), "GRPC", info.FullMethodName, &start, &end, e)
-					monitor.GrpcClientMonitor(b.c.server, "GRPC", info.FullMethodName, e, uint64(end.UnixNano()-start.UnixNano()))
 				},
 			}, nil
 		}

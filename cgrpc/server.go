@@ -16,6 +16,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/log/trace"
 	cmetadata "github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/pool"
@@ -242,42 +243,81 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 		atomic.AddInt64(&s.totalreqnum, 1)
 		defer atomic.AddInt64(&s.totalreqnum, -1)
 		//trace
-		conninfo := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)
-		remoteaddr := conninfo.RemoteAddr.String()
-		localaddr := conninfo.LocalAddr.String()
-		sourceip := ""
+		peerip := ""
 		if ok {
 			if forward := gmd.Get("X-Forwarded-For"); len(forward) > 0 && len(forward[0]) > 0 {
-				sourceip = strings.TrimSpace(strings.Split(forward[0], ",")[0])
+				peerip = strings.TrimSpace(strings.Split(forward[0], ",")[0])
 			} else if realip := gmd.Get("X-Real-Ip"); len(realip) > 0 && len(realip[0]) > 0 {
-				sourceip = strings.TrimSpace(realip[0])
+				peerip = strings.TrimSpace(realip[0])
 			}
 		}
-		if sourceip == "" {
-			sourceip = remoteaddr[:strings.LastIndex(remoteaddr, ":")]
+		if peerip == "" {
+			conninfo := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)
+			remoteaddr := conninfo.RemoteAddr.String()
+			peerip = remoteaddr[:strings.LastIndex(remoteaddr, ":")]
 		}
-		sourceapp := "unknown"
-		sourcemethod := "unknown"
-		sourcepath := "unknown"
+		var span *trace.Span
 		if ok {
-			if data := gmd.Get("Core-Tracedata"); len(data) == 0 || data[0] == "" {
-				ctx = log.InitTrace(ctx, "", s.self, host.Hostip, "GRPC", path, 0)
-			} else if len(data) != 5 {
-				log.Error(nil, "[cgrpc.server] tracedata format wrong", log.String("cip", sourceip), log.String("path", path), log.Any("tracedata", data))
-				return nil, cerror.ErrReq
-			} else {
-				sourceapp = data[1]
-				sourcemethod = data[2]
-				sourcepath = data[3]
-				clientdeep, e := strconv.Atoi(data[4])
-				if e != nil || sourceapp == "" || sourcemethod == "" || sourcepath == "" || clientdeep == 0 {
-					log.Error(nil, "[cgrpc.server] tracedata format wrong", log.String("cip", sourceip), log.String("path", path), log.Any("tracedata", data))
+			if traceparentstr := gmd.Get("traceparent"); len(traceparentstr) != 0 && traceparentstr[0] != "" {
+				tid, psid, e := trace.ParseTraceParent(traceparentstr[0])
+				if e != nil {
+					log.Error(nil, "[cgrpc.server] trace data format wrong",
+						log.String("cip", peerip),
+						log.String("path", path),
+						log.String("trace_parent", traceparentstr[0]))
 					return nil, cerror.ErrReq
 				}
-				ctx = log.InitTrace(ctx, data[0], s.self, host.Hostip, "GRPC", path, clientdeep)
+				parent := trace.NewSpanData(tid, psid)
+				if tracestatestr := gmd.Get("Tracestate"); len(tracestatestr) != 0 && tracestatestr[0] != "" {
+					tmp, e := trace.ParseTraceState(tracestatestr[0])
+					if e != nil {
+						log.Error(nil, "[cgrpc.server] trace data format wrong",
+							log.String("cip", peerip),
+							log.String("path", path),
+							log.String("trace_state", tracestatestr[0]))
+						return nil, cerror.ErrReq
+					}
+					var app, host, method, path bool
+					for k, v := range tmp {
+						switch k {
+						case "app":
+							app = true
+						case "host":
+							host = true
+							peerip = v
+						case "method":
+							method = true
+						case "path":
+							path = true
+						}
+						parent.SetStateKV(k, v)
+					}
+					if !app {
+						parent.SetStateKV("app", "unknown")
+					}
+					if !host {
+						parent.SetStateKV("host", peerip)
+					}
+					if !method {
+						parent.SetStateKV("method", "unknown")
+					}
+					if !path {
+						parent.SetStateKV("path", "unknown")
+					}
+				}
+				ctx, span = trace.NewSpan(ctx, "", trace.Server, parent)
+			} else {
+				ctx, span = trace.NewSpan(ctx, "", trace.Server, nil)
+				span.GetParentSpanData().SetStateKV("app", "unknown")
+				span.GetParentSpanData().SetStateKV("host", peerip)
+				span.GetParentSpanData().SetStateKV("method", "unknown")
+				span.GetParentSpanData().SetStateKV("path", "unknown")
 			}
+			span.GetSelfSpanData().SetStateKV("app", s.self)
+			span.GetSelfSpanData().SetStateKV("host", host.Hostip)
+			span.GetSelfSpanData().SetStateKV("method", "GRPC")
+			span.GetSelfSpanData().SetStateKV("path", path)
 		}
-		traceid, _, _, _, _, selfdeep := log.GetTrace(ctx)
 		//metadata
 		var cmd map[string]string
 		if ok {
@@ -286,8 +326,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				cmd = make(map[string]string)
 				if e := json.Unmarshal(common.Str2byte(data[0]), &cmd); e != nil {
 					log.Error(ctx, "[cgrpc.server] metadata format wrong",
-						log.String("cname", sourceapp),
-						log.String("cip", sourceip),
+						log.String("cip", peerip),
 						log.String("path", path),
 						log.String("metadata", data[0]))
 					return nil, cerror.ErrReq
@@ -295,19 +334,18 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			}
 		}
 		if cmd == nil {
-			cmd = map[string]string{"Client-IP": sourceip}
+			cmd = map[string]string{"Client-IP": peerip}
 		} else if _, ok := cmd["Client-IP"]; !ok {
-			cmd["Client-IP"] = sourceip
+			cmd["Client-IP"] = peerip
 		}
 		//timeout
-		start := time.Now()
 		servertimeout := s.getHandlerTimeout(path)
 		if servertimeout > 0 {
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithDeadline(ctx, start.Add(servertimeout))
+			ctx, cancel = context.WithDeadline(ctx, time.Now().Add(servertimeout))
 			defer cancel()
 		}
-		workctx := s.getcontext(cmetadata.SetMetadata(ctx, cmd), path, sourceapp, remoteaddr, totalhandlers, decode)
+		workctx := s.getcontext(cmetadata.SetMetadata(ctx, cmd), path, peerip, totalhandlers, decode)
 		paniced := true
 		defer func() {
 			if paniced {
@@ -315,19 +353,17 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
 				log.Error(workctx, "[cgrpc.server] panic",
-					log.String("cname", sourceapp),
-					log.String("cip", sourceip),
+					log.String("cip", peerip),
 					log.String("path", path),
 					log.Any("panic", e),
 					log.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
 				workctx.e = cerror.ErrPanic
 				workctx.resp = nil
 			}
-
 			grpc.SetTrailer(ctx, gmetadata.New(map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}))
-			end := time.Now()
-			log.Trace(log.InitTrace(nil, traceid, sourceapp, sourceip, sourcemethod, sourcepath, selfdeep-1), log.SERVER, s.self, host.Hostip+":"+localaddr[strings.LastIndex(localaddr, ":")+1:], "GRPC", path, &start, &end, workctx.e)
-			monitor.GrpcServerMonitor(sourceapp, "GRPC", path, workctx.e, uint64(end.UnixNano()-start.UnixNano()))
+			span.Finish(workctx.e)
+			peername, _ := span.GetParentSpanData().GetStateKV("app")
+			monitor.GrpcServerMonitor(peername, "GRPC", path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
 			resp = workctx.resp
 			if workctx.e != nil {
 				e = workctx.e
