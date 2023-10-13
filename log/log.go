@@ -181,8 +181,8 @@ func CError(value error) slog.Attr {
 	return Group("error", slog.Int64("code", int64(e.Code)), slog.String("msg", e.Msg))
 }
 
-func Group(key string, attrs ...any) slog.Attr {
-	return slog.Group(key, attrs)
+func Group(key string, attrs ...slog.Attr) slog.Attr {
+	return slog.Attr{Key: key, Value: slog.GroupValue(attrs...)}
 }
 
 func Any(key string, value any) slog.Attr {

@@ -358,7 +358,7 @@ func (s *Span) Finish(e error) {
 	if ee == nil {
 		attrs = append(attrs, slog.Any("error", nil))
 	} else {
-		attrs = append(attrs, slog.Group("error", slog.Int64("code", int64(ee.Code)), slog.String("msg", ee.Msg)))
+		attrs = append(attrs, slog.Attr{Key: "error", Value: slog.GroupValue(slog.Int64("code", int64(ee.Code)), slog.String("msg", ee.Msg))})
 	}
 
 	var pcs [1]uintptr
