@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"sync"
 	"testing"
-	"time"
 )
 
 func Test_Nil(t *testing.T) {
@@ -38,7 +37,6 @@ func Test_Common(t *testing.T) {
 	if Byte2str(bempty) != sempty {
 		panic("empty byte to str failed")
 	}
-	rand.Seed(time.Now().UnixNano())
 	wg := &sync.WaitGroup{}
 	wg.Add(6)
 	go func() {
@@ -68,8 +66,8 @@ func Test_Common(t *testing.T) {
 	wg.Wait()
 }
 
-//capacity 1024*1024*8
-//test data 1024*1024*4
+// capacity 1024*1024*8
+// test data 1024*1024*4
 func testhash(strf func(string, uint64) uint64, bytef func([]byte, uint64) uint64) int {
 	total := 1024 * 1024 * 8
 	conflict := 0
@@ -91,7 +89,7 @@ func testhash(strf func(string, uint64) uint64, bytef func([]byte, uint64) uint6
 	return conflict
 }
 
-//key contain [0-9][a-z][A-Z][_:-|]
+// key contain [0-9][a-z][A-Z][_:-|]
 func makerandkeystr() string {
 	return Byte2str(makerandkeybyte())
 }
