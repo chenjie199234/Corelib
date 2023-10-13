@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
-	"maps"
 	"os"
 	"runtime"
 	"strings"
@@ -139,7 +138,9 @@ func (sd *SpanData) GetSid() SpanID {
 }
 func (sd *SpanData) GetState() map[string]string {
 	r := make(map[string]string)
-	maps.Copy(r, sd.state)
+	for k, v := range sd.state {
+		r[k] = v
+	}
 	return r
 }
 func (sd *SpanData) SetStateKV(key, value string) {
