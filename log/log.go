@@ -127,7 +127,7 @@ func innerlog(ctx context.Context, level slog.Level, msg string, attrs ...any) {
 	}
 	if logtrace {
 		if span := trace.SpanFromContext(ctx); span != nil {
-			attrs = append(attrs, slog.String("tid", span.GetSelfSpanData().GetTid().String()))
+			attrs = append(attrs, slog.String("traceid", span.GetSelfSpanData().GetTid().String()))
 		}
 	}
 	var pcs [1]uintptr

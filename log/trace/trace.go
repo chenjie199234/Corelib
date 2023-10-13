@@ -342,14 +342,14 @@ func (s *Span) Finish(e error) {
 	}
 	attrs := make([]any, 0, 10)
 	attrs = append(attrs, slog.String("name", s.name))
-	attrs = append(attrs, slog.String("tid", s.s.tid.String()))
-	attrs = append(attrs, slog.String("s_sid", s.s.sid.String()))
+	attrs = append(attrs, slog.String("traceid", s.s.tid.String()))
+	attrs = append(attrs, slog.String("s_spanid", s.s.sid.String()))
 	attrs = append(attrs, slog.Any("s_state", s.s.state))
 	if s.p == nil {
-		attrs = append(attrs, slog.String("p_sid", strings.Repeat("0", 16)))
+		attrs = append(attrs, slog.String("p_spanid", strings.Repeat("0", 16)))
 		attrs = append(attrs, slog.String("p_state", "{}"))
 	} else {
-		attrs = append(attrs, slog.String("p_sid", s.p.sid.String()))
+		attrs = append(attrs, slog.String("p_spanid", s.p.sid.String()))
 		attrs = append(attrs, slog.Any("p_state", s.p.state))
 	}
 	attrs = append(attrs, slog.String("kind", s.kind.String()))
