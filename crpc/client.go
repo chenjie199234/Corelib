@@ -256,12 +256,12 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 		selfmethod, _ := span.GetParentSpanData().GetStateKV("method")
 		selfpath, _ := span.GetParentSpanData().GetStateKV("path")
 		msg.Tracedata = map[string]string{
-			"TraceID":      span.GetSelfSpanData().GetTid().String(),
-			"SpanID":       span.GetSelfSpanData().GetSid().String(),
-			"SourceApp":    c.self,
-			"SourceHost":   host.Hostip,
-			"SourceMethod": selfmethod,
-			"SourcePath":   selfpath,
+			"TraceID": span.GetSelfSpanData().GetTid().String(),
+			"SpanID":  span.GetSelfSpanData().GetSid().String(),
+			"app":     c.self,
+			"host":    host.Hostip,
+			"method":  selfmethod,
+			"path":    selfpath,
 		}
 		server, done, e := c.balancer.Pick(ctx)
 		if e != nil {

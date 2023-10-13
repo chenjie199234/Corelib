@@ -218,14 +218,14 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 					continue
 				}
 				switch k {
-				case "SourceApp":
+				case "app":
 					app = true
-				case "SourceHost":
+				case "host":
 					host = true
 					peerip = v
-				case "SourceMethod":
+				case "method":
 					method = true
-				case "SourcePath":
+				case "path":
 					path = true
 				}
 				parent.SetStateKV(k, v)
