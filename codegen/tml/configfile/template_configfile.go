@@ -92,9 +92,12 @@ const source = `{
 		"example_redis":{
 			"tls":false,
 			"specific_ca_paths":["./example.pem"],
+			"redis_mode":"direct",
 			"addrs":["127.0.0.1:6379"],
 			"user_name":"",
 			"password":"",
+			"sentinel_master_name":"",
+			"read_write_split":true,
 			"max_open":256,
 			"max_conn_idletime":"5m",
 			"io_timeout":"500ms",

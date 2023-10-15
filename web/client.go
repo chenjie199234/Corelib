@@ -311,7 +311,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		header.Set("Core-Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
 	for {
-		ctx, span := trace.NewSpan(ctx, "", trace.Client, nil)
+		ctx, span := trace.NewSpan(ctx, "Corelib.Web", trace.Client, nil)
 		if span.GetParentSpanData().IsEmpty() {
 			span.GetParentSpanData().SetStateKV("app", c.self)
 			span.GetParentSpanData().SetStateKV("host", host.Hostip)

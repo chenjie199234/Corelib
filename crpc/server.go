@@ -187,7 +187,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 		peerip := p.GetRealPeerIP()
 		var span *trace.Span
 		if len(msg.Tracedata) == 0 || msg.Tracedata["TraceID"] == "" || msg.Tracedata["SpanID"] == "" {
-			ctx, span = trace.NewSpan(ctx, "", trace.Server, nil)
+			ctx, span = trace.NewSpan(ctx, "Corelib.Crpc", trace.Server, nil)
 			span.GetParentSpanData().SetStateKV("app", "unknown")
 			span.GetParentSpanData().SetStateKV("host", peerip)
 			span.GetParentSpanData().SetStateKV("method", "unknown")
@@ -242,7 +242,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 			if !path {
 				parent.SetStateKV("path", "unknown")
 			}
-			ctx, span = trace.NewSpan(ctx, "", trace.Server, parent)
+			ctx, span = trace.NewSpan(ctx, "Corelib.Crpc", trace.Server, parent)
 		}
 		span.GetSelfSpanData().SetStateKV("app", s.self)
 		span.GetSelfSpanData().SetStateKV("host", host.Hostip)

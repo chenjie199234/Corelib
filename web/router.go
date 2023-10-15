@@ -250,9 +250,9 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 					parent.SetStateKV("path", "unknown")
 				}
 			}
-			ctx, span = trace.NewSpan(req.Context(), "", trace.Server, parent)
+			ctx, span = trace.NewSpan(req.Context(), "Corelib.Web", trace.Server, parent)
 		} else {
-			ctx, span = trace.NewSpan(req.Context(), "", trace.Server, nil)
+			ctx, span = trace.NewSpan(req.Context(), "Corelib.Web", trace.Server, nil)
 			span.GetParentSpanData().SetStateKV("app", "unknown")
 			span.GetParentSpanData().SetStateKV("host", peerip)
 			span.GetParentSpanData().SetStateKV("method", "unknown")

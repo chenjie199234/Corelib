@@ -305,9 +305,9 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 						parent.SetStateKV("path", "unknown")
 					}
 				}
-				ctx, span = trace.NewSpan(ctx, "", trace.Server, parent)
+				ctx, span = trace.NewSpan(ctx, "Corelib.CGrpc", trace.Server, parent)
 			} else {
-				ctx, span = trace.NewSpan(ctx, "", trace.Server, nil)
+				ctx, span = trace.NewSpan(ctx, "Corelib.CGrpc", trace.Server, nil)
 				span.GetParentSpanData().SetStateKV("app", "unknown")
 				span.GetParentSpanData().SetStateKV("host", peerip)
 				span.GetParentSpanData().SetStateKV("method", "unknown")

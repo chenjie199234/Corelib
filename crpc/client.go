@@ -243,7 +243,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 	}
 	r := c.getreq(msg)
 	for {
-		ctx, span := trace.NewSpan(ctx, "", trace.Client, nil)
+		ctx, span := trace.NewSpan(ctx, "Corelib.Crpc", trace.Client, nil)
 		if span.GetParentSpanData().IsEmpty() {
 			span.GetParentSpanData().SetStateKV("app", c.self)
 			span.GetParentSpanData().SetStateKV("host", host.Hostip)

@@ -229,7 +229,7 @@ func (c *CGrpcClient) callInterceptor(ctx context.Context, path string, req, rep
 		gmd.Set("Core-Metadata", common.Byte2str(d))
 	}
 	for {
-		ctx, span := trace.NewSpan(ctx, "", trace.Client, nil)
+		ctx, span := trace.NewSpan(ctx, "Corelib.CGrpc", trace.Client, nil)
 		if span.GetParentSpanData().IsEmpty() {
 			span.GetParentSpanData().SetStateKV("app", c.self)
 			span.GetParentSpanData().SetStateKV("host", host.Hostip)

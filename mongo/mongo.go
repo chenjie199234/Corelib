@@ -4,11 +4,17 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/chenjie199234/Corelib/cerror"
+	_ "github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/log/trace"
 	"github.com/chenjie199234/Corelib/util/ctime"
 
+	gevent "go.mongodb.org/mongo-driver/event"
 	gmongo "go.mongodb.org/mongo-driver/mongo"
 	goptions "go.mongodb.org/mongo-driver/mongo/options"
 	greadpref "go.mongodb.org/mongo-driver/mongo/readpref"
@@ -46,11 +52,26 @@ type Client struct {
 // if MongoDBSRV is true or tlsc is not nil,the tls will be actived
 // the json tag will be supported
 func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
+	if len(c.Addrs) == 0 {
+		c.Addrs = []string{"127.0.0.1:27017"}
+	}
+	if len(c.Addrs) > 1 {
+		undup := make(map[string]*struct{}, len(c.Addrs))
+		for _, addr := range c.Addrs {
+			undup[addr] = nil
+		}
+		tmp := make([]string, 0, len(undup))
+		for addr := range undup {
+			tmp = append(tmp, addr)
+		}
+		c.Addrs = tmp
+	}
 	var opts *goptions.ClientOptions
 	opts = goptions.Client()
 	if c.MongoName != "" {
 		opts = opts.SetAppName(c.MongoName)
 	}
+	opts = opts.SetMonitor(newMonitor(c.MongoName))
 	opts = opts.SetBSONOptions(&goptions.BSONOptions{UseJSONStructTags: true})
 	if c.ReplicaSet != "" {
 		opts = opts.SetReplicaSet(c.ReplicaSet)
@@ -121,6 +142,82 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	if e = client.Ping(context.Background(), greadpref.Primary()); e != nil {
 		return nil, e
 	}
-	//TODO add otel
 	return &Client{client}, nil
+}
+
+// ----------------------------Monitor-----------------------------------
+type monitor struct {
+	sync.Mutex
+	mongoname string
+	spans     map[string]*trace.Span
+}
+
+func newMonitor(mongoname string) *gevent.CommandMonitor {
+	m := &monitor{
+		mongoname: mongoname,
+		spans:     make(map[string]*trace.Span),
+	}
+	return &gevent.CommandMonitor{
+		Started:   m.Started,
+		Succeeded: m.Succeeded,
+		Failed:    m.Failed,
+	}
+}
+func (m *monitor) Started(ctx context.Context, evt *gevent.CommandStartedEvent) {
+	hostname, port := peerInfo(evt)
+	_, span := trace.NewSpan(ctx, "Corelib.Mongo", trace.Client, nil)
+	span.GetSelfSpanData().SetStateKV("mongo", m.mongoname)
+	span.GetSelfSpanData().SetStateKV("host", hostname+":"+strconv.Itoa(port))
+	span.GetSelfSpanData().SetStateKV("db", evt.DatabaseName)
+	span.GetSelfSpanData().SetStateKV("col", colInfo(evt))
+	span.GetSelfSpanData().SetStateKV("cmd", evt.CommandName)
+	m.Lock()
+	defer m.Unlock()
+	m.spans[evt.ConnectionID+"-"+strconv.FormatInt(evt.RequestID, 10)] = span
+}
+func (m *monitor) Succeeded(ctx context.Context, evt *gevent.CommandSucceededEvent) {
+	m.Finished(&evt.CommandFinishedEvent, nil)
+}
+func (m *monitor) Failed(ctx context.Context, evt *gevent.CommandFailedEvent) {
+	m.Finished(&evt.CommandFinishedEvent, cerror.ConvertErrorstr(evt.Failure))
+}
+func (m *monitor) Finished(evt *gevent.CommandFinishedEvent, err error) {
+	m.Lock()
+	key := evt.ConnectionID + "-" + strconv.FormatInt(evt.RequestID, 10)
+	span, ok := m.spans[key]
+	if ok {
+		delete(m.spans, key)
+	}
+	m.Unlock()
+	if !ok {
+		return
+	}
+	span.Finish(err)
+}
+
+func colInfo(evt *gevent.CommandStartedEvent) string {
+	elt, err := evt.Command.IndexErr(0)
+	if err != nil {
+		return ""
+	}
+	if key, err := elt.KeyErr(); err == nil && key == evt.CommandName {
+		v, err := elt.ValueErr()
+		if err != nil || v.Type.String() != "string" {
+			return ""
+		}
+		return v.StringValue()
+	}
+	return ""
+}
+func peerInfo(evt *gevent.CommandStartedEvent) (hostname string, port int) {
+	hostname = evt.ConnectionID
+	port = 27017
+	if idx := strings.IndexByte(hostname, '['); idx >= 0 {
+		hostname = hostname[:idx]
+	}
+	if idx := strings.IndexByte(hostname, ':'); idx >= 0 {
+		port, _ = strconv.Atoi(hostname[idx+1:])
+		hostname = hostname[:idx]
+	}
+	return hostname, port
 }
