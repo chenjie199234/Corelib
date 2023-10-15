@@ -700,9 +700,6 @@ func initmysql(){
 			continue
 		}
 		mysqlc.MysqlName = k
-		if mysqlc.Addr == "" {
-			mysqlc.Addr = "127.0.0.1:3306"
-		}
 		if mysqlc.MaxConnIdletime <= 0 {
 			mysqlc.MaxConnIdletime = ctime.Duration(time.Minute * 5)
 		}
