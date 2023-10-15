@@ -9,8 +9,25 @@ import (
 
 func Test_Mysql(t *testing.T) {
 	c := &Config{
-		MysqlName:       "test",
-		Addr:            "127.0.0.1:3306",
+		MysqlName: "test",
+		Master: &struct {
+			Addr     string `json:"addr"`
+			UserName string `json:"user_name"`
+			Password string `json:"password"`
+		}{
+			Addr:     "127.0.0.1:3306",
+			UserName: "root",
+			Password: "",
+		},
+		Slaves: &struct {
+			Addrs    []string `json:"addrs"`
+			UserName string   `json:"user_name"`
+			Password string   `json:"password"`
+		}{
+			Addrs:    []string{},
+			UserName: "",
+			Password: "",
+		},
 		ParseTime:       true,
 		MaxOpen:         256,
 		MaxConnIdletime: ctime.Duration(time.Minute * 5),
