@@ -122,7 +122,7 @@ func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 		tmpdb.SetMaxOpenConns(int(c.MaxOpen))
 		tmpdb.SetConnMaxIdleTime(c.MaxConnIdletime.StdDuration())
 		lker.Lock()
-		client.master = append(client.master, &cdb{db: tmpdb, addr: c.Master.Addr, name: c.MysqlName})
+		client.master = append(client.master, &cdb{db: tmpdb, master: true, addr: c.Master.Addr, name: c.MysqlName})
 		lker.Unlock()
 	}()
 	if c.Slaves != nil && len(c.Slaves.Addrs) > 0 {
@@ -147,7 +147,7 @@ func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 				tmpdb.SetMaxOpenConns(int(c.MaxOpen))
 				tmpdb.SetConnMaxIdleTime(c.MaxConnIdletime.StdDuration())
 				lker.Lock()
-				client.slave = append(client.slave, &cdb{db: tmpdb, addr: addr, name: c.MysqlName})
+				client.slave = append(client.slave, &cdb{db: tmpdb, master: false, addr: addr, name: c.MysqlName})
 				lker.Unlock()
 			}()
 		}

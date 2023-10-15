@@ -11,9 +11,10 @@ import (
 )
 
 type cdb struct {
-	db   *sql.DB
-	addr string
-	name string
+	db     *sql.DB
+	master bool
+	addr   string
+	name   string
 }
 
 func (c *cdb) Stats() sql.DBStats {
@@ -24,6 +25,11 @@ func (c *cdb) PingContext(ctx context.Context) error {
 	span.GetSelfSpanData().SetStateKV("mysql", c.name)
 	span.GetSelfSpanData().SetStateKV("host", c.addr)
 	span.GetSelfSpanData().SetStateKV("cmd", "Ping")
+	if c.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
+	}
 	e := c.db.PingContext(ctx)
 	span.Finish(e)
 	return e
@@ -33,6 +39,11 @@ func (c *cdb) QueryRowContext(ctx context.Context, query string, args ...any) *s
 	span.GetSelfSpanData().SetStateKV("mysql", c.name)
 	span.GetSelfSpanData().SetStateKV("host", c.addr)
 	span.GetSelfSpanData().SetStateKV("cmd", "QueryRow")
+	if c.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
+	}
 	r := c.db.QueryRowContext(ctx, query, args...)
 	span.Finish(r.Err())
 	return r
@@ -42,6 +53,11 @@ func (c *cdb) QueryContext(ctx context.Context, query string, args ...any) (*sql
 	span.GetSelfSpanData().SetStateKV("mysql", c.name)
 	span.GetSelfSpanData().SetStateKV("host", c.addr)
 	span.GetSelfSpanData().SetStateKV("cmd", "Query")
+	if c.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
+	}
 	rs, e := c.db.QueryContext(ctx, query, args...)
 	span.Finish(e)
 	return rs, e
@@ -51,6 +67,11 @@ func (c *cdb) ExecContext(ctx context.Context, query string, args ...any) (sql.R
 	span.GetSelfSpanData().SetStateKV("mysql", c.name)
 	span.GetSelfSpanData().SetStateKV("host", c.addr)
 	span.GetSelfSpanData().SetStateKV("cmd", "Exec")
+	if c.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
+	}
 	r, e := c.db.ExecContext(ctx, query, args...)
 	span.Finish(e)
 	return r, e
@@ -60,6 +81,11 @@ func (c *cdb) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
 	span.GetSelfSpanData().SetStateKV("mysql", c.name)
 	span.GetSelfSpanData().SetStateKV("host", c.addr)
 	span.GetSelfSpanData().SetStateKV("cmd", "Begin")
+	if c.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
+	}
 	tx, e := c.db.BeginTx(ctx, opts)
 	span.Finish(e)
 	return tx, e
@@ -69,6 +95,11 @@ func (c *cdb) PrepareContext(ctx context.Context, query string) (*sql.Stmt, erro
 	span.GetSelfSpanData().SetStateKV("mysql", c.name)
 	span.GetSelfSpanData().SetStateKV("host", c.addr)
 	span.GetSelfSpanData().SetStateKV("cmd", "Prepare")
+	if c.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
+	}
 	stmt, e := c.db.PrepareContext(ctx, query)
 	span.Finish(e)
 	return stmt, e
@@ -162,6 +193,11 @@ func (t *Tx) QueryRowContext(ctx context.Context, query string, args ...any) *sq
 	span.GetSelfSpanData().SetStateKV("mysql", t.db.name)
 	span.GetSelfSpanData().SetStateKV("host", t.db.addr)
 	span.GetSelfSpanData().SetStateKV("cmd", "TxQueryRow")
+	if t.db.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
+	}
 	r := t.t.QueryRowContext(ctx, query, args...)
 	span.Finish(r.Err())
 	return r
@@ -171,6 +207,11 @@ func (t *Tx) QueryContext(ctx context.Context, query string, args ...any) (*sql.
 	span.GetSelfSpanData().SetStateKV("mysql", t.db.name)
 	span.GetSelfSpanData().SetStateKV("host", t.db.addr)
 	span.GetSelfSpanData().SetStateKV("cmd", "TxQuery")
+	if t.db.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
+	}
 	rs, e := t.t.QueryContext(ctx, query, args...)
 	span.Finish(e)
 	return rs, e
@@ -180,6 +221,11 @@ func (t *Tx) ExecContext(ctx context.Context, query string, args ...any) (sql.Re
 	span.GetSelfSpanData().SetStateKV("mysql", t.db.name)
 	span.GetSelfSpanData().SetStateKV("host", t.db.addr)
 	span.GetSelfSpanData().SetStateKV("cmd", "TxExec")
+	if t.db.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
+	}
 	r, e := t.t.ExecContext(ctx, query, args...)
 	span.Finish(e)
 	return r, e
@@ -191,6 +237,11 @@ func (t *Tx) PrepareContext(ctx context.Context, query string) (*Stmt, error) {
 	span.GetSelfSpanData().SetStateKV("mysql", t.db.name)
 	span.GetSelfSpanData().SetStateKV("host", t.db.addr)
 	span.GetSelfSpanData().SetStateKV("cmd", "TxPrepare")
+	if t.db.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
+	}
 	newstmt, e := t.t.PrepareContext(ctx, query)
 	span.Finish(e)
 	return &Stmt{
@@ -204,6 +255,11 @@ func (t *Tx) Commit(ctx context.Context) error {
 	span.GetSelfSpanData().SetStateKV("mysql", t.db.name)
 	span.GetSelfSpanData().SetStateKV("host", t.db.addr)
 	span.GetSelfSpanData().SetStateKV("cmd", "Commit")
+	if t.db.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
+	}
 	e := t.t.Commit()
 	span.Finish(e)
 	return e
@@ -213,6 +269,11 @@ func (t *Tx) Rollback(ctx context.Context) error {
 	span.GetSelfSpanData().SetStateKV("mysql", t.db.name)
 	span.GetSelfSpanData().SetStateKV("host", t.db.addr)
 	span.GetSelfSpanData().SetStateKV("cmd", "Rollback")
+	if t.db.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
+	}
 	e := t.t.Rollback()
 	span.Finish(e)
 	return e
@@ -254,6 +315,11 @@ func (s *Stmt) QueryRowContext(ctx context.Context, args ...any) *sql.Row {
 	} else {
 		span.GetSelfSpanData().SetStateKV("cmd", "TxStmtQueryRow")
 	}
+	if db.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
+	}
 	r := stmt.QueryRowContext(ctx, args...)
 	span.Finish(r.Err())
 	return r
@@ -273,6 +339,11 @@ func (s *Stmt) QueryContext(ctx context.Context, args ...any) (*sql.Rows, error)
 	} else {
 		span.GetSelfSpanData().SetStateKV("cmd", "TxStmtQuery")
 	}
+	if db.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
+	}
 	rs, e := stmt.QueryContext(ctx, args...)
 	span.Finish(e)
 	return rs, e
@@ -291,6 +362,11 @@ func (s *Stmt) ExecContext(ctx context.Context, args ...any) (sql.Result, error)
 		span.GetSelfSpanData().SetStateKV("cmd", "StmtExec")
 	} else {
 		span.GetSelfSpanData().SetStateKV("cmd", "TxStmtExec")
+	}
+	if db.master {
+		span.GetSelfSpanData().SetStateKV("role", "master")
+	} else {
+		span.GetSelfSpanData().SetStateKV("role", "slave")
 	}
 	r, e := stmt.ExecContext(ctx, args...)
 	span.Finish(e)

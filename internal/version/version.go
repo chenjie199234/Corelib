@@ -5,7 +5,7 @@ import "fmt"
 var major = 0
 var minor = 0
 var patch = 82
-var status = "dev"
+var status = ""
 
 func String() string {
 	if status != "" {

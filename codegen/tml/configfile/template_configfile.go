@@ -76,9 +76,16 @@ const source = `{
 		"example_mysql":{
 			"tls":false,
 			"specific_ca_paths":["./example.pem"],
-			"addr":"127.0.0.1:3306",
-			"user_name":"",
-			"password":"",
+			"master":{
+				"addr":"127.0.0.1:3306",
+				"user_name":"root",
+				"password":""
+			},
+			"slaves":{
+				"addrs":[],
+				"user_name":"",
+				"password":""
+			},
 			"max_open":256,
 			"max_conn_idletime":"5m",
 			"io_timeout":"500ms",
