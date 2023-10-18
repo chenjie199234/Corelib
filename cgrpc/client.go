@@ -197,6 +197,7 @@ func (c *CGrpcClient) Invoke(ctx context.Context, path string, req, reply any, o
 }
 
 // TDOD
+// In distributed system,this is not recommend.We should try our best to keep the program stateless.
 func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	stream, e := c.conn.NewStream(ctx, desc, path, opts...)
 	return stream, transGrpcError(e)
