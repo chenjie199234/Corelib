@@ -22,8 +22,7 @@ import (
 // {name_n}_exist(redis string):1
 
 var ErrTemporaryMQMissingName = errors.New("temporary mq missing name")
-var ErrTemporaryMQMissingGroup = errors.New("temporary mq missing group")
-var ErrTemporaryMQMissingReceiver = errors.New("temporary mq missing receiver")
+var ErrTemporaryMQMissingSuber = errors.New("temporary mq missing suber")
 
 var expireTMQ *gredis.Script
 var pubTMQ *gredis.Script
@@ -43,19 +42,19 @@ redis.call("EXPIRE",KEYS[1],16)
 return #ARGV`)
 }
 
-// Warning!this module will take group*2 redis connections,be careful of the client's MaxOpen
-// in redis cluster mode,group is used to split data into different redis node
-// in redis slave master mode,group is better to be 1
-// sub and pub's mqname and group should be same
+// Warning!this module will take shard*2 redis connections,be careful of the client's MaxOpen
+// in redis cluster mode,shard is used to split data into different redis node
+// in redis slave master mode,shard is better to be 1
+// sub and pub's mqname and shard should be same
 // stop will stop the sub immediately,even if there are datas int the mq,the left datas will be expired within 16s
-func (c *Client) TemporaryMQSub(mqname string, group uint64, subhandler func([]byte)) (stop func(), e error) {
+func (c *Client) TemporaryMQSub(mqname string, shard uint64, subhandler func([]byte)) (stop func(), e error) {
 	if mqname == "" {
 		return nil, ErrTemporaryMQMissingName
 	}
-	if group == 0 {
-		return nil, ErrTemporaryMQMissingGroup
+	if shard == 0 {
+		shard = 1
 	}
-	if e := c.temporaryMQSubRefresh(context.Background(), mqname, group); e != nil {
+	if e := c.temporaryMQSubRefresh(context.Background(), mqname, shard); e != nil {
 		return nil, e
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -73,11 +72,11 @@ func (c *Client) TemporaryMQSub(mqname string, group uint64, subhandler func([]b
 			case <-ctx.Done():
 				//stop
 				tmer.Stop()
-				c.temporaryMQSubClean(context.Background(), mqname, group)
+				c.temporaryMQSubClean(context.Background(), mqname, shard)
 				return
 			case <-tmer.C:
 				//refresh
-				if e := c.temporaryMQSubRefresh(ctx, mqname, group); e != nil && ctx.Err() != nil {
+				if e := c.temporaryMQSubRefresh(ctx, mqname, shard); e != nil && ctx.Err() != nil {
 					break
 				} else if e != nil {
 					tmer.Reset(time.Millisecond * 500)
@@ -87,7 +86,7 @@ func (c *Client) TemporaryMQSub(mqname string, group uint64, subhandler func([]b
 			}
 		}
 	}()
-	for i := uint64(0); i < group; i++ {
+	for i := uint64(0); i < shard; i++ {
 		wg.Add(1)
 		go func(index uint64) {
 			defer wg.Done()
@@ -96,17 +95,17 @@ func (c *Client) TemporaryMQSub(mqname string, group uint64, subhandler func([]b
 	}
 	return
 }
-func (c *Client) temporaryMQSubRefresh(ctx context.Context, mqname string, group uint64) error {
+func (c *Client) temporaryMQSubRefresh(ctx context.Context, mqname string, shard uint64) error {
 	var err error
 	wg := sync.WaitGroup{}
-	for i := uint64(0); i < group; i++ {
+	for i := uint64(0); i < shard; i++ {
 		wg.Add(1)
 		go func(index uint64) {
 			defer wg.Done()
 			listname := mqname + "_" + strconv.FormatUint(index, 10)
 			listexist := "{" + listname + "}_exist"
 			if _, e := expireTMQ.Run(ctx, c, []string{listname, listexist}).Result(); e != nil {
-				log.Error(ctx, "[redis.temporaryMQSubRefresh] failed", log.Uint64("group", index), log.CError(e))
+				log.Error(ctx, "[redis.temporaryMQSubRefresh] failed", log.Uint64("shard", index), log.CError(e))
 				err = e
 			}
 		}(i)
@@ -114,17 +113,17 @@ func (c *Client) temporaryMQSubRefresh(ctx context.Context, mqname string, group
 	wg.Wait()
 	return err
 }
-func (c *Client) temporaryMQSubClean(ctx context.Context, mqname string, group uint64) error {
+func (c *Client) temporaryMQSubClean(ctx context.Context, mqname string, shard uint64) error {
 	var err error
 	wg := sync.WaitGroup{}
-	for i := uint64(0); i < group; i++ {
+	for i := uint64(0); i < shard; i++ {
 		wg.Add(1)
 		go func(index uint64) {
 			defer wg.Done()
 			listname := mqname + "_" + strconv.FormatUint(index, 10)
 			listexist := "{" + listname + "}_exist"
 			if _, e := c.Del(ctx, listexist).Result(); e != nil {
-				log.Error(ctx, "[redis.TemporaryMQSubClean] failed", log.Uint64("group", index), log.CError(e))
+				log.Error(ctx, "[redis.TemporaryMQSubClean] failed", log.Uint64("shard", index), log.CError(e))
 				err = e
 			}
 		}(i)
@@ -147,32 +146,32 @@ func (c *Client) temporaryMQSubHandle(ctx context.Context, mqname string, index 
 		if result, e = c.BLPop(ctx, time.Second, listname).Result(); e == nil {
 			handler(common.Str2byte(result[1]))
 		} else if ee, ok := e.(interface{ Timeout() bool }); (!ok || !ee.Timeout()) && e != gredis.Nil {
-			log.Error(ctx, "[redis.temporaryMQSubHandle] failed", log.Uint64("group", index), log.CError(e))
+			log.Error(ctx, "[redis.temporaryMQSubHandle] failed", log.Uint64("shard", index), log.CError(e))
 		} else {
 			e = nil
 		}
 	}
 }
 
-// in redis cluster mode,group is used to split data into different redis node
-// in redis slave master mode,group is better to be 1
-// sub and pub's mqname and group should be same
-// key is only used to caculate the data's group(hash)
-func (c *Client) TemporaryMQPub(ctx context.Context, mqname string, group uint64, key string, values ...interface{}) error {
+// in redis cluster mode,shard is used to split data into different redis node
+// in redis slave master mode,shard is better to be 1
+// sub and pub's mqname and shard should be same
+// key is only used to caculate the data's shard(hash)
+func (c *Client) TemporaryMQPub(ctx context.Context, mqname string, shard uint64, key string, values ...interface{}) error {
 	if len(values) == 0 {
 		return nil
 	}
 	if mqname == "" {
 		return ErrTemporaryMQMissingName
 	}
-	if group == 0 {
-		return ErrTemporaryMQMissingGroup
+	if shard == 0 {
+		shard = 1
 	}
-	listname := mqname + "_" + strconv.FormatUint(common.BkdrhashString(key, group), 10)
+	listname := mqname + "_" + strconv.FormatUint(common.BkdrhashString(key, shard), 10)
 	listexist := "{" + listname + "}_exist"
 	r, e := pubTMQ.Run(ctx, c, []string{listname, listexist}, values...).Int()
 	if r == -1 {
-		e = ErrTemporaryMQMissingReceiver
+		e = ErrTemporaryMQMissingSuber
 	}
 	return e
 }
