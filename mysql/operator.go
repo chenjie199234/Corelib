@@ -3,12 +3,16 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"math/rand"
+	"strings"
 	"sync"
 
 	_ "github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/log/trace"
 )
+
+var ErrSlaveExec = errors.New("do exec cmd on slave node")
 
 type cdb struct {
 	db     *sql.DB
@@ -63,6 +67,9 @@ func (c *cdb) QueryContext(ctx context.Context, query string, args ...any) (*sql
 	return rs, e
 }
 func (c *cdb) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	if !c.master {
+		return nil, ErrSlaveExec
+	}
 	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
 	span.GetSelfSpanData().SetStateKV("mysql", c.name)
 	span.GetSelfSpanData().SetStateKV("host", c.addr)
@@ -91,6 +98,27 @@ func (c *cdb) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
 	return tx, e
 }
 func (c *cdb) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
+	if !c.master {
+		tmpquery := strings.TrimSpace(query)
+		if tmpquery[0] != 'S' && tmpquery[0] != 's' {
+			return nil, ErrSlaveExec
+		}
+		if tmpquery[1] != 'E' && tmpquery[1] != 'e' {
+			return nil, ErrSlaveExec
+		}
+		if tmpquery[2] != 'L' && tmpquery[2] != 'l' {
+			return nil, ErrSlaveExec
+		}
+		if tmpquery[3] != 'E' && tmpquery[3] != 'e' {
+			return nil, ErrSlaveExec
+		}
+		if tmpquery[4] != 'C' && tmpquery[4] != 'c' {
+			return nil, ErrSlaveExec
+		}
+		if tmpquery[5] != 'T' && tmpquery[5] != 't' {
+			return nil, ErrSlaveExec
+		}
+	}
 	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
 	span.GetSelfSpanData().SetStateKV("mysql", c.name)
 	span.GetSelfSpanData().SetStateKV("host", c.addr)
@@ -217,6 +245,9 @@ func (t *Tx) QueryContext(ctx context.Context, query string, args ...any) (*sql.
 	return rs, e
 }
 func (t *Tx) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	if !t.db.master {
+		return nil, ErrSlaveExec
+	}
 	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
 	span.GetSelfSpanData().SetStateKV("mysql", t.db.name)
 	span.GetSelfSpanData().SetStateKV("host", t.db.addr)
@@ -233,6 +264,27 @@ func (t *Tx) ExecContext(ctx context.Context, query string, args ...any) (sql.Re
 
 // the returned stmt don't need to close manually,it will be closed by commit or rollback
 func (t *Tx) PrepareContext(ctx context.Context, query string) (*Stmt, error) {
+	if !t.db.master {
+		tmpquery := strings.TrimSpace(query)
+		if tmpquery[0] != 'S' && tmpquery[0] != 's' {
+			return nil, ErrSlaveExec
+		}
+		if tmpquery[1] != 'E' && tmpquery[1] != 'e' {
+			return nil, ErrSlaveExec
+		}
+		if tmpquery[2] != 'L' && tmpquery[2] != 'l' {
+			return nil, ErrSlaveExec
+		}
+		if tmpquery[3] != 'E' && tmpquery[3] != 'e' {
+			return nil, ErrSlaveExec
+		}
+		if tmpquery[4] != 'C' && tmpquery[4] != 'c' {
+			return nil, ErrSlaveExec
+		}
+		if tmpquery[5] != 'T' && tmpquery[5] != 't' {
+			return nil, ErrSlaveExec
+		}
+	}
 	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
 	span.GetSelfSpanData().SetStateKV("mysql", t.db.name)
 	span.GetSelfSpanData().SetStateKV("host", t.db.addr)
@@ -354,6 +406,9 @@ func (s *Stmt) ExecContext(ctx context.Context, args ...any) (sql.Result, error)
 	for db, stmt = range s.stmts {
 		//this is random
 		break
+	}
+	if !db.master {
+		return nil, ErrSlaveExec
 	}
 	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
 	span.GetSelfSpanData().SetStateKV("mysql", db.name)
