@@ -115,6 +115,7 @@ fi
 echo "option unsupport"
 help`
 const txtbat = `@echo off
+chcp 65001
 REM      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
 
 cd %~dp0
@@ -223,7 +224,7 @@ goto :help
 	del >nul 2>nul .\api\*.md
 	del >nul 2>nul .\api\*.ts
 	go mod tidy
-	for /F %%i in ('go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib') do ( set corelib=%%i )
+	for /f "delims=" %%i in ('go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib') do ( set "corelib=%%i" )
 	set workdir=%cd%
 	cd %corelib%
 	go install ./...
