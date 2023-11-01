@@ -115,7 +115,6 @@ fi
 echo "option unsupport"
 help`
 const txtbat = `@echo off
-chcp 65001
 REM      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
 
 cd %~dp0
@@ -224,18 +223,32 @@ goto :help
 	del >nul 2>nul .\api\*.md
 	del >nul 2>nul .\api\*.ts
 	go mod tidy
-	for /f "delims=" %%i in ('go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib') do ( set "corelib=%%i" )
 	set workdir=%cd%
+	for /f %%a in ('wmic os get CodeSet /value ^| find "="') do (
+	    for /f "tokens=2 delims==" %%b in ("%%a") do set current_chcp=%%b
+	)
+	REM don't known why,in different system codeset the corelib's path will be strange
+	REM when want to use cd to switch to the dir,the codeset need to be set to the utf-8
+	REM tested on Windows 10 Enterprise LTSC 2021 and system codeset is 936
+	chcp 65001
+	for /f %%a in ('go list -m -f "{{.Dir}}" github.com/chenjie199234/Corelib') do set corelib=%%a
 	cd %corelib%
+	chcp %current_chcp%
+	echo install codegen and protoc plugins in %corelib%
 	go install ./...
 	cd %workdir%
+	REM don't known why,in different system codeset the corelib's path will be strange
+	REM when want to use protoc to generate code,the codeset need to be set to the system's codeset
+	REM tested on Windows 10 Enterprise LTSC 2021 and system codeset is 936
+	for /f %%a in ('go list -m -f "{{.Dir}}" github.com/chenjie199234/Corelib') do set corelib=%%a
+	echo generate api in %workdir%
 	protoc -I ./ -I %corelib% --go_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-pbex_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-cgrpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-crpc_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-web_out=paths=source_relative:. ./api/*.proto
-	protoc -I ./ -I %corelib% --browser_out=paths=source_relative,gen_tob=true:. ./api/*.proto
 	protoc -I ./ -I %corelib% --markdown_out=paths=source_relative:. ./api/*.proto
+	protoc -I ./ -I %corelib% --browser_out=paths=source_relative:. ./api/*.proto
 	go mod tidy
 goto :end
 
