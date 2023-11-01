@@ -125,6 +125,7 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 			WriteTimeout:          c.IOTimeout.StdDuration(),
 			ContextTimeoutEnabled: true,
 			PoolSize:              int(c.MaxOpen),
+			MaxActiveConns:        int(c.MaxOpen),
 			MinIdleConns:          1,
 			ConnMaxIdleTime:       c.MaxConnIdletime.StdDuration(),
 			TLSConfig:             tlsc,
@@ -144,6 +145,7 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 			WriteTimeout:          c.IOTimeout.StdDuration(),
 			ContextTimeoutEnabled: true,
 			PoolSize:              int(c.MaxOpen),
+			MaxActiveConns:        int(c.MaxOpen),
 			MinIdleConns:          1,
 			ConnMaxIdleTime:       c.MaxConnIdletime.StdDuration(),
 			TLSConfig:             tlsc,
@@ -157,17 +159,19 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 			addrs["node"+strconv.Itoa(i+1)] = addr
 		}
 		client = &Client{gredis.NewRing(&gredis.RingOptions{
-			ClientName:      c.RedisName,
-			Addrs:           addrs,
-			Username:        c.UserName,
-			Password:        c.Password,
-			DialTimeout:     c.DialTimeout.StdDuration(),
-			ReadTimeout:     c.IOTimeout.StdDuration(),
-			WriteTimeout:    c.IOTimeout.StdDuration(),
-			PoolSize:        int(c.MaxOpen),
-			MinIdleConns:    1,
-			ConnMaxIdleTime: c.MaxConnIdletime.StdDuration(),
-			TLSConfig:       tlsc,
+			ClientName:            c.RedisName,
+			Addrs:                 addrs,
+			Username:              c.UserName,
+			Password:              c.Password,
+			DialTimeout:           c.DialTimeout.StdDuration(),
+			ReadTimeout:           c.IOTimeout.StdDuration(),
+			WriteTimeout:          c.IOTimeout.StdDuration(),
+			ContextTimeoutEnabled: true,
+			PoolSize:              int(c.MaxOpen),
+			MaxActiveConns:        int(c.MaxOpen),
+			MinIdleConns:          1,
+			ConnMaxIdleTime:       c.MaxConnIdletime.StdDuration(),
+			TLSConfig:             tlsc,
 		})}
 	case "randomring":
 		if len(c.Addrs) == 1 {
@@ -178,18 +182,20 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 			addrs["node"+strconv.Itoa(i+1)] = addr
 		}
 		client = &Client{gredis.NewRing(&gredis.RingOptions{
-			ClientName:        c.RedisName,
-			Addrs:             addrs,
-			NewConsistentHash: func(proxys []string) gredis.ConsistentHash { return _proxys(proxys) },
-			Username:          c.UserName,
-			Password:          c.Password,
-			DialTimeout:       c.DialTimeout.StdDuration(),
-			ReadTimeout:       c.IOTimeout.StdDuration(),
-			WriteTimeout:      c.IOTimeout.StdDuration(),
-			PoolSize:          int(c.MaxOpen),
-			MinIdleConns:      1,
-			ConnMaxIdleTime:   c.MaxConnIdletime.StdDuration(),
-			TLSConfig:         tlsc,
+			ClientName:            c.RedisName,
+			Addrs:                 addrs,
+			NewConsistentHash:     func(proxys []string) gredis.ConsistentHash { return _proxys(proxys) },
+			Username:              c.UserName,
+			Password:              c.Password,
+			DialTimeout:           c.DialTimeout.StdDuration(),
+			ReadTimeout:           c.IOTimeout.StdDuration(),
+			WriteTimeout:          c.IOTimeout.StdDuration(),
+			ContextTimeoutEnabled: true,
+			PoolSize:              int(c.MaxOpen),
+			MaxActiveConns:        int(c.MaxOpen),
+			MinIdleConns:          1,
+			ConnMaxIdleTime:       c.MaxConnIdletime.StdDuration(),
+			TLSConfig:             tlsc,
 		})}
 	default:
 		return nil, errors.New("unknown redis mode")
