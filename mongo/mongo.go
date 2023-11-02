@@ -196,16 +196,19 @@ func (m *monitor) Finished(evt *gevent.CommandFinishedEvent, err error) {
 }
 
 func colInfo(evt *gevent.CommandStartedEvent) string {
-	elt, err := evt.Command.IndexErr(0)
-	if err != nil {
-		return ""
-	}
-	if key, err := elt.KeyErr(); err == nil && key == evt.CommandName {
-		v, err := elt.ValueErr()
-		if err != nil || v.Type.String() != "string" {
-			return ""
+	v, e := evt.Command.LookupErr(evt.CommandName)
+	if e == nil {
+		colname, ok := v.StringValueOK()
+		if ok {
+			return colname
 		}
-		return v.StringValue()
+	}
+	v, e = evt.Command.LookupErr("collection")
+	if e == nil {
+		colname, ok := v.StringValueOK()
+		if ok {
+			return colname
+		}
 	}
 	return ""
 }
