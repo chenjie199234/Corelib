@@ -15,7 +15,7 @@ go 1.21
 require (
 	github.com/chenjie199234/admin main
 	github.com/chenjie199234/Corelib %s
-	github.com/fsnotify/fsnotify v1.6.0
+	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/redis/go-redis/v9 v9.3.0
 	go.mongodb.org/mongo-driver v1.12.1
