@@ -183,21 +183,23 @@ func main() {
 }
 
 func updatetools() {
+	fmt.Println("start update corelib tools.")
 	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/chenjie199234/Corelib")
 	output, e := cmd.CombinedOutput()
-	fmt.Println(strings.TrimSpace(string(output)))
 	if e != nil {
+		fmt.Println(strings.TrimSpace(string(output)))
 		fmt.Println("update corelib tools error: " + e.Error())
 		return
 	}
 	cmd = exec.Command("go", "install", "./...")
 	cmd.Dir = strings.TrimSpace(string(output))
 	output, e = cmd.CombinedOutput()
-	fmt.Println(strings.TrimSpace(string(output)))
 	if e != nil {
+		fmt.Println(strings.TrimSpace(string(output)))
 		fmt.Println("update corelib tools error: " + e.Error())
 		return
 	}
+	fmt.Println("update corelib tools success!")
 }
 func createBaseProject() {
 	fmt.Println("start create base app.")
