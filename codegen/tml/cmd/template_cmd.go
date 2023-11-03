@@ -48,16 +48,19 @@ pb() {
 }
 
 sub() {
+	go mod tidy
 	codegen -update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -sub $1
 }
 
 kube() {
+	go mod tidy
 	codegen -update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -kube
 }
 
 html() {
+	go mod tidy
 	codegen -update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -html
 }
@@ -236,16 +239,19 @@ goto :help
 goto :end
 
 :kube
+	go mod tidy
 	codegen -update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -kube
 goto :end
 
 :html
+	go mod tidy
 	codegen -update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -html
 goto :end
 
 :sub
+	go mod tidy
 	codegen -update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -sub %2
 goto :end
