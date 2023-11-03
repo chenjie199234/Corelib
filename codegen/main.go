@@ -76,6 +76,9 @@ func init() {
 				find := false
 				for _, line := range lines {
 					line = strings.TrimSpace(line)
+					if len(line) == 0 {
+						continue
+					}
 					if line[len(line)-1] == '\r' {
 						line = line[:len(line)-1]
 					}
@@ -104,6 +107,9 @@ func init() {
 				find := false
 				for _, line := range lines {
 					line = strings.TrimSpace(line)
+					if len(line) == 0 {
+						continue
+					}
 					if line[len(line)-1] == '\r' {
 						line = line[:len(line)-1]
 					}
