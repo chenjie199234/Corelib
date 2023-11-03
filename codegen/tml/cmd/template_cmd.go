@@ -44,6 +44,7 @@ pb() {
 	protoc -I ./ -I $corelib --go-web_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --browser_out=paths=source_relative,gen_tob=true:. ./api/*.proto
 	protoc -I ./ -I $corelib --markdown_out=paths=source_relative:. ./api/*.proto
+	go mod tidy
 }
 
 sub() {
@@ -234,6 +235,7 @@ goto :help
 	protoc -I ./ -I %corelib% --go-web_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --browser_out=paths=source_relative,gen_tob=true:. ./api/*.proto
 	protoc -I ./ -I %corelib% --markdown_out=paths=source_relative:. ./api/*.proto
+	go mod tidy
 goto :end
 
 :kube
