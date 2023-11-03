@@ -17,8 +17,7 @@ import (
 // This file is readonly!
 // Don't modify this file!
 
-const pkg = "{{.PackageName}}"
-const Name = "{{.AppName}}"
+const Name = "{{.}}"
 
 var Group = os.Getenv("GROUP")
 var Project = os.Getenv("PROJECT")
@@ -38,18 +37,9 @@ func init() {
 	}
 }`
 
-type data struct {
-	PackageName string
-	AppName     string
-}
-
-func CreatePathAndFile(packagename, appname string) {
+func CreatePathAndFile(appname string) {
 	if e := os.MkdirAll("./model/", 0755); e != nil {
 		panic("mkdir ./model/ error: " + e.Error())
-	}
-	tmp := &data{
-		PackageName: packagename,
-		AppName:     appname,
 	}
 	modeltemplate, e := template.New("./model/model.go").Parse(txt)
 	if e != nil {
@@ -59,7 +49,7 @@ func CreatePathAndFile(packagename, appname string) {
 	if e != nil {
 		panic("open ./model/model.go error: " + e.Error())
 	}
-	if e := modeltemplate.Execute(file, tmp); e != nil {
+	if e := modeltemplate.Execute(file, appname); e != nil {
 		panic("write ./model/model.go error: " + e.Error())
 	}
 	if e := file.Sync(); e != nil {

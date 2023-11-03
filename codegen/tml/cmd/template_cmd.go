@@ -14,7 +14,7 @@ cd $(dirname $0)
 help() {
 	echo "cmd.sh — every thing you need"
 	echo "         please install git"
-	echo "         please install golang(1.18+)"
+	echo "         please install golang(1.21+)"
 	echo "         please install protoc           (github.com/protocolbuffers/protobuf)"
 	echo "         please install protoc-gen-go    (github.com/protocolbuffers/protobuf-go)"
 	echo "         please install codegen          (github.com/chenjie199234/Corelib)"
@@ -35,11 +35,8 @@ pb() {
 	rm ./api/*.md
 	rm ./api/*.ts
 	go mod tidy
+	codegen -update
 	corelib=$(go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib)
-	workdir=$(pwd)
-	cd $corelib
-	go install ./...
-	cd $workdir
 	protoc -I ./ -I $corelib --go_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --go-pbex_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --go-cgrpc_out=paths=source_relative:. ./api/*.proto
@@ -51,14 +48,17 @@ pb() {
 }
 
 sub() {
+	codegen -update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -sub $1
 }
 
 kube() {
+	codegen -update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -kube
 }
 
 html() {
+	codegen -update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -html
 }
 
@@ -223,25 +223,8 @@ goto :help
 	del >nul 2>nul .\api\*.md
 	del >nul 2>nul .\api\*.ts
 	go mod tidy
-	set workdir=%cd%
-	for /f %%a in ('wmic os get CodeSet /value ^| find "="') do (
-	    for /f "tokens=2 delims==" %%b in ("%%a") do set current_chcp=%%b
-	)
-	REM don't known why,in different system codeset the corelib's path will be strange
-	REM when want to use cd to switch to the dir,the codeset need to be set to the utf-8
-	REM tested on Windows 10 Enterprise LTSC 2021 and system codeset is 936
-	chcp 65001
+	codegen -update
 	for /f %%a in ('go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib') do set corelib=%%a
-	cd %corelib%
-	chcp %current_chcp%
-	echo install codegen and protoc plugins in %corelib%
-	go install ./...
-	cd %workdir%
-	REM don't known why,in different system codeset the corelib's path will be strange
-	REM when want to use protoc to generate code,the codeset need to be set to the system's codeset
-	REM tested on Windows 10 Enterprise LTSC 2021 and system codeset is 936
-	for /f %%a in ('go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib') do set corelib=%%a
-	echo generate api in %workdir%
 	protoc -I ./ -I %corelib% --go_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-pbex_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-cgrpc_out=paths=source_relative:. ./api/*.proto
@@ -253,21 +236,24 @@ goto :help
 goto :end
 
 :kube
+	codegen -update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -kube
 goto :end
 
 :html
+	codegen -update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -html
 goto :end
 
 :sub
+	codegen -update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -sub %2
 goto :end
 
 :help
 	echo cmd.bat - every thing you need
 	echo           please install git
-	echo           please install golang(1.18+)
+	echo           please install golang(1.21+)
 	echo           please install protoc           (github.com/protocolbuffers/protobuf)
 	echo           please install protoc-gen-go    (github.com/protocolbuffers/protobuf-go)
 	echo           please install codegen          (github.com/chenjie199234/Corelib)
