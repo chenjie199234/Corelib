@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	"github.com/chenjie199234/Corelib/util/common"
 
@@ -104,19 +105,24 @@ func (c *Client) CheckVerifyCode(ctx context.Context, target, action, code, must
 }
 
 // return nil means has check times
-// return ErrVerifyCodeCheckTimesUsedup means no check times any more
 // return ErrVerifyCodeMissing means verify code doesn't exist
-func (c *Client) HasCheckTimes(ctx context.Context, target, action string) error {
+// return ErrVerifyCodeCheckTimesUsedup means no check times any more
+// return ErrVerifyCodeReceiverMissing means the must receiver doesn't exist
+func (c *Client) HasCheckTimes(ctx context.Context, target, action, mustreceiver string) error {
 	key := "verify_code_{" + target + "}_" + action
-	r, e := c.HGet(ctx, key, "_check").Int()
+	rs, e := c.HMGet(ctx, key, "_check", mustreceiver).Result()
 	if e != nil {
-		if e == gredis.Nil {
-			e = ErrVerifyCodeMissing
-		}
 		return e
 	}
-	if r >= 5 {
+	if rs[0] == nil {
+		return ErrVerifyCodeMissing
+	} else if r, e := strconv.Atoi(rs[0].(string)); e != nil {
+		return e
+	} else if r >= 5 {
 		return ErrVerifyCodeCheckTimesUsedup
+	}
+	if mustreceiver != "" && rs[1] == nil {
+		return ErrVerifyCodeReceiverMissing
 	}
 	return nil
 }

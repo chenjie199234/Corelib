@@ -26,6 +26,12 @@ func Test_VerifyCode(t *testing.T) {
 		t.Fatal(e)
 		return
 	}
+
+	//0 empty
+	if e := client.HasCheckTimes(context.Background(), "testuserid", "testaction", ""); e != ErrVerifyCodeMissing {
+		t.Fatal("should be verify code missing")
+		return
+	}
 	//1
 	code, dup, e := client.MakeVerifyCode(context.Background(), "testuserid", "testaction", "", 300)
 	if e != nil {
@@ -34,6 +40,10 @@ func Test_VerifyCode(t *testing.T) {
 	}
 	if dup {
 		t.Fatal("should not be dup")
+		return
+	}
+	if e := client.HasCheckTimes(context.Background(), "testuserid", "testaction", "testemail@gmail.com"); e != ErrVerifyCodeReceiverMissing {
+		t.Fatal("should be receiver missing")
 		return
 	}
 	//1 dup check
@@ -48,6 +58,10 @@ func Test_VerifyCode(t *testing.T) {
 	}
 	if code != newcode {
 		t.Fatal("should get same code")
+		return
+	}
+	if e := client.HasCheckTimes(context.Background(), "testuserid", "testaction", "testemail@gmail.com"); e != nil {
+		t.Fatal(e)
 		return
 	}
 	newcode, dup, e = client.MakeVerifyCode(context.Background(), "testuserid", "testaction", "testemail@gmail.com", 300)
@@ -76,6 +90,10 @@ func Test_VerifyCode(t *testing.T) {
 		t.Fatal("should get same code")
 		return
 	}
+	if e := client.HasCheckTimes(context.Background(), "testuserid", "testaction", "123123123"); e != nil {
+		t.Fatal(e)
+		return
+	}
 
 	//1 wrong receiver check
 	if e := client.CheckVerifyCode(context.Background(), "testuserid", "testaction", code, "abc"); e != ErrVerifyCodeReceiverMissing {
@@ -86,7 +104,7 @@ func Test_VerifyCode(t *testing.T) {
 		}
 		return
 	}
-	if e := client.HasCheckTimes(context.Background(), "testuserid", "testaction"); e != nil {
+	if e := client.HasCheckTimes(context.Background(), "testuserid", "testaction", ""); e != nil {
 		t.Fatal(e)
 		return
 	}
@@ -96,7 +114,7 @@ func Test_VerifyCode(t *testing.T) {
 		t.Fatal(e)
 		return
 	}
-	if e := client.HasCheckTimes(context.Background(), "testuserid", "testaction"); e != ErrVerifyCodeMissing {
+	if e := client.HasCheckTimes(context.Background(), "testuserid", "testaction", ""); e != ErrVerifyCodeMissing {
 		t.Fatal("should be verify code missing")
 		return
 	}
@@ -117,7 +135,7 @@ func Test_VerifyCode(t *testing.T) {
 		t.Fatal(e)
 		return
 	}
-	if e := client.HasCheckTimes(context.Background(), "testuserid", "testaction"); e != ErrVerifyCodeMissing {
+	if e := client.HasCheckTimes(context.Background(), "testuserid", "testaction", ""); e != ErrVerifyCodeMissing {
 		t.Fatal("should be verify code missing")
 		return
 	}
@@ -150,7 +168,23 @@ func Test_VerifyCode(t *testing.T) {
 		}
 		return
 	}
-	if e := client.HasCheckTimes(context.Background(), "testuserid", "testaction"); e != nil {
+	if e := client.CheckVerifyCode(context.Background(), "testuserid", "testaction", "123", ""); e != ErrVerifyCodeWrong {
+		if e == nil {
+			t.Fatal("should not pass")
+		} else {
+			t.Fatal(e)
+		}
+		return
+	}
+	if e := client.CheckVerifyCode(context.Background(), "testuserid", "testaction", "123", ""); e != ErrVerifyCodeWrong {
+		if e == nil {
+			t.Fatal("should not pass")
+		} else {
+			t.Fatal(e)
+		}
+		return
+	}
+	if e := client.HasCheckTimes(context.Background(), "testuserid", "testaction", ""); e != nil {
 		t.Fatal(e)
 		return
 	}
@@ -162,7 +196,7 @@ func Test_VerifyCode(t *testing.T) {
 		}
 		return
 	}
-	if e := client.HasCheckTimes(context.Background(), "testuserid", "testaction"); e != ErrVerifyCodeCheckTimesUsedup {
+	if e := client.HasCheckTimes(context.Background(), "testuserid", "testaction", ""); e != ErrVerifyCodeCheckTimesUsedup {
 		t.Fatal("should be check times used up")
 		return
 	}
