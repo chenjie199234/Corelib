@@ -25,7 +25,7 @@ end
 local data=redis.call("HMGET",KEYS[1],"_code","_check")
 if(data[1] and data[2])
 then
-	if(tonumber(data[2])>=3)
+	if(tonumber(data[2])>=5)
 	then
 		return {data[1],tonumber(data[2]),addReceiver}
 	end
@@ -44,9 +44,9 @@ if(not data[1] or not data[2])
 then
 	return nil
 end
-if(tonumber(data[2])>=3)
+if(tonumber(data[2])>=5)
 then
-	return 3
+	return 5
 end
 data[2]=redis.call("HINCRBY",KEYS[1],"_check",1)
 if(ARGV[2]~="" and not data[3])
@@ -62,7 +62,7 @@ return tonumber(data[2])`)
 }
 
 // target + action make the unique key in redis and CheckVerifyCode(if check pass) or DelVerifyCode will delete this key
-// have 3 times for check
+// have 5 times for check
 // expire unit is second and it will only be used when new receiver added into this key to share the code
 // in the key's life,different receiver add to this key will get the same code
 func (c *Client) MakeVerifyCode(ctx context.Context, target, action, receiver string, expire uint) (code string, duplicatereceiver bool, e error) {
@@ -73,7 +73,7 @@ func (c *Client) MakeVerifyCode(ctx context.Context, target, action, receiver st
 	}
 	code = data[0].(string)
 	duplicatereceiver = receiver != "" && data[2].(int64) == 0
-	if data[1].(int64) == 3 {
+	if data[1].(int64) == 5 {
 		e = ErrVerifyCodeCheckTimesUsedup
 	}
 	return
@@ -81,7 +81,7 @@ func (c *Client) MakeVerifyCode(ctx context.Context, target, action, receiver st
 
 // target + action make the unique key in redis and the key will be deleted if check pass
 // if mustreceiver is not empty,the check can pass only if this receiver exists
-// have 3 times for check
+// have 5 times for check
 func (c *Client) CheckVerifyCode(ctx context.Context, target, action, code, mustreceiver string) error {
 	key := "verify_code_{" + target + "}_" + action
 	r, e := checkvcode.Run(ctx, c, []string{key}, code, mustreceiver).Int()
@@ -94,7 +94,7 @@ func (c *Client) CheckVerifyCode(ctx context.Context, target, action, code, must
 	if r == -1 {
 		return ErrVerifyCodeReceiverMissing
 	}
-	if r == 3 {
+	if r == 5 {
 		return ErrVerifyCodeCheckTimesUsedup
 	}
 	if r != 0 {
@@ -115,7 +115,7 @@ func (c *Client) HasCheckTimes(ctx context.Context, target, action string) error
 		}
 		return e
 	}
-	if r >= 3 {
+	if r >= 5 {
 		return ErrVerifyCodeCheckTimesUsedup
 	}
 	return nil
