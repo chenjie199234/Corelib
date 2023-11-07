@@ -10,6 +10,7 @@ import (
 func Test_Redis(t *testing.T) {
 	c := &Config{
 		RedisName:       "test",
+		RedisMode:       "direct",
 		Addrs:           []string{"127.0.0.1:6379"},
 		MaxOpen:         256,
 		MaxConnIdletime: ctime.Duration(time.Minute * 5),

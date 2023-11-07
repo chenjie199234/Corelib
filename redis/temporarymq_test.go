@@ -13,6 +13,7 @@ import (
 func Test_TemporaryMQ(t *testing.T) {
 	client, _ := NewRedis(&Config{
 		RedisName:       "test",
+		RedisMode:       "direct",
 		Addrs:           []string{"127.0.0.1:6379"},
 		MaxOpen:         256,
 		MaxConnIdletime: ctime.Duration(time.Minute * 5),

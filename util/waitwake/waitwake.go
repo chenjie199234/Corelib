@@ -18,8 +18,8 @@ func NewWaitWake() *WaitWake {
 }
 
 // doOnce and doEvery will run in goroutine
-// only the first Wait after Wake on the key will run the doOnce function(if doOnce is not nil)
-// the doEvery function will run every time call the Wait(in doEvery is not nil)
+// only the first Wait on the key will run the doOnce function(if doOnce is not nil)
+// the doEvery function will run every time call the Wait(if doEvery is not nil)
 func (w *WaitWake) Wait(ctx context.Context, key string, doOnce func(), doEvery func()) error {
 	notice := make(chan *struct{}, 1)
 	w.lker.Lock()

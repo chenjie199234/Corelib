@@ -8,6 +8,10 @@ import (
 	"testing"
 )
 
+func Test_RandCode(t *testing.T) {
+	t.Log(MakeRandCode(100))
+}
+
 func Test_Nil(t *testing.T) {
 	a := ([]byte)(nil)
 	if Byte2str(a) != "" {
