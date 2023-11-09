@@ -144,7 +144,7 @@ func (c *Client) temporaryMQSubHandle(ctx context.Context, mqname string, index 
 			return
 		}
 		if result, e = c.BLPop(ctx, time.Second, listname).Result(); e == nil {
-			handler(common.Str2byte(result[1]))
+			handler(common.STB(result[1]))
 		} else if ee, ok := e.(interface{ Timeout() bool }); (!ok || !ee.Timeout()) && e != gredis.Nil {
 			log.Error(ctx, "[redis.temporaryMQSubHandle] failed", log.Uint64("shard", index), log.CError(e))
 		} else {

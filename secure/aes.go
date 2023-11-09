@@ -15,7 +15,7 @@ func AesEncrypt(password string, plaintxt []byte) (string, error) {
 	if len(password) >= 32 {
 		return "", cerror.ErrPasswordLength
 	}
-	s := padding(common.Str2byte(password), 32)
+	s := padding(common.STB(password), 32)
 	block, _ := aes.NewCipher(s)
 	aead, _ := cipher.NewGCM(block)
 	nonce := make([]byte, aead.NonceSize())
@@ -31,7 +31,7 @@ func AesDecrypt(password string, ciphertxt string) ([]byte, error) {
 	if e != nil {
 		return nil, cerror.ErrDataBroken
 	}
-	s := padding(common.Str2byte(password), 32)
+	s := padding(common.STB(password), 32)
 	block, _ := aes.NewCipher(s)
 	aead, _ := cipher.NewGCM(block)
 	plaintext, e := aead.Open(nil, tmp[:aead.NonceSize()], tmp[aead.NonceSize():], nil)

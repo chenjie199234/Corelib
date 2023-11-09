@@ -199,7 +199,7 @@ func (c *Client) priorityMQSubHandle(ctx context.Context, group, channel string,
 			keys = append(keys, "{"+group+"}_"+task+"_"+channel)
 		}
 		if result, e = c.BLPop(ctx, time.Second, keys...).Result(); e == nil {
-			handle(result[0][len(group)+3:len(result[0])-len(channel)-1], common.Str2byte(result[1]))
+			handle(result[0][len(group)+3:len(result[0])-len(channel)-1], common.STB(result[1]))
 		} else if ee, ok := e.(interface{ Timeout() bool }); (!ok || !ee.Timeout()) && e != gredis.Nil {
 			log.Error(ctx, "[redis.priorityMQSubHandle] sub tasks failed", log.String("group", group), log.String("channel", channel), log.CError(e))
 		} else {

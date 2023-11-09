@@ -227,7 +227,7 @@ func (c *CGrpcClient) callInterceptor(ctx context.Context, path string, req, rep
 	gmd.Set("Core-Target", c.server)
 	if len(cmd) > 0 {
 		d, _ := json.Marshal(cmd)
-		gmd.Set("Core-Metadata", common.Byte2str(d))
+		gmd.Set("Core-Metadata", common.BTS(d))
 	}
 	for {
 		ctx, span := trace.NewSpan(ctx, "Corelib.CGrpc", trace.Client, nil)

@@ -82,7 +82,7 @@ func (c *Context) Abort(e error) {
 			panic("[web.Context.Abort] httpcode must in [400,999]")
 		}
 		c.w.WriteHeader(int(c.e.Httpcode))
-		c.w.Write(common.Str2byte(c.e.Error()))
+		c.w.Write(common.STB(c.e.Error()))
 	}
 }
 
@@ -97,7 +97,7 @@ func (c *Context) Write(contenttype string, msg []byte) {
 }
 
 func (c *Context) WriteString(contenttype, msg string) {
-	c.Write(contenttype, common.Str2byte(msg))
+	c.Write(contenttype, common.STB(msg))
 }
 
 func (c *Context) Redirect(code int, url string) {

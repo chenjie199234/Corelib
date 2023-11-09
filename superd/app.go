@@ -276,15 +276,15 @@ func (a *app) git(cmd *exec.Cmd, operation string) bool {
 			}
 			switch operation {
 			case "listbranch":
-				pieces := strings.Split(strings.TrimSpace(common.Byte2str(line)), " ")
+				pieces := strings.Split(strings.TrimSpace(common.BTS(line)), " ")
 				if pieces[0] != "HEAD" {
 					result[pieces[0]] = pieces[1]
 				}
 			case "listtag":
-				pieces := strings.Split(strings.TrimSpace(common.Byte2str(line)), " ")
+				pieces := strings.Split(strings.TrimSpace(common.BTS(line)), " ")
 				result[pieces[0]] = pieces[1]
 			}
-			a.sloger.Info("stdout:"+common.Byte2str(line), "operation", operation)
+			a.sloger.Info("stdout:"+common.BTS(line), "operation", operation)
 		}
 		if operation == "listbranch" {
 			a.allbranch = result
@@ -303,7 +303,7 @@ func (a *app) git(cmd *exec.Cmd, operation string) bool {
 			} else if e != nil {
 				break
 			}
-			a.sloger.Error("stderr:"+common.Byte2str(line), "operation", operation)
+			a.sloger.Error("stderr:"+common.BTS(line), "operation", operation)
 		}
 		wg.Done()
 	}()
@@ -348,7 +348,7 @@ func (a *app) build() bool {
 				} else if e != nil {
 					break
 				}
-				a.sloger.Info("stdout:"+common.Byte2str(line), "operation", "build")
+				a.sloger.Info("stdout:"+common.BTS(line), "operation", "build")
 			}
 			wg.Done()
 		}()
@@ -361,7 +361,7 @@ func (a *app) build() bool {
 				} else if e != nil {
 					break
 				}
-				a.sloger.Error("stderr:"+common.Byte2str(line), "operation", "build")
+				a.sloger.Error("stderr:"+common.BTS(line), "operation", "build")
 			}
 			wg.Done()
 		}()

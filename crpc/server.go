@@ -354,7 +354,7 @@ func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]b
 		//self closing
 		return nil, false
 	}
-	if common.Byte2str(peerVerifyData) != s.self {
+	if common.BTS(peerVerifyData) != s.self {
 		return nil, false
 	}
 	return nil, true

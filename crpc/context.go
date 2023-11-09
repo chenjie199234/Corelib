@@ -84,7 +84,7 @@ func (c *Context) Write(resp []byte) {
 }
 
 func (c *Context) WriteString(resp string) {
-	c.Write(common.Str2byte(resp))
+	c.Write(common.STB(resp))
 }
 
 func (c *Context) GetMethod() string {

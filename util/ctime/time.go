@@ -25,11 +25,11 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 	if data[0] != '"' && data[len(data)-1] != '"' {
-		if temp, e := time.ParseDuration(common.Byte2str(data)); e == nil {
+		if temp, e := time.ParseDuration(common.BTS(data)); e == nil {
 			*d = Duration(temp)
 			return nil
 		}
-		if num, e := strconv.ParseInt(common.Byte2str(data), 10, 64); e == nil {
+		if num, e := strconv.ParseInt(common.BTS(data), 10, 64); e == nil {
 			*d = Duration(num)
 			return nil
 		}
@@ -90,11 +90,11 @@ func (d *Duration) UnmarshalText(data []byte) error {
 		return nil
 	}
 	if data[0] != '"' && data[len(data)-1] != '"' {
-		if temp, e := time.ParseDuration(common.Byte2str(data)); e == nil {
+		if temp, e := time.ParseDuration(common.BTS(data)); e == nil {
 			*d = Duration(temp)
 			return nil
 		}
-		if num, e := strconv.ParseInt(common.Byte2str(data), 10, 64); e == nil {
+		if num, e := strconv.ParseInt(common.BTS(data), 10, 64); e == nil {
 			*d = Duration(num)
 			return nil
 		}
@@ -187,5 +187,5 @@ func (d Duration) String() string {
 		b = strconv.AppendInt(b, int64(dd), 10)
 		b = append(b, "ns"...)
 	}
-	return common.Byte2str(b)
+	return common.BTS(b)
 }

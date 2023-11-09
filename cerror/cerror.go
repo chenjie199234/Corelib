@@ -88,7 +88,7 @@ func transStdErrorStr(e string) *Error {
 	result := &Error{}
 	if e[0] == '{' && e[len(e)-1] == '}' {
 		//json format
-		if ee := json.Unmarshal(common.Str2byte(e), result); ee != nil || result.Code == 0 {
+		if ee := json.Unmarshal(common.STB(e), result); ee != nil || result.Code == 0 {
 			result.Code = -1
 			result.Httpcode = http.StatusInternalServerError
 			result.Msg = e
@@ -126,7 +126,7 @@ func (this *Error) Error() string {
 	}
 	if special {
 		d, _ := json.Marshal(this.Msg)
-		return "{\"code\":" + strconv.FormatInt(int64(this.Code), 10) + ",\"msg\":" + common.Byte2str(d) + "}"
+		return "{\"code\":" + strconv.FormatInt(int64(this.Code), 10) + ",\"msg\":" + common.BTS(d) + "}"
 	}
 	return "{\"code\":" + strconv.FormatInt(int64(this.Code), 10) + ",\"msg\":\"" + this.Msg + "\"}"
 }

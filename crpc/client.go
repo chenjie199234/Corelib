@@ -141,7 +141,7 @@ func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 		//can't reconnect to server
 		return
 	}
-	if !c.instance.StartClient(server.addr, false, common.Str2byte(c.server), c.tlsc) {
+	if !c.instance.StartClient(server.addr, false, common.STB(c.server), c.tlsc) {
 		go c.start(server, true)
 	}
 }

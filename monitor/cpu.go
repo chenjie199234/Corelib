@@ -89,7 +89,7 @@ func getCPUNum() (cgroup bool) {
 	if quotastr[len(quotastr)-1] == 10 {
 		quotastr = quotastr[:len(quotastr)-1]
 	}
-	quota, e := strconv.ParseInt(common.Byte2str(quotastr), 10, 64)
+	quota, e := strconv.ParseInt(common.BTS(quotastr), 10, 64)
 	if e != nil {
 		panic("[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us data format wrong: " + e.Error())
 	}
@@ -104,7 +104,7 @@ func getCPUNum() (cgroup bool) {
 	if periodstr[len(periodstr)-1] == 10 {
 		periodstr = periodstr[:len(periodstr)-1]
 	}
-	period, e := strconv.ParseInt(common.Byte2str(periodstr), 10, 64)
+	period, e := strconv.ParseInt(common.BTS(periodstr), 10, 64)
 	if e != nil {
 		panic("[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us success,but read /sys/fs/cgroup/cpu/cpu.cfs_period_us data format wrong: " + e.Error())
 	}
@@ -154,9 +154,9 @@ func cgroupCPU(now int64) {
 	if usagestr[len(usagestr)-1] == 10 {
 		usagestr = usagestr[:len(usagestr)-1]
 	}
-	usage, e := strconv.ParseInt(common.Byte2str(usagestr), 10, 64)
+	usage, e := strconv.ParseInt(common.BTS(usagestr), 10, 64)
 	if e != nil {
-		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage data format wrong", log.String("usage", common.Byte2str(usagestr)))
+		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage data format wrong", log.String("usage", common.BTS(usagestr)))
 		return
 	}
 	oldUsage := cpuUsageLast

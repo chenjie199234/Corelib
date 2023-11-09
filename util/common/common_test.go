@@ -14,11 +14,11 @@ func Test_RandCode(t *testing.T) {
 
 func Test_Nil(t *testing.T) {
 	a := ([]byte)(nil)
-	if Byte2str(a) != "" {
+	if BTS(a) != "" {
 		panic("nil")
 	}
 	b := make([]byte, 0)
-	if Byte2str(b) != "" {
+	if BTS(b) != "" {
 		panic("empty")
 	}
 }
@@ -28,17 +28,17 @@ func Test_Common(t *testing.T) {
 	var bempty []byte = nil
 	var b []byte = []byte{'a', 'b', 'c'}
 
-	if !bytes.Equal(Str2byte(s), b) {
+	if !bytes.Equal(STB(s), b) {
 		panic("not empty str to byte failed")
 	}
-	if !bytes.Equal(Str2byte(sempty), bempty) {
+	if !bytes.Equal(STB(sempty), bempty) {
 		panic("empty str to byte failed")
 	}
 
-	if Byte2str(b) != s {
+	if BTS(b) != s {
 		panic("not empty byte to str failed")
 	}
-	if Byte2str(bempty) != sempty {
+	if BTS(bempty) != sempty {
 		panic("empty byte to str failed")
 	}
 	wg := &sync.WaitGroup{}
@@ -78,7 +78,7 @@ func testhash(strf func(string, uint64) uint64, bytef func([]byte, uint64) uint6
 	bit := make(map[uint64]struct{}, total)
 	for i := 0; i < total/2; i++ {
 		keyb := makerandkeybyte()
-		keys := Byte2str(keyb)
+		keys := BTS(keyb)
 		indexs := strf(keys, uint64(total))
 		indexb := bytef(keyb, uint64(total))
 		if indexs != indexb {
@@ -95,7 +95,7 @@ func testhash(strf func(string, uint64) uint64, bytef func([]byte, uint64) uint6
 
 // key contain [0-9][a-z][A-Z][_:-|]
 func makerandkeystr() string {
-	return Byte2str(makerandkeybyte())
+	return BTS(makerandkeybyte())
 }
 func makerandkeybyte() []byte {
 	result := make([]byte, 10)

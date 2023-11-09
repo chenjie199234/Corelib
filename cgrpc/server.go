@@ -324,7 +324,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			data := gmd.Get("Core-Metadata")
 			if len(data) != 0 {
 				cmd = make(map[string]string)
-				if e := json.Unmarshal(common.Str2byte(data[0]), &cmd); e != nil {
+				if e := json.Unmarshal(common.STB(data[0]), &cmd); e != nil {
 					log.Error(ctx, "[cgrpc.server] metadata format wrong",
 						log.String("cip", peerip),
 						log.String("path", path),

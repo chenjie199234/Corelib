@@ -293,7 +293,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	header.Set("Core-Target", c.server)
 	if len(metadata) != 0 {
 		d, _ := json.Marshal(metadata)
-		header.Set("Core-Metadata", common.Byte2str(d))
+		header.Set("Core-Metadata", common.BTS(d))
 	}
 	var dl time.Time
 	var ok bool
@@ -365,7 +365,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			} else if len(respbody) == 0 {
 				e = cerror.MakeError(-1, int32(resp.StatusCode), http.StatusText(resp.StatusCode))
 			} else {
-				e = cerror.ConvertErrorstr(common.Byte2str(respbody))
+				e = cerror.ConvertErrorstr(common.BTS(respbody))
 				(e.(*cerror.Error)).SetHttpcode(int32(resp.StatusCode))
 			}
 		}

@@ -99,7 +99,7 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 				return
 			}
 			pieces := [][]byte{bytes.TrimSpace(line[:index]), bytes.TrimSpace(line[index+1:])}
-			switch common.Byte2str(bytes.ToLower(pieces[0])) {
+			switch common.BTS(bytes.ToLower(pieces[0])) {
 			case "host":
 				check |= 0b00000001
 			case "connection":

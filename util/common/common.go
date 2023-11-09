@@ -5,13 +5,11 @@ import (
 	"unsafe"
 )
 
-func Str2byte(data string) []byte {
-	temp := (*[2]uintptr)(unsafe.Pointer(&data))
-	result := [3]uintptr{temp[0], temp[1], temp[1]}
-	return *(*[]byte)(unsafe.Pointer(&result))
+func STB(data string) []byte {
+	return unsafe.Slice(unsafe.StringData(data), len(data))
 }
-func Byte2str(data []byte) string {
-	return *(*string)(unsafe.Pointer(&data))
+func BTS(data []byte) string {
+	return unsafe.String(unsafe.SliceData(data), len(data))
 }
 
 const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#*" //letters' length is 64 and 2^6=64
@@ -34,5 +32,5 @@ func MakeRandCode(length uint16) string {
 			break
 		}
 	}
-	return Byte2str(b)
+	return BTS(b)
 }

@@ -124,7 +124,7 @@ func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header 
 				e = ErrHeaderLineFormat
 				return
 			}
-			switch common.Byte2str(bytes.ToLower(pieces[0])) {
+			switch common.BTS(bytes.ToLower(pieces[0])) {
 			case "connection":
 				check |= 0b00000001
 				if !bytes.Equal(bytes.ToLower(pieces[1]), []byte{'u', 'p', 'g', 'r', 'a', 'd', 'e'}) {
@@ -148,7 +148,7 @@ func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header 
 				h := sha1.New()
 				h.Write(nonce)
 				h.Write([]byte{'2', '5', '8', 'E', 'A', 'F', 'A', '5', '-', 'E', '9', '1', '4', '-', '4', '7', 'D', 'A', '-', '9', '5', 'C', 'A', '-', 'C', '5', 'A', 'B', '0', 'D', 'C', '8', '5', 'B', '1', '1'})
-				if base64.StdEncoding.EncodeToString(h.Sum(nil)) != common.Byte2str(pieces[1]) {
+				if base64.StdEncoding.EncodeToString(h.Sum(nil)) != common.BTS(pieces[1]) {
 					e = ErrSign
 					return
 				}
