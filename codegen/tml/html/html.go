@@ -37,8 +37,6 @@ const tsconfig = `{
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
-    "noImplicitAny": false,
-    "noImplicitThis":false,
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -52,7 +50,9 @@ const tsconfig = `{
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitAny": false,
+    "noImplicitThis":false
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"],
   "references": [{ "path": "./tsconfig.node.json" }]
