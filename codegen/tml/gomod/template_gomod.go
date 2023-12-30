@@ -17,10 +17,10 @@ require (
 	github.com/chenjie199234/Corelib %s
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-sql-driver/mysql v1.7.1
-	github.com/redis/go-redis/v9 v9.3.0
-	go.mongodb.org/mongo-driver v1.13.0
-	google.golang.org/grpc v1.59.0
-	google.golang.org/protobuf v1.31.0
+	github.com/redis/go-redis/v9 v9.3.1
+	go.mongodb.org/mongo-driver v1.13.1
+	google.golang.org/grpc v1.60.0
+	google.golang.org/protobuf v1.32.0
 )`
 
 func CreatePathAndFile(packagename string) {
