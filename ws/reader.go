@@ -68,124 +68,87 @@ func decodeFirstSecond(reader *bufio.Reader) (fin, rsv1, rsv2, rsv3 bool, opcode
 	return
 }
 
-// msg can be fragmented,so this can be happened:msg1 frame1,msg1 frame2,control frame,msg1 frame3,msg2 frame1
-// when we get control frame,we need to deal this control frame,then continue to accept the rest msg
-// example:
-//
-//	var conn net.Conn
-//	... get the conn
-//	reader := bufio.NewReader(conn)
-//	msgbuf := pool.GetPool().Get(0)
-//	defer pool.GetPool().Put(&msgbuf)
-//	ctlbuf := pool.GetPool().Get(0)
-//	defer pool.GetPool().Put(&ctlbuf)
-//	for{
-//		ctlcode, e :=Read(reader, &msgbuf, your_max_msg_length_limit, &ctlbuf)
-//		if ctlcode.IsPing() {
-//			//ping msg
-//			ping := ctlbuf
-//			... logic
-//			ctlbuf = ctlbuf[:0]
-//		}else if ctlcode.IsPong() {
-//			//pong msg
-//			pong := ctlbuf
-//			... logic
-//			ctlbuf = ctlbuf[:0]
-//		}else if ctlcode.IsClose() {
-//			//close msg
-//			close := ctlbuf
-//			... logic
-//			ctlbuf = ctlbuf[:0]
-//		}else{
-//			//this is the msg
-//			msg := msgbuf
-//			... logic
-//			msgbuf = msgbuf[:0]
-//		}
-//	}
-//
 // RFC 6455: all message from client to server must be masked
-// ctlbuf's cap must >= 131
-func Read(reader *bufio.Reader, msgbuf *[]byte, maxmsglen uint32, ctlbuf *[]byte, mustmask bool) (ctlcode OPCode, e error) {
+func Read(reader *bufio.Reader, maxmsglen uint32, mustmask bool, handler func(OPCode, []byte) (readmore bool)) error {
+	code := _CONTINUE
+	var buf []byte
+	defer func() {
+		if buf != nil {
+			pool.GetPool().Put(&buf)
+		}
+	}()
 	for {
-		fin, _, _, _, opcode, mask, payloadlen, err := decodeFirstSecond(reader)
-		if err != nil {
-			return 0, err
+		fin, _, _, _, curcode, mask, payloadlen, e := decodeFirstSecond(reader)
+		if e != nil {
+			return e
 		}
 		if mustmask && !mask {
-			return 0, ErrMsgMask
+			return ErrMsgMask
+		}
+		if !curcode.IsControl() {
+			if code == _CONTINUE {
+				if curcode == _CONTINUE {
+					return ErrMsgType
+				}
+				code = curcode
+			} else if code != curcode && curcode != _CONTINUE {
+				return ErrMsgType
+			}
+		}
+		if buf == nil {
+			buf = pool.GetPool().Get(256)
+			buf = buf[:8]
 		}
 		switch payloadlen {
 		case 127:
-			*ctlbuf = (*ctlbuf)[:8]
-			if _, err := io.ReadFull(reader, *ctlbuf); err != nil {
-				return 0, err
+			if _, e := io.ReadFull(reader, buf[:8]); e != nil {
+				return e
 			}
-			tmplen := binary.BigEndian.Uint64(*ctlbuf)
+			tmplen := binary.BigEndian.Uint64(buf[:8])
 			if tmplen > math.MaxUint32 {
-				return 0, ErrMsgLarge
+				return ErrMsgLarge
 			}
 			payloadlen = uint32(tmplen)
-			*ctlbuf = (*ctlbuf)[:0]
 		case 126:
-			*ctlbuf = (*ctlbuf)[:2]
-			if _, err := io.ReadFull(reader, *ctlbuf); err != nil {
-				return 0, err
+			if _, e := io.ReadFull(reader, buf[:2]); e != nil {
+				return e
 			}
-			payloadlen = uint32(binary.BigEndian.Uint16(*ctlbuf))
-			*ctlbuf = (*ctlbuf)[:0]
+			payloadlen = uint32(binary.BigEndian.Uint16(buf[:2]))
 		}
-		if payloadlen > maxmsglen || (!opcode.IsControl() && uint64(len(*msgbuf))+uint64(payloadlen) > uint64(maxmsglen)) {
-			return 0, ErrMsgLarge
-		}
-		if payloadlen == 0 {
-			if mask {
-				*ctlbuf = (*ctlbuf)[:4]
-				if _, err := io.ReadFull(reader, *ctlbuf); err != nil {
-					return 0, err
-				}
-				*ctlbuf = (*ctlbuf)[:0]
-			}
-			if fin {
-				return opcode, nil
-			}
-			continue
-		}
-		if opcode.IsControl() {
-			var maskkey []byte
-			if mask {
-				maskkey = pool.GetPool().Get(4)
-				defer pool.GetPool().Put(&maskkey)
-				if _, err := io.ReadFull(reader, maskkey); err != nil {
-					return 0, err
-				}
-			}
-			*ctlbuf = (*ctlbuf)[:payloadlen]
-			if _, err := io.ReadFull(reader, *ctlbuf); err != nil {
-				return 0, err
-			}
-			if mask {
-				domask(*ctlbuf, maskkey)
-			}
-			return opcode, nil
+		if payloadlen > maxmsglen || (!curcode.IsControl() && len(buf) > 8 && len(buf)-8+int(payloadlen) > int(maxmsglen)) {
+			return ErrMsgLarge
 		}
 		if mask {
-			*ctlbuf = (*ctlbuf)[:4]
-			if _, err := io.ReadFull(reader, *ctlbuf); err != nil {
-				return 0, err
+			if _, e := io.ReadFull(reader, buf[:4]); e != nil {
+				return e
 			}
 		}
-		*msgbuf = pool.CheckCap(msgbuf, len(*msgbuf)+int(payloadlen))
-		*msgbuf = (*msgbuf)[:len(*msgbuf)+int(payloadlen)]
-		if _, e = io.ReadFull(reader, (*msgbuf)[uint32(len(*msgbuf))-payloadlen:]); e != nil {
-			return
+		if payloadlen > 0 {
+			buf = pool.CheckCap(&buf, len(buf)+int(payloadlen))
+			buf = buf[:len(buf)+int(payloadlen)]
+			if _, e := io.ReadFull(reader, buf[len(buf)-int(payloadlen):]); e != nil {
+				return e
+			}
 		}
-		if mask {
-			domask((*msgbuf)[uint32(len(*msgbuf))-payloadlen:], *ctlbuf)
+		if mask && payloadlen > 0 {
+			domask(buf[len(buf)-int(payloadlen):], buf[:4])
 		}
-		*ctlbuf = (*ctlbuf)[:0]
-		if fin {
-			return _BINARY, nil
+		if curcode.IsControl() {
+			if !handler(curcode, buf[len(buf)-int(payloadlen):]) {
+				return nil
+			}
+			buf = buf[:len(buf)-int(payloadlen)]
+		} else if fin {
+			if !handler(code, buf[8:]) {
+				return nil
+			}
+			if len(buf) > 4096 {
+				pool.GetPool().Put(&buf)
+				buf = nil
+			} else {
+				buf = buf[:8]
+			}
+			code = _CONTINUE
 		}
 	}
 }

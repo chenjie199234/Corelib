@@ -229,7 +229,8 @@ func (c *Context) GetBody() ([]byte, error) {
 	if c.body != nil || c.bodyerr != nil {
 		return c.body, c.bodyerr
 	}
-	b := pool.GetPool().Get(0)
+	b := pool.GetPool().Get(int(c.GetContentLength()))
+	b = b[:0]
 	for {
 		n, e := c.r.Body.Read(b[len(b):cap(b)])
 		b = b[:len(b)+n]

@@ -7,8 +7,6 @@ import (
 	"net"
 	"testing"
 	"time"
-
-	"github.com/chenjie199234/Corelib/pool"
 )
 
 func Test_Server(t *testing.T) {
@@ -35,39 +33,32 @@ func Test_Server(t *testing.T) {
 					WritePing(c, []byte("server ping"), false)
 				}
 			}()
-			msgbuf := pool.GetPool().Get(0)
-			ctlbuf := pool.GetPool().Get(0)
-			for {
-				opcode, e := Read(reader, &msgbuf, 1024, &ctlbuf, true)
-				if e != nil {
-					panic("read error:" + e.Error())
-				}
+			if e := Read(reader, 1024, true, func(opcode OPCode, data []byte) bool {
 				switch {
 				case opcode.IsPing():
-					fmt.Println(string(ctlbuf))
-					if e := WritePong(conn, ctlbuf, false); e != nil {
+					fmt.Println(string(data))
+					if e := WritePong(conn, data, false); e != nil {
 						panic("write pong error:" + e.Error())
 					}
-					ctlbuf = ctlbuf[:0]
 				case opcode.IsPong():
-					fmt.Println(string(ctlbuf))
-					ctlbuf = ctlbuf[:0]
+					fmt.Println("client pong:" + string(data))
 				case opcode.IsClose():
-					fmt.Println(string(ctlbuf))
+					fmt.Println(string(data))
 					c.Close()
-					ctlbuf = ctlbuf[:0]
-					return
+					return false
 				default:
-					fmt.Println("msglen:", len(msgbuf))
-					if !bytes.Equal(msgbuf, bytes.Repeat([]byte("a"), 513)) {
-						fmt.Println(string(msgbuf))
+					fmt.Println("msglen:", len(data))
+					if !bytes.Equal(data, bytes.Repeat([]byte("a"), 513)) {
+						fmt.Println(string(data))
 						panic("msg broken")
 					}
-					if e := WriteMsg(conn, msgbuf, true, true, false); e != nil {
+					if e := WriteMsg(conn, data, true, true, false); e != nil {
 						panic("write msg error:" + e.Error())
 					}
-					msgbuf = msgbuf[:0]
 				}
+				return true
+			}); e != nil {
+				t.Error(e)
 			}
 		}(conn)
 	}

@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/keepalive"
 	gmetadata "google.golang.org/grpc/metadata"
 	gresolver "google.golang.org/grpc/resolver"
@@ -117,7 +118,7 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 	opts := make([]grpc.DialOption, 0, 10)
 	opts = append(opts, grpc.WithChainUnaryInterceptor(client.gracefulInterceptor, client.timeoutInterceptor, client.callInterceptor))
 	opts = append(opts, grpc.WithChainStreamInterceptor())
-	opts = append(opts, grpc.WithRecvBufferPool(pool.GetPool()))
+	opts = append(opts, experimental.WithRecvBufferPool(pool.GetPool()))
 	opts = append(opts, grpc.WithDisableRetry())
 	if tlsc == nil {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))

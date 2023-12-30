@@ -340,74 +340,71 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 }
 
 func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
-	msgbuf := pool.GetPool().Get(0)
-	defer pool.GetPool().Put(&msgbuf)
-	ctlbuf := pool.GetPool().Get(0)
-	defer pool.GetPool().Put(&ctlbuf)
-	for {
-		opcode, e := ws.Read(p.cr, &msgbuf, p.selfMaxMsgLen, &ctlbuf, false)
-		if e != nil {
-			if p.peertype == _PEER_CLIENT {
-				log.Error(nil, "[Stream.verifypeer] read from client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
-			} else {
-				log.Error(nil, "[Stream.verifypeer] read from server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
+	var response []byte
+	if e := ws.Read(p.cr, p.selfMaxMsgLen, false, func(opcode ws.OPCode, data []byte) (readmore bool) {
+		switch {
+		case !opcode.IsControl():
+			if len(data) < 4 {
+				if p.peertype == _PEER_CLIENT {
+					log.Error(nil, "[Stream.verifypeer] client verify data format wrong", log.String("cip", p.c.RemoteAddr().String()))
+				} else {
+					log.Error(nil, "[Stream.verifypeer] server verify data format wrong", log.String("sip", p.c.RemoteAddr().String()))
+				}
+				return false
 			}
-			return nil
-		}
-		if !opcode.IsControl() {
-			break
-		}
-		if opcode.IsPing() {
+			senderMaxRecvMsgLen := binary.BigEndian.Uint32(data[:4])
+			if senderMaxRecvMsgLen < 65536 {
+				if p.peertype == _PEER_CLIENT {
+					log.Error(nil, "[Stream.verifypeer] client maxmsglen too small", log.String("cip", p.c.RemoteAddr().String()))
+				} else {
+					log.Error(nil, "[Stream.verifypeer] server maxmsglen too small", log.String("sip", p.c.RemoteAddr().String()))
+				}
+				return false
+			}
+			p.lastactive = time.Now().UnixNano()
+			p.recvidlestart = p.lastactive
+			p.sendidlestart = p.lastactive
+			p.peerMaxMsgLen = senderMaxRecvMsgLen
+			r, success := this.c.VerifyFunc(ctx, data[4:])
+			if !success {
+				if p.peertype == _PEER_CLIENT {
+					log.Error(nil, "[Stream.verifypeer] verify client failed", log.String("cip", p.c.RemoteAddr().String()))
+				} else {
+					log.Error(nil, "[Stream.verifypeer] verify server failed", log.String("sip", p.c.RemoteAddr().String()))
+				}
+			} else {
+				response = r
+			}
+			return false
+		case opcode.IsPing():
 			//this can be possible when:
-			//server get a connection from other implement's client which will send a ping first
-			//client connect to a other implement's server which will send a ping first
-			//we write back
-			if e := ws.WritePong(p.c, ctlbuf, false); e != nil {
+			//server get a connection from other implement's client which will send a ping before verify
+			//client connect to an other implement's server which will send a ping before verify
+			//write back
+			if e := ws.WritePong(p.c, data, false); e != nil {
 				if p.peertype == _PEER_CLIENT {
 					log.Error(nil, "[Stream.verifypeer] write pong to client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 				} else {
 					log.Error(nil, "[Stream.verifypeer] write pong to server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 				}
-				return nil
+				return false
 			}
-		} else {
+			//continue to read the verify message
+			return true
+		default:
 			//if this is a pong:
-			//both client and server will not send ping before verify,so this is not impossible
+			//both client and server in this implement will not send ping before verify,so this is not impossible
 			//need to close the connection
 			//if this is a close:
 			//need to close the connection
-			return nil
+			return false
 		}
-	}
-	if len(msgbuf) < 4 {
+	}); e != nil {
 		if p.peertype == _PEER_CLIENT {
-			log.Error(nil, "[Stream.verifypeer] client verify data format wrong", log.String("cip", p.c.RemoteAddr().String()))
+			log.Error(nil, "[Stream.verifypeer] read from client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 		} else {
-			log.Error(nil, "[Stream.verifypeer] server verify data format wrong", log.String("sip", p.c.RemoteAddr().String()))
+			log.Error(nil, "[Stream.verifypeer] read from server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 		}
-		return nil
-	}
-	senderMaxRecvMsgLen := binary.BigEndian.Uint32(msgbuf[:4])
-	if senderMaxRecvMsgLen < 65536 {
-		if p.peertype == _PEER_CLIENT {
-			log.Error(nil, "[Stream.verifypeer] client maxmsglen too small", log.String("cip", p.c.RemoteAddr().String()))
-		} else {
-			log.Error(nil, "[Stream.verifypeer] server maxmsglen too small", log.String("sip", p.c.RemoteAddr().String()))
-		}
-		return nil
-	}
-	p.lastactive = time.Now().UnixNano()
-	p.recvidlestart = p.lastactive
-	p.sendidlestart = p.lastactive
-	p.peerMaxMsgLen = senderMaxRecvMsgLen
-	response, success := this.c.VerifyFunc(ctx, msgbuf[4:])
-	if !success {
-		if p.peertype == _PEER_CLIENT {
-			log.Error(nil, "[Stream.verifypeer] verify client failed", log.String("cip", p.c.RemoteAddr().String()))
-		} else {
-			log.Error(nil, "[Stream.verifypeer] verify server failed", log.String("sip", p.c.RemoteAddr().String()))
-		}
-		return nil
 	}
 	return response
 }
@@ -424,74 +421,51 @@ func (this *Instance) handle(p *Peer) {
 		pool.GetPool().PutBufReader(p.cr)
 	}()
 	//before handle user data,send first ping,to get the net lag
-	ctlbuf := pool.GetPool().Get(8)
-	binary.BigEndian.PutUint64(ctlbuf, uint64(time.Now().UnixNano()))
-	if e := ws.WritePing(p.c, ctlbuf, false); e != nil {
+	buf := pool.GetPool().Get(8)
+	binary.BigEndian.PutUint64(buf, uint64(time.Now().UnixNano()))
+	e := ws.WritePing(p.c, buf, false)
+	pool.GetPool().Put(&buf)
+	if e != nil {
 		if p.peertype == _PEER_CLIENT {
 			log.Error(nil, "[Stream.handle] send first ping to client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 		} else {
 			log.Error(nil, "[Stream.handle] send first ping to server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 		}
-		pool.GetPool().Put(&ctlbuf)
 		return
 	}
-	ctlbuf = ctlbuf[:0]
-	msgbuf := pool.GetPool().Get(0)
-	for {
-		opcode, e := ws.Read(p.cr, &msgbuf, p.selfMaxMsgLen, &ctlbuf, false)
-		if e != nil {
-			if p.peertype == _PEER_CLIENT {
-				log.Error(nil, "[Stream.handle] read from client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
-			} else {
-				log.Error(nil, "[Stream.handle] read from server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
-			}
-			pool.GetPool().Put(&ctlbuf)
-			pool.GetPool().Put(&msgbuf)
-			return
-		}
-		if !opcode.IsControl() {
+	if ws.Read(p.cr, p.selfMaxMsgLen, false, func(opcode ws.OPCode, data []byte) (readmore bool) {
+		switch {
+		case !opcode.IsControl():
 			now := time.Now()
 			p.lastactive = now.UnixNano()
 			p.recvidlestart = now.UnixNano()
-			this.c.UserdataFunc(p, msgbuf)
-			msgbuf = msgbuf[:0]
-			if cap(msgbuf) > 2048 {
-				//we think most of the msg's length will not > 2048
-				//put the buf back to the pool,and the GC may give it back to the system
-				//then we use a new(maybe a new) one
-				tmp := pool.GetPool().Get(0)
-				pool.GetPool().Put(&msgbuf)
-				msgbuf = tmp
-			}
-		} else if opcode.IsPing() {
+			this.c.UserdataFunc(p, data)
+			return true
+		case opcode.IsPing():
 			p.lastactive = time.Now().UnixNano()
 			//write back
-			if e := ws.WritePong(p.c, ctlbuf, false); e != nil {
+			if e := ws.WritePong(p.c, data, false); e != nil {
 				if p.peertype == _PEER_CLIENT {
 					log.Error(nil, "[Stream.handle] send pong to client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 				} else {
 					log.Error(nil, "[Stream.handle] send pong to server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 				}
-				pool.GetPool().Put(&ctlbuf)
-				pool.GetPool().Put(&msgbuf)
-				return
+				return false
 			}
 			if this.c.PingPongFunc != nil {
 				this.c.PingPongFunc(p)
 			}
-			ctlbuf = ctlbuf[:0]
-		} else if opcode.IsPong() {
-			if len(ctlbuf) != 8 {
+			return true
+		case opcode.IsPong():
+			if len(data) != 8 {
 				if p.peertype == _PEER_CLIENT {
 					log.Error(nil, "[Stream.handle] client pong msg format wrong", log.String("cip", p.c.RemoteAddr().String()))
 				} else {
 					log.Error(nil, "[Stream.handle] server pong msg format wrong", log.String("sip", p.c.RemoteAddr().String()))
 				}
-				pool.GetPool().Put(&ctlbuf)
-				pool.GetPool().Put(&msgbuf)
-				return
+				return false
 			}
-			sendtime := binary.BigEndian.Uint64(ctlbuf)
+			sendtime := binary.BigEndian.Uint64(data)
 			p.lastactive = time.Now().UnixNano()
 			p.netlag = p.lastactive - int64(sendtime)
 			if p.netlag < 0 {
@@ -500,19 +474,21 @@ func (this *Instance) handle(p *Peer) {
 				} else {
 					log.Error(nil, "[Stream.handle] server pong msg broken", log.String("sip", p.c.RemoteAddr().String()))
 				}
-				pool.GetPool().Put(&ctlbuf)
-				pool.GetPool().Put(&msgbuf)
-				return
+				return false
 			}
 			if this.c.PingPongFunc != nil {
 				this.c.PingPongFunc(p)
 			}
-			ctlbuf = ctlbuf[:0]
-		} else {
+			return true
+		default:
 			//close
-			pool.GetPool().Put(&ctlbuf)
-			pool.GetPool().Put(&msgbuf)
-			return
+			return false
+		}
+	}); e != nil {
+		if p.peertype == _PEER_CLIENT {
+			log.Error(nil, "[Stream.handle] read from client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
+		} else {
+			log.Error(nil, "[Stream.handle] read from server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 		}
 	}
 }

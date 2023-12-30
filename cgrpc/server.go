@@ -27,6 +27,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/keepalive"
 	gmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
@@ -107,7 +108,7 @@ func NewCGrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tls
 		handlerTimeout: make(map[string]time.Duration),
 	}
 	opts := make([]grpc.ServerOption, 0, 10)
-	opts = append(opts, grpc.RecvBufferPool(pool.GetPool()))
+	opts = append(opts, experimental.RecvBufferPool(pool.GetPool()))
 	opts = append(opts, grpc.MaxRecvMsgSize(int(c.MaxMsgLen)))
 	opts = append(opts, grpc.StatsHandler(serverinstance))
 	opts = append(opts, grpc.UnknownServiceHandler(func(_ interface{}, stream grpc.ServerStream) error {
