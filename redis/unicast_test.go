@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/util/ctime"
+
+	gredis "github.com/redis/go-redis/v9"
 )
 
-func Test_TemporaryMQ(t *testing.T) {
+func Test_Unicast(t *testing.T) {
 	client, _ := NewRedis(&Config{
 		RedisName:       "test",
 		RedisMode:       "direct",
@@ -23,7 +25,7 @@ func Test_TemporaryMQ(t *testing.T) {
 	lker := &sync.Mutex{}
 	r := make(map[string]int, 1000)
 	done := make(chan *struct{}, 1)
-	cancel, e := client.TemporaryMQSub("test", 20, func(data []byte) {
+	cancel, e := client.SubUnicast("test", 20, func(data []byte) {
 		lker.Lock()
 		if v, ok := r[string(data)]; ok {
 			r[string(data)] = v + 1
@@ -41,10 +43,9 @@ func Test_TemporaryMQ(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	//wait 30s the test the suber's refresh
-	time.Sleep(time.Second * 30)
+	time.Sleep(time.Second * 3)
 	for i := 0; i < 1000; i++ {
-		e := client.TemporaryMQPub(context.Background(), "test", 20, strconv.Itoa(i), strconv.AppendInt(nil, int64(i), 10))
+		e := client.PubUnicast(context.Background(), "test", 20, strconv.Itoa(i), strconv.AppendInt(nil, int64(i), 10))
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -61,5 +62,9 @@ func Test_TemporaryMQ(t *testing.T) {
 		} else if v != 1 {
 			t.Fatal("count wrong: " + s + " count: " + strconv.Itoa(v))
 		}
+	}
+	time.Sleep(time.Second * 3)
+	if e := client.PubUnicast(context.Background(), "test", 20, "", "a"); e != gredis.Nil {
+		t.Fatal("sub already stopped,pub should return nil", e)
 	}
 }
