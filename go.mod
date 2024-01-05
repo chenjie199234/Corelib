@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/redis/go-redis/v9 v9.3.1
-	github.com/shirou/gopsutil/v3 v3.23.11
+	github.com/shirou/gopsutil/v3 v3.23.12
 	go.mongodb.org/mongo-driver v1.13.1
 	golang.org/x/net v0.19.0
 	google.golang.org/grpc v1.60.0
