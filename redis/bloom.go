@@ -2,7 +2,6 @@ package redis
 
 import (
 	"context"
-	"errors"
 	"strconv"
 
 	"github.com/chenjie199234/Corelib/util/common"
@@ -58,7 +57,7 @@ return 0`)
 
 	setBloom = gredis.NewScript(`if(redis.call("EXISTS",KEYS[7])==0)
 then
-	return -1
+	return nil
 end
 local r1=redis.call("SETBIT",KEYS[1],ARGV[1],1)
 local r2=redis.call("SETBIT",KEYS[2],ARGV[2],1)
@@ -74,7 +73,7 @@ then
 	redis.call("DEL",KEYS[4])
 	redis.call("DEL",KEYS[5])
 	redis.call("DEL",KEYS[6])
-	return -1
+	return nil
 end
 if(r1==0 or r2==0 or r3==0 or r4==0 or r5==0 or r6==0)
 then
@@ -84,7 +83,7 @@ return 1`)
 
 	checkBloom = gredis.NewScript(`if(redis.call("EXISTS",KEYS[7])==0)
 then
-	return -1
+	return nil
 end
 local r1=redis.call("GETBIT",KEYS[1],ARGV[1])
 local r2=redis.call("GETBIT",KEYS[2],ARGV[2])
@@ -100,7 +99,7 @@ then
 	redis.call("DEL",KEYS[4])
 	redis.call("DEL",KEYS[5])
 	redis.call("DEL",KEYS[6])
-	return -1
+	return nil
 end
 if(r1==0 or r2==0 or r3==0 or r4==0 or r5==0 or r6==0)
 then
@@ -108,10 +107,6 @@ then
 end
 return 1`)
 }
-
-var ErrBloomExpired = errors.New("bloom expired")
-var ErrBloomMissingName = errors.New("bloom missing name")
-var ErrBloomMissingGroup = errors.New("bloom missing group")
 
 // NewBloom -
 // groupnum: how many bitset key will be used in redis for this bloom
@@ -128,11 +123,8 @@ var ErrBloomMissingGroup = errors.New("bloom missing group")
 //
 //	<=0 means no expire
 func (c *Client) NewBloom(ctx context.Context, bloomname string, groupnum uint64, bitnum uint64, expiresecond int) error {
-	if bloomname == "" {
-		return ErrBloomMissingName
-	}
-	if groupnum == 0 {
-		return ErrBloomMissingGroup
+	if bloomname == "" || groupnum == 0 {
+		panic("[redis.bloom.new] bloom name or group num missing")
 	}
 	if bitnum < 1024 {
 		bitnum = 1024
@@ -160,12 +152,10 @@ func (c *Client) NewBloom(ctx context.Context, bloomname string, groupnum uint64
 // SetBloom add key into the bloom
 // true,this key is not in this bloom and add success
 // false,this key maybe already in this bloom,can't 100% confirm
+// error: go-redis.Nil means the bloom not exist
 func (c *Client) SetBloom(ctx context.Context, bloomname string, groupnum uint64, bitnum uint64, userkey string) (bool, error) {
-	if bloomname == "" {
-		return false, ErrBloomMissingName
-	}
-	if groupnum == 0 {
-		return false, ErrBloomMissingGroup
+	if bloomname == "" || groupnum == 0 {
+		panic("[redis.bloom.set] bloom name or group num missing")
 	}
 	if bitnum < 1024 {
 		bitnum = 1024
@@ -188,21 +178,16 @@ func (c *Client) SetBloom(ctx context.Context, bloomname string, groupnum uint64
 	if e != nil {
 		return false, e
 	}
-	if r == -1 {
-		return false, ErrBloomExpired
-	}
 	return r == 0, nil
 }
 
 // Check -
 // true,this key 100% not in this bloom
 // false,this key maybe in this bloom,can't 100% confirm
+// error: go-redis.Nil means the bloom not exist
 func (c *Client) CheckBloom(ctx context.Context, bloomname string, groupnum uint64, bitnum uint64, userkey string) (bool, error) {
-	if bloomname == "" {
-		return false, ErrBloomMissingName
-	}
-	if groupnum == 0 {
-		return false, ErrBloomMissingGroup
+	if bloomname == "" || groupnum == 0 {
+		panic("[redis.bloom.check] bloom name or group num missing")
 	}
 	if bitnum < 1024 {
 		bitnum = 1024
@@ -225,12 +210,12 @@ func (c *Client) CheckBloom(ctx context.Context, bloomname string, groupnum uint
 	if e != nil {
 		return false, e
 	}
-	if r == -1 {
-		return false, ErrBloomExpired
-	}
 	return r == 0, nil
 }
 func (c *Client) DelBloom(ctx context.Context, bloomname string, groupnum uint64) error {
+	if bloomname == "" || groupnum == 0 {
+		panic("[redis.bloom.del] bloom name or group num missing")
+	}
 	eg := egroup.GetGroup(ctx)
 	for i := uint64(0); i < groupnum; i++ {
 		index := i

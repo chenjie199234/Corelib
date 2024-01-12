@@ -64,7 +64,7 @@ func Test_PriorityMQ(t *testing.T) {
 	sub := make(map[int]*struct{}, 1000)
 	done1 := make(chan *struct{}, 1)
 	done2 := make(chan *struct{}, 1)
-	cancel1, e := client.PriorityMQSub("testgroup", "testchannel_1", func(task string, data []byte) {
+	cancel1, e := client.PriorityMQSub("testgroup", "testchannel_1", 1, func(task string, data []byte) {
 		if task != "testtask" {
 			t.Fatal("task name broken")
 			return
@@ -97,7 +97,7 @@ func Test_PriorityMQ(t *testing.T) {
 		t.Fatal("finish task pub should return 0")
 		return
 	}
-	cancel2, e := client.PriorityMQSub("testgroup", "testchannel_2", func(task string, data []byte) {
+	cancel2, e := client.PriorityMQSub("testgroup", "testchannel_2", 1, func(task string, data []byte) {
 		if task != "testtask" {
 			t.Fatal("task name broken")
 			return

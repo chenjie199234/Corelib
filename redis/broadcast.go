@@ -17,7 +17,7 @@ import (
 // shard: is used to split data into different redis streams
 func (c *Client) SubBroadcast(broadcast string, shard uint8, handler func(values map[string]interface{})) (stop func(), e error) {
 	if broadcast == "" || shard == 0 {
-		panic("[broadcast.sub]")
+		panic("[redis.broadcast.sub] broadcast name or shard num missing")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	for i := uint8(0); i < shard; i++ {
@@ -34,7 +34,7 @@ func (c *Client) SubBroadcast(broadcast string, shard uint8, handler func(values
 					if err == gredis.ErrClosed || err == context.Canceled {
 						return
 					}
-					log.Error(ctx, "[broadcast.sub] read failed", log.String("stream", stream))
+					log.Error(ctx, "[redis.broadcast.sub] read failed", log.String("stream", stream))
 					time.Sleep(time.Millisecond * 100)
 					continue
 				}
@@ -54,7 +54,7 @@ func (c *Client) SubBroadcast(broadcast string, shard uint8, handler func(values
 // key: is only used to shard values into different redis node(hash),if key is empty,values will be sharded randomly
 func (c *Client) PubBroadcast(ctx context.Context, broadcast string, shard uint8, key string, values map[string]interface{}) error {
 	if broadcast == "" || shard == 0 {
-		panic("[broadcast.pub]")
+		panic("[redis.broadcast.pub] broadcast name or shard num missing")
 	}
 	stream := ""
 	if key == "" {
@@ -73,7 +73,7 @@ func (c *Client) PubBroadcast(ctx context.Context, broadcast string, shard uint8
 // shard: is used to split data into different redis streams
 func (c *Client) DelBroadcast(ctx context.Context, broadcast string, shard uint8) (e error) {
 	if broadcast == "" || shard == 0 {
-		panic("[broadcast.del]")
+		panic("[redis.broadcast.del] broadcast name or shard num missing")
 	}
 	wg := sync.WaitGroup{}
 	for i := uint8(0); i < shard; i++ {
@@ -94,7 +94,7 @@ func (c *Client) DelBroadcast(ctx context.Context, broadcast string, shard uint8
 // timestamp: unit seconds,all messages before this timestamp will be deleted
 func (c *Client) TrimBroadcast(ctx context.Context, broadcast string, shard uint8, timestamp uint64) (e error) {
 	if broadcast == "" || shard == 0 {
-		panic("[broadcast.trim]")
+		panic("[redis.broadcast.trim] broadcast name or shard num missing")
 	}
 	wg := sync.WaitGroup{}
 	for i := uint8(0); i < shard; i++ {

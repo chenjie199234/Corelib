@@ -28,7 +28,7 @@ return #ARGV`)
 // shard: is used to split data into different redis lists
 func (c *Client) SubUnicast(unicast string, shard uint8, handler func([]byte)) (stop func(), e error) {
 	if unicast == "" || shard == 0 {
-		panic("[unicast.sub]")
+		panic("[redis.unicast.sub] unicast name or shard num missing")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	for i := uint8(0); i < shard; i++ {
@@ -37,7 +37,7 @@ func (c *Client) SubUnicast(unicast string, shard uint8, handler func([]byte)) (
 		go func() {
 			for {
 				if _, err := c.SetEx(ctx, exist, 1, time.Second*16).Result(); err != nil {
-					log.Error(ctx, "[unicast.sub] init failed", log.String("list", list), log.CError(err))
+					log.Error(ctx, "[redis.unicast.sub] init failed", log.String("list", list), log.CError(err))
 					time.Sleep(time.Millisecond * 100)
 					continue
 				}
@@ -50,7 +50,7 @@ func (c *Client) SubUnicast(unicast string, shard uint8, handler func([]byte)) (
 					select {
 					case <-ctx.Done():
 						if _, err := c.Del(context.Background(), exist).Result(); err != nil {
-							log.Error(ctx, "[unicast.sub] stop failed", log.String("list", list), log.CError(err))
+							log.Error(ctx, "[redis.unicast.sub] stop failed", log.String("list", list), log.CError(err))
 						}
 						tker.Stop()
 						return
@@ -63,7 +63,7 @@ func (c *Client) SubUnicast(unicast string, shard uint8, handler func([]byte)) (
 								tker.Stop()
 								return
 							}
-							log.Error(ctx, "[unicast.sub] expire failed", log.String("list", list), log.CError(err))
+							log.Error(ctx, "[redis.unicast.sub] expire failed", log.String("list", list), log.CError(err))
 						}
 						if _, err := c.SetEx(ctx, exist, 1, time.Second*16).Result(); err != nil {
 							if err == context.Canceled {
@@ -73,7 +73,7 @@ func (c *Client) SubUnicast(unicast string, shard uint8, handler func([]byte)) (
 								tker.Stop()
 								return
 							}
-							log.Error(ctx, "[unicast.sub] expire failed", log.String("list", list), log.CError(err))
+							log.Error(ctx, "[redis.unicast.sub] expire failed", log.String("list", list), log.CError(err))
 						}
 					}
 				}
@@ -85,7 +85,7 @@ func (c *Client) SubUnicast(unicast string, shard uint8, handler func([]byte)) (
 						if err == gredis.ErrClosed || err == context.Canceled {
 							return
 						}
-						log.Error(ctx, "[unicast.sub] read failed", log.String("list", list), log.CError(err))
+						log.Error(ctx, "[redis.unicast.sub] read failed", log.String("list", list), log.CError(err))
 						time.Sleep(time.Millisecond * 100)
 						continue
 					}
@@ -102,7 +102,7 @@ func (c *Client) SubUnicast(unicast string, shard uint8, handler func([]byte)) (
 // return gredis.Nil means the unicast doesn't exist
 func (c *Client) PubUnicast(ctx context.Context, unicast string, shard uint8, key string, values ...interface{}) error {
 	if unicast == "" || shard == 0 {
-		panic("[unicast.pub]")
+		panic("[redis.unicast.pub] unicast name or shard num missing")
 	}
 	list := ""
 	if key == "" {
