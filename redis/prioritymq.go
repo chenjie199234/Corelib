@@ -85,7 +85,7 @@ func (c *Client) PriorityMQGetCurTasks(ctx context.Context, group string) (map[s
 	}
 	result := make(map[string]int64, len(r))
 	for _, v := range r {
-		result[v.Member] = int64(v.Score)
+		result[v.Member.(string)] = int64(v.Score)
 	}
 	return result, nil
 }
