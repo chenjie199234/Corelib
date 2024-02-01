@@ -23,7 +23,7 @@ const index = `<!DOCTYPE html>
   </head>
   <body style="margin:0px;padding:0px;border:0px none white">
     <div id="app" style="width:100vw;height:100vh;overflow:hidden;background-color:white"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>`
 
