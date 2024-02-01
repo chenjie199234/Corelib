@@ -9,9 +9,6 @@ const git = `*
 !.gitignore
 !index.html
 !package.json
-!tsconfig.json
-!tsconfig.node.json
-!vite.config.ts
 !/src/
 !/src/*
 !/src/**/
@@ -24,60 +21,11 @@ const index = `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{.}}</title>
   </head>
-  <body>
-  <div id="app" style="width:100vw;height:100vh;overflow:hidden;background-color:white"></div>
+  <body style="margin:0px;padding:0px;border:0px none white">
+    <div id="app" style="width:100vw;height:100vh;overflow:hidden;background-color:white"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>`
-
-const tsconfig = `{
-  "compilerOptions": {
-    "target": "ES2020",
-    "useDefineForClassFields": true,
-    "module": "ESNext",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "skipLibCheck": true,
-
-    /* Bundler mode */
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "preserve",
-
-    /* Linting */
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "noImplicitAny": false,
-    "noImplicitThis":false
-  },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"],
-  "references": [{ "path": "./tsconfig.node.json" }]
-}`
-
-const tsconfignode = `{
-  "compilerOptions": {
-    "composite": true,
-    "skipLibCheck": true,
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true
-  },
-  "include": ["vite.config.ts"]
-}`
-
-const viteconfig = `import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-
-// https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [vue()],
-  server: {
-  }
-})`
 
 const pkg = `{
   "name": "{{.}}",
@@ -86,33 +34,17 @@ const pkg = `{
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
-  "dependencies": {
-    "vue": "latest"
-  },
   "devDependencies": {
-    "@vitejs/plugin-vue": "latest",
-    "typescript": "latest",
-    "vite": "latest",
-    "vue-tsc": "latest"
+    "vite": "latest"
+  },
+  "dependencies": {
   }
 }`
 
-const main = `import { createApp } from 'vue'
-import main from './main.vue'
-
-createApp(main).mount('#app')`
-
-const app = `<script setup lang="ts">
-</script>
-
-<template>
-Hello World
-</template>`
-
-const viteenv = `/// <reference types="vite/client" />`
+const main = `document.querySelector('#app').innerHTML="hello world"`
 
 func CreatePathAndFile(projectname string) {
 	var e error
@@ -169,88 +101,18 @@ func CreatePathAndFile(projectname string) {
 	if e := pkgfile.Close(); e != nil {
 		panic("close ./html/package.json error: " + e.Error())
 	}
-	//./html/tsconfig.json
-	tsconfigfile, e := os.OpenFile("./html/tsconfig.json", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	//./html/src/main.js
+	mainfile, e := os.OpenFile("./html/src/main.js", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic("open ./html/tsconfig.json error: " + e.Error())
-	}
-	if _, e := tsconfigfile.WriteString(tsconfig); e != nil {
-		panic("write ./html/tsconfig.json error: " + e.Error())
-	}
-	if e := tsconfigfile.Sync(); e != nil {
-		panic("sync ./html/tsconfig.json error: " + e.Error())
-	}
-	if e := tsconfigfile.Close(); e != nil {
-		panic("close ./html/tsconfig.json error: " + e.Error())
-	}
-	//./html/tsconfig.node.json
-	tsconfignodefile, e := os.OpenFile("./html/tsconfig.node.json", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		panic("open ./html/tsconfig.node.json error: " + e.Error())
-	}
-	if _, e := tsconfignodefile.WriteString(tsconfignode); e != nil {
-		panic("write ./html/tsconfig.node.json error: " + e.Error())
-	}
-	if e := tsconfignodefile.Sync(); e != nil {
-		panic("sync ./html/tsconfig.node.json error: " + e.Error())
-	}
-	if e := tsconfignodefile.Close(); e != nil {
-		panic("close ./html/tsconfig.node.json error: " + e.Error())
-	}
-	//./html/vite.config.ts
-	viteconfigfile, e := os.OpenFile("./html/vite.config.ts", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		panic("open ./html/vite.config.ts error: " + e.Error())
-	}
-	if _, e := viteconfigfile.WriteString(viteconfig); e != nil {
-		panic("write ./html/vite.config.ts error: " + e.Error())
-	}
-	if e := viteconfigfile.Sync(); e != nil {
-		panic("sync ./html/vite.config.ts error: " + e.Error())
-	}
-	if e := viteconfigfile.Close(); e != nil {
-		panic("close ./html/vite.config.ts error: " + e.Error())
-	}
-	//./html/src/main.vue
-	appfile, e := os.OpenFile("./html/src/main.vue", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		panic("open ./html/src/main.vue error: " + e.Error())
-	}
-	if _, e := appfile.WriteString(app); e != nil {
-		panic("write ./html/src/main.vue error: " + e.Error())
-	}
-	if e := appfile.Sync(); e != nil {
-		panic("sync ./html/src/main.vue error: " + e.Error())
-	}
-	if e := appfile.Close(); e != nil {
-		panic("close ./html/src/main.vue error: " + e.Error())
-	}
-	//./html/src/main.ts
-	mainfile, e := os.OpenFile("./html/src/main.ts", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		panic("open ./html/src/main.ts error: " + e.Error())
+		panic("open ./html/src/main.js error: " + e.Error())
 	}
 	if _, e := mainfile.WriteString(main); e != nil {
-		panic("write ./html/src/main.ts error: " + e.Error())
+		panic("write ./html/src/main.js error: " + e.Error())
 	}
 	if e := mainfile.Sync(); e != nil {
-		panic("sync ./html/src/main.ts error: " + e.Error())
+		panic("sync ./html/src/main.js error: " + e.Error())
 	}
 	if e := mainfile.Close(); e != nil {
-		panic("close ./html/src/main.ts error: " + e.Error())
-	}
-	//./html/src/vite-env.d.ts
-	viteenvfile, e := os.OpenFile("./html/src/vite-env.d.ts", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		panic("open ./html/src/vite-env.d.ts error: " + e.Error())
-	}
-	if _, e := viteenvfile.WriteString(viteenv); e != nil {
-		panic("write ./html/src/vite-env.d.ts error: " + e.Error())
-	}
-	if e := viteenvfile.Sync(); e != nil {
-		panic("sync ./html/src/vite-env.d.ts error: " + e.Error())
-	}
-	if e := viteenvfile.Close(); e != nil {
-		panic("close ./html/src/vite-env.d.ts error: " + e.Error())
+		panic("close ./html/src/main.js error: " + e.Error())
 	}
 }
