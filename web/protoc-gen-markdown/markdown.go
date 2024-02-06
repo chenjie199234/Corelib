@@ -258,7 +258,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 			if f.Desc.Kind() == protoreflect.Int64Kind ||
 				f.Desc.Kind() == protoreflect.Sint64Kind ||
 				f.Desc.Kind() == protoreflect.Sfixed64Kind {
-				g.P("\t//int64 use string to avoid overflow")
+				g.P("\t//int64 use string to prevent overflow")
 			} else {
 				g.P("\t//int32")
 			}
@@ -344,7 +344,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 			}
 			if f.Desc.Kind() == protoreflect.Uint64Kind ||
 				f.Desc.Kind() == protoreflect.Fixed64Kind {
-				g.P("\t//uint64 use string to avoid overflow")
+				g.P("\t//uint64 use string to prevent overflow")
 			} else {
 				g.P("\t//uint32")
 			}
@@ -478,13 +478,13 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 		case protoreflect.StringKind:
 			if f.Desc.IsList() {
 				if f.Desc.Kind() == protoreflect.BytesKind {
-					line += "[\"base64 str\",\"base64 str\"]"
+					line += "[\"standard base64 str\",\"standard base64 str\"]"
 				} else {
 					line += "[\"str\",\"str\"]"
 				}
 			} else {
 				if f.Desc.Kind() == protoreflect.BytesKind {
-					line += "\"base64 str\""
+					line += "\"standard base64 str\""
 				} else {
 					line += "\"str\""
 				}
@@ -654,7 +654,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 					tmp += "0.1"
 				case protoreflect.BytesKind:
 					//bytes
-					tmp += strconv.Quote("base64 str")
+					tmp += strconv.Quote("standard base64 str")
 				case protoreflect.StringKind:
 					//string
 					tmp += strconv.Quote("str")
@@ -733,12 +733,12 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 					fallthrough
 				case protoreflect.Sfixed64Kind:
 					//int64
-					comment += ",value-int64 use string to avoid overflow"
+					comment += ",value-int64 use string to prevent overflow"
 				case protoreflect.Uint64Kind:
 					fallthrough
 				case protoreflect.Fixed64Kind:
 					//uint64
-					comment += ",value-uint64 use string to avoid overflow"
+					comment += ",value-uint64 use string to prevent overflow"
 				case protoreflect.FloatKind:
 					//float32
 					comment += ",value-float32"
@@ -1034,7 +1034,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 							ins := proto.GetExtension(fop, pbex.E_MapValueStringBytesIn).([]string)
 							d, _ := json.Marshal(ins)
 							if f.Desc.Kind() == protoreflect.BytesKind {
-								g.P("\t//value after decode base64 must in ", string(d))
+								g.P("\t//value after decode standard base64 must in ", string(d))
 							} else {
 								g.P("\t//value must in ", string(d))
 							}
@@ -1043,7 +1043,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 							notins := proto.GetExtension(fop, pbex.E_MapValueStringBytesNotIn).([]string)
 							d, _ := json.Marshal(notins)
 							if f.Desc.Kind() == protoreflect.BytesKind {
-								g.P("\t//value after decode base64 must not in ", string(d))
+								g.P("\t//value after decode standard base64 must not in ", string(d))
 							} else {
 								g.P("\t//value must not in ", string(d))
 							}
@@ -1052,7 +1052,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 							match := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegMatch).([]string)
 							d := strings.Join(match, " and ")
 							if f.Desc.Kind() == protoreflect.BytesKind {
-								g.P("\t//value after decode base64 must match regexp ", d)
+								g.P("\t//value after decode standard base64 must match regexp ", d)
 							} else {
 								g.P("\t//value must match regexp ", d)
 							}
@@ -1061,7 +1061,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 							notmatch := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegNotMatch).([]string)
 							d := strings.Join(notmatch, " and ")
 							if f.Desc.Kind() == protoreflect.BytesKind {
-								g.P("\t//value after decode base64 must not match regexp ", d)
+								g.P("\t//value after decode standard base64 must not match regexp ", d)
 							} else {
 								g.P("\t//value must not match regexp ", d)
 							}
@@ -1069,7 +1069,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 						if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenEq) {
 							eq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenEq).(uint64)
 							if f.Desc.Kind() == protoreflect.BytesKind {
-								g.P("\t//value after decode base64 length must == ", eq)
+								g.P("\t//value after decode standard base64 length must == ", eq)
 							} else {
 								g.P("\t//value length must == ", eq)
 							}
@@ -1077,7 +1077,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 						if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenNotEq) {
 							noteq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenNotEq).(uint64)
 							if f.Desc.Kind() == protoreflect.BytesKind {
-								g.P("\t//value after decode base64 length must != ", noteq)
+								g.P("\t//value after decode standard base64 length must != ", noteq)
 							} else {
 								g.P("\t//value length must != ", noteq)
 							}
@@ -1085,7 +1085,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 						if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGt) {
 							gt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGt).(uint64)
 							if f.Desc.Kind() == protoreflect.BytesKind {
-								g.P("\t//value after decode base64 length must > ", gt)
+								g.P("\t//value after decode standard base64 length must > ", gt)
 							} else {
 								g.P("\t//value length must > ", gt)
 							}
@@ -1093,7 +1093,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 						if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGte) {
 							gte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGte).(uint64)
 							if f.Desc.Kind() == protoreflect.BytesKind {
-								g.P("\t//value after decode base64 length must >= ", gte)
+								g.P("\t//value after decode standard base64 length must >= ", gte)
 							} else {
 								g.P("\t//value length must >= ", gte)
 							}
@@ -1101,7 +1101,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 						if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLt) {
 							lt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLt).(uint64)
 							if f.Desc.Kind() == protoreflect.BytesKind {
-								g.P("\t//value after decode base64 length must < ", lt)
+								g.P("\t//value after decode standard base64 length must < ", lt)
 							} else {
 								g.P("\t//value length must < ", lt)
 							}
@@ -1109,7 +1109,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 						if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLte) {
 							lte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLte).(uint64)
 							if f.Desc.Kind() == protoreflect.BytesKind {
-								g.P("\t//value after decode base64 length must <= ", lte)
+								g.P("\t//value after decode standard base64 length must <= ", lte)
 							} else {
 								g.P("\t//value length must <= ", lte)
 							}
@@ -1517,7 +1517,7 @@ func formdoc(g *protogen.GeneratedFile, m *protogen.Message) {
 			if f.Desc.IsList() {
 				if f.Desc.Kind() == protoreflect.BytesKind {
 					line = string(f.Desc.Name()) + "=base64str&" + string(f.Desc.Name()) + "=base64str"
-					g.P("//base64 string array")
+					g.P("//standard base64 string array")
 				} else {
 					line = string(f.Desc.Name()) + "=str&" + string(f.Desc.Name()) + "=str"
 					g.P("//string array")
@@ -1525,7 +1525,7 @@ func formdoc(g *protogen.GeneratedFile, m *protogen.Message) {
 			} else {
 				if f.Desc.Kind() == protoreflect.BytesKind {
 					line = string(f.Desc.Name()) + "=base64str"
-					g.P("//base64 string")
+					g.P("//standard base64 string")
 				} else {
 					line = string(f.Desc.Name()) + "=str"
 					g.P("//string")
@@ -1617,560 +1617,9 @@ func formdoc(g *protogen.GeneratedFile, m *protogen.Message) {
 				}
 			}
 		case protoreflect.MessageKind:
-			if f.Desc.IsMap() {
-				tmp := ""
-				key := f.Desc.MapKey()
-				value := f.Desc.MapValue()
-				switch key.Kind() {
-				case protoreflect.BoolKind:
-					//bool
-					tmp += strconv.Quote("true")
-				case protoreflect.Int32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					//int32
-					fallthrough
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					fallthrough
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Fixed32Kind:
-					//uint32
-					fallthrough
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Fixed64Kind:
-					//uint64
-					tmp += strconv.Quote("0")
-				case protoreflect.StringKind:
-					tmp += strconv.Quote("str")
-				}
-				tmp += ":"
-				switch value.Kind() {
-				case protoreflect.BoolKind:
-					//bool
-					tmp += "true"
-				case protoreflect.EnumKind:
-					fallthrough
-				case protoreflect.Int32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					//int32
-					fallthrough
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Fixed32Kind:
-					//uint32
-					tmp += "0"
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					fallthrough
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Fixed64Kind:
-					//uint64
-					tmp += strconv.Quote("0")
-				case protoreflect.FloatKind:
-					//float32
-					fallthrough
-				case protoreflect.DoubleKind:
-					//float64
-					tmp += "0.1"
-				case protoreflect.BytesKind:
-					//bytes
-					tmp += strconv.Quote("base64 str")
-				case protoreflect.StringKind:
-					//string
-					tmp += strconv.Quote("str")
-				case protoreflect.MessageKind:
-					//message
-					tmp += "{}"
-					newmessage[string(f.Message.Fields[1].Message.Desc.FullName())] = f.Message.Fields[1].Message
-				}
-				line = string(f.Desc.Name()) + "={" + tmp + "," + tmp + "}"
-			} else if f.Desc.IsList() {
-				newmessage[string(f.Message.Desc.FullName())] = f.Message
-				line = string(f.Desc.Name()) + "={}&" + strconv.Quote(string(f.Desc.Name())) + "={}"
-			} else {
-				newmessage[string(f.Message.Desc.FullName())] = f.Message
-				line = string(f.Desc.Name()) + "={}"
-			}
-			if f.Desc.IsMap() {
-				comment := "//kv map"
-				key := f.Desc.MapKey()
-				value := f.Desc.MapValue()
-				switch key.Kind() {
-				case protoreflect.BoolKind:
-					//bool
-					comment += ",key-bool use string is json's require"
-				case protoreflect.Int32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					//int32
-					comment += ",key-int32 use string is json's require"
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					comment += ",key-int64 use string is json's require"
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Fixed32Kind:
-					//uint32
-					comment += ",key-uint32 use string is json's require"
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Fixed64Kind:
-					//uint64
-					comment += ",key-uint64 use string is json's require"
-				case protoreflect.StringKind:
-					// comment += ",key-string"
-				}
-				switch value.Kind() {
-				case protoreflect.BoolKind:
-					//bool
-					break
-				case protoreflect.EnumKind:
-					fallthrough
-				case protoreflect.Int32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					//int32
-					comment += ",value-int32"
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Fixed32Kind:
-					//uint32
-					comment += ",value-uint32"
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					comment += ",value-int64 use string to avoid overflow"
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Fixed64Kind:
-					//uint64
-					comment += ",value-uint64 use string to avoid overflow"
-				case protoreflect.FloatKind:
-					//float32
-					comment += ",value-float32"
-				case protoreflect.DoubleKind:
-					//float64
-					comment += ",value-float64"
-				case protoreflect.BytesKind:
-					//bytes
-					break
-				case protoreflect.StringKind:
-					//string
-					break
-				case protoreflect.MessageKind:
-					//message
-					comment += ",value-object " + string(value.Message().Name())
-				}
-				g.P(comment)
-			} else if f.Desc.IsList() {
-				g.P("//object " + string(f.Message.Desc.Name()) + " array")
-			} else {
-				g.P("//object " + string(f.Message.Desc.Name()))
-			}
-			//options comments
-			if f.Desc.IsMap() {
-				key := f.Desc.MapKey()
-				value := f.Desc.MapValue()
-				switch key.Kind() {
-				case protoreflect.Int32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					//int32
-					fallthrough
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					if proto.HasExtension(fop, pbex.E_MapKeyIntIn) {
-						ins := proto.GetExtension(fop, pbex.E_MapKeyIntIn).([]int64)
-						d, _ := json.Marshal(ins)
-						g.P("//key must in ", string(d))
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyIntIn) {
-						notins := proto.GetExtension(fop, pbex.E_MapKeyIntNotIn).([]int64)
-						d, _ := json.Marshal(notins)
-						g.P("//key must not in ", string(d))
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyIntGt) {
-						gt := proto.GetExtension(fop, pbex.E_MapKeyIntGt).(int64)
-						g.P("//key must > ", gt)
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyIntGte) {
-						gte := proto.GetExtension(fop, pbex.E_MapKeyIntGte).(int64)
-						g.P("//key must >= ", gte)
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyIntLt) {
-						lt := proto.GetExtension(fop, pbex.E_MapKeyIntLt).(int64)
-						g.P("//key must < ", lt)
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyIntLte) {
-						lte := proto.GetExtension(fop, pbex.E_MapKeyIntLte).(int64)
-						g.P("//key must <= ", lte)
-					}
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Fixed32Kind:
-					//uint32
-					fallthrough
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Fixed64Kind:
-					//uint64
-					if proto.HasExtension(fop, pbex.E_MapKeyUintIn) {
-						ins := proto.GetExtension(fop, pbex.E_MapKeyUintIn).([]uint64)
-						d, _ := json.Marshal(ins)
-						g.P("//key must in ", string(d))
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyUintNotIn) {
-						notins := proto.GetExtension(fop, pbex.E_MapKeyUintNotIn).([]uint64)
-						d, _ := json.Marshal(notins)
-						g.P("//key must not in ", string(d))
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyUintGt) {
-						gt := proto.GetExtension(fop, pbex.E_MapKeyUintGt).(uint64)
-						g.P("//key must > ", gt)
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyUintGte) {
-						gte := proto.GetExtension(fop, pbex.E_MapKeyUintGte).(uint64)
-						g.P("//key must >= ", gte)
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyUintLt) {
-						lt := proto.GetExtension(fop, pbex.E_MapKeyUintLt).(uint64)
-						g.P("//key must < ", lt)
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyUintLte) {
-						lte := proto.GetExtension(fop, pbex.E_MapKeyUintLte).(uint64)
-						g.P("//key must <= ", lte)
-					}
-				case protoreflect.StringKind:
-					if proto.HasExtension(fop, pbex.E_MapKeyStringIn) {
-						ins := proto.GetExtension(fop, pbex.E_MapKeyStringIn).([]string)
-						d, _ := json.Marshal(ins)
-						g.P("//key must in ", string(d))
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyStringNotIn) {
-						notins := proto.GetExtension(fop, pbex.E_MapKeyStringNotIn).([]string)
-						d, _ := json.Marshal(notins)
-						g.P("//key must not in ", string(d))
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyStringRegMatch) {
-						match := proto.GetExtension(fop, pbex.E_MapKeyStringRegMatch).([]string)
-						d := strings.Join(match, " and ")
-						g.P("//key must match regexp ", d)
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyStringRegNotMatch) {
-						notmatch := proto.GetExtension(fop, pbex.E_MapKeyStringRegNotMatch).([]string)
-						d := strings.Join(notmatch, " and ")
-						g.P("//key must not match regexp ", d)
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyStringLenEq) {
-						eq := proto.GetExtension(fop, pbex.E_MapKeyStringLenEq).(uint64)
-						g.P("//key length must == ", eq)
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyStringLenNotEq) {
-						noteq := proto.GetExtension(fop, pbex.E_MapKeyStringLenNotEq).(uint64)
-						g.P("//key length must != ", noteq)
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyStringLenGt) {
-						gt := proto.GetExtension(fop, pbex.E_MapKeyStringLenGt).(uint64)
-						g.P("//key length must > ", gt)
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyStringLenGte) {
-						gte := proto.GetExtension(fop, pbex.E_MapKeyStringLenGte).(uint64)
-						g.P("//key length must >= ", gte)
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyStringLenLt) {
-						lt := proto.GetExtension(fop, pbex.E_MapKeyStringLenLt).(uint64)
-						g.P("//key length must < ", lt)
-					}
-					if proto.HasExtension(fop, pbex.E_MapKeyStringLenLte) {
-						lte := proto.GetExtension(fop, pbex.E_MapKeyStringLenLte).(uint64)
-						g.P("//key length must <= ", lte)
-					}
-				}
-				switch value.Kind() {
-				case protoreflect.BoolKind:
-					//bool
-					if proto.HasExtension(fop, pbex.E_MapValueBoolEq) {
-						eq := proto.GetExtension(fop, pbex.E_MapValueBoolEq).(bool)
-						g.P("//value must be ", eq)
-					}
-				case protoreflect.EnumKind:
-					//int32
-					if proto.HasExtension(fop, pbex.E_MapValueEnumIn) {
-						ins := proto.GetExtension(fop, pbex.E_MapValueEnumIn).([]int64)
-						d, _ := json.Marshal(ins)
-						g.P("//value must in ", string(d))
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueEnumNotIn) {
-						notins := proto.GetExtension(fop, pbex.E_MapValueEnumNotIn).([]int64)
-						d, _ := json.Marshal(notins)
-						g.P("//value must not in ", string(d))
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueEnumGt) {
-						gt := proto.GetExtension(fop, pbex.E_MapValueEnumGt).(int64)
-						g.P("//value must > ", gt)
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueEnumGte) {
-						gte := proto.GetExtension(fop, pbex.E_MapValueEnumGte).(int64)
-						g.P("//value must >= ", gte)
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueEnumLt) {
-						lt := proto.GetExtension(fop, pbex.E_MapValueEnumLt).(int64)
-						g.P("//value must < ", lt)
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueEnumLte) {
-						lte := proto.GetExtension(fop, pbex.E_MapValueEnumLte).(int64)
-						g.P("//value must <= ", lte)
-					}
-				case protoreflect.Int32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					//int32
-					fallthrough
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					if proto.HasExtension(fop, pbex.E_MapValueIntIn) {
-						ins := proto.GetExtension(fop, pbex.E_MapValueIntIn).([]int64)
-						d, _ := json.Marshal(ins)
-						g.P("//value must in ", string(d))
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueIntNotIn) {
-						notins := proto.GetExtension(fop, pbex.E_MapValueIntNotIn).([]int64)
-						d, _ := json.Marshal(notins)
-						g.P("//value must not in ", string(d))
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueIntGt) {
-						gt := proto.GetExtension(fop, pbex.E_MapValueIntGt).(int64)
-						g.P("//value must > ", gt)
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueIntGte) {
-						gte := proto.GetExtension(fop, pbex.E_MapValueIntGte).(int64)
-						g.P("//value must >= ", gte)
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueIntLt) {
-						lt := proto.GetExtension(fop, pbex.E_MapValueIntLt).(int64)
-						g.P("//value must < ", lt)
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueIntLte) {
-						lte := proto.GetExtension(fop, pbex.E_MapValueIntLte).(int64)
-						g.P("//value must <= ", lte)
-					}
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Fixed32Kind:
-					//uint32
-					fallthrough
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Fixed64Kind:
-					//uint64
-					if proto.HasExtension(fop, pbex.E_MapValueUintIn) {
-						ins := proto.GetExtension(fop, pbex.E_MapValueUintIn).([]uint64)
-						d, _ := json.Marshal(ins)
-						g.P("//value must in ", string(d))
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueUintNotIn) {
-						notins := proto.GetExtension(fop, pbex.E_MapValueUintNotIn).([]uint64)
-						d, _ := json.Marshal(notins)
-						g.P("//value must not in ", string(d))
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueUintGt) {
-						gt := proto.GetExtension(fop, pbex.E_MapValueUintGt).(uint64)
-						g.P("//value must > ", gt)
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueUintGte) {
-						gte := proto.GetExtension(fop, pbex.E_MapValueUintGte).(uint64)
-						g.P("//value must >= ", gte)
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueUintLt) {
-						lt := proto.GetExtension(fop, pbex.E_MapValueUintLt).(uint64)
-						g.P("//value must < ", lt)
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueUintLte) {
-						lte := proto.GetExtension(fop, pbex.E_MapValueUintLte).(uint64)
-						g.P("//value must <= ", lte)
-					}
-				case protoreflect.FloatKind:
-					//float32
-					fallthrough
-				case protoreflect.DoubleKind:
-					//float64
-					if proto.HasExtension(fop, pbex.E_MapValueFloatIn) {
-						ins := proto.GetExtension(fop, pbex.E_MapValueFloatIn).([]float64)
-						d, _ := json.Marshal(ins)
-						g.P("//value must in ", string(d))
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueFloatNotIn) {
-						notins := proto.GetExtension(fop, pbex.E_MapValueFloatNotIn).([]float64)
-						d, _ := json.Marshal(notins)
-						g.P("//value must not in ", string(d))
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueFloatGt) {
-						gt := proto.GetExtension(fop, pbex.E_MapValueFloatGt).(float64)
-						g.P("//value must > ", gt)
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueFloatGte) {
-						gte := proto.GetExtension(fop, pbex.E_MapValueFloatGte).(float64)
-						g.P("//value must >= ", gte)
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueFloatLt) {
-						lt := proto.GetExtension(fop, pbex.E_MapValueFloatLt).(float64)
-						g.P("//value must < ", lt)
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueFloatLte) {
-						lte := proto.GetExtension(fop, pbex.E_MapValueFloatLte).(float64)
-						g.P("//value must <= ", lte)
-					}
-				case protoreflect.BytesKind:
-					//bytes
-					fallthrough
-				case protoreflect.StringKind:
-					//string
-					if proto.HasExtension(fop, pbex.E_MapValueStringBytesIn) {
-						ins := proto.GetExtension(fop, pbex.E_MapValueStringBytesIn).([]string)
-						d, _ := json.Marshal(ins)
-						if f.Desc.Kind() == protoreflect.BytesKind {
-							g.P("//value after decode base64 must in ", string(d))
-						} else {
-							g.P("//value must in ", string(d))
-						}
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueStringBytesNotIn) {
-						notins := proto.GetExtension(fop, pbex.E_MapValueStringBytesNotIn).([]string)
-						d, _ := json.Marshal(notins)
-						if f.Desc.Kind() == protoreflect.BytesKind {
-							g.P("//value after decode base64 must not in ", string(d))
-						} else {
-							g.P("//value must not in ", string(d))
-						}
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueStringBytesRegMatch) {
-						match := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegMatch).([]string)
-						d := strings.Join(match, " and ")
-						if f.Desc.Kind() == protoreflect.BytesKind {
-							g.P("//value after decode base64 must match regexp ", d)
-						} else {
-							g.P("//value must match regexp ", d)
-						}
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueStringBytesRegNotMatch) {
-						notmatch := proto.GetExtension(fop, pbex.E_MapValueStringBytesRegNotMatch).([]string)
-						d := strings.Join(notmatch, " and ")
-						if f.Desc.Kind() == protoreflect.BytesKind {
-							g.P("//value after decode base64 must not match regexp ", d)
-						} else {
-							g.P("//value must not match regexp ", d)
-						}
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenEq) {
-						eq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenEq).(uint64)
-						if f.Desc.Kind() == protoreflect.BytesKind {
-							g.P("//value after decode base64 length must == ", eq)
-						} else {
-							g.P("//value length must == ", eq)
-						}
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenNotEq) {
-						noteq := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenNotEq).(uint64)
-						if f.Desc.Kind() == protoreflect.BytesKind {
-							g.P("//value after decode base64 length must != ", noteq)
-						} else {
-							g.P("//value length must != ", noteq)
-						}
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGt) {
-						gt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGt).(uint64)
-						if f.Desc.Kind() == protoreflect.BytesKind {
-							g.P("//value after decode base64 length must > ", gt)
-						} else {
-							g.P("//value length must > ", gt)
-						}
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenGte) {
-						gte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenGte).(uint64)
-						if f.Desc.Kind() == protoreflect.BytesKind {
-							g.P("//value after decode base64 length must >= ", gte)
-						} else {
-							g.P("//value length must >= ", gte)
-						}
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLt) {
-						lt := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLt).(uint64)
-						if f.Desc.Kind() == protoreflect.BytesKind {
-							g.P("//value after decode base64 length must < ", lt)
-						} else {
-							g.P("//value length must < ", lt)
-						}
-					}
-					if proto.HasExtension(fop, pbex.E_MapValueStringBytesLenLte) {
-						lte := proto.GetExtension(fop, pbex.E_MapValueStringBytesLenLte).(uint64)
-						if f.Desc.Kind() == protoreflect.BytesKind {
-							g.P("//value after decode base64 length must <= ", lte)
-						} else {
-							g.P("//value length must <= ", lte)
-						}
-					}
-				case protoreflect.MessageKind:
-					//message
-					if proto.HasExtension(fop, pbex.E_MapValueMessageNotNil) {
-						notnil := proto.GetExtension(fop, pbex.E_MapValueMessageNotNil).(bool)
-						if notnil {
-							g.P("//value must not be null")
-						}
-					}
-				}
-			} else {
-				if proto.HasExtension(fop, pbex.E_MessageNotNil) {
-					if notnil := proto.GetExtension(fop, pbex.E_MessageNotNil).(bool); notnil {
-						if f.Desc.IsList() {
-							g.P("//element value must not be null")
-						} else {
-							g.P("//value must not be null")
-						}
-					}
-				}
-			}
+			panic(fmt.Sprintf("form request message can't contain nested message and map"))
 		}
-		if f.Desc.IsMap() || f.Desc.IsList() {
+		if f.Desc.IsList() {
 			if proto.HasExtension(fop, pbex.E_MapRepeatedLenEq) {
 				eq := proto.GetExtension(fop, pbex.E_MapRepeatedLenEq).(uint64)
 				g.P("//element num must == ", eq)

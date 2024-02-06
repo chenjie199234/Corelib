@@ -12,6 +12,7 @@ import (
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
 )
@@ -59,8 +60,22 @@ func main() {
 						continue
 					}
 					httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
-					if httpmetohd != http.MethodGet && httpmetohd != http.MethodPost && httpmetohd != http.MethodPut && httpmetohd != http.MethodDelete && httpmetohd != http.MethodPatch {
+					if httpmetohd != http.MethodGet &&
+						httpmetohd != http.MethodPost &&
+						httpmetohd != http.MethodPut &&
+						httpmetohd != http.MethodDelete &&
+						httpmetohd != http.MethodPatch {
 						panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", m.Desc.Name(), s.Desc.Name(), httpmetohd))
+					}
+					//Get and Delete method can only contain simple fields
+					if httpmetohd != http.MethodGet && httpmetohd != http.MethodDelete {
+						continue
+					}
+					for _, f := range m.Input.Fields {
+						if f.Desc.Kind() != protoreflect.MessageKind {
+							continue
+						}
+						panic(fmt.Sprintf("method: %s in service: %s with httpmethod: %s,it's request message can't contain nested message and map", m.Desc.Name(), s.Desc.Name(), httpmetohd))
 					}
 				}
 			}
