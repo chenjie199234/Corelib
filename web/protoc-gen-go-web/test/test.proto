@@ -50,6 +50,18 @@ message helloreq{
 	TestEnum e=28;
 	optional TestEnum eo=29;
 	repeated TestEnum re=30;
+	oneof o{
+		bool obl=31;
+		int32 oi32=32;
+		uint32 oui32=33;
+		int64 oi64=34;
+		uint64 oui64=35;
+		bytes obs=36;
+		string oss=37;
+		float of=38;
+		double od=39;
+		TestEnum oe=40;
+	}
 }
 message helloresp{
 
