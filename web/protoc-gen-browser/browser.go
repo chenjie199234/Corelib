@@ -30,11 +30,10 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, target bool) *proto
 	genFileComment(gen, file, g)
 
 	//gen req and resp
-	enums, msgs, tojson, toform, fromjson, methodcount := prepare(file, g, target)
+	enums, msgs, tojson, toform, fromobj, methodcount := prepare(file, g, target)
 	if methodcount == 0 {
 		return g
 	}
-	g.P()
 	g.P("export interface Error{")
 	g.P("\tcode: number;")
 	g.P("\tmsg: string;")
@@ -44,15 +43,10 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, target bool) *proto
 		genEnum(e, g)
 	}
 	for _, m := range msgs {
-		if _, ok := tojson[m.GoIdent.String()]; ok {
-			genToJson(m, g)
-		}
-		if _, ok := toform[m.GoIdent.String()]; ok {
-			genToForm(m, g)
-		}
-		if _, ok := fromjson[m.GoIdent.String()]; ok {
-			genFromJson(m, g)
-		}
+		_, gentojson := tojson[m.GoIdent.String()]
+		_, gentoform := toform[m.GoIdent.String()]
+		_, genfromobj := fromobj[m.GoIdent.String()]
+		genMessage(m, g, gentojson, gentoform, genfromobj)
 	}
 
 	/*
@@ -92,12 +86,17 @@ func genFileComment(gen *protogen.Plugin, file *protogen.File, g *protogen.Gener
 }
 
 // target toc-true,tob-false
-func prepare(file *protogen.File, g *protogen.GeneratedFile, target bool) (enums []*protogen.Enum, msgs []*protogen.Message, tojson map[string]*struct{}, toform map[string]*struct{}, fromjson map[string]*struct{}, methodcount uint32) {
+func prepare(file *protogen.File, g *protogen.GeneratedFile, target bool) (enums []*protogen.Enum,
+	msgs []*protogen.Message,
+	tojson map[string]*struct{},
+	toform map[string]*struct{},
+	fromobj map[string]*struct{},
+	methodcount uint32) {
 	tmpenums := make(map[string]*protogen.Enum)
 	tmpmsgs := make(map[string]*protogen.Message)
 	tojson = make(map[string]*struct{})
 	toform = make(map[string]*struct{})
-	fromjson = make(map[string]*struct{})
+	fromobj = make(map[string]*struct{})
 	for _, service := range file.Services {
 		if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 			continue
@@ -120,13 +119,13 @@ func prepare(file *protogen.File, g *protogen.GeneratedFile, target bool) (enums
 					tojson[method.Input.GoIdent.String()] = nil
 				}
 				tmpmsgs[method.Output.GoIdent.String()] = method.Output
-				fromjson[method.Output.GoIdent.String()] = nil
+				fromobj[method.Output.GoIdent.String()] = nil
 			} else {
 				//tob
 				tmpmsgs[method.Input.GoIdent.String()] = method.Input
 				tojson[method.Input.GoIdent.String()] = nil
 				tmpmsgs[method.Output.GoIdent.String()] = method.Output
-				fromjson[method.Output.GoIdent.String()] = nil
+				fromobj[method.Output.GoIdent.String()] = nil
 			}
 			methodcount++
 		}
@@ -156,9 +155,9 @@ func prepare(file *protogen.File, g *protogen.GeneratedFile, target bool) (enums
 							needcheck = true
 						}
 					}
-					if _, ok := fromjson[m.GoIdent.String()]; ok {
-						if _, ok = fromjson[f.Message.GoIdent.String()]; !ok {
-							fromjson[f.Message.GoIdent.String()] = nil
+					if _, ok := fromobj[m.GoIdent.String()]; ok {
+						if _, ok = fromobj[f.Message.GoIdent.String()]; !ok {
+							fromobj[f.Message.GoIdent.String()] = nil
 							needcheck = true
 						}
 					}
@@ -177,9 +176,9 @@ func prepare(file *protogen.File, g *protogen.GeneratedFile, target bool) (enums
 							needcheck = true
 						}
 					}
-					if _, ok := fromjson[m.GoIdent.String()]; ok {
-						if _, ok := fromjson[f.Message.Fields[1].Message.GoIdent.String()]; !ok {
-							fromjson[f.Message.Fields[1].Message.GoIdent.String()] = nil
+					if _, ok := fromobj[m.GoIdent.String()]; ok {
+						if _, ok := fromobj[f.Message.Fields[1].Message.GoIdent.String()]; !ok {
+							fromobj[f.Message.Fields[1].Message.GoIdent.String()] = nil
 							needcheck = true
 						}
 					}
@@ -233,8 +232,8 @@ func genEnum(e *protogen.Enum, g *protogen.GeneratedFile) {
 	}
 	g.P("}")
 }
-
-func genField(m *protogen.Message, g *protogen.GeneratedFile) {
+func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gentoform, genfromobj bool) {
+	g.P("export class ", m.GoIdent.GoName, "{")
 	oneof := make(map[string]*struct{})
 	for _, f := range m.Fields {
 		if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
@@ -517,177 +516,174 @@ func genField(m *protogen.Message, g *protogen.GeneratedFile) {
 			}
 		}
 	}
-}
-func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
-	g.P("export class ", m.GoIdent.GoName, "{")
-	genField(m, g)
-	g.P("\ttoJSON(){")
-	g.P("\t\tlet tmp = {}")
-	oneofs := make(map[string]*struct{})
-	for _, f := range m.Fields {
-		if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
-			if _, ok := oneofs[f.Oneof.GoIdent.String()]; ok {
+	if genfromobj {
+		if len(m.Fields) == 0 {
+			g.P("\tconstructor(_obj:Object){")
+		} else {
+			g.P("\tconstructor(obj:Object){")
+		}
+		g.P("\t}")
+	}
+	if gentojson {
+		g.P("\ttoJSON(){")
+		g.P("\t\tlet tmp = {}")
+		oneofs := make(map[string]*struct{})
+		for _, f := range m.Fields {
+			if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
+				if _, ok := oneofs[f.Oneof.GoIdent.String()]; ok {
+					continue
+				}
+				oneofs[f.Oneof.GoIdent.String()] = nil
+				g.P("\t\tif(this.", f.Oneof.Desc.Name(), "){")
+				g.P("\t\t\tswitch(this.", f.Oneof.Desc.Name(), ".$key){")
+				for _, oneoff := range f.Oneof.Fields {
+					g.P("\t\t\t\tcase ", strconv.Quote(string(oneoff.Desc.Name())), ":{")
+					if oneoff.Desc.Kind() == protoreflect.BytesKind {
+						g.P("\t\t\t\t\t//bytes type in protobuf should be standard base64 encoded")
+						g.P("\t\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
+						g.P("\t\t\t\t\tlet rawstr=''")
+						g.P("\t\t\t\t\tthis.", f.Oneof.Desc.Name(), ".value.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
+						g.P("\t\t\t\t\ttmp[", strconv.Quote(string(oneoff.Desc.Name())), "]=window.btoa(rawstr)")
+					} else {
+						g.P("\t\t\t\t\ttmp[", strconv.Quote(string(oneoff.Desc.Name())), "]=this.", f.Oneof.Desc.Name(), ".value")
+					}
+					g.P("\t\t\t\t\tbreak")
+					g.P("\t\t\t\t}")
+				}
+				g.P("\t\t\t}")
+				g.P("\t\t}")
 				continue
 			}
-			oneofs[f.Oneof.GoIdent.String()] = nil
-			g.P("\t\tif(this.", f.Oneof.Desc.Name(), "){")
-			g.P("\t\t\tswitch(this.", f.Oneof.Desc.Name(), ".$key){")
-			for _, oneoff := range f.Oneof.Fields {
-				g.P("\t\t\t\tcase ", strconv.Quote(string(oneoff.Desc.Name())), ":{")
-				if oneoff.Desc.Kind() == protoreflect.BytesKind {
-					g.P("\t\t\t\t\t//bytes type in protobuf should be standard base64 encoded")
-					g.P("\t\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
-					g.P("\t\t\t\t\tlet rawstr=''")
-					g.P("\t\t\t\t\tthis.", f.Oneof.Desc.Name(), ".value.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
-					g.P("\t\t\t\t\ttmp[", strconv.Quote(string(oneoff.Desc.Name())), "]=window.btoa(rawstr)")
+			if !f.Desc.IsMap() {
+				if f.Desc.IsList() {
+					g.P("\t\tif(this.", f.Desc.Name(), " && this.", f.Desc.Name(), ".length>0)")
 				} else {
-					g.P("\t\t\t\t\ttmp[", strconv.Quote(string(oneoff.Desc.Name())), "]=this.", f.Oneof.Desc.Name(), ".value")
+					g.P("\t\tif(this.", f.Desc.Name(), "){")
 				}
-				g.P("\t\t\t\t\tbreak")
-				g.P("\t\t\t\t}")
+				if f.Desc.Kind() == protoreflect.BytesKind {
+					g.P("\t\t\t//bytes type in protobuf should be standard base64 encoded")
+					g.P("\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
+					if f.Desc.IsList() {
+						g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]=[]")
+						g.P("\t\t\tfor(let value of this.", f.Desc.Name(), "){")
+						g.P("\t\t\t\tlet rawstr=''")
+						g.P("\t\t\t\tvalue.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
+						g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "].push(window.btoa(rawstr))")
+						g.P("\t\t\t}")
+					} else {
+						g.P("\t\t\tlet rawstr=''")
+						g.P("\t\t\tthis.", f.Desc.Name(), ".forEach((element)=>{rawstr+=String.fromCharCode(element)})")
+						g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]=window.btoa(rawstr)")
+					}
+				} else {
+					g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]=this.", f.Desc.Name())
+				}
+				g.P("\t\t}")
+				continue
+			}
+			g.P("\t\tif(this.", f.Desc.Name(), " && this.", f.Desc.Name(), ".size>0){")
+			g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]={}")
+			g.P("\t\t\tfor(let [k,v] of this.", f.Desc.Name(), "){")
+			if f.Message.Fields[1].Desc.Kind() == protoreflect.BytesKind {
+				g.P("\t\t\t\tlet rawstr=''")
+				g.P("\t\t\t\tv.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
+				if f.Message.Fields[0].Desc.Kind() == protoreflect.Sfixed64Kind ||
+					f.Message.Fields[0].Desc.Kind() == protoreflect.Sint64Kind ||
+					f.Message.Fields[0].Desc.Kind() == protoreflect.Int64Kind ||
+					f.Message.Fields[0].Desc.Kind() == protoreflect.Fixed64Kind ||
+					f.Message.Fields[0].Desc.Kind() == protoreflect.Uint64Kind {
+					g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "][k.toString()]=window.btoa(rawstr)")
+				} else {
+					g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "][k]=window.btoa(rawstr)")
+				}
+			} else {
+				if f.Message.Fields[0].Desc.Kind() == protoreflect.Sfixed64Kind ||
+					f.Message.Fields[0].Desc.Kind() == protoreflect.Sint64Kind ||
+					f.Message.Fields[0].Desc.Kind() == protoreflect.Int64Kind ||
+					f.Message.Fields[0].Desc.Kind() == protoreflect.Fixed64Kind ||
+					f.Message.Fields[0].Desc.Kind() == protoreflect.Uint64Kind {
+					g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "][k.toString()]=v")
+				} else {
+					g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "][k]=v")
+				}
 			}
 			g.P("\t\t\t}")
 			g.P("\t\t}")
-			continue
 		}
-		if !f.Desc.IsMap() {
+		g.P("\t\treturn tmp")
+		g.P("\t}")
+	}
+	if gentoform {
+		g.P("\ttoForm(){")
+		g.P("\t\tlet query=[]")
+		oneofs := make(map[string]*struct{})
+		for _, f := range m.Fields {
+			if f.Desc.Kind() == protoreflect.MessageKind {
+				panic("form request message can't contain nested message and map")
+			}
+			if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
+				if _, ok := oneofs[f.Oneof.GoIdent.String()]; ok {
+					continue
+				}
+				oneofs[f.Oneof.GoIdent.String()] = nil
+				g.P("\t\tif(this.", f.Oneof.Desc.Name(), "){")
+				g.P("\t\t\tswitch(this.", f.Oneof.Desc.Name(), ".$key){")
+				for _, oneoff := range f.Oneof.Fields {
+					g.P("\t\t\t\tcase ", strconv.Quote(string(oneoff.Desc.Name())), ":{")
+					if oneoff.Desc.Kind() == protoreflect.BytesKind {
+						g.P("\t\t\t\t\t//bytes type in protobuf should be standard base64 encoded")
+						g.P("\t\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
+						g.P("\t\t\t\t\tlet rawstr=''")
+						g.P("\t\t\t\t\tthis.", f.Oneof.Desc.Name(), ".value.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
+						g.P("\t\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
+					} else {
+						g.P("\t\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+this.", f.Oneof.Desc.Name(), ".value")
+					}
+					g.P("\t\t\t\t\tquery.push(tmp)")
+					g.P("\t\t\t\t\tbreak")
+					g.P("\t\t\t\t}")
+				}
+				g.P("\t\t\t}")
+				g.P("\t\t}")
+				continue
+			}
 			if f.Desc.IsList() {
 				g.P("\t\tif(this.", f.Desc.Name(), " && this.", f.Desc.Name(), ".length>0)")
-			} else {
-				g.P("\t\tif(this.", f.Desc.Name(), "){")
-			}
-			if f.Desc.Kind() == protoreflect.BytesKind {
-				g.P("\t\t\t//bytes type in protobuf should be standard base64 encoded")
-				g.P("\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
-				if f.Desc.IsList() {
-					g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]=[]")
-					g.P("\t\t\tfor(let value of this.", f.Desc.Name(), "){")
+				g.P("\t\t\tfor(let value of this.", f.Desc.Name(), "){")
+				if f.Desc.Kind() == protoreflect.BytesKind {
+					g.P("\t\t\t\t//bytes type in protobuf should be standard base64 encoded")
+					g.P("\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
 					g.P("\t\t\t\tlet rawstr=''")
 					g.P("\t\t\t\tvalue.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
-					g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "].push(window.btoa(rawstr))")
-					g.P("\t\t\t}")
+					g.P("\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
 				} else {
+					g.P("\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+value")
+				}
+				g.P("\t\t\t\tquery.push(tmp)")
+				g.P("\t\t\t}")
+				g.P("\t\t}")
+			} else {
+				g.P("\t\tif(this.", f.Desc.Name(), "){")
+				if f.Desc.Kind() == protoreflect.BytesKind {
+					g.P("\t\t\t//bytes type in protobuf should be standard base64 encoded")
+					g.P("\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
 					g.P("\t\t\tlet rawstr=''")
 					g.P("\t\t\tthis.", f.Desc.Name(), ".forEach((element)=>{rawstr+=String.fromCharCode(element)})")
-					g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]=window.btoa(rawstr)")
-				}
-			} else {
-				g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]=this.", f.Desc.Name())
-			}
-			g.P("\t\t}")
-			continue
-		}
-		g.P("\t\tif(this.", f.Desc.Name(), " && this.", f.Desc.Name(), ".size>0){")
-		g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]={}")
-		g.P("\t\t\tfor(let [k,v] of this.", f.Desc.Name(), "){")
-		if f.Message.Fields[1].Desc.Kind() == protoreflect.BytesKind {
-			g.P("\t\t\t\tlet rawstr=''")
-			g.P("\t\t\t\tv.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
-			if f.Message.Fields[0].Desc.Kind() == protoreflect.Sfixed64Kind ||
-				f.Message.Fields[0].Desc.Kind() == protoreflect.Sint64Kind ||
-				f.Message.Fields[0].Desc.Kind() == protoreflect.Int64Kind ||
-				f.Message.Fields[0].Desc.Kind() == protoreflect.Fixed64Kind ||
-				f.Message.Fields[0].Desc.Kind() == protoreflect.Uint64Kind {
-				g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "][k.toString()]=window.btoa(rawstr)")
-			} else {
-				g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "][k]=window.btoa(rawstr)")
-			}
-		} else {
-			if f.Message.Fields[0].Desc.Kind() == protoreflect.Sfixed64Kind ||
-				f.Message.Fields[0].Desc.Kind() == protoreflect.Sint64Kind ||
-				f.Message.Fields[0].Desc.Kind() == protoreflect.Int64Kind ||
-				f.Message.Fields[0].Desc.Kind() == protoreflect.Fixed64Kind ||
-				f.Message.Fields[0].Desc.Kind() == protoreflect.Uint64Kind {
-				g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "][k.toString()]=v")
-			} else {
-				g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "][k]=v")
-			}
-		}
-		g.P("\t\t\t}")
-		g.P("\t\t}")
-	}
-	g.P("\t\treturn tmp")
-	g.P("\t}")
-	g.P("}")
-}
-
-func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
-	g.P("export class ", m.GoIdent.GoName, "{")
-	genField(m, g)
-	g.P("\ttoForm(){")
-	g.P("\t\tlet query=[]")
-	oneofs := make(map[string]*struct{})
-	for _, f := range m.Fields {
-		if f.Desc.Kind() == protoreflect.MessageKind {
-			panic("form request message can't contain nested message and map")
-		}
-		if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
-			if _, ok := oneofs[f.Oneof.GoIdent.String()]; ok {
-				continue
-			}
-			oneofs[f.Oneof.GoIdent.String()] = nil
-			g.P("\t\tif(this.", f.Oneof.Desc.Name(), "){")
-			g.P("\t\t\tswitch(this.", f.Oneof.Desc.Name(), ".$key){")
-			for _, oneoff := range f.Oneof.Fields {
-				g.P("\t\t\t\tcase ", strconv.Quote(string(oneoff.Desc.Name())), ":{")
-				if oneoff.Desc.Kind() == protoreflect.BytesKind {
-					g.P("\t\t\t\t\t//bytes type in protobuf should be standard base64 encoded")
-					g.P("\t\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
-					g.P("\t\t\t\t\tlet rawstr=''")
-					g.P("\t\t\t\t\tthis.", f.Oneof.Desc.Name(), ".value.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
-					g.P("\t\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
+					g.P("\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
 				} else {
-					g.P("\t\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+this.", f.Oneof.Desc.Name(), ".value")
+					g.P("\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+this.", f.Desc.Name())
 				}
-				g.P("\t\t\t\t\tquery.push(tmp)")
-				g.P("\t\t\t\t\tbreak")
-				g.P("\t\t\t\t}")
+				g.P("\t\t\tquery.push(tmp)")
+				g.P("\t\t}")
 			}
-			g.P("\t\t\t}")
-			g.P("\t\t}")
-			continue
 		}
-		if f.Desc.IsList() {
-			g.P("\t\tif(this.", f.Desc.Name(), " && this.", f.Desc.Name(), ".length>0)")
-			g.P("\t\t\tfor(let value of this.", f.Desc.Name(), "){")
-			if f.Desc.Kind() == protoreflect.BytesKind {
-				g.P("\t\t\t\t//bytes type in protobuf should be standard base64 encoded")
-				g.P("\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
-				g.P("\t\t\t\tlet rawstr=''")
-				g.P("\t\t\t\tvalue.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
-				g.P("\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
-			} else {
-				g.P("\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+value")
-			}
-			g.P("\t\t\t\tquery.push(tmp)")
-			g.P("\t\t\t}")
-			g.P("\t\t}")
-		} else {
-			g.P("\t\tif(this.", f.Desc.Name(), "){")
-			if f.Desc.Kind() == protoreflect.BytesKind {
-				g.P("\t\t\t//bytes type in protobuf should be standard base64 encoded")
-				g.P("\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
-				g.P("\t\t\tlet rawstr=''")
-				g.P("\t\t\tthis.", f.Desc.Name(), ".forEach((element)=>{rawstr+=String.fromCharCode(element)})")
-				g.P("\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
-			} else {
-				g.P("\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+this.", f.Desc.Name())
-			}
-			g.P("\t\t\tquery.push(tmp)")
-			g.P("\t\t}")
-		}
+		g.P("\t\treturn encodeURIComponent(query.join('&'))")
+		g.P("\t}")
 	}
-	g.P("\t\treturn encodeURIComponent(query.join('&'))")
-	g.P("\t}")
 	g.P("}")
 }
 
 func genFromJson(m *protogen.Message, g *protogen.GeneratedFile) {
-	g.P("export class ", m.GoIdent.GoName, "{")
-	genField(m, g)
-	g.P("\tconstructor(obj:Object){")
-	g.P("\t}")
-	g.P("}")
 	/*
 		if len(m.Fields) == 0 {
 			g.P("function JsonTo", m.GoIdent.GoName, "(_jsonobj: { [k:string]:any }): ", m.GoIdent.GoName, "{")
