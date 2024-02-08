@@ -1,76 +1,176 @@
 //protoc -I ../../../pbex -I . --go_out=paths=source_relative:. *.proto
 syntax="proto3";
 package test;
-option go_package="github.com/chenjie199234/Corelib/web/protoc-gen-go-web/test;test";
+option go_package="github.com/chenjie199234/Corelib/web/protoc-gen-browser/test;test";
 import "pbex.proto";
 service test {
-	rpc hello(hello_req)returns(hello_resp){
+	rpc hello(helloreq)returns(helloresp){
 		option (pbex.method)="get";
+		option (pbex.web_midwares)="user";
+		option (pbex.web_midwares)="limit";
 	}
-	rpc world(world_req)returns(world_resp);
+	rpc world(worldreq)returns(worldresp){
+		option (pbex.method)="post";
+		option (pbex.web_midwares)="user";
+		option (pbex.web_midwares)="limit";
+	}
 }
-enum TE{
-	A=0;
-	B=3;
+enum TestEnum {
+	ENUMA=0;
+	ENUMB=1;
 }
-message hello_req{
-	int32 i32=1;
-	repeated int32 ri32=2;
-	uint32 u32=3;
-	repeated uint32 ru32=4;
-	int64 i64=5;
-	repeated int64 ri64=6;
-	uint64 u64=7;
-	repeated uint64 ru64=8;
-	bool b=9;
-	repeated bool rb=10;
-	TE e=11;
-	repeated TE re=12;
-	string s=13;
-	repeated string rs=14;
-	bytes bs=15;
-	repeated bytes rbs=16;
-	float f=17;
-	repeated float rf=18;
-	double d=19;
-	repeated double rd=20;
-	data msg=21;
-	repeated data rmsg=22;
-	map<uint64,int32> mi32=23;
-	map<uint64,uint32> mu32=24;
-	map<uint64,int64> mi64=25;
-	map<uint64,uint64> mu64=26;
-	map<uint64,bool> mb=27;
-	map<uint64,TE> me=28;
-	map<uint64,string> ms=29;
-	map<uint64,bytes> mbs=30;
-	map<uint64,float> mf=31;
-	map<uint64,double> md=32;
-	map<uint64,data> mmsg=33;
-	oneof union{
-		int32 oi32=34;
-		uint32 ou32=35;
-		int64 oi64=36;
-		uint64 ou64=37;
+message helloreq{
+	bool bl = 1;
+	optional bool blo = 2;
+	repeated bool bls = 3;
+	int32 i32=4[(pbex.int_in)=1];
+	optional int32 i32o=5;
+	repeated int32 ri32=6[(pbex.int_not_in)=1];
+	uint32 ui32=7[(pbex.uint_in)=1];
+	optional uint32 ui32o=8;
+	repeated uint32 rui32=9[(pbex.map_repeated_len_gt)=2,(pbex.uint_not_in)=1];
+	int64 i64=10;
+	optional int64 i64o=11;
+	repeated int64 ri64=12;
+	uint64 ui64=13;
+	optional uint64 ui64o=14;
+	repeated uint64 rui64=15;
+	bytes bs=16;
+	optional bytes bso=17;
+	repeated bytes rbs=18;
+	string ss=19;
+	optional string sso=20;
+	repeated string rss=21[(pbex.string_bytes_reg_match)="abc*"];
+	float f=22;
+	optional float fo=23;
+	repeated float rf=24;
+	double d=25;
+	optional double do=26;
+	repeated double rd=27;
+	TestEnum e=28;
+	optional TestEnum eo=29;
+	repeated TestEnum re=30;
+	oneof o{
+		bool obl=31;
+		int32 oi32=32;
+		uint32 oui32=33;
+		int64 oi64=34;
+		uint64 oui64=35;
+		bytes obs=36;
+		string oss=37;
 		float of=38;
 		double od=39;
-		string os=40;
-		bytes obs=41;
-		TE oe=42;
-		bool ob=43;
-		data omsg=44;
+		TestEnum oe=40;
 	}
 }
-message data {
-	data t=1;
-	TE e=2;
+message helloresp{
+
 }
-message hello_resp{
-	hello_req req=1;
+message data{
+
 }
-message world_req{
-	string req=1;
+message worldreq{
+	bool bl = 1;
+	optional bool blo = 2;
+	repeated bool bls = 3;
+	int32 i32=4[(pbex.int_in)=1];
+	optional int32 i32o=5;
+	repeated int32 ri32=6[(pbex.int_not_in)=1];
+	uint32 ui32=7[(pbex.uint_in)=1];
+	optional uint32 ui32o=8;
+	repeated uint32 rui32=9[(pbex.map_repeated_len_gt)=2,(pbex.uint_not_in)=1];
+	int64 i64=10;
+	optional int64 i64o=11;
+	repeated int64 ri64=12;
+	uint64 ui64=13;
+	optional uint64 ui64o=14;
+	repeated uint64 rui64=15;
+	bytes bs=16;
+	optional bytes bso=17;
+	repeated bytes rbs=18;
+	string ss=19;
+	optional string sso=20;
+	repeated string rss=21[(pbex.string_bytes_reg_match)="abc*"];
+	float f=22;
+	optional float fo=23;
+	repeated float rf=24;
+	double d=25;
+	optional double do=26;
+	repeated double rd=27;
+	TestEnum e=28;
+	optional TestEnum eo=29;
+	repeated TestEnum re=30;
+	data m=31[(pbex.message_not_nil)=true];
+	optional data mo=32;
+	repeated data rm=33[(pbex.message_not_nil)=true];
+	oneof o{
+		bool obl=34;
+		int32 oi32=35;
+		uint32 oui32=36;
+		int64 oi64=37;
+		uint64 oui64=38;
+		bytes obs=39;
+		string oss=40;
+		float of=41;
+		double od=42;
+		TestEnum oe=43;
+	}
+
+	map<int32,int32> mi32_i32=44;
+	map<int32,uint32> mi32_ui32=45;
+	map<int32,int64> mi32_i64=46;
+	map<int32,uint64> mi32_ui64=47;
+	map<int32,bytes> mi32_bs=48;
+	map<int32,string> mi32_ss=49;
+	map<int32,float> mi32_f=50;
+	map<int32,double> mi32_d=51;
+	map<int32,TestEnum> mi32_e=52;
+	map<int32,data> mi32_m=53;
+
+	map<uint32,int32> mui32_i32=54;
+	map<uint32,uint32> mui32_ui32=55;
+	map<uint32,int64> mui32_i64=56;
+	map<uint32,uint64> mui32_ui64=57;
+	map<uint32,bytes> mui32_bs=58;
+	map<uint32,string> mui32_ss=59[(pbex.map_value_string_bytes_reg_match)="xyz*"];
+	map<uint32,float> mui32_f=60;
+	map<uint32,double> mui32_d=61;
+	map<uint32,TestEnum> mui32_e=62;
+	map<uint32,data> mui32_m=63;
+
+	map<int64,int32> mi64_i32=64;
+	map<int64,uint32> mi64_ui32=65;
+	map<int64,int64> mi64_i64=66;
+	map<int64,uint64> mi64_ui64=67;
+	map<int64,bytes> mi64_bs=68;
+	map<int64,string> mi64_ss=69;
+	map<int64,float> mi64_f=70;
+	map<int64,double> mi64_d=71;
+	map<int64,TestEnum> mi64_e=72;
+	map<int64,data> mi64_m=73;
+
+	map<uint64,int32> mui64_i32=74;
+	map<uint64,uint32> mui64_ui32=75;
+	map<uint64,int64> mui64_i64=76;
+	map<uint64,uint64> mui64_ui64=77;
+	map<uint64,bytes> mui64_bs=78;
+	map<uint64,string> mui64_ss=79;
+	map<uint64,float> mui64_f=80;
+	map<uint64,double> mui64_d=81;
+	map<uint64,TestEnum> mui64_e=82;
+	map<uint64,data> mui64_m=83;
+
+	map<string,int32> mss_i32=84[(pbex.map_key_string_reg_match)="key*"];
+	map<string,uint32> mss_ui32=85;
+	map<string,int64> mss_i64=86;
+	map<string,uint64> mss_ui64=87;
+	map<string,bytes> mss_bs=88;
+	map<string,string> mss_ss=89;
+	map<string,float> mss_f=90;
+	map<string,double> mss_d=91;
+	map<string,TestEnum> mss_e=92;
+	map<string,data> mss_m=93;
 }
-message world_resp{
-	string resp=1;
+message worldresp{
+
 }

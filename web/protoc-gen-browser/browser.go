@@ -30,16 +30,9 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, target bool) *proto
 	genFileComment(gen, file, g)
 
 	//gen req and resp
-	enums, msgs, tojson, toform, jsonto, needlong, needbase64, methodcount := reqANDresp(file, g, target)
+	enums, msgs, tojson, toform, fromjson, methodcount := prepare(file, g, target)
 	if methodcount == 0 {
 		return g
-	}
-	g.P("import Axios from \"axios\";")
-	if needlong {
-		g.P("import Long from \"long\";")
-	}
-	if needbase64 {
-		g.P("import Base64 from \"@protobufjs/base64\"")
 	}
 	g.P()
 	g.P("export interface Error{")
@@ -51,32 +44,33 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, target bool) *proto
 		genEnum(e, g)
 	}
 	for _, m := range msgs {
-		genInterface(m, g)
 		if _, ok := tojson[m.GoIdent.String()]; ok {
 			genToJson(m, g)
 		}
 		if _, ok := toform[m.GoIdent.String()]; ok {
 			genToForm(m, g)
 		}
-		if _, ok := jsonto[m.GoIdent.String()]; ok {
-			genJsonTo(m, g)
+		if _, ok := fromjson[m.GoIdent.String()]; ok {
+			genFromJson(m, g)
 		}
 	}
 
-	for _, service := range file.Services {
-		if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
-			continue
+	/*
+		for _, service := range file.Services {
+			if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
+				continue
+			}
+			//gen path
+			genPath(file, service, g, target)
+			if target {
+				//gen toc service
+				genToCService(file, service, g)
+			} else {
+				//gen tob service
+				genToBService(file, service, g)
+			}
 		}
-		//gen path
-		genPath(file, service, g, target)
-		if target {
-			//gen toc service
-			genToCService(file, service, g)
-		} else {
-			//gen tob service
-			genToBService(file, service, g)
-		}
-	}
+	*/
 	return g
 }
 
@@ -98,12 +92,12 @@ func genFileComment(gen *protogen.Plugin, file *protogen.File, g *protogen.Gener
 }
 
 // target toc-true,tob-false
-func reqANDresp(file *protogen.File, g *protogen.GeneratedFile, target bool) (enums []*protogen.Enum, msgs []*protogen.Message, tojson map[string]*struct{}, toform map[string]*struct{}, jsonto map[string]*struct{}, needlong, needbase64 bool, methodcount uint32) {
+func prepare(file *protogen.File, g *protogen.GeneratedFile, target bool) (enums []*protogen.Enum, msgs []*protogen.Message, tojson map[string]*struct{}, toform map[string]*struct{}, fromjson map[string]*struct{}, methodcount uint32) {
 	tmpenums := make(map[string]*protogen.Enum)
 	tmpmsgs := make(map[string]*protogen.Message)
 	tojson = make(map[string]*struct{})
 	toform = make(map[string]*struct{})
-	jsonto = make(map[string]*struct{})
+	fromjson = make(map[string]*struct{})
 	for _, service := range file.Services {
 		if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 			continue
@@ -126,13 +120,13 @@ func reqANDresp(file *protogen.File, g *protogen.GeneratedFile, target bool) (en
 					tojson[method.Input.GoIdent.String()] = nil
 				}
 				tmpmsgs[method.Output.GoIdent.String()] = method.Output
-				jsonto[method.Output.GoIdent.String()] = nil
+				fromjson[method.Output.GoIdent.String()] = nil
 			} else {
 				//tob
 				tmpmsgs[method.Input.GoIdent.String()] = method.Input
 				tojson[method.Input.GoIdent.String()] = nil
 				tmpmsgs[method.Output.GoIdent.String()] = method.Output
-				jsonto[method.Output.GoIdent.String()] = nil
+				fromjson[method.Output.GoIdent.String()] = nil
 			}
 			methodcount++
 		}
@@ -145,14 +139,6 @@ func reqANDresp(file *protogen.File, g *protogen.GeneratedFile, target bool) (en
 			for _, f := range m.Fields {
 				if f.Desc.Kind() == protoreflect.EnumKind {
 					tmpenums[f.Enum.GoIdent.String()] = f.Enum
-					continue
-				}
-				if f.Desc.Kind() == protoreflect.Uint64Kind || f.Desc.Kind() == protoreflect.Fixed64Kind || f.Desc.Kind() == protoreflect.Int64Kind || f.Desc.Kind() == protoreflect.Sint64Kind || f.Desc.Kind() == protoreflect.Sfixed64Kind {
-					needlong = true
-					continue
-				}
-				if f.Desc.Kind() == protoreflect.BytesKind {
-					needbase64 = true
 					continue
 				}
 				if f.Desc.Kind() != protoreflect.MessageKind {
@@ -170,51 +156,35 @@ func reqANDresp(file *protogen.File, g *protogen.GeneratedFile, target bool) (en
 							needcheck = true
 						}
 					}
-					if _, ok := jsonto[m.GoIdent.String()]; ok {
-						if _, ok = jsonto[f.Message.GoIdent.String()]; !ok {
-							jsonto[f.Message.GoIdent.String()] = nil
+					if _, ok := fromjson[m.GoIdent.String()]; ok {
+						if _, ok = fromjson[f.Message.GoIdent.String()]; !ok {
+							fromjson[f.Message.GoIdent.String()] = nil
 							needcheck = true
 						}
 					}
 					if needcheck {
 						newnestcheck[f.Message.GoIdent.String()] = f.Message
 					}
-				} else {
-					k := f.Message.Fields[0]
-					v := f.Message.Fields[1]
-					if k.Desc.Kind() == protoreflect.Uint64Kind || k.Desc.Kind() == protoreflect.Fixed64Kind || k.Desc.Kind() == protoreflect.Int64Kind || k.Desc.Kind() == protoreflect.Sint64Kind || k.Desc.Kind() == protoreflect.Sfixed64Kind {
-						needlong = true
+				} else if f.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
+					needcheck := false
+					if _, ok := tmpmsgs[f.Message.Fields[1].Message.GoIdent.String()]; !ok {
+						tmpmsgs[f.Message.Fields[1].Message.GoIdent.String()] = f.Message.Fields[1].Message
+						needcheck = true
 					}
-					if k.Desc.Kind() == protoreflect.BytesKind {
-						needbase64 = true
-					}
-					if v.Desc.Kind() == protoreflect.Uint64Kind || v.Desc.Kind() == protoreflect.Fixed64Kind || v.Desc.Kind() == protoreflect.Int64Kind || v.Desc.Kind() == protoreflect.Sint64Kind || v.Desc.Kind() == protoreflect.Sfixed64Kind {
-						needlong = true
-					}
-					if v.Desc.Kind() == protoreflect.BytesKind {
-						needbase64 = true
-					}
-					if v.Desc.Kind() == protoreflect.MessageKind {
-						needcheck := false
-						if _, ok := tmpmsgs[v.Message.GoIdent.String()]; !ok {
-							tmpmsgs[v.Message.GoIdent.String()] = v.Message
+					if _, ok := tojson[m.GoIdent.String()]; ok {
+						if _, ok = tojson[f.Message.Fields[1].Message.GoIdent.String()]; !ok {
+							tojson[f.Message.Fields[1].Message.GoIdent.String()] = nil
 							needcheck = true
 						}
-						if _, ok := tojson[m.GoIdent.String()]; ok {
-							if _, ok = tojson[v.Message.GoIdent.String()]; !ok {
-								tojson[v.Message.GoIdent.String()] = nil
-								needcheck = true
-							}
+					}
+					if _, ok := fromjson[m.GoIdent.String()]; ok {
+						if _, ok := fromjson[f.Message.Fields[1].Message.GoIdent.String()]; !ok {
+							fromjson[f.Message.Fields[1].Message.GoIdent.String()] = nil
+							needcheck = true
 						}
-						if _, ok := jsonto[m.GoIdent.String()]; ok {
-							if _, ok := jsonto[v.Message.GoIdent.String()]; !ok {
-								jsonto[v.Message.GoIdent.String()] = nil
-								needcheck = true
-							}
-						}
-						if needcheck {
-							newnestcheck[v.Message.GoIdent.String()] = v.Message
-						}
+					}
+					if needcheck {
+						newnestcheck[f.Message.Fields[1].Message.GoIdent.String()] = f.Message.Fields[1].Message
 					}
 				}
 			}
@@ -263,9 +233,9 @@ func genEnum(e *protogen.Enum, g *protogen.GeneratedFile) {
 	}
 	g.P("}")
 }
-func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
+
+func genField(m *protogen.Message, g *protogen.GeneratedFile) {
 	oneof := make(map[string]*struct{})
-	g.P("export interface ", m.GoIdent.GoName, "{")
 	for _, f := range m.Fields {
 		if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
 			//oneof field
@@ -299,7 +269,7 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Uint32Kind:
 					//uint32
-					g.P("\t\t//Warning!!!Value's type is int32,be careful of sign(+) and overflow")
+					g.P("\t\t//Warning!!!Value's type is uint32,be careful of sign(+) and overflow")
 					g.P("\t\t{$key: ", strconv.Quote(string(oneoff.Desc.Name())), ",value: number}|", strings.TrimSuffix(oneoff.Comments.Trailing.String(), "\n"))
 				case protoreflect.Sfixed64Kind:
 					fallthrough
@@ -307,14 +277,14 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Int64Kind:
 					//int64
-					g.P("\t\t//Warning!!!Value's type is int32,be careful of sign(+,-) and overflow")
-					g.P("\t\t{$key: ", strconv.Quote(string(oneoff.Desc.Name())), ",value: Long}|", strings.TrimSuffix(oneoff.Comments.Trailing.String(), "\n"))
+					g.P("\t\t//Warning!!!Value's type is int64,be careful of sign(+,-)")
+					g.P("\t\t{$key: ", strconv.Quote(string(oneoff.Desc.Name())), ",value: bigint}|", strings.TrimSuffix(oneoff.Comments.Trailing.String(), "\n"))
 				case protoreflect.Fixed64Kind:
 					fallthrough
 				case protoreflect.Uint64Kind:
 					//uint64
-					g.P("\t\t//Warning!!!Value's type is int32,be careful of sign(+) and overflow")
-					g.P("\t\t{$key: ", strconv.Quote(string(oneoff.Desc.Name())), ",value: Long}|", strings.TrimSuffix(oneoff.Comments.Trailing.String(), "\n"))
+					g.P("\t\t//Warning!!!Value's type is uint64,be careful of sign(+)")
+					g.P("\t\t{$key: ", strconv.Quote(string(oneoff.Desc.Name())), ",value: bigint}|", strings.TrimSuffix(oneoff.Comments.Trailing.String(), "\n"))
 				case protoreflect.FloatKind:
 					g.P("\t\t//Warning!!!Value's type is float32,be careful of overflow")
 					fallthrough
@@ -328,7 +298,7 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 					g.P("\t\t{$key: ", strconv.Quote(string(oneoff.Desc.Name())), ",value: ", oneoff.Message.GoIdent.GoName, "|null|undefined}|", strings.TrimSuffix(oneoff.Comments.Trailing.String(), "\n"))
 				}
 			}
-			g.P("\t\tnull|undefined;")
+			g.P("\t\tnull;")
 			continue
 		}
 		comments := strings.Split(strings.TrimSuffix(f.Comments.Leading.String(), "\n"), "\n")
@@ -341,13 +311,17 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 		switch f.Desc.Kind() {
 		case protoreflect.BoolKind:
 			if f.Desc.IsList() {
-				g.P("\t", f.Desc.Name(), ": Array<boolean>|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<boolean>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+			} else if f.Desc.HasOptionalKeyword() {
+				g.P("\t", f.Desc.Name(), ": boolean|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t", f.Desc.Name(), ": boolean;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.EnumKind:
 			if f.Desc.IsList() {
-				g.P("\t", f.Desc.Name(), ": Array<", f.Enum.GoIdent.GoName, ">|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<", f.Enum.GoIdent.GoName, ">|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+			} else if f.Desc.HasOptionalKeyword() {
+				g.P("\t", f.Desc.Name(), ": ", f.Enum.GoIdent.GoName, "|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t", f.Desc.Name(), ": ", f.Enum.GoIdent.GoName, ";", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
@@ -359,7 +333,10 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 			//int32
 			if f.Desc.IsList() {
 				g.P("\t//Warning!!!Element type is int32,be careful of sign(+,-) and overflow")
-				g.P("\t", f.Desc.Name(), ": Array<number>|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<number>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+			} else if f.Desc.HasOptionalKeyword() {
+				g.P("\t//Warning!!!Type is int32,be careful of sign(+,-) and overflow")
+				g.P("\t", f.Desc.Name(), ": number|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t//Warning!!!Type is int32,be careful of sign(+,-) and overflow")
 				g.P("\t", f.Desc.Name(), ": number;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
@@ -370,7 +347,10 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 			//uint32
 			if f.Desc.IsList() {
 				g.P("\t//Warning!!!Element type is uint32,be careful of sign(+) and overflow")
-				g.P("\t", f.Desc.Name(), ": Array<number>|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<number>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+			} else if f.Desc.HasOptionalKeyword() {
+				g.P("\t//Warning!!!Type is uint32,be careful of sign(+) and overflow")
+				g.P("\t", f.Desc.Name(), ": number|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t//Warning!!!Type is uint32,be careful of sign(+) and overflow")
 				g.P("\t", f.Desc.Name(), ": number;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
@@ -383,10 +363,13 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 			//int64
 			if f.Desc.IsList() {
 				g.P("\t//Warning!!!Element type is int64,be careful of sign(+,-)")
-				g.P("\t", f.Desc.Name(), ": Array<Long>|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<bigint>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+			} else if f.Desc.HasOptionalKeyword() {
+				g.P("\t//Warning!!!Type is int64,be careful of sign(+,-)")
+				g.P("\t", f.Desc.Name(), ": bigint|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t//Warning!!!Type is int64,be careful of sign(+,-)")
-				g.P("\t", f.Desc.Name(), ": Long;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": bigint;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.Fixed64Kind:
 			fallthrough
@@ -394,34 +377,46 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 			//uint64
 			if f.Desc.IsList() {
 				g.P("\t//Warning!!!Element type is uint64,be careful of sign(+)")
-				g.P("\t", f.Desc.Name(), ": Array<Long>|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<bigint>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+			} else if f.Desc.HasOptionalKeyword() {
+				g.P("\t//Warning!!!Type is uint64,be careful of sign(+)")
+				g.P("\t", f.Desc.Name(), ": bigint|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t//Warning!!!Type is uint64,be careful of sign(+)")
-				g.P("\t", f.Desc.Name(), ": Long;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": bigint;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.FloatKind:
 			if f.Desc.IsList() {
 				g.P("\t//Warning!!!Element type is float32,be careful of overflow")
-				g.P("\t", f.Desc.Name(), ": Array<number>|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<number>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+			} else if f.Desc.HasOptionalKeyword() {
+				g.P("\t//Warning!!!Type is float32,be careful of overflow")
+				g.P("\t", f.Desc.Name(), ": number|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t//Warning!!!Type is float32,be careful of overflow")
 				g.P("\t", f.Desc.Name(), ": number;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.DoubleKind:
 			if f.Desc.IsList() {
-				g.P("\t", f.Desc.Name(), ": Array<number>|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<number>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+			} else if f.Desc.HasOptionalKeyword() {
+				g.P("\t", f.Desc.Name(), ": number|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t", f.Desc.Name(), ": number;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.StringKind:
 			if f.Desc.IsList() {
-				g.P("\t", f.Desc.Name(), ": Array<string>|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<string>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+			} else if f.Desc.HasOptionalKeyword() {
+				g.P("\t", f.Desc.Name(), ": string|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t", f.Desc.Name(), ": string;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.BytesKind:
 			if f.Desc.IsList() {
-				g.P("\t", f.Desc.Name(), ": Array<Uint8Array>|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<Uint8Array>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+			} else if f.Desc.HasOptionalKeyword() {
+				g.P("\t", f.Desc.Name(), ": Uint8Array|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t", f.Desc.Name(), ": Uint8Array;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
@@ -452,13 +447,13 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Sfixed64Kind:
 					//int64
-					keytype = "Long"
+					keytype = "bigint"
 					keywarn += "map's key's type is int64,be careful of sign(+,-)"
 				case protoreflect.Uint64Kind:
 					fallthrough
 				case protoreflect.Fixed64Kind:
 					//uint64
-					keytype = "Long"
+					keytype = "bigint"
 					keywarn += "map's key's type is uint64,be carefule of sign(+)"
 				case protoreflect.StringKind:
 					keytype = "string"
@@ -488,13 +483,13 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 					fallthrough
 				case protoreflect.Sfixed64Kind:
 					//int64
-					valuetype = "Long"
+					valuetype = "bigint"
 					valuewarn += "map's value's type is int64,be careful of sign(+,-)"
 				case protoreflect.Uint64Kind:
 					fallthrough
 				case protoreflect.Fixed64Kind:
 					//uint64
-					valuetype = "Long"
+					valuetype = "bigint"
 					valuewarn += "map's value's type is uint64,be careful of sign(+)"
 				case protoreflect.FloatKind:
 					valuetype = "number"
@@ -506,7 +501,7 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 				case protoreflect.BytesKind:
 					valuetype = "Uint8Array"
 				case protoreflect.MessageKind:
-					valuetype = f.Message.Fields[1].Message.GoIdent.GoName + "|null|undefined"
+					valuetype = f.Message.Fields[1].Message.GoIdent.GoName + "|null"
 				}
 				if keywarn != "\t//Warning!!!" {
 					g.P(keywarn)
@@ -514,2053 +509,1086 @@ func genInterface(m *protogen.Message, g *protogen.GeneratedFile) {
 				if valuewarn != "\t//Warning!!!" {
 					g.P(valuewarn)
 				}
-				g.P("\t", f.Desc.Name(), ": Map<", keytype, ",", valuetype, ">|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Map<", keytype, ",", valuetype, ">|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else if f.Desc.IsList() {
-				g.P("\t", f.Desc.Name(), ": Array<", f.Message.GoIdent.GoName, "|null|undefined>|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<", f.Message.GoIdent.GoName, "|null>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
-				g.P("\t", f.Desc.Name(), ": ", f.Message.GoIdent.GoName, "|null|undefined;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": ", f.Message.GoIdent.GoName, "|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		}
 	}
-	g.P("}")
 }
 func genToJson(m *protogen.Message, g *protogen.GeneratedFile) {
-	if len(m.Fields) == 0 {
-		g.P("function ", m.GoIdent.GoName, "ToJson(_msg: ", m.GoIdent.GoName, "): string{")
-	} else {
-		g.P("function ", m.GoIdent.GoName, "ToJson(msg: ", m.GoIdent.GoName, "): string{")
-	}
-	oneofs := make(map[string]*struct{}, len(m.Oneofs))
-	g.P("\tlet s: string=\"{\"")
+	g.P("export class ", m.GoIdent.GoName, "{")
+	genField(m, g)
+	g.P("\ttoJSON(){")
+	g.P("\t\tlet tmp = {}")
+	oneofs := make(map[string]*struct{})
 	for _, f := range m.Fields {
 		if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
 			if _, ok := oneofs[f.Oneof.GoIdent.String()]; ok {
 				continue
 			}
 			oneofs[f.Oneof.GoIdent.String()] = nil
-			tmps := make([]string, 0, len(f.Oneof.Fields))
+			g.P("\t\tif(this.", f.Oneof.Desc.Name(), "){")
+			g.P("\t\t\tswitch(this.", f.Oneof.Desc.Name(), ".$key){")
 			for _, oneoff := range f.Oneof.Fields {
-				var tmp string
-				switch oneoff.Desc.Kind() {
-				case protoreflect.BoolKind:
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: boolean}"
-				case protoreflect.EnumKind:
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: " + string(oneoff.Enum.Desc.Name()) + "}"
-				case protoreflect.Sfixed32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Int32Kind:
-					//int32
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: number}"
-				case protoreflect.Sfixed64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Int64Kind:
-					//int64
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: Long}"
-				case protoreflect.Fixed32Kind:
-					fallthrough
-				case protoreflect.Uint32Kind:
-					//uint32
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: number}"
-				case protoreflect.Fixed64Kind:
-					fallthrough
-				case protoreflect.Uint64Kind:
-					//uint64
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: Long}"
-				case protoreflect.FloatKind:
-					fallthrough
-				case protoreflect.DoubleKind:
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: number}"
-				case protoreflect.StringKind:
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: string}"
-				case protoreflect.BytesKind:
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: Uint8Array}"
-				case protoreflect.MessageKind:
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: " + oneoff.Message.GoIdent.GoName + "|null|undefined}"
-				}
-				tmps = append(tmps, tmp)
-			}
-			g.P("\t//", f.Oneof.Desc.Name())
-			g.P("\tif(msg.", f.Oneof.Desc.Name(), "!=null&&msg.", f.Oneof.Desc.Name(), "!=undefined){")
-			for i, oneoff := range f.Oneof.Fields {
-				if i == 0 {
-					g.P("\t\tif(msg.", f.Oneof.Desc.Name(), ".$key=='", oneoff.Desc.Name(), "'){")
+				g.P("\t\t\t\tcase ", strconv.Quote(string(oneoff.Desc.Name())), ":{")
+				if oneoff.Desc.Kind() == protoreflect.BytesKind {
+					g.P("\t\t\t\t\t//bytes type in protobuf should be standard base64 encoded")
+					g.P("\t\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
+					g.P("\t\t\t\t\tlet rawstr=''")
+					g.P("\t\t\t\t\tthis.", f.Oneof.Desc.Name(), ".value.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
+					g.P("\t\t\t\t\ttmp[", strconv.Quote(string(oneoff.Desc.Name())), "]=window.btoa(rawstr)")
 				} else {
-					g.P("\t\t}else if(msg.", f.Oneof.Desc.Name(), ".$key=='", oneoff.Desc.Name(), "'){")
+					g.P("\t\t\t\t\ttmp[", strconv.Quote(string(oneoff.Desc.Name())), "]=this.", f.Oneof.Desc.Name(), ".value")
 				}
-				g.P("\t\t\ts+='\"'+msg.", f.Oneof.Desc.Name(), ".$key+'\":'")
-				switch oneoff.Desc.Kind() {
-				case protoreflect.BoolKind:
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be boolean'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".value+','")
-				case protoreflect.EnumKind:
-					tmps := make([]string, 0, len(oneoff.Enum.Values))
-					for _, v := range oneoff.Enum.Values {
-						tmps = append(tmps, "msg."+string(f.Oneof.Desc.Name())+".value!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
-					}
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined||(", strings.Join(tmps, "&&"), ")){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be enum in ", oneoff.Enum.GoIdent.GoName, "'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".value+','")
-				case protoreflect.Sfixed32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Int32Kind:
-					//int32
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined||!Number.isInteger(msg.", f.Oneof.Desc.Name(), ".value)){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value>2147483647||msg.", f.Oneof.Desc.Name(), ".value<-2147483648){")
-					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".value+','")
-				case protoreflect.Fixed32Kind:
-					fallthrough
-				case protoreflect.Uint32Kind:
-					//uint32
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined||!Number.isInteger(msg.", f.Oneof.Desc.Name(), ".value)){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value>4294967295||msg.", f.Oneof.Desc.Name(), ".value<0){")
-					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".value+','")
-				case protoreflect.Sfixed64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Int64Kind:
-					//int64
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value.lessThan(Long.MIN_VALUE)||msg.", f.Oneof.Desc.Name(), ".value.greaterThan(Long.MAX_VALUE)){")
-					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+='\"'+msg.", f.Oneof.Desc.Name(), ".value.toString()+'\",'")
-				case protoreflect.Fixed64Kind:
-					fallthrough
-				case protoreflect.Uint64Kind:
-					//uint64
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value.lessThan(0)){")
-					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+='\"'+msg.", f.Oneof.Desc.Name(), ".value.toString()+'\",'")
-				case protoreflect.FloatKind:
-					fallthrough
-				case protoreflect.DoubleKind:
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be number'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".value+','")
-				case protoreflect.StringKind:
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be string'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+='\"'+msg.", f.Oneof.Desc.Name(), ".value+'\",'")
-				case protoreflect.BytesKind:
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be Uint8Array'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+='\"'+Base64.encode(msg.", f.Oneof.Desc.Name(), ".value,0,msg.", f.Oneof.Desc.Name(), ".value.length)+'\",'")
-				case protoreflect.MessageKind:
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
-					g.P("\t\t\t\ts+='null,'")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ts+=", oneoff.Message.GoIdent.GoName, "ToJson(msg.", f.Oneof.Desc.Name(), ".value)+','")
-					g.P("\t\t\t}")
-				}
-				if i == len(f.Oneof.Fields)-1 {
-					g.P("\t\t}")
-				}
+				g.P("\t\t\t\t\tbreak")
+				g.P("\t\t\t\t}")
 			}
-			g.P("\t}")
+			g.P("\t\t\t}")
+			g.P("\t\t}")
 			continue
 		}
-		g.P("\t//", f.Desc.Name())
-		switch f.Desc.Kind() {
-		case protoreflect.BoolKind:
+		if !f.Desc.IsMap() {
 			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":null,'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ".length==0){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":[],'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":['")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
-				g.P("\t\t\t}")
-				g.P("\t\t\ts+=element+','")
-				g.P("\t\t}")
-				g.P("\t\ts=s.substr(0,s.length-1)+'],'")
-				g.P("\t}")
+				g.P("\t\tif(this.", f.Desc.Name(), " && this.", f.Desc.Name(), ".length>0)")
 			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":'+msg.", f.Desc.Name(), "+','")
-				g.P("\t}")
+				g.P("\t\tif(this.", f.Desc.Name(), "){")
 			}
-		case protoreflect.EnumKind:
-			if f.Desc.IsList() {
-				tmps := make([]string, 0, len(f.Enum.Values))
-				for _, v := range f.Enum.Values {
-					tmps = append(tmps, "element!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
-				}
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":null,'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ".length==0){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":[],'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":['")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined||(", strings.Join(tmps, "&&"), ")){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
-				g.P("\t\t\t}")
-				g.P("\t\t\ts+=element+','")
-				g.P("\t\t}")
-				g.P("\t\ts=s.substr(0,s.length-1)+'],'")
-				g.P("\t}")
-			} else {
-				tmps := make([]string, 0, len(f.Enum.Values))
-				for _, v := range f.Enum.Values {
-					tmps = append(tmps, "msg."+string(f.Desc.Name())+"!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
-				}
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined||(", strings.Join(tmps, "&&"), ")){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":'+msg.", f.Desc.Name(), "+','")
-				g.P("\t}")
-			}
-		case protoreflect.Sfixed32Kind:
-			fallthrough
-		case protoreflect.Sint32Kind:
-			fallthrough
-		case protoreflect.Int32Kind:
-			//int32
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":null,'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ".length==0){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":[],'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":['")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined||!Number.isInteger(element)){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(element>2147483647||element<-2147483648){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t}")
-				g.P("\t\t\ts+=element+','")
-				g.P("\t\t}")
-				g.P("\t\ts=s.substr(0,s.length-1)+'],'")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined||!Number.isInteger(msg.", f.Desc.Name(), ")){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ">2147483647||msg.", f.Desc.Name(), "<-2147483648){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":'+msg.", f.Desc.Name(), "+','")
-				g.P("\t}")
-			}
-		case protoreflect.Fixed32Kind:
-			fallthrough
-		case protoreflect.Uint32Kind:
-			//uint32
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":null,'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ".length==0){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":[],'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":['")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined||!Number.isInteger(element)){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(element>4294967295||element<0){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t}")
-				g.P("\t\t\ts+=element+','")
-				g.P("\t\t}")
-				g.P("\t\ts=s.substr(0,s.length-1)+'],'")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined||!Number.isInteger(msg.", f.Desc.Name(), ")){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ">4294967295||msg.", f.Desc.Name(), "<0){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":'+msg.", f.Desc.Name(), "+','")
-				g.P("\t}")
-			}
-		case protoreflect.Sfixed64Kind:
-			fallthrough
-		case protoreflect.Sint64Kind:
-			fallthrough
-		case protoreflect.Int64Kind:
-			//int64
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":null,'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ".length==0){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":[],'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":['")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}else if(element.lessThan(Long.MIN_VALUE)||element.greaterThan(Long.MAX_VALUE)){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t}else{")
-				g.P("\t\t\t\ts+='\"'+element.toString()+'\",'")
-				g.P("\t\t\t}")
-				g.P("\t\t}")
-				g.P("\t\ts=s.substr(0,s.length-1)+'],'")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ".lessThan(Long.MIN_VALUE)||msg.", f.Desc.Name(), ".greaterThan(Long.MAX_VALUE)){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":\"'+msg.", f.Desc.Name(), ".toString()+'\",'")
-				g.P("\t}")
-			}
-		case protoreflect.Fixed64Kind:
-			fallthrough
-		case protoreflect.Uint64Kind:
-			//uint64
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":null,'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ".length==0){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":[],'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":['")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined||(typeof element=='number'&&!Number.isInteger(element))){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}else if(element.lessThan(0)){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t}else{")
-				g.P("\t\t\t\ts+='\"'+element.toString()+'\",'")
-				g.P("\t\t\t}")
-				g.P("\t\t}")
-				g.P("\t\ts=s.substr(0,s.length-1)+'],'")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ".lessThan(0)){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":\"'+msg.", f.Desc.Name(), ".toString()+'\",'")
-				g.P("\t}")
-			}
-		case protoreflect.FloatKind:
-			//float32
-			fallthrough
-		case protoreflect.DoubleKind:
-			//float64
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":null,'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ".length==0){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":[],'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":['")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
-				g.P("\t\t\t}")
-				g.P("\t\t\ts+=element.toString()+','")
-				g.P("\t\t}")
-				g.P("\t\ts=s.substr(0,s.length-1)+'],'")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":'+msg.", f.Desc.Name(), ".toString()+','")
-				g.P("\t}")
-			}
-		case protoreflect.StringKind:
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":null,'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ".length==0){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":[],'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":['")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
-				g.P("\t\t\t}")
-				g.P("\t\t\t//transfer the json escape")
-				g.P("\t\t\tlet vv=JSON.stringify(element)")
-				g.P("\t\t\ts+=vv+','")
-				g.P("\t\t}")
-				g.P("\t\ts=s.substr(0,s.length-1)+'],'")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
-				g.P("\t}else{")
-				g.P("\t\t//transfer the json escape")
-				g.P("\t\tlet vv=JSON.stringify(msg.", f.Desc.Name(), ")")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":'+vv+','")
-				g.P("\t}")
-			}
-		case protoreflect.BytesKind:
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":null,'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ".length==0){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":[],'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":['")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Uint8Array'")
-				g.P("\t\t\t}")
-				g.P("\t\t\ts+='\"'+Base64.encode(element,0,element.length)+'\",'")
-				g.P("\t\t}")
-				g.P("\t\ts=s.substr(0,s.length-1)+'],'")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Uint8Array'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":\"'+Base64.encode(msg.", f.Desc.Name(), ",0,msg.", f.Desc.Name(), ".length)+'\",'")
-				g.P("\t}")
-			}
-		case protoreflect.MessageKind:
-			if f.Desc.IsMap() {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":null,'")
-				g.P("\t}else if (msg.", f.Desc.Name(), ".size==0){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":{},'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":{'")
-				g.P("\t\tfor(let kv of msg.", f.Desc.Name(), ".entries()){")
-				switch f.Message.Fields[0].Desc.Kind() {
-				case protoreflect.Int32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					//int32
-					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined||!Number.isInteger(kv[0])){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[0]>2147483647||kv[0]<-2147483648){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
+			if f.Desc.Kind() == protoreflect.BytesKind {
+				g.P("\t\t\t//bytes type in protobuf should be standard base64 encoded")
+				g.P("\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
+				if f.Desc.IsList() {
+					g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]=[]")
+					g.P("\t\t\tfor(let value of this.", f.Desc.Name(), "){")
+					g.P("\t\t\t\tlet rawstr=''")
+					g.P("\t\t\t\tvalue.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
+					g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "].push(window.btoa(rawstr))")
 					g.P("\t\t\t}")
-					g.P("\t\t\ts+='\"'+kv[0]+'\":'")
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Fixed32Kind:
-					//uint32
-					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined||!Number.isInteger(kv[0])){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[0]>4294967295||kv[0]<0){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+='\"'+kv[0]+'\":'")
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[0].lessThan(Long.MIN_VALUE)||kv[0].greaterThan(Long.MAX_VALUE)){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+='\"'+kv[0].toString()+'\":'")
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Fixed64Kind:
-					//uint64
-					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[0].lessThan(0)){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+='\"'+kv[0].toString()+'\":'")
-				case protoreflect.StringKind:
-					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\t//transfer the json escape")
-					g.P("\t\t\tlet vv=JSON.stringify(kv[0])")
-					g.P("\t\t\ts+=vv+':'")
-				}
-				switch f.Message.Fields[1].Desc.Kind() {
-				case protoreflect.BoolKind:
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=kv[1]+','")
-				case protoreflect.EnumKind:
-					tmps := make([]string, 0, len(f.Message.Fields[1].Enum.Values))
-					for _, v := range f.Message.Fields[1].Enum.Values {
-						tmps = append(tmps, "kv[1]!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
-					}
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined||(", strings.Join(tmps, "&&"), ")){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Message.Fields[1].Enum.GoIdent.GoName, "\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=kv[1]+','")
-				case protoreflect.Int32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					//int32
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined||!Number.isInteger(kv[1])){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[1]>2147483647||kv[1]<-2147483648){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=kv[1]+','")
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Fixed32Kind:
-					//uint32
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined||!Number.isInteger(kv[1])){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[1]>4294967295||kv[1]<0){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=kv[1]+','")
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[1].lessThan(Long.MIN_VALUE)||kv[1].greaterThan(Long.MAX_VALUE)){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+='\"'+kv[1].toString()+'\",'")
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Fixed64Kind:
-					//uint64
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[1].lessThan(0)){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+='\"'+kv[1].toString()+'\",'")
-				case protoreflect.FloatKind:
-					fallthrough
-				case protoreflect.DoubleKind:
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=kv[1]+','")
-				case protoreflect.StringKind:
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\t//transfer the json escape")
-					g.P("\t\t\tlet vv=JSON.stringify(kv[1])")
-					g.P("\t\t\ts+=vv+','")
-				case protoreflect.BytesKind:
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+='\"'+Base64.encode(kv[1],0,kv[1].length)+'\",'")
-				case protoreflect.MessageKind:
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
-					g.P("\t\t\t\ts+='null,'")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ts+=", f.Message.Fields[1].Message.GoIdent.GoName, "ToJson(kv[1])+','")
-					g.P("\t\t\t}")
-				}
-				g.P("\t\t}")
-				g.P("\t\ts=s.substr(0,s.length-1)+'},'")
-				g.P("\t}")
-			} else if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":null,'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ".length==0){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":[],'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":['")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined){")
-				g.P("\t\t\t\ts+='null,'")
-				g.P("\t\t\t}else{")
-				g.P("\t\t\t\ts+=", f.Message.GoIdent.GoName, "ToJson(element)+','")
-				g.P("\t\t\t}")
-				g.P("\t\t}")
-				g.P("\t\ts=s.substr(0,s.length-1)+'],'")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":null,'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", strconv.Quote(string(f.Desc.Name())), ":'+"+f.Message.GoIdent.GoName, "ToJson(msg.", f.Desc.Name(), ")+','")
-				g.P("\t}")
-			}
-		}
-	}
-	g.P("\tif(s.length==1){")
-	g.P("\t\ts+=\"}\"")
-	g.P("\t}else{")
-	g.P("\t\ts=s.substr(0,s.length-1)+'}'")
-	g.P("\t}")
-	g.P("\treturn s")
-	g.P("}")
-}
-
-func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
-	if len(m.Fields) == 0 {
-		g.P("function ", m.GoIdent.GoName, "ToForm(_msg: ", m.GoIdent.GoName, "): string{")
-	} else {
-		g.P("function ", m.GoIdent.GoName, "ToForm(msg: ", m.GoIdent.GoName, "): string{")
-	}
-	oneofs := make(map[string]*struct{}, len(m.Oneofs))
-	g.P("\tlet s: string=\"\"")
-	for _, f := range m.Fields {
-		if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
-			if _, ok := oneofs[f.Oneof.GoIdent.String()]; ok {
-				continue
-			}
-			oneofs[f.Oneof.GoIdent.String()] = nil
-			tmps := make([]string, 0, len(f.Oneof.Fields))
-			for _, oneoff := range f.Oneof.Fields {
-				var tmp string
-				switch oneoff.Desc.Kind() {
-				case protoreflect.BoolKind:
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: boolean}"
-				case protoreflect.EnumKind:
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: " + string(oneoff.Enum.Desc.Name()) + "}"
-				case protoreflect.Sfixed32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Int32Kind:
-					//int32
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: number}"
-				case protoreflect.Sfixed64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Int64Kind:
-					//int64
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: Long}"
-				case protoreflect.Fixed32Kind:
-					fallthrough
-				case protoreflect.Uint32Kind:
-					//uint32
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: number}"
-				case protoreflect.Fixed64Kind:
-					fallthrough
-				case protoreflect.Uint64Kind:
-					//uint64
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: Long}"
-				case protoreflect.FloatKind:
-					fallthrough
-				case protoreflect.DoubleKind:
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: number}"
-				case protoreflect.StringKind:
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: string}"
-				case protoreflect.BytesKind:
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: Uint8Array}"
-				case protoreflect.MessageKind:
-					tmp = "{$key: " + strconv.Quote(string(oneoff.Desc.Name())) + ",value: " + oneoff.Message.GoIdent.GoName + "|null|undefined}"
-				}
-				tmps = append(tmps, tmp)
-			}
-			g.P("\t//", f.Oneof.Desc.Name())
-			g.P("\tif(msg.", f.Oneof.Desc.Name(), "!=null&&msg.", f.Oneof.Desc.Name(), "!=undefined){")
-			for i, oneoff := range f.Oneof.Fields {
-				if i == 0 {
-					g.P("\t\tif(msg.", f.Oneof.Desc.Name(), ".$key=='", oneoff.Desc.Name(), "'){")
 				} else {
-					g.P("\t\t}else if(msg.", f.Oneof.Desc.Name(), ".$key=='", oneoff.Desc.Name(), "'){")
+					g.P("\t\t\tlet rawstr=''")
+					g.P("\t\t\tthis.", f.Desc.Name(), ".forEach((element)=>{rawstr+=String.fromCharCode(element)})")
+					g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]=window.btoa(rawstr)")
 				}
-				switch oneoff.Desc.Kind() {
-				case protoreflect.BoolKind:
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be boolean'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value+'&'")
-				case protoreflect.EnumKind:
-					tmps := make([]string, 0, len(oneoff.Enum.Values))
-					for _, v := range oneoff.Enum.Values {
-						tmps = append(tmps, "msg."+string(f.Oneof.Desc.Name())+".value!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
-					}
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined||(", strings.Join(tmps, "&&"), ")){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be enum in ", oneoff.Enum.GoIdent.GoName, "'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value+'&'")
-				case protoreflect.Sfixed32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Int32Kind:
-					//int32
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined||!Number.isInteger(msg.", f.Oneof.Desc.Name(), ".value)){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value>2147483647||msg.", f.Oneof.Desc.Name(), ".value<-2147483648){")
-					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value+'&'")
-				case protoreflect.Fixed32Kind:
-					fallthrough
-				case protoreflect.Uint32Kind:
-					//uint32
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined||!Number.isInteger(msg.", f.Oneof.Desc.Name(), ".value)){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value>4294967295||msg.", f.Oneof.Desc.Name(), ".value<0){")
-					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value+'&'")
-				case protoreflect.Sfixed64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Int64Kind:
-					//int64
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value.lessThan(Long.MIN_VALUE)||msg.", f.Oneof.Desc.Name(), ".value.greaterThan(Long.MAX_VALUE)){")
-					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value.toString()+'&'")
-				case protoreflect.Fixed64Kind:
-					fallthrough
-				case protoreflect.Uint64Kind:
-					//uint64
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}else if(msg.", f.Oneof.Desc.Name(), ".value.lessThan(0)){")
-					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value.toString()+'&'")
-				case protoreflect.FloatKind:
-					fallthrough
-				case protoreflect.DoubleKind:
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be number'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+msg.", f.Oneof.Desc.Name(), ".value+'&'")
-				case protoreflect.StringKind:
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be string'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+encodeURIComponent(msg.", f.Oneof.Desc.Name(), ".value)+'&'")
-				case protoreflect.BytesKind:
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be Uint8Array'")
-					g.P("\t\t\t}")
-					g.P("\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+encodeURIComponent(Base64.encode(msg.", f.Oneof.Desc.Name(), ".value,0,msg.", f.Oneof.Desc.Name(), ".value.length))+'&'")
-				case protoreflect.MessageKind:
-					g.P("\t\t\tif(msg.", f.Oneof.Desc.Name(), ".value==null||msg.", f.Oneof.Desc.Name(), ".value==undefined){")
-					g.P("\t\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'=null&'")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ts+=msg.", f.Oneof.Desc.Name(), ".$key+'='+encodeURIComponent(", oneoff.Message.GoIdent.GoName, "ToJson(msg.", f.Oneof.Desc.Name(), ".value))+'&'")
-					g.P("\t\t\t}")
-				}
-				if i == len(f.Oneof.Fields)-1 {
-					g.P("\t\t}")
-				}
-			}
-			g.P("\t}")
-			continue
-		}
-		g.P("\t//", f.Desc.Name())
-		switch f.Desc.Kind() {
-		case protoreflect.BoolKind:
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined&&msg.", f.Desc.Name(), ".length!=0){")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
-				g.P("\t\t\t}")
-				g.P("\t\t\ts+='", f.Desc.Name(), "='+element+'&'")
-				g.P("\t\t}")
-				g.P("\t}")
 			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", f.Desc.Name(), "='+msg.", f.Desc.Name(), "+'&'")
-				g.P("\t}")
-			}
-		case protoreflect.EnumKind:
-			if f.Desc.IsList() {
-				tmps := make([]string, 0, len(f.Enum.Values))
-				for _, v := range f.Enum.Values {
-					tmps = append(tmps, "element!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
-				}
-				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined&&msg.", f.Desc.Name(), ".length!=0){")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined||(", strings.Join(tmps, "&&"), ")){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
-				g.P("\t\t\t}")
-				g.P("\t\t\ts+='", f.Desc.Name(), "='+element+'&'")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				tmps := make([]string, 0, len(f.Enum.Values))
-				for _, v := range f.Enum.Values {
-					tmps = append(tmps, "msg."+string(f.Desc.Name())+"!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
-				}
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined||(", strings.Join(tmps, "&&"), ")){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", f.Desc.Name(), "='+msg.", f.Desc.Name(), "+'&'")
-				g.P("\t}")
-			}
-		case protoreflect.Sfixed32Kind:
-			fallthrough
-		case protoreflect.Sint32Kind:
-			fallthrough
-		case protoreflect.Int32Kind:
-			//int32
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined&&msg.", f.Desc.Name(), ".length!=0){")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined||!Number.isInteger(element)){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(element>2147483647||element<-2147483648){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t}")
-				g.P("\t\t\ts+='", f.Desc.Name(), "='+element+'&'")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined||!Number.isInteger(msg.", f.Desc.Name(), ")){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ">2147483647||msg.", f.Desc.Name(), "<-2147483648){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", f.Desc.Name(), "='+msg.", f.Desc.Name(), "+'&'")
-				g.P("\t}")
-			}
-		case protoreflect.Fixed32Kind:
-			fallthrough
-		case protoreflect.Uint32Kind:
-			//uint32
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined&&msg.", f.Desc.Name(), ".length!=0){")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined||!Number.isInteger(element)){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(element>4294967295||element<0){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t}")
-				g.P("\t\t\ts+='", f.Desc.Name(), "='+element+'&'")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined||!Number.isInteger(msg.", f.Desc.Name(), ")){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ">4294967295||msg.", f.Desc.Name(), "<0){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", f.Desc.Name(), "='+msg.", f.Desc.Name(), "+'&'")
-				g.P("\t}")
-			}
-		case protoreflect.Sfixed64Kind:
-			fallthrough
-		case protoreflect.Sint64Kind:
-			fallthrough
-		case protoreflect.Int64Kind:
-			//int64
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined&&msg.", f.Desc.Name(), ".length!=0){")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}else if(element.lessThan(Long.MIN_VALUE)||element.greaterThan(Long.MAX_VALUE)){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t}else{")
-				g.P("\t\t\t\ts+='", f.Desc.Name(), "='+element.toString()+'&'")
-				g.P("\t\t\t}")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ".lessThan(Long.MIN_VALUE)||msg.", f.Desc.Name(), ".greaterThan(Long.MAX_VALUE)){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", f.Desc.Name(), "='+msg.", f.Desc.Name(), ".toString()+'&'")
-				g.P("\t}")
-			}
-		case protoreflect.Fixed64Kind:
-			fallthrough
-		case protoreflect.Uint64Kind:
-			//uint64
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined&&msg.", f.Desc.Name(), ".length!=0){")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}else if(element.lessThan(0)){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t}else{")
-				g.P("\t\t\t\ts+='", f.Desc.Name(), "='+element.toString()+'&'")
-				g.P("\t\t\t}")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t}else if(msg.", f.Desc.Name(), ".lessThan(0)){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", f.Desc.Name(), "='+msg.", f.Desc.Name(), ".toString()+'&'")
-				g.P("\t}")
-			}
-		case protoreflect.FloatKind:
-			//float32
-			fallthrough
-		case protoreflect.DoubleKind:
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined&&msg.", f.Desc.Name(), ".length!=0){")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
-				g.P("\t\t\t}")
-				g.P("\t\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(element.toString())+'&'")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(msg.", f.Desc.Name(), ".toString())+'&'")
-				g.P("\t}")
-			}
-		case protoreflect.StringKind:
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined&&msg.", f.Desc.Name(), ".length!=0){")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
-				g.P("\t\t\t}")
-				g.P("\t\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(element)+'&'")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(msg.", f.Desc.Name(), ")+'&'")
-				g.P("\t}")
-			}
-		case protoreflect.BytesKind:
-			if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined&&msg.", f.Desc.Name(), ".length!=0){")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Uint8Array'")
-				g.P("\t\t\t}")
-				g.P("\t\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(Base64.encode(element,0,element.length))+'&'")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "==null||msg.", f.Desc.Name(), "==undefined){")
-				g.P("\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Uint8Array'")
-				g.P("\t}else{")
-				g.P("\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(Base64.encode(msg.", f.Desc.Name(), ",0,msg.", f.Desc.Name(), ".length))+'&'")
-				g.P("\t}")
-			}
-		case protoreflect.MessageKind:
-			if f.Desc.IsMap() {
-				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined&&msg.", f.Desc.Name(), ".size!=0){")
-				g.P("\t\tlet tmps: string=\"{\"")
-				g.P("\t\tfor(let kv of msg.", f.Desc.Name(), ".entries()){")
-				switch f.Message.Fields[0].Desc.Kind() {
-				case protoreflect.Int32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					//int32
-					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined||!Number.isInteger(kv[0])){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[0]>2147483647||kv[0]<-2147483648){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ttmps+='\"'+kv[0]+'\":'")
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Fixed32Kind:
-					//uint32
-					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined||!Number.isInteger(kv[0])){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[0]>4294967295||kv[0]<0){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ttmps+='\"'+kv[0]+'\":'")
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[0].lessThan(Long.MIN_VALUE)||kv[0].greaterThan(Long.MAX_VALUE)){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\t\ttmps+='\"'+kv[0].toString()+'\":'")
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Fixed64Kind:
-					//uint64
-					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[0].lessThan(0)){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\t\ttmps+='\"'+kv[0].toString()+'\":'")
-				case protoreflect.StringKind:
-					g.P("\t\t\tif(kv[0]==null||kv[0]==undefined){")
-					g.P("\t\t\t\tthrow \"map's key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\t//transfer the json escape")
-					g.P("\t\t\tlet kk=JSON.stringify(kv[0])")
-					g.P("\t\t\ttmps+=kk+':'")
-				}
-				switch f.Message.Fields[1].Desc.Kind() {
-				case protoreflect.BoolKind:
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ttmps+=kv[1]+','")
-				case protoreflect.EnumKind:
-					tmps := make([]string, 0, len(f.Message.Fields[1].Enum.Values))
-					for _, v := range f.Message.Fields[1].Enum.Values {
-						tmps = append(tmps, "kv[1]!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
-					}
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined||(", strings.Join(tmps, "&&"), ")){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Message.Fields[1].Enum.GoIdent.GoName, "\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ttmps+=kv[1]+','")
-				case protoreflect.Int32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					//int32
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined||!Number.isInteger(kv[1])){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[1]>2147483647||kv[1]<-2147483648){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ttmps+=kv[1]+','")
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Fixed32Kind:
-					//uint32
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined||!Number.isInteger(kv[1])){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[1]>4294967295||kv[1]<0){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ttmps+=kv[1]+','")
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[1].lessThan(Long.MIN_VALUE)||kv[1].greaterThan(Long.MAX_VALUE)){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ttmps+='\"'+kv[1].toString()+'\",'")
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Fixed64Kind:
-					//uint64
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer\"")
-					g.P("\t\t\t}else if(kv[1].lessThan(0)){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ttmps+='\"'+kv[1].toString()+'\",'")
-				case protoreflect.FloatKind:
-					fallthrough
-				case protoreflect.DoubleKind:
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ttmps+=kv[1]+','")
-				case protoreflect.StringKind:
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\t//transfer the json escape")
-					g.P("\t\t\tlet vv=JSON.stringify(kv[1])")
-					g.P("\t\t\ttmps+=vv+','")
-				case protoreflect.BytesKind:
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
-					g.P("\t\t\t\tthrow \"map's value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string\"")
-					g.P("\t\t\t}")
-					g.P("\t\t\ttmps+='\"'+Base64.encode(kv[1],0,kv[1].length)+'\",'")
-				case protoreflect.MessageKind:
-					g.P("\t\t\tif(kv[1]==null||kv[1]==undefined){")
-					g.P("\t\t\t\ttmps+='null,'")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ttmps+=", f.Message.Fields[1].Message.GoIdent.GoName, "ToJson(kv[1])+','")
-					g.P("\t\t\t}")
-				}
-				g.P("\t\t}")
-				g.P("\t\tif(tmps.length==1){")
-				g.P("\t\t\ttmps+=\"}\"")
-				g.P("\t\t}else{")
-				g.P("\t\t\ttmps=tmps.substr(0,tmps.length-1)+'}'")
-				g.P("\t\t}")
-				g.P("\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(tmps)+'&'")
-				g.P("\t}")
-			} else if f.Desc.IsList() {
-				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined&&msg.", f.Desc.Name(), ".length!=0){")
-				g.P("\t\tfor(let element of msg.", f.Desc.Name(), "){")
-				g.P("\t\t\tif(element==null||element==undefined){")
-				g.P("\t\t\t\ts+='", f.Desc.Name(), "=null&'")
-				g.P("\t\t\t}else{")
-				g.P("\t\t\t\ts+='", f.Desc.Name(), "='+encodeURIComponent(", f.Message.GoIdent.GoName, "ToJson(element))+'&'")
-				g.P("\t\t\t}")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(msg.", f.Desc.Name(), "!=null&&msg.", f.Desc.Name(), "!=undefined){")
-				g.P("\t\ts+='", f.Desc.Name(), "='+encodeURIComponent("+f.Message.GoIdent.GoName, "ToJson(msg.", f.Desc.Name(), "))+'&'")
-				g.P("\t}")
-			}
-		}
-	}
-	g.P("\tif(s.length!=0){")
-	g.P("\t\ts=s.substr(0,s.length-1)")
-	g.P("\t}")
-	g.P("\treturn s")
-	g.P("}")
-}
-
-func genJsonTo(m *protogen.Message, g *protogen.GeneratedFile) {
-	if len(m.Fields) == 0 {
-		g.P("function JsonTo", m.GoIdent.GoName, "(_jsonobj: { [k:string]:any }): ", m.GoIdent.GoName, "{")
-	} else {
-		g.P("function JsonTo", m.GoIdent.GoName, "(jsonobj: { [k:string]:any }): ", m.GoIdent.GoName, "{")
-	}
-	oneofs := make(map[string]*struct{}, len(m.Oneofs))
-	g.P("\tlet obj: ", m.GoIdent.GoName, "={")
-	for _, f := range m.Fields {
-		if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
-			if _, ok := oneofs[f.Oneof.GoIdent.String()]; ok {
-				continue
-			}
-			oneofs[f.Oneof.GoIdent.String()] = nil
-			g.P("\t\t", f.Oneof.Desc.Name(), ":null,")
-			continue
-		}
-		switch f.Desc.Kind() {
-		case protoreflect.BoolKind:
-			if f.Desc.IsList() {
-				g.P("\t\t", f.Desc.Name(), ":null,")
-			} else {
-				g.P("\t\t", f.Desc.Name(), ":false,")
-			}
-		case protoreflect.EnumKind:
-			if f.Desc.IsList() {
-				g.P("\t\t", f.Desc.Name(), ":null,")
-			} else {
-				g.P("\t\t", f.Desc.Name(), ":0,")
-			}
-		case protoreflect.Sfixed32Kind:
-			fallthrough
-		case protoreflect.Sint32Kind:
-			fallthrough
-		case protoreflect.Int32Kind:
-			//int32
-			if f.Desc.IsList() {
-				g.P("\t\t", f.Desc.Name(), ":null,")
-			} else {
-				g.P("\t\t", f.Desc.Name(), ":0,")
-			}
-		case protoreflect.Fixed32Kind:
-			fallthrough
-		case protoreflect.Uint32Kind:
-			//uint32
-			if f.Desc.IsList() {
-				g.P("\t\t", f.Desc.Name(), ":null,")
-			} else {
-				g.P("\t\t", f.Desc.Name(), ":0,")
-			}
-		case protoreflect.Sfixed64Kind:
-			fallthrough
-		case protoreflect.Sint64Kind:
-			fallthrough
-		case protoreflect.Int64Kind:
-			//int64
-			if f.Desc.IsList() {
-				g.P("\t\t", f.Desc.Name(), ":null,")
-			} else {
-				g.P("\t\t", f.Desc.Name(), ":Long.ZERO,")
-			}
-		case protoreflect.Fixed64Kind:
-			fallthrough
-		case protoreflect.Uint64Kind:
-			//uint64
-			if f.Desc.IsList() {
-				g.P("\t\t", f.Desc.Name(), ":null,")
-			} else {
-				g.P("\t\t", f.Desc.Name(), ":Long.ZERO,")
-			}
-		case protoreflect.FloatKind:
-			//float32
-			fallthrough
-		case protoreflect.DoubleKind:
-			if f.Desc.IsList() {
-				g.P("\t\t", f.Desc.Name(), ":null,")
-			} else {
-				g.P("\t\t", f.Desc.Name(), ":0,")
-			}
-		case protoreflect.StringKind:
-			if f.Desc.IsList() {
-				g.P("\t\t", f.Desc.Name(), ":null,")
-			} else {
-				g.P("\t\t", f.Desc.Name(), ":'',")
-			}
-		case protoreflect.BytesKind:
-			if f.Desc.IsList() {
-				g.P("\t\t", f.Desc.Name(), ":null,")
-			} else {
-				g.P("\t\t", f.Desc.Name(), ":new Uint8Array(0),")
-			}
-		case protoreflect.MessageKind:
-			g.P("\t\t", f.Desc.Name(), ":null,")
-		}
-	}
-	g.P("\t}")
-	oneofs = make(map[string]*struct{}, len(m.Oneofs))
-	for _, f := range m.Fields {
-		if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
-			if _, ok := oneofs[f.Oneof.GoIdent.String()]; ok {
-				continue
-			}
-			oneofs[f.Oneof.GoIdent.String()] = nil
-			g.P("\t//", f.Oneof.Desc.Name())
-			for i, oneoff := range f.Oneof.Fields {
-				if i == 0 {
-					g.P("\tif(jsonobj['", oneoff.Desc.Name(), "']!=null&&jsonobj['", oneoff.Desc.Name(), "']!=undefined){")
-				} else {
-					g.P("\t}else if(jsonobj['", oneoff.Desc.Name(), "']!=null&&jsonobj['", oneoff.Desc.Name(), "']!=undefined){")
-				}
-				switch oneoff.Desc.Kind() {
-				case protoreflect.BoolKind:
-					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='boolean'){")
-					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be boolean'")
-					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
-				case protoreflect.EnumKind:
-					tmps := make([]string, 0, len(oneoff.Enum.Values))
-					for _, v := range oneoff.Enum.Values {
-						tmps = append(tmps, "jsonobj['"+string(oneoff.Desc.Name())+"']!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
-					}
-					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='number'||(", strings.Join(tmps, "&&"), ")){")
-					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be enum in ", oneoff.Enum.GoIdent.GoName, "'")
-					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
-				case protoreflect.Sfixed32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Int32Kind:
-					//int32
-					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", oneoff.Desc.Name(), "'])){")
-					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t}else if(jsonobj['", oneoff.Desc.Name(), "']>2147483647||jsonobj['", oneoff.Desc.Name(), "']<-2147483648){")
-					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
-				case protoreflect.Fixed32Kind:
-					fallthrough
-				case protoreflect.Uint32Kind:
-					//uint32
-					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", oneoff.Desc.Name(), "'])){")
-					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t}else if(jsonobj['", oneoff.Desc.Name(), "']>4294967295||jsonobj['", oneoff.Desc.Name(), "']<0){")
-					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
-				case protoreflect.Sfixed64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Int64Kind:
-					//int64
-					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']=='number'){")
-					g.P("\t\t\tif(!Number.isInteger(jsonobj['", oneoff.Desc.Name(), "'])){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tlet tmp: Long=Long.ZERO")
-					g.P("\t\t\ttry{")
-					g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", oneoff.Desc.Name(), "'],false)")
-					g.P("\t\t\t}catch(e){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:tmp}")
-					g.P("\t\t}else if(typeof jsonobj['", oneoff.Desc.Name(), "']=='string'){")
-					g.P("\t\t\tlet tmp: Long=Long.ZERO")
-					g.P("\t\t\ttry{")
-					g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", oneoff.Desc.Name(), "'],false)")
-					g.P("\t\t\t}catch(e){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(tmp.toString()!=jsonobj['", oneoff.Desc.Name(), "']){")
-					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:tmp}")
-					g.P("\t\t}else{")
-					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t}")
-				case protoreflect.Fixed64Kind:
-					fallthrough
-				case protoreflect.Uint64Kind:
-					//uint64
-					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']=='number'){")
-					g.P("\t\t\tif(!Number.isInteger(jsonobj['", oneoff.Desc.Name(), "'])){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(jsonobj['", oneoff.Desc.Name(), "']<0){")
-					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tlet tmp: Long=Long.ZERO")
-					g.P("\t\t\ttry{")
-					g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", oneoff.Desc.Name(), "'],true)")
-					g.P("\t\t\t}catch(e){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:tmp}")
-					g.P("\t\t}else if(typeof jsonobj['", oneoff.Desc.Name(), "']=='string'){")
-					g.P("\t\t\tlet tmp: Long=Long.ZERO")
-					g.P("\t\t\ttry{")
-					g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", oneoff.Desc.Name(), "'],true)")
-					g.P("\t\t\t}catch(e){")
-					g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(tmp.toString()!=jsonobj['", oneoff.Desc.Name(), "']){")
-					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:tmp}")
-					g.P("\t\t}else{")
-					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
-					g.P("\t\t}")
-				case protoreflect.FloatKind:
-					fallthrough
-				case protoreflect.DoubleKind:
-					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='number'){")
-					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be number'")
-					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
-				case protoreflect.StringKind:
-					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='string'){")
-					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be string'")
-					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
-				case protoreflect.BytesKind:
-					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='string'){")
-					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be base64 string from Uint8Array'")
-					g.P("\t\t}")
-					g.P("\t\tlet buf: Uint8Array=new Uint8Array(Base64.length(jsonobj['", oneoff.Desc.Name(), "']))")
-					g.P("\t\ttry{")
-					g.P("\t\t\tBase64.decode(jsonobj['", oneoff.Desc.Name(), "'],buf,0)")
-					g.P("\t\t}catch(e){")
-					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be base64 string from Uint8Array'")
-					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:buf}")
-				case protoreflect.MessageKind:
-					g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='object'){")
-					g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be ", oneoff.Message.GoIdent.GoName, "'")
-					g.P("\t\t}")
-					g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:JsonTo", oneoff.Message.GoIdent.GoName, "(jsonobj['", oneoff.Desc.Name(), "'])}")
-				}
+				g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]=this.", f.Desc.Name())
 			}
 			g.P("\t\t}")
 			continue
 		}
-		g.P("\t//", f.Desc.Name())
-		switch f.Desc.Kind() {
-		case protoreflect.BoolKind:
-			if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<boolean>|null|undefined'")
-				g.P("\t\t}")
-				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\tif(typeof element!='boolean'){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<boolean>")
-				g.P("\t\t\t}")
-				g.P("\t\t\tobj['", f.Desc.Name(), "'].push(element)")
-				g.P("\t\t}")
-				g.P("\t}")
+		g.P("\t\tif(this.", f.Desc.Name(), " && this.", f.Desc.Name(), ".size>0){")
+		g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]={}")
+		g.P("\t\t\tfor(let [k,v] of this.", f.Desc.Name(), "){")
+		if f.Message.Fields[1].Desc.Kind() == protoreflect.BytesKind {
+			g.P("\t\t\t\tlet rawstr=''")
+			g.P("\t\t\t\tv.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
+			if f.Message.Fields[0].Desc.Kind() == protoreflect.Sfixed64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Sint64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Int64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Fixed64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Uint64Kind {
+				g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "][k.toString()]=window.btoa(rawstr)")
 			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='boolean'){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
-				g.P("\t\t}")
-				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
-				g.P("\t}")
+				g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "][k]=window.btoa(rawstr)")
 			}
-		case protoreflect.EnumKind:
-			if f.Desc.IsList() {
-				tmps := make([]string, 0, len(f.Enum.Values))
-				for _, v := range f.Enum.Values {
-					tmps = append(tmps, "element!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
-				}
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<", f.Enum.GoIdent.GoName, ">|null|undefined'")
-				g.P("\t\t}")
-				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\tif(typeof element!='number'||(", strings.Join(tmps, "&&"), ")){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<", f.Enum.GoIdent.GoName, ">")
-				g.P("\t\t\t}")
-				g.P("\t\t\tobj['", f.Desc.Name(), "'].push(element)")
-				g.P("\t\t}")
-				g.P("\t}")
+		} else {
+			if f.Message.Fields[0].Desc.Kind() == protoreflect.Sfixed64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Sint64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Int64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Fixed64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Uint64Kind {
+				g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "][k.toString()]=v")
 			} else {
-				tmps := make([]string, 0, len(f.Enum.Values))
-				for _, v := range f.Enum.Values {
-					tmps = append(tmps, "jsonobj['"+string(f.Desc.Name())+"']!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
-				}
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='number'||(", strings.Join(tmps, "&&"), ")){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
-				g.P("\t\t}")
-				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
-				g.P("\t}")
-			}
-		case protoreflect.Sfixed32Kind:
-			fallthrough
-		case protoreflect.Sint32Kind:
-			fallthrough
-		case protoreflect.Int32Kind:
-			//int32
-			if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
-				g.P("\t\t}")
-				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\tif(typeof element!='number'||!Number.isInteger(element)){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}else if(element>2147483647||element<-2147483648){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<number>")
-				g.P("\t\t\t}")
-				g.P("\t\t\tobj['", f.Desc.Name(), "'].push(element)")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t}else if(jsonobj['", f.Desc.Name(), "']>2147483647||jsonobj['", f.Desc.Name(), "']<-2147483648){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t}")
-				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
-				g.P("\t}")
-			}
-		case protoreflect.Fixed32Kind:
-			fallthrough
-		case protoreflect.Uint32Kind:
-			//uint32
-			if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
-				g.P("\t\t}")
-				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\tif(typeof element!='number'||!Number.isInteger(element)){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}else if(element>4294967295||element<0){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<number>")
-				g.P("\t\t\t}")
-				g.P("\t\t\tobj['", f.Desc.Name(), "'].push(element)")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t}else if(jsonobj['", f.Desc.Name(), "']>4294967295||jsonobj['", f.Desc.Name(), "']<0){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t}")
-				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
-				g.P("\t}")
-			}
-		case protoreflect.Sfixed64Kind:
-			fallthrough
-		case protoreflect.Sint64Kind:
-			fallthrough
-		case protoreflect.Int64Kind:
-			//int64
-			if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Long>|null|undefined'")
-				g.P("\t\t}")
-				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\tif(typeof element=='number'){")
-				g.P("\t\t\t\tif(!Number.isInteger(element)){")
-				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tlet tmp: Long=Long.ZERO")
-				g.P("\t\t\t\ttry{")
-				g.P("\t\t\t\t\ttmp=Long.fromNumber(element,false)")
-				g.P("\t\t\t\t}catch(e){")
-				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tif(obj['", f.Desc.Name(), "']==null){")
-				g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Long>")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(tmp)")
-				g.P("\t\t\t}else if(typeof element=='string'){")
-				g.P("\t\t\t\tlet tmp:Long=Long.ZERO")
-				g.P("\t\t\t\ttry{")
-				g.P("\t\t\t\t\ttmp=Long.fromString(element,false)")
-				g.P("\t\t\t\t}catch(e){")
-				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tif(tmp.toString()!=element){")
-				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tif(obj['", f.Desc.Name(), "']==null){")
-				g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Long>")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(tmp)")
-				g.P("\t\t\t}else{")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']=='number'){")
-				g.P("\t\t\tif(!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
-				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tlet tmp: Long=Long.ZERO")
-				g.P("\t\t\ttry{")
-				g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", f.Desc.Name(), "'],false)")
-				g.P("\t\t\t}catch(e){")
-				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tobj['", f.Desc.Name(), "']=tmp")
-				g.P("\t\t}else if(typeof jsonobj['", f.Desc.Name(), "']=='string'){")
-				g.P("\t\t\tlet tmp:Long=Long.ZERO")
-				g.P("\t\t\ttry{")
-				g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", f.Desc.Name(), "'],false)")
-				g.P("\t\t\t}catch(e){")
-				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(tmp.toString()!=jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tobj['", f.Desc.Name(), "']=tmp")
-				g.P("\t\t}else{")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t}")
-				g.P("\t}")
-			}
-		case protoreflect.Fixed64Kind:
-			fallthrough
-		case protoreflect.Uint64Kind:
-			//uint64
-			if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Long>|null|undefined'")
-				g.P("\t\t}")
-				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\tif(typeof element=='number'){")
-				g.P("\t\t\t\tif(!Number.isInteger(element)){")
-				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tif(element<0){")
-				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tlet tmp: Long=Long.ZERO")
-				g.P("\t\t\t\ttry{")
-				g.P("\t\t\t\t\ttmp=Long.fromNumber(element,true)")
-				g.P("\t\t\t\t}catch(e){")
-				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tif(obj['", f.Desc.Name(), "']==null){")
-				g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Long>")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(tmp)")
-				g.P("\t\t\t}else if(typeof element=='string'){")
-				g.P("\t\t\t\tlet tmp:Long=Long.ZERO")
-				g.P("\t\t\t\ttry{")
-				g.P("\t\t\t\t\ttmp=Long.fromString(element,true)")
-				g.P("\t\t\t\t}catch(e){")
-				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tif(tmp.toString()!=element){")
-				g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tif(obj['", f.Desc.Name(), "']==null){")
-				g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Long>")
-				g.P("\t\t\t\t}")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(tmp)")
-				g.P("\t\t\t}else{")
-				g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']=='number'){")
-				g.P("\t\t\tif(!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
-				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(jsonobj['", f.Desc.Name(), "']<0){")
-				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tlet tmp: Long=Long.ZERO")
-				g.P("\t\t\ttry{")
-				g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", f.Desc.Name(), "'],true)")
-				g.P("\t\t\t}catch(e){")
-				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tobj['", f.Desc.Name(), "']=tmp")
-				g.P("\t\t}else if(typeof jsonobj['", f.Desc.Name(), "']=='string'){")
-				g.P("\t\t\tlet tmp:Long=Long.ZERO")
-				g.P("\t\t\ttry{")
-				g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", f.Desc.Name(), "'],true)")
-				g.P("\t\t\t}catch(e){")
-				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(tmp.toString()!=jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tobj['", f.Desc.Name(), "']=tmp")
-				g.P("\t\t}else{")
-				g.P("\t\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-				g.P("\t\t}")
-				g.P("\t}")
-			}
-		case protoreflect.FloatKind:
-			//float32
-			fallthrough
-		case protoreflect.DoubleKind:
-			if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
-				g.P("\t\t}")
-				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\tif(typeof element!='number'){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<number>")
-				g.P("\t\t\t}")
-				g.P("\t\t\tobj['", f.Desc.Name(), "'].push(element)")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='number'){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
-				g.P("\t\t}")
-				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
-				g.P("\t}")
-			}
-		case protoreflect.StringKind:
-			if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<string>|null|undefined'")
-				g.P("\t\t}")
-				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\tif(typeof element!='string'){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<string>")
-				g.P("\t\t\t}")
-				g.P("\t\t\tobj['", f.Desc.Name(), "'].push(element)")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='string'){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
-				g.P("\t\t}")
-				g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
-				g.P("\t}")
-			}
-		case protoreflect.BytesKind:
-			if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Uint8Array>|null|undefined'")
-				g.P("\t\t}")
-				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\tif(typeof element!='string'){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tlet buf:Uint8Array=new Uint8Array(Base64.length(element))")
-				g.P("\t\t\ttry{")
-				g.P("\t\t\t\tBase64.decode(element,buf,0)")
-				g.P("\t\t\t}catch(e){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Uint8Array>")
-				g.P("\t\t\t}")
-				g.P("\t\t\tobj['", f.Desc.Name(), "'].push(buf)")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='string'){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
-				g.P("\t\t}")
-				g.P("\t\tlet buf:Uint8Array=new Uint8Array(Base64.length(jsonobj['", f.Desc.Name(), "']))")
-				g.P("\t\ttry{")
-				g.P("\t\t\tBase64.decode(jsonobj['", f.Desc.Name(), "'],buf,0)")
-				g.P("\t\t}catch(e){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
-				g.P("\t\t}")
-				g.P("\t\tobj['", f.Desc.Name(), "']=buf")
-				g.P("\t}")
-			}
-		case protoreflect.MessageKind:
-			if f.Desc.IsMap() {
-				var keytype string
-				var valuetype string
-				switch f.Message.Fields[0].Desc.Kind() {
-				case protoreflect.Int32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					//int32
-					keytype = "number"
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					keytype = "Long"
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Fixed32Kind:
-					//uint32
-					keytype = "number"
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Fixed64Kind:
-					//uint64
-					keytype = "Long"
-				case protoreflect.StringKind:
-					keytype = "string"
-				}
-				switch f.Message.Fields[1].Desc.Kind() {
-				case protoreflect.BoolKind:
-					valuetype = "boolean"
-				case protoreflect.EnumKind:
-					valuetype = f.Message.Fields[1].Enum.GoIdent.GoName
-				case protoreflect.Int32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					//int32
-					valuetype = "number"
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					valuetype = "Long"
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Fixed32Kind:
-					//uint32
-					valuetype = "number"
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Fixed64Kind:
-					//uint64
-					valuetype = "Long"
-				case protoreflect.FloatKind:
-					valuetype = "number"
-				case protoreflect.DoubleKind:
-					valuetype = "number"
-				case protoreflect.StringKind:
-					valuetype = "string"
-				case protoreflect.BytesKind:
-					valuetype = "Uint8Array"
-				case protoreflect.MessageKind:
-					valuetype = f.Message.Fields[1].Message.GoIdent.GoName + "|null|undefined"
-				}
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='object'){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Map<", keytype, ",", valuetype, ">|null|undefined'")
-				g.P("\t\t}")
-				g.P("\t\tfor(let key of Object.keys(jsonobj['", f.Desc.Name(), "'])){")
-				g.P("\t\t\tlet value=jsonobj['", f.Desc.Name(), "'][key]")
-				switch f.Message.Fields[0].Desc.Kind() {
-				case protoreflect.Int32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					//int32
-					g.P("\t\t\tlet k: number=Number(key)")
-					g.P("\t\t\tif(isNaN(k)||!Number.isInteger(k)){")
-					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t}else if(k>2147483647||k<-2147483648){")
-					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-					g.P("\t\t\t}")
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Fixed32Kind:
-					//uint32
-					g.P("\t\t\tlet k: number=Number(key)")
-					g.P("\t\t\tif(isNaN(k)||!Number.isInteger(k)){")
-					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t}else if(k>4294967295||k<0){")
-					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-					g.P("\t\t\t}")
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					g.P("\t\t\tlet k: Long=Long.ZERO")
-					g.P("\t\t\ttry{")
-					g.P("\t\t\t\tk=Long.fromString(key,false)")
-					g.P("\t\t\t}catch(e){")
-					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(k.toString()!=key){")
-					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-					g.P("\t\t\t}")
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Fixed64Kind:
-					//uint64
-					g.P("\t\t\tlet k: Long=Long.ZERO")
-					g.P("\t\t\ttry{")
-					g.P("\t\t\t\tk=Long.fromString(key,true)")
-					g.P("\t\t\t}catch(e){")
-					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tif(k.toString()!=key){")
-					g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-					g.P("\t\t\t}")
-				case protoreflect.StringKind:
-					g.P("\t\t\tlet k: string=key")
-				}
-				switch f.Message.Fields[1].Desc.Kind() {
-				case protoreflect.BoolKind:
-					g.P("\t\t\tif(typeof value!='boolean'){")
-					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tlet v: boolean=value")
-				case protoreflect.EnumKind:
-					tmps := make([]string, 0, len(f.Message.Fields[1].Enum.Values))
-					for _, v := range f.Message.Fields[1].Enum.Values {
-						tmps = append(tmps, "value!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
-					}
-					g.P("\t\t\tif(typeof value!='number'||(", strings.Join(tmps, "&&"), ")){")
-					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Message.Fields[1].Enum.GoIdent.GoName, "'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tlet v: ", f.Message.Fields[1].Enum.GoIdent.GoName, "=value")
-				case protoreflect.Int32Kind:
-					fallthrough
-				case protoreflect.Sint32Kind:
-					fallthrough
-				case protoreflect.Sfixed32Kind:
-					//int32
-					g.P("\t\t\tif(typeof value!='number'||!Number.isInteger(value)){")
-					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t}else if(value>2147483647&&value<-2147483648){")
-					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tlet v: number=value")
-				case protoreflect.Uint32Kind:
-					fallthrough
-				case protoreflect.Fixed32Kind:
-					//uint32
-					g.P("\t\t\tif(typeof value!='number'||!Number.isInteger(value)){")
-					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t}else if(value>4294967295&&value<0){")
-					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tlet v: number=value")
-				case protoreflect.Int64Kind:
-					fallthrough
-				case protoreflect.Sint64Kind:
-					fallthrough
-				case protoreflect.Sfixed64Kind:
-					//int64
-					g.P("\t\t\tif(typeof value=='number'){")
-					g.P("\t\t\t\tif(!Number.isInteger(value)){")
-					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t}else if(typeof value!='string'){")
-					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, '.', f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tlet v: Long=Long.ZERO")
-					g.P("\t\t\tif(typeof value=='number'){")
-					g.P("\t\t\t\ttry{")
-					g.P("\t\t\t\t\tv=Long.fromNumber(value,false)")
-					g.P("\t\t\t\t}catch(e){")
-					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, '.', f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ttry{")
-					g.P("\t\t\t\t\tv=Long.fromString(value,false)")
-					g.P("\t\t\t\t}catch(e){")
-					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t\tif(v.toString()!=value){")
-					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t}")
-				case protoreflect.Uint64Kind:
-					fallthrough
-				case protoreflect.Fixed64Kind:
-					//uint64
-					g.P("\t\t\tif(typeof value=='number'){")
-					g.P("\t\t\t\tif(!Number.isInteger(value)){")
-					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t}else if(typeof value!='string'){")
-					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, '.', f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tlet v: Long=Long.ZERO")
-					g.P("\t\t\tif(typeof value=='number'){")
-					g.P("\t\t\t\ttry{")
-					g.P("\t\t\t\t\tv=Long.fromNumber(value,true)")
-					g.P("\t\t\t\t}catch(e){")
-					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t\tif(v.toNumber()!=value){")
-					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\ttry{")
-					g.P("\t\t\t\t\tv=Long.fromString(value,true)")
-					g.P("\t\t\t\t}catch(e){")
-					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t\tif(v.toString()!=value){")
-					g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
-					g.P("\t\t\t\t}")
-					g.P("\t\t\t}")
-				case protoreflect.FloatKind:
-					fallthrough
-				case protoreflect.DoubleKind:
-					g.P("\t\t\tif(typeof value!='number'){")
-					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tlet v: number=value")
-				case protoreflect.StringKind:
-					g.P("\t\t\tif(typeof value!='string'){")
-					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tlet v: string=value")
-				case protoreflect.BytesKind:
-					g.P("\t\t\tif(typeof value!='string'){")
-					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tlet buf:Uint8Array=new Uint8Array(Base64.length(value))")
-					g.P("\t\t\ttry{")
-					g.P("\t\t\t\tBase64.decode(value,buf,0)")
-					g.P("\t\t\t}catch(e){")
-					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
-					g.P("\t\t\t}")
-					g.P("\t\t\tlet v: Uint8Array=buf")
-				case protoreflect.MessageKind:
-					g.P("\t\t\tlet v: ", f.Message.Fields[1].Message.GoIdent.GoName, "|null|undefined=null")
-					g.P("\t\t\tif(typeof value==null||typeof value==undefined){")
-					g.P("\t\t\t\tv=null")
-					g.P("\t\t\t}else if(typeof value!='object'){")
-					g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.Fields[1].Message.GoIdent.GoName, "|null|undefined'")
-					g.P("\t\t\t}else{")
-					g.P("\t\t\t\tv=JsonTo", f.Message.Fields[1].Message.GoIdent.GoName, "(value)")
-					g.P("\t\t\t}")
-				}
-				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==undefined){")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Map<", keytype, ",", valuetype, ">")
-				g.P("\t\t\t}")
-				g.P("\t\t\tobj['", f.Desc.Name(), "'].set(k,v)")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else if f.Desc.IsList() {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<", f.Message.GoIdent.GoName, ">|null|undefined'")
-				g.P("\t\t}")
-				g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
-				g.P("\t\t\tif(typeof element!='object'){")
-				g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.GoIdent.GoName, "'")
-				g.P("\t\t\t}")
-				g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
-				g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<", f.Message.GoIdent.GoName, ">")
-				g.P("\t\t\t}")
-				g.P("\t\t\tobj['", f.Desc.Name(), "'].push(JsonTo", f.Message.GoIdent.GoName, "(element))")
-				g.P("\t\t}")
-				g.P("\t}")
-			} else {
-				g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
-				g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='object'){")
-				g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.GoIdent.GoName, "'")
-				g.P("\t\t}")
-				g.P("\t\tobj['", f.Desc.Name(), "']=JsonTo", f.Message.GoIdent.GoName, "(jsonobj['", f.Desc.Name(), "'])")
-				g.P("\t}")
+				g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "][k]=v")
 			}
 		}
+		g.P("\t\t\t}")
+		g.P("\t\t}")
 	}
-	g.P("\treturn obj")
+	g.P("\t\treturn tmp")
+	g.P("\t}")
 	g.P("}")
+}
+
+func genToForm(m *protogen.Message, g *protogen.GeneratedFile) {
+	g.P("export class ", m.GoIdent.GoName, "{")
+	genField(m, g)
+	g.P("\ttoForm(){")
+	g.P("\t\tlet query=[]")
+	oneofs := make(map[string]*struct{})
+	for _, f := range m.Fields {
+		if f.Desc.Kind() == protoreflect.MessageKind {
+			panic("form request message can't contain nested message and map")
+		}
+		if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
+			if _, ok := oneofs[f.Oneof.GoIdent.String()]; ok {
+				continue
+			}
+			oneofs[f.Oneof.GoIdent.String()] = nil
+			g.P("\t\tif(this.", f.Oneof.Desc.Name(), "){")
+			g.P("\t\t\tswitch(this.", f.Oneof.Desc.Name(), ".$key){")
+			for _, oneoff := range f.Oneof.Fields {
+				g.P("\t\t\t\tcase ", strconv.Quote(string(oneoff.Desc.Name())), ":{")
+				if oneoff.Desc.Kind() == protoreflect.BytesKind {
+					g.P("\t\t\t\t\t//bytes type in protobuf should be standard base64 encoded")
+					g.P("\t\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
+					g.P("\t\t\t\t\tlet rawstr=''")
+					g.P("\t\t\t\t\tthis.", f.Oneof.Desc.Name(), ".value.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
+					g.P("\t\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
+				} else {
+					g.P("\t\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+this.", f.Oneof.Desc.Name(), ".value")
+				}
+				g.P("\t\t\t\t\tquery.push(tmp)")
+				g.P("\t\t\t\t\tbreak")
+				g.P("\t\t\t\t}")
+			}
+			g.P("\t\t\t}")
+			g.P("\t\t}")
+			continue
+		}
+		if f.Desc.IsList() {
+			g.P("\t\tif(this.", f.Desc.Name(), " && this.", f.Desc.Name(), ".length>0)")
+			g.P("\t\t\tfor(let value of this.", f.Desc.Name(), "){")
+			if f.Desc.Kind() == protoreflect.BytesKind {
+				g.P("\t\t\t\t//bytes type in protobuf should be standard base64 encoded")
+				g.P("\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
+				g.P("\t\t\t\tlet rawstr=''")
+				g.P("\t\t\t\tvalue.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
+				g.P("\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
+			} else {
+				g.P("\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+value")
+			}
+			g.P("\t\t\t\tquery.push(tmp)")
+			g.P("\t\t\t}")
+			g.P("\t\t}")
+		} else {
+			g.P("\t\tif(this.", f.Desc.Name(), "){")
+			if f.Desc.Kind() == protoreflect.BytesKind {
+				g.P("\t\t\t//bytes type in protobuf should be standard base64 encoded")
+				g.P("\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
+				g.P("\t\t\tlet rawstr=''")
+				g.P("\t\t\tthis.", f.Desc.Name(), ".forEach((element)=>{rawstr+=String.fromCharCode(element)})")
+				g.P("\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
+			} else {
+				g.P("\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+this.", f.Desc.Name())
+			}
+			g.P("\t\t\tquery.push(tmp)")
+			g.P("\t\t}")
+		}
+	}
+	g.P("\t\treturn encodeURIComponent(query.join('&'))")
+	g.P("\t}")
+	g.P("}")
+}
+
+func genFromJson(m *protogen.Message, g *protogen.GeneratedFile) {
+	g.P("export class ", m.GoIdent.GoName, "{")
+	genField(m, g)
+	g.P("\tconstructor(obj:Object){")
+	g.P("\t}")
+	g.P("}")
+	/*
+		if len(m.Fields) == 0 {
+			g.P("function JsonTo", m.GoIdent.GoName, "(_jsonobj: { [k:string]:any }): ", m.GoIdent.GoName, "{")
+		} else {
+			g.P("function JsonTo", m.GoIdent.GoName, "(jsonobj: { [k:string]:any }): ", m.GoIdent.GoName, "{")
+		}
+		oneofs := make(map[string]*struct{}, len(m.Oneofs))
+		g.P("\tlet obj: ", m.GoIdent.GoName, "={")
+		for _, f := range m.Fields {
+			if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
+				if _, ok := oneofs[f.Oneof.GoIdent.String()]; ok {
+					continue
+				}
+				oneofs[f.Oneof.GoIdent.String()] = nil
+				g.P("\t\t", f.Oneof.Desc.Name(), ":null,")
+				continue
+			}
+			switch f.Desc.Kind() {
+			case protoreflect.BoolKind:
+				if f.Desc.IsList() {
+					g.P("\t\t", f.Desc.Name(), ":null,")
+				} else {
+					g.P("\t\t", f.Desc.Name(), ":false,")
+				}
+			case protoreflect.EnumKind:
+				if f.Desc.IsList() {
+					g.P("\t\t", f.Desc.Name(), ":null,")
+				} else {
+					g.P("\t\t", f.Desc.Name(), ":0,")
+				}
+			case protoreflect.Sfixed32Kind:
+				fallthrough
+			case protoreflect.Sint32Kind:
+				fallthrough
+			case protoreflect.Int32Kind:
+				//int32
+				if f.Desc.IsList() {
+					g.P("\t\t", f.Desc.Name(), ":null,")
+				} else {
+					g.P("\t\t", f.Desc.Name(), ":0,")
+				}
+			case protoreflect.Fixed32Kind:
+				fallthrough
+			case protoreflect.Uint32Kind:
+				//uint32
+				if f.Desc.IsList() {
+					g.P("\t\t", f.Desc.Name(), ":null,")
+				} else {
+					g.P("\t\t", f.Desc.Name(), ":0,")
+				}
+			case protoreflect.Sfixed64Kind:
+				fallthrough
+			case protoreflect.Sint64Kind:
+				fallthrough
+			case protoreflect.Int64Kind:
+				//int64
+				if f.Desc.IsList() {
+					g.P("\t\t", f.Desc.Name(), ":null,")
+				} else {
+					g.P("\t\t", f.Desc.Name(), ":Long.ZERO,")
+				}
+			case protoreflect.Fixed64Kind:
+				fallthrough
+			case protoreflect.Uint64Kind:
+				//uint64
+				if f.Desc.IsList() {
+					g.P("\t\t", f.Desc.Name(), ":null,")
+				} else {
+					g.P("\t\t", f.Desc.Name(), ":Long.ZERO,")
+				}
+			case protoreflect.FloatKind:
+				//float32
+				fallthrough
+			case protoreflect.DoubleKind:
+				if f.Desc.IsList() {
+					g.P("\t\t", f.Desc.Name(), ":null,")
+				} else {
+					g.P("\t\t", f.Desc.Name(), ":0,")
+				}
+			case protoreflect.StringKind:
+				if f.Desc.IsList() {
+					g.P("\t\t", f.Desc.Name(), ":null,")
+				} else {
+					g.P("\t\t", f.Desc.Name(), ":'',")
+				}
+			case protoreflect.BytesKind:
+				if f.Desc.IsList() {
+					g.P("\t\t", f.Desc.Name(), ":null,")
+				} else {
+					g.P("\t\t", f.Desc.Name(), ":new Uint8Array(0),")
+				}
+			case protoreflect.MessageKind:
+				g.P("\t\t", f.Desc.Name(), ":null,")
+			}
+		}
+		g.P("\t}")
+		oneofs = make(map[string]*struct{}, len(m.Oneofs))
+		for _, f := range m.Fields {
+			if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
+				if _, ok := oneofs[f.Oneof.GoIdent.String()]; ok {
+					continue
+				}
+				oneofs[f.Oneof.GoIdent.String()] = nil
+				g.P("\t//", f.Oneof.Desc.Name())
+				for i, oneoff := range f.Oneof.Fields {
+					if i == 0 {
+						g.P("\tif(jsonobj['", oneoff.Desc.Name(), "']!=null&&jsonobj['", oneoff.Desc.Name(), "']!=undefined){")
+					} else {
+						g.P("\t}else if(jsonobj['", oneoff.Desc.Name(), "']!=null&&jsonobj['", oneoff.Desc.Name(), "']!=undefined){")
+					}
+					switch oneoff.Desc.Kind() {
+					case protoreflect.BoolKind:
+						g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='boolean'){")
+						g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be boolean'")
+						g.P("\t\t}")
+						g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
+					case protoreflect.EnumKind:
+						tmps := make([]string, 0, len(oneoff.Enum.Values))
+						for _, v := range oneoff.Enum.Values {
+							tmps = append(tmps, "jsonobj['"+string(oneoff.Desc.Name())+"']!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
+						}
+						g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='number'||(", strings.Join(tmps, "&&"), ")){")
+						g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be enum in ", oneoff.Enum.GoIdent.GoName, "'")
+						g.P("\t\t}")
+						g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
+					case protoreflect.Sfixed32Kind:
+						fallthrough
+					case protoreflect.Sint32Kind:
+						fallthrough
+					case protoreflect.Int32Kind:
+						//int32
+						g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", oneoff.Desc.Name(), "'])){")
+						g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
+						g.P("\t\t}else if(jsonobj['", oneoff.Desc.Name(), "']>2147483647||jsonobj['", oneoff.Desc.Name(), "']<-2147483648){")
+						g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
+						g.P("\t\t}")
+						g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
+					case protoreflect.Fixed32Kind:
+						fallthrough
+					case protoreflect.Uint32Kind:
+						//uint32
+						g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", oneoff.Desc.Name(), "'])){")
+						g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
+						g.P("\t\t}else if(jsonobj['", oneoff.Desc.Name(), "']>4294967295||jsonobj['", oneoff.Desc.Name(), "']<0){")
+						g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
+						g.P("\t\t}")
+						g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
+					case protoreflect.Sfixed64Kind:
+						fallthrough
+					case protoreflect.Sint64Kind:
+						fallthrough
+					case protoreflect.Int64Kind:
+						//int64
+						g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']=='number'){")
+						g.P("\t\t\tif(!Number.isInteger(jsonobj['", oneoff.Desc.Name(), "'])){")
+						g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tlet tmp: Long=Long.ZERO")
+						g.P("\t\t\ttry{")
+						g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", oneoff.Desc.Name(), "'],false)")
+						g.P("\t\t\t}catch(e){")
+						g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:tmp}")
+						g.P("\t\t}else if(typeof jsonobj['", oneoff.Desc.Name(), "']=='string'){")
+						g.P("\t\t\tlet tmp: Long=Long.ZERO")
+						g.P("\t\t\ttry{")
+						g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", oneoff.Desc.Name(), "'],false)")
+						g.P("\t\t\t}catch(e){")
+						g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tif(tmp.toString()!=jsonobj['", oneoff.Desc.Name(), "']){")
+						g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:tmp}")
+						g.P("\t\t}else{")
+						g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
+						g.P("\t\t}")
+					case protoreflect.Fixed64Kind:
+						fallthrough
+					case protoreflect.Uint64Kind:
+						//uint64
+						g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']=='number'){")
+						g.P("\t\t\tif(!Number.isInteger(jsonobj['", oneoff.Desc.Name(), "'])){")
+						g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tif(jsonobj['", oneoff.Desc.Name(), "']<0){")
+						g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tlet tmp: Long=Long.ZERO")
+						g.P("\t\t\ttry{")
+						g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", oneoff.Desc.Name(), "'],true)")
+						g.P("\t\t\t}catch(e){")
+						g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:tmp}")
+						g.P("\t\t}else if(typeof jsonobj['", oneoff.Desc.Name(), "']=='string'){")
+						g.P("\t\t\tlet tmp: Long=Long.ZERO")
+						g.P("\t\t\ttry{")
+						g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", oneoff.Desc.Name(), "'],true)")
+						g.P("\t\t\t}catch(e){")
+						g.P("\t\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tif(tmp.toString()!=jsonobj['", oneoff.Desc.Name(), "']){")
+						g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value overflow'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:tmp}")
+						g.P("\t\t}else{")
+						g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be integer'")
+						g.P("\t\t}")
+					case protoreflect.FloatKind:
+						fallthrough
+					case protoreflect.DoubleKind:
+						g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='number'){")
+						g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be number'")
+						g.P("\t\t}")
+						g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
+					case protoreflect.StringKind:
+						g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='string'){")
+						g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be string'")
+						g.P("\t\t}")
+						g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:jsonobj['", oneoff.Desc.Name(), "']}")
+					case protoreflect.BytesKind:
+						g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='string'){")
+						g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be base64 string from Uint8Array'")
+						g.P("\t\t}")
+						g.P("\t\tlet buf: Uint8Array=new Uint8Array(Base64.length(jsonobj['", oneoff.Desc.Name(), "']))")
+						g.P("\t\ttry{")
+						g.P("\t\t\tBase64.decode(jsonobj['", oneoff.Desc.Name(), "'],buf,0)")
+						g.P("\t\t}catch(e){")
+						g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be base64 string from Uint8Array'")
+						g.P("\t\t}")
+						g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:buf}")
+					case protoreflect.MessageKind:
+						g.P("\t\tif(typeof jsonobj['", oneoff.Desc.Name(), "']!='object'){")
+						g.P("\t\t\tthrow 'when ", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".$key is ", oneoff.Desc.Name(), ",", m.GoIdent.GoName, ".", f.Oneof.Desc.Name(), ".value must be ", oneoff.Message.GoIdent.GoName, "'")
+						g.P("\t\t}")
+						g.P("\t\tobj['", f.Oneof.Desc.Name(), "']={$key:'", oneoff.Desc.Name(), "',value:JsonTo", oneoff.Message.GoIdent.GoName, "(jsonobj['", oneoff.Desc.Name(), "'])}")
+					}
+				}
+				g.P("\t\t}")
+				continue
+			}
+			g.P("\t//", f.Desc.Name())
+			switch f.Desc.Kind() {
+			case protoreflect.BoolKind:
+				if f.Desc.IsList() {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<boolean>|null|undefined'")
+					g.P("\t\t}")
+					g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
+					g.P("\t\t\tif(typeof element!='boolean'){")
+					g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
+					g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<boolean>")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Desc.Name(), "'].push(element)")
+					g.P("\t\t}")
+					g.P("\t}")
+				} else {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='boolean'){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
+					g.P("\t\t}")
+					g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
+					g.P("\t}")
+				}
+			case protoreflect.EnumKind:
+				if f.Desc.IsList() {
+					tmps := make([]string, 0, len(f.Enum.Values))
+					for _, v := range f.Enum.Values {
+						tmps = append(tmps, "element!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
+					}
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<", f.Enum.GoIdent.GoName, ">|null|undefined'")
+					g.P("\t\t}")
+					g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
+					g.P("\t\t\tif(typeof element!='number'||(", strings.Join(tmps, "&&"), ")){")
+					g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
+					g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<", f.Enum.GoIdent.GoName, ">")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Desc.Name(), "'].push(element)")
+					g.P("\t\t}")
+					g.P("\t}")
+				} else {
+					tmps := make([]string, 0, len(f.Enum.Values))
+					for _, v := range f.Enum.Values {
+						tmps = append(tmps, "jsonobj['"+string(f.Desc.Name())+"']!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
+					}
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='number'||(", strings.Join(tmps, "&&"), ")){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Enum.GoIdent.GoName, "'")
+					g.P("\t\t}")
+					g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
+					g.P("\t}")
+				}
+			case protoreflect.Sfixed32Kind:
+				fallthrough
+			case protoreflect.Sint32Kind:
+				fallthrough
+			case protoreflect.Int32Kind:
+				//int32
+				if f.Desc.IsList() {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
+					g.P("\t\t}")
+					g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
+					g.P("\t\t\tif(typeof element!='number'||!Number.isInteger(element)){")
+					g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t}else if(element>2147483647||element<-2147483648){")
+					g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
+					g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<number>")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Desc.Name(), "'].push(element)")
+					g.P("\t\t}")
+					g.P("\t}")
+				} else {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t}else if(jsonobj['", f.Desc.Name(), "']>2147483647||jsonobj['", f.Desc.Name(), "']<-2147483648){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t}")
+					g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
+					g.P("\t}")
+				}
+			case protoreflect.Fixed32Kind:
+				fallthrough
+			case protoreflect.Uint32Kind:
+				//uint32
+				if f.Desc.IsList() {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
+					g.P("\t\t}")
+					g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
+					g.P("\t\t\tif(typeof element!='number'||!Number.isInteger(element)){")
+					g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t}else if(element>4294967295||element<0){")
+					g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
+					g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<number>")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Desc.Name(), "'].push(element)")
+					g.P("\t\t}")
+					g.P("\t}")
+				} else {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='number'||!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t}else if(jsonobj['", f.Desc.Name(), "']>4294967295||jsonobj['", f.Desc.Name(), "']<0){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t}")
+					g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
+					g.P("\t}")
+				}
+			case protoreflect.Sfixed64Kind:
+				fallthrough
+			case protoreflect.Sint64Kind:
+				fallthrough
+			case protoreflect.Int64Kind:
+				//int64
+				if f.Desc.IsList() {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Long>|null|undefined'")
+					g.P("\t\t}")
+					g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
+					g.P("\t\t\tif(typeof element=='number'){")
+					g.P("\t\t\t\tif(!Number.isInteger(element)){")
+					g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tlet tmp: Long=Long.ZERO")
+					g.P("\t\t\t\ttry{")
+					g.P("\t\t\t\t\ttmp=Long.fromNumber(element,false)")
+					g.P("\t\t\t\t}catch(e){")
+					g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tif(obj['", f.Desc.Name(), "']==null){")
+					g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Long>")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(tmp)")
+					g.P("\t\t\t}else if(typeof element=='string'){")
+					g.P("\t\t\t\tlet tmp:Long=Long.ZERO")
+					g.P("\t\t\t\ttry{")
+					g.P("\t\t\t\t\ttmp=Long.fromString(element,false)")
+					g.P("\t\t\t\t}catch(e){")
+					g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tif(tmp.toString()!=element){")
+					g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tif(obj['", f.Desc.Name(), "']==null){")
+					g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Long>")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(tmp)")
+					g.P("\t\t\t}else{")
+					g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t}")
+					g.P("\t\t}")
+					g.P("\t}")
+				} else {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']=='number'){")
+					g.P("\t\t\tif(!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
+					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tlet tmp: Long=Long.ZERO")
+					g.P("\t\t\ttry{")
+					g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", f.Desc.Name(), "'],false)")
+					g.P("\t\t\t}catch(e){")
+					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Desc.Name(), "']=tmp")
+					g.P("\t\t}else if(typeof jsonobj['", f.Desc.Name(), "']=='string'){")
+					g.P("\t\t\tlet tmp:Long=Long.ZERO")
+					g.P("\t\t\ttry{")
+					g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", f.Desc.Name(), "'],false)")
+					g.P("\t\t\t}catch(e){")
+					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tif(tmp.toString()!=jsonobj['", f.Desc.Name(), "']){")
+					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Desc.Name(), "']=tmp")
+					g.P("\t\t}else{")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t}")
+					g.P("\t}")
+				}
+			case protoreflect.Fixed64Kind:
+				fallthrough
+			case protoreflect.Uint64Kind:
+				//uint64
+				if f.Desc.IsList() {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Long>|null|undefined'")
+					g.P("\t\t}")
+					g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
+					g.P("\t\t\tif(typeof element=='number'){")
+					g.P("\t\t\t\tif(!Number.isInteger(element)){")
+					g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tif(element<0){")
+					g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tlet tmp: Long=Long.ZERO")
+					g.P("\t\t\t\ttry{")
+					g.P("\t\t\t\t\ttmp=Long.fromNumber(element,true)")
+					g.P("\t\t\t\t}catch(e){")
+					g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tif(obj['", f.Desc.Name(), "']==null){")
+					g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Long>")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(tmp)")
+					g.P("\t\t\t}else if(typeof element=='string'){")
+					g.P("\t\t\t\tlet tmp:Long=Long.ZERO")
+					g.P("\t\t\t\ttry{")
+					g.P("\t\t\t\t\ttmp=Long.fromString(element,true)")
+					g.P("\t\t\t\t}catch(e){")
+					g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tif(tmp.toString()!=element){")
+					g.P("\t\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tif(obj['", f.Desc.Name(), "']==null){")
+					g.P("\t\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Long>")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tobj['", f.Desc.Name(), "'].push(tmp)")
+					g.P("\t\t\t}else{")
+					g.P("\t\t\t\tthrow 'format wrong!element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t}")
+					g.P("\t\t}")
+					g.P("\t}")
+				} else {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']=='number'){")
+					g.P("\t\t\tif(!Number.isInteger(jsonobj['", f.Desc.Name(), "'])){")
+					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tif(jsonobj['", f.Desc.Name(), "']<0){")
+					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tlet tmp: Long=Long.ZERO")
+					g.P("\t\t\ttry{")
+					g.P("\t\t\t\ttmp=Long.fromNumber(jsonobj['", f.Desc.Name(), "'],true)")
+					g.P("\t\t\t}catch(e){")
+					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Desc.Name(), "']=tmp")
+					g.P("\t\t}else if(typeof jsonobj['", f.Desc.Name(), "']=='string'){")
+					g.P("\t\t\tlet tmp:Long=Long.ZERO")
+					g.P("\t\t\ttry{")
+					g.P("\t\t\t\ttmp=Long.fromString(jsonobj['", f.Desc.Name(), "'],true)")
+					g.P("\t\t\t}catch(e){")
+					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tif(tmp.toString()!=jsonobj['", f.Desc.Name(), "']){")
+					g.P("\t\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Desc.Name(), "']=tmp")
+					g.P("\t\t}else{")
+					g.P("\t\t\tthrow 'format wrong!", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+					g.P("\t\t}")
+					g.P("\t}")
+				}
+			case protoreflect.FloatKind:
+				//float32
+				fallthrough
+			case protoreflect.DoubleKind:
+				if f.Desc.IsList() {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<number>|null|undefined'")
+					g.P("\t\t}")
+					g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
+					g.P("\t\t\tif(typeof element!='number'){")
+					g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
+					g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<number>")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Desc.Name(), "'].push(element)")
+					g.P("\t\t}")
+					g.P("\t}")
+				} else {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='number'){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
+					g.P("\t\t}")
+					g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
+					g.P("\t}")
+				}
+			case protoreflect.StringKind:
+				if f.Desc.IsList() {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<string>|null|undefined'")
+					g.P("\t\t}")
+					g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
+					g.P("\t\t\tif(typeof element!='string'){")
+					g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
+					g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<string>")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Desc.Name(), "'].push(element)")
+					g.P("\t\t}")
+					g.P("\t}")
+				} else {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='string'){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
+					g.P("\t\t}")
+					g.P("\t\tobj['", f.Desc.Name(), "']=jsonobj['", f.Desc.Name(), "']")
+					g.P("\t}")
+				}
+			case protoreflect.BytesKind:
+				if f.Desc.IsList() {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<Uint8Array>|null|undefined'")
+					g.P("\t\t}")
+					g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
+					g.P("\t\t\tif(typeof element!='string'){")
+					g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tlet buf:Uint8Array=new Uint8Array(Base64.length(element))")
+					g.P("\t\t\ttry{")
+					g.P("\t\t\t\tBase64.decode(element,buf,0)")
+					g.P("\t\t\t}catch(e){")
+					g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
+					g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<Uint8Array>")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Desc.Name(), "'].push(buf)")
+					g.P("\t\t}")
+					g.P("\t}")
+				} else {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='string'){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
+					g.P("\t\t}")
+					g.P("\t\tlet buf:Uint8Array=new Uint8Array(Base64.length(jsonobj['", f.Desc.Name(), "']))")
+					g.P("\t\ttry{")
+					g.P("\t\t\tBase64.decode(jsonobj['", f.Desc.Name(), "'],buf,0)")
+					g.P("\t\t}catch(e){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
+					g.P("\t\t}")
+					g.P("\t\tobj['", f.Desc.Name(), "']=buf")
+					g.P("\t}")
+				}
+			case protoreflect.MessageKind:
+				if f.Desc.IsMap() {
+					var keytype string
+					var valuetype string
+					switch f.Message.Fields[0].Desc.Kind() {
+					case protoreflect.Int32Kind:
+						fallthrough
+					case protoreflect.Sint32Kind:
+						fallthrough
+					case protoreflect.Sfixed32Kind:
+						//int32
+						keytype = "number"
+					case protoreflect.Int64Kind:
+						fallthrough
+					case protoreflect.Sint64Kind:
+						fallthrough
+					case protoreflect.Sfixed64Kind:
+						//int64
+						keytype = "Long"
+					case protoreflect.Uint32Kind:
+						fallthrough
+					case protoreflect.Fixed32Kind:
+						//uint32
+						keytype = "number"
+					case protoreflect.Uint64Kind:
+						fallthrough
+					case protoreflect.Fixed64Kind:
+						//uint64
+						keytype = "Long"
+					case protoreflect.StringKind:
+						keytype = "string"
+					}
+					switch f.Message.Fields[1].Desc.Kind() {
+					case protoreflect.BoolKind:
+						valuetype = "boolean"
+					case protoreflect.EnumKind:
+						valuetype = f.Message.Fields[1].Enum.GoIdent.GoName
+					case protoreflect.Int32Kind:
+						fallthrough
+					case protoreflect.Sint32Kind:
+						fallthrough
+					case protoreflect.Sfixed32Kind:
+						//int32
+						valuetype = "number"
+					case protoreflect.Int64Kind:
+						fallthrough
+					case protoreflect.Sint64Kind:
+						fallthrough
+					case protoreflect.Sfixed64Kind:
+						//int64
+						valuetype = "Long"
+					case protoreflect.Uint32Kind:
+						fallthrough
+					case protoreflect.Fixed32Kind:
+						//uint32
+						valuetype = "number"
+					case protoreflect.Uint64Kind:
+						fallthrough
+					case protoreflect.Fixed64Kind:
+						//uint64
+						valuetype = "Long"
+					case protoreflect.FloatKind:
+						valuetype = "number"
+					case protoreflect.DoubleKind:
+						valuetype = "number"
+					case protoreflect.StringKind:
+						valuetype = "string"
+					case protoreflect.BytesKind:
+						valuetype = "Uint8Array"
+					case protoreflect.MessageKind:
+						valuetype = f.Message.Fields[1].Message.GoIdent.GoName + "|null|undefined"
+					}
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='object'){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Map<", keytype, ",", valuetype, ">|null|undefined'")
+					g.P("\t\t}")
+					g.P("\t\tfor(let key of Object.keys(jsonobj['", f.Desc.Name(), "'])){")
+					g.P("\t\t\tlet value=jsonobj['", f.Desc.Name(), "'][key]")
+					switch f.Message.Fields[0].Desc.Kind() {
+					case protoreflect.Int32Kind:
+						fallthrough
+					case protoreflect.Sint32Kind:
+						fallthrough
+					case protoreflect.Sfixed32Kind:
+						//int32
+						g.P("\t\t\tlet k: number=Number(key)")
+						g.P("\t\t\tif(isNaN(k)||!Number.isInteger(k)){")
+						g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+						g.P("\t\t\t}else if(k>2147483647||k<-2147483648){")
+						g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+						g.P("\t\t\t}")
+					case protoreflect.Uint32Kind:
+						fallthrough
+					case protoreflect.Fixed32Kind:
+						//uint32
+						g.P("\t\t\tlet k: number=Number(key)")
+						g.P("\t\t\tif(isNaN(k)||!Number.isInteger(k)){")
+						g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+						g.P("\t\t\t}else if(k>4294967295||k<0){")
+						g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+						g.P("\t\t\t}")
+					case protoreflect.Int64Kind:
+						fallthrough
+					case protoreflect.Sint64Kind:
+						fallthrough
+					case protoreflect.Sfixed64Kind:
+						//int64
+						g.P("\t\t\tlet k: Long=Long.ZERO")
+						g.P("\t\t\ttry{")
+						g.P("\t\t\t\tk=Long.fromString(key,false)")
+						g.P("\t\t\t}catch(e){")
+						g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tif(k.toString()!=key){")
+						g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+						g.P("\t\t\t}")
+					case protoreflect.Uint64Kind:
+						fallthrough
+					case protoreflect.Fixed64Kind:
+						//uint64
+						g.P("\t\t\tlet k: Long=Long.ZERO")
+						g.P("\t\t\ttry{")
+						g.P("\t\t\t\tk=Long.fromString(key,true)")
+						g.P("\t\t\t}catch(e){")
+						g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tif(k.toString()!=key){")
+						g.P("\t\t\t\tthrow 'key in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+						g.P("\t\t\t}")
+					case protoreflect.StringKind:
+						g.P("\t\t\tlet k: string=key")
+					}
+					switch f.Message.Fields[1].Desc.Kind() {
+					case protoreflect.BoolKind:
+						g.P("\t\t\tif(typeof value!='boolean'){")
+						g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be boolean'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tlet v: boolean=value")
+					case protoreflect.EnumKind:
+						tmps := make([]string, 0, len(f.Message.Fields[1].Enum.Values))
+						for _, v := range f.Message.Fields[1].Enum.Values {
+							tmps = append(tmps, "value!="+strconv.FormatInt(int64(v.Desc.Number()), 10))
+						}
+						g.P("\t\t\tif(typeof value!='number'||(", strings.Join(tmps, "&&"), ")){")
+						g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be enum in ", f.Message.Fields[1].Enum.GoIdent.GoName, "'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tlet v: ", f.Message.Fields[1].Enum.GoIdent.GoName, "=value")
+					case protoreflect.Int32Kind:
+						fallthrough
+					case protoreflect.Sint32Kind:
+						fallthrough
+					case protoreflect.Sfixed32Kind:
+						//int32
+						g.P("\t\t\tif(typeof value!='number'||!Number.isInteger(value)){")
+						g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+						g.P("\t\t\t}else if(value>2147483647&&value<-2147483648){")
+						g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tlet v: number=value")
+					case protoreflect.Uint32Kind:
+						fallthrough
+					case protoreflect.Fixed32Kind:
+						//uint32
+						g.P("\t\t\tif(typeof value!='number'||!Number.isInteger(value)){")
+						g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+						g.P("\t\t\t}else if(value>4294967295&&value<0){")
+						g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tlet v: number=value")
+					case protoreflect.Int64Kind:
+						fallthrough
+					case protoreflect.Sint64Kind:
+						fallthrough
+					case protoreflect.Sfixed64Kind:
+						//int64
+						g.P("\t\t\tif(typeof value=='number'){")
+						g.P("\t\t\t\tif(!Number.isInteger(value)){")
+						g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+						g.P("\t\t\t\t}")
+						g.P("\t\t\t}else if(typeof value!='string'){")
+						g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, '.', f.Desc.Name(), " must be integer'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tlet v: Long=Long.ZERO")
+						g.P("\t\t\tif(typeof value=='number'){")
+						g.P("\t\t\t\ttry{")
+						g.P("\t\t\t\t\tv=Long.fromNumber(value,false)")
+						g.P("\t\t\t\t}catch(e){")
+						g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, '.', f.Desc.Name(), " must be integer'")
+						g.P("\t\t\t\t}")
+						g.P("\t\t\t}else{")
+						g.P("\t\t\t\ttry{")
+						g.P("\t\t\t\t\tv=Long.fromString(value,false)")
+						g.P("\t\t\t\t}catch(e){")
+						g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+						g.P("\t\t\t\t}")
+						g.P("\t\t\t\tif(v.toString()!=value){")
+						g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+						g.P("\t\t\t\t}")
+						g.P("\t\t\t}")
+					case protoreflect.Uint64Kind:
+						fallthrough
+					case protoreflect.Fixed64Kind:
+						//uint64
+						g.P("\t\t\tif(typeof value=='number'){")
+						g.P("\t\t\t\tif(!Number.isInteger(value)){")
+						g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+						g.P("\t\t\t\t}")
+						g.P("\t\t\t}else if(typeof value!='string'){")
+						g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, '.', f.Desc.Name(), " must be integer'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tlet v: Long=Long.ZERO")
+						g.P("\t\t\tif(typeof value=='number'){")
+						g.P("\t\t\t\ttry{")
+						g.P("\t\t\t\t\tv=Long.fromNumber(value,true)")
+						g.P("\t\t\t\t}catch(e){")
+						g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+						g.P("\t\t\t\t}")
+						g.P("\t\t\t\tif(v.toNumber()!=value){")
+						g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+						g.P("\t\t\t\t}")
+						g.P("\t\t\t}else{")
+						g.P("\t\t\t\ttry{")
+						g.P("\t\t\t\t\tv=Long.fromString(value,true)")
+						g.P("\t\t\t\t}catch(e){")
+						g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be integer'")
+						g.P("\t\t\t\t}")
+						g.P("\t\t\t\tif(v.toString()!=value){")
+						g.P("\t\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " overflow'")
+						g.P("\t\t\t\t}")
+						g.P("\t\t\t}")
+					case protoreflect.FloatKind:
+						fallthrough
+					case protoreflect.DoubleKind:
+						g.P("\t\t\tif(typeof value!='number'){")
+						g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be number'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tlet v: number=value")
+					case protoreflect.StringKind:
+						g.P("\t\t\tif(typeof value!='string'){")
+						g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be string'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tlet v: string=value")
+					case protoreflect.BytesKind:
+						g.P("\t\t\tif(typeof value!='string'){")
+						g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tlet buf:Uint8Array=new Uint8Array(Base64.length(value))")
+						g.P("\t\t\ttry{")
+						g.P("\t\t\t\tBase64.decode(value,buf,0)")
+						g.P("\t\t\t}catch(e){")
+						g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be base64 string from Uint8Array'")
+						g.P("\t\t\t}")
+						g.P("\t\t\tlet v: Uint8Array=buf")
+					case protoreflect.MessageKind:
+						g.P("\t\t\tlet v: ", f.Message.Fields[1].Message.GoIdent.GoName, "|null|undefined=null")
+						g.P("\t\t\tif(typeof value==null||typeof value==undefined){")
+						g.P("\t\t\t\tv=null")
+						g.P("\t\t\t}else if(typeof value!='object'){")
+						g.P("\t\t\t\tthrow 'value in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.Fields[1].Message.GoIdent.GoName, "|null|undefined'")
+						g.P("\t\t\t}else{")
+						g.P("\t\t\t\tv=JsonTo", f.Message.Fields[1].Message.GoIdent.GoName, "(value)")
+						g.P("\t\t\t}")
+					}
+					g.P("\t\t\tif(obj['", f.Desc.Name(), "']==undefined){")
+					g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Map<", keytype, ",", valuetype, ">")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Desc.Name(), "'].set(k,v)")
+					g.P("\t\t}")
+					g.P("\t}")
+				} else if f.Desc.IsList() {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(!(jsonobj['", f.Desc.Name(), "'] instanceof Array)){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be Array<", f.Message.GoIdent.GoName, ">|null|undefined'")
+					g.P("\t\t}")
+					g.P("\t\tfor(let element of jsonobj['", f.Desc.Name(), "']){")
+					g.P("\t\t\tif(typeof element!='object'){")
+					g.P("\t\t\t\tthrow 'element in ", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.GoIdent.GoName, "'")
+					g.P("\t\t\t}")
+					g.P("\t\t\tif(obj['", f.Desc.Name(), "']==null){")
+					g.P("\t\t\t\tobj['", f.Desc.Name(), "']=new Array<", f.Message.GoIdent.GoName, ">")
+					g.P("\t\t\t}")
+					g.P("\t\t\tobj['", f.Desc.Name(), "'].push(JsonTo", f.Message.GoIdent.GoName, "(element))")
+					g.P("\t\t}")
+					g.P("\t}")
+				} else {
+					g.P("\tif(jsonobj['", f.Desc.Name(), "']!=null&&jsonobj['", f.Desc.Name(), "']!=undefined){")
+					g.P("\t\tif(typeof jsonobj['", f.Desc.Name(), "']!='object'){")
+					g.P("\t\t\tthrow '", m.GoIdent.GoName, ".", f.Desc.Name(), " must be ", f.Message.GoIdent.GoName, "'")
+					g.P("\t\t}")
+					g.P("\t\tobj['", f.Desc.Name(), "']=JsonTo", f.Message.GoIdent.GoName, "(jsonobj['", f.Desc.Name(), "'])")
+					g.P("\t}")
+				}
+			}
+		}
+		g.P("\treturn obj")
+		g.P("}")
+	*/
 }
 
 // target toc-true,tob-false
