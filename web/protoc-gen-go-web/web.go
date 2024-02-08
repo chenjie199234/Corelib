@@ -221,7 +221,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
-								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] oneof field conflict\")")
+								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
@@ -275,7 +275,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
-								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] oneof field conflict\")")
+								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
@@ -325,7 +325,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
-								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] oneof field conflict\")")
+								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
@@ -372,7 +372,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
-								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] oneof field conflict\")")
+								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
@@ -421,7 +421,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
-								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] oneof field conflict\")")
+								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
@@ -467,7 +467,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
-								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] oneof field conflict\")")
+								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
@@ -511,7 +511,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
-								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] oneof field conflict\")")
+								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
@@ -556,7 +556,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
-								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] oneof field conflict\")")
+								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
@@ -602,7 +602,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
-								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] oneof field conflict\")")
+								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
@@ -635,7 +635,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
-								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] oneof field conflict\")")
+								g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
