@@ -297,7 +297,7 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 					g.P("\t\t{$key: ", strconv.Quote(string(oneoff.Desc.Name())), ",value: ", oneoff.Message.GoIdent.GoName, "|null|undefined}|", strings.TrimSuffix(oneoff.Comments.Trailing.String(), "\n"))
 				}
 			}
-			g.P("\t\tnull;")
+			g.P("\t\tnull")
 			continue
 		}
 		comments := strings.Split(strings.TrimSuffix(f.Comments.Leading.String(), "\n"), "\n")
@@ -310,19 +310,19 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 		switch f.Desc.Kind() {
 		case protoreflect.BoolKind:
 			if f.Desc.IsList() {
-				g.P("\t", f.Desc.Name(), ": Array<boolean>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<boolean>|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else if f.Desc.HasOptionalKeyword() {
-				g.P("\t", f.Desc.Name(), ": boolean|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": boolean|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
-				g.P("\t", f.Desc.Name(), ": boolean;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": boolean", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.EnumKind:
 			if f.Desc.IsList() {
-				g.P("\t", f.Desc.Name(), ": Array<", f.Enum.GoIdent.GoName, ">|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<", f.Enum.GoIdent.GoName, ">|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else if f.Desc.HasOptionalKeyword() {
-				g.P("\t", f.Desc.Name(), ": ", f.Enum.GoIdent.GoName, "|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": ", f.Enum.GoIdent.GoName, "|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
-				g.P("\t", f.Desc.Name(), ": ", f.Enum.GoIdent.GoName, ";", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": ", f.Enum.GoIdent.GoName, strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.Sfixed32Kind:
 			fallthrough
@@ -332,13 +332,13 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 			//int32
 			if f.Desc.IsList() {
 				g.P("\t//Warning!!!Element type is int32,be careful of sign(+,-) and overflow")
-				g.P("\t", f.Desc.Name(), ": Array<number>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<number>|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else if f.Desc.HasOptionalKeyword() {
 				g.P("\t//Warning!!!Type is int32,be careful of sign(+,-) and overflow")
-				g.P("\t", f.Desc.Name(), ": number|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": number|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t//Warning!!!Type is int32,be careful of sign(+,-) and overflow")
-				g.P("\t", f.Desc.Name(), ": number;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": number", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.Fixed32Kind:
 			fallthrough
@@ -346,13 +346,13 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 			//uint32
 			if f.Desc.IsList() {
 				g.P("\t//Warning!!!Element type is uint32,be careful of sign(+) and overflow")
-				g.P("\t", f.Desc.Name(), ": Array<number>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<number>|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else if f.Desc.HasOptionalKeyword() {
 				g.P("\t//Warning!!!Type is uint32,be careful of sign(+) and overflow")
-				g.P("\t", f.Desc.Name(), ": number|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": number|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t//Warning!!!Type is uint32,be careful of sign(+) and overflow")
-				g.P("\t", f.Desc.Name(), ": number;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": number", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.Sfixed64Kind:
 			fallthrough
@@ -362,13 +362,13 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 			//int64
 			if f.Desc.IsList() {
 				g.P("\t//Warning!!!Element type is int64,be careful of sign(+,-)")
-				g.P("\t", f.Desc.Name(), ": Array<bigint>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<bigint>|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else if f.Desc.HasOptionalKeyword() {
 				g.P("\t//Warning!!!Type is int64,be careful of sign(+,-)")
-				g.P("\t", f.Desc.Name(), ": bigint|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": bigint|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t//Warning!!!Type is int64,be careful of sign(+,-)")
-				g.P("\t", f.Desc.Name(), ": bigint;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": bigint", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.Fixed64Kind:
 			fallthrough
@@ -376,48 +376,48 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 			//uint64
 			if f.Desc.IsList() {
 				g.P("\t//Warning!!!Element type is uint64,be careful of sign(+)")
-				g.P("\t", f.Desc.Name(), ": Array<bigint>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<bigint>|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else if f.Desc.HasOptionalKeyword() {
 				g.P("\t//Warning!!!Type is uint64,be careful of sign(+)")
-				g.P("\t", f.Desc.Name(), ": bigint|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": bigint|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t//Warning!!!Type is uint64,be careful of sign(+)")
-				g.P("\t", f.Desc.Name(), ": bigint;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": bigint", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.FloatKind:
 			if f.Desc.IsList() {
 				g.P("\t//Warning!!!Element type is float32,be careful of overflow")
-				g.P("\t", f.Desc.Name(), ": Array<number>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<number>|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else if f.Desc.HasOptionalKeyword() {
 				g.P("\t//Warning!!!Type is float32,be careful of overflow")
-				g.P("\t", f.Desc.Name(), ": number|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": number|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
 				g.P("\t//Warning!!!Type is float32,be careful of overflow")
-				g.P("\t", f.Desc.Name(), ": number;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": number", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.DoubleKind:
 			if f.Desc.IsList() {
-				g.P("\t", f.Desc.Name(), ": Array<number>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<number>|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else if f.Desc.HasOptionalKeyword() {
-				g.P("\t", f.Desc.Name(), ": number|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": number|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
-				g.P("\t", f.Desc.Name(), ": number;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": number", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.StringKind:
 			if f.Desc.IsList() {
-				g.P("\t", f.Desc.Name(), ": Array<string>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<string>|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else if f.Desc.HasOptionalKeyword() {
-				g.P("\t", f.Desc.Name(), ": string|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": string|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
-				g.P("\t", f.Desc.Name(), ": string;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": string", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.BytesKind:
 			if f.Desc.IsList() {
-				g.P("\t", f.Desc.Name(), ": Array<Uint8Array>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<Uint8Array>|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else if f.Desc.HasOptionalKeyword() {
-				g.P("\t", f.Desc.Name(), ": Uint8Array|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Uint8Array|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
-				g.P("\t", f.Desc.Name(), ": Uint8Array;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Uint8Array", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		case protoreflect.MessageKind:
 			if f.Desc.IsMap() {
@@ -508,19 +508,24 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 				if valuewarn != "\t//Warning!!!" {
 					g.P(valuewarn)
 				}
-				g.P("\t", f.Desc.Name(), ": Map<", keytype, ",", valuetype, ">|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Map<", keytype, ",", valuetype, ">|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else if f.Desc.IsList() {
-				g.P("\t", f.Desc.Name(), ": Array<", f.Message.GoIdent.GoName, "|null>|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": Array<", f.Message.GoIdent.GoName, "|null>|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			} else {
-				g.P("\t", f.Desc.Name(), ": ", f.Message.GoIdent.GoName, "|null;", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
+				g.P("\t", f.Desc.Name(), ": ", f.Message.GoIdent.GoName, "|null", strings.TrimSuffix(f.Comments.Trailing.String(), "\n"))
 			}
 		}
 	}
-	if genfromobj {
-		if len(m.Fields) == 0 {
-			g.P("\tconstructor(_obj:Object){")
-		} else {
-			g.P("\tconstructor(obj:Object){")
+	if genfromobj && len(m.Fields) != 0 {
+		g.P("\tconstructor(obj:Object){")
+		oneofs := make(map[string]*struct{})
+		for _, f := range m.Fields {
+			if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
+				if _, ok := oneofs[f.Oneof.GoIdent.String()]; ok {
+					continue
+				}
+				oneofs[f.Oneof.GoIdent.String()] = nil
+			}
 		}
 		g.P("\t}")
 	}
@@ -556,7 +561,7 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 			}
 			if !f.Desc.IsMap() {
 				if f.Desc.IsList() {
-					g.P("\t\tif(this.", f.Desc.Name(), " && this.", f.Desc.Name(), ".length>0)")
+					g.P("\t\tif(this.", f.Desc.Name(), " && this.", f.Desc.Name(), ".length>0){")
 				} else {
 					g.P("\t\tif(this.", f.Desc.Name(), "){")
 				}
@@ -615,7 +620,7 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 	}
 	if gentoform {
 		g.P("\ttoForm(){")
-		g.P("\t\tlet query=[]")
+		g.P("\t\tlet query=new Array<string>()")
 		oneofs := make(map[string]*struct{})
 		for _, f := range m.Fields {
 			if f.Desc.Kind() == protoreflect.MessageKind {
@@ -635,9 +640,9 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 						g.P("\t\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
 						g.P("\t\t\t\t\tlet rawstr=''")
 						g.P("\t\t\t\t\tthis.", f.Oneof.Desc.Name(), ".value.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
-						g.P("\t\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
+						g.P("\t\t\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
 					} else {
-						g.P("\t\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+this.", f.Oneof.Desc.Name(), ".value")
+						g.P("\t\t\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+this.", f.Oneof.Desc.Name(), ".value")
 					}
 					g.P("\t\t\t\t\tquery.push(tmp)")
 					g.P("\t\t\t\t\tbreak")
@@ -648,16 +653,16 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 				continue
 			}
 			if f.Desc.IsList() {
-				g.P("\t\tif(this.", f.Desc.Name(), " && this.", f.Desc.Name(), ".length>0)")
+				g.P("\t\tif(this.", f.Desc.Name(), " && this.", f.Desc.Name(), ".length>0){")
 				g.P("\t\t\tfor(let value of this.", f.Desc.Name(), "){")
 				if f.Desc.Kind() == protoreflect.BytesKind {
 					g.P("\t\t\t\t//bytes type in protobuf should be standard base64 encoded")
 					g.P("\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
 					g.P("\t\t\t\tlet rawstr=''")
 					g.P("\t\t\t\tvalue.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
-					g.P("\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
+					g.P("\t\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
 				} else {
-					g.P("\t\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+value")
+					g.P("\t\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+value")
 				}
 				g.P("\t\t\t\tquery.push(tmp)")
 				g.P("\t\t\t}")
@@ -669,9 +674,9 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 					g.P("\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
 					g.P("\t\t\tlet rawstr=''")
 					g.P("\t\t\tthis.", f.Desc.Name(), ".forEach((element)=>{rawstr+=String.fromCharCode(element)})")
-					g.P("\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
+					g.P("\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
 				} else {
-					g.P("\t\t\ttmp=", strconv.Quote(string(f.Desc.Name())+"="), "+this.", f.Desc.Name())
+					g.P("\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+this.", f.Desc.Name())
 				}
 				g.P("\t\t\tquery.push(tmp)")
 				g.P("\t\t}")
