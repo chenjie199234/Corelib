@@ -635,7 +635,13 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 				g.P("\t\t\tswitch(this.", f.Oneof.Desc.Name(), ".$key){")
 				for _, oneoff := range f.Oneof.Fields {
 					g.P("\t\t\t\tcase ", strconv.Quote(string(oneoff.Desc.Name())), ":{")
-					if oneoff.Desc.Kind() == protoreflect.BytesKind {
+					if oneoff.Desc.Kind() == protoreflect.Sfixed64Kind ||
+						oneoff.Desc.Kind() == protoreflect.Sint64Kind ||
+						oneoff.Desc.Kind() == protoreflect.Int64Kind ||
+						oneoff.Desc.Kind() == protoreflect.Fixed64Kind ||
+						oneoff.Desc.Kind() == protoreflect.Uint64Kind {
+						g.P("\t\t\t\t\ttmp[", strconv.Quote(string(oneoff.Desc.Name())), "]=this.", f.Oneof.Desc.Name(), ".value.toString()")
+					} else if oneoff.Desc.Kind() == protoreflect.BytesKind {
 						g.P("\t\t\t\t\t//bytes type in protobuf should be standard base64 encoded")
 						g.P("\t\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
 						g.P("\t\t\t\t\tlet rawstr=''")
@@ -657,7 +663,20 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 				} else {
 					g.P("\t\tif(this.", f.Desc.Name(), "){")
 				}
-				if f.Desc.Kind() == protoreflect.BytesKind {
+				if f.Desc.Kind() == protoreflect.Sfixed64Kind ||
+					f.Desc.Kind() == protoreflect.Sint64Kind ||
+					f.Desc.Kind() == protoreflect.Int64Kind ||
+					f.Desc.Kind() == protoreflect.Fixed64Kind ||
+					f.Desc.Kind() == protoreflect.Uint64Kind {
+					if f.Desc.IsList() {
+						g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]=new Array<string>()")
+						g.P("\t\t\tfor(let value of this.", f.Desc.Name(), "){")
+						g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "].push(value.toString())")
+						g.P("\t\t\t}")
+					} else {
+						g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]=this.", f.Desc.Name(), ".toString()")
+					}
+				} else if f.Desc.Kind() == protoreflect.BytesKind {
 					g.P("\t\t\t//bytes type in protobuf should be standard base64 encoded")
 					g.P("\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
 					if f.Desc.IsList() {
@@ -681,7 +700,21 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 			g.P("\t\tif(this.", f.Desc.Name(), " && this.", f.Desc.Name(), ".size>0){")
 			g.P("\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "]={}")
 			g.P("\t\t\tfor(let [k,v] of this.", f.Desc.Name(), "){")
-			if f.Message.Fields[1].Desc.Kind() == protoreflect.BytesKind {
+			if f.Message.Fields[1].Desc.Kind() == protoreflect.Sfixed64Kind ||
+				f.Message.Fields[1].Desc.Kind() == protoreflect.Sint64Kind ||
+				f.Message.Fields[1].Desc.Kind() == protoreflect.Int64Kind ||
+				f.Message.Fields[1].Desc.Kind() == protoreflect.Fixed64Kind ||
+				f.Message.Fields[1].Desc.Kind() == protoreflect.Uint64Kind {
+				if f.Message.Fields[0].Desc.Kind() == protoreflect.Sfixed64Kind ||
+					f.Message.Fields[0].Desc.Kind() == protoreflect.Sint64Kind ||
+					f.Message.Fields[0].Desc.Kind() == protoreflect.Int64Kind ||
+					f.Message.Fields[0].Desc.Kind() == protoreflect.Fixed64Kind ||
+					f.Message.Fields[0].Desc.Kind() == protoreflect.Uint64Kind {
+					g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "][k.toString()]=v.toString()")
+				} else {
+					g.P("\t\t\t\ttmp[", strconv.Quote(string(f.Desc.Name())), "][k]=v.toString()")
+				}
+			} else if f.Message.Fields[1].Desc.Kind() == protoreflect.BytesKind {
 				g.P("\t\t\t\tlet rawstr=''")
 				g.P("\t\t\t\tv.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
 				if f.Message.Fields[0].Desc.Kind() == protoreflect.Sfixed64Kind ||
