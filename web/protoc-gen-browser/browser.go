@@ -617,7 +617,144 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 				g.P("\t\t}")
 				continue
 			}
-			//TODO map
+			var keytype string
+			var valuetype string
+			if f.Message.Fields[0].Desc.Kind() == protoreflect.Sint32Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Sfixed32Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Int32Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Fixed32Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Uint32Kind {
+				keytype = "number"
+			} else if f.Message.Fields[0].Desc.Kind() == protoreflect.Sint64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Sfixed64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Int64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Fixed64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Uint64Kind {
+				keytype = "bigint"
+			} else {
+				keytype = "string"
+			}
+			if f.Message.Fields[1].Desc.Kind() == protoreflect.Sint32Kind ||
+				f.Message.Fields[1].Desc.Kind() == protoreflect.Sfixed32Kind ||
+				f.Message.Fields[1].Desc.Kind() == protoreflect.Int32Kind ||
+				f.Message.Fields[1].Desc.Kind() == protoreflect.Fixed32Kind ||
+				f.Message.Fields[1].Desc.Kind() == protoreflect.Uint32Kind ||
+				f.Message.Fields[1].Desc.Kind() == protoreflect.FloatKind ||
+				f.Message.Fields[1].Desc.Kind() == protoreflect.DoubleKind {
+				valuetype = "number"
+			} else if f.Message.Fields[1].Desc.Kind() == protoreflect.Sint64Kind ||
+				f.Message.Fields[1].Desc.Kind() == protoreflect.Sfixed64Kind ||
+				f.Message.Fields[1].Desc.Kind() == protoreflect.Int64Kind ||
+				f.Message.Fields[1].Desc.Kind() == protoreflect.Fixed64Kind ||
+				f.Message.Fields[1].Desc.Kind() == protoreflect.Uint64Kind {
+				valuetype = "bigint"
+			} else if f.Message.Fields[1].Desc.Kind() == protoreflect.BoolKind {
+				valuetype = "bool"
+			} else if f.Message.Fields[1].Desc.Kind() == protoreflect.EnumKind {
+				valuetype = f.Message.Fields[1].Enum.GoIdent.GoName
+			} else if f.Message.Fields[1].Desc.Kind() == protoreflect.StringKind {
+				valuetype = "string"
+			} else if f.Message.Fields[1].Desc.Kind() == protoreflect.BytesKind {
+				valuetype = "Uint8Array"
+			} else {
+				valuetype = f.Message.Fields[1].Message.GoIdent.GoName + "|null"
+			}
+			g.P("\t\tif(obj[", strconv.Quote(string(f.Desc.Name())), "] && obj[", strconv.Quote(string(f.Desc.Name())), "].keys().length>0){")
+			g.P("\t\t\tthis.", f.Desc.Name(), "=new Map<", keytype, ",", valuetype, ">()")
+			g.P("\t\t\tlet keys = obj[", strconv.Quote(string(f.Desc.Name())), "].keys()")
+			g.P("\t\t\tfor(let key of keys){")
+			if f.Message.Fields[0].Desc.Kind() == protoreflect.Sint32Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Sfixed32Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Int32Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Fixed32Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Uint32Kind {
+				if f.Message.Fields[1].Desc.Kind() == protoreflect.Sint64Kind ||
+					f.Message.Fields[1].Desc.Kind() == protoreflect.Sfixed64Kind ||
+					f.Message.Fields[1].Desc.Kind() == protoreflect.Int64Kind ||
+					f.Message.Fields[1].Desc.Kind() == protoreflect.Fixed64Kind ||
+					f.Message.Fields[1].Desc.Kind() == protoreflect.Uint64Kind {
+					g.P("\t\t\t\tthis.", f.Desc.Name(), ".set(Number(key),BigInt(obj[", strconv.Quote(string(f.Desc.Name())), "][key]))")
+				} else if f.Message.Fields[1].Desc.Kind() == protoreflect.BytesKind {
+					g.P("\t\t\t\t//bytes type in protobuf is standard base64 encoded")
+					g.P("\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
+					g.P("\t\t\t\tlet rawstr=window.atob(obj[", strconv.Quote(string(f.Desc.Name())), "][key])")
+					g.P("\t\t\t\tlet tmp=new Uint8Array(rawstr.length)")
+					g.P("\t\t\t\tfor(let i=0;i<rawstr.length;i++){")
+					g.P("\t\t\t\t\ttmp[i]=rawstr.charCodeAt(i)")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tthis.", f.Desc.Name(), ".set(Number(key),tmp)")
+				} else if f.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
+					g.P("\t\t\t\tif(obj[", strconv.Quote(string(f.Desc.Name())), "][key]){")
+					g.P("\t\t\t\t\tlet tmp = new ", f.Message.Fields[1].Message.GoIdent.GoName, "()")
+					g.P("\t\t\t\t\ttmp.fromOBJ(obj[", strconv.Quote(string(f.Desc.Name())), "][key])")
+					g.P("\t\t\t\t\tthis.", f.Desc.Name(), ".set(Number(key),tmp)")
+					g.P("\t\t\t\t}else{")
+					g.P("\t\t\t\t\tthis.", f.Desc.Name(), ".set(Number(key),null)")
+					g.P("\t\t\t\t}")
+				} else {
+					g.P("\t\t\t\tthis.", f.Desc.Name(), ".set(Number(key),obj[", strconv.Quote(string(f.Desc.Name())), "][key])")
+				}
+			} else if f.Message.Fields[0].Desc.Kind() == protoreflect.Sint64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Sfixed64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Int64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Fixed64Kind ||
+				f.Message.Fields[0].Desc.Kind() == protoreflect.Uint64Kind {
+				if f.Message.Fields[1].Desc.Kind() == protoreflect.Sint64Kind ||
+					f.Message.Fields[1].Desc.Kind() == protoreflect.Sfixed64Kind ||
+					f.Message.Fields[1].Desc.Kind() == protoreflect.Int64Kind ||
+					f.Message.Fields[1].Desc.Kind() == protoreflect.Fixed64Kind ||
+					f.Message.Fields[1].Desc.Kind() == protoreflect.Uint64Kind {
+					g.P("\t\t\t\tthis.", f.Desc.Name(), ".set(BigInt(key),BigInt(obj[", strconv.Quote(string(f.Desc.Name())), "][key]))")
+				} else if f.Message.Fields[1].Desc.Kind() == protoreflect.BytesKind {
+					g.P("\t\t\t\t//bytes type in protobuf is standard base64 encoded")
+					g.P("\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
+					g.P("\t\t\t\tlet rawstr=window.atob(obj[", strconv.Quote(string(f.Desc.Name())), "][key])")
+					g.P("\t\t\t\tlet tmp=new Uint8Array(rawstr.length)")
+					g.P("\t\t\t\tfor(let i=0;i<rawstr.length;i++){")
+					g.P("\t\t\t\t\ttmp[i]=rawstr.charCodeAt(i)")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tthis.", f.Desc.Name(), ".set(BigInt(key),tmp)")
+				} else if f.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
+					g.P("\t\t\t\tif(obj[", strconv.Quote(string(f.Desc.Name())), "][key]){")
+					g.P("\t\t\t\t\tlet tmp = new ", f.Message.Fields[1].Message.GoIdent.GoName, "()")
+					g.P("\t\t\t\t\ttmp.fromOBJ(obj[", strconv.Quote(string(f.Desc.Name())), "][key])")
+					g.P("\t\t\t\t\tthis.", f.Desc.Name(), ".set(BigInt(key),tmp)")
+					g.P("\t\t\t\t}else{")
+					g.P("\t\t\t\t\tthis.", f.Desc.Name(), ".set(BigInt(key),null)")
+					g.P("\t\t\t\t}")
+				} else {
+					g.P("\t\t\t\tthis.", f.Desc.Name(), ".set(BigInt(key),obj[", strconv.Quote(string(f.Desc.Name())), "][key])")
+				}
+			} else {
+				if f.Message.Fields[1].Desc.Kind() == protoreflect.Sint64Kind ||
+					f.Message.Fields[1].Desc.Kind() == protoreflect.Sfixed64Kind ||
+					f.Message.Fields[1].Desc.Kind() == protoreflect.Int64Kind ||
+					f.Message.Fields[1].Desc.Kind() == protoreflect.Fixed64Kind ||
+					f.Message.Fields[1].Desc.Kind() == protoreflect.Uint64Kind {
+					g.P("\t\t\t\tthis.", f.Desc.Name(), ".set(key,BigInt(obj[", strconv.Quote(string(f.Desc.Name())), "][key]))")
+				} else if f.Message.Fields[1].Desc.Kind() == protoreflect.BytesKind {
+					g.P("\t\t\t\t//bytes type in protobuf is standard base64 encoded")
+					g.P("\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
+					g.P("\t\t\t\tlet rawstr=window.atob(obj[", strconv.Quote(string(f.Desc.Name())), "][key])")
+					g.P("\t\t\t\tlet tmp=new Uint8Array(rawstr.length)")
+					g.P("\t\t\t\tfor(let i=0;i<rawstr.length;i++){")
+					g.P("\t\t\t\t\ttmp[i]=rawstr.charCodeAt(i)")
+					g.P("\t\t\t\t}")
+					g.P("\t\t\t\tthis.", f.Desc.Name(), ".set(key,tmp)")
+				} else if f.Message.Fields[1].Desc.Kind() == protoreflect.MessageKind {
+					g.P("\t\t\t\tif(obj[", strconv.Quote(string(f.Desc.Name())), "][key]){")
+					g.P("\t\t\t\t\tlet tmp = new ", f.Message.Fields[1].Message.GoIdent.GoName, "()")
+					g.P("\t\t\t\t\ttmp.fromOBJ(obj[", strconv.Quote(string(f.Desc.Name())), "][key])")
+					g.P("\t\t\t\t\tthis.", f.Desc.Name(), ".set(key,tmp)")
+					g.P("\t\t\t\t}else{")
+					g.P("\t\t\t\t\tthis.", f.Desc.Name(), ".set(key,null)")
+					g.P("\t\t\t\t}")
+				} else {
+					g.P("\t\t\t\tthis.", f.Desc.Name(), ".set(key,obj[", strconv.Quote(string(f.Desc.Name())), "][key])")
+				}
+			}
+			g.P("\t\t\t}")
+			g.P("\t\t}")
 		}
 		g.P("\t}")
 	}
