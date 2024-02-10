@@ -9,6 +9,7 @@ const git = `*
 !.gitignore
 !index.html
 !package.json
+!tsconfig.json
 !/src/
 !/src/*
 !/src/**/
@@ -23,7 +24,7 @@ const index = `<!DOCTYPE html>
   </head>
   <body style="margin:0px;padding:0px;border:0px none white">
     <div id="app" style="width:100vw;height:100vh;overflow:hidden;background-color:white"></div>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>`
 
@@ -34,17 +35,47 @@ const pkg = `{
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "typescript": "latest",
     "vite": "latest"
   },
   "dependencies": {
   }
 }`
 
-const main = `document.querySelector('#app').innerHTML="hello world"`
+const tsc = `{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "noEmitOnError": true,
+
+    /* Linting */
+    "strict": true,
+    "alwaysStrict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": false,
+    "noImplicitThis":false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"]
+}`
+
+const main = `document.querySelector<HTMLDivElement>('#app')!.innerHTML="hello world"`
 
 func CreatePathAndFile(projectname string) {
 	var e error
@@ -101,18 +132,32 @@ func CreatePathAndFile(projectname string) {
 	if e := pkgfile.Close(); e != nil {
 		panic("close ./html/package.json error: " + e.Error())
 	}
-	//./html/src/main.js
-	mainfile, e := os.OpenFile("./html/src/main.js", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	//./html/tsconfig.json
+	tscfile, e := os.OpenFile("./html/tsconfig.json", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic("open ./html/src/main.js error: " + e.Error())
+		panic("open ./html/tsconfig.json error: " + e.Error())
+	}
+	if _, e := tscfile.WriteString(tsc); e != nil {
+		panic("write ./html/tsconfig.json error: " + e.Error())
+	}
+	if e := tscfile.Sync(); e != nil {
+		panic("sync ./html/tsconfig.json error: " + e.Error())
+	}
+	if e := tscfile.Close(); e != nil {
+		panic("close ./html/tsconfig.json error: " + e.Error())
+	}
+	//./html/src/main.ts
+	mainfile, e := os.OpenFile("./html/src/main.ts", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if e != nil {
+		panic("open ./html/src/main.ts error: " + e.Error())
 	}
 	if _, e := mainfile.WriteString(main); e != nil {
-		panic("write ./html/src/main.js error: " + e.Error())
+		panic("write ./html/src/main.ts error: " + e.Error())
 	}
 	if e := mainfile.Sync(); e != nil {
-		panic("sync ./html/src/main.js error: " + e.Error())
+		panic("sync ./html/src/main.ts error: " + e.Error())
 	}
 	if e := mainfile.Close(); e != nil {
-		panic("close ./html/src/main.js error: " + e.Error())
+		panic("close ./html/src/main.ts error: " + e.Error())
 	}
 }
