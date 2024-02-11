@@ -66,8 +66,8 @@ const tsc = `{
     "strict": true,
     "alwaysStrict": true,
     "strictNullChecks": true,
-    "noImplicitAny": false,
-    "noImplicitThis":false,
+    "noImplicitAny": true,
+    "noImplicitThis":true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true

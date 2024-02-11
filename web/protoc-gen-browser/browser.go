@@ -1092,7 +1092,9 @@ func genCall(g *protogen.GeneratedFile, target bool) {
 	}
 	g.P("\t})")
 	g.P("\t.catch(e=>{")
-	g.P("\t\tif(e.length>0 && e[0]=='{' && e[e.length-1]=='}'){")
+	g.P("\t\tif(e instanceof Error){")
+	g.P("\t\t\terror({code:-1,msg:e.message})")
+	g.P("\t\t}else if(e.length>0 && e[0]=='{' && e[e.length-1]=='}'){")
 	g.P("\t\t\terror(JSON.parse(e))")
 	g.P("\t\t}else{")
 	g.P("\t\t\terror({code:-1,msg:e})")
