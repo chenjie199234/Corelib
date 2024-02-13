@@ -517,7 +517,11 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 		}
 	}
 	if genfromobj {
-		g.P("\tfromOBJ(obj:Object){")
+		if len(m.Fields) == 0 {
+			g.P("\tfromOBJ(_obj:Object){")
+		} else {
+			g.P("\tfromOBJ(obj:Object){")
+		}
 		oneofs := make(map[string]*struct{})
 		for _, f := range m.Fields {
 			if f.Oneof != nil && !f.Desc.HasOptionalKeyword() {
