@@ -659,10 +659,9 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 			} else {
 				valuetype = f.Message.Fields[1].Message.GoIdent.GoName + "|null"
 			}
-			g.P("\t\tif(obj[", strconv.Quote(string(f.Desc.Name())), "] && obj[", strconv.Quote(string(f.Desc.Name())), "].keys().length>0){")
+			g.P("\t\tif(obj[", strconv.Quote(string(f.Desc.Name())), "] && Object.keys(obj[", strconv.Quote(string(f.Desc.Name())), "]).length>0){")
 			g.P("\t\t\tthis.", f.Desc.Name(), "=new Map<", keytype, ",", valuetype, ">()")
-			g.P("\t\t\tlet keys = obj[", strconv.Quote(string(f.Desc.Name())), "].keys()")
-			g.P("\t\t\tfor(let key of keys){")
+			g.P("\t\t\tfor(let key of Object.keys(obj[", strconv.Quote(string(f.Desc.Name())), "])){")
 			if f.Message.Fields[0].Desc.Kind() == protoreflect.Sint32Kind ||
 				f.Message.Fields[0].Desc.Kind() == protoreflect.Sfixed32Kind ||
 				f.Message.Fields[0].Desc.Kind() == protoreflect.Int32Kind ||
