@@ -10,7 +10,7 @@ import (
 )
 
 func SignMake(password string) (string, error) {
-	if len(password) >= 32 {
+	if len(password) > 32 {
 		return "", cerror.ErrPasswordLength
 	}
 	cache := make([]byte, 64+64)
@@ -21,7 +21,7 @@ func SignMake(password string) (string, error) {
 	return hex.EncodeToString(cache), nil
 }
 func SignCheck(password, sign string) error {
-	if len(password) >= 32 {
+	if len(password) > 32 {
 		return cerror.ErrPasswordLength
 	}
 	noncesign, e := hex.DecodeString(sign)

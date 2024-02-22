@@ -50,7 +50,7 @@ var (
 	ErrBusy           = &Error{Code: 10011, Httpcode: http.StatusServiceUnavailable, Msg: "busy"}
 	ErrNotExist       = &Error{Code: 10012, Httpcode: http.StatusNotFound, Msg: "not exist"}
 	ErrPasswordWrong  = &Error{Code: 10013, Httpcode: http.StatusBadRequest, Msg: "password wrong"}
-	ErrPasswordLength = &Error{Code: 10014, Httpcode: http.StatusBadRequest, Msg: "password length must <=31"}
+	ErrPasswordLength = &Error{Code: 10014, Httpcode: http.StatusBadRequest, Msg: "password length must <=32"}
 )
 
 // convert std error,always -1
