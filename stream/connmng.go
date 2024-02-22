@@ -85,7 +85,7 @@ var errClosing = errors.New("instance closing")
 
 func (m *connmng) AddPeer(p *Peer) error {
 	peeraddr := p.c.RemoteAddr().String()
-	tw := m.timewheels[common.BkdrhashString(peeraddr, uint64(len(m.timewheels)))]
+	tw := m.timewheels[common.Bkdrhash(common.STB(peeraddr), uint64(len(m.timewheels)))]
 	g := tw.groups[(atomic.LoadUint64(&tw.index)+rand.Uint64()%50+5)%60] //rand is used to reduce race
 	g.Lock()
 	if _, ok := g.peers[peeraddr]; ok {

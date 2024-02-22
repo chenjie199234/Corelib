@@ -60,7 +60,7 @@ func (c *Client) PubBroadcast(ctx context.Context, broadcast string, shard uint8
 	if key == "" {
 		stream = "broadcast_" + broadcast + "_" + strconv.FormatUint(rand.Uint64()%uint64(shard), 10)
 	} else {
-		stream = "broadcast_" + broadcast + "_" + strconv.FormatUint(common.BkdrhashString(key, uint64(shard)), 10)
+		stream = "broadcast_" + broadcast + "_" + strconv.FormatUint(common.Bkdrhash(common.STB(key), uint64(shard)), 10)
 	}
 	args := &gredis.XAddArgs{
 		Stream: stream,

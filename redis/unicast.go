@@ -108,7 +108,7 @@ func (c *Client) PubUnicast(ctx context.Context, unicast string, shard uint8, ke
 	if key == "" {
 		list = "unicast_" + unicast + "_" + strconv.FormatUint(rand.Uint64()%uint64(shard), 10)
 	} else {
-		list = "unicast_" + unicast + "_" + strconv.FormatUint(common.BkdrhashString(key, uint64(shard)), 10)
+		list = "unicast_" + unicast + "_" + strconv.FormatUint(common.Bkdrhash(common.STB(key), uint64(shard)), 10)
 	}
 	exist := "{" + list + "}_exist"
 	return pubunicast.Run(ctx, c, []string{list, exist}, values...).Err()

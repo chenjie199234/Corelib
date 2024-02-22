@@ -160,7 +160,7 @@ func (c *Client) SetBloom(ctx context.Context, bloomname string, groupnum uint64
 	if bitnum < 1024 {
 		bitnum = 1024
 	}
-	key := bloomname + "_" + strconv.FormatUint(common.BkdrhashString(userkey, uint64(groupnum)), 10)
+	key := bloomname + "_" + strconv.FormatUint(common.Bkdrhash(common.STB(userkey), uint64(groupnum)), 10)
 	keybkdr := "{" + key + "}_bkdr"
 	keydjb := "{" + key + "}_djb"
 	keyfnv := "{" + key + "}_fnv"
@@ -168,12 +168,12 @@ func (c *Client) SetBloom(ctx context.Context, bloomname string, groupnum uint64
 	keyrs := "{" + key + "}_rs"
 	keysdbm := "{" + key + "}_sdbm"
 	keyexist := "{" + key + "}_exist"
-	bit1 := common.BkdrhashString(userkey, bitnum)
-	bit2 := common.DjbhashString(userkey, bitnum)
-	bit3 := common.FnvhashString(userkey, bitnum)
-	bit4 := common.DekhashString(userkey, bitnum)
-	bit5 := common.RshashString(userkey, bitnum)
-	bit6 := common.SdbmhashString(userkey, bitnum)
+	bit1 := common.Bkdrhash(common.STB(userkey), bitnum)
+	bit2 := common.Djbhash(common.STB(userkey), bitnum)
+	bit3 := common.Fnvhash(common.STB(userkey), bitnum)
+	bit4 := common.Dekhash(common.STB(userkey), bitnum)
+	bit5 := common.Rshash(common.STB(userkey), bitnum)
+	bit6 := common.Sdbmhash(common.STB(userkey), bitnum)
 	r, e := setBloom.Run(ctx, c, []string{keybkdr, keydjb, keyfnv, keydek, keyrs, keysdbm, keyexist}, bit1, bit2, bit3, bit4, bit5, bit6).Int()
 	if e != nil {
 		return false, e
@@ -192,7 +192,7 @@ func (c *Client) CheckBloom(ctx context.Context, bloomname string, groupnum uint
 	if bitnum < 1024 {
 		bitnum = 1024
 	}
-	key := bloomname + "_" + strconv.FormatUint(common.BkdrhashString(userkey, uint64(groupnum)), 10)
+	key := bloomname + "_" + strconv.FormatUint(common.Bkdrhash(common.STB(userkey), uint64(groupnum)), 10)
 	keybkdr := "{" + key + "}_bkdr"
 	keydjb := "{" + key + "}_djb"
 	keyfnv := "{" + key + "}_fnv"
@@ -200,12 +200,12 @@ func (c *Client) CheckBloom(ctx context.Context, bloomname string, groupnum uint
 	keyrs := "{" + key + "}_rs"
 	keysdbm := "{" + key + "}_sdbm"
 	keyexist := "{" + key + "}_exist"
-	bit1 := common.BkdrhashString(userkey, bitnum)
-	bit2 := common.DjbhashString(userkey, bitnum)
-	bit3 := common.FnvhashString(userkey, bitnum)
-	bit4 := common.DekhashString(userkey, bitnum)
-	bit5 := common.RshashString(userkey, bitnum)
-	bit6 := common.SdbmhashString(userkey, bitnum)
+	bit1 := common.Bkdrhash(common.STB(userkey), bitnum)
+	bit2 := common.Djbhash(common.STB(userkey), bitnum)
+	bit3 := common.Fnvhash(common.STB(userkey), bitnum)
+	bit4 := common.Dekhash(common.STB(userkey), bitnum)
+	bit5 := common.Rshash(common.STB(userkey), bitnum)
+	bit6 := common.Sdbmhash(common.STB(userkey), bitnum)
 	r, e := checkBloom.Run(ctx, c, []string{keybkdr, keydjb, keyfnv, keydek, keyrs, keysdbm, keyexist}, bit1, bit2, bit3, bit4, bit5, bit6).Int()
 	if e != nil {
 		return false, e
