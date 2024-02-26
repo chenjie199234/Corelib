@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -103,17 +102,30 @@ func prepare(file *protogen.File, g *protogen.GeneratedFile, target bool) (enums
 		}
 		for _, method := range service.Methods {
 			mop := method.Desc.Options().(*descriptorpb.MethodOptions)
-			if mop.GetDeprecated() {
+			if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 				continue
 			}
-			if target && !proto.HasExtension(mop, pbex.E_Method) {
+			emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+			need := ""
+			for _, em := range emethod {
+				em = strings.ToUpper(em)
+				if target {
+					if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
+						need = em
+						break
+					}
+				} else if em == "CRPC" {
+					need = em
+					break
+				}
+			}
+			if need == "" {
 				continue
 			}
 			if target {
 				//toc
 				tmpmsgs[method.Input.GoIdent.String()] = method.Input
-				httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
-				if httpmetohd == http.MethodGet || httpmetohd == http.MethodDelete {
+				if need == "GET" || need == "DELETE" {
 					toform[method.Input.GoIdent.String()] = nil
 				} else {
 					tojson[method.Input.GoIdent.String()] = nil
@@ -958,7 +970,24 @@ func genPath(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile
 	count := 0
 	for _, method := range s.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
-		if mop.GetDeprecated() || (target && !proto.HasExtension(mop, pbex.E_Method)) {
+		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
+			continue
+		}
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := false
+		for _, em := range emethod {
+			em = strings.ToUpper(em)
+			if target {
+				if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
+					need = true
+					break
+				}
+			} else if em == "CRPC" {
+				need = true
+				break
+			}
+		}
+		if !need {
 			continue
 		}
 		count++
@@ -983,9 +1012,17 @@ func genToCService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
-		httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
-		if httpmetohd != http.MethodGet && httpmetohd != http.MethodPost && httpmetohd != http.MethodPut && httpmetohd != http.MethodDelete && httpmetohd != http.MethodPatch {
-			panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", method.Desc.Name(), s.Desc.Name(), httpmetohd))
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := ""
+		for _, em := range emethod {
+			em = strings.ToUpper(em)
+			if em == "GET" || em == "POST" || em == "PATCH" || em == "PUT" || em == "DELETE" {
+				need = em
+				break
+			}
+		}
+		if need == "" {
+			continue
 		}
 		pathname := "_WebPath" + s.GoName + method.GoName
 		g.P("\t//timeout's unit is millisecond,it will be used when > 0")
@@ -993,16 +1030,16 @@ func genToCService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 		g.P("\t\tif(!header){")
 		g.P("\t\t\theader={}")
 		g.P("\t\t}")
-		if httpmetohd == http.MethodGet || httpmetohd == http.MethodDelete {
+		if need == "GET" || need == "DELETE" {
 			g.P("\t\theader[\"Content-Type\"] = \"application/x-www-form-urlencoded\"")
-			g.P("\t\tcall(timeout,this.host+", pathname, "+\"?\"+req.toFORM(),{method:", strconv.Quote(httpmetohd), ",headers:header},error,function(arg: Object){")
+			g.P("\t\tcall(timeout,this.host+", pathname, "+\"?\"+req.toFORM(),{method:", strconv.Quote(need), ",headers:header},error,function(arg: Object){")
 			g.P("\t\t\tlet r=new ", method.Output.GoIdent.GoName, "()")
 			g.P("\t\t\tr.fromOBJ(arg)")
 			g.P("\t\t\tsuccess(r)")
 			g.P("\t\t})")
 		} else {
 			g.P("\t\theader[\"Content-Type\"] = \"application/json\"")
-			g.P("\t\tcall(timeout,this.host+", pathname, ",{method:", strconv.Quote(httpmetohd), ",headers:header,body:JSON.stringify(req)},error,function(arg: Object){")
+			g.P("\t\tcall(timeout,this.host+", pathname, ",{method:", strconv.Quote(need), ",headers:header,body:JSON.stringify(req)},error,function(arg: Object){")
 			g.P("\t\t\tlet r=new ", method.Output.GoIdent.GoName, "()")
 			g.P("\t\t\tr.fromOBJ(arg)")
 			g.P("\t\t\tsuccess(r)")
@@ -1035,7 +1072,19 @@ func genToBService(file *protogen.File, s *protogen.Service, g *protogen.Generat
 	g.P("\t}")
 	for _, method := range s.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
-		if mop.GetDeprecated() {
+		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
+			continue
+		}
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := false
+		for _, em := range emethod {
+			em = strings.ToUpper(em)
+			if em == "CRPC" {
+				need = true
+				break
+			}
+		}
+		if !need {
 			continue
 		}
 		pathname := "_WebPath" + s.GoName + method.GoName

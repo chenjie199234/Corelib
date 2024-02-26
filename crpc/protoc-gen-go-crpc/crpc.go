@@ -35,7 +35,31 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 		if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 			continue
 		}
-		genService(file, service, g)
+		count := 0
+		for _, method := range service.Methods {
+			mop := method.Desc.Options().(*descriptorpb.MethodOptions)
+			if mop.GetDeprecated() {
+				continue
+			}
+			if !proto.HasExtension(mop, pbex.E_Method) {
+				continue
+			}
+			emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+			need := false
+			for _, em := range emethod {
+				if strings.ToUpper(em) == "CRPC" {
+					need = true
+					break
+				}
+			}
+			if !need {
+				continue
+			}
+			count++
+		}
+		if count > 0 {
+			genService(file, service, g)
+		}
 	}
 	return g
 }
@@ -57,14 +81,29 @@ func genFileComment(gen *protogen.Plugin, file *protogen.File, g *protogen.Gener
 }
 
 func genService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) {
+
 	genPath(file, s, g)
 	genClient(file, s, g)
 	genServer(file, s, g)
 }
-
 func genPath(file *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
 	for _, method := range service.Methods {
-		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
+		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
+		if mop.GetDeprecated() {
+			continue
+		}
+		if !proto.HasExtension(mop, pbex.E_Method) {
+			continue
+		}
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := false
+		for _, em := range emethod {
+			if strings.ToUpper(em) == "CRPC" {
+				need = true
+				break
+			}
+		}
+		if !need {
 			continue
 		}
 		pathname := "_CrpcPath" + service.GoName + method.GoName
@@ -79,7 +118,22 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 
 	g.P("type ", serverName, " interface {")
 	for _, method := range service.Methods {
-		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
+		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
+		if mop.GetDeprecated() {
+			continue
+		}
+		if !proto.HasExtension(mop, pbex.E_Method) {
+			continue
+		}
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := false
+		for _, em := range emethod {
+			if strings.ToUpper(em) == "CRPC" {
+				need = true
+				break
+			}
+		}
+		if !need {
 			continue
 		}
 		g.P(method.Comments.Leading,
@@ -90,7 +144,22 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	g.P()
 	// Server handler
 	for _, method := range service.Methods {
-		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
+		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
+		if mop.GetDeprecated() {
+			continue
+		}
+		if !proto.HasExtension(mop, pbex.E_Method) {
+			continue
+		}
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := false
+		for _, em := range emethod {
+			if strings.ToUpper(em) == "CRPC" {
+				need = true
+				break
+			}
+		}
+		if !need {
 			continue
 		}
 		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
@@ -160,6 +229,20 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if mop.GetDeprecated() {
 			continue
 		}
+		if !proto.HasExtension(mop, pbex.E_Method) {
+			continue
+		}
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := false
+		for _, em := range emethod {
+			if strings.ToUpper(em) == "CRPC" {
+				need = true
+				break
+			}
+		}
+		if !need {
+			continue
+		}
 		var mids []string
 		if proto.HasExtension(mop, pbex.E_CrpcMidwares) {
 			mids = proto.GetExtension(mop, pbex.E_CrpcMidwares).([]string)
@@ -198,7 +281,22 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 
 	g.P("type ", clientName, " interface {")
 	for _, method := range service.Methods {
-		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
+		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
+		if mop.GetDeprecated() {
+			continue
+		}
+		if !proto.HasExtension(mop, pbex.E_Method) {
+			continue
+		}
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := false
+		for _, em := range emethod {
+			if strings.ToUpper(em) == "CRPC" {
+				need = true
+				break
+			}
+		}
+		if !need {
 			continue
 		}
 		g.P(method.Comments.Leading,
@@ -218,6 +316,20 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	for _, method := range service.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
 		if mop.GetDeprecated() {
+			continue
+		}
+		if !proto.HasExtension(mop, pbex.E_Method) {
+			continue
+		}
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := false
+		for _, em := range emethod {
+			if strings.ToUpper(em) == "CRPC" {
+				need = true
+				break
+			}
+		}
+		if !need {
 			continue
 		}
 		pathname := "_CrpcPath" + service.GoName + method.GoName

@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -53,15 +52,20 @@ func genService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedF
 	first := true
 	for _, m := range s.Methods {
 		mop := m.Desc.Options().(*descriptorpb.MethodOptions)
-		if mop.GetDeprecated() {
+		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
-		if !proto.HasExtension(mop, pbex.E_Method) {
-			continue
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := ""
+		for _, em := range emethod {
+			em = strings.ToUpper(em)
+			if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
+				need = em
+				break
+			}
 		}
-		httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
-		if httpmetohd != http.MethodGet && httpmetohd != http.MethodPost && httpmetohd != http.MethodPut && httpmetohd != http.MethodDelete && httpmetohd != http.MethodPatch {
-			panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", m.Desc.Name(), s.Desc.Name(), httpmetohd))
+		if need == "" {
+			continue
 		}
 		if first {
 			first = false
@@ -73,8 +77,8 @@ func genService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedF
 		g.P("#### Req:")
 		g.P("```")
 		g.P("Path:         ", path)
-		g.P("Method:       ", httpmetohd)
-		if httpmetohd == "POST" || httpmetohd == "PUT" || httpmetohd == "PATCH" {
+		g.P("Method:       ", need)
+		if need == "POST" || need == "PUT" || need == "PATCH" {
 			g.P("Content-Type: application/json")
 			checked := make(map[string]*struct{})
 			jsondoc(g, m.Input, false, false, checked)
@@ -1616,8 +1620,6 @@ func formdoc(g *protogen.GeneratedFile, m *protogen.Message) {
 					g.P("//value length must <= ", lte)
 				}
 			}
-		case protoreflect.MessageKind:
-			panic(fmt.Sprintf("form request message can't contain nested message and map"))
 		}
 		if f.Desc.IsList() {
 			if proto.HasExtension(fop, pbex.E_MapRepeatedLenEq) {

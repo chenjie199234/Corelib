@@ -48,7 +48,32 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 		if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 			continue
 		}
-		genService(file, service, g)
+		count := 0
+		for _, method := range service.Methods {
+			mop := method.Desc.Options().(*descriptorpb.MethodOptions)
+			if mop.GetDeprecated() {
+				continue
+			}
+			if !proto.HasExtension(mop, pbex.E_Method) {
+				continue
+			}
+			emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+			need := false
+			for _, em := range emethod {
+				em = strings.ToUpper(em)
+				if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
+					need = true
+					break
+				}
+			}
+			if !need {
+				continue
+			}
+			count++
+		}
+		if count > 0 {
+			genService(file, service, g)
+		}
 	}
 	return g
 }
@@ -68,13 +93,11 @@ func genFileComment(gen *protogen.Plugin, file *protogen.File, g *protogen.Gener
 	g.P("// source: ", file.Desc.Path(), "<br />")
 	g.P()
 }
-
 func genService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) {
 	genPath(file, s, g)
 	genClient(file, s, g)
 	genServer(file, s, g)
 }
-
 func genPath(file *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
 	for _, method := range service.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
@@ -84,9 +107,17 @@ func genPath(file *protogen.File, service *protogen.Service, g *protogen.Generat
 		if !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
-		httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
-		if httpmetohd != http.MethodGet && httpmetohd != http.MethodPost && httpmetohd != http.MethodPut && httpmetohd != http.MethodDelete && httpmetohd != http.MethodPatch {
-			panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", method.Desc.Name(), service.Desc.Name(), httpmetohd))
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := false
+		for _, em := range emethod {
+			em = strings.ToUpper(em)
+			if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
+				need = true
+				break
+			}
+		}
+		if !need {
+			continue
 		}
 		pathname := "_WebPath" + service.GoName + method.GoName
 		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
@@ -94,7 +125,6 @@ func genPath(file *protogen.File, service *protogen.Service, g *protogen.Generat
 	}
 	g.P()
 }
-
 func genServer(file *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
 	// Server interface.
 	serverName := service.GoName + "WebServer"
@@ -108,9 +138,17 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
-		httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
-		if httpmetohd != http.MethodGet && httpmetohd != http.MethodPost && httpmetohd != http.MethodPut && httpmetohd != http.MethodDelete && httpmetohd != http.MethodPatch {
-			panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", method.Desc.Name(), service.Desc.Name(), httpmetohd))
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := false
+		for _, em := range emethod {
+			em = strings.ToUpper(em)
+			if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
+				need = true
+				break
+			}
+		}
+		if !need {
+			continue
 		}
 		g.P(method.Comments.Leading,
 			method.GoName, "(", g.QualifiedGoIdent(contextPackage.Ident("Context")), ",*", g.QualifiedGoIdent(method.Input.GoIdent), ")(*", g.QualifiedGoIdent(method.Output.GoIdent), ",error)",
@@ -120,14 +158,6 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	g.P()
 	// Server handler
 	for _, method := range service.Methods {
-		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
-		simplefields := true
-		for _, f := range method.Input.Fields {
-			if f.Desc.Kind() == protoreflect.MessageKind {
-				simplefields = false
-				break
-			}
-		}
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
 		if mop.GetDeprecated() {
 			continue
@@ -135,10 +165,26 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
-		httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
-		if httpmetohd != http.MethodGet && httpmetohd != http.MethodPost && httpmetohd != http.MethodPut && httpmetohd != http.MethodDelete && httpmetohd != http.MethodPatch {
-			panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", method.Desc.Name(), service.Desc.Name(), httpmetohd))
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := ""
+		for _, em := range emethod {
+			em = strings.ToUpper(em)
+			if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
+				need = em
+				break
+			}
 		}
+		if need == "" {
+			continue
+		}
+		reqsimple := true
+		for _, f := range method.Input.Fields {
+			if f.Desc.Kind() == protoreflect.MessageKind {
+				reqsimple = false
+				break
+			}
+		}
+		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		fname := "func _" + service.GoName + "_" + method.GoName + "_" + "WebHandler"
 		p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
 		freturn := g.QualifiedGoIdent(webPackage.Ident("OutsideHandler"))
@@ -146,7 +192,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("return func(ctx *", g.QualifiedGoIdent(webPackage.Ident("Context")), "){")
 		g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
 		if len(method.Input.Fields) > 0 {
-			if httpmetohd == http.MethodPost || httpmetohd == http.MethodPut || httpmetohd == http.MethodPatch {
+			if need == "POST" || need == "PUT" || need == "PATCH" {
 				g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetContentType(),", strconv.Quote("application/json"), "){")
 				g.P("data, e := ctx.GetBody()")
 				g.P("if e!=nil{")
@@ -176,12 +222,13 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				g.P("}")
 				g.P("}")
 				g.P("}else{")
+				if !reqsimple {
+					g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] request message contain nested message or map,Content-Type must be application/json or application/x-protobuf\")")
+					g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
+					g.P("return")
+				}
 			}
-			if !simplefields {
-				g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] request message contain nested message or map,Content-Type must be application/json or application/x-protobuf\")")
-				g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
-				g.P("return")
-			} else {
+			if reqsimple {
 				g.P("if e:=ctx.ParseForm();e!=nil{")
 				g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] parse form failed\",", g.QualifiedGoIdent(logPackage.Ident("CError")), "(e))")
 				g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
@@ -655,12 +702,10 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							}
 							g.P("}")
 						}
-					case protoreflect.MessageKind:
-						panic(fmt.Sprintf("method: %s in service: %s with httpmetohd: %s,it's request message can't contain nested message and map", method.Desc.Name(), service.Desc.Name(), httpmetohd))
 					}
 				}
 			}
-			if httpmetohd == http.MethodPost || httpmetohd == http.MethodPut || httpmetohd == http.MethodPatch {
+			if need == "POST" || need == "PUT" || need == "PATCH" {
 				g.P("}")
 			}
 		}
@@ -706,9 +751,17 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
-		httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
-		if httpmetohd != http.MethodGet && httpmetohd != http.MethodPost && httpmetohd != http.MethodPut && httpmetohd != http.MethodDelete && httpmetohd != http.MethodPatch {
-			panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", method.Desc.Name(), service.Desc.Name(), httpmetohd))
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := ""
+		for _, em := range emethod {
+			em = strings.ToUpper(em)
+			if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
+				need = em
+				break
+			}
+		}
+		if need == "" {
+			continue
 		}
 		var mids []string
 		if proto.HasExtension(mop, pbex.E_WebMidwares) {
@@ -734,30 +787,30 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("}")
 			g.P("}")
 			g.P("mids = append(mids,", fname, ")")
-			switch httpmetohd {
-			case http.MethodGet:
+			switch need {
+			case "GET":
 				g.P("router.Get(", pathname, ",mids...)")
-			case http.MethodDelete:
+			case "DELETE":
 				g.P("router.Delete(", pathname, ",mids...)")
-			case http.MethodPost:
+			case "POST":
 				g.P("router.Post(", pathname, ",mids...)")
-			case http.MethodPut:
+			case "PUT":
 				g.P("router.Put(", pathname, ",mids...)")
-			case http.MethodPatch:
+			case "PATCH":
 				g.P("router.Patch(", pathname, ",mids...)")
 			}
 			g.P("}")
 		} else {
-			switch httpmetohd {
-			case http.MethodGet:
+			switch need {
+			case "GET":
 				g.P("router.Get(", pathname, ",", fname, ")")
-			case http.MethodDelete:
+			case "DELETE":
 				g.P("router.Delete(", pathname, ",", fname, ")")
-			case http.MethodPost:
+			case "POST":
 				g.P("router.Post(", pathname, ",", fname, ")")
-			case http.MethodPut:
+			case "PUT":
 				g.P("router.Put(", pathname, ",", fname, ")")
-			case http.MethodPatch:
+			case "PATCH":
 				g.P("router.Patch(", pathname, ",", fname, ")")
 			}
 		}
@@ -779,9 +832,17 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
-		httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
-		if httpmetohd != http.MethodGet && httpmetohd != http.MethodPost && httpmetohd != http.MethodPut && httpmetohd != http.MethodDelete && httpmetohd != http.MethodPatch {
-			panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", method.Desc.Name(), service.Desc.Name(), httpmetohd))
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := false
+		for _, em := range emethod {
+			em = strings.ToUpper(em)
+			if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
+				need = true
+				break
+			}
+		}
+		if !need {
+			continue
 		}
 		p1 := g.QualifiedGoIdent(contextPackage.Ident("Context"))
 		p2 := g.QualifiedGoIdent(method.Input.GoIdent)
@@ -809,9 +870,17 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
-		httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
-		if httpmetohd != http.MethodGet && httpmetohd != http.MethodPost && httpmetohd != http.MethodPut && httpmetohd != http.MethodDelete && httpmetohd != http.MethodPatch {
-			panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", method.Desc.Name(), service.Desc.Name(), httpmetohd))
+		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+		need := ""
+		for _, em := range emethod {
+			em = strings.ToUpper(em)
+			if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
+				need = em
+				break
+			}
+		}
+		if need == "" {
+			continue
 		}
 		pathname := "_WebPath" + service.GoName + method.GoName
 		p1 := "ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context"))
@@ -827,7 +896,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("header = make(", g.QualifiedGoIdent(httpPackage.Ident("Header")), ")")
 		g.P("}")
 
-		if httpmetohd == http.MethodGet || httpmetohd == http.MethodDelete {
+		if need == http.MethodGet || need == http.MethodDelete {
 			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-www-form-urlencoded"), ")")
 			g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("application/x-protobuf"), ")")
 			g.P("query :=", g.QualifiedGoIdent(poolPackage.Ident("GetPool")), "().Get(0)")
@@ -1142,8 +1211,6 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("query=append(query,'&')")
 						g.P("}")
 					}
-				case protoreflect.MessageKind:
-					panic(fmt.Sprintf("method: %s in service: %s with httpmethod: %s,it's request message can't contain nested message and map", method.Desc.Name(), service.Desc.Name(), httpmetohd))
 				}
 			}
 			g.P("if len(query)>0{")
@@ -1151,22 +1218,22 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("query=query[:len(query)-1]")
 			g.P("}")
 			g.P("querystr:=", g.QualifiedGoIdent(commonPackage.Ident("BTS")), "(query)")
-			switch httpmetohd {
-			case http.MethodGet:
+			switch need {
+			case "GET":
 				g.P("r,e:=c.cc.Get(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
-			case http.MethodDelete:
+			case "DELETE":
 				g.P("r,e:=c.cc.Delete(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			}
 		} else {
 			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")
 			g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("application/x-protobuf"), ")")
 			g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
-			switch httpmetohd {
-			case http.MethodPost:
+			switch need {
+			case "POST":
 				g.P("r,e:=c.cc.Post(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
-			case http.MethodPut:
+			case "PUT":
 				g.P("r,e:=c.cc.Put(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
-			case http.MethodPatch:
+			case "PATCH":
 				g.P("r,e:=c.cc.Patch(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
 			}
 		}

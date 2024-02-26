@@ -17,7 +17,9 @@ import "pbex/pbex.proto";
 //this is the proto file for {{.Sname}} service
 service {{.Sname}}{
 	//rpc example(examplereq)returns(exampleresp){
-	//	option (pbex.method)="get";//can be set to get,delete,post,put,patch
+	//	option (pbex.method)="get";
+	//	option (pbex.method)="crpc";
+	//	option (pbex.method)="grpc";//can be set to get,delete,post,put,patch,crpc,grpc
 	//	option (pbex.web_midwares)="b";
 	//	option (pbex.web_midwares)="c";
 	//	option (pbex.web_midwares)="a";//this function on web protocol has 3 midwares,it's order is b,c,a

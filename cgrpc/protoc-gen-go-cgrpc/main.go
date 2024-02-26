@@ -4,11 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/pbex"
 
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
 )
@@ -39,7 +41,22 @@ func main() {
 					continue
 				}
 				for _, m := range s.Methods {
-					if m.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
+					mop := m.Desc.Options().(*descriptorpb.MethodOptions)
+					if mop.GetDeprecated() {
+						continue
+					}
+					if !proto.HasExtension(mop, pbex.E_Method) {
+						continue
+					}
+					emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+					need := false
+					for _, em := range emethod {
+						if strings.ToUpper(em) == "GRPC" {
+							need = true
+							break
+						}
+					}
+					if !need {
 						continue
 					}
 					if m.Desc.IsStreamingClient() || m.Desc.IsStreamingServer() {

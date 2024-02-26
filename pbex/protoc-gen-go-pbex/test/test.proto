@@ -1,11 +1,20 @@
-//protoc -I ../../../pbex -I . --go_out=paths=source_relative:. *.proto
+//protoc -I ../../../pbex -I . --go-pbex_out=paths=source_relative:. *.proto
 syntax="proto3";
 package test;
-option go_package="github.com/chenjie199234/Corelib/web/protoc-gen-go-web/test;test";
+option go_package="github.com/chenjie199234/Corelib/pbex/test;test";
 import "pbex.proto";
 service test {
 	rpc hello(helloreq)returns(helloresp){
 		option (pbex.method)="get";
+		option (pbex.method)="crpc";
+		option (pbex.method)="grpc";
+		option (pbex.web_midwares)="user";
+		option (pbex.web_midwares)="limit";
+	}
+	rpc world(worldreq)returns(worldresp){
+		option (pbex.method)="post";
+		option (pbex.method)="crpc";
+		option (pbex.method)="grpc";
 		option (pbex.web_midwares)="user";
 		option (pbex.web_midwares)="limit";
 	}
@@ -14,166 +23,140 @@ enum TestEnum {
 	ENUMA=0;
 	ENUMB=1;
 }
-message test_data{
-	int32 i32=1[(pbex.int_in)=1];
-	repeated int32 ri32=2[(pbex.int_not_in)=1];
-	uint32 ui32=3[(pbex.uint_in)=1];
-	repeated uint32 rui32=4[(pbex.map_repeated_len_gt)=2,(pbex.uint_not_in)=1];
-	int64 i64=5;
-	repeated int64 ri64=6;
-	uint64 ui64=7;
-	repeated uint64 rui64=8;
-	bytes bs=9[(pbex.string_bytes_in)="1",(pbex.string_bytes_in)="2",(pbex.string_bytes_not_in)="a",(pbex.string_bytes_not_in)="b"];
-	repeated bytes rbs=10;
-	string ss=11[(pbex.string_bytes_in)="1",(pbex.string_bytes_in)="2",(pbex.string_bytes_not_in)="a",(pbex.string_bytes_not_in)="b"];
-	repeated string rss=12[(pbex.string_bytes_reg_not_match)="123*",(pbex.string_bytes_reg_not_match)="789*",(pbex.string_bytes_reg_match)="abc*",(pbex.string_bytes_reg_match)="xyz*"];
-	float f=13;
-	repeated float rf=14;
-	double d=15[(pbex.float_not_in)=1.0,(pbex.float_not_in)=2.0];
-	repeated double rd=16[(pbex.float_in)=1.0,(pbex.float_in)=2.0];
-	TestEnum e=17;
-	repeated TestEnum re=18;
-	test_data m=19;
-	repeated test_data rm=20;
-
-	map<int32,int32> mi32_i32=21;
-	map<int32,uint32> mi32_ui32=22;
-	map<int32,int64> mi32_i64=23;
-	map<int32,uint64> mi32_ui64=24;
-	map<int32,bytes> mi32_bs=25;
-	map<int32,string> mi32_ss=26;
-	map<int32,float> mi32_f=27;
-	map<int32,double> mi32_d=28;
-	map<int32,TestEnum> mi32_e=29;
-	map<int32,test_data> mi32_m=30;
-
-	map<uint32,int32> mui32_i32=31;
-	map<uint32,uint32> mui32_ui32=32;
-	map<uint32,int64> mui32_i64=33;
-	map<uint32,uint64> mui32_ui64=34;
-	map<uint32,bytes> mui32_bs=35;
-	map<uint32,string> mui32_ss=36[(pbex.map_value_string_bytes_reg_not_match)="789*"];
-	map<uint32,float> mui32_f=37;
-	map<uint32,double> mui32_d=38;
-	map<uint32,TestEnum> mui32_e=39;
-	map<uint32,test_data> mui32_m=40;
-
-	map<int64,int32> mi64_i32=41;
-	map<int64,uint32> mi64_ui32=42;
-	map<int64,int64> mi64_i64=43;
-	map<int64,uint64> mi64_ui64=44;
-	map<int64,bytes> mi64_bs=45;
-	map<int64,string> mi64_ss=46;
-	map<int64,float> mi64_f=47;
-	map<int64,double> mi64_d=48;
-	map<int64,TestEnum> mi64_e=49;
-	map<int64,test_data> mi64_m=50;
-
-	map<uint64,int32> mui64_i32=51;
-	map<uint64,uint32> mui64_ui32=52;
-	map<uint64,int64> mui64_i64=53;
-	map<uint64,uint64> mui64_ui64=54;
-	map<uint64,bytes> mui64_bs=55;
-	map<uint64,string> mui64_ss=56;
-	map<uint64,float> mui64_f=57;
-	map<uint64,double> mui64_d=58;
-	map<uint64,TestEnum> mui64_e=59;
-	map<uint64,test_data> mui64_m=60[(pbex.map_value_message_not_nil)=true];
-
-	map<string,int32> mss_i32=61[(pbex.map_key_string_reg_not_match)="notkey*"];
-	map<string,uint32> mss_ui32=62;
-	map<string,int64> mss_i64=63;
-	map<string,uint64> mss_ui64=64;
-	map<string,bytes> mss_bs=65;
-	map<string,string> mss_ss=66;
-	map<string,float> mss_f=67;
-	map<string,double> mss_d=68;
-	map<string,TestEnum> mss_e=69;
-	map<string,test_data> mss_m=70;
-}
 message helloreq{
-	int32 i32=1[(pbex.int_in)=1,(pbex.int_in)=2];
-	repeated int32 ri32=2[(pbex.int_not_in)=1,(pbex.int_not_in)=2];
-	uint32 ui32=3[(pbex.uint_in)=1];
-	repeated uint32 rui32=4[(pbex.map_repeated_len_gt)=2,(pbex.uint_not_in)=1];
-	int64 i64=5;
-	repeated int64 ri64=6;
-	uint64 ui64=7;
-	repeated uint64 rui64=8;
-	bytes bs=9;
-	repeated bytes rbs=10;
-	string ss=11;
-	repeated string rss=12[(pbex.string_bytes_reg_match)="abc*"];
-	float f=13;
-	repeated float rf=14;
-	double d=15;
-	repeated double rd=16;
-	TestEnum e=17;
-	repeated TestEnum re=18;
-	test_data m=19[(pbex.message_not_nil)=true];
-	repeated test_data rm=20[(pbex.message_not_nil)=true];
-
-	map<int32,int32> mi32_i32=21;
-	map<int32,uint32> mi32_ui32=22;
-	map<int32,int64> mi32_i64=23;
-	map<int32,uint64> mi32_ui64=24;
-	map<int32,bytes> mi32_bs=25;
-	map<int32,string> mi32_ss=26;
-	map<int32,float> mi32_f=27;
-	map<int32,double> mi32_d=28;
-	map<int32,TestEnum> mi32_e=29;
-	map<int32,test_data> mi32_m=30;
-
-	map<uint32,int32> mui32_i32=31;
-	map<uint32,uint32> mui32_ui32=32;
-	map<uint32,int64> mui32_i64=33;
-	map<uint32,uint64> mui32_ui64=34;
-	map<uint32,bytes> mui32_bs=35;
-	map<uint32,string> mui32_ss=36[(pbex.map_value_string_bytes_reg_match)="xyz*"];
-	map<uint32,float> mui32_f=37;
-	map<uint32,double> mui32_d=38;
-	map<uint32,TestEnum> mui32_e=39;
-	map<uint32,test_data> mui32_m=40;
-
-	map<int64,int32> mi64_i32=41;
-	map<int64,uint32> mi64_ui32=42;
-	map<int64,int64> mi64_i64=43;
-	map<int64,uint64> mi64_ui64=44;
-	map<int64,bytes> mi64_bs=45;
-	map<int64,string> mi64_ss=46;
-	map<int64,float> mi64_f=47;
-	map<int64,double> mi64_d=48;
-	map<int64,TestEnum> mi64_e=49;
-	map<int64,test_data> mi64_m=50;
-
-	map<uint64,int32> mui64_i32=51;
-	map<uint64,uint32> mui64_ui32=52;
-	map<uint64,int64> mui64_i64=53;
-	map<uint64,uint64> mui64_ui64=54;
-	map<uint64,bytes> mui64_bs=55;
-	map<uint64,string> mui64_ss=56;
-	map<uint64,float> mui64_f=57;
-	map<uint64,double> mui64_d=58;
-	map<uint64,TestEnum> mui64_e=59;
-	map<uint64,test_data> mui64_m=60;
-
-	map<string,int32> mss_i32=61[(pbex.map_key_string_reg_match)="key*"];
-	map<string,uint32> mss_ui32=62;
-	map<string,int64> mss_i64=63;
-	map<string,uint64> mss_ui64=64;
-	map<string,bytes> mss_bs=65;
-	map<string,string> mss_ss=66;
-	map<string,float> mss_f=67;
-	map<string,double> mss_d=68;
-	map<string,TestEnum> mss_e=69;
-	map<string,test_data> mss_m=70;
+	bool bl = 1;
+	optional bool blo = 2;
+	repeated bool bls = 3;
+	int32 i32=4[(pbex.int_in)=1];
+	optional int32 i32o=5;
+	repeated int32 ri32=6[(pbex.int_not_in)=1];
+	uint32 ui32=7[(pbex.uint_in)=1];
+	optional uint32 ui32o=8;
+	repeated uint32 rui32=9[(pbex.map_repeated_len_gt)=2,(pbex.uint_not_in)=1];
+	int64 i64=10;
+	optional int64 i64o=11;
+	repeated int64 ri64=12;
+	uint64 ui64=13;
+	optional uint64 ui64o=14;
+	repeated uint64 rui64=15;
+	bytes bs=16;
+	optional bytes bso=17;
+	repeated bytes rbs=18;
+	string ss=19;
+	optional string sso=20;
+	repeated string rss=21[(pbex.string_bytes_reg_match)="abc*"];
+	float f=22;
+	optional float fo=23;
+	repeated float rf=24;
+	double d=25;
+	optional double do=26;
+	repeated double rd=27;
+	TestEnum e=28;
+	optional TestEnum eo=29;
+	repeated TestEnum re=30;
+	oneof o{
+		bool obl=31;
+		int32 oi32=32;
+		uint32 oui32=33;
+		int64 oi64=34;
+		uint64 oui64=35;
+		bytes obs=36;
+		string oss=37;
+		float of=38;
+		double od=39;
+		TestEnum oe=40;
+	}
 }
 message helloresp{
 
 }
 message worldreq{
+	helloreq m=1;
+	optional helloreq mo=2;
+	repeated helloreq rm=3;
 
+	map<int32,int32> mi32_i32=4;
+	map<int32,uint32> mi32_ui32=5;
+	map<int32,int64> mi32_i64=6;
+	map<int32,uint64> mi32_ui64=7;
+	map<int32,bytes> mi32_bs=8;
+	map<int32,string> mi32_ss=9;
+	map<int32,float> mi32_f=10;
+	map<int32,double> mi32_d=11;
+	map<int32,TestEnum> mi32_e=12;
+	map<int32,helloreq> mi32_m=13;
+
+	map<uint32,int32> mui32_i32=14;
+	map<uint32,uint32> mui32_ui32=15;
+	map<uint32,int64> mui32_i64=16;
+	map<uint32,uint64> mui32_ui64=17;
+	map<uint32,bytes> mui32_bs=18;
+	map<uint32,string> mui32_ss=19[(pbex.map_value_string_bytes_reg_match)="xyz*"];
+	map<uint32,float> mui32_f=20;
+	map<uint32,double> mui32_d=21;
+	map<uint32,TestEnum> mui32_e=22;
+	map<uint32,helloreq> mui32_m=23;
+
+	map<int64,int32> mi64_i32=24;
+	map<int64,uint32> mi64_ui32=25;
+	map<int64,int64> mi64_i64=26;
+	map<int64,uint64> mi64_ui64=27;
+	map<int64,bytes> mi64_bs=28;
+	map<int64,string> mi64_ss=29;
+	map<int64,float> mi64_f=30;
+	map<int64,double> mi64_d=31;
+	map<int64,TestEnum> mi64_e=32;
+	map<int64,helloreq> mi64_m=33;
+
+	map<uint64,int32> mui64_i32=34;
+	map<uint64,uint32> mui64_ui32=35;
+	map<uint64,int64> mui64_i64=36;
+	map<uint64,uint64> mui64_ui64=37;
+	map<uint64,bytes> mui64_bs=38;
+	map<uint64,string> mui64_ss=39;
+	map<uint64,float> mui64_f=40;
+	map<uint64,double> mui64_d=41;
+	map<uint64,TestEnum> mui64_e=42;
+	map<uint64,helloreq> mui64_m=43;
+
+	map<string,int32> mss_i32=44[(pbex.map_key_string_reg_match)="key*"];
+	map<string,uint32> mss_ui32=45;
+	map<string,int64> mss_i64=46;
+	map<string,uint64> mss_ui64=47;
+	map<string,bytes> mss_bs=48;
+	map<string,string> mss_ss=49;
+	map<string,float> mss_f=50;
+	map<string,double> mss_d=51;
+	map<string,TestEnum> mss_e=52;
+	map<string,helloreq> mss_m=53;
+
+	oneof o{
+		bool obl=54;
+		int32 oi32=55;
+		uint32 oui32=56;
+		int64 oi64=57;
+		uint64 oui64=58;
+		bytes obs=59;
+		string oss=60;
+		float of=61;
+		double od=62;
+		TestEnum oe=63;
+	}
+
+	selfnest s=64;
 }
 message worldresp{
-
+	worldreq result1=1;
+	selfnest result2=2;
 }
+message selfnest{
+	selfnest self=1;
+	optional selfnest oself=2;
+	repeated selfnest rself=3;
+	map<int32,selfnest> mi32_self=4;
+	map<uint32,selfnest> mui32_self=5;
+	map<int64,selfnest> mi64_self=6;
+	map<uint64,selfnest> mui64_self=7;
+	map<string,selfnest> mss_self=8;
+}
+

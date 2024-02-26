@@ -1,4 +1,4 @@
-//protoc -I ../../../pbex -I . --go_out=paths=source_relative:. *.proto
+//protoc -I ../../../pbex -I . --browser_out=paths=source_relative:. *.proto
 syntax="proto3";
 package test;
 option go_package="github.com/chenjie199234/Corelib/web/protoc-gen-browser/test;test";
@@ -6,11 +6,15 @@ import "pbex.proto";
 service test {
 	rpc hello(helloreq)returns(helloresp){
 		option (pbex.method)="get";
+		option (pbex.method)="crpc";
+		option (pbex.method)="grpc";
 		option (pbex.web_midwares)="user";
 		option (pbex.web_midwares)="limit";
 	}
 	rpc world(worldreq)returns(worldresp){
 		option (pbex.method)="post";
+		option (pbex.method)="crpc";
+		option (pbex.method)="grpc";
 		option (pbex.web_midwares)="user";
 		option (pbex.web_midwares)="limit";
 	}
@@ -125,7 +129,33 @@ message worldreq{
 	map<string,double> mss_d=51;
 	map<string,TestEnum> mss_e=52;
 	map<string,helloreq> mss_m=53;
+
+	oneof o{
+		bool obl=54;
+		int32 oi32=55;
+		uint32 oui32=56;
+		int64 oi64=57;
+		uint64 oui64=58;
+		bytes obs=59;
+		string oss=60;
+		float of=61;
+		double od=62;
+		TestEnum oe=63;
+	}
+
+	selfnest s=64;
 }
 message worldresp{
-	worldreq result=1;
+	worldreq result1=1;
+	selfnest result2=2;
+}
+message selfnest{
+	selfnest self=1;
+	optional selfnest oself=2;
+	repeated selfnest rself=3;
+	map<int32,selfnest> mi32_self=4;
+	map<uint32,selfnest> mui32_self=5;
+	map<int64,selfnest> mi64_self=6;
+	map<uint64,selfnest> mui64_self=7;
+	map<string,selfnest> mss_self=8;
 }

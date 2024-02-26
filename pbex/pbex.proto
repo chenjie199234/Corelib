@@ -3,7 +3,7 @@ package pbex;
 option go_package="github.com/chenjie199234/Corelib/pbex;pbex";
 import "google/protobuf/descriptor.proto";
 extend google.protobuf.MethodOptions {
-	string method=150001;// this is only useful for webserver
+	repeated string method=150001;
 	repeated string web_midwares=150002;
 	repeated string crpc_midwares=150003;
 	repeated string cgrpc_midwares=150004;

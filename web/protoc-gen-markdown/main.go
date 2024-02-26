@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 
@@ -44,8 +43,22 @@ func main() {
 				}
 				for _, m := range s.Methods {
 					mop := m.Desc.Options().(*descriptorpb.MethodOptions)
-					if mop.GetDeprecated() {
+					if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 						continue
+					}
+					emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+					need := 0
+					for _, em := range emethod {
+						em = strings.ToUpper(em)
+						if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
+							need++
+						}
+					}
+					if need == 0 {
+						continue
+					}
+					if need > 1 {
+						panic(fmt.Sprintf("method: %s in service: %s,only one http method can be setted", m.Desc.Name(), s.Desc.Name()))
 					}
 					if m.Desc.IsStreamingClient() || m.Desc.IsStreamingServer() {
 						panic("stream is not supported")
@@ -56,26 +69,22 @@ func main() {
 					if pbex.OneOfHasPBEX(m.Output) {
 						panic("oneof fields should not contain pbex")
 					}
-					if !proto.HasExtension(mop, pbex.E_Method) {
-						continue
+					simple := false
+					for _, em := range emethod {
+						em = strings.ToUpper(em)
+						if em == "GET" || em == "DELETE" {
+							simple = true
+							break
+						}
 					}
-					httpmetohd := strings.ToUpper(proto.GetExtension(mop, pbex.E_Method).(string))
-					if httpmetohd != http.MethodGet &&
-						httpmetohd != http.MethodPost &&
-						httpmetohd != http.MethodPut &&
-						httpmetohd != http.MethodDelete &&
-						httpmetohd != http.MethodPatch {
-						panic(fmt.Sprintf("method: %s in service: %s with not supported httpmetohd: %s", m.Desc.Name(), s.Desc.Name(), httpmetohd))
-					}
-					//Get and Delete method can only contain simple fields
-					if httpmetohd != http.MethodGet && httpmetohd != http.MethodDelete {
+					if !simple {
 						continue
 					}
 					for _, f := range m.Input.Fields {
 						if f.Desc.Kind() != protoreflect.MessageKind {
 							continue
 						}
-						panic(fmt.Sprintf("method: %s in service: %s with httpmethod: %s,it's request message can't contain nested message and map", m.Desc.Name(), s.Desc.Name(), httpmetohd))
+						panic(fmt.Sprintf("method: %s in service: %s with http method: get/delete,it's request message can't contain nested message and map", m.Desc.Name(), s.Desc.Name()))
 					}
 				}
 			}
