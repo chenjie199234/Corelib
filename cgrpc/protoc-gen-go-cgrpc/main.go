@@ -42,10 +42,7 @@ func main() {
 				}
 				for _, m := range s.Methods {
 					mop := m.Desc.Options().(*descriptorpb.MethodOptions)
-					if mop.GetDeprecated() {
-						continue
-					}
-					if !proto.HasExtension(mop, pbex.E_Method) {
+					if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 						continue
 					}
 					emethod := proto.GetExtension(mop, pbex.E_Method).([]string)

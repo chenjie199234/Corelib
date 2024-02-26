@@ -36,10 +36,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 		count := 0
 		for _, method := range service.Methods {
 			mop := method.Desc.Options().(*descriptorpb.MethodOptions)
-			if mop.GetDeprecated() {
-				continue
-			}
-			if !proto.HasExtension(mop, pbex.E_Method) {
+			if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 				continue
 			}
 			emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
@@ -87,10 +84,7 @@ func genService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedF
 func genPath(file *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
 	for _, method := range service.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
-		if mop.GetDeprecated() {
-			continue
-		}
-		if !proto.HasExtension(mop, pbex.E_Method) {
+		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
@@ -117,10 +111,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	g.P("type ", serverName, " interface {")
 	for _, method := range service.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
-		if mop.GetDeprecated() {
-			continue
-		}
-		if !proto.HasExtension(mop, pbex.E_Method) {
+		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
@@ -143,10 +134,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	// Server handler
 	for _, method := range service.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
-		if mop.GetDeprecated() {
-			continue
-		}
-		if !proto.HasExtension(mop, pbex.E_Method) {
+		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
@@ -200,10 +188,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	g.P("_=allmids")
 	for _, method := range service.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
-		if mop.GetDeprecated() {
-			continue
-		}
-		if !proto.HasExtension(mop, pbex.E_Method) {
+		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
@@ -256,10 +241,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	g.P("type ", clientName, " interface {")
 	for _, method := range service.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
-		if mop.GetDeprecated() {
-			continue
-		}
-		if !proto.HasExtension(mop, pbex.E_Method) {
+		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
@@ -289,10 +271,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	// Client handler
 	for _, method := range service.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
-		if mop.GetDeprecated() {
-			continue
-		}
-		if !proto.HasExtension(mop, pbex.E_Method) {
+		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
