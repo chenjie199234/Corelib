@@ -19,7 +19,7 @@ service {{.Sname}}{
 	//rpc example(examplereq)returns(exampleresp){
 	//	option (pbex.method)="get";
 	//	option (pbex.method)="crpc";
-	//	option (pbex.method)="grpc";//can be set to get,delete,post,put,patch,crpc,grpc
+	//	option (pbex.method)="grpc";//can be set to one of (get,delete,post,put,patch) or crpc or grpc
 	//	option (pbex.web_midwares)="b";
 	//	option (pbex.web_midwares)="c";
 	//	option (pbex.web_midwares)="a";//this function on web protocol has 3 midwares,it's order is b,c,a

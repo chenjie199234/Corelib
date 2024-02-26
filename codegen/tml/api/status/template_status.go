@@ -19,6 +19,8 @@ service status{
 	//ping check server's health
 	rpc ping(pingreq)returns(pingresp){
 		option (pbex.method)="get";
+		option (pbex.method)="crpc";
+		option (pbex.method)="grpc";
 	}
 }
 //req can be set with pbex extentions
