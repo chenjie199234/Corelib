@@ -1,12 +1,13 @@
 package stack
 
 import (
+	"errors"
 	"runtime"
 	"sync/atomic"
 	"unsafe"
 )
 
-//thread safe
+// thread safe
 type Stack[T any] struct {
 	top *node[T]
 }
@@ -31,19 +32,25 @@ func (s *Stack[T]) Push(data T) {
 	}
 }
 
-//check func is used to check whether the next element can be popped,set nil if don't need it
-//return false - when the buf is empty,or the check failed
-func (s *Stack[T]) Pop(check func(d T) bool) (data T, ok bool) {
+var ErrPopEmpty = errors.New("pop empty stack")
+var ErrPopCheckFailed = errors.New("pop stack check failed")
+
+// check func is used to check whether the next element can be popped,set nil if don't need it
+// if e == ErrPopCheckFailed the data will return but it will not be poped from the stack
+func (s *Stack[T]) Pop(check func(d T) bool) (data T, e error) {
 	for {
 		oldtop := s.top
 		if oldtop.pre == nil {
+			e = ErrPopEmpty
 			return
 		}
 		if check != nil && !check(oldtop.value) {
+			data = oldtop.value
+			e = ErrPopCheckFailed
 			return
 		}
 		if atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&s.top)), unsafe.Pointer(oldtop), unsafe.Pointer(oldtop.pre)) {
-			return oldtop.value, true
+			return oldtop.value, nil
 		}
 		runtime.Gosched()
 	}

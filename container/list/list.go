@@ -1,12 +1,13 @@
 package list
 
 import (
+	"errors"
 	"runtime"
 	"sync/atomic"
 	"unsafe"
 )
 
-//thread safe
+// thread safe
 type List[T any] struct {
 	head *node[T]
 	tail *node[T]
@@ -43,19 +44,25 @@ func (l *List[T]) Push(data T) {
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&l.tail)), unsafe.Pointer(n))
 }
 
-//check func is used to check whether the next element can be popped,set nil if don't need it
-//return false - when the buf is empty,or the check failed
-func (l *List[T]) Pop(check func(d T) bool) (data T, ok bool) {
+var ErrPopEmpty = errors.New("pop empty list")
+var ErrPopCheckFailed = errors.New("pop list check failed")
+
+// check func is used to check whether the next element can be popped,set nil if don't need it
+// if e == ErrPopCheckFailed the data will return but it will not be poped from the list
+func (l *List[T]) Pop(check func(d T) bool) (data T, e error) {
 	for {
 		oldhead := l.head
 		if oldhead.next == nil {
+			e = ErrPopEmpty
 			return
 		}
 		if check != nil && !check(oldhead.next.value) {
+			data = oldhead.next.value
+			e = ErrPopCheckFailed
 			return
 		}
 		if atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&l.head)), unsafe.Pointer(oldhead), unsafe.Pointer(oldhead.next)) {
-			return oldhead.next.value, true
+			return oldhead.next.value, nil
 		}
 		runtime.Gosched()
 	}

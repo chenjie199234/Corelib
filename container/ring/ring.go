@@ -1,6 +1,7 @@
 package ring
 
 import (
+	"errors"
 	"runtime"
 	"sync/atomic"
 )
@@ -37,16 +38,22 @@ func (b *Ring[T]) Push(d T) bool {
 	}
 }
 
+var ErrPopEmpty = errors.New("pop empty ring")
+var ErrPopCheckFailed = errors.New("pop ring check failed")
+
 // check func is used to check whether the next element can be popped,set nil if don't need it
-// return false - when the buf is empty,or the check failed
-func (b *Ring[T]) Pop(check func(d T) bool) (data T, ok bool) {
+// if e == ErrPopCheckFailed the data will return but it will not be poped from the ring
+func (b *Ring[T]) Pop(check func(d T) bool) (data T, e error) {
 	for {
 		oldPopTry := atomic.LoadUint64(&b.popTry)
 		if oldPopTry == atomic.LoadUint64(&b.pushConfirm) {
+			e = ErrPopEmpty
 			return
 		}
 		d := b.data[oldPopTry%atomic.LoadUint64(&b.length)]
 		if check != nil && !check(d) {
+			data = d
+			e = ErrPopCheckFailed
 			return
 		}
 		if !atomic.CompareAndSwapUint64(&b.popTry, oldPopTry, oldPopTry+1) {
@@ -55,6 +62,6 @@ func (b *Ring[T]) Pop(check func(d T) bool) (data T, ok bool) {
 		for !atomic.CompareAndSwapUint64(&b.popConfirm, oldPopTry, oldPopTry+1) {
 			runtime.Gosched()
 		}
-		return d, true
+		return d, nil
 	}
 }
