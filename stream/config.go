@@ -14,7 +14,7 @@ import (
 // server's response will write back to the client for client to verify the server
 // client's response is useless and it will be dropped,you can just return nil
 // Warning!!!Don't reuse the data in 'peerVerifyData',it will change when this function return,if you want to use it,copy it first
-type HandleVerifyFunc func(ctx context.Context, peerVerifyData []byte) (response []byte, success bool)
+type HandleVerifyFunc func(ctx context.Context, peerVerifyData []byte, p *Peer) (response []byte, success bool)
 
 // This is a notice func after verify each other success
 // success = true means online success

@@ -146,7 +146,7 @@ func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 	}
 }
 
-func (c *CrpcClient) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]byte, bool) {
+func (c *CrpcClient) verifyfunc(ctx context.Context, peerVerifyData []byte, p *stream.Peer) ([]byte, bool) {
 	//verify success
 	return nil, true
 }

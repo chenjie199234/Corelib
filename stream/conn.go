@@ -52,7 +52,7 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 		p := newPeer(this.c.TcpC.MaxMsgLen, _PEER_CLIENT, "")
 		conn, e := tmplistener.AcceptTCP()
 		if e != nil {
-			if ee, ok := e.(net.Error); ok && ee.Temporary() {
+			if ee, ok := e.(interface{ Temporary() bool }); ok && ee.Temporary() {
 				log.Error(nil, "[Stream.StartServer] accept tcp connection failed", log.CError(e))
 				continue
 			}
@@ -365,7 +365,7 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 			p.recvidlestart = p.lastactive
 			p.sendidlestart = p.lastactive
 			p.peerMaxMsgLen = senderMaxRecvMsgLen
-			r, success := this.c.VerifyFunc(ctx, data[4:])
+			r, success := this.c.VerifyFunc(ctx, data[4:], p)
 			if !success {
 				if p.peertype == _PEER_CLIENT {
 					log.Error(nil, "[Stream.verifypeer] verify client failed", log.String("cip", p.c.RemoteAddr().String()))
