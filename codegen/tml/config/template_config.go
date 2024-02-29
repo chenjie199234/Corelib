@@ -214,7 +214,7 @@ func initremoteapp(notice func(*AppConfig), wait chan *struct{}) (stopwatch func
 			return
 		}
 		c := &AppConfig{}
-		if e := json.Unmarshal(common.Str2byte(keyvalue), c); e != nil {
+		if e := json.Unmarshal(common.STB(keyvalue), c); e != nil {
 			log.Error(nil, "[config.remote.app] config data format wrong", log.CError(e))
 			return
 		}
@@ -355,7 +355,7 @@ func initremotesource(wait chan *struct{}) (stopwatch func()) {
 			return
 		}
 		c := &sourceConfig{}
-		if e := json.Unmarshal(common.Str2byte(keyvalue), c); e != nil {
+		if e := json.Unmarshal(common.STB(keyvalue), c); e != nil {
 			log.Error(nil, "[config.remote.source] config data format wrong", log.CError(e))
 			return
 		}
