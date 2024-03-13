@@ -349,15 +349,15 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 }
 
 // return false will close the connection
-func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte, p *stream.Peer) ([]byte, bool) {
+func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]byte, string, bool) {
 	if s.stop.Closing() {
 		//self closing
-		return nil, false
+		return nil, "", false
 	}
 	if common.BTS(peerVerifyData) != s.self {
-		return nil, false
+		return nil, "", false
 	}
-	return nil, true
+	return nil, "", true
 }
 
 // return false will close the connection

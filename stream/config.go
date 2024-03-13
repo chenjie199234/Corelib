@@ -13,8 +13,9 @@ import (
 // Before two peers can communicate,they need to verify each other first
 // server's response will write back to the client for client to verify the server
 // client's response is useless and it will be dropped,you can just return nil
+// if uniquekey is empty,the peer's addr(ip:port) will be used as the uniquekey
 // Warning!!!Don't reuse the data in 'peerVerifyData',it will change when this function return,if you want to use it,copy it first
-type HandleVerifyFunc func(ctx context.Context, peerVerifyData []byte, p *Peer) (response []byte, success bool)
+type HandleVerifyFunc func(ctx context.Context, peerVerifyData []byte) (response []byte, uniquekey string, success bool)
 
 // This is a notice func after verify each other success
 // success = true means online success
@@ -95,9 +96,8 @@ type InstanceConfig struct {
 
 	//split connections into groups
 	//every group will have an independence RWMutex to control online and offline
-	//every group will have an independence goruntine to check nodes' heart timeout in this group
-	//min 1,default 1
-	GroupNum uint32
+	//default 100
+	GroupNum uint16
 
 	//specify the tcp socket connection's config
 	TcpC       *TcpConfig
@@ -132,7 +132,7 @@ func (c *InstanceConfig) validate() {
 		c.SendIdleTimeout = c.HeartprobeInterval * 3
 	}
 	if c.GroupNum == 0 {
-		c.GroupNum = 1
+		c.GroupNum = 100
 	}
 	if c.TcpC == nil {
 		c.TcpC = defaultTcpConfig

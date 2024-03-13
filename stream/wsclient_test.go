@@ -18,7 +18,6 @@ func Test_Wsclient(t *testing.T) {
 		for count := 0; count < 10000; count++ {
 			tcpclientinstance, _ := NewInstance(&InstanceConfig{
 				HeartprobeInterval: time.Second,
-				GroupNum:           1,
 				TcpC:               &TcpConfig{
 					//MaxMsgLen: 65535,
 				},
@@ -34,12 +33,12 @@ func Test_Wsclient(t *testing.T) {
 	}()
 	http.ListenAndServe(":8082", nil)
 }
-func wsclienthandleVerify(ctx context.Context, peerVerifyData []byte, p *Peer) ([]byte, bool) {
+func wsclienthandleVerify(ctx context.Context, peerVerifyData []byte) ([]byte, string, bool) {
 	if !bytes.Equal([]byte{'t', 'e', 's', 't'}, peerVerifyData) {
 		fmt.Println("verify error")
-		return nil, false
+		return nil, "", false
 	}
-	return nil, true
+	return nil, "", true
 }
 
 var firstwsclient int64

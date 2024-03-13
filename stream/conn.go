@@ -365,7 +365,7 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 			p.recvidlestart = p.lastactive
 			p.sendidlestart = p.lastactive
 			p.peerMaxMsgLen = senderMaxRecvMsgLen
-			r, success := this.c.VerifyFunc(ctx, data[4:], p)
+			r, u, success := this.c.VerifyFunc(ctx, data[4:])
 			if !success {
 				if p.peertype == _PEER_CLIENT {
 					log.Error(nil, "[Stream.verifypeer] verify client failed", log.String("cip", p.c.RemoteAddr().String()))
@@ -374,6 +374,7 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 				}
 			} else {
 				response = r
+				p.uniqueid = u
 			}
 			return false
 		case opcode.IsPing():

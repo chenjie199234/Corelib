@@ -28,6 +28,7 @@ const (
 )
 
 type Peer struct {
+	uniqueid       string //if this is empty,the uniqueid will be setted with the peer's RemoteAddr(ip:port)
 	selfMaxMsgLen  uint32
 	peerMaxMsgLen  uint32
 	peergroup      *group
@@ -90,9 +91,9 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	if recvidle > 0 && now-atomic.LoadInt64(&p.recvidlestart) > int64(recvidle) {
 		//recv idle timeout
 		if p.peertype == _PEER_CLIENT {
-			log.Error(nil, "[Stream.checkheart] recv idle timeout:", log.String("cip", p.c.RemoteAddr().String()))
+			log.Error(nil, "[Stream.checkheart] recv idle timeout", log.String("cip", p.c.RemoteAddr().String()))
 		} else {
-			log.Error(nil, "[Stream.checkheart] recv idle timeout:", log.String("sip", p.c.RemoteAddr().String()))
+			log.Error(nil, "[Stream.checkheart] recv idle timeout", log.String("sip", p.c.RemoteAddr().String()))
 		}
 		p.c.Close()
 		return

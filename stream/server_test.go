@@ -18,7 +18,6 @@ func Test_Server(t *testing.T) {
 	serverinstance, _ = NewInstance(&InstanceConfig{
 		HeartprobeInterval: time.Second,
 		RecvIdleTimeout:    30 * time.Second, //30s
-		GroupNum:           10,
 		TcpC:               &TcpConfig{
 			//MaxMsgLen: 6553500,
 		},
@@ -41,12 +40,12 @@ func Test_Server(t *testing.T) {
 	}()
 	http.ListenAndServe(":8080", nil)
 }
-func serverhandleVerify(ctx context.Context, peerVerifyData []byte, p *Peer) ([]byte, bool) {
+func serverhandleVerify(ctx context.Context, peerVerifyData []byte) ([]byte, string, bool) {
 	if !bytes.Equal([]byte{'t', 'e', 's', 't', 'c'}, peerVerifyData) {
 		fmt.Println("verify error")
-		return nil, false
+		return nil, "", false
 	}
-	return []byte{'t', 'e', 's', 't'}, true
+	return []byte{'t', 'e', 's', 't'}, "", true
 }
 func serverhandleonline(p *Peer) bool {
 	return true

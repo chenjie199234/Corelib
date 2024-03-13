@@ -33,7 +33,7 @@ func NewInstance(c *InstanceConfig) (*Instance, error) {
 	stream := &Instance{
 		c:         c,
 		listeners: make([]*net.TCPListener, 0),
-		mng:       newconnmng(int(c.GroupNum), c.HeartprobeInterval, c.SendIdleTimeout, c.RecvIdleTimeout),
+		mng:       newconnmng(c.GroupNum, c.HeartprobeInterval, c.SendIdleTimeout, c.RecvIdleTimeout),
 	}
 	return stream, nil
 }
@@ -66,4 +66,7 @@ func (this *Instance) GetPeerNum() int32 {
 }
 func (this *Instance) RangePeers(handler func(p *Peer)) {
 	this.mng.RangePeers(handler)
+}
+func (this *Instance) GetPeer(uniqueid string) *Peer {
+	return this.mng.GetPeer(uniqueid)
 }
