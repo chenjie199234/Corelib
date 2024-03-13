@@ -13,9 +13,9 @@ import (
 // Before two peers can communicate,they need to verify each other first
 // server's response will write back to the client for client to verify the server
 // client's response is useless and it will be dropped,you can just return nil
-// if uniquekey is empty,the peer's RemoteAddr(ip:port) will be used as the uniquekey
+// if uniqueid is empty,the peer's RemoteAddr(ip:port) will be used as the uniqueid
 // Warning!!!Don't reuse the data in 'peerVerifyData',it will change when this function return,if you want to use it,copy it first
-type HandleVerifyFunc func(ctx context.Context, peerVerifyData []byte) (response []byte, uniquekey string, success bool)
+type HandleVerifyFunc func(ctx context.Context, peerVerifyData []byte) (response []byte, uniqueid string, success bool)
 
 // This is a notice func after verify each other success
 // success = true means online success
