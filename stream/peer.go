@@ -199,6 +199,17 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 	}
 	return nil
 }
+func (p *Peer) SendPing() error {
+	buf := pool.GetPool().Get(8)
+	defer pool.GetPool().Put(&buf)
+	now := time.Now()
+	binary.BigEndian.PutUint64(buf, uint64(now.UnixNano()))
+	if e := ws.WritePing(p.c, buf, false); e != nil {
+		return e
+	}
+	p.sendidlestart = now.UnixNano()
+	return nil
+}
 
 func (p *Peer) Close(block bool) {
 	atomic.StoreInt32(&p.status, 0)
