@@ -142,7 +142,7 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 		if e := ws.WriteMsg(p.c, buf, true, true, false); e != nil {
 			log.Error(nil, "[Stream.sworker] write verify data to client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 			this.mng.DelPeer(p)
-			p.Close()
+			p.Close(false)
 			p.cr.Reset(nil)
 			pool.GetPool().PutBufReader(p.cr)
 			return
@@ -150,7 +150,7 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 	} else if e := ws.WriteMsg(p.c, buf, false, true, false); e != nil {
 		log.Error(nil, "[Stream.sworker] write verify data to client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 		this.mng.DelPeer(p)
-		p.Close()
+		p.Close(false)
 		p.cr.Reset(nil)
 		pool.GetPool().PutBufReader(p.cr)
 		return

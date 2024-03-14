@@ -29,6 +29,7 @@ const (
 
 type Peer struct {
 	uniqueid       string //if this is empty,the uniqueid will be setted with the peer's RemoteAddr(ip:port)
+	blocknotice    chan *struct{}
 	selfMaxMsgLen  uint32
 	peerMaxMsgLen  uint32
 	peergroup      *group
@@ -52,6 +53,7 @@ type Peer struct {
 func newPeer(selfMaxMsgLen uint32, peertype int, rawconnectaddr string) *Peer {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &Peer{
+		blocknotice:    make(chan *struct{}),
 		rawconnectaddr: rawconnectaddr,
 		peertype:       peertype,
 		selfMaxMsgLen:  selfMaxMsgLen,
@@ -198,9 +200,12 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 	return nil
 }
 
-func (p *Peer) Close() {
+func (p *Peer) Close(block bool) {
 	atomic.StoreInt32(&p.status, 0)
 	p.c.Close()
+	if block {
+		<-p.blocknotice
+	}
 }
 
 func (p *Peer) GetLocalPort() string {

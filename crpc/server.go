@@ -126,7 +126,7 @@ func (s *CrpcServer) StopCrpcServer(force bool) {
 	}
 }
 func (s *CrpcServer) tellAllPeerSelfClosed() {
-	s.instance.RangePeers(func(p *stream.Peer) {
+	s.instance.RangePeers(true, func(p *stream.Peer) {
 		if tmpdata := p.GetData(); tmpdata != nil {
 			c := (*client)(tmpdata)
 			c.Lock()
@@ -199,7 +199,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 					log.String("cip", peerip),
 					log.String("path", path),
 					log.String("trace_id", msg.Tracedata["TraceID"]))
-				p.Close()
+				p.Close(false)
 				return
 			}
 			psid, e := trace.SpanIDFromHex(msg.Tracedata["SpanID"])
@@ -208,7 +208,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 					log.String("cip", peerip),
 					log.String("path", path),
 					log.String("p_span_id", msg.Tracedata["SpanID"]))
-				p.Close()
+				p.Close(false)
 				return
 			}
 			parent := trace.NewSpanData(tid, psid)
@@ -382,7 +382,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		log.Error(nil, "[crpc.server] userdata format wrong", log.String("cip", p.GetRealPeerIP()))
-		p.Close()
+		p.Close(false)
 		return
 	}
 	c := (*client)(p.GetData())

@@ -115,6 +115,7 @@ func (m *connmng) DelPeer(p *Peer) {
 	delete(p.peergroup.peers, uniqueid)
 	p.peergroup.Unlock()
 	p.peergroup = nil
+	close(p.blocknotice)
 	atomic.AddInt32(&m.peernum, -1)
 	select {
 	case m.delpeerch <- nil:
@@ -161,7 +162,7 @@ func (m *connmng) Stop() {
 	for _, g := range m.groups {
 		g.Lock()
 		for _, p := range g.peers {
-			p.Close()
+			p.Close(false)
 		}
 		g.Unlock()
 	}
@@ -185,18 +186,28 @@ func (m *connmng) Finishing() bool {
 func (m *connmng) Finished() bool {
 	return atomic.LoadInt32(&m.peernum) == -math.MaxInt32
 }
-func (m *connmng) RangePeers(handler func(p *Peer)) {
-	wg := sync.WaitGroup{}
-	for _, g := range m.groups {
-		g.RLock()
-		wg.Add(len(g.peers))
-		for _, p := range g.peers {
-			go func(p *Peer) {
-				handler(p)
-				wg.Done()
-			}(p)
+func (m *connmng) RangePeers(block bool, handler func(p *Peer)) {
+	if block {
+		wg := sync.WaitGroup{}
+		for _, g := range m.groups {
+			g.RLock()
+			wg.Add(len(g.peers))
+			for _, p := range g.peers {
+				go func(p *Peer) {
+					handler(p)
+					wg.Done()
+				}(p)
+			}
+			g.RUnlock()
 		}
-		g.RUnlock()
+		wg.Wait()
+	} else {
+		for _, g := range m.groups {
+			g.RLock()
+			for _, p := range g.peers {
+				go handler(p)
+			}
+			g.RUnlock()
+		}
 	}
-	wg.Wait()
 }

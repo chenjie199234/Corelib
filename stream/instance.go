@@ -64,9 +64,14 @@ func (this *Instance) Stop() {
 func (this *Instance) GetPeerNum() int32 {
 	return this.mng.GetPeerNum()
 }
-func (this *Instance) RangePeers(handler func(p *Peer)) {
-	this.mng.RangePeers(handler)
+func (this *Instance) RangePeers(block bool, handler func(p *Peer)) {
+	this.mng.RangePeers(block, handler)
 }
 func (this *Instance) GetPeer(uniqueid string) *Peer {
 	return this.mng.GetPeer(uniqueid)
+}
+func (this *Instance) KickPeer(block bool, uniqueid string) {
+	if p := this.mng.GetPeer(uniqueid); p != nil {
+		p.Close(block)
+	}
 }
