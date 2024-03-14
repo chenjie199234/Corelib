@@ -207,6 +207,8 @@ func (p *Peer) Close(block bool) {
 		<-p.blocknotice
 	}
 }
+
+// if uniqueid return in verify callback function is empty,the peer's RemoteAddr(ip:port) will be returned
 func (p *Peer) GetUniqueID() string {
 	if p.uniqueid == "" {
 		return p.GetRemoteAddr()
