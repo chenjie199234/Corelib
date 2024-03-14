@@ -126,8 +126,8 @@ func (m *connmng) GetPeer(uniqueid string) *Peer {
 		return nil
 	}
 	g := m.groups[common.Bkdrhash(common.STB(uniqueid), uint64(len(m.groups)))]
-	g.Lock()
-	defer g.Unlock()
+	g.RLock()
+	defer g.RUnlock()
 	return g.peers[uniqueid]
 }
 
