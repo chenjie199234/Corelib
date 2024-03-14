@@ -81,10 +81,7 @@ var errDup = errors.New("duplicate connection")
 var errClosing = errors.New("instance closing")
 
 func (m *connmng) AddPeer(p *Peer) error {
-	uniqueid := p.uniqueid
-	if uniqueid == "" {
-		uniqueid = p.GetRemoteAddr()
-	}
+	uniqueid := p.GetUniqueID()
 	g := m.groups[common.Bkdrhash(common.STB(uniqueid), uint64(len(m.groups)))]
 	g.Lock()
 	if _, ok := g.peers[uniqueid]; ok {
@@ -107,10 +104,7 @@ func (m *connmng) AddPeer(p *Peer) error {
 	return nil
 }
 func (m *connmng) DelPeer(p *Peer) {
-	uniqueid := p.uniqueid
-	if uniqueid == "" {
-		uniqueid = p.GetRemoteAddr()
-	}
+	uniqueid := p.GetUniqueID()
 	p.peergroup.Lock()
 	delete(p.peergroup.peers, uniqueid)
 	p.peergroup.Unlock()

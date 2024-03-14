@@ -207,6 +207,12 @@ func (p *Peer) Close(block bool) {
 		<-p.blocknotice
 	}
 }
+func (p *Peer) GetUniqueID() string {
+	if p.uniqueid == "" {
+		return p.GetRemoteAddr()
+	}
+	return p.uniqueid
+}
 
 func (p *Peer) GetLocalPort() string {
 	laddr := p.c.LocalAddr().String()
