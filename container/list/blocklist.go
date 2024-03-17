@@ -24,7 +24,7 @@ func (bl *BlockList[T]) Push(data T) uint64 {
 	newcount := atomic.AddUint64(&bl.count, 1)
 	if newcount == 1 {
 		select {
-		case <-bl.block:
+		case bl.block <- nil:
 		default:
 		}
 	}
