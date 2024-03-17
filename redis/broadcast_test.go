@@ -37,7 +37,7 @@ func Test_Broadcast(t *testing.T) {
 		suber2[strconv.Itoa(i)] = i
 		suber3[strconv.Itoa(i)] = i
 	}
-	if _, e := client.SubBroadcast("testbroadcast", 2, func(values map[string]interface{}) {
+	if _ = client.SubBroadcast("testbroadcast", 2, func(values map[string]interface{}, last bool) {
 		//suber 1
 		lker1.Lock()
 		defer func() {
@@ -61,7 +61,7 @@ func Test_Broadcast(t *testing.T) {
 		t.Fatal("sub 1 failed:", e)
 		return
 	}
-	if _, e := client.SubBroadcast("testbroadcast", 2, func(values map[string]interface{}) {
+	if _ = client.SubBroadcast("testbroadcast", 2, func(values map[string]interface{}, last bool) {
 		//suber 2
 		lker2.Lock()
 		defer func() {
@@ -85,7 +85,7 @@ func Test_Broadcast(t *testing.T) {
 		t.Fatal("sub 2 failed:", e)
 		return
 	}
-	if _, e := client.SubBroadcast("testbroadcast", 2, func(values map[string]interface{}) {
+	if _ = client.SubBroadcast("testbroadcast", 2, func(values map[string]interface{}, last bool) {
 		//suber 3
 		lker3.Lock()
 		defer func() {

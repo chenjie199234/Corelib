@@ -15,86 +15,65 @@ import (
 var pubunicast *gredis.Script
 
 func init() {
-	pubunicast = gredis.NewScript(`if(redis.call("EXISTS",KEYS[2])==0)
-then
-	return nil
-end
+	pubunicast = gredis.NewScript(`redis.call("RPUSH",KEYS[1],unpack(ARGV))
 redis.call("EXPIRE",KEYS[1],16)
-redis.call("RPUSH",KEYS[1],unpack(ARGV))
 return #ARGV`)
 }
 
-// due to go-redis doesn't support to wake up the block cmd actively now,so the stop func can't stop the sub now,but it try to prevent the new pub
+// SubUnicast will sub max 128 datas in one cycle
+// last: wether this is the last data in this cycle
+type UnicastHandler func(data []byte, last bool)
+
+// due to go-redis doesn't support to wake up the block cmd actively now
+// so the stop func can't stop the sub when there is not data in the list(cmd is blocked)
 // shard: is used to split data into different redis lists
-func (c *Client) SubUnicast(unicast string, shard uint8, handler func([]byte)) (stop func(), e error) {
+func (c *Client) SubUnicast(unicast string, shard uint8, handler UnicastHandler) (stop func()) {
 	if unicast == "" || shard == 0 {
 		panic("[redis.unicast.sub] unicast name or shard num missing")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	for i := uint8(0); i < shard; i++ {
 		list := "unicast_" + unicast + "_" + strconv.Itoa(int(i))
-		exist := "{" + list + "}_exist"
+		go func() {
+			time.Sleep(time.Duration(rand.Int63n(time.Second.Nanoseconds() * 5)))
+			tker := time.NewTicker(time.Second * 5)
+			for {
+				select {
+				case <-ctx.Done():
+					tker.Stop()
+					return
+				case <-tker.C:
+					if _, err := c.Expire(ctx, list, time.Second*16).Result(); err != nil {
+						if err == context.Canceled {
+							continue
+						}
+						if err == gredis.ErrClosed {
+							tker.Stop()
+							return
+						}
+						log.Error(ctx, "[redis.unicast.sub] expire failed", log.String("list", list), log.CError(err))
+					}
+				}
+			}
+		}()
 		go func() {
 			for {
-				if _, err := c.SetEx(ctx, exist, 1, time.Second*16).Result(); err != nil {
-					log.Error(ctx, "[redis.unicast.sub] init failed", log.String("list", list), log.CError(err))
+				_, rs, err := c.BLMPop(ctx, 0, "LEFT", 128, list).Result()
+				if err != nil {
+					if err == gredis.ErrClosed || err == context.Canceled {
+						return
+					}
+					log.Error(ctx, "[redis.unicast.sub] read failed", log.String("list", list), log.CError(err))
 					time.Sleep(time.Millisecond * 100)
 					continue
 				}
-				break
+				for i, r := range rs {
+					handler(common.STB(r), i == len(rs)-1)
+				}
 			}
-			go func() {
-				time.Sleep(time.Duration(rand.Int63n(time.Second.Nanoseconds() * 5)))
-				tker := time.NewTicker(time.Second * 5)
-				for {
-					select {
-					case <-ctx.Done():
-						if _, err := c.Del(context.Background(), exist).Result(); err != nil {
-							log.Error(ctx, "[redis.unicast.sub] stop failed", log.String("list", list), log.CError(err))
-						}
-						tker.Stop()
-						return
-					case <-tker.C:
-						if _, err := c.Expire(ctx, list, time.Second*16).Result(); err != nil {
-							if err == context.Canceled {
-								continue
-							}
-							if err == gredis.ErrClosed {
-								tker.Stop()
-								return
-							}
-							log.Error(ctx, "[redis.unicast.sub] expire failed", log.String("list", list), log.CError(err))
-						}
-						if _, err := c.SetEx(ctx, exist, 1, time.Second*16).Result(); err != nil {
-							if err == context.Canceled {
-								continue
-							}
-							if err == gredis.ErrClosed {
-								tker.Stop()
-								return
-							}
-							log.Error(ctx, "[redis.unicast.sub] expire failed", log.String("list", list), log.CError(err))
-						}
-					}
-				}
-			}()
-			go func() {
-				for {
-					r, err := c.BLPop(ctx, 0, list).Result()
-					if err != nil {
-						if err == gredis.ErrClosed || err == context.Canceled {
-							return
-						}
-						log.Error(ctx, "[redis.unicast.sub] read failed", log.String("list", list), log.CError(err))
-						time.Sleep(time.Millisecond * 100)
-						continue
-					}
-					handler(common.STB(r[1]))
-				}
-			}()
 		}()
 	}
-	return func() { cancel() }, nil
+	return cancel
 }
 
 // shard: is used to split data into different redis lists
@@ -110,6 +89,5 @@ func (c *Client) PubUnicast(ctx context.Context, unicast string, shard uint8, ke
 	} else {
 		list = "unicast_" + unicast + "_" + strconv.FormatUint(common.Bkdrhash(common.STB(key), uint64(shard)), 10)
 	}
-	exist := "{" + list + "}_exist"
-	return pubunicast.Run(ctx, c, []string{list, exist}, values...).Err()
+	return pubunicast.Run(ctx, c, []string{list}, values...).Err()
 }

@@ -13,9 +13,15 @@ import (
 	gredis "github.com/redis/go-redis/v9"
 )
 
-// due to go-redis doesn't support to wake up the block cmd actively now,so the stop func can't stop the read now.
+// SubBroadcast will sub max 128 datas in one cycle
+// last: wether this is the last data in this cycle
+type BroadcastHandler func(data map[string]interface{}, last bool)
+
+// SubBroadcast sub data which is pubbed after the sub action
+// due to go-redis doesn't support to wake up the block cmd actively now
+// so the stop func can't stop the sub when there is no data in the stream(cmd is blocked)
 // shard: is used to split data into different redis streams
-func (c *Client) SubBroadcast(broadcast string, shard uint8, handler func(values map[string]interface{})) (stop func(), e error) {
+func (c *Client) SubBroadcast(broadcast string, shard uint8, handler BroadcastHandler) (stop func()) {
 	if broadcast == "" || shard == 0 {
 		panic("[redis.broadcast.sub] broadcast name or shard num missing")
 	}
@@ -27,7 +33,7 @@ func (c *Client) SubBroadcast(broadcast string, shard uint8, handler func(values
 			for {
 				rs, err := c.XRead(ctx, &gredis.XReadArgs{
 					Streams: []string{stream, id},
-					Count:   32,
+					Count:   128,
 					Block:   0,
 				}).Result()
 				if err != nil {
@@ -39,15 +45,15 @@ func (c *Client) SubBroadcast(broadcast string, shard uint8, handler func(values
 					continue
 				}
 				for _, r := range rs {
-					for _, m := range r.Messages {
+					for i, m := range r.Messages {
 						id = m.ID
-						handler(m.Values)
+						handler(m.Values, i == len(r.Messages)-1)
 					}
 				}
 			}
 		}()
 	}
-	return func() { cancel() }, nil
+	return cancel
 }
 
 // shard: is used to split data into different redis streams
