@@ -1,14 +1,17 @@
 package list
 
 import (
+	"errors"
 	"math"
 	"sync/atomic"
 )
 
+var ErrClosed = errors.New("block list closed")
+
 type BlockList[T any] struct {
 	block chan *struct{}
 	list  *List[T]
-	count uint64
+	count int64
 }
 
 // work's like golang's chan
@@ -19,29 +22,51 @@ func NewBlockList[T any]() *BlockList[T] {
 		count: 0,
 	}
 }
-func (bl *BlockList[T]) Push(data T) uint64 {
+func (bl *BlockList[T]) Push(data T) (int64, error) {
+	var oldcount int64
+	for {
+		oldcount = bl.count
+		if oldcount < 0 {
+			return oldcount + math.MaxInt64, ErrClosed
+		}
+		if atomic.CompareAndSwapInt64(&bl.count, oldcount, oldcount+1) {
+			break
+		}
+	}
 	bl.list.Push(data)
-	newcount := atomic.AddUint64(&bl.count, 1)
-	if newcount == 1 {
+	if oldcount == 0 {
 		select {
 		case bl.block <- nil:
 		default:
 		}
 	}
-	return newcount
+	return oldcount + 1, nil
 }
 func (bl *BlockList[T]) Pop() (T, bool) {
 	for {
 		if data, e := bl.list.Pop(nil); e == nil {
-			atomic.AddUint64(&bl.count, math.MaxUint64)
+			atomic.AddInt64(&bl.count, -1)
 			return data, true
 		}
-		if _, ok := <-bl.block; !ok {
+		if bl.count < 0 {
 			var empty T
 			return empty, false
 		}
+		<-bl.block
 	}
 }
-func (bl *BlockList[T]) Stop() {
-	close(bl.block)
+func (bl *BlockList[T]) Close() {
+	for {
+		oldcount := bl.count
+		if oldcount < 0 {
+			return
+		}
+		if atomic.CompareAndSwapInt64(&bl.count, oldcount, oldcount-math.MaxInt64) {
+			break
+		}
+	}
+	select {
+	case bl.block <- nil:
+	default:
+	}
 }

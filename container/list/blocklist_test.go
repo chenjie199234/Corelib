@@ -14,7 +14,7 @@ func Test_BlockList(t *testing.T) {
 			l.Push(count)
 			count++
 			if count == 10 {
-				l.Stop()
+				l.Close()
 				return
 			}
 		}
@@ -25,5 +25,9 @@ func Test_BlockList(t *testing.T) {
 			break
 		}
 		t.Log(data)
+	}
+	if _, e := l.Push(11); e != ErrClosed {
+		t.Fatal("should return error closed")
+		return
 	}
 }
