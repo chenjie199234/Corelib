@@ -55,6 +55,13 @@ func (bl *BlockList[T]) Pop() (T, bool) {
 		<-bl.block
 	}
 }
+func (bl *BlockList[T]) Count() int64 {
+	count := bl.count
+	if count < 0 {
+		count += math.MaxInt64
+	}
+	return count
+}
 func (bl *BlockList[T]) Close() {
 	for {
 		oldcount := bl.count
