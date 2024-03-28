@@ -44,7 +44,7 @@ func tcpclienthandleVerify(ctx context.Context, peerVerifyData []byte) ([]byte, 
 var firsttcpclient int64
 var firsttcpclientpeer *Peer
 
-func tcpclienthandleonline(p *Peer) bool {
+func tcpclienthandleonline(ctx context.Context, p *Peer) bool {
 	if atomic.SwapInt64(&firsttcpclient, 1) == 0 {
 		firsttcpclientpeer = p
 		go func() {

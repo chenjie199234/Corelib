@@ -361,7 +361,7 @@ func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]b
 }
 
 // return false will close the connection
-func (s *CrpcServer) onlinefunc(p *stream.Peer) bool {
+func (s *CrpcServer) onlinefunc(ctx context.Context, p *stream.Peer) bool {
 	if s.stop.Closing() {
 		//tel peer self closed
 		d, _ := proto.Marshal(&Msg{

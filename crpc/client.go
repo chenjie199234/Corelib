@@ -151,7 +151,7 @@ func (c *CrpcClient) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]b
 	return nil, "", true
 }
 
-func (c *CrpcClient) onlinefunc(p *stream.Peer) bool {
+func (c *CrpcClient) onlinefunc(ctx context.Context, p *stream.Peer) bool {
 	//online success,update success
 	server := c.balancer.getRegisterServer(p.GetRawConnectAddr())
 	if server == nil {

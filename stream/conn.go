@@ -180,7 +180,7 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 	//verify finished,status set to true
 	atomic.StoreInt32(&p.status, 1)
 	if this.c.OnlineFunc != nil {
-		if !this.c.OnlineFunc(p) {
+		if !this.c.OnlineFunc(ctx, p) {
 			log.Error(nil, "[Stream.sworker] online failed", log.String("cip", p.c.RemoteAddr().String()))
 			atomic.StoreInt32(&p.status, 0)
 			this.mng.DelPeer(p)
@@ -322,7 +322,7 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 	//verify finished set status to true
 	atomic.StoreInt32(&p.status, 1)
 	if this.c.OnlineFunc != nil {
-		if !this.c.OnlineFunc(p) {
+		if !this.c.OnlineFunc(ctx, p) {
 			log.Error(nil, "[Stream.cworker] online failed", log.String("sip", p.c.RemoteAddr().String()))
 			atomic.StoreInt32(&p.status, 0)
 			this.mng.DelPeer(p)

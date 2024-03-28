@@ -47,7 +47,7 @@ func serverhandleVerify(ctx context.Context, peerVerifyData []byte) ([]byte, str
 	}
 	return []byte{'t', 'e', 's', 't'}, "", true
 }
-func serverhandleonline(p *Peer) bool {
+func serverhandleonline(ctx context.Context, p *Peer) bool {
 	return true
 }
 func serverhandleuserdata(p *Peer, data []byte) {
