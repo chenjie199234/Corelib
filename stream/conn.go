@@ -114,7 +114,7 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 func (this *Instance) sworker(ctx context.Context, p *Peer) {
 	//read first verify message from client
 	serververifydata := this.verifypeer(ctx, p)
-	if p.peerMaxMsgLen == 0 {
+	if p.uniqueid == "" {
 		p.c.Close()
 		p.cr.Reset(nil)
 		pool.GetPool().PutBufReader(p.cr)
@@ -374,7 +374,11 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 				}
 			} else {
 				response = r
-				p.uniqueid = u
+				if u == "" {
+					p.uniqueid = p.GetRemoteAddr()
+				} else {
+					p.uniqueid = u
+				}
 			}
 			return false
 		case opcode.IsPing():
