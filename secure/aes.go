@@ -43,6 +43,9 @@ func AesDecrypt(password string, ciphertxt string) ([]byte, error) {
 	}
 	block, _ := aes.NewCipher(s)
 	aead, _ := cipher.NewGCM(block)
+	if len(tmp) < aead.NonceSize() {
+		return nil, cerror.ErrDataBroken
+	}
 	plaintext, e := aead.Open(nil, tmp[:aead.NonceSize()], tmp[aead.NonceSize():], nil)
 	if e != nil {
 		return nil, cerror.ErrPasswordWrong
