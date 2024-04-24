@@ -90,9 +90,6 @@ func NewCrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfa
 		reqpool: &sync.Pool{},
 		stop:    graceful.New(),
 	}
-	client.balancer = newCorelibBalancer(client)
-	client.resolver = resolver.NewCorelibResolver(client.balancer, client.discover, discover.Crpc)
-	client.resolver.Start()
 	instancec := &stream.InstanceConfig{
 		RecvIdleTimeout:    c.IdleTimeout.StdDuration(),
 		HeartprobeInterval: c.HeartProbe.StdDuration(),
@@ -107,6 +104,10 @@ func NewCrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfa
 	instancec.UserdataFunc = client.userfunc
 	instancec.OfflineFunc = client.offlinefunc
 	client.instance, _ = stream.NewInstance(instancec)
+
+	client.balancer = newCorelibBalancer(client)
+	client.resolver = resolver.NewCorelibResolver(client.balancer, client.discover, discover.Crpc)
+	client.resolver.Start()
 	return client, nil
 }
 
