@@ -21,7 +21,7 @@ import (
 
 type EmailClientConfig struct {
 	EmailName       string         `json:"email_name"`
-	MaxOpen         uint16         `json:"max_open"`          //<=0 means no limit,default 100
+	MaxOpen         uint16         `json:"max_open"`          //0: default 100
 	MaxConnIdletime ctime.Duration `json:"max_conn_idletime"` //<=0 means no idle time out
 	Host            string         `json:"host"`
 	Port            uint16         `json:"port"`
@@ -266,36 +266,38 @@ func (c *EmailClient) formemail(to []string, subject string, mimetype string, bo
 	//from
 	count := 6 + len(c.c.Account) + 2
 	//to
+	count += 4
 	for _, v := range to {
-		count += 4 + len(v) + 2
+		count += len(v)
 	}
-	//subject
-	count += 9 + len(subject) + 2
+	count += len(to) - 1
+	count += 2
 	//mimetype
 	count += 14 + len(mimetype) + 2
+	//subject
+	count += 9 + len(subject) + 2
 	//empty line
 	count += 2
 	//body
 	count += len(body)
 
 	buf := pool.GetPool().Get(count)
+	buf = buf[:0]
 	//from
 	buf = append(buf, "From: "...)
 	buf = append(buf, c.c.Account...)
 	buf = append(buf, "\r\n"...)
 	//to
-	for _, v := range to {
-		buf = append(buf, "To: "...)
-		buf = append(buf, v...)
-		buf = append(buf, "\r\n"...)
-	}
-	//subject
-	buf = append(buf, "Subject: "...)
-	buf = append(buf, subject...)
+	buf = append(buf, "To: "...)
+	buf = append(buf, strings.Join(to, ",")...)
 	buf = append(buf, "\r\n"...)
 	//mimetype
 	buf = append(buf, "Content-Type: "...)
 	buf = append(buf, mimetype...)
+	buf = append(buf, "\r\n"...)
+	//subject
+	buf = append(buf, "Subject: "...)
+	buf = append(buf, subject...)
 	buf = append(buf, "\r\n\r\n"...)
 	buf = append(buf, body...)
 	return buf
