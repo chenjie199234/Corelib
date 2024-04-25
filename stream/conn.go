@@ -305,7 +305,7 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 	}
 	//read first verify message from server
 	_ = this.verifypeer(ctx, p)
-	if p.uniqueid== "" {
+	if p.uniqueid == "" {
 		p.c.Close()
 		p.cr.Reset(nil)
 		pool.GetPool().PutBufReader(p.cr)

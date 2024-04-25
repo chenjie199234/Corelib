@@ -190,19 +190,19 @@ func (p *Picker) Pick(forceaddr string) (ServerForPick, func(cpuusage float64, s
 	if normal2 != nil {
 		//normal 1 and normal 2 both exist
 		s = p.compare(normal1, normal2)
-	} else if normal2 == nil && normal1 != nil {
+	} else if normal1 != nil {
 		//only exist normal 1
 		s = normal1
 	} else if danger2 != nil {
 		//danger 1 and danger 2 both exist
 		s = p.compare(danger1, danger2)
-	} else if danger2 == nil && danger1 != nil {
+	} else if danger1 != nil {
 		//only exist danger 1
 		s = danger1
 	} else if nightmare2 != nil {
 		//nightmare 1 and nightmare 2 both exist
 		s = p.compare(nightmare1, nightmare2)
-	} else if nightmare2 == nil && nightmare1 != nil {
+	} else if nightmare1 != nil {
 		//only exist nightmare 1
 		s = nightmare1
 	}

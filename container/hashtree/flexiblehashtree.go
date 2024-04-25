@@ -24,7 +24,7 @@ func (h *FlexibleHashtree[T]) GetNodeNum() int {
 	return ((*hashtree[T])(h)).NodeNum()
 }
 
-//return nil,means this is an empty tree
+// return nil,means this is an empty tree
 func (h *FlexibleHashtree[T]) GetRootHash() []byte {
 	return ((*hashtree[T])(h)).RootHash()
 }
@@ -88,7 +88,7 @@ func (h *FlexibleHashtree[T]) PushMulti(datas []*LeafData[T]) error {
 	return nil
 }
 
-//return nil means index out of range
+// return nil means index out of range
 func (h *FlexibleHashtree[T]) GetSingle(index int) *LeafData[T] {
 	origin := (*hashtree[T])(h)
 	if index < 0 || index >= origin.NodeNum() {
@@ -97,7 +97,7 @@ func (h *FlexibleHashtree[T]) GetSingle(index int) *LeafData[T] {
 	return origin.nodes[index].data
 }
 
-//return map's value is nil means index(map's key) out of range
+// return map's value is nil means index(map's key) out of range
 func (h *FlexibleHashtree[T]) GetMulti(indexes []int) map[int]*LeafData[T] {
 	r := make(map[int]*LeafData[T], len(indexes))
 	origin := (*hashtree[T])(h)

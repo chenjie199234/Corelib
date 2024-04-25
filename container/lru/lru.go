@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-//thread unsafe
+// thread unsafe
 type LruCache[T any] struct {
 	maxcap int64
 	curcap int64
@@ -27,7 +27,7 @@ type node[T any] struct {
 	prev *node[T]
 }
 
-//ttl == 0 means not using expire time
+// ttl == 0 means not using expire time
 func New[T any](maxcap int64, ttl time.Duration) *LruCache[T] {
 	if maxcap <= 0 || ttl < 0 {
 		return nil

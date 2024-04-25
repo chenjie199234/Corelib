@@ -37,7 +37,7 @@ func GetGroup(ctx context.Context) *Group {
 	return g
 }
 
-//PutGroup will wait all goroutine exit
+// PutGroup will wait all goroutine exit
 func PutGroup(g *Group) error {
 	defer p.Put(g)
 	g.wg.Wait()

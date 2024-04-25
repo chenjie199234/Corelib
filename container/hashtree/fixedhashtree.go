@@ -6,8 +6,8 @@ import (
 	"math"
 )
 
-//thread unsafe
-//node's data can be nill
+// thread unsafe
+// node's data can be nill
 type FixedHashtree[T any] hashtree[T]
 
 var ErrLengthConflict = errors.New("length conflict")
