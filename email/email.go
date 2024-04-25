@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"io"
 	"math"
 	"net/smtp"
@@ -20,8 +21,8 @@ import (
 
 type EmailClientConfig struct {
 	EmailName       string         `json:"email_name"`
-	MaxOpen         uint16         `json:"max_open"`
-	MaxConnIdletime ctime.Duration `json:"max_conn_idletime"`
+	MaxOpen         uint16         `json:"max_open"`          //<=0 means no limit,default 100
+	MaxConnIdletime ctime.Duration `json:"max_conn_idletime"` //<=0 means no idle time out
 	Host            string         `json:"host"`
 	Port            uint16         `json:"port"`
 	Account         string         `json:"account"`
@@ -66,9 +67,18 @@ func (c *smtpclient) sendemail(from string, to []string, email []byte) (e error,
 	return
 }
 
-func NewEmailClient(c *EmailClientConfig) *EmailClient {
+func NewEmailClient(c *EmailClientConfig) (*EmailClient, error) {
+	if c.MaxOpen == 0 {
+		c.MaxOpen = 100
+	}
+	if c.Host == "" || c.Port == 0 {
+		return nil, errors.New("missing host/port in the config")
+	}
+	if c.Account == "" || c.Password == "" {
+		return nil, errors.New("missing account/password in the config")
+	}
 	client := &EmailClient{c: c, p: list.NewList[*smtpclient](), notice: make(chan *struct{}, 1)}
-	return client
+	return client, nil
 }
 func (c *EmailClient) get(ctx context.Context) (*smtpclient, error) {
 	for {
