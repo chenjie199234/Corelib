@@ -104,6 +104,7 @@ func (c *EmailClient) get(ctx context.Context) (*smtpclient, error) {
 				cc.expired = true
 				cc.client.Close()
 			})
+			cc.lker.Unlock()
 			select {
 			case c.notice <- nil:
 			default:
