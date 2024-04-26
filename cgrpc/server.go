@@ -19,7 +19,7 @@ import (
 	"github.com/chenjie199234/Corelib/log/trace"
 	cmetadata "github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
-	"github.com/chenjie199234/Corelib/pool"
+	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/host"
@@ -108,7 +108,7 @@ func NewCGrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tls
 		handlerTimeout: make(map[string]time.Duration),
 	}
 	opts := make([]grpc.ServerOption, 0, 10)
-	opts = append(opts, experimental.RecvBufferPool(pool.GetPool()))
+	opts = append(opts, experimental.RecvBufferPool(bpool.GetPool()))
 	opts = append(opts, grpc.MaxRecvMsgSize(int(c.MaxMsgLen)))
 	opts = append(opts, grpc.StatsHandler(serverinstance))
 	opts = append(opts, grpc.UnknownServiceHandler(func(_ interface{}, stream grpc.ServerStream) error {

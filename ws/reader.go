@@ -6,7 +6,7 @@ import (
 	"io"
 	"math"
 
-	"github.com/chenjie199234/Corelib/pool"
+	"github.com/chenjie199234/Corelib/pool/bpool"
 )
 
 // 0                   1                   2                   3
@@ -74,7 +74,7 @@ func Read(reader *bufio.Reader, maxmsglen uint32, mustmask bool, handler func(OP
 	var buf []byte
 	defer func() {
 		if buf != nil {
-			pool.GetPool().Put(&buf)
+			bpool.Put(&buf)
 		}
 	}()
 	for {
@@ -96,7 +96,7 @@ func Read(reader *bufio.Reader, maxmsglen uint32, mustmask bool, handler func(OP
 			}
 		}
 		if buf == nil {
-			buf = pool.GetPool().Get(256)
+			buf = bpool.Get(256)
 			buf = buf[:8]
 		}
 		switch payloadlen {
@@ -124,7 +124,7 @@ func Read(reader *bufio.Reader, maxmsglen uint32, mustmask bool, handler func(OP
 			}
 		}
 		if payloadlen > 0 {
-			buf = pool.CheckCap(&buf, len(buf)+int(payloadlen))
+			buf = bpool.CheckCap(&buf, len(buf)+int(payloadlen))
 			buf = buf[:len(buf)+int(payloadlen)]
 			if _, e := io.ReadFull(reader, buf[len(buf)-int(payloadlen):]); e != nil {
 				return e
@@ -143,7 +143,7 @@ func Read(reader *bufio.Reader, maxmsglen uint32, mustmask bool, handler func(OP
 				return nil
 			}
 			if len(buf) > 4096 {
-				pool.GetPool().Put(&buf)
+				bpool.Put(&buf)
 				buf = nil
 			} else {
 				buf = buf[:8]

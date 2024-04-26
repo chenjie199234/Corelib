@@ -19,7 +19,7 @@ import (
 	"github.com/chenjie199234/Corelib/log/trace"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
-	"github.com/chenjie199234/Corelib/pool"
+	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/host"
@@ -67,8 +67,9 @@ func cleanPath(origin string) string {
 		return "/"
 	}
 	var realpos int
-	buf := pool.GetPool().Get(len(origin) + 1) // +1 for not start from '/'
-	defer pool.GetPool().Put(&buf)
+	buf := bpool.Get(len(origin) + 1) // +1 for not start from '/'
+	defer bpool.Put(&buf)
+	buf = buf[:len(origin)+1]
 	if origin[0] != '/' {
 		buf[0] = '/'
 		realpos = 1

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/container/list"
-	"github.com/chenjie199234/Corelib/pool"
+	"github.com/chenjie199234/Corelib/pool/bpool"
 )
 
 // thread unsafe
@@ -99,7 +99,7 @@ func (f *RotateFile) run() {
 			} else {
 				f.curlen += int64(n)
 			}
-			pool.GetPool().Put(&buf)
+			bpool.Put(&buf)
 			return true
 		}
 		return false
@@ -219,7 +219,7 @@ func (f *RotateFile) Write(data []byte) (int, error) {
 	if atomic.LoadInt32(&f.status) == 0 {
 		return 0, fmt.Errorf("[rotatefile.Write] rotate file closed")
 	}
-	buf := pool.GetPool().Get(len(data))
+	buf := bpool.Get(len(data))
 	copy(buf, data)
 	f.caslist.Push(buf)
 	select {

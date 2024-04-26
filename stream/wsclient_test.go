@@ -33,7 +33,7 @@ func Test_Wsclient(t *testing.T) {
 	}()
 	http.ListenAndServe(":8082", nil)
 }
-func wsclienthandleVerify(ctx context.Context, peerVerifyData []byte) ([]byte, string, bool) {
+func wsclienthandleVerify(_ context.Context, peerVerifyData []byte) ([]byte, string, bool) {
 	if !bytes.Equal([]byte{'t', 'e', 's', 't'}, peerVerifyData) {
 		fmt.Println("verify error")
 		return nil, "", false
@@ -44,7 +44,7 @@ func wsclienthandleVerify(ctx context.Context, peerVerifyData []byte) ([]byte, s
 var firstwsclient int64
 var firstwsclientpeer *Peer
 
-func wsclienthandleonline(ctx context.Context, p *Peer) bool {
+func wsclienthandleonline(_ context.Context, p *Peer) bool {
 	if atomic.SwapInt64(&firsttcpclient, 1) == 0 {
 		firsttcpclientpeer = p
 		go func() {

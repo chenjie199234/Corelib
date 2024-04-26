@@ -8,7 +8,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/chenjie199234/Corelib/pool"
+	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
@@ -31,8 +31,8 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 	var accept string
 	var check uint8
 	header = make(http.Header)
-	buf := pool.GetPool().Get(0)
-	defer pool.GetPool().Put(&buf)
+	buf := bpool.Get(256)
+	defer bpool.Put(&buf)
 	for {
 		line, prefix, err := reader.ReadLine()
 		if e != nil {

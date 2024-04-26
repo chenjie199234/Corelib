@@ -28,7 +28,7 @@ const (
 	webPackage       = protogen.GoImportPath("github.com/chenjie199234/Corelib/web")
 	commonPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
 	metadataPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/metadata")
-	poolPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/pool")
+	poolPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/pool/bpool")
 	cerrorPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/cerror")
 	logPackage       = protogen.GoImportPath("github.com/chenjie199234/Corelib/log")
 )
@@ -802,7 +802,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	g.P("}")
 }
 
-func genClient(file *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
+func genClient(_ *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
 	// Client interface.
 	clientName := service.GoName + "WebClient"
 	lowclientName := strings.ToLower(clientName[:1]) + clientName[1:]
@@ -877,8 +877,8 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if need == "GET" || need == "DELETE" {
 			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-www-form-urlencoded"), ")")
 			g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("application/x-protobuf"), ")")
-			g.P("query :=", g.QualifiedGoIdent(poolPackage.Ident("GetPool")), "().Get(0)")
-			g.P("defer ", g.QualifiedGoIdent(poolPackage.Ident("GetPool")), "().Put(&query)")
+			g.P("query :=", g.QualifiedGoIdent(poolPackage.Ident("Get")), "(256)")
+			g.P("defer ", g.QualifiedGoIdent(poolPackage.Ident("Put")), "(&query)")
 			for _, field := range method.Input.Fields {
 				if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 					g.P("//req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ")")

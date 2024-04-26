@@ -5,17 +5,13 @@ import (
 	"crypto/tls"
 	"errors"
 	"io"
-	"math"
 	"net/smtp"
 	"strconv"
 	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 
-	"github.com/chenjie199234/Corelib/container/list"
 	"github.com/chenjie199234/Corelib/log/trace"
-	"github.com/chenjie199234/Corelib/pool"
+	"github.com/chenjie199234/Corelib/pool/bpool"
+	"github.com/chenjie199234/Corelib/pool/cpool"
 	"github.com/chenjie199234/Corelib/util/ctime"
 )
 
@@ -29,42 +25,8 @@ type EmailClientConfig struct {
 	Password        string         `json:"password"`
 }
 type EmailClient struct {
-	c      *EmailClientConfig
-	p      *list.List[*smtpclient]
-	notice chan *struct{}
-	lker   sync.Mutex
-	count  uint32
-}
-type smtpclient struct {
-	lker    sync.Mutex
-	client  *smtp.Client
-	tmer    *time.Timer
-	expired bool
-}
-
-func (c *smtpclient) sendemail(from string, to []string, email []byte) (e error, del bool) {
-	defer func() {
-		if e != nil && c.client.Reset() != nil {
-			del = true
-		}
-	}()
-	if e = c.client.Mail(from); e != nil {
-		return
-	}
-	for _, v := range to {
-		if e = c.client.Rcpt(v); e != nil {
-			return
-		}
-	}
-	var w io.WriteCloser
-	if w, e = c.client.Data(); e != nil {
-		return
-	}
-	if _, e = w.Write(email); e != nil {
-		return
-	}
-	e = w.Close()
-	return
+	c *EmailClientConfig
+	p *cpool.CPool[*smtp.Client]
 }
 
 func NewEmailClient(c *EmailClientConfig) (*EmailClient, error) {
@@ -77,108 +39,29 @@ func NewEmailClient(c *EmailClientConfig) (*EmailClient, error) {
 	if c.Account == "" || c.Password == "" {
 		return nil, errors.New("missing account/password in the config")
 	}
-	client := &EmailClient{c: c, p: list.NewList[*smtpclient](), notice: make(chan *struct{}, 1)}
-	return client, nil
-}
-func (c *EmailClient) get(ctx context.Context) (*smtpclient, error) {
-	for {
-		cc, e := c.p.Pop(nil)
-		if e == nil {
-			if c.c.MaxConnIdletime <= 0 {
-				select {
-				case c.notice <- nil:
-				default:
-				}
-				return cc, nil
-			}
-			cc.lker.Lock()
-			if cc.expired || !cc.tmer.Stop() {
-				cc.lker.Unlock()
-				atomic.AddUint32(&c.count, math.MaxUint32)
-				continue
-			}
-			cc.tmer = time.AfterFunc(c.c.MaxConnIdletime.StdDuration(), func() {
-				cc.lker.Lock()
-				defer cc.lker.Unlock()
-				cc.tmer.Stop()
-				cc.expired = true
-				cc.client.Close()
-			})
-			cc.lker.Unlock()
-			select {
-			case c.notice <- nil:
-			default:
-			}
-			return cc, nil
-		}
-		//pool is empty
-		if c.c.MaxOpen == 0 {
-			//no limit
-			atomic.AddUint32(&c.count, 1)
-			return c.new()
-		}
-		//limit check
-		c.lker.Lock()
-		if c.count < uint32(c.c.MaxOpen) {
-			tmp, e := c.new()
+	client := &EmailClient{
+		c: c,
+		p: cpool.NewCPool(uint32(c.MaxOpen), func() (*smtp.Client, error) {
+			client, e := smtp.Dial(c.Host + ":" + strconv.FormatUint(uint64(c.Port), 10))
 			if e != nil {
-				c.lker.Unlock()
 				return nil, e
 			}
-			if atomic.AddUint32(&c.count, 1) < uint32(c.c.MaxOpen) {
-				select {
-				case c.notice <- nil:
-				default:
+			if ok, _ := client.Extension("STARTTLS"); ok {
+				if e = client.StartTLS(&tls.Config{ServerName: c.Host}); e != nil {
+					return nil, e
 				}
 			}
-			c.lker.Unlock()
-			return tmp, nil
-		}
-		c.lker.Unlock()
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-c.notice:
-		}
+			if ok, _ := client.Extension("AUTH"); ok {
+				if e = client.Auth(smtp.PlainAuth("", c.Account, c.Password, c.Host)); e != nil {
+					return nil, e
+				}
+			}
+			return client, nil
+		}, c.MaxConnIdletime.StdDuration(), func(client *smtp.Client) {
+			client.Close()
+		}),
 	}
-}
-func (c *EmailClient) put(client *smtpclient) {
-	c.p.Push(client)
-	select {
-	case c.notice <- nil:
-	default:
-	}
-}
-func (c *EmailClient) new() (*smtpclient, error) {
-	client, e := smtp.Dial(c.c.Host + ":" + strconv.FormatUint(uint64(c.c.Port), 10))
-	if e != nil {
-		return nil, e
-	}
-	if ok, _ := client.Extension("STARTTLS"); ok {
-		if e = client.StartTLS(&tls.Config{ServerName: c.c.Host}); e != nil {
-			return nil, e
-		}
-	}
-	if ok, _ := client.Extension("AUTH"); ok {
-		if e = client.Auth(smtp.PlainAuth("", c.c.Account, c.c.Password, c.c.Host)); e != nil {
-			return nil, e
-		}
-	}
-	cc := &smtpclient{
-		lker:    sync.Mutex{},
-		client:  client,
-		expired: false,
-	}
-	if c.c.MaxConnIdletime > 0 {
-		cc.tmer = time.AfterFunc(c.c.MaxConnIdletime.StdDuration(), func() {
-			cc.lker.Lock()
-			defer cc.lker.Unlock()
-			cc.tmer.Stop()
-			cc.expired = true
-			cc.client.Close()
-		})
-	}
-	return cc, nil
+	return client, nil
 }
 func (c *EmailClient) SendTextEmail(ctx context.Context, to []string, subject string, body []byte) error {
 	ctx, span := trace.NewSpan(ctx, "Corelib.Email", trace.Client, nil)
@@ -195,7 +78,7 @@ func (c *EmailClient) SendTextEmail(ctx context.Context, to []string, subject st
 	} else {
 		span.GetSelfSpanData().SetStateKV("targets", strings.Join(to, ";"))
 	}
-	e := c.sendemail(ctx, to, subject, "text/plain; charset=UTF-8", body)
+	e := c.do(ctx, to, subject, "text/plain; charset=UTF-8", body)
 	span.Finish(e)
 	return e
 }
@@ -214,51 +97,34 @@ func (c *EmailClient) SendHtmlEmail(ctx context.Context, to []string, subject st
 	} else {
 		span.GetSelfSpanData().SetStateKV("targets", strings.Join(to, ";"))
 	}
-	e := c.sendemail(ctx, to, subject, "text/html; charset=UTF-8", body)
+	e := c.do(ctx, to, subject, "text/html; charset=UTF-8", body)
 	span.Finish(e)
 	return e
 }
-func (c *EmailClient) sendemail(ctx context.Context, to []string, subject string, mimetype string, body []byte) error {
+func (c *EmailClient) do(ctx context.Context, to []string, subject string, mimetype string, body []byte) error {
 	for {
-		client, e := c.get(ctx)
+		client, e := c.p.Get(ctx)
 		if e != nil {
 			return e
 		}
-		client.lker.Lock()
-		if client.expired {
-			client.lker.Unlock()
-			atomic.AddUint32(&c.count, math.MaxUint32)
-			continue
-		}
-		if e := client.client.Noop(); e != nil {
-			client.client.Close()
-			if client.tmer != nil {
-				client.tmer.Stop()
-			}
-			client.lker.Unlock()
-			atomic.AddUint32(&c.count, math.MaxUint32)
+		if e := client.Noop(); e != nil {
+			client.Close()
+			c.p.AbandonOne()
 			continue
 		}
 		email := c.formemail(to, subject, mimetype, body)
-		if e, del := client.sendemail(c.c.Account, to, email); e != nil {
+		if e, del := c.sendemail(client, to, email); e != nil {
 			if del {
-				client.client.Close()
-				if client.tmer != nil {
-					client.tmer.Stop()
-				}
-				atomic.AddUint32(&c.count, math.MaxUint32)
-				select {
-				case c.notice <- nil:
-				default:
-				}
+				client.Close()
+				c.p.AbandonOne()
+			} else {
+				c.p.Put(client)
 			}
-			client.lker.Unlock()
-			pool.GetPool().Put(&email)
+			bpool.Put(&email)
 			return e
 		}
-		client.lker.Unlock()
-		c.put(client)
-		pool.GetPool().Put(&email)
+		c.p.Put(client)
+		bpool.Put(&email)
 		return nil
 	}
 }
@@ -281,8 +147,7 @@ func (c *EmailClient) formemail(to []string, subject string, mimetype string, bo
 	//body
 	count += len(body)
 
-	buf := pool.GetPool().Get(count)
-	buf = buf[:0]
+	buf := bpool.Get(count)
 	//from
 	buf = append(buf, "From: "...)
 	buf = append(buf, c.c.Account...)
@@ -301,4 +166,28 @@ func (c *EmailClient) formemail(to []string, subject string, mimetype string, bo
 	buf = append(buf, "\r\n\r\n"...)
 	buf = append(buf, body...)
 	return buf
+}
+func (c *EmailClient) sendemail(client *smtp.Client, to []string, email []byte) (e error, del bool) {
+	defer func() {
+		if e != nil && client.Reset() != nil {
+			del = true
+		}
+	}()
+	if e = client.Mail(c.c.Account); e != nil {
+		return
+	}
+	for _, v := range to {
+		if e = client.Rcpt(v); e != nil {
+			return
+		}
+	}
+	var w io.WriteCloser
+	if w, e = client.Data(); e != nil {
+		return
+	}
+	if _, e = w.Write(email); e != nil {
+		return
+	}
+	e = w.Close()
+	return
 }

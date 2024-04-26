@@ -85,7 +85,7 @@ func genFileComment(gen *protogen.Plugin, file *protogen.File, g *protogen.Gener
 }
 
 // target toc-true,tob-false
-func prepare(file *protogen.File, g *protogen.GeneratedFile, target bool) (enums []*protogen.Enum,
+func prepare(file *protogen.File, _ *protogen.GeneratedFile, target bool) (enums []*protogen.Enum,
 	msgs []*protogen.Message,
 	tojson map[string]*struct{},
 	toform map[string]*struct{},
@@ -997,7 +997,7 @@ func genPath(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile
 	}
 	return count
 }
-func genToCService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) {
+func genToCService(_ *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) {
 	clientName := s.GoName + "BrowserClientToC"
 	g.P("//ToC means this is for users")
 	g.P("export class ", clientName, " {")

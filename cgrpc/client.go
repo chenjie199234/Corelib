@@ -13,7 +13,7 @@ import (
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/log/trace"
 	cmetadata "github.com/chenjie199234/Corelib/metadata"
-	"github.com/chenjie199234/Corelib/pool"
+	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
@@ -118,7 +118,7 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 	opts := make([]grpc.DialOption, 0, 10)
 	opts = append(opts, grpc.WithChainUnaryInterceptor(client.gracefulInterceptor, client.timeoutInterceptor, client.callInterceptor))
 	opts = append(opts, grpc.WithChainStreamInterceptor())
-	opts = append(opts, experimental.WithRecvBufferPool(pool.GetPool()))
+	opts = append(opts, experimental.WithRecvBufferPool(bpool.GetPool()))
 	opts = append(opts, grpc.WithDisableRetry())
 	if tlsc == nil {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))

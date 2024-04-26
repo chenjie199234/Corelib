@@ -233,7 +233,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	}
 	g.P("}")
 }
-func genClient(file *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
+func genClient(_ *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
 	// Client interface.
 	clientName := service.GoName + "CGrpcClient"
 	lowclientName := strings.ToLower(clientName[:1]) + clientName[1:]

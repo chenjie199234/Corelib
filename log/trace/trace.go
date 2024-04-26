@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
-	"github.com/chenjie199234/Corelib/pool"
+	"github.com/chenjie199234/Corelib/pool/bpool"
 )
 
 // https://www.w3.org/TR/trace-context/
@@ -155,9 +155,8 @@ func (sd *SpanData) DelStateKV(key string) {
 }
 
 func (sd *SpanData) FormatTraceParent() string {
-	buf := pool.GetPool().Get(55)
-	defer pool.GetPool().Put(&buf)
-	buf = buf[:0]
+	buf := bpool.Get(55)
+	defer bpool.Put(&buf)
 	buf = append(buf, "00-"...)
 	buf = append(buf, sd.tid.String()...)
 	buf = append(buf, '-')
@@ -173,9 +172,8 @@ func (sd *SpanData) FormatTraceState() string {
 	for k, v := range sd.state {
 		length += len(k) + len(v) + 1 //+1 for '='
 	}
-	buf := pool.GetPool().Get(length)
-	defer pool.GetPool().Put(&buf)
-	buf = buf[:0]
+	buf := bpool.Get(length)
+	defer bpool.Put(&buf)
 	first := true
 	for k, v := range sd.state {
 		if !first {

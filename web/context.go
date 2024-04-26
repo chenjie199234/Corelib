@@ -10,7 +10,7 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
-	"github.com/chenjie199234/Corelib/pool"
+	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
@@ -42,7 +42,7 @@ func (s *WebServer) putContext(ctx *Context) {
 	ctx.r = nil
 	ctx.w = nil
 	if ctx.bodyerr != nil {
-		pool.GetPool().Put(&ctx.body)
+		bpool.Put(&ctx.body)
 	}
 	ctx.body = nil
 	ctx.bodyerr = nil
@@ -229,8 +229,7 @@ func (c *Context) GetBody() ([]byte, error) {
 	if c.body != nil || c.bodyerr != nil {
 		return c.body, c.bodyerr
 	}
-	b := pool.GetPool().Get(int(c.GetContentLength()))
-	b = b[:0]
+	b := bpool.Get(int(c.GetContentLength()))
 	for {
 		n, e := c.r.Body.Read(b[len(b):cap(b)])
 		b = b[:len(b)+n]
@@ -239,12 +238,14 @@ func (c *Context) GetBody() ([]byte, error) {
 		}
 		if e != nil {
 			c.bodyerr = e
-			pool.GetPool().Put(&b)
+			bpool.Put(&b)
 			break
 		}
 		if len(b) == cap(b) {
-			//need more buf
-			b = pool.CheckCap(&b, len(b)+1)
+			//aready read at least Content-Length body,still not EOF
+			c.bodyerr = cerror.ErrReq
+			bpool.Put(&b)
+			break
 		}
 	}
 	if c.bodyerr == nil {

@@ -12,7 +12,8 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/pool"
+	"github.com/chenjie199234/Corelib/pool/bpool"
+	"github.com/chenjie199234/Corelib/pool/rpool"
 	"github.com/chenjie199234/Corelib/ws"
 )
 
@@ -75,7 +76,7 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 		} else {
 			p.c = conn
 		}
-		p.cr = pool.GetPool().GetBufReader(p.c)
+		p.cr = rpool.Get(p.c)
 		p.c.SetDeadline(time.Now().Add(this.c.TcpC.ConnectTimeout))
 		ctx, cancel := context.WithTimeout(p, this.c.TcpC.ConnectTimeout)
 		go func() {
@@ -86,7 +87,7 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 					log.Error(nil, "[Stream.StartServer] tls handshake failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 					p.c.Close()
 					p.cr.Reset(nil)
-					pool.GetPool().PutBufReader(p.cr)
+					rpool.Put(p.cr)
 					return
 				}
 			}
@@ -99,7 +100,7 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 				log.Error(nil, "[Stream.StartServer] upgrade websocket failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 				p.c.Close()
 				p.cr.Reset(nil)
-				pool.GetPool().PutBufReader(p.cr)
+				rpool.Put(p.cr)
 				return
 			}
 			if e == nil {
@@ -117,26 +118,27 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 	if p.uniqueid == "" {
 		p.c.Close()
 		p.cr.Reset(nil)
-		pool.GetPool().PutBufReader(p.cr)
+		rpool.Put(p.cr)
 		return
 	}
 	if 4+uint64(len(serververifydata)) > uint64(p.peerMaxMsgLen) {
 		log.Error(nil, "[Stream.sworker] server response verify data too large", log.String("cip", p.c.RemoteAddr().String()))
 		p.c.Close()
 		p.cr.Reset(nil)
-		pool.GetPool().PutBufReader(p.cr)
+		rpool.Put(p.cr)
 		return
 	}
 	if e := this.mng.AddPeer(p); e != nil {
 		log.Error(nil, "[Stream.sworker] add client to connection manager failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 		p.c.Close()
 		p.cr.Reset(nil)
-		pool.GetPool().PutBufReader(p.cr)
+		rpool.Put(p.cr)
 		return
 	}
 	//verify client success,send self's verify message to client
-	buf := pool.GetPool().Get(4)
-	defer pool.GetPool().Put(&buf)
+	buf := bpool.Get(4)
+	defer bpool.Put(&buf)
+	buf = buf[:4]
 	binary.BigEndian.PutUint32(buf, p.selfMaxMsgLen)
 	if len(serververifydata) == 0 {
 		if e := ws.WriteMsg(p.c, buf, true, true, false); e != nil {
@@ -144,7 +146,7 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 			this.mng.DelPeer(p)
 			p.Close(false)
 			p.cr.Reset(nil)
-			pool.GetPool().PutBufReader(p.cr)
+			rpool.Put(p.cr)
 			return
 		}
 	} else if e := ws.WriteMsg(p.c, buf, false, true, false); e != nil {
@@ -152,7 +154,7 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 		this.mng.DelPeer(p)
 		p.Close(false)
 		p.cr.Reset(nil)
-		pool.GetPool().PutBufReader(p.cr)
+		rpool.Put(p.cr)
 		return
 	} else {
 		for len(serververifydata) > 0 {
@@ -169,7 +171,7 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 				this.mng.DelPeer(p)
 				p.c.Close()
 				p.cr.Reset(nil)
-				pool.GetPool().PutBufReader(p.cr)
+				rpool.Put(p.cr)
 				return
 			}
 			if serververifydata == nil {
@@ -187,7 +189,7 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 			p.CancelFunc()
 			p.c.Close()
 			p.cr.Reset(nil)
-			pool.GetPool().PutBufReader(p.cr)
+			rpool.Put(p.cr)
 			return
 		}
 	}
@@ -233,7 +235,7 @@ func (this *Instance) StartClient(serveraddr string, websocket bool, verifydata 
 	} else {
 		p.c = conn
 	}
-	p.cr = pool.GetPool().GetBufReader(p.c)
+	p.cr = rpool.Get(p.c)
 	p.c.SetDeadline(dl)
 	ctx, cancel := context.WithDeadline(p, dl)
 	defer cancel()
@@ -243,7 +245,7 @@ func (this *Instance) StartClient(serveraddr string, websocket bool, verifydata 
 			log.Error(nil, "[Stream.StartClient] tls handshake failed", log.String("sip", serveraddr), log.CError(e))
 			p.c.Close()
 			p.cr.Reset(nil)
-			pool.GetPool().PutBufReader(p.cr)
+			rpool.Put(p.cr)
 			return false
 		}
 	}
@@ -254,7 +256,7 @@ func (this *Instance) StartClient(serveraddr string, websocket bool, verifydata 
 			log.Error(nil, "[Stream.StartClient] upgrade websocket failed", log.String("sip", serveraddr), log.CError(e))
 			p.c.Close()
 			p.cr.Reset(nil)
-			pool.GetPool().PutBufReader(p.cr)
+			rpool.Put(p.cr)
 			return false
 		}
 		p.header = header
@@ -264,22 +266,23 @@ func (this *Instance) StartClient(serveraddr string, websocket bool, verifydata 
 
 func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []byte) bool {
 	//send self's verify message to server
-	buf := pool.GetPool().Get(4)
-	defer pool.GetPool().Put(&buf)
+	buf := bpool.Get(4)
+	defer bpool.Put(&buf)
+	buf = buf[:4]
 	binary.BigEndian.PutUint32(buf, p.selfMaxMsgLen)
 	if len(clientverifydata) == 0 {
 		if e := ws.WriteMsg(p.c, buf, true, true, false); e != nil {
 			log.Error(nil, "[Stream.cworker] write verify data to server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 			p.c.Close()
 			p.cr.Reset(nil)
-			pool.GetPool().PutBufReader(p.cr)
+			rpool.Put(p.cr)
 			return false
 		}
 	} else if e := ws.WriteMsg(p.c, buf, false, true, false); e != nil {
 		log.Error(nil, "[Stream.cworker] write verify data to server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 		p.c.Close()
 		p.cr.Reset(nil)
-		pool.GetPool().PutBufReader(p.cr)
+		rpool.Put(p.cr)
 		return false
 	} else {
 		for len(clientverifydata) > 0 {
@@ -295,7 +298,7 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 				log.Error(nil, "[Stream.cworker] write verify data to server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 				p.c.Close()
 				p.cr.Reset(nil)
-				pool.GetPool().PutBufReader(p.cr)
+				rpool.Put(p.cr)
 				return false
 			}
 			if clientverifydata == nil {
@@ -308,7 +311,7 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 	if p.uniqueid == "" {
 		p.c.Close()
 		p.cr.Reset(nil)
-		pool.GetPool().PutBufReader(p.cr)
+		rpool.Put(p.cr)
 		return false
 	}
 	//verify server success
@@ -316,7 +319,7 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 		log.Error(nil, "[Stream.cworker] add server to connection manager failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 		p.c.Close()
 		p.cr.Reset(nil)
-		pool.GetPool().PutBufReader(p.cr)
+		rpool.Put(p.cr)
 		return false
 	}
 	//verify finished set status to true
@@ -329,7 +332,7 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 			p.CancelFunc()
 			p.c.Close()
 			p.cr.Reset(nil)
-			pool.GetPool().PutBufReader(p.cr)
+			rpool.Put(p.cr)
 			return false
 		}
 	}
@@ -423,13 +426,14 @@ func (this *Instance) handle(p *Peer) {
 		this.mng.DelPeer(p)
 		p.CancelFunc()
 		p.cr.Reset(nil)
-		pool.GetPool().PutBufReader(p.cr)
+		rpool.Put(p.cr)
 	}()
 	//before handle user data,send first ping,to get the net lag
-	buf := pool.GetPool().Get(8)
+	buf := bpool.Get(8)
+	buf = buf[:8]
 	binary.BigEndian.PutUint64(buf, uint64(time.Now().UnixNano()))
 	e := ws.WritePing(p.c, buf, false)
-	pool.GetPool().Put(&buf)
+	bpool.Put(&buf)
 	if e != nil {
 		if p.peertype == _PEER_CLIENT {
 			log.Error(nil, "[Stream.handle] send first ping to client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
@@ -438,7 +442,7 @@ func (this *Instance) handle(p *Peer) {
 		}
 		return
 	}
-	if ws.Read(p.cr, p.selfMaxMsgLen, false, func(opcode ws.OPCode, data []byte) (readmore bool) {
+	if e = ws.Read(p.cr, p.selfMaxMsgLen, false, func(opcode ws.OPCode, data []byte) (readmore bool) {
 		switch {
 		case !opcode.IsControl():
 			now := time.Now()
