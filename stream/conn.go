@@ -86,7 +86,6 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 				if e := p.c.(*tls.Conn).HandshakeContext(ctx); e != nil {
 					log.Error(nil, "[Stream.StartServer] tls handshake failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 					p.c.Close()
-					p.cr.Reset(nil)
 					rpool.Put(p.cr)
 					return
 				}
@@ -99,7 +98,6 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 			if e != nil && e != ws.ErrNotWS {
 				log.Error(nil, "[Stream.StartServer] upgrade websocket failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 				p.c.Close()
-				p.cr.Reset(nil)
 				rpool.Put(p.cr)
 				return
 			}
@@ -117,21 +115,18 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 	serververifydata := this.verifypeer(ctx, p)
 	if p.uniqueid == "" {
 		p.c.Close()
-		p.cr.Reset(nil)
 		rpool.Put(p.cr)
 		return
 	}
 	if 4+uint64(len(serververifydata)) > uint64(p.peerMaxMsgLen) {
 		log.Error(nil, "[Stream.sworker] server response verify data too large", log.String("cip", p.c.RemoteAddr().String()))
 		p.c.Close()
-		p.cr.Reset(nil)
 		rpool.Put(p.cr)
 		return
 	}
 	if e := this.mng.AddPeer(p); e != nil {
 		log.Error(nil, "[Stream.sworker] add client to connection manager failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 		p.c.Close()
-		p.cr.Reset(nil)
 		rpool.Put(p.cr)
 		return
 	}
@@ -145,7 +140,6 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 			log.Error(nil, "[Stream.sworker] write verify data to client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 			this.mng.DelPeer(p)
 			p.Close(false)
-			p.cr.Reset(nil)
 			rpool.Put(p.cr)
 			return
 		}
@@ -153,7 +147,6 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 		log.Error(nil, "[Stream.sworker] write verify data to client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 		this.mng.DelPeer(p)
 		p.Close(false)
-		p.cr.Reset(nil)
 		rpool.Put(p.cr)
 		return
 	} else {
@@ -170,7 +163,6 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 				log.Error(nil, "[Stream.sworker] write verify data to client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
 				this.mng.DelPeer(p)
 				p.c.Close()
-				p.cr.Reset(nil)
 				rpool.Put(p.cr)
 				return
 			}
@@ -188,7 +180,6 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 			this.mng.DelPeer(p)
 			p.CancelFunc()
 			p.c.Close()
-			p.cr.Reset(nil)
 			rpool.Put(p.cr)
 			return
 		}
@@ -244,7 +235,6 @@ func (this *Instance) StartClient(serveraddr string, websocket bool, verifydata 
 		if e := p.c.(*tls.Conn).HandshakeContext(ctx); e != nil {
 			log.Error(nil, "[Stream.StartClient] tls handshake failed", log.String("sip", serveraddr), log.CError(e))
 			p.c.Close()
-			p.cr.Reset(nil)
 			rpool.Put(p.cr)
 			return false
 		}
@@ -255,7 +245,6 @@ func (this *Instance) StartClient(serveraddr string, websocket bool, verifydata 
 		if e != nil {
 			log.Error(nil, "[Stream.StartClient] upgrade websocket failed", log.String("sip", serveraddr), log.CError(e))
 			p.c.Close()
-			p.cr.Reset(nil)
 			rpool.Put(p.cr)
 			return false
 		}
@@ -274,14 +263,12 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 		if e := ws.WriteMsg(p.c, buf, true, true, false); e != nil {
 			log.Error(nil, "[Stream.cworker] write verify data to server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 			p.c.Close()
-			p.cr.Reset(nil)
 			rpool.Put(p.cr)
 			return false
 		}
 	} else if e := ws.WriteMsg(p.c, buf, false, true, false); e != nil {
 		log.Error(nil, "[Stream.cworker] write verify data to server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 		p.c.Close()
-		p.cr.Reset(nil)
 		rpool.Put(p.cr)
 		return false
 	} else {
@@ -297,7 +284,6 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 			if e := ws.WriteMsg(p.c, data, clientverifydata == nil, false, false); e != nil {
 				log.Error(nil, "[Stream.cworker] write verify data to server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 				p.c.Close()
-				p.cr.Reset(nil)
 				rpool.Put(p.cr)
 				return false
 			}
@@ -310,7 +296,6 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 	_ = this.verifypeer(ctx, p)
 	if p.uniqueid == "" {
 		p.c.Close()
-		p.cr.Reset(nil)
 		rpool.Put(p.cr)
 		return false
 	}
@@ -318,7 +303,6 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 	if e := this.mng.AddPeer(p); e != nil {
 		log.Error(nil, "[Stream.cworker] add server to connection manager failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
 		p.c.Close()
-		p.cr.Reset(nil)
 		rpool.Put(p.cr)
 		return false
 	}
@@ -331,7 +315,6 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 			this.mng.DelPeer(p)
 			p.CancelFunc()
 			p.c.Close()
-			p.cr.Reset(nil)
 			rpool.Put(p.cr)
 			return false
 		}
@@ -425,7 +408,6 @@ func (this *Instance) handle(p *Peer) {
 		}
 		this.mng.DelPeer(p)
 		p.CancelFunc()
-		p.cr.Reset(nil)
 		rpool.Put(p.cr)
 	}()
 	//before handle user data,send first ping,to get the net lag
