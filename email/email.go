@@ -15,7 +15,7 @@ import (
 	"github.com/chenjie199234/Corelib/util/ctime"
 )
 
-type EmailClientConfig struct {
+type Config struct {
 	EmailName       string         `json:"email_name"`
 	MaxOpen         uint16         `json:"max_open"`          //0: default 100
 	MaxConnIdletime ctime.Duration `json:"max_conn_idletime"` //<=0 means no idle time out
@@ -24,12 +24,12 @@ type EmailClientConfig struct {
 	Account         string         `json:"account"`
 	Password        string         `json:"password"`
 }
-type EmailClient struct {
-	c *EmailClientConfig
+type Client struct {
+	c *Config
 	p *cpool.CPool[*smtp.Client]
 }
 
-func NewEmailClient(c *EmailClientConfig) (*EmailClient, error) {
+func NewEmail(c *Config) (*Client, error) {
 	if c.MaxOpen == 0 {
 		c.MaxOpen = 100
 	}
@@ -39,7 +39,7 @@ func NewEmailClient(c *EmailClientConfig) (*EmailClient, error) {
 	if c.Account == "" || c.Password == "" {
 		return nil, errors.New("missing account/password in the config")
 	}
-	client := &EmailClient{
+	return &Client{
 		c: c,
 		p: cpool.NewCPool(uint32(c.MaxOpen), func() (*smtp.Client, error) {
 			client, e := smtp.Dial(c.Host + ":" + strconv.FormatUint(uint64(c.Port), 10))
@@ -60,16 +60,15 @@ func NewEmailClient(c *EmailClientConfig) (*EmailClient, error) {
 		}, c.MaxConnIdletime.StdDuration(), func(client *smtp.Client) {
 			client.Close()
 		}),
-	}
-	return client, nil
+	}, nil
 }
-func (c *EmailClient) SendTextEmail(ctx context.Context, to []string, subject string, body []byte) error {
+func (c *Client) SendTextEmail(ctx context.Context, to []string, subject string, body []byte) error {
 	return c.do(ctx, to, subject, "text/plain; charset=UTF-8", body)
 }
-func (c *EmailClient) SendHtmlEmail(ctx context.Context, to []string, subject string, body []byte) error {
+func (c *Client) SendHtmlEmail(ctx context.Context, to []string, subject string, body []byte) error {
 	return c.do(ctx, to, subject, "text/html; charset=UTF-8", body)
 }
-func (c *EmailClient) do(ctx context.Context, to []string, subject string, mimetype string, body []byte) (e error) {
+func (c *Client) do(ctx context.Context, to []string, subject string, mimetype string, body []byte) (e error) {
 	ctx, span := trace.NewSpan(ctx, "Corelib.Email", trace.Client, nil)
 	span.GetSelfSpanData().SetStateKV("email", c.c.EmailName)
 	span.GetSelfSpanData().SetStateKV("host", c.c.Host+":"+strconv.FormatUint(uint64(c.c.Port), 10))
@@ -115,7 +114,7 @@ func (c *EmailClient) do(ctx context.Context, to []string, subject string, mimet
 		return
 	}
 }
-func (c *EmailClient) formemail(to []string, subject string, mimetype string, body []byte) []byte {
+func (c *Client) formemail(to []string, subject string, mimetype string, body []byte) []byte {
 	//from
 	count := 6 + len(c.c.Account) + 2
 	//to
@@ -154,7 +153,7 @@ func (c *EmailClient) formemail(to []string, subject string, mimetype string, bo
 	buf = append(buf, body...)
 	return buf
 }
-func (c *EmailClient) sendemail(client *smtp.Client, to []string, email []byte) (e error, del bool) {
+func (c *Client) sendemail(client *smtp.Client, to []string, email []byte) (e error, del bool) {
 	defer func() {
 		if e != nil && client.Reset() != nil {
 			del = true
