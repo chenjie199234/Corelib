@@ -10,20 +10,21 @@ func init() {
 	p = &sync.Pool{}
 }
 
-// get a []byte which len() == 0 and cap() >= length
-func Get(length int) []byte {
-	if length < 0 {
+// get a []byte which len() == 0 and cap() >= min
+func Get(min int) []byte {
+	if min < 0 {
 		panic("cannot be  negative")
-	} else if length < 256 {
-		length = 256
+	} else if min < 256 {
+		min = 256
 	}
 	if b, ok := p.Get().([]byte); ok {
-		if cap(b) >= length {
+		if cap(b) >= min {
 			return b[:0]
 		}
 		p.Put(&b)
 	}
-	return make([]byte, 0, length)
+	tmp := make([]byte, min)
+	return tmp[:0]
 }
 func Put(b *[]byte) {
 	*b = (*b)[:0]
