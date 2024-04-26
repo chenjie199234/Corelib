@@ -64,25 +64,12 @@ func NewEmailClient(c *EmailClientConfig) (*EmailClient, error) {
 	return client, nil
 }
 func (c *EmailClient) SendTextEmail(ctx context.Context, to []string, subject string, body []byte) error {
-	ctx, span := trace.NewSpan(ctx, "Corelib.Email", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("email", c.c.EmailName)
-	span.GetSelfSpanData().SetStateKV("host", c.c.Host+":"+strconv.FormatUint(uint64(c.c.Port), 10))
-	span.GetSelfSpanData().SetStateKV("subject", subject)
-	span.GetSelfSpanData().SetStateKV("self", c.c.Account)
-	count := 0
-	for _, v := range to {
-		count += len(v)
-	}
-	if count > 256 {
-		span.GetSelfSpanData().SetStateKV("targets", strconv.Itoa(len(to))+" targets")
-	} else {
-		span.GetSelfSpanData().SetStateKV("targets", strings.Join(to, ";"))
-	}
-	e := c.do(ctx, to, subject, "text/plain; charset=UTF-8", body)
-	span.Finish(e)
-	return e
+	return c.do(ctx, to, subject, "text/plain; charset=UTF-8", body)
 }
 func (c *EmailClient) SendHtmlEmail(ctx context.Context, to []string, subject string, body []byte) error {
+	return c.do(ctx, to, subject, "text/html; charset=UTF-8", body)
+}
+func (c *EmailClient) do(ctx context.Context, to []string, subject string, mimetype string, body []byte) (e error) {
 	ctx, span := trace.NewSpan(ctx, "Corelib.Email", trace.Client, nil)
 	span.GetSelfSpanData().SetStateKV("email", c.c.EmailName)
 	span.GetSelfSpanData().SetStateKV("host", c.c.Host+":"+strconv.FormatUint(uint64(c.c.Port), 10))
@@ -91,29 +78,29 @@ func (c *EmailClient) SendHtmlEmail(ctx context.Context, to []string, subject st
 	count := 0
 	for _, v := range to {
 		count += len(v)
+		if count > 256 {
+			break
+		}
 	}
 	if count > 256 {
 		span.GetSelfSpanData().SetStateKV("targets", strconv.Itoa(len(to))+" targets")
 	} else {
 		span.GetSelfSpanData().SetStateKV("targets", strings.Join(to, ";"))
 	}
-	e := c.do(ctx, to, subject, "text/html; charset=UTF-8", body)
-	span.Finish(e)
-	return e
-}
-func (c *EmailClient) do(ctx context.Context, to []string, subject string, mimetype string, body []byte) error {
+	defer span.Finish(e)
 	for {
-		client, e := c.p.Get(ctx)
-		if e != nil {
-			return e
+		var client *smtp.Client
+		if client, e = c.p.Get(ctx); e != nil {
+			return
 		}
-		if e := client.Noop(); e != nil {
+		if e = client.Noop(); e != nil {
 			client.Close()
 			c.p.AbandonOne()
 			continue
 		}
 		email := c.formemail(to, subject, mimetype, body)
-		if e, del := c.sendemail(client, to, email); e != nil {
+		var del bool
+		if e, del = c.sendemail(client, to, email); e != nil {
 			if del {
 				client.Close()
 				c.p.AbandonOne()
@@ -121,11 +108,11 @@ func (c *EmailClient) do(ctx context.Context, to []string, subject string, mimet
 				c.p.Put(client)
 			}
 			bpool.Put(&email)
-			return e
+			return
 		}
 		c.p.Put(client)
 		bpool.Put(&email)
-		return nil
+		return
 	}
 }
 func (c *EmailClient) formemail(to []string, subject string, mimetype string, body []byte) []byte {
