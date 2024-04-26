@@ -70,8 +70,11 @@ func (p *CPool[T]) Get(ctx context.Context) (T, error) {
 		}
 		if p.max == 0 {
 			//no limit
-			atomic.AddUint32(&p.count, 1)
-			return p.new()
+			tmp, e := p.new()
+			if e == nil {
+				atomic.AddUint32(&p.count, 1)
+			}
+			return tmp, e
 		}
 		//limit check
 		for {
