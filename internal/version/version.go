@@ -4,7 +4,7 @@ import "fmt"
 
 var major = 0
 var minor = 0
-var patch = 115
+var patch = 116
 var status = ""
 
 func String() string {

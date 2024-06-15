@@ -10,17 +10,17 @@ import (
 
 const txt = `module {{.}}
 
-go 1.21
+go 1.22.0
 
 require (
 	github.com/chenjie199234/admin main
 	github.com/chenjie199234/Corelib %s
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-sql-driver/mysql v1.8.1
-	github.com/redis/go-redis/v9 v9.5.1
+	github.com/redis/go-redis/v9 v9.5.2
 	go.mongodb.org/mongo-driver v1.15.0
-	google.golang.org/grpc v1.63.2
-	google.golang.org/protobuf v1.33.0
+	google.golang.org/grpc v1.64.0
+	google.golang.org/protobuf v1.34.2
 )`
 
 func CreatePathAndFile(packagename string) {
