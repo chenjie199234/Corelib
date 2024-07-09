@@ -10,7 +10,7 @@ require (
 	github.com/shirou/gopsutil/v4 v4.24.5
 	go.mongodb.org/mongo-driver v1.15.0
 	golang.org/x/net v0.26.0
-	google.golang.org/grpc v1.64.0
+	google.golang.org/grpc v1.64.1
 	google.golang.org/protobuf v1.34.2
 	k8s.io/api v0.30.2
 	k8s.io/apimachinery v0.30.2
