@@ -143,7 +143,7 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 	opts = append(opts, grpc.WithDefaultServiceConfig("{\"loadBalancingConfig\":[{\"corelib\":{}}]}"))
 	//resolver
 	gresolver.Register(&resolverBuilder{c: client})
-	client.conn, e = grpc.Dial("corelib:///"+serverapp, opts...)
+	client.conn, e = grpc.NewClient("corelib:///"+serverapp, opts...)
 	if e != nil {
 		return nil, e
 	}
