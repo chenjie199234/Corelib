@@ -2,12 +2,10 @@ module github.com/chenjie199234/Corelib
 
 go 1.22.0
 
-toolchain go1.22.4
-
 require (
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/redis/go-redis/v9 v9.5.2
-	github.com/shirou/gopsutil/v4 v4.24.5
+	github.com/shirou/gopsutil/v4 v4.24.6
 	go.mongodb.org/mongo-driver v1.16.0
 	golang.org/x/net v0.27.0
 	google.golang.org/grpc v1.65.0
