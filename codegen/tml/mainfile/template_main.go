@@ -8,11 +8,11 @@ import (
 const txt = `package main
 
 import (
+	"log/slog"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
-	"log/slog"
 
 	"{{.}}/config"
 	"{{.}}/dao"

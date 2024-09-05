@@ -707,7 +707,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		}
 
 		g.P("resp,e:=handler(ctx,req)")
-		g.P("ee := ", g.QualifiedGoIdent(cerrorPackage.Ident("ConvertStdError")), "(e)")
+		g.P("ee := ", g.QualifiedGoIdent(cerrorPackage.Ident("Convert")), "(e)")
 		g.P("if ee!=nil{")
 		g.P("ctx.Abort(ee)")
 		g.P("return")
@@ -1221,7 +1221,7 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 		g.P("data,e:=", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(r.Body)")
 		g.P("r.Body.Close()")
 		g.P("if e!=nil {")
-		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ConvertStdError")), "(e)")
+		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("Convert")), "(e)")
 		g.P("}")
 		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 		g.P("if len(data)==0{")
