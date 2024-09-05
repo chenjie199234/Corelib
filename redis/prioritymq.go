@@ -2,9 +2,9 @@ package redis
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
 
 	gredis "github.com/redis/go-redis/v9"
@@ -140,7 +140,7 @@ func (c *Client) PriorityMQSub(group, channel string, concurrencynum uint, subha
 				}
 				tasks, e = c.ZRevRangeByScore(ctx, group, &gredis.ZRangeBy{Min: "0", Max: "+inf"}).Result()
 				if e != nil {
-					log.Error(ctx, "[redis.prioritymq.sub] get tasks failed", log.String("group", group), log.CError(e))
+					slog.ErrorContext(ctx, "[redis.prioritymq.sub] get tasks failed", slog.String("group", group), slog.String("error", e.Error()))
 					continue
 				}
 				if len(tasks) == 0 && ctx.Err() == nil {
@@ -158,7 +158,7 @@ func (c *Client) PriorityMQSub(group, channel string, concurrencynum uint, subha
 				if result, e = c.BLPop(ctx, time.Second, keys...).Result(); e == nil {
 					subhandler(result[0][len(group)+3:len(result[0])-len(channel)-1], common.STB(result[1]))
 				} else if ee, ok := e.(interface{ Timeout() bool }); (!ok || !ee.Timeout()) && e != gredis.Nil {
-					log.Error(ctx, "[redis.prioritymq.sub] sub tasks failed", log.String("group", group), log.String("channel", channel), log.CError(e))
+					slog.ErrorContext(ctx, "[redis.prioritymq.sub] sub tasks failed", slog.String("group", group), slog.String("channel", channel), slog.String("error", e.Error()))
 				} else {
 					e = nil
 				}

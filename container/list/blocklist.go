@@ -1,6 +1,7 @@
 package list
 
 import (
+	"context"
 	"errors"
 	"math"
 	"sync/atomic"
@@ -42,17 +43,25 @@ func (bl *BlockList[T]) Push(data T) (int64, error) {
 	}
 	return oldcount + 1, nil
 }
-func (bl *BlockList[T]) Pop() (T, bool) {
+func (bl *BlockList[T]) Pop(ctx context.Context) (T, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	for {
 		if data, e := bl.list.Pop(nil); e == nil {
 			atomic.AddInt64(&bl.count, -1)
-			return data, true
+			return data, nil
 		}
 		if bl.count < 0 {
 			var empty T
-			return empty, false
+			return empty, ErrClosed
 		}
-		<-bl.block
+		select {
+		case <-bl.block:
+		case <-ctx.Done():
+			var empty T
+			return empty, ctx.Err()
+		}
 	}
 }
 func (bl *BlockList[T]) Count() int64 {

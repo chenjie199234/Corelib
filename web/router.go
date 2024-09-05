@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io/fs"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -15,11 +16,10 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/container/trie"
-	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/log/trace"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/pool/bpool"
+	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/host"
@@ -189,7 +189,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 		if target := req.Header.Get("Core-Target"); target != "" && target != r.s.self {
 			resp.Header().Set("Content-Type", "application/json")
 			resp.WriteHeader(int(cerror.ErrTarget.Httpcode))
-			resp.Write(common.STB(cerror.ErrTarget.Error()))
+			resp.Write(common.STB(cerror.ErrTarget.Json()))
 			return
 		}
 		//trace
@@ -199,28 +199,28 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 		if traceparentstr := req.Header.Get("Traceparent"); traceparentstr != "" {
 			tid, psid, e := trace.ParseTraceParent(traceparentstr)
 			if e != nil {
-				log.Error(nil, "[web.server] trace data format wrong",
-					log.String("cip", peerip),
-					log.String("path", path),
-					log.String("method", method),
-					log.String("trace_parent", traceparentstr))
+				slog.ErrorContext(nil, "[web.server] trace data format wrong",
+					slog.String("cip", peerip),
+					slog.String("path", path),
+					slog.String("method", method),
+					slog.String("trace_parent", traceparentstr))
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
-				resp.Write(common.STB(cerror.ErrReq.Error()))
+				resp.Write(common.STB(cerror.ErrReq.Json()))
 				return
 			}
 			parent := trace.NewSpanData(tid, psid)
 			if tracestatestr := req.Header.Get("Tracestate"); tracestatestr != "" {
 				tmp, e := trace.ParseTraceState(tracestatestr)
 				if e != nil {
-					log.Error(nil, "[web.server] trace data format wrong",
-						log.String("cip", peerip),
-						log.String("path", path),
-						log.String("method", method),
-						log.String("trace_state", tracestatestr))
+					slog.ErrorContext(nil, "[web.server] trace data format wrong",
+						slog.String("cip", peerip),
+						slog.String("path", path),
+						slog.String("method", method),
+						slog.String("trace_state", tracestatestr))
 					resp.Header().Set("Content-Type", "application/json")
 					resp.WriteHeader(int(cerror.ErrReq.Httpcode))
-					resp.Write(common.STB(cerror.ErrReq.Error()))
+					resp.Write(common.STB(cerror.ErrReq.Json()))
 					return
 				}
 				var app, host, method, path bool
@@ -267,14 +267,14 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 		if mdstr := req.Header.Get("Core-Metadata"); mdstr != "" {
 			md = make(map[string]string)
 			if e := json.Unmarshal(common.STB(mdstr), &md); e != nil {
-				log.Error(ctx, "[web.server] meta data format wrong",
-					log.String("cip", peerip),
-					log.String("path", path),
-					log.String("method", method),
-					log.String("metadata", mdstr))
+				slog.ErrorContext(ctx, "[web.server] meta data format wrong",
+					slog.String("cip", peerip),
+					slog.String("path", path),
+					slog.String("method", method),
+					slog.String("metadata", mdstr))
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
-				resp.Write(common.STB(cerror.ErrReq.Error()))
+				resp.Write(common.STB(cerror.ErrReq.Json()))
 				span.Finish(cerror.ErrReq)
 				return
 			}
@@ -288,14 +288,14 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 		if temp := req.Header.Get("Core-Deadline"); temp != "" {
 			clientdl, e := strconv.ParseInt(temp, 10, 64)
 			if e != nil {
-				log.Error(ctx, "[web.server] deadline format wrong",
-					log.String("cip", peerip),
-					log.String("path", path),
-					log.String("method", method),
-					log.String("deadline", temp))
+				slog.ErrorContext(ctx, "[web.server] deadline format wrong",
+					slog.String("cip", peerip),
+					slog.String("path", path),
+					slog.String("method", method),
+					slog.String("deadline", temp))
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
-				resp.Write(common.STB(cerror.ErrReq.Error()))
+				resp.Write(common.STB(cerror.ErrReq.Json()))
 				span.Finish(cerror.ErrReq)
 				return
 			}
@@ -315,13 +315,13 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 				//tell peer self closed
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrServerClosing.Httpcode))
-				resp.Write(common.STB(cerror.ErrServerClosing.Error()))
+				resp.Write(common.STB(cerror.ErrServerClosing.Json()))
 				span.Finish(cerror.ErrServerClosing)
 			} else {
 				//tell peer self busy
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrBusy.Httpcode))
-				resp.Write(common.STB(cerror.ErrBusy.Error()))
+				resp.Write(common.STB(cerror.ErrBusy.Json()))
 				span.Finish(cerror.ErrBusy)
 			}
 			return
@@ -335,16 +335,16 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 				e := recover()
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[web.server] panic",
-					log.String("cip", peerip),
-					log.String("path", path),
-					log.String("method", method),
-					log.Any("panic", e),
-					log.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
+				slog.ErrorContext(workctx, "[web.server] panic",
+					slog.String("cip", peerip),
+					slog.String("path", path),
+					slog.String("method", method),
+					slog.Any("panic", e),
+					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
 				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
 				resp.Header().Set("Content-Type", "application/json")
-				resp.WriteHeader(http.StatusInternalServerError)
-				resp.Write(common.STB(cerror.ErrPanic.Error()))
+				resp.WriteHeader(int(cerror.ErrPanic.Httpcode))
+				resp.Write(common.STB(cerror.ErrPanic.Json()))
 				workctx.e = cerror.ErrPanic
 			}
 			span.Finish(workctx.e)
@@ -360,10 +360,10 @@ func (r *Router) notFoundHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusNotFound)
 	w.Write(common.STB(cerror.ErrNotExist.Error()))
-	log.Error(nil, "[web.server] path not exist",
-		log.String("cip", realip(req)),
-		log.String("path", req.URL.Path),
-		log.String("method", req.Method))
+	slog.ErrorContext(nil, "[web.server] path not exist",
+		slog.String("cip", realip(req)),
+		slog.String("path", req.URL.Path),
+		slog.String("method", req.Method))
 }
 func (r *Router) srcFileHandler(resp http.ResponseWriter, req *http.Request) {
 	path := req.URL.Path
@@ -371,42 +371,32 @@ func (r *Router) srcFileHandler(resp http.ResponseWriter, req *http.Request) {
 		path = "/index.html"
 	}
 	if file, e := r.srcroot.Open(path[1:]); e != nil {
-		if os.IsNotExist(e) {
-			resp.Header().Set("Content-Type", "application/json")
-			resp.WriteHeader(int(cerror.ErrNotExist.Httpcode))
-			resp.Write(common.STB(cerror.ErrNotExist.Error()))
-			log.Error(nil, "[web.server] static src file not exist",
-				log.String("cip", realip(req)),
-				log.String("path", req.URL.Path),
-				log.String("method", req.Method))
-		} else {
-			resp.Header().Set("Content-Type", "application/json")
-			resp.WriteHeader(int(cerror.ErrSystem.Httpcode))
-			resp.Write(common.STB(cerror.ErrSystem.Error()))
-			log.Error(nil, "[web.server] open static src file failed",
-				log.String("cip", realip(req)),
-				log.String("path", req.URL.Path),
-				log.String("method", req.Method),
-				log.CError(e))
-		}
+		resp.Header().Set("Content-Type", "application/json")
+		resp.WriteHeader(int(cerror.ErrSystem.Httpcode))
+		resp.Write(common.STB(cerror.ErrSystem.Json()))
+		slog.ErrorContext(nil, "[web.server] open static src file failed",
+			slog.String("cip", realip(req)),
+			slog.String("path", req.URL.Path),
+			slog.String("method", req.Method),
+			slog.String("error", e.Error()))
 	} else if fileinfo, e := file.Stat(); e != nil {
 		resp.Header().Set("Content-Type", "application/json")
 		resp.WriteHeader(int(cerror.ErrSystem.Httpcode))
-		resp.Write(common.STB(cerror.ErrSystem.Error()))
-		log.Error(nil, "[web.server] get static src file info failed",
-			log.String("cip", realip(req)),
-			log.String("path", req.URL.Path),
-			log.String("method", req.Method),
-			log.CError(e))
+		resp.Write(common.STB(cerror.ErrSystem.Json()))
+		slog.ErrorContext(nil, "[web.server] get static src file info failed",
+			slog.String("cip", realip(req)),
+			slog.String("path", req.URL.Path),
+			slog.String("method", req.Method),
+			slog.String("error", e.Error()))
 		file.Close()
 	} else if !fileinfo.Mode().IsRegular() {
 		resp.Header().Set("Content-Type", "application/json")
 		resp.WriteHeader(int(cerror.ErrNotExist.Httpcode))
-		resp.Write(common.STB(cerror.ErrNotExist.Error()))
-		log.Error(nil, "[web.server] static src file not exist",
-			log.String("cip", realip(req)),
-			log.String("path", req.URL.Path),
-			log.String("method", req.Method))
+		resp.Write(common.STB(cerror.ErrNotExist.Json()))
+		slog.ErrorContext(nil, "[web.server] static src file not exist",
+			slog.String("cip", realip(req)),
+			slog.String("path", req.URL.Path),
+			slog.String("method", req.Method))
 		file.Close()
 	} else {
 		http.ServeContent(resp, req, fileinfo.Name(), fileinfo.ModTime(), file.(*os.File))
@@ -448,10 +438,10 @@ func (r *Router) corsOptions(resp http.ResponseWriter, req *http.Request) {
 	}
 	if resp.Header().Get("Access-Control-Allow-Origin") == "" {
 		resp.WriteHeader(http.StatusForbidden)
-		log.Error(nil, "[web.server] cors check failed",
-			log.String("cip", realip(req)),
-			log.String("path", req.URL.Path),
-			log.String("method", req.Method))
+		slog.ErrorContext(nil, "[web.server] cors check failed",
+			slog.String("cip", realip(req)),
+			slog.String("path", req.URL.Path),
+			slog.String("method", req.Method))
 		return
 	}
 	if r.s.c.CorsAllowCredentials {
@@ -506,11 +496,11 @@ func (r *Router) corsNormal(resp http.ResponseWriter, req *http.Request) bool {
 	if resp.Header().Get("Access-Control-Allow-Origin") == "" {
 		resp.Header().Set("Content-Type", "application/json")
 		resp.WriteHeader(int(cerror.ErrCors.Httpcode))
-		resp.Write(common.STB(cerror.ErrCors.Error()))
-		log.Error(nil, "[web.server] cors check failed",
-			log.String("cip", realip(req)),
-			log.String("path", req.URL.Path),
-			log.String("method", req.Method))
+		resp.Write(common.STB(cerror.ErrCors.Json()))
+		slog.ErrorContext(nil, "[web.server] cors check failed",
+			slog.String("cip", realip(req)),
+			slog.String("path", req.URL.Path),
+			slog.String("method", req.Method))
 		return false
 	}
 	if r.s.c.CorsAllowCredentials {
@@ -585,43 +575,43 @@ func (r *Router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 func (r *Router) printPath() {
 	rewrite := r.s.handlerRewrite
 	for path := range r.getTree.GetAll() {
-		log.Info(nil, "[web.server] GET: "+path)
+		slog.Info("[web.server] GET: " + path)
 	}
 	if rewrite, ok := rewrite["GET"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] GET: "+ourl+" => "+nurl)
+			slog.Info("[web.server] GET: " + ourl + " => " + nurl)
 		}
 	}
 	for path := range r.postTree.GetAll() {
-		log.Info(nil, "[web.server] POST: "+path)
+		slog.Info("[web.server] POST: " + path)
 	}
 	if rewrite, ok := rewrite["POST"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] POST: "+ourl+" => "+nurl)
+			slog.Info("[web.server] POST: " + ourl + " => " + nurl)
 		}
 	}
 	for path := range r.putTree.GetAll() {
-		log.Info(nil, "[web.server] PUT: "+path)
+		slog.Info("[web.server] PUT: " + path)
 	}
 	if rewrite, ok := rewrite["PUT"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] PUT: "+ourl+" => "+nurl)
+			slog.Info("[web.server] PUT: " + ourl + " => " + nurl)
 		}
 	}
 	for path := range r.patchTree.GetAll() {
-		log.Info(nil, "[web.server] PATCH: "+path)
+		slog.Info("[web.server] PATCH: " + path)
 	}
 	if rewrite, ok := rewrite["PATCH"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] PATCH: "+ourl+" => "+nurl)
+			slog.Info("[web.server] PATCH: " + ourl + " => " + nurl)
 		}
 	}
 	for path := range r.deleteTree.GetAll() {
-		log.Info(nil, "[web.server] DELETE: "+path)
+		slog.Info("[web.server] DELETE: " + path)
 	}
 	if rewrite, ok := rewrite["DELETE"]; ok {
 		for ourl, nurl := range rewrite {
-			log.Info(nil, "[web.server] DELETE: "+ourl+" => "+nurl)
+			slog.Info("[web.server] DELETE: " + ourl + " => " + nurl)
 		}
 	}
 }

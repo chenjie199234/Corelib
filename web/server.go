@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -13,7 +14,6 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/container/trie"
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/name"
@@ -78,7 +78,7 @@ func (c *ServerConfig) validate() {
 		for _, v := range c.CorsAllowedOrigins {
 			if v == "*" {
 				if c.CorsAllowCredentials {
-					log.Warn(nil, "[web.server] when cors_allow_credentials is true in config,the wildcard '*' in cors_allowed_origins will be ignored")
+					slog.Warn("[web.server] when cors_allow_credentials is true in config,the wildcard '*' in cors_allowed_origins will be ignored")
 					continue
 				} else {
 					c.CorsAllowedOrigins = []string{"*"}
@@ -104,7 +104,7 @@ func (c *ServerConfig) validate() {
 				undup = nil
 				break
 			} else if v == "*" {
-				log.Warn(nil, "[web.server] when cors_allow_credentials is true in config,the wildcard '*' in cors_allowed_headers is treated as the literal header name '*',without special semantics")
+				slog.Warn("[web.server] when cors_allow_credentials is true in config,the wildcard '*' in cors_allowed_headers is treated as the literal header name '*',without special semantics")
 			}
 			undup[http.CanonicalHeaderKey(v)] = nil
 		}
@@ -124,7 +124,7 @@ func (c *ServerConfig) validate() {
 				undup = nil
 				break
 			} else if v == "*" {
-				log.Warn(nil, "[web.server] when cors_allow_credentials is true in config,the wildcard '*' in cors_expose_headers is treated as the literal header name '*',without special semantics")
+				slog.Warn("[web.server] when cors_allow_credentials is true in config,the wildcard '*' in cors_expose_headers is treated as the literal header name '*',without special semantics")
 			}
 			undup[http.CanonicalHeaderKey(v)] = nil
 		}
@@ -184,7 +184,7 @@ func NewWebServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tlsc 
 		handlerRewrite: make(map[string]map[string]string),
 	}
 	instance.s = &http.Server{
-		ErrorLog:          log.GetLloger(),
+		ErrorLog:          slog.NewLogLogger(slog.Default().Handler(), slog.LevelInfo),
 		TLSConfig:         tlsc,
 		ReadHeaderTimeout: c.ConnectTimeout.StdDuration(),
 		IdleTimeout:       c.IdleTimeout.StdDuration(),

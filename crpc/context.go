@@ -59,7 +59,7 @@ func (c *Context) Abort(e error) {
 	if !atomic.CompareAndSwapInt32(&c.finish, 0, -1) {
 		return
 	}
-	c.msg.Error = cerror.ConvertStdError(e)
+	c.msg.Error = cerror.Convert(e)
 	if c.msg.Error != nil && (c.msg.Error.Httpcode < 400 || c.msg.Error.Httpcode > 999) {
 		panic("[crpc.Context.Abort] httpcode must in [400,999]")
 	}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -139,7 +140,22 @@ func (s *Super) CreateApp(project, groupname, appname, url string, buildcmds []*
 		if e != nil {
 			return errors.New("[CreateApp] " + e.Error())
 		}
-		a.sloger = slog.New(slog.NewJSONHandler(a.logfile, &slog.HandlerOptions{AddSource: true}).WithGroup("attrs"))
+		a.sloger = slog.New(slog.NewJSONHandler(a.logfile, &slog.HandlerOptions{
+			AddSource: true,
+			ReplaceAttr: func(groups []string, attr slog.Attr) slog.Attr {
+				if len(groups) == 0 && attr.Key == "function" {
+					return slog.Attr{}
+				}
+				if len(groups) == 0 && attr.Key == slog.SourceKey {
+					s := attr.Value.Any().(*slog.Source)
+					if index := strings.Index(s.File, "corelib@v"); index != -1 {
+						s.File = s.File[index:]
+					} else if index = strings.Index(s.File, "Corelib@v"); index != -1 {
+						s.File = s.File[index:]
+					}
+				}
+				return attr
+			}}).WithGroup("msg_kvs"))
 		s.apps[fullappname] = a
 		go a.startApp()
 		return nil

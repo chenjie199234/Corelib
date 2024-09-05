@@ -7,54 +7,54 @@ import (
 
 // system,start from 1000
 var (
-	ErrServerClosing    = &Error{Code: 1000, Httpcode: 449, Msg: "server is closing,retry this request"}
-	ErrClientClosing    = &Error{Code: 1001, Httpcode: http.StatusServiceUnavailable, Msg: "using closed clinet"}
-	ErrTarget           = &Error{Code: 1002, Httpcode: http.StatusServiceUnavailable, Msg: "wrong server,check the server group and name"}
-	ErrNoapi            = &Error{Code: 1003, Httpcode: http.StatusNotImplemented, Msg: "api not implement"}
-	ErrPanic            = &Error{Code: 1004, Httpcode: http.StatusServiceUnavailable, Msg: "server panic"}
-	ErrNoSpecificserver = &Error{Code: 1005, Httpcode: http.StatusServiceUnavailable, Msg: "no specific server"}
-	ErrNoserver         = &Error{Code: 1006, Httpcode: http.StatusServiceUnavailable, Msg: "no servers"}
-	ErrDiscoverStopped  = &Error{Code: 1007, Httpcode: http.StatusInternalServerError, Msg: "discover stopped"}
-	ErrClosed           = &Error{Code: 1008, Httpcode: http.StatusInternalServerError, Msg: "connection closed"}
-	ErrReqmsgLen        = &Error{Code: 1009, Httpcode: http.StatusBadRequest, Msg: "req msg too large"}
-	ErrRespmsgLen       = &Error{Code: 1010, Httpcode: http.StatusInternalServerError, Msg: "resp msg too large"}
+	ErrServerClosing    = MakeCError(1000, http.StatusServiceUnavailable, "server is closing,retry this request")
+	ErrClientClosing    = MakeCError(1001, http.StatusBadRequest, "using closed client")
+	ErrTarget           = MakeCError(1002, http.StatusBadRequest, "wrong server,check the server group and name")
+	ErrNoapi            = MakeCError(1003, http.StatusNotImplemented, "api not implement")
+	ErrPanic            = MakeCError(1004, http.StatusServiceUnavailable, "server panic")
+	ErrNoserver         = MakeCError(1005, http.StatusServiceUnavailable, "no servers")
+	ErrNoSpecificserver = MakeCError(1006, http.StatusServiceUnavailable, "no specific server")
+	ErrDiscoverStopped  = MakeCError(1007, http.StatusBadRequest, "discover stopped")
+	ErrClosed           = MakeCError(1008, http.StatusInternalServerError, "connection closed")
+	ErrReqmsgLen        = MakeCError(1009, http.StatusBadRequest, "req msg too large")
+	ErrRespmsgLen       = MakeCError(1010, http.StatusInternalServerError, "resp msg too large")
 
-	ErrCors = &Error{Code: 2001, Httpcode: http.StatusForbidden, Msg: "Cors forbidden"}
+	ErrCors = MakeCError(2001, http.StatusForbidden, "Cors forbidden")
 )
 var (
-	ErrDataConflict = &Error{Code: 9001, Httpcode: http.StatusInternalServerError, Msg: "data conflict"}
-	ErrDataBroken   = &Error{Code: 9002, Httpcode: http.StatusInternalServerError, Msg: "data broken"}
+	ErrDataConflict = MakeCError(9001, http.StatusInternalServerError, "data conflict")
+	ErrDataBroken   = MakeCError(9002, http.StatusInternalServerError, "data broken")
 
-	ErrDBDataConflict = &Error{Code: 9101, Httpcode: http.StatusInternalServerError, Msg: "db data conflict"}
-	ErrDBDataBroken   = &Error{Code: 9102, Httpcode: http.StatusInternalServerError, Msg: "db data broken"}
+	ErrDBDataConflict = MakeCError(9101, http.StatusInternalServerError, "db data conflict")
+	ErrDBDataBroken   = MakeCError(9102, http.StatusInternalServerError, "db data broken")
 
-	ErrCacheDataConflict = &Error{Code: 9201, Httpcode: http.StatusInternalServerError, Msg: "cache data conflict"}
-	ErrCacheDataBroken   = &Error{Code: 9202, Httpcode: http.StatusInternalServerError, Msg: "cache data broken"}
+	ErrCacheDataConflict = MakeCError(9201, http.StatusInternalServerError, "cache data conflict")
+	ErrCacheDataBroken   = MakeCError(9202, http.StatusInternalServerError, "cache data broken")
 
-	ErrMQDataBroken = &Error{Code: 9301, Httpcode: http.StatusInternalServerError, Msg: "message queue data broken"}
+	ErrMQDataBroken = MakeCError(9301, http.StatusInternalServerError, "message queue data broken")
 )
 
 // business,start from 10000
 var (
-	ErrUnknown        = &Error{Code: 10000, Httpcode: http.StatusInternalServerError, Msg: "unknown"}
-	ErrReq            = &Error{Code: 10001, Httpcode: http.StatusBadRequest, Msg: "request error"}
-	ErrResp           = &Error{Code: 10002, Httpcode: http.StatusInternalServerError, Msg: "response error"}
-	ErrSystem         = &Error{Code: 10003, Httpcode: http.StatusInternalServerError, Msg: "system error"}
-	ErrToken          = &Error{Code: 10004, Httpcode: http.StatusUnauthorized, Msg: "token wrong"}
-	ErrSession        = &Error{Code: 10005, Httpcode: http.StatusUnauthorized, Msg: "session wrong"}
-	ErrAccessKey      = &Error{Code: 10006, Httpcode: http.StatusUnauthorized, Msg: "access key wrong"}
-	ErrAccessSign     = &Error{Code: 10007, Httpcode: http.StatusUnauthorized, Msg: "access sign wrong"}
-	ErrPermission     = &Error{Code: 10008, Httpcode: http.StatusForbidden, Msg: "permission denie"}
-	ErrTooFast        = &Error{Code: 10009, Httpcode: http.StatusForbidden, Msg: "too fast"}
-	ErrBan            = &Error{Code: 10010, Httpcode: http.StatusForbidden, Msg: "ban"}
-	ErrBusy           = &Error{Code: 10011, Httpcode: http.StatusServiceUnavailable, Msg: "busy"}
-	ErrNotExist       = &Error{Code: 10012, Httpcode: http.StatusNotFound, Msg: "not exist"}
-	ErrPasswordWrong  = &Error{Code: 10013, Httpcode: http.StatusBadRequest, Msg: "password wrong"}
-	ErrPasswordLength = &Error{Code: 10014, Httpcode: http.StatusBadRequest, Msg: "password length must <=32"}
+	ErrUnknown        = MakeCError(10000, http.StatusInternalServerError, "unknown")
+	ErrReq            = MakeCError(10001, http.StatusBadRequest, "request error")
+	ErrResp           = MakeCError(10002, http.StatusInternalServerError, "response error")
+	ErrSystem         = MakeCError(10003, http.StatusInternalServerError, "system error")
+	ErrToken          = MakeCError(10004, http.StatusUnauthorized, "token wrong")
+	ErrSession        = MakeCError(10005, http.StatusUnauthorized, "session wrong")
+	ErrAccessKey      = MakeCError(10006, http.StatusUnauthorized, "access key wrong")
+	ErrAccessSign     = MakeCError(10007, http.StatusUnauthorized, "access sign wrong")
+	ErrPermission     = MakeCError(10008, http.StatusForbidden, "permission denie")
+	ErrTooFast        = MakeCError(10009, http.StatusForbidden, "too fast")
+	ErrBan            = MakeCError(10010, http.StatusForbidden, "ban")
+	ErrBusy           = MakeCError(10011, http.StatusServiceUnavailable, "busy")
+	ErrNotExist       = MakeCError(10012, http.StatusNotFound, "not exist")
+	ErrPasswordWrong  = MakeCError(10013, http.StatusBadRequest, "password wrong")
+	ErrPasswordLength = MakeCError(10014, http.StatusBadRequest, "password length must <=32")
 )
 
 // convert std error,always -1
 var (
-	ErrDeadlineExceeded = &Error{Code: -1, Httpcode: http.StatusGatewayTimeout, Msg: context.DeadlineExceeded.Error()}
-	ErrCanceled         = &Error{Code: -1, Httpcode: http.StatusRequestTimeout, Msg: context.Canceled.Error()}
+	ErrDeadlineExceeded = MakeCError(-1, http.StatusGatewayTimeout, context.DeadlineExceeded.Error())
+	ErrCanceled         = MakeCError(-1, http.StatusRequestTimeout, context.Canceled.Error())
 )

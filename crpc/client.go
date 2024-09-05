@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"log/slog"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -13,11 +14,10 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
-	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/log/trace"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
+	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
@@ -162,7 +162,7 @@ func (c *CrpcClient) onlinefunc(ctx context.Context, p *stream.Peer) bool {
 	server.setpeer(p)
 	server.closing = 0
 	c.balancer.RebuildPicker(server.addr, true)
-	log.Info(nil, "[crpc.client] online", log.String("sname", c.server), log.String("sip", server.addr))
+	slog.InfoContext(nil, "[crpc.client] online", slog.String("sname", c.server), slog.String("sip", server.addr))
 	return true
 }
 
@@ -171,7 +171,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
-		log.Error(nil, "[crpc.client] userdata format wrong", log.String("sname", c.server), log.String("sip", server.addr))
+		slog.ErrorContext(nil, "[crpc.client] userdata format wrong", slog.String("sname", c.server), slog.String("sip", server.addr))
 		return
 	}
 	server.lker.Lock()
@@ -206,7 +206,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 
 func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
-	log.Info(nil, "[crpc.client] offline", log.String("sname", c.server), log.String("sip", server.addr))
+	slog.InfoContext(nil, "[crpc.client] offline", slog.String("sname", c.server), slog.String("sip", server.addr))
 	server.setpeer(nil)
 	c.balancer.RebuildPicker(server.addr, false)
 	server.lker.Lock()
@@ -271,11 +271,11 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 		span.GetSelfSpanData().SetStateKV("host", server.addr)
 		msg.Callid = atomic.AddUint64(&server.callid, 1)
 		if e = server.sendmessage(ctx, r); e != nil {
-			log.Error(ctx, "[crpc.client] send request failed",
-				log.String("sname", c.server),
-				log.String("sip", server.addr),
-				log.String("path", path),
-				log.CError(e))
+			slog.ErrorContext(ctx, "[crpc.client] send request failed",
+				slog.String("sname", c.server),
+				slog.String("sip", server.addr),
+				slog.String("path", path),
+				slog.String("error", e.Error()))
 			span.Finish(e)
 			done(0, 0, false)
 			monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(span.GetEnd()-span.GetStart()))
@@ -309,7 +309,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 			delete(server.reqs, msg.Callid)
 			server.lker.Unlock()
 			c.putreq(r)
-			e = cerror.ConvertStdError(ctx.Err())
+			e = cerror.Convert(ctx.Err())
 			span.Finish(e)
 			done(0, 0, false)
 			monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(span.GetEnd()-span.GetStart()))

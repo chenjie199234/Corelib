@@ -14,9 +14,9 @@ import (
 
 const (
 	contextPackage = protogen.GoImportPath("context")
+	slogPackage    = protogen.GoImportPath("log/slog")
 	grpcPackage    = protogen.GoImportPath("google.golang.org/grpc")
 	cgrpcPackage   = protogen.GoImportPath("github.com/chenjie199234/Corelib/cgrpc")
-	logPackage     = protogen.GoImportPath("github.com/chenjie199234/Corelib/log")
 	cerrorPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/cerror")
 )
 
@@ -156,14 +156,14 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("return func(ctx *", g.QualifiedGoIdent(cgrpcPackage.Ident("Context")), "){")
 		g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
 		g.P("if e := ctx.DecodeReq(req); e != nil{")
-		g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] decode failed\")")
+		g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] decode failed\")")
 		g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 		g.P("return")
 		g.P("}")
 
 		if pbex.NeedValidate(method.Input) {
 			g.P("if errstr := req.Validate(); errstr != \"\" {")
-			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] validate failed\",", g.QualifiedGoIdent(logPackage.Ident("String")), "(\"validate\",errstr))")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 			g.P("return")
 			g.P("}")

@@ -2,12 +2,12 @@ package mids
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/redis"
 )
@@ -41,7 +41,7 @@ type PathRateRule struct {
 
 func UpdateRateRedisInstance(c *redis.Client) {
 	if c == nil {
-		log.Warn(nil, "[rate] redis missing,all rate check will be failed")
+		slog.WarnContext(nil, "[rate] redis missing,all rate check will be failed")
 	}
 	oldp := (*redis.Client)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.c)), unsafe.Pointer(c)))
 	if oldp != nil {
@@ -66,7 +66,7 @@ func UpdateRateConfig(c MultiPathRateConfigs) {
 		}
 		for _, pathraterule := range pathraterules {
 			if pathraterule.RateType != "path" && pathraterule.RateType != "token" && pathraterule.RateType != "session" {
-				log.Error(nil, "[rate] rate config's rate_type must be path/token/session", log.String("path", path), log.String("rate_type", pathraterule.RateType))
+				slog.ErrorContext(nil, "[rate] rate config's rate_type must be path/token/session", slog.String("path", path), slog.String("rate_type", pathraterule.RateType))
 				return
 			}
 
@@ -127,7 +127,7 @@ func UpdateRateConfig(c MultiPathRateConfigs) {
 func checkrate(ctx context.Context, infos [][3]interface{}) bool {
 	redisclient := rateinstance.c
 	if redisclient == nil {
-		log.Error(ctx, "[rate] redis missing")
+		slog.ErrorContext(ctx, "[rate] redis missing")
 		return false
 	}
 	rates := make(map[string][2]uint64)
@@ -136,7 +136,7 @@ func checkrate(ctx context.Context, infos [][3]interface{}) bool {
 			md := metadata.GetMetadata(ctx)
 			token, ok := md["Token-User"]
 			if !ok {
-				log.Error(ctx, "[rate] missing token when check token's rate,make sure the token midware is before the rate midware")
+				slog.ErrorContext(ctx, "[rate] missing token when check token's rate,make sure the token midware is before the rate midware")
 				return false
 			}
 			rates[info[0].(string)+"_"+token] = [2]uint64{info[1].(uint64), info[2].(uint64)}
@@ -144,7 +144,7 @@ func checkrate(ctx context.Context, infos [][3]interface{}) bool {
 			md := metadata.GetMetadata(ctx)
 			session, ok := md["Session-User"]
 			if !ok {
-				log.Error(ctx, "[rate] missing session when check session's rate,make sure the session midware is before the rate midware")
+				slog.ErrorContext(ctx, "[rate] missing session when check session's rate,make sure the session midware is before the rate midware")
 				return false
 			}
 			rates[info[0].(string)+"_"+session] = [2]uint64{info[1].(uint64), info[2].(uint64)}
@@ -154,14 +154,14 @@ func checkrate(ctx context.Context, infos [][3]interface{}) bool {
 	}
 	pass, e := redisclient.RateLimit(ctx, rates)
 	if e != nil {
-		log.Error(ctx, "[rate] redis op failed", log.CError(e))
+		slog.ErrorContext(ctx, "[rate] redis op failed", slog.String("error", e.Error()))
 	}
 	return pass
 }
 
 func GrpcRate(ctx context.Context, path string) bool {
 	if rateinstance.grpc == nil {
-		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
+		slog.ErrorContext(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
 		return false
 	}
@@ -174,7 +174,7 @@ func GrpcRate(ctx context.Context, path string) bool {
 }
 func CrpcRate(ctx context.Context, path string) bool {
 	if rateinstance.crpc == nil {
-		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
+		slog.ErrorContext(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
 		return false
 	}
@@ -187,7 +187,7 @@ func CrpcRate(ctx context.Context, path string) bool {
 }
 func HttpGetRate(ctx context.Context, path string) bool {
 	if rateinstance.get == nil {
-		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
+		slog.ErrorContext(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
 		return false
 	}
@@ -200,7 +200,7 @@ func HttpGetRate(ctx context.Context, path string) bool {
 }
 func HttpPostRate(ctx context.Context, path string) bool {
 	if rateinstance.post == nil {
-		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
+		slog.ErrorContext(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
 		return false
 	}
@@ -213,7 +213,7 @@ func HttpPostRate(ctx context.Context, path string) bool {
 }
 func HttpPutRate(ctx context.Context, path string) bool {
 	if rateinstance.put == nil {
-		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
+		slog.ErrorContext(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
 		return false
 	}
@@ -226,7 +226,7 @@ func HttpPutRate(ctx context.Context, path string) bool {
 }
 func HttpPatchRate(ctx context.Context, path string) bool {
 	if rateinstance.patch == nil {
-		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
+		slog.ErrorContext(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
 		return false
 	}
@@ -239,7 +239,7 @@ func HttpPatchRate(ctx context.Context, path string) bool {
 }
 func HttpDelRate(ctx context.Context, path string) bool {
 	if rateinstance.del == nil {
-		log.Error(ctx, "[rate] missing init,please use UpdateRateConfig first")
+		slog.ErrorContext(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
 		return false
 	}

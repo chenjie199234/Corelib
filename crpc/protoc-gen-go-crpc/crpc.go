@@ -15,10 +15,10 @@ import (
 
 const (
 	contextPackage   = protogen.GoImportPath("context")
+	slogPackage      = protogen.GoImportPath("log/slog")
 	protoPackage     = protogen.GoImportPath("google.golang.org/protobuf/proto")
 	protojsonPackage = protogen.GoImportPath("google.golang.org/protobuf/encoding/protojson")
 	crpcPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/crpc")
-	logPackage       = protogen.GoImportPath("github.com/chenjie199234/Corelib/log")
 	cerrorPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/cerror")
 )
 
@@ -163,7 +163,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(reqbody,req);e!=nil{")
 		g.P("req.Reset()")
 		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(reqbody,req);e!=nil{")
-		g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] json and proto format decode both failed\")")
+		g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] json and proto format decode both failed\")")
 		g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 		g.P("return")
 		g.P("}")
@@ -173,7 +173,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("}else if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(reqbody,req);e!=nil{")
 		g.P("req.Reset()")
 		g.P("if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(reqbody,req);e!=nil{")
-		g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] json and proto format decode both failed\")")
+		g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] json and proto format decode both failed\")")
 		g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 		g.P("return")
 		g.P("}else{")
@@ -183,7 +183,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 
 		if pbex.NeedValidate(method.Input) {
 			g.P("if errstr := req.Validate(); errstr != \"\" {")
-			g.P(g.QualifiedGoIdent(logPackage.Ident("Error")), "(ctx,\"[", pathurl, "] validate failed\",", g.QualifiedGoIdent(logPackage.Ident("String")), "(\"validate\",errstr))")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 			g.P("return")
 			g.P("}")

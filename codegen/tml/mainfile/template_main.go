@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"log/slog"
 
 	"{{.}}/config"
 	"{{.}}/dao"
@@ -20,7 +21,6 @@ import (
 	"{{.}}/server/xweb"
 	"{{.}}/service"
 
-	"github.com/chenjie199234/Corelib/log"
 	publicmids "github.com/chenjie199234/Corelib/mids"
 	_ "github.com/chenjie199234/Corelib/monitor"
 
@@ -48,16 +48,16 @@ func main() {
 	if rateredis := config.GetRedis("rate_redis"); rateredis != nil {
 		publicmids.UpdateRateRedisInstance(rateredis)
 	} else {
-		log.Warn(nil, "[main] rate redis missing,all rate check will be failed")
+		slog.WarnContext(nil, "[main] rate redis missing,all rate check will be failed")
 	}
 	if sessionredis := config.GetRedis("session_redis"); sessionredis != nil {
 		publicmids.UpdateSessionRedisInstance(sessionredis)
 	} else {
-		log.Warn(nil, "[main] session redis missing,all session event will be failed")
+		slog.WarnContext(nil, "[main] session redis missing,all session event will be failed")
 	}
 	//start the whole business service
 	if e := service.StartService(); e != nil {
-		log.Error(nil, "[main] start service failed", log.CError(e))
+		slog.ErrorContext(nil, "[main] start service failed", slog.String("error",e.Error()))
 		return
 	}
 	//start low level net service

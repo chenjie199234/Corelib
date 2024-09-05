@@ -2,6 +2,7 @@ package cgrpc
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -11,9 +12,8 @@ import (
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/picker"
 	"github.com/chenjie199234/Corelib/internal/resolver"
-	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/log/trace"
 	"github.com/chenjie199234/Corelib/monitor"
+	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/waitwake"
 
 	"google.golang.org/grpc/attributes"
@@ -175,7 +175,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 					case connectivity.Shutdown:
 						if oldstatus == int32(connectivity.Ready) {
 							//offline
-							log.Info(nil, "[cgrpc.client] offline", log.String("sname", b.c.server), log.String("sip", server.addr))
+							slog.InfoContext(nil, "[cgrpc.client] offline", slog.String("sname", b.c.server), slog.String("sip", server.addr))
 							go b.rebuildpicker(server.addr, false)
 						}
 						delete(b.servers, addr.Addr)
@@ -183,7 +183,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 					case connectivity.Idle:
 						if oldstatus == int32(connectivity.Ready) {
 							//offline
-							log.Info(nil, "[cgrpc.client] offline", log.String("sname", b.c.server), log.String("sip", server.addr))
+							slog.InfoContext(nil, "[cgrpc.client] offline", slog.String("sname", b.c.server), slog.String("sip", server.addr))
 							go b.rebuildpicker(server.addr, false)
 						}
 						if len(server.dservers) == 0 {
@@ -198,13 +198,13 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 					case connectivity.Ready:
 						//online
 						server.closing = 0
-						log.Info(nil, "[cgrpc.client] online", log.String("sname", b.c.server), log.String("sip", server.addr))
+						slog.InfoContext(nil, "[cgrpc.client] online", slog.String("sname", b.c.server), slog.String("sip", server.addr))
 						go b.rebuildpicker(server.addr, true)
 					case connectivity.TransientFailure:
 						//connect failed
-						log.Error(nil, "[cgrpc.client] connect failed", log.String("sname", b.c.server), log.String("sip", server.addr), log.CError(s.ConnectionError))
+						slog.ErrorContext(nil, "[cgrpc.client] connect failed", slog.String("sname", b.c.server), slog.String("sip", server.addr), slog.String("error", s.ConnectionError.Error()))
 					case connectivity.Connecting:
-						log.Info(nil, "[cgrpc.client] connecting", log.String("sname", b.c.server), log.String("sip", server.addr))
+						slog.InfoContext(nil, "[cgrpc.client] connecting", slog.String("sname", b.c.server), slog.String("sip", server.addr))
 					}
 				},
 			})
@@ -267,7 +267,7 @@ func (b *corelibBalancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubC
 func (b *corelibBalancer) Close() {
 	for _, server := range b.servers {
 		server.subconn.Shutdown()
-		log.Info(nil, "[cgrpc.client] offline", log.String("sname", b.c.server), log.String("sip", server.addr))
+		slog.InfoContext(nil, "[cgrpc.client] offline", slog.String("sname", b.c.server), slog.String("sip", server.addr))
 	}
 	b.servers = make(map[string]*ServerForPick)
 	b.lastResolveError = cerror.ErrClientClosing
@@ -346,7 +346,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 					return balancer.PickResult{}, cerror.ErrCanceled
 				} else {
 					//this is impossible
-					return balancer.PickResult{}, cerror.ConvertStdError(e)
+					return balancer.PickResult{}, cerror.Convert(e)
 				}
 			}
 			refresh = true
@@ -368,11 +368,11 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 			}
 			//server is connecting
 			if e := b.ww.Wait(info.Ctx, "SPECIFIC:"+forceaddr, b.c.resolver.Now, b.lker.RUnlock); e != nil {
-				return balancer.PickResult{}, cerror.ConvertStdError(e)
+				return balancer.PickResult{}, cerror.Convert(e)
 			}
 		} else if !refresh {
 			if e := b.ww.Wait(info.Ctx, "CALL", b.c.resolver.Now, b.lker.RUnlock); e != nil {
-				return balancer.PickResult{}, cerror.ConvertStdError(e)
+				return balancer.PickResult{}, cerror.Convert(e)
 			}
 			refresh = true
 		}

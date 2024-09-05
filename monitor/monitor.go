@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -8,8 +9,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-
-	"github.com/chenjie199234/Corelib/log"
 )
 
 func init() {
@@ -17,13 +16,13 @@ func init() {
 		panic("[monitor] unsupported GOOS")
 	}
 	if str := os.Getenv("MONITOR"); str == "" || str == "<MONITOR>" {
-		log.Warn(nil, "[monitor] env MONITOR missing,monitor closed")
+		slog.Warn("[monitor] env MONITOR missing,monitor closed")
 		return
 	} else if n, e := strconv.Atoi(str); e != nil || n != 0 && n != 1 {
-		log.Warn(nil, "[monitor] env MONITOR format error,must in [0,1],monitor closed")
+		slog.Warn("[monitor] env MONITOR format error,must in [0,1],monitor closed")
 		return
 	} else if n == 0 {
-		log.Warn(nil, "[monitor] env MONITOR is 0,monitor closed")
+		slog.Warn("[monitor] env MONITOR is 0,monitor closed")
 		return
 	}
 	initmem()
@@ -505,7 +504,7 @@ func index(timewaste uint64) int64 {
 
 type pathinfo struct {
 	TotalCount     uint32
-	ErrCodeCount   map[int32]uint32 //key:error code,value:count
+	ErrCodeCount   map[int64]uint32 //key:error code,value:count
 	TotaltimeWaste uint64           //nano second
 	maxTimewaste   uint64           //nano second
 	timewaste      [5001]uint32     //index:0-4999(1ms-5000ms) each 1ms,index:5000 more then 5s,value:count

@@ -9,13 +9,15 @@ import (
 const txt = `package config
 
 import (
+	"context"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"{{.}}/model"
 
-	"github.com/chenjie199234/Corelib/log"
+	"github.com/chenjie199234/Corelib/trace"
 	configsdk "github.com/chenjie199234/admin/sdk/config"
 )
 
@@ -33,9 +35,62 @@ var EC *EnvConfig
 // RemoteConfigSdk -
 var RemoteConfigSdk *configsdk.ConfigSdk
 
+type LogHandler struct {
+	slog.Handler
+}
+
+func (l *LogHandler) Handle(ctx context.Context, record slog.Record) error {
+	var traceattr *slog.Attr
+	if record.NumAttrs() > 0 {
+		attrs := make([]slog.Attr, 0, record.NumAttrs())
+		record.Attrs(func(a slog.Attr) bool {
+			if a.Key == "traceid"{
+				traceattr = &a
+			}
+			attrs = append(attrs, a)
+			return true
+		})
+		record = slog.NewRecord(record.Time, record.Level, record.Message, record.PC)
+		record.AddAttrs(slog.Attr{
+			Key:   "msg_kvs",
+			Value: slog.GroupValue(attrs...),
+		})
+	}
+	if trace.LogTrace(){
+		if traceattr == nil {
+			if span := trace.SpanFromContext(ctx); span != nil {
+				traceattr = slog.String("traceid", span.GetSelfSpanData().GetTid().String())
+			}
+		}
+		if traceattr != nil {
+			record.AddAttrs(traceattr)
+		}
+	}
+	return l.Handler.Handle(ctx, newr)
+}
+
 // notice is a sync function
 // don't write block logic inside it
 func Init(notice func(c *AppConfig)) {
+	slog.SetDefault(slog.New(&LogHandler{
+		slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			AddSource: true,
+			ReplaceAttr: func(groups []string, attr slog.Attr) slog.Attr {
+				if len(groups) == 0 && attr.Key == "function" {
+					return slog.Attr{}
+				}
+				if len(groups) == 0 && attr.Key == slog.SourceKey {
+					s := attr.Value.Any().(*slog.Source)
+					if index := strings.Index(s.File, "corelib@v"); index != -1 {
+						s.File = s.File[index:]
+					} else if index = strings.Index(s.File, "Corelib@v"); index != -1 {
+						s.File = s.File[index:]
+					}
+				}
+				return attr
+			},
+		}),
+	}))
 	initenv()
 	if EC.ConfigType != nil && *EC.ConfigType == 1 {
 		tmer := time.NewTimer(time.Second * 2)
@@ -53,8 +108,7 @@ func Init(notice func(c *AppConfig)) {
 				sourceinit = true
 				stopwatchsource()
 			case <-tmer.C:
-				log.Error(nil, "[config.Init] timeout")
-				Close()
+				slog.ErrorContext(nil,"[config.Init] timeout")
 				os.Exit(1)
 			}
 			if appinit && sourceinit {
@@ -67,41 +121,34 @@ func Init(notice func(c *AppConfig)) {
 	}
 }
 
-// Close -
-func Close() {
-	log.Close()
-}
-
 func initenv() {
 	EC = &EnvConfig{}
 	if str, ok := os.LookupEnv("CONFIG_TYPE"); ok && str != "<CONFIG_TYPE>" && str != "" {
 		configtype, e := strconv.Atoi(str)
 		if e != nil || (configtype != 0 && configtype != 1 && configtype != 2) {
-			log.Error(nil, "[config.initenv] env CONFIG_TYPE must be number in [0,1,2]")
-			Close()
+			slog.ErrorContext(nil, "[config.initenv] env CONFIG_TYPE must be number in [0,1,2]")
 			os.Exit(1)
 		}
 		EC.ConfigType = &configtype
 	} else {
-		log.Warn(nil, "[config.initenv] missing env CONFIG_TYPE")
+		slog.WarnContext(nil, "[config.initenv] missing env CONFIG_TYPE")
 	}
 	if EC.ConfigType != nil && *EC.ConfigType == 1 {
 		var e error
 		if RemoteConfigSdk, e = configsdk.NewConfigSdk(model.Project, model.Group, model.Name, nil); e != nil {
-			log.Error(nil, "[config.initenv] new remote config sdk failed", log.CError(e))
-			Close()
+			slog.ErrorContext(nil, "[config.initenv] new remote config sdk failed")
 			os.Exit(1)
 		}
 	}
 	if str, ok := os.LookupEnv("RUN_ENV"); ok && str != "<RUN_ENV>" && str != "" {
 		EC.RunEnv = &str
 	} else {
-		log.Warn(nil, "[config.initenv] missing env RUN_ENV")
+		slog.WarnContext(nil, "[config.initenv] missing env RUN_ENV")
 	}
 	if str, ok := os.LookupEnv("DEPLOY_ENV"); ok && str != "<DEPLOY_ENV>" && str != "" {
 		EC.DeployEnv = &str
 	} else {
-		log.Warn(nil, "[config.initenv] missing env DEPLOY_ENV")
+		slog.WarnContext(nil, "[config.initenv] missing env DEPLOY_ENV")
 	}
 }`
 const apptxt = `package config
@@ -110,8 +157,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"log/slog"
 
-	"github.com/chenjie199234/Corelib/log"
 	publicmids "github.com/chenjie199234/Corelib/mids"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
@@ -145,29 +192,29 @@ var watcher *fsnotify.Watcher
 func initlocalapp(notice func(*AppConfig)) {
 	data, e := os.ReadFile("./AppConfig.json")
 	if e != nil {
-		log.Error(nil, "[config.local.app] read config file failed", log.CError(e))
+		slog.ErrorContext(nil, "[config.local.app] read config file failed", slog.String("error", e.Error()))
 		Close()
 		os.Exit(1)
 	}
 	AC = &AppConfig{}
 	if e = json.Unmarshal(data, AC); e != nil {
-		log.Error(nil, "[config.local.app] config file format wrong", log.CError(e))
+		slog.ErrorContext(nil, "[config.local.app] config file format wrong", slog.String("error",e.Error()))
 		Close()
 		os.Exit(1)
 	}
 	validateAppConfig(AC)
-	log.Info(nil, "[config.local.app] update success", log.Any("config", AC))
+	slog.InfoContext(nil, "[config.local.app] update success", slog.Any("config", AC))
 	if notice != nil {
 		notice(AC)
 	}
 	watcher, e = fsnotify.NewWatcher()
 	if e != nil {
-		log.Error(nil, "[config.local.app] create watcher for hot update failed", log.CError(e))
+		slog.ErrorContext(nil, "[config.local.app] create watcher for hot update failed", slog.String("error",e.Error()))
 		Close()
 		os.Exit(1)
 	}
 	if e = watcher.Add("./"); e != nil {
-		log.Error(nil, "[config.local.app] create watcher for hot update failed", log.CError(e))
+		slog.ErrorContext(nil, "[config.local.app] create watcher for hot update failed", slog.String("error",e.Error()))
 		Close()
 		os.Exit(1)
 	}
@@ -183,17 +230,17 @@ func initlocalapp(notice func(*AppConfig)) {
 				}
 				data, e := os.ReadFile("./AppConfig.json")
 				if e != nil {
-					log.Error(nil, "[config.local.app] hot update read config file failed", log.CError(e))
+					slog.ErrorContext(nil, "[config.local.app] hot update read config file failed", slog.String("error",e.Error()))
 					continue
 				}
 				c := &AppConfig{}
 				if e = json.Unmarshal(data, c); e != nil {
-					log.Error(nil, "[config.local.app] hot update config file format wrong", log.CError(e))
+					slog.ErrorContext(nil, "[config.local.app] hot update config file format wrong", slog.String("error",e.Error()))
 					continue
 				}
 				validateAppConfig(c)
 				AC = c
-				log.Info(nil, "[config.local.app] update success", log.Any("config", AC))
+				slog.InfoContext(nil, "[config.local.app] update success", slog.Any("config", AC))
 				if notice != nil {
 					notice(AC)
 				}
@@ -201,7 +248,7 @@ func initlocalapp(notice func(*AppConfig)) {
 				if !ok {
 					return
 				}
-				log.Error(nil, "[config.local.app] hot update watcher failed", log.CError(err))
+				slog.ErrorContext(nil, "[config.local.app] hot update watcher failed", slog.String("error",err.Error()))
 			}
 		}
 	}()
@@ -210,17 +257,17 @@ func initremoteapp(notice func(*AppConfig), wait chan *struct{}) (stopwatch func
 	return RemoteConfigSdk.Watch("AppConfig", func(key, keyvalue, keytype string) {
 		//only support json
 		if keytype != "json" {
-			log.Error(nil, "[config.remote.app] config data can only support json format")
+			slog.ErrorContext(nil, "[config.remote.app] config data can only support json format")
 			return
 		}
 		c := &AppConfig{}
 		if e := json.Unmarshal(common.STB(keyvalue), c); e != nil {
-			log.Error(nil, "[config.remote.app] config data format wrong", log.CError(e))
+			slog.ErrorContext(nil, "[config.remote.app] config data format wrong", slog.String("error",e.Error()))
 			return
 		}
 		validateAppConfig(c)
 		AC = c
-		log.Info(nil, "[config.remote.app] update success", log.Any("config", AC))
+		slog.InfoContext(nil, "[config.remote.app] update success", slog.Any("config", AC))
 		if notice != nil {
 			notice(AC)
 		}
@@ -239,10 +286,10 @@ import (
 	"os"
 	"sync"
 	"time"
+	"log/slog"
 
 	"github.com/chenjie199234/Corelib/cgrpc"
 	"github.com/chenjie199234/Corelib/crpc"
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/mongo"
 	"github.com/chenjie199234/Corelib/mysql"
 	"github.com/chenjie199234/Corelib/redis"
@@ -330,24 +377,24 @@ var rediss map[string]*redis.Client
 func initlocalsource() {
 	data, e := os.ReadFile("./SourceConfig.json")
 	if e != nil {
-		log.Error(nil, "[config.local.source] read config file failed", log.CError(e))
+		slog.ErrorContext(nil, "[config.local.source] read config file failed", slog.String("error",e.Error()))
 		Close()
 		os.Exit(1)
 	}
 	sc = &sourceConfig{}
 	if e = json.Unmarshal(data, sc); e != nil {
-		log.Error(nil, "[config.local.source] config file format wrong", log.CError(e))
+		slog.ErrorContext(nil, "[config.local.source] config file format wrong", slog.String("error",e.Error()))
 		Close()
 		os.Exit(1)
 	}
-	log.Info(nil, "[config.local.source] update success", log.Any("config", sc))
+	slog.InfoContext(nil, "[config.local.source] update success", slog.Any("config", sc))
 	initsource()
 }
 func initremotesource(wait chan *struct{}) (stopwatch func()) {
 	return RemoteConfigSdk.Watch("SourceConfig", func(key, keyvalue, keytype string) {
 		//only support json
 		if keytype != "json" {
-			log.Error(nil, "[config.remote.source] config data can only support json format")
+			slog.ErrorContext(nil, "[config.remote.source] config data can only support json format")
 			return
 		}
 		//source config only init once
@@ -356,11 +403,11 @@ func initremotesource(wait chan *struct{}) (stopwatch func()) {
 		}
 		c := &sourceConfig{}
 		if e := json.Unmarshal(common.STB(keyvalue), c); e != nil {
-			log.Error(nil, "[config.remote.source] config data format wrong", log.CError(e))
+			slog.ErrorContext(nil, "[config.remote.source] config data format wrong", slog.String("error",e.Error()))
 			return
 		}
 		sc = c
-		log.Info(nil, "[config.remote.source] update success", log.Any("config", sc))
+		slog.InfoContext(nil, "[config.remote.source] update success", slog.Any("config", sc))
 		initsource()
 		select {
 		case wait <- nil:
@@ -526,7 +573,7 @@ func initwebserver() {
 		}
 	} else {
 		if sc.WebServer.WaitCloseMode != 0 && sc.WebServer.WaitCloseMode != 1 {
-			log.Error(nil, "[config.initwebserver] wait_close_mode must be 0 or 1")
+			slog.ErrorContext(nil, "[config.initwebserver] wait_close_mode must be 0 or 1")
 			Close()
 			os.Exit(1)
 		}
@@ -601,14 +648,14 @@ func initredis(){
 					for _, certpath := range redisc.SpecificCAPaths {
 						cert, e := os.ReadFile(certpath)
 						if e != nil {
-							log.Error(nil, "[config.initredis] read specific cert failed",
-								log.String("redis", redisc.RedisName), log.String("cert_path", certpath), log.CError(e))
+							slog.ErrorContext(nil, "[config.initredis] read specific cert failed",
+								slog.String("redis", redisc.RedisName), slog.String("cert_path", certpath), slog.String("error",e))
 							Close()
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
-							log.Error(nil, "[config.initredis] specific cert load failed",
-								log.String("redis", redisc.RedisName), log.String("cert_path", certpath), log.CError(e))
+							slog.ErrorContext(nil, "[config.initredis] specific cert load failed",
+								slog.String("redis", redisc.RedisName), slog.String("cert_path", certpath), slog.String("error",e))
 							Close()
 							os.Exit(1)
 						}
@@ -617,8 +664,8 @@ func initredis(){
 			}
 			c, e := redis.NewRedis(redisc.Config, tlsc)
 			if e != nil {
-				log.Error(nil, "[config.initredis] failed",
-					log.String("redis", redisc.RedisName), log.CError(e))
+				slog.ErrorContext(nil, "[config.initredis] failed",
+					slog.String("redis", redisc.RedisName), slog.String("error",e))
 				Close()
 				os.Exit(1)
 			}
@@ -667,14 +714,14 @@ func initmongo(){
 					for _, certpath := range mongoc.SpecificCAPaths {
 						cert, e := os.ReadFile(certpath)
 						if e != nil {
-							log.Error(nil, "[config.initmongo] read specific cert failed",
-								log.String("mongo", mongoc.MongoName), log.String("cert_path", certpath), log.CError(e))
+							slog.ErrorContext(nil, "[config.initmongo] read specific cert failed",
+								slog.String("mongo", mongoc.MongoName), slog.String("cert_path", certpath), slog.String("error",e.Error())
 							Close()
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
-							log.Error(nil, "[config.initmongo] specific cert load failed",
-								log.String("mongo", mongoc.MongoName), log.String("cert_path", certpath), log.CError(e))
+							slog.ErrorContext(nil, "[config.initmongo] specific cert load failed",
+								slog.String("mongo", mongoc.MongoName), slog.String("cert_path", certpath), slog.String("error",e.Error())
 							Close()
 							os.Exit(1)
 						}
@@ -683,7 +730,7 @@ func initmongo(){
 			}
 			c, e := mongo.NewMongo(mongoc.Config, tlsc)
 			if e != nil {
-				log.Error(nil, "[config.initmongo] failed", log.String("mongo", mongoc.MongoName), log.CError(e))
+				slog.ErrorContext(nil, "[config.initmongo] failed", slog.String("mongo", mongoc.MongoName), slog.String("error",e.Error()))
 				Close()
 				os.Exit(1)
 			}
@@ -729,14 +776,14 @@ func initmysql(){
 					for _, certpath := range mysqlc.SpecificCAPaths {
 						cert, e := os.ReadFile(certpath)
 						if e != nil {
-							log.Error(nil, "[config.initmysql] read specific cert failed",
-								log.String("mysql", mysqlc.MysqlName), log.String("cert_path", certpath), log.CError(e))
+							slog.ErrorContext(nil, "[config.initmysql] read specific cert failed",
+								slog.String("mysql", mysqlc.MysqlName), slog.String("cert_path", certpath), slog.String("error",e.Error())
 							Close()
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
-							log.Error(nil, "[config.initmysql] specific cert load failed",
-								log.String("mysql", mysqlc.MysqlName), log.String("cert_path", certpath), log.CError(e))
+							slog.ErrorContext(nil, "[config.initmysql] specific cert load failed",
+								slog.String("mysql", mysqlc.MysqlName), slog.String("cert_path", certpath), slog.String("error",e.Error())
 							Close()
 							os.Exit(1)
 						}
@@ -745,7 +792,7 @@ func initmysql(){
 			}
 			c, e := mysql.NewMysql(mysqlc.Config, tlsc)
 			if e != nil {
-				log.Error(nil, "[config.initmysql] failed", log.String("mysql", mysqlc.MysqlName), log.CError(e))
+				slog.ErrorContext(nil, "[config.initmysql] failed", slog.String("mysql", mysqlc.MysqlName), slog.String("error",e.Error()))
 				Close()
 				os.Exit(1)
 			}

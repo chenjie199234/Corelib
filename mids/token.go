@@ -3,9 +3,9 @@ package mids
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"time"
 
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/secure"
 )
 
@@ -43,7 +43,7 @@ func MakeToken(ctx context.Context, puber, deployenv, runenv, userid, data strin
 	})
 	tokenstr, e := secure.AesEncrypt(tokensecret, t)
 	if e != nil {
-		log.Error(ctx, "[token.make] failed", log.CError(e))
+		slog.ErrorContext(ctx, "[token.make] failed", slog.String("error", e.Error()))
 		return ""
 	}
 	return tokenstr

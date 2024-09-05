@@ -74,7 +74,7 @@ func (c *Context) Abort(e error) {
 	if !atomic.CompareAndSwapInt32(&c.finish, 0, -1) {
 		return
 	}
-	c.e = cerror.ConvertStdError(e)
+	c.e = cerror.Convert(e)
 	if c.e != nil {
 		c.w.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
 		c.w.Header().Set("Content-Type", "application/json")
@@ -82,7 +82,7 @@ func (c *Context) Abort(e error) {
 			panic("[web.Context.Abort] httpcode must in [400,999]")
 		}
 		c.w.WriteHeader(int(c.e.Httpcode))
-		c.w.Write(common.STB(c.e.Error()))
+		c.w.Write(common.STB(c.e.Json()))
 	}
 }
 

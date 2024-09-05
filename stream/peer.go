@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -12,7 +13,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/ws"
 )
@@ -73,9 +73,9 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	if now-atomic.LoadInt64(&p.lastactive) > int64(heart) {
 		//heartbeat timeout
 		if p.peertype == _PEER_CLIENT {
-			log.Error(nil, "[Stream.checkheart] heart timeout", log.String("cip", p.c.RemoteAddr().String()))
+			slog.ErrorContext(nil, "[Stream.checkheart] heart timeout", slog.String("cip", p.c.RemoteAddr().String()))
 		} else {
-			log.Error(nil, "[Stream.checkheart] heart timeout", log.String("sip", p.c.RemoteAddr().String()))
+			slog.ErrorContext(nil, "[Stream.checkheart] heart timeout", slog.String("sip", p.c.RemoteAddr().String()))
 		}
 		p.c.Close()
 		return
@@ -83,9 +83,9 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	if now-atomic.LoadInt64(&p.sendidlestart) > int64(sendidle) {
 		//send idle timeout
 		if p.peertype == _PEER_CLIENT {
-			log.Error(nil, "[Stream.checkheart] send idle timeout", log.String("cip", p.c.RemoteAddr().String()))
+			slog.ErrorContext(nil, "[Stream.checkheart] send idle timeout", slog.String("cip", p.c.RemoteAddr().String()))
 		} else {
-			log.Error(nil, "[Stream.checkheart] send idle timeout", log.String("sip", p.c.RemoteAddr().String()))
+			slog.ErrorContext(nil, "[Stream.checkheart] send idle timeout", slog.String("sip", p.c.RemoteAddr().String()))
 		}
 		p.c.Close()
 		return
@@ -93,9 +93,9 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	if recvidle > 0 && now-atomic.LoadInt64(&p.recvidlestart) > int64(recvidle) {
 		//recv idle timeout
 		if p.peertype == _PEER_CLIENT {
-			log.Error(nil, "[Stream.checkheart] recv idle timeout", log.String("cip", p.c.RemoteAddr().String()))
+			slog.ErrorContext(nil, "[Stream.checkheart] recv idle timeout", slog.String("cip", p.c.RemoteAddr().String()))
 		} else {
-			log.Error(nil, "[Stream.checkheart] recv idle timeout", log.String("sip", p.c.RemoteAddr().String()))
+			slog.ErrorContext(nil, "[Stream.checkheart] recv idle timeout", slog.String("sip", p.c.RemoteAddr().String()))
 		}
 		p.c.Close()
 		return
@@ -108,9 +108,9 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 		binary.BigEndian.PutUint64(buf, uint64(now))
 		if e := ws.WritePing(p.c, buf, false); e != nil {
 			if p.peertype == _PEER_CLIENT {
-				log.Error(nil, "[Stream.checkheart] write ping to client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
+				slog.ErrorContext(nil, "[Stream.checkheart] write ping to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 			} else {
-				log.Error(nil, "[Stream.checkheart] write ping to server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
+				slog.ErrorContext(nil, "[Stream.checkheart] write ping to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 			}
 			p.c.Close()
 			return
@@ -182,9 +182,9 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 		}
 		if e := ws.WriteMsg(p.c, data, userdata == nil, first, false); e != nil {
 			if p.peertype == _PEER_CLIENT {
-				log.Error(ctx, "[Stream.SendMessage] write to client failed", log.String("cip", p.c.RemoteAddr().String()), log.CError(e))
+				slog.ErrorContext(ctx, "[Stream.SendMessage] write to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 			} else {
-				log.Error(ctx, "[Stream.SendMessage] write to server failed", log.String("sip", p.c.RemoteAddr().String()), log.CError(e))
+				slog.ErrorContext(ctx, "[Stream.SendMessage] write to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 			}
 			p.c.Close()
 			if as != nil {

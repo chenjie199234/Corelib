@@ -4,12 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"log/slog"
 	"strings"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
 )
 
@@ -21,7 +21,7 @@ func UpdateSessionConfig(expire time.Duration) {
 }
 func UpdateSessionRedisInstance(c *redis.Client) {
 	if c == nil {
-		log.Warn(nil, "[session] redis missing,all session event will be failed")
+		slog.WarnContext(nil, "[session] redis missing,all session event will be failed")
 	}
 	oldp := (*redis.Client)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&sessionredis)), unsafe.Pointer(c)))
 	if oldp != nil {
@@ -34,14 +34,14 @@ func UpdateSessionRedisInstance(c *redis.Client) {
 func MakeSession(ctx context.Context, userid, data string) string {
 	redisclient := sessionredis
 	if redisclient == nil {
-		log.Error(ctx, "[session.make] redis missing")
+		slog.ErrorContext(ctx, "[session.make] redis missing")
 		return ""
 	}
 	result := make([]byte, 8)
 	rand.Read(result)
 	sessionid := hex.EncodeToString(result)
 	if _, e := redisclient.SetEx(ctx, "session_"+userid, sessionid+"_"+data, sessionexpire).Result(); e != nil {
-		log.Error(ctx, "[session.make] write session data failed", log.String("userid", userid), log.CError(e))
+		slog.ErrorContext(ctx, "[session.make] write session data failed", slog.String("userid", userid), slog.String("error", e.Error()))
 		return ""
 	}
 	return "userid=" + userid + ",sessionid=" + sessionid
@@ -50,11 +50,11 @@ func MakeSession(ctx context.Context, userid, data string) string {
 func CleanSession(ctx context.Context, userid string) bool {
 	redisclient := sessionredis
 	if redisclient == nil {
-		log.Error(ctx, "[session.clean] redis missing")
+		slog.ErrorContext(ctx, "[session.clean] redis missing")
 		return false
 	}
 	if _, e := redisclient.Del(ctx, "session_"+userid).Result(); e != nil {
-		log.Error(ctx, "[session.clean] delete session data failed", log.String("userid", userid), log.CError(e))
+		slog.ErrorContext(ctx, "[session.clean] delete session data failed", slog.String("userid", userid), slog.String("error", e.Error()))
 		return false
 	}
 	return true
@@ -63,11 +63,11 @@ func CleanSession(ctx context.Context, userid string) bool {
 func ExtendSession(ctx context.Context, userid string, expire time.Duration) bool {
 	redisclient := sessionredis
 	if redisclient == nil {
-		log.Error(ctx, "[session.extend] redis missing")
+		slog.ErrorContext(ctx, "[session.extend] redis missing")
 		return false
 	}
 	if _, e := redisclient.Expire(ctx, "session_"+userid, expire).Result(); e != nil {
-		log.Error(ctx, "[session.extend] update session data failed", log.String("userid", userid), log.CError(e))
+		slog.ErrorContext(ctx, "[session.extend] update session data failed", slog.String("userid", userid), slog.String("error", e.Error()))
 		return false
 	}
 	return true
@@ -76,7 +76,7 @@ func ExtendSession(ctx context.Context, userid string, expire time.Duration) boo
 func VerifySession(ctx context.Context, sessionstr string) (string, string, bool) {
 	redisclient := sessionredis
 	if redisclient == nil {
-		log.Error(ctx, "[session.verify] redis missing")
+		slog.ErrorContext(ctx, "[session.verify] redis missing")
 		return "", "", false
 	}
 	index := strings.LastIndex(sessionstr, ",")
@@ -95,7 +95,7 @@ func VerifySession(ctx context.Context, sessionstr string) (string, string, bool
 	sessionid = sessionid[10:]
 	str, e := redisclient.Get(ctx, "session_"+userid).Result()
 	if e != nil {
-		log.Error(ctx, "[session.verify] read session data failed", log.String("userid", userid), log.CError(e))
+		slog.ErrorContext(ctx, "[session.verify] read session data failed", slog.String("userid", userid), slog.String("error", e.Error()))
 		return "", "", false
 	}
 	if !strings.HasPrefix(str, sessionid+"_") {

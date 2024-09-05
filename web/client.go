@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -17,9 +18,8 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
-	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/log/trace"
 	"github.com/chenjie199234/Corelib/monitor"
+	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
@@ -135,9 +135,9 @@ func (c *WebClient) dial(ctx context.Context, network, addr string) (net.Conn, e
 	}
 	conn, e := c.dialer.DialContext(ctx, network, addr)
 	if e != nil {
-		log.Error(ctx, "[web.client] dial failed", log.String("sname", c.server), log.String("sip", addr), log.CError(e))
+		slog.ErrorContext(ctx, "[web.client] dial failed", slog.String("sname", c.server), slog.String("sip", addr), slog.String("error", e.Error()))
 	} else {
-		log.Info(ctx, "[web.client] online", log.String("sname", c.server), log.String("sip", addr))
+		slog.InfoContext(ctx, "[web.client] online", slog.String("sname", c.server), slog.String("sip", addr))
 	}
 	return conn, e
 }
@@ -155,7 +155,7 @@ func (c *WebClient) dialtls(ctx context.Context, network, addr string) (net.Conn
 	}
 	conn, e := c.dialer.DialContext(ctx, network, addr)
 	if e != nil {
-		log.Error(ctx, "[web.client] dial failed", log.String("sname", c.server), log.String("sip", addr), log.CError(e))
+		slog.ErrorContext(ctx, "[web.client] dial failed", slog.String("sname", c.server), slog.String("sip", addr), slog.String("error", e.Error()))
 		return nil, e
 	}
 	tmptlsc := c.tlsc.Clone()
@@ -164,10 +164,10 @@ func (c *WebClient) dialtls(ctx context.Context, network, addr string) (net.Conn
 	}
 	tc := tls.Client(conn, tmptlsc)
 	if e = tc.HandshakeContext(ctx); e != nil {
-		log.Error(ctx, "[web.client] tls handshake failed", log.String("sname", c.server), log.String("sip", addr), log.CError(e))
+		slog.ErrorContext(ctx, "[web.client] tls handshake failed", slog.String("sname", c.server), slog.String("sip", addr), slog.String("error", e.Error()))
 		return nil, e
 	} else {
-		log.Info(ctx, "[web.client] online", log.String("sname", c.server), log.String("sip", addr))
+		slog.InfoContext(ctx, "[web.client] online", slog.String("sname", c.server), slog.String("sip", addr))
 	}
 	return tc, nil
 }
@@ -185,7 +185,6 @@ func (c *WebClient) GetServerIps() (ips []string, version interface{}, lasterror
 	}
 	lasterror = e
 	return
-
 }
 
 func (c *WebClient) Close(force bool) {
@@ -336,7 +335,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		}
 		if e != nil {
 			done(0, 0, false)
-			e = cerror.ConvertStdError(e.(*url.Error).Unwrap())
+			e = cerror.Convert(e.(*url.Error).Unwrap())
 			return nil, e
 		}
 		span.GetSelfSpanData().SetStateKV("host", req.URL.Scheme+"://"+req.URL.Host)
@@ -345,7 +344,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		var resp *http.Response
 		resp, e = c.client.Do(req)
 		if e != nil {
-			e = cerror.ConvertStdError(e.(*url.Error).Unwrap())
+			e = cerror.Convert(e.(*url.Error).Unwrap())
 			span.Finish(e)
 			done(0, 0, false)
 			monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
@@ -361,12 +360,13 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			respbody, e = io.ReadAll(resp.Body)
 			resp.Body.Close()
 			if e != nil {
-				e = cerror.ConvertStdError(e)
+				e = cerror.Convert(e)
 			} else if len(respbody) == 0 {
-				e = cerror.MakeError(-1, int32(resp.StatusCode), http.StatusText(resp.StatusCode))
+				e = cerror.MakeCError(-1, int32(resp.StatusCode), http.StatusText(resp.StatusCode))
 			} else {
-				e = cerror.ConvertErrorstr(common.BTS(respbody))
-				(e.(*cerror.Error)).SetHttpcode(int32(resp.StatusCode))
+				ee := cerror.Decode(common.BTS(respbody))
+				ee.SetHttpcode(int32(resp.StatusCode))
+				e = ee
 			}
 		}
 		span.Finish(e)

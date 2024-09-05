@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"os"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -18,7 +17,6 @@ import (
 // https://www.w3.org/TR/trace-context/
 
 var logtrace bool
-var sloger *slog.Logger
 
 func init() {
 	if str := os.Getenv("LOG_TRACE"); str != "" && str != "<LOG_TRACE>" && str != "0" && str != "1" {
@@ -27,8 +25,8 @@ func init() {
 		logtrace = str == "1"
 	}
 }
-func SetSloger(l *slog.Logger) {
-	sloger = l
+func LogTrace() bool {
+	return logtrace
 }
 
 type TraceID [16]byte
@@ -352,17 +350,11 @@ func (s *Span) Finish(e error) {
 	}
 	attrs = append(attrs, slog.String("kind", s.kind.String()))
 	attrs = append(attrs, slog.Int64("duration", s.end-s.start))
-	ee := cerror.ConvertStdError(e)
+	ee := cerror.Convert(e)
 	if ee == nil {
 		attrs = append(attrs, slog.Any("error", nil))
 	} else {
-		attrs = append(attrs, slog.Attr{Key: "error", Value: slog.GroupValue(slog.Int64("code", int64(ee.Code)), slog.String("msg", ee.Msg))})
+		attrs = append(attrs, ee.SlogAttr())
 	}
-
-	var pcs [1]uintptr
-	//skip runtime.Callers ,this function
-	runtime.Callers(2, pcs[:])
-	r := slog.NewRecord(time.Now(), slog.LevelInfo, "trace", pcs[0])
-	r.Add(attrs...)
-	sloger.Handler().Handle(context.Background(), r)
+	slog.Info("trace", attrs...)
 }

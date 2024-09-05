@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"errors"
+	"log/slog"
 	"runtime"
 	"strconv"
 	"strings"
@@ -13,11 +14,10 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/cerror"
-	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/log/trace"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
+	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
@@ -195,19 +195,19 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 		} else {
 			tid, e := trace.TraceIDFromHex(msg.Tracedata["TraceID"])
 			if e != nil {
-				log.Error(nil, "[crpc.server] trace data fromat wrong",
-					log.String("cip", peerip),
-					log.String("path", path),
-					log.String("trace_id", msg.Tracedata["TraceID"]))
+				slog.ErrorContext(nil, "[crpc.server] trace data fromat wrong",
+					slog.String("cip", peerip),
+					slog.String("path", path),
+					slog.String("trace_id", msg.Tracedata["TraceID"]))
 				p.Close(false)
 				return
 			}
 			psid, e := trace.SpanIDFromHex(msg.Tracedata["SpanID"])
 			if e != nil {
-				log.Error(nil, "[crpc.server] trace data fromat wrong",
-					log.String("cip", peerip),
-					log.String("path", path),
-					log.String("p_span_id", msg.Tracedata["SpanID"]))
+				slog.ErrorContext(nil, "[crpc.server] trace data fromat wrong",
+					slog.String("cip", peerip),
+					slog.String("path", path),
+					slog.String("p_span_id", msg.Tracedata["SpanID"]))
 				p.Close(false)
 				return
 			}
@@ -287,11 +287,11 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 				e := recover()
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[crpc.server] panic",
-					log.String("cip", peerip),
-					log.String("path", path),
-					log.Any("panic", e),
-					log.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
+				slog.ErrorContext(workctx, "[crpc.server] panic",
+					slog.String("cip", peerip),
+					slog.String("path", path),
+					slog.Any("panic", e),
+					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
 				msg.Path = ""
 				msg.Deadline = 0
 				msg.Body = nil
@@ -303,10 +303,10 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(workctx, d, nil, nil); e != nil {
 				if e == stream.ErrMsgLarge {
-					log.Error(workctx, "[crpc.server] write response failed",
-						log.String("cip", peerip),
-						log.String("path", path),
-						log.CError(cerror.ErrRespmsgLen))
+					slog.ErrorContext(workctx, "[crpc.server] write response failed",
+						slog.String("cip", peerip),
+						slog.String("path", path),
+						slog.String("error", cerror.ErrRespmsgLen.Error()))
 					msg.Path = ""
 					msg.Deadline = 0
 					msg.Body = nil
@@ -317,25 +317,25 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 						if e == stream.ErrConnClosed {
 							msg.Error = cerror.ErrClosed
 						} else {
-							msg.Error = cerror.ConvertStdError(e)
+							msg.Error = cerror.Convert(e)
 						}
-						log.Error(workctx, "[crpc.server] write response failed",
-							log.String("cip", peerip),
-							log.String("path", path),
-							log.CError(msg.Error))
+						slog.ErrorContext(workctx, "[crpc.server] write response failed",
+							slog.String("cip", peerip),
+							slog.String("path", path),
+							slog.String("error", msg.Error.Error()))
 					}
 				} else if e == stream.ErrConnClosed {
-					log.Error(workctx, "[crpc.server] write response failed",
-						log.String("cip", peerip),
-						log.String("path", path),
-						log.CError(cerror.ErrClosed))
+					slog.ErrorContext(workctx, "[crpc.server] write response failed",
+						slog.String("cip", peerip),
+						slog.String("path", path),
+						slog.String("error", cerror.ErrClosed.Error()))
 					msg.Error = cerror.ErrClosed
 				} else {
-					msg.Error = cerror.ConvertStdError(e)
-					log.Error(workctx, "[crpc.server] write response failed",
-						log.String("cip", peerip),
-						log.String("path", path),
-						log.CError(msg.Error))
+					msg.Error = cerror.Convert(e)
+					slog.ErrorContext(workctx, "[crpc.server] write response failed",
+						slog.String("cip", peerip),
+						slog.String("path", path),
+						slog.String("error", msg.Error.Error()))
 				}
 			}
 			span.Finish(msg.Error)
@@ -375,13 +375,13 @@ func (s *CrpcServer) onlinefunc(ctx context.Context, p *stream.Peer) bool {
 		calls:     make(map[uint64]context.CancelFunc),
 	}
 	p.SetData(unsafe.Pointer(c))
-	log.Info(nil, "[crpc.server] online", log.String("cip", p.GetRealPeerIP()))
+	slog.InfoContext(nil, "[crpc.server] online", slog.String("cip", p.GetRealPeerIP()))
 	return true
 }
 func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
-		log.Error(nil, "[crpc.server] userdata format wrong", log.String("cip", p.GetRealPeerIP()))
+		slog.ErrorContext(nil, "[crpc.server] userdata format wrong", slog.String("cip", p.GetRealPeerIP()))
 		p.Close(false)
 		return
 	}
@@ -396,7 +396,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	}
 	handler, ok := s.handler[msg.Path]
 	if !ok {
-		log.Error(nil, "[crpc.server] path doesn't exist", log.String("cip", p.GetRealPeerIP()), log.String("path", msg.Path))
+		slog.ErrorContext(nil, "[crpc.server] path doesn't exist", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.Path))
 		msg.Path = ""
 		msg.Deadline = 0
 		msg.Body = nil
@@ -410,7 +410,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			} else if e == stream.ErrConnClosed {
 				e = cerror.ErrClosed
 			}
-			log.Error(nil, "[crpc.server] write response failed", log.String("cip", p.GetRealPeerIP()), log.String("path", msg.Path), log.CError(e))
+			slog.ErrorContext(nil, "[crpc.server] write response failed", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.Path), slog.String("error", e.Error()))
 		}
 		return
 	}
@@ -431,7 +431,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			} else if e == stream.ErrConnClosed {
 				e = cerror.ErrClosed
 			}
-			log.Error(nil, "[crpc.server] write response failed", log.String("cip", p.GetRealPeerIP()), log.String("path", msg.Path), log.CError(e))
+			slog.ErrorContext(nil, "[crpc.server] write response failed", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.Path), slog.String("error", e.Error()))
 		}
 		return
 	}
@@ -456,7 +456,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			} else if e == stream.ErrConnClosed {
 				e = cerror.ErrClosed
 			}
-			log.Error(nil, "[crpc.server] write response failed", log.String("cip", p.GetRealPeerIP()), log.String("path", msg.Path), log.CError(e))
+			slog.ErrorContext(nil, "[crpc.server] write response failed", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.Path), slog.String("error", e.Error()))
 		}
 		return
 	}
@@ -476,5 +476,5 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	}()
 }
 func (s *CrpcServer) offlinefunc(p *stream.Peer) {
-	log.Info(nil, "[crpc.server] offline", log.String("cip", p.GetRealPeerIP()))
+	slog.InfoContext(nil, "[crpc.server] offline", slog.String("cip", p.GetRealPeerIP()))
 }

@@ -10,8 +10,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
-	_ "github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/log/trace"
+	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/ctime"
 
 	gevent "go.mongodb.org/mongo-driver/event"
@@ -179,7 +178,7 @@ func (m *monitor) Succeeded(ctx context.Context, evt *gevent.CommandSucceededEve
 	m.Finished(&evt.CommandFinishedEvent, nil)
 }
 func (m *monitor) Failed(ctx context.Context, evt *gevent.CommandFailedEvent) {
-	m.Finished(&evt.CommandFinishedEvent, cerror.ConvertErrorstr(evt.Failure))
+	m.Finished(&evt.CommandFinishedEvent, cerror.Decode(evt.Failure))
 }
 func (m *monitor) Finished(evt *gevent.CommandFinishedEvent, err error) {
 	m.Lock()

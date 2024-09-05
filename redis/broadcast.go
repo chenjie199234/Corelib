@@ -2,12 +2,12 @@ package redis
 
 import (
 	"context"
+	"log/slog"
 	"math/rand"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
 
 	gredis "github.com/redis/go-redis/v9"
@@ -40,7 +40,7 @@ func (c *Client) SubBroadcast(broadcast string, shard uint8, handler BroadcastHa
 					if err == gredis.ErrClosed || err == context.Canceled {
 						return
 					}
-					log.Error(ctx, "[redis.broadcast.sub] read failed", log.String("stream", stream))
+					slog.ErrorContext(ctx, "[redis.broadcast.sub] read failed", slog.String("stream", stream))
 					time.Sleep(time.Millisecond * 100)
 					continue
 				}

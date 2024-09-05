@@ -2,11 +2,11 @@ package mids
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/redis"
 )
 
@@ -114,7 +114,7 @@ func UpdateAccessConfig(c MultiPathAccessConfigs) {
 }
 func UpdateReplayDefendRedisInstance(c *redis.Client) {
 	if c == nil {
-		log.Warn(nil, "[access.sign] redis missing,replay attack may happened")
+		slog.WarnContext(nil, "[access.sign] redis missing,replay attack may happened")
 	}
 	oldp := (*redis.Client)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&accessInstance.c)), unsafe.Pointer(c)))
 	if oldp != nil {
@@ -143,7 +143,7 @@ func VerifyAccessKey(ctx context.Context, method, path, accesskey string) bool {
 		return false
 	}
 	if tmp == nil {
-		log.Error(ctx, "[access.key] missing init,please use UpdateAccessConfig first")
+		slog.ErrorContext(ctx, "[access.key] missing init,please use UpdateAccessConfig first")
 		return false
 	}
 	accesses, ok := tmp[path]

@@ -1,13 +1,13 @@
 package monitor
 
 import (
+	"log/slog"
 	"os"
 	"runtime"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/shirou/gopsutil/v4/cpu"
 )
@@ -148,7 +148,7 @@ var cpuUsageLastTime int64
 func cgroupCPU(now int64) {
 	usagestr, e := os.ReadFile("/sys/fs/cgroup/cpu/cpuacct.usage")
 	if e != nil {
-		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage failed", log.CError(e))
+		slog.Error("[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage failed", slog.String("error", e.Error()))
 		return
 	}
 	if usagestr[len(usagestr)-1] == 10 {
@@ -156,7 +156,7 @@ func cgroupCPU(now int64) {
 	}
 	usage, e := strconv.ParseInt(common.BTS(usagestr), 10, 64)
 	if e != nil {
-		log.Error(nil, "[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage data format wrong", log.String("usage", common.BTS(usagestr)))
+		slog.Error("[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage data format wrong", slog.String("usage", common.BTS(usagestr)))
 		return
 	}
 	oldUsage := cpuUsageLast

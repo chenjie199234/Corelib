@@ -9,13 +9,13 @@ const txt = `package xweb
 
 import (
 	"crypto/tls"
+	"log/slog"
 
 	"{{.}}/api"
 	"{{.}}/config"
 	"{{.}}/model"
 	"{{.}}/service"
 
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/web"
 	"github.com/chenjie199234/Corelib/web/mids"
@@ -32,7 +32,7 @@ func StartWebServer() {
 		for cert, key := range c.Certs {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
-				log.Error(nil, "[xweb] load cert failed:", log.String("cert", cert), log.String("key", key), log.CError(e))
+				slog.ErrorContext(nil, "[xweb] load cert failed:", slog.String("cert", cert), slog.String("key", key), slog.String("error",e))
 				return 
 			}
 			certificates = append(certificates, temp)
@@ -41,7 +41,7 @@ func StartWebServer() {
 	}
 	var e error
 	if s, e = web.NewWebServer(c.ServerConfig, model.Project, model.Group, model.Name, tlsc); e != nil {
-		log.Error(nil, "[xweb] new server failed", log.CError(e))
+		slog.ErrorContext(nil, "[xweb] new server failed", slog.String("error",e.Error()))
 		return
 	}
 	UpdateHandlerTimeout(config.AC.HandlerTimeout)
@@ -59,10 +59,10 @@ func StartWebServer() {
 
 	s.SetRouter(r)
 	if e = s.StartWebServer(":8000"); e != nil && e != web.ErrServerClosed {
-		log.Error(nil, "[xweb] start server failed", log.CError(e))
+		slog.ErrorContext(nil, "[xweb] start server failed", slog.String("error",e))
 		return
 	}
-	log.Info(nil, "[xweb] server closed")
+	slog.InfoContext(nil, "[xweb] server closed")
 }
 
 // UpdateHandlerTimeout -

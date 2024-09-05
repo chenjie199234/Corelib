@@ -1,13 +1,13 @@
 package monitor
 
 import (
+	"log/slog"
 	"os"
 	"runtime"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/shirou/gopsutil/v4/mem"
 )
@@ -96,7 +96,7 @@ func getTotalMEM() (cgroup bool) {
 func cgroupMEM() {
 	usagestr, e := os.ReadFile("/sys/fs/cgroup/memory/memory.usage_in_bytes")
 	if e != nil {
-		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes failed", log.CError(e))
+		slog.Error("[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes failed", slog.String("error", e.Error()))
 		return
 	}
 	//drop \n
@@ -105,7 +105,7 @@ func cgroupMEM() {
 	}
 	usage, e := strconv.ParseUint(common.BTS(usagestr), 10, 64)
 	if e != nil {
-		log.Error(nil, "[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes data format wrong", log.String("usage_in_bytes", common.BTS(usagestr)))
+		slog.Error("[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes data format wrong", slog.String("usage_in_bytes", common.BTS(usagestr)))
 		return
 	}
 	LastUsageMEM = usage

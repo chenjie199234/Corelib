@@ -8,8 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	_ "github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/log/trace"
+	"github.com/chenjie199234/Corelib/trace"
 )
 
 var ErrSlaveExec = errors.New("do exec cmd on slave node")

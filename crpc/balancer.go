@@ -193,7 +193,7 @@ func (b *corelibBalancer) Pick(ctx context.Context) (server *ServerForPick, done
 				return nil, nil, cerror.ErrNoserver
 			}
 			if e := b.ww.Wait(ctx, "CALL", b.c.resolver.Now, nil); e != nil {
-				return nil, nil, cerror.ConvertStdError(e)
+				return nil, nil, cerror.Convert(e)
 			}
 			refresh = true
 			continue
@@ -214,11 +214,11 @@ func (b *corelibBalancer) Pick(ctx context.Context) (server *ServerForPick, done
 			}
 			//server is connecting
 			if e := b.ww.Wait(ctx, "SPECIFIC:"+forceaddr, b.c.resolver.Now, b.lker.RUnlock); e != nil {
-				return nil, nil, cerror.ConvertStdError(e)
+				return nil, nil, cerror.Convert(e)
 			}
 		} else if !refresh {
 			if e := b.ww.Wait(ctx, "CALL", b.c.resolver.Now, b.lker.RUnlock); e != nil {
-				return nil, nil, cerror.ConvertStdError(e)
+				return nil, nil, cerror.Convert(e)
 			}
 			refresh = true
 		}

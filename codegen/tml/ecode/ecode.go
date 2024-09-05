@@ -37,7 +37,7 @@ var (
 	ErrPasswordWrong     = cerror.ErrPasswordWrong     //10013 // http code 400
 	ErrPasswordLength    = cerror.ErrPasswordLength    //10014 // http code 400
 
-	ErrBusiness1 = cerror.MakeError(20001, http.StatusBadRequest, "business error 1")
+	ErrBusiness1 = cerror.MakeCError(20001, http.StatusBadRequest, "business error 1")
 )
 
 func ReturnEcode(originerror error, defaulterror *cerror.Error) error {

@@ -2,13 +2,13 @@ package discover
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/name"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -189,20 +189,20 @@ func (d *KubernetesD) list() {
 		pods, e := kubeclient.CoreV1().Pods(d.namespace).List(d.ctx, metav1.ListOptions{LabelSelector: d.labelselector, FieldSelector: d.fieldselector})
 		if e != nil {
 			if cerror.Equal(e, cerror.ErrCanceled) {
-				log.Info(nil, "[discover.kubernetes] discover stopped",
-					log.String("target", d.target),
-					log.String("namespace", d.namespace),
-					log.String("labelselector", d.labelselector),
-					log.String("fieldselector", d.fieldselector))
+				slog.InfoContext(nil, "[discover.kubernetes] discover stopped",
+					slog.String("target", d.target),
+					slog.String("namespace", d.namespace),
+					slog.String("labelselector", d.labelselector),
+					slog.String("fieldselector", d.fieldselector))
 				d.lasterror = cerror.ErrDiscoverStopped
 				return
 			}
-			log.Error(nil, "[discover.kubernetes] list failed",
-				log.String("target", d.target),
-				log.String("namespace", d.namespace),
-				log.String("labelselector", d.labelselector),
-				log.String("fieldselector", d.fieldselector),
-				log.CError(e))
+			slog.ErrorContext(nil, "[discover.kubernetes] list failed",
+				slog.String("target", d.target),
+				slog.String("namespace", d.namespace),
+				slog.String("labelselector", d.labelselector),
+				slog.String("fieldselector", d.fieldselector),
+				slog.String("error", e.Error()))
 			d.lker.Lock()
 			d.lasterror = e
 			for notice := range d.notices {
@@ -265,20 +265,20 @@ func (d *KubernetesD) watch() {
 		}
 		if d.watcher, e = kubeclient.CoreV1().Pods(d.namespace).Watch(d.ctx, opts); e != nil {
 			if cerror.Equal(e, cerror.ErrCanceled) {
-				log.Info(nil, "[discover.kubernetes] discover stopped",
-					log.String("target", d.target),
-					log.String("namespace", d.namespace),
-					log.String("labelselector", d.labelselector),
-					log.String("fieldselector", d.fieldselector))
+				slog.InfoContext(nil, "[discover.kubernetes] discover stopped",
+					slog.String("target", d.target),
+					slog.String("namespace", d.namespace),
+					slog.String("labelselector", d.labelselector),
+					slog.String("fieldselector", d.fieldselector))
 				d.lasterror = cerror.ErrDiscoverStopped
 				return
 			}
-			log.Error(nil, "[discover.kubernetes] watch failed",
-				log.String("target", d.target),
-				log.String("namespace", d.namespace),
-				log.String("labelselector", d.labelselector),
-				log.String("fieldselector", d.fieldselector),
-				log.CError(e))
+			slog.ErrorContext(nil, "[discover.kubernetes] watch failed",
+				slog.String("target", d.target),
+				slog.String("namespace", d.namespace),
+				slog.String("labelselector", d.labelselector),
+				slog.String("fieldselector", d.fieldselector),
+				slog.String("error", e.Error()))
 			d.lker.Lock()
 			d.lasterror = e
 			for notice := range d.notices {
@@ -297,22 +297,22 @@ func (d *KubernetesD) watch() {
 			var ok bool
 			select {
 			case <-d.ctx.Done():
-				log.Info(nil, "[discover.kubernetes] discover stopped",
-					log.String("target", d.target),
-					log.String("namespace", d.namespace),
-					log.String("labelselector", d.labelselector),
-					log.String("fieldselector", d.fieldselector))
+				slog.InfoContext(nil, "[discover.kubernetes] discover stopped",
+					slog.String("target", d.target),
+					slog.String("namespace", d.namespace),
+					slog.String("labelselector", d.labelselector),
+					slog.String("fieldselector", d.fieldselector))
 				d.lasterror = cerror.ErrDiscoverStopped
 				return
 			case event, ok = <-d.watcher.ResultChan():
 				if !ok {
 					select {
 					case <-d.ctx.Done():
-						log.Info(nil, "[discover.kubernetes] discover stopped",
-							log.String("target", d.target),
-							log.String("namespace", d.namespace),
-							log.String("labelselector", d.labelselector),
-							log.String("fieldselector", d.fieldselector))
+						slog.InfoContext(nil, "[discover.kubernetes] discover stopped",
+							slog.String("target", d.target),
+							slog.String("namespace", d.namespace),
+							slog.String("labelselector", d.labelselector),
+							slog.String("fieldselector", d.fieldselector))
 						d.lasterror = cerror.ErrDiscoverStopped
 						return
 					default:
@@ -377,12 +377,12 @@ func (d *KubernetesD) watch() {
 			case watch.Error:
 				failed = true
 				e = apierrors.FromObject(event.Object)
-				log.Error(nil, "[discover.kubernetes] watch failed",
-					log.String("target", d.target),
-					log.String("namespace", d.namespace),
-					log.String("labelselector", d.labelselector),
-					log.String("fieldselector", d.fieldselector),
-					log.CError(e))
+				slog.ErrorContext(nil, "[discover.kubernetes] watch failed",
+					slog.String("target", d.target),
+					slog.String("namespace", d.namespace),
+					slog.String("labelselector", d.labelselector),
+					slog.String("fieldselector", d.fieldselector),
+					slog.String("error", e.Error()))
 				d.lker.Lock()
 				d.lasterror = e
 				for notice := range d.notices {

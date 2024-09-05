@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/chenjie199234/Corelib/log/trace"
 	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/pool/cpool"
+	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/ctime"
 )
 

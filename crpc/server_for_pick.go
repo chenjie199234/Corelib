@@ -2,11 +2,11 @@ package crpc
 
 import (
 	"context"
-	"github.com/chenjie199234/Corelib/cerror"
 	"sync"
 	"sync/atomic"
 	"unsafe"
 
+	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/internal/picker"
 	"github.com/chenjie199234/Corelib/stream"
 
@@ -75,7 +75,7 @@ func (s *ServerForPick) sendmessage(ctx context.Context, r *req) (e error) {
 			e = cerror.ErrCanceled
 		} else {
 			//this is impossible
-			e = cerror.ConvertStdError(e)
+			e = cerror.Convert(e)
 		}
 		return
 	}

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net"
 	"runtime"
 	"strconv"
@@ -15,11 +16,10 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
-	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/log/trace"
 	cmetadata "github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/pool/bpool"
+	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/host"
@@ -108,7 +108,7 @@ func NewCGrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tls
 		handlerTimeout: make(map[string]time.Duration),
 	}
 	opts := make([]grpc.ServerOption, 0, 10)
-	opts = append(opts, experimental.RecvBufferPool(bpool.GetPool()))
+	opts = append(opts, experimental.BufferPool(bpool.GetPool()))
 	opts = append(opts, grpc.MaxRecvMsgSize(int(c.MaxMsgLen)))
 	opts = append(opts, grpc.StatsHandler(serverinstance))
 	opts = append(opts, grpc.UnknownServiceHandler(func(_ interface{}, stream grpc.ServerStream) error {
@@ -128,7 +128,7 @@ func NewCGrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tls
 			remoteaddr := conninfo.RemoteAddr.String()
 			peerip = remoteaddr[:strings.LastIndex(remoteaddr, ":")]
 		}
-		log.Error(nil, "[cgrpc.server] path doesn't exist", log.String("cip", peerip), log.String("path", rpcinfo.FullMethodName))
+		slog.ErrorContext(nil, "[cgrpc.server] path doesn't exist", slog.String("cip", peerip), slog.String("path", rpcinfo.FullMethodName))
 		return cerror.ErrNoapi
 	}))
 	opts = append(opts, grpc.ConnectionTimeout(c.ConnectTimeout.StdDuration()))
@@ -262,20 +262,20 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			if traceparentstr := gmd.Get("traceparent"); len(traceparentstr) != 0 && traceparentstr[0] != "" {
 				tid, psid, e := trace.ParseTraceParent(traceparentstr[0])
 				if e != nil {
-					log.Error(nil, "[cgrpc.server] trace data format wrong",
-						log.String("cip", peerip),
-						log.String("path", path),
-						log.String("trace_parent", traceparentstr[0]))
+					slog.ErrorContext(nil, "[cgrpc.server] trace data format wrong",
+						slog.String("cip", peerip),
+						slog.String("path", path),
+						slog.String("trace_parent", traceparentstr[0]))
 					return nil, cerror.ErrReq
 				}
 				parent := trace.NewSpanData(tid, psid)
 				if tracestatestr := gmd.Get("Tracestate"); len(tracestatestr) != 0 && tracestatestr[0] != "" {
 					tmp, e := trace.ParseTraceState(tracestatestr[0])
 					if e != nil {
-						log.Error(nil, "[cgrpc.server] trace data format wrong",
-							log.String("cip", peerip),
-							log.String("path", path),
-							log.String("trace_state", tracestatestr[0]))
+						slog.ErrorContext(nil, "[cgrpc.server] trace data format wrong",
+							slog.String("cip", peerip),
+							slog.String("path", path),
+							slog.String("trace_state", tracestatestr[0]))
 						return nil, cerror.ErrReq
 					}
 					var app, host, method, path bool
@@ -326,10 +326,10 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			if len(data) != 0 {
 				cmd = make(map[string]string)
 				if e := json.Unmarshal(common.STB(data[0]), &cmd); e != nil {
-					log.Error(ctx, "[cgrpc.server] metadata format wrong",
-						log.String("cip", peerip),
-						log.String("path", path),
-						log.String("metadata", data[0]))
+					slog.ErrorContext(ctx, "[cgrpc.server] metadata format wrong",
+						slog.String("cip", peerip),
+						slog.String("path", path),
+						slog.String("metadata", data[0]))
 					return nil, cerror.ErrReq
 				}
 			}
@@ -353,11 +353,11 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				e := recover()
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
-				log.Error(workctx, "[cgrpc.server] panic",
-					log.String("cip", peerip),
-					log.String("path", path),
-					log.Any("panic", e),
-					log.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
+				slog.ErrorContext(workctx, "[cgrpc.server] panic",
+					slog.String("cip", peerip),
+					slog.String("path", path),
+					slog.Any("panic", e),
+					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
 				workctx.e = cerror.ErrPanic
 				workctx.resp = nil
 			}
@@ -410,9 +410,9 @@ func (s *CGrpcServer) HandleConn(ctx context.Context, stat stats.ConnStats) {
 	switch stat.(type) {
 	case *stats.ConnBegin:
 		atomic.AddInt32(&s.clientnum, 1)
-		log.Info(nil, "[cgrpc.server] online", log.String("cip", peerip))
+		slog.InfoContext(nil, "[cgrpc.server] online", slog.String("cip", peerip))
 	case *stats.ConnEnd:
 		atomic.AddInt32(&s.clientnum, -1)
-		log.Info(nil, "[cgrpc.server] offline", log.String("cip", peerip))
+		slog.InfoContext(nil, "[cgrpc.server] offline", slog.String("cip", peerip))
 	}
 }

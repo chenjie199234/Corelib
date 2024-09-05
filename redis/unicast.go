@@ -2,11 +2,11 @@ package redis
 
 import (
 	"context"
+	"log/slog"
 	"math/rand"
 	"strconv"
 	"time"
 
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/common"
 
 	gredis "github.com/redis/go-redis/v9"
@@ -51,7 +51,7 @@ func (c *Client) SubUnicast(unicast string, shard uint8, handler UnicastHandler)
 							tker.Stop()
 							return
 						}
-						log.Error(ctx, "[redis.unicast.sub] expire failed", log.String("list", list), log.CError(err))
+						slog.ErrorContext(ctx, "[redis.unicast.sub] expire failed", slog.String("list", list), slog.String("error", err.Error()))
 					}
 				}
 			}
@@ -63,7 +63,7 @@ func (c *Client) SubUnicast(unicast string, shard uint8, handler UnicastHandler)
 					if err == gredis.ErrClosed || err == context.Canceled {
 						return
 					}
-					log.Error(ctx, "[redis.unicast.sub] read failed", log.String("list", list), log.CError(err))
+					slog.ErrorContext(ctx, "[redis.unicast.sub] read failed", slog.String("list", list), slog.String("error", err.Error()))
 					time.Sleep(time.Millisecond * 100)
 					continue
 				}

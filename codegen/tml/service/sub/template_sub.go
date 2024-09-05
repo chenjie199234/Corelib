@@ -9,6 +9,7 @@ const txt = `package {{.Sname}}
 
 import (
 	"context"
+	// "log/slog"
 
 	"{{.PackageName}}/api"
 	"{{.PackageName}}/config"
@@ -17,7 +18,6 @@ import (
 
 	// "github.com/chenjie199234/Corelib/cgrpc"
 	// "github.com/chenjie199234/Corelib/crpc"
-	// "github.com/chenjie199234/Corelib/log"
 	// "github.com/chenjie199234/Corelib/web"
 	"github.com/chenjie199234/Corelib/util/graceful"
 )

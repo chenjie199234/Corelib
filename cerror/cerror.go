@@ -3,73 +3,57 @@ package cerror
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/chenjie199234/Corelib/util/common"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
-//if error was not in this error's format,code will return -1,msg will use the origin error.Error()
-
-func MakeError(code, httpcode int32, msg string) *Error {
-	return &Error{Code: code, Httpcode: httpcode, Msg: msg}
-}
-func GetCodeFromErrorstr(e string) int32 {
-	ee := ConvertErrorstr(e)
-	if ee == nil {
-		return 0
+func MakeCError(code int64, httpcode int32, msg string) *Error {
+	if code == 0 {
+		panic("error code can't be 0")
 	}
-	return ee.Code
-}
-func GetCodeFromStdError(e error) int32 {
-	ee := ConvertStdError(e)
-	if ee == nil {
-		return 0
+	if http.StatusText(int(httpcode)) == "" {
+		panic("unknown http code")
 	}
-	return ee.Code
-}
-func GetHttpcodeFromErrorstr(e string) int32 {
-	ee := ConvertErrorstr(e)
-	if ee == nil {
-		return http.StatusOK
+	return &Error{
+		Code:     code,
+		Httpcode: httpcode,
+		Msg:      msg,
 	}
-	return ee.Httpcode
 }
-func GetHttpcodeFromStdError(e error) int32 {
-	ee := ConvertStdError(e)
-	if ee == nil {
-		return http.StatusOK
-	}
-	return ee.Httpcode
+func (this *Error) Error() string {
+	return "code=" + strconv.FormatInt(this.Code, 10) + ",msg=" + this.Msg
 }
-func GetMsgFromErrorstr(e string) string {
-	ee := ConvertErrorstr(e)
-	if ee == nil {
-		return ""
-	}
-	return ee.Msg
+func (this *Error) Json() string {
+	d, _ := json.Marshal(this.Msg)
+	return "{\"code\":" + strconv.FormatInt(this.Code, 10) + ",\"msg\":" + common.BTS(d) + "}"
 }
-func GetMsgFromStdError(e error) string {
-	ee := ConvertStdError(e)
-	if ee == nil {
-		return ""
-	}
-	return ee.Msg
+func (this *Error) GRPCStatus() *status.Status {
+	return status.New(codes.Code(this.Httpcode), this.Error())
 }
-func ConvertErrorstr(e string) *Error {
-	if e == "" {
-		return nil
-	}
-	if e == ErrDeadlineExceeded.Error() {
-		return ErrDeadlineExceeded
-	} else if e == ErrCanceled.Error() {
-		return ErrCanceled
-	}
-	return transStdErrorStr(e)
+func (this *Error) SlogAttr() *slog.Attr {
+	return &slog.Attr{Key: "error", Value: slog.GroupValue(slog.Int64("code", this.Code), slog.String("msg", this.Msg))}
 }
-func ConvertStdError(e error) *Error {
+func (this *Error) SetHttpcode(httpcode int32) {
+	this.Httpcode = httpcode
+}
+func Equal(a, b error) bool {
+	aa := Convert(a)
+	bb := Convert(b)
+	if aa == nil && bb == nil {
+		return true
+	} else if (aa == nil && bb != nil) || (aa != nil && bb == nil) {
+		return false
+	}
+	return aa.Code == bb.Code && aa.Msg == bb.Msg
+}
+func Convert(e error) *Error {
 	if e == nil {
 		return nil
 	}
@@ -82,57 +66,47 @@ func ConvertStdError(e error) *Error {
 	if ok {
 		return result
 	}
-	return transStdErrorStr(e.Error())
+	return MakeCError(-1, 500, e.Error())
 }
-func transStdErrorStr(e string) *Error {
-	result := &Error{}
-	if e[0] == '{' && e[len(e)-1] == '}' {
+func Decode(estr string) *Error {
+	if estr == "" {
+		return nil
+	}
+	if estr == ErrDeadlineExceeded.Json() || estr == ErrDeadlineExceeded.Error() {
+		return ErrDeadlineExceeded
+	} else if estr == ErrCanceled.Json() || estr == ErrCanceled.Error() {
+		return ErrCanceled
+	}
+	if estr[0] == '{' && estr[len(estr)-1] == '}' {
 		//json format
-		if ee := json.Unmarshal(common.STB(e), result); ee != nil || result.Code == 0 {
-			result.Code = -1
-			result.Httpcode = http.StatusInternalServerError
-			result.Msg = e
-		} else if result.Httpcode == 0 {
-			result.Httpcode = http.StatusInternalServerError
+		tmp := &Error{}
+		//protojson can support "number string" or "number" for field:code
+		if e := (protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}).Unmarshal(common.STB(estr), tmp); e != nil {
+			return MakeCError(-1, 500, estr)
 		}
+		if tmp.Code == 0 {
+			return nil
+		}
+		if tmp.Httpcode == 0 {
+			tmp.Httpcode = 500
+		}
+		return tmp
 	} else {
 		//text format
-		result.Code = -1
-		result.Httpcode = http.StatusInternalServerError
-		result.Msg = e
-	}
-	return result
-}
-func Equal(a, b error) bool {
-	aa := ConvertStdError(a)
-	bb := ConvertStdError(b)
-	if aa == nil && bb == nil {
-		return true
-	} else if (aa == nil && bb != nil) || (aa != nil && bb == nil) {
-		return false
-	}
-	return aa.Code == bb.Code && aa.Msg == bb.Msg
-}
-func (this *Error) Error() string {
-	if this == nil {
-		return ""
-	}
-	special := false
-	for _, v := range this.Msg {
-		if v == '\\' || v == '"' {
-			special = true
-			break
+		index := strings.Index(estr, ",")
+		if index == -1 {
+			return MakeCError(-1, 500, estr)
 		}
+		p1 := estr[:index]
+		p2 := estr[index+1:]
+		if !strings.HasPrefix(p1, "code=") || !strings.HasPrefix(p2, "msg=") {
+			return MakeCError(-1, 500, estr)
+		}
+		code, e := strconv.ParseInt(p1[5:], 10, 64)
+		if e != nil {
+			return MakeCError(-1, 500, estr)
+		}
+		msg := p2[4:]
+		return MakeCError(code, 500, msg)
 	}
-	if special {
-		d, _ := json.Marshal(this.Msg)
-		return "{\"code\":" + strconv.FormatInt(int64(this.Code), 10) + ",\"msg\":" + common.BTS(d) + "}"
-	}
-	return "{\"code\":" + strconv.FormatInt(int64(this.Code), 10) + ",\"msg\":\"" + this.Msg + "\"}"
-}
-func (this *Error) GRPCStatus() *status.Status {
-	return status.New(codes.Code(this.Httpcode), this.Error())
-}
-func (this *Error) SetHttpcode(httpcode int32) {
-	this.Httpcode = httpcode
 }

@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"log/slog"
 	"slices"
 	"strconv"
 	"strings"
@@ -8,7 +9,6 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
-	"github.com/chenjie199234/Corelib/log"
 	"github.com/chenjie199234/Corelib/util/name"
 )
 
@@ -68,7 +68,7 @@ func (d *StaticD) Stop() {
 		return
 	}
 	d.lasterror = cerror.ErrDiscoverStopped
-	log.Info(nil, "[discover.static] discover stopped", log.String("target", d.target), log.Any("addrs", d.addrs))
+	slog.InfoContext(nil, "[discover.static] discover stopped", slog.String("target", d.target), slog.Any("addrs", d.addrs))
 	for notice := range d.notices {
 		delete(d.notices, notice)
 		close(notice)

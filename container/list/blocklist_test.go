@@ -20,8 +20,8 @@ func Test_BlockList(t *testing.T) {
 		}
 	}()
 	for {
-		data, ok := l.Pop()
-		if !ok {
+		data, e := l.Pop(nil)
+		if e != nil {
 			break
 		}
 		t.Log(data)

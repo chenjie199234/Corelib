@@ -78,12 +78,8 @@ spec:
               value: <GROUP>
             - name: PROJECT
               value: <PROJECT>
-            - name: LOG_LEVEL
-              value: <LOG_LEVEL>
             - name: LOG_TRACE
               value: <LOG_TRACE>
-            - name: LOG_TARGET
-              value: <LOG_TARGET>
             - name: DEPLOY_ENV
               value: <DEPLOY_ENV>
             - name: RUN_ENV

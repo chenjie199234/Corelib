@@ -2,6 +2,7 @@ package discover
 
 import (
 	"errors"
+	"log/slog"
 	"net"
 	"slices"
 	"strconv"
@@ -11,8 +12,6 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
-	"github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/name"
 	"golang.org/x/net/context"
 )
@@ -164,10 +163,10 @@ func (d *DnsD) run() {
 	for {
 		select {
 		case <-d.ctx.Done():
-			log.Info(nil, "[discover.dns] discover stopped",
-				log.String("target", d.target),
-				log.String("host", d.host),
-				log.CDuration("interval", ctime.Duration(d.interval)))
+			slog.InfoContext(nil, "[discover.dns] discover stopped",
+				slog.String("target", d.target),
+				slog.String("host", d.host),
+				slog.Duration("interval", d.interval))
 			d.lasterror = cerror.ErrDiscoverStopped
 			return
 		case <-d.triger:
@@ -176,17 +175,17 @@ func (d *DnsD) run() {
 		d.status = 1
 		addrs, e := net.DefaultResolver.LookupHost(d.ctx, d.host)
 		if e != nil && cerror.Equal(errors.Unwrap(e), cerror.ErrCanceled) {
-			log.Info(nil, "[discover.dns] discover stopped", log.String("target", d.target),
-				log.String("host", d.host),
-				log.CDuration("interval", ctime.Duration(d.interval)))
+			slog.InfoContext(nil, "[discover.dns] discover stopped", slog.String("target", d.target),
+				slog.String("host", d.host),
+				slog.Duration("interval", d.interval))
 			d.lasterror = cerror.ErrDiscoverStopped
 			return
 		}
 		if e != nil {
-			log.Error(nil, "[discover.dns] look up failed", log.String("target", d.target),
-				log.String("host", d.host),
-				log.CDuration("interval", ctime.Duration(d.interval)),
-				log.CError(e))
+			slog.ErrorContext(nil, "[discover.dns] look up failed", slog.String("target", d.target),
+				slog.String("host", d.host),
+				slog.Duration("interval", d.interval),
+				slog.String("error", e.Error()))
 			d.lker.Lock()
 			d.lasterror = e
 			for notice := range d.notices {

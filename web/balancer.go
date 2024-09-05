@@ -143,7 +143,7 @@ func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, func(cpuusa
 				return nil, nil, cerror.ErrCanceled
 			} else {
 				//this is impossible
-				return nil, nil, cerror.ConvertStdError(e)
+				return nil, nil, cerror.Convert(e)
 			}
 		}
 		refresh = true

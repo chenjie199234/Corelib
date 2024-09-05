@@ -49,8 +49,9 @@ func CheckCap(b *[]byte, length int) []byte {
 
 type pool struct{}
 
-func (p *pool) Get(lenght int) []byte {
-	return Get(lenght)
+func (p *pool) Get(lenght int) *[]byte {
+	tmp := Get(lenght)
+	return &tmp
 }
 func (p *pool) Put(b *[]byte) {
 	Put(b)

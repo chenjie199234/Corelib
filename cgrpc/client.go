@@ -11,9 +11,9 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
-	"github.com/chenjie199234/Corelib/log/trace"
 	cmetadata "github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/pool/bpool"
+	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
@@ -118,7 +118,7 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 	opts := make([]grpc.DialOption, 0, 10)
 	opts = append(opts, grpc.WithChainUnaryInterceptor(client.gracefulInterceptor, client.timeoutInterceptor, client.callInterceptor))
 	opts = append(opts, grpc.WithChainStreamInterceptor())
-	opts = append(opts, experimental.WithRecvBufferPool(bpool.GetPool()))
+	opts = append(opts, experimental.WithBufferPool(bpool.GetPool()))
 	opts = append(opts, grpc.WithDisableRetry())
 	if tlsc == nil {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -272,35 +272,35 @@ func transGrpcError(e error) *cerror.Error {
 	case codes.DeadlineExceeded:
 		return cerror.ErrDeadlineExceeded
 	case codes.Unknown:
-		return cerror.ConvertErrorstr(s.Message())
+		return cerror.Decode(s.Message())
 	case codes.InvalidArgument:
-		return cerror.MakeError(-1, http.StatusBadRequest, s.Message())
+		return cerror.MakeCError(-1, http.StatusBadRequest, s.Message())
 	case codes.NotFound:
-		return cerror.MakeError(-1, http.StatusNotFound, s.Message())
+		return cerror.MakeCError(-1, http.StatusNotFound, s.Message())
 	case codes.AlreadyExists:
-		return cerror.MakeError(-1, http.StatusBadRequest, s.Message())
+		return cerror.MakeCError(-1, http.StatusBadRequest, s.Message())
 	case codes.PermissionDenied:
-		return cerror.MakeError(-1, http.StatusForbidden, s.Message())
+		return cerror.MakeCError(-1, http.StatusForbidden, s.Message())
 	case codes.ResourceExhausted:
-		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
+		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
 	case codes.FailedPrecondition:
-		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
+		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
 	case codes.Aborted:
-		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
+		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
 	case codes.OutOfRange:
-		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
+		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
 	case codes.Unimplemented:
-		return cerror.MakeError(-1, http.StatusNotImplemented, s.Message())
+		return cerror.MakeCError(-1, http.StatusNotImplemented, s.Message())
 	case codes.Internal:
-		return cerror.MakeError(-1, http.StatusInternalServerError, s.Message())
+		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
 	case codes.Unavailable:
-		return cerror.MakeError(-1, http.StatusServiceUnavailable, s.Message())
+		return cerror.MakeCError(-1, http.StatusServiceUnavailable, s.Message())
 	case codes.DataLoss:
-		return cerror.MakeError(-1, http.StatusNotFound, s.Message())
+		return cerror.MakeCError(-1, http.StatusNotFound, s.Message())
 	case codes.Unauthenticated:
-		return cerror.MakeError(-1, http.StatusUnauthorized, s.Message())
+		return cerror.MakeCError(-1, http.StatusUnauthorized, s.Message())
 	default:
-		ee := cerror.ConvertErrorstr(s.Message())
+		ee := cerror.Decode(s.Message())
 		ee.SetHttpcode(int32(s.Code()))
 		return ee
 	}

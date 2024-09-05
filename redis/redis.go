@@ -9,8 +9,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/chenjie199234/Corelib/log"
-	"github.com/chenjie199234/Corelib/log/trace"
+	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/ctime"
 
 	gredis "github.com/redis/go-redis/v9"
