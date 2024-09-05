@@ -12,6 +12,7 @@ import (
 	"context"
 	"os"
 	"strconv"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -59,14 +60,15 @@ func (l *LogHandler) Handle(ctx context.Context, record slog.Record) error {
 	if trace.LogTrace(){
 		if traceattr == nil {
 			if span := trace.SpanFromContext(ctx); span != nil {
-				traceattr = slog.String("traceid", span.GetSelfSpanData().GetTid().String())
+				tmp := slog.String("traceid", span.GetSelfSpanData().GetTid().String())
+				traceattr = &tmp
 			}
 		}
 		if traceattr != nil {
-			record.AddAttrs(traceattr)
+			record.AddAttrs(*traceattr)
 		}
 	}
-	return l.Handler.Handle(ctx, newr)
+	return l.Handler.Handle(ctx, record)
 }
 
 // notice is a sync function
@@ -642,12 +644,12 @@ func initredis(){
 						cert, e := os.ReadFile(certpath)
 						if e != nil {
 							slog.ErrorContext(nil, "[config.initredis] read specific cert failed",
-								slog.String("redis", redisc.RedisName), slog.String("cert_path", certpath), slog.String("error",e))
+								slog.String("redis", redisc.RedisName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
 							slog.ErrorContext(nil, "[config.initredis] specific cert load failed",
-								slog.String("redis", redisc.RedisName), slog.String("cert_path", certpath), slog.String("error",e))
+								slog.String("redis", redisc.RedisName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
 							os.Exit(1)
 						}
 					}
@@ -656,7 +658,7 @@ func initredis(){
 			c, e := redis.NewRedis(redisc.Config, tlsc)
 			if e != nil {
 				slog.ErrorContext(nil, "[config.initredis] failed",
-					slog.String("redis", redisc.RedisName), slog.String("error",e))
+					slog.String("redis", redisc.RedisName), slog.String("error",e.Error()))
 				os.Exit(1)
 			}
 			lker.Lock()
@@ -705,12 +707,12 @@ func initmongo(){
 						cert, e := os.ReadFile(certpath)
 						if e != nil {
 							slog.ErrorContext(nil, "[config.initmongo] read specific cert failed",
-								slog.String("mongo", mongoc.MongoName), slog.String("cert_path", certpath), slog.String("error",e.Error())
+								slog.String("mongo", mongoc.MongoName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
 							slog.ErrorContext(nil, "[config.initmongo] specific cert load failed",
-								slog.String("mongo", mongoc.MongoName), slog.String("cert_path", certpath), slog.String("error",e.Error())
+								slog.String("mongo", mongoc.MongoName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
 							os.Exit(1)
 						}
 					}
@@ -764,12 +766,12 @@ func initmysql(){
 						cert, e := os.ReadFile(certpath)
 						if e != nil {
 							slog.ErrorContext(nil, "[config.initmysql] read specific cert failed",
-								slog.String("mysql", mysqlc.MysqlName), slog.String("cert_path", certpath), slog.String("error",e.Error())
+								slog.String("mysql", mysqlc.MysqlName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
 							slog.ErrorContext(nil, "[config.initmysql] specific cert load failed",
-								slog.String("mysql", mysqlc.MysqlName), slog.String("cert_path", certpath), slog.String("error",e.Error())
+								slog.String("mysql", mysqlc.MysqlName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
 							os.Exit(1)
 						}
 					}
