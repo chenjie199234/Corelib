@@ -44,7 +44,6 @@ func main() {
 		publicmids.UpdateSessionConfig(ac.SessionTokenExpire.StdDuration())
 		publicmids.UpdateAccessConfig(ac.Accesses)
 	})
-	defer config.Close()
 	if rateredis := config.GetRedis("rate_redis"); rateredis != nil {
 		publicmids.UpdateRateRedisInstance(rateredis)
 	} else {

@@ -193,13 +193,11 @@ func initlocalapp(notice func(*AppConfig)) {
 	data, e := os.ReadFile("./AppConfig.json")
 	if e != nil {
 		slog.ErrorContext(nil, "[config.local.app] read config file failed", slog.String("error", e.Error()))
-		Close()
 		os.Exit(1)
 	}
 	AC = &AppConfig{}
 	if e = json.Unmarshal(data, AC); e != nil {
 		slog.ErrorContext(nil, "[config.local.app] config file format wrong", slog.String("error",e.Error()))
-		Close()
 		os.Exit(1)
 	}
 	validateAppConfig(AC)
@@ -210,12 +208,10 @@ func initlocalapp(notice func(*AppConfig)) {
 	watcher, e = fsnotify.NewWatcher()
 	if e != nil {
 		slog.ErrorContext(nil, "[config.local.app] create watcher for hot update failed", slog.String("error",e.Error()))
-		Close()
 		os.Exit(1)
 	}
 	if e = watcher.Add("./"); e != nil {
 		slog.ErrorContext(nil, "[config.local.app] create watcher for hot update failed", slog.String("error",e.Error()))
-		Close()
 		os.Exit(1)
 	}
 	go func() {
@@ -378,13 +374,11 @@ func initlocalsource() {
 	data, e := os.ReadFile("./SourceConfig.json")
 	if e != nil {
 		slog.ErrorContext(nil, "[config.local.source] read config file failed", slog.String("error",e.Error()))
-		Close()
 		os.Exit(1)
 	}
 	sc = &sourceConfig{}
 	if e = json.Unmarshal(data, sc); e != nil {
 		slog.ErrorContext(nil, "[config.local.source] config file format wrong", slog.String("error",e.Error()))
-		Close()
 		os.Exit(1)
 	}
 	slog.InfoContext(nil, "[config.local.source] update success", slog.Any("config", sc))
@@ -574,7 +568,6 @@ func initwebserver() {
 	} else {
 		if sc.WebServer.WaitCloseMode != 0 && sc.WebServer.WaitCloseMode != 1 {
 			slog.ErrorContext(nil, "[config.initwebserver] wait_close_mode must be 0 or 1")
-			Close()
 			os.Exit(1)
 		}
 		if sc.WebServer.ConnectTimeout <= 0 {
@@ -650,13 +643,11 @@ func initredis(){
 						if e != nil {
 							slog.ErrorContext(nil, "[config.initredis] read specific cert failed",
 								slog.String("redis", redisc.RedisName), slog.String("cert_path", certpath), slog.String("error",e))
-							Close()
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
 							slog.ErrorContext(nil, "[config.initredis] specific cert load failed",
 								slog.String("redis", redisc.RedisName), slog.String("cert_path", certpath), slog.String("error",e))
-							Close()
 							os.Exit(1)
 						}
 					}
@@ -666,7 +657,6 @@ func initredis(){
 			if e != nil {
 				slog.ErrorContext(nil, "[config.initredis] failed",
 					slog.String("redis", redisc.RedisName), slog.String("error",e))
-				Close()
 				os.Exit(1)
 			}
 			lker.Lock()
@@ -716,13 +706,11 @@ func initmongo(){
 						if e != nil {
 							slog.ErrorContext(nil, "[config.initmongo] read specific cert failed",
 								slog.String("mongo", mongoc.MongoName), slog.String("cert_path", certpath), slog.String("error",e.Error())
-							Close()
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
 							slog.ErrorContext(nil, "[config.initmongo] specific cert load failed",
 								slog.String("mongo", mongoc.MongoName), slog.String("cert_path", certpath), slog.String("error",e.Error())
-							Close()
 							os.Exit(1)
 						}
 					}
@@ -731,7 +719,6 @@ func initmongo(){
 			c, e := mongo.NewMongo(mongoc.Config, tlsc)
 			if e != nil {
 				slog.ErrorContext(nil, "[config.initmongo] failed", slog.String("mongo", mongoc.MongoName), slog.String("error",e.Error()))
-				Close()
 				os.Exit(1)
 			}
 			lker.Lock()
@@ -778,13 +765,11 @@ func initmysql(){
 						if e != nil {
 							slog.ErrorContext(nil, "[config.initmysql] read specific cert failed",
 								slog.String("mysql", mysqlc.MysqlName), slog.String("cert_path", certpath), slog.String("error",e.Error())
-							Close()
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
 							slog.ErrorContext(nil, "[config.initmysql] specific cert load failed",
 								slog.String("mysql", mysqlc.MysqlName), slog.String("cert_path", certpath), slog.String("error",e.Error())
-							Close()
 							os.Exit(1)
 						}
 					}
@@ -793,7 +778,6 @@ func initmysql(){
 			c, e := mysql.NewMysql(mysqlc.Config, tlsc)
 			if e != nil {
 				slog.ErrorContext(nil, "[config.initmysql] failed", slog.String("mysql", mysqlc.MysqlName), slog.String("error",e.Error()))
-				Close()
 				os.Exit(1)
 			}
 			lker.Lock()
