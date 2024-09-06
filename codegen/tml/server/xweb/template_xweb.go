@@ -32,7 +32,7 @@ func StartWebServer() {
 		for cert, key := range c.Certs {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
-				slog.ErrorContext(nil, "[xweb] load cert failed:", slog.String("cert", cert), slog.String("key", key), slog.String("error",e))
+				slog.ErrorContext(nil, "[xweb] load cert failed:", slog.String("cert", cert), slog.String("key", key), slog.String("error",e.Error()))
 				return 
 			}
 			certificates = append(certificates, temp)
@@ -59,7 +59,7 @@ func StartWebServer() {
 
 	s.SetRouter(r)
 	if e = s.StartWebServer(":8000"); e != nil && e != web.ErrServerClosed {
-		slog.ErrorContext(nil, "[xweb] start server failed", slog.String("error",e))
+		slog.ErrorContext(nil, "[xweb] start server failed", slog.String("error",e.Error()))
 		return
 	}
 	slog.InfoContext(nil, "[xweb] server closed")
