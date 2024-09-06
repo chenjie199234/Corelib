@@ -136,14 +136,8 @@ func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header 
 					e = ErrHeaderLineFormat
 					return
 				}
-			case "sec-websocket-version":
-				check |= 0b00000100
-				if !bytes.Equal(pieces[1], []byte{'1', '3'}) {
-					e = ErrHeaderLineFormat
-					return
-				}
 			case "sec-websocket-accept":
-				check |= 0b00001000
+				check |= 0b00000100
 				h := sha1.New()
 				h.Write(nonce)
 				h.Write([]byte{'2', '5', '8', 'E', 'A', 'F', 'A', '5', '-', 'E', '9', '1', '4', '-', '4', '7', 'D', 'A', '-', '9', '5', 'C', 'A', '-', 'C', '5', 'A', 'B', '0', 'D', 'C', '8', '5', 'B', '1', '1'})
@@ -151,6 +145,7 @@ func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header 
 					e = ErrSign
 					return
 				}
+			case "sec-websocket-version":
 			case "sec-websocket-protocol":
 				//doesn't support
 			case "sec-websocket-extensions":
@@ -161,7 +156,7 @@ func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header 
 		}
 		buf = buf[:0]
 	}
-	if check != 0b00001111 {
+	if check != 0b00000111 {
 		e = ErrHeaderLineFormat
 		return
 	}

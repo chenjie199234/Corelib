@@ -144,7 +144,7 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 	buf = append(buf, "HTTP/1.1 101 Switching Protocols\r\n"...)
 	buf = append(buf, "Upgrade: websocket\r\n"...)
 	buf = append(buf, "Connection: Upgrade\r\n"...)
-	buf = append(buf, "Sec-WebSocket-Version: 13\r\n"...)
+	// buf = append(buf, "Sec-WebSocket-Version: 13\r\n"...)
 	buf = append(buf, "Sec-WebSocket-Accept: "...)
 	buf = append(buf, accept...)
 	buf = append(buf, "\r\n\r\n"...)
