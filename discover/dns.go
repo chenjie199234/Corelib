@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/util/name"
-	"golang.org/x/net/context"
 )
 
 type DnsD struct {
