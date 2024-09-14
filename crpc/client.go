@@ -127,7 +127,6 @@ func (c *CrpcClient) GetServerIps() (ips []string, version interface{}, lasterro
 	return
 }
 
-/*
 // force - false graceful,wait all requests finish,true - not graceful,close all connections immediately
 func (c *CrpcClient) Close(force bool) {
 	if force {
@@ -137,7 +136,6 @@ func (c *CrpcClient) Close(force bool) {
 		c.stop.Close(c.resolver.Close, c.instance.Stop)
 	}
 }
-*/
 
 func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 	if reconnect && !c.balancer.ReconnectCheck(server) {
@@ -177,14 +175,21 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 		return
 	}
 	switch msg.H.Type {
-	case MsgType_CloseSend:
-		if rw := server.getrw(msg.H.Callid); rw != nil {
-			rw.readstatus = 0
-			rw.reader.Close()
-		}
 	case MsgType_CloseRead:
 		if rw := server.getrw(msg.H.Callid); rw != nil {
-			rw.sendstatus = 0
+			atomic.AndInt32(&rw.status, 0b0111)
+		}
+	case MsgType_CloseSend:
+		if rw := server.getrw(msg.H.Callid); rw != nil {
+			atomic.AndInt32(&rw.status, 0b1011)
+			rw.reader.Close()
+		}
+	case MsgType_CloseReadSend:
+		rw := server.getrw(msg.H.Callid)
+		if rw != nil {
+			atomic.AndInt32(&rw.status, 0b0111)
+			atomic.AndInt32(&rw.status, 0b1011)
+			rw.reader.Close()
 		}
 	case MsgType_Send:
 		if msg.B.Error != nil && cerror.Equal(msg.B.Error, cerror.ErrServerClosing) {

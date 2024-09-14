@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -164,12 +165,10 @@ func (this *CrpcServer) getHandlerTimeout(path string) time.Duration {
 	return this.c.GlobalTimeout.StdDuration()
 }
 
-// thread unsafe
 func (s *CrpcServer) Use(globalMids ...OutsideHandler) {
 	s.global = append(s.global, globalMids...)
 }
 
-// thread unsafe
 func (s *CrpcServer) RegisterHandler(sname, mname string, handlers ...OutsideHandler) {
 	path := "/" + sname + "/" + mname
 	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
@@ -230,10 +229,11 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			msg.H.Type = MsgType_Send
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(nil, d, nil, nil); e != nil {
-				if e == stream.ErrMsgLarge {
-					e = cerror.ErrRespmsgLen
-				} else if e == stream.ErrConnClosed {
+				if e == stream.ErrConnClosed {
 					e = cerror.ErrClosed
+				} else if e == stream.ErrMsgLarge {
+					//this is impossible
+					e = cerror.ErrRespmsgLen
 				}
 				slog.ErrorContext(nil, "[crpc.server] write response failed",
 					slog.String("cip", p.GetRealPeerIP()),
@@ -267,10 +267,11 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			msg.H.Type = MsgType_Send
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(nil, d, nil, nil); e != nil {
-				if e == stream.ErrMsgLarge {
-					e = cerror.ErrRespmsgLen
-				} else if e == stream.ErrConnClosed {
+				if e == stream.ErrConnClosed {
 					e = cerror.ErrClosed
+				} else if e == stream.ErrMsgLarge {
+					//this is impossible
+					e = cerror.ErrRespmsgLen
 				}
 				slog.ErrorContext(nil, "[crpc.server] write response failed",
 					slog.String("cip", p.GetRealPeerIP()),
@@ -293,10 +294,11 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			msg.H.Type = MsgType_Send
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(nil, d, nil, nil); e != nil {
-				if e == stream.ErrMsgLarge {
-					e = cerror.ErrRespmsgLen
-				} else if e == stream.ErrConnClosed {
+				if e == stream.ErrConnClosed {
 					e = cerror.ErrClosed
+				} else if e == stream.ErrMsgLarge {
+					//this is impossible
+					e = cerror.ErrRespmsgLen
 				}
 				slog.ErrorContext(nil, "[crpc.server] write response failed",
 					slog.String("cip", p.GetRealPeerIP()),
@@ -435,7 +437,6 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			rw:         rw,
 			peer:       p,
 			peerip:     peerip,
-			handlers:   handlers,
 		}
 		c.ctxs[msg.H.Callid] = workctx
 		c.Unlock()
@@ -449,20 +450,26 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 						slog.String("path", msg.H.Path),
 						slog.Any("panic", e),
 						slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
-					workctx.AbortWrite(cerror.ErrPanic)
+					workctx.StopSend(cerror.ErrPanic)
 				}
 				span.Finish(workctx.e)
 				peername, _ := span.GetParentSpanData().GetStateKV("app")
 				monitor.CrpcServerMonitor(peername, "CRPC", msg.H.Path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
 				s.stop.DoneOne()
 			}()
-			workctx.run()
+			for _, handler := range handlers {
+				handler(workctx)
+				if workctx.finish {
+					break
+				}
+			}
 			c.Lock()
 			if ctx, ok := c.ctxs[msg.H.Callid]; ok {
 				ctx.CancelFunc()
 				delete(c.ctxs, msg.H.Callid)
 			}
 			c.Unlock()
+			rw.closereadwrite()
 		}()
 	case MsgType_Send:
 		c.RLock()
@@ -476,17 +483,25 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			ctx.CancelFunc()
 		}
 		c.RUnlock()
-	case MsgType_CloseSend:
-		c.RLock()
-		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
-			ctx.rw.readstatus = 0
-			ctx.rw.reader.Close()
-		}
-		c.RUnlock()
 	case MsgType_CloseRead:
 		c.RLock()
 		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
-			ctx.rw.sendstatus = 0
+			atomic.AndInt32(&ctx.rw.status, 0b0111)
+		}
+		c.RUnlock()
+	case MsgType_CloseSend:
+		c.RLock()
+		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
+			atomic.AndInt32(&ctx.rw.status, 0b1011)
+			ctx.rw.reader.Close()
+		}
+		c.RUnlock()
+	case MsgType_CloseReadSend:
+		c.RLock()
+		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
+			atomic.AndInt32(&ctx.rw.status, 0b0111)
+			atomic.AndInt32(&ctx.rw.status, 0b1011)
+			ctx.rw.reader.Close()
 		}
 		c.RUnlock()
 	}

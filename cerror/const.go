@@ -16,10 +16,8 @@ var (
 	ErrNoSpecificserver = MakeCError(1006, http.StatusServiceUnavailable, "no specific server")
 	ErrDiscoverStopped  = MakeCError(1007, http.StatusBadRequest, "discover stopped")
 	ErrClosed           = MakeCError(1008, http.StatusInternalServerError, "connection closed")
-	ErrStreamReadClosed = MakeCError(1009, http.StatusInternalServerError, "stream read closed")
-	ErrStreamSendClosed = MakeCError(1010, http.StatusInternalServerError, "stream send closed")
-	ErrReqmsgLen        = MakeCError(1011, http.StatusBadRequest, "req msg too large")
-	ErrRespmsgLen       = MakeCError(1012, http.StatusInternalServerError, "resp msg too large")
+	ErrReqmsgLen        = MakeCError(1009, http.StatusBadRequest, "req msg too large")
+	ErrRespmsgLen       = MakeCError(1010, http.StatusInternalServerError, "resp msg too large")
 
 	ErrCors = MakeCError(2001, http.StatusForbidden, "Cors forbidden")
 )

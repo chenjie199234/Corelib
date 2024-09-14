@@ -9,6 +9,7 @@ enum MsgType{
 	Cancel=2;
 	CloseSend=3;
 	CloseRead=4;
+	CloseReadSend=5;
 }
 message msg {
 	message header {

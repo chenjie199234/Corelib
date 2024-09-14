@@ -3,7 +3,6 @@ package crpc
 import (
 	"context"
 	"strconv"
-	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/metadata"
@@ -14,43 +13,31 @@ import (
 type ServerContext struct {
 	context.Context
 	context.CancelFunc
-	rw       *rw
-	peer     *stream.Peer
-	peerip   string
-	handlers []OutsideHandler
-	finish   int32
-	e        *cerror.Error
+	rw     *rw
+	peer   *stream.Peer
+	peerip string
+	finish bool
+	e      *cerror.Error
 }
 
-func (c *ServerContext) run() {
-	for _, handler := range c.handlers {
-		handler(c)
-		if c.finish != 0 {
-			break
-		}
-	}
+func (c *ServerContext) Abort() {
+	c.finish = true
 }
 
-func (c *ServerContext) AbortWrite(e error) error {
-	if atomic.SwapInt32(&c.finish, 1) != 0 {
-		return cerror.ErrStreamSendClosed
-	}
+func (c *ServerContext) Send(resp []byte) error {
+	traildata := map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
+	return c.rw.send(c.Context, &MsgBody{Body: resp, Traildata: traildata})
+}
+func (c *ServerContext) StopSend(e error) {
 	c.e = cerror.Convert(e)
 	if c.e != nil && (c.e.Httpcode < 400 || c.e.Httpcode > 999) {
 		panic("[crpc.Context.Abort] http code must in [400,999)")
 	}
 	if c.e != nil {
 		traildata := map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
-		return c.rw.write(context.Background(), &MsgBody{Error: c.e, Traildata: traildata})
+		c.rw.send(context.Background(), &MsgBody{Error: c.e, Traildata: traildata})
 	}
-	return c.rw.closesend(context.Background())
-}
-func (c *ServerContext) Write(resp []byte) error {
-	if atomic.LoadInt32(&c.finish) != 0 {
-		return cerror.ErrStreamSendClosed
-	}
-	traildata := map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
-	return c.rw.write(context.Background(), &MsgBody{Body: resp, Traildata: traildata})
+	c.rw.closesend()
 }
 
 // context's cancel can wake up the block
@@ -61,8 +48,8 @@ func (c *ServerContext) Read(ctx context.Context) ([]byte, error) {
 	}
 	return body, e
 }
-func (c *ServerContext) AbortRead() error {
-	return c.rw.closeread(context.Background())
+func (c *ServerContext) StopRead() {
+	c.rw.closeread()
 }
 
 func (c *ServerContext) GetMethod() string {
