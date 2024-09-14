@@ -172,7 +172,10 @@ func (s *CrpcServer) Use(globalMids ...OutsideHandler) {
 // thread unsafe
 func (s *CrpcServer) RegisterHandler(sname, mname string, handlers ...OutsideHandler) {
 	path := "/" + sname + "/" + mname
-	s.handler[path] = handlers
+	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
+	copy(totalhandlers, s.global)
+	copy(totalhandlers[len(s.global):], handlers)
+	s.handler[path] = totalhandlers
 }
 
 // return false will close the connection
