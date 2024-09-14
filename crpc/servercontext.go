@@ -53,7 +53,7 @@ func (c *ServerContext) Write(resp []byte) error {
 	return c.rw.write(context.Background(), &MsgBody{Body: resp, Traildata: traildata})
 }
 
-// context's cancel can wake up the read's block
+// context's cancel can wake up the block
 func (c *ServerContext) Read(ctx context.Context) ([]byte, error) {
 	body, _, e := c.rw.read(ctx)
 	if e != nil {

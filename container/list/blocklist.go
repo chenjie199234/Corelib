@@ -48,6 +48,10 @@ func (bl *BlockList[T]) Pop(ctx context.Context) (T, error) {
 		ctx = context.Background()
 	}
 	for {
+		if ctx.Err() != nil {
+			var empty T
+			return empty, ctx.Err()
+		}
 		if data, e := bl.list.Pop(nil); e == nil {
 			atomic.AddInt64(&bl.count, -1)
 			return data, nil
