@@ -36,8 +36,9 @@ func (c *ServerContext) StopSend(e error) {
 	if c.e != nil {
 		traildata := map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
 		c.rw.send(context.Background(), &MsgBody{Error: c.e, Traildata: traildata})
+	} else {
+		c.rw.closesend()
 	}
-	c.rw.closesend()
 }
 
 // context's cancel can wake up the block

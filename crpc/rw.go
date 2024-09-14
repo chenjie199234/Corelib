@@ -136,6 +136,7 @@ func (this *rw) read(ctx context.Context) ([]byte, map[string]string, error) {
 	}
 	//if we read error from peer,means peer stop send
 	atomic.AndInt32(&this.status, 0b1011)
+	this.reader.Close()
 	return m.Body, m.Traildata, m.Error
 }
 func (this *rw) cache(m *MsgBody) error {
