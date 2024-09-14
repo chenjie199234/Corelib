@@ -27,7 +27,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type OutsideHandler func(*Context)
+type OutsideHandler func(*ServerContext)
 
 type ServerConfig struct {
 	//the default timeout for every rpc call,<=0 means no timeout
@@ -50,16 +50,15 @@ type CrpcServer struct {
 	tlsc           *tls.Config
 	self           string
 	global         []OutsideHandler
-	ctxpool        *sync.Pool
-	handler        map[string]func(context.Context, *stream.Peer, *Msg)
+	handler        map[string][]OutsideHandler
 	handlerTimeout map[string]time.Duration
 	instance       *stream.Instance
 	stop           *graceful.Graceful
 }
 type client struct {
 	sync.RWMutex
-	maxcallid uint64 //0-server is closing
-	calls     map[uint64]context.CancelFunc
+	stop bool
+	ctxs map[uint64]*ServerContext
 }
 
 // if tlsc is not nil,the tls will be actived
@@ -77,8 +76,7 @@ func NewCrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tlsc
 		tlsc:           tlsc,
 		self:           selffullname,
 		global:         make([]OutsideHandler, 0, 10),
-		ctxpool:        &sync.Pool{},
-		handler:        make(map[string]func(context.Context, *stream.Peer, *Msg), 10),
+		handler:        make(map[string][]OutsideHandler, 10),
 		handlerTimeout: make(map[string]time.Duration),
 		stop:           graceful.New(),
 	}
@@ -118,7 +116,6 @@ func (s *CrpcServer) GetReqNum() int64 {
 func (s *CrpcServer) StopCrpcServer(force bool) {
 	s.instance.PreStop()
 	if force {
-		//tel all peers self closed
 		s.tellAllPeerSelfClosed()
 		s.instance.Stop()
 	} else {
@@ -130,13 +127,12 @@ func (s *CrpcServer) tellAllPeerSelfClosed() {
 		if tmpdata := p.GetData(); tmpdata != nil {
 			c := (*client)(tmpdata)
 			c.Lock()
-			d, _ := proto.Marshal(&Msg{
-				Callid: c.maxcallid + 1,
-				Error:  cerror.ErrServerClosing,
-			})
-			c.maxcallid = 0
-			p.SendMessage(nil, d, nil, nil)
+			c.stop = true
 			c.Unlock()
+			d, _ := proto.Marshal(&Msg{
+				B: &MsgBody{Error: cerror.ErrServerClosing},
+			})
+			p.SendMessage(nil, d, nil, nil)
 		}
 	})
 }
@@ -176,44 +172,171 @@ func (s *CrpcServer) Use(globalMids ...OutsideHandler) {
 // thread unsafe
 func (s *CrpcServer) RegisterHandler(sname, mname string, handlers ...OutsideHandler) {
 	path := "/" + sname + "/" + mname
-	s.handler[path] = s.insidehandler(path, handlers...)
+	s.handler[path] = handlers
 }
 
-func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func(context.Context, *stream.Peer, *Msg) {
-	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
-	copy(totalhandlers, s.global)
-	copy(totalhandlers[len(s.global):], handlers)
-	return func(ctx context.Context, p *stream.Peer, msg *Msg) {
+// return false will close the connection
+func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]byte, string, bool) {
+	if s.stop.Closing() {
+		//self closing
+		return nil, "", false
+	}
+	if common.BTS(peerVerifyData) != s.self {
+		return nil, "", false
+	}
+	return nil, "", true
+}
+
+// return false will close the connection
+func (s *CrpcServer) onlinefunc(ctx context.Context, p *stream.Peer) bool {
+	if s.stop.Closing() {
+		//tel peer self closed
+		d, _ := proto.Marshal(&Msg{
+			B: &MsgBody{Error: cerror.ErrServerClosing},
+		})
+		p.SendMessage(nil, d, nil, nil)
+	}
+	c := &client{
+		stop: false,
+		ctxs: make(map[uint64]*ServerContext),
+	}
+	p.SetData(unsafe.Pointer(c))
+	slog.InfoContext(nil, "[crpc.server] online", slog.String("cip", p.GetRealPeerIP()))
+	return true
+}
+func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
+	msg := &Msg{}
+	if e := proto.Unmarshal(data, msg); e != nil {
+		slog.ErrorContext(nil, "[crpc.server] userdata format wrong", slog.String("cip", p.GetRealPeerIP()))
+		p.Close(false)
+		return
+	}
+	c := (*client)(p.GetData())
+	switch msg.H.Type {
+	case MsgType_Init:
+		c.Lock()
+		if c.stop {
+			c.Unlock()
+			//tell peer self closed
+			msg.B.Body = nil
+			msg.B.Error = cerror.ErrServerClosing
+			msg.B.Traildata = nil
+			msg.H.Metadata = nil
+			msg.H.Tracedata = nil
+			msg.H.Deadline = 0
+			msg.H.Type = MsgType_Send
+			d, _ := proto.Marshal(msg)
+			if e := p.SendMessage(nil, d, nil, nil); e != nil {
+				if e == stream.ErrMsgLarge {
+					e = cerror.ErrRespmsgLen
+				} else if e == stream.ErrConnClosed {
+					e = cerror.ErrClosed
+				}
+				slog.ErrorContext(nil, "[crpc.server] write response failed",
+					slog.String("cip", p.GetRealPeerIP()),
+					slog.String("path", msg.H.Path),
+					slog.String("error", e.Error()))
+			}
+			return
+		}
+		if _, ok := c.ctxs[msg.H.Callid]; ok {
+			//this is impossible
+			c.Unlock()
+			slog.ErrorContext(nil, "[crpc.server] duplicate init callid", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.H.Path))
+			p.Close(false)
+			return
+		}
+		if e := s.stop.Add(1); e != nil {
+			c.Unlock()
+			msg.B.Body = nil
+			if e == graceful.ErrClosing {
+				//tell peer self closed
+				msg.B.Error = cerror.ErrServerClosing
+				msg.B.Traildata = nil
+			} else {
+				//tell peer self busy
+				msg.B.Error = cerror.ErrBusy
+				msg.B.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
+			}
+			msg.H.Metadata = nil
+			msg.H.Tracedata = nil
+			msg.H.Deadline = 0
+			msg.H.Type = MsgType_Send
+			d, _ := proto.Marshal(msg)
+			if e := p.SendMessage(nil, d, nil, nil); e != nil {
+				if e == stream.ErrMsgLarge {
+					e = cerror.ErrRespmsgLen
+				} else if e == stream.ErrConnClosed {
+					e = cerror.ErrClosed
+				}
+				slog.ErrorContext(nil, "[crpc.server] write response failed",
+					slog.String("cip", p.GetRealPeerIP()),
+					slog.String("path", msg.H.Path),
+					slog.String("error", e.Error()))
+			}
+			return
+		}
+
+		handlers, ok := s.handler[msg.H.Path]
+		if !ok {
+			c.Unlock()
+			slog.ErrorContext(nil, "[crpc.server] path doesn't exist", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.H.Path))
+			msg.B.Body = nil
+			msg.B.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
+			msg.B.Error = cerror.ErrNoapi
+			msg.H.Metadata = nil
+			msg.H.Tracedata = nil
+			msg.H.Deadline = 0
+			msg.H.Type = MsgType_Send
+			d, _ := proto.Marshal(msg)
+			if e := p.SendMessage(nil, d, nil, nil); e != nil {
+				if e == stream.ErrMsgLarge {
+					e = cerror.ErrRespmsgLen
+				} else if e == stream.ErrConnClosed {
+					e = cerror.ErrClosed
+				}
+				slog.ErrorContext(nil, "[crpc.server] write response failed",
+					slog.String("cip", p.GetRealPeerIP()),
+					slog.String("path", msg.H.Path),
+					slog.String("error", e.Error()))
+			}
+			return
+		}
+
+		//deal trace data
 		peerip := p.GetRealPeerIP()
+		var basectx context.Context
 		var span *trace.Span
-		if len(msg.Tracedata) == 0 || msg.Tracedata["TraceID"] == "" || msg.Tracedata["SpanID"] == "" {
-			ctx, span = trace.NewSpan(ctx, "Corelib.Crpc", trace.Server, nil)
+		if len(msg.H.Tracedata) == 0 || msg.H.Tracedata["TraceID"] == "" || msg.H.Tracedata["SpanID"] == "" {
+			basectx, span = trace.NewSpan(p, "Corelib.Crpc", trace.Server, nil)
 			span.GetParentSpanData().SetStateKV("app", "unknown")
-			span.GetParentSpanData().SetStateKV("host", peerip)
+			span.GetParentSpanData().SetStateKV("host", p.GetRealPeerIP())
 			span.GetParentSpanData().SetStateKV("method", "unknown")
 			span.GetParentSpanData().SetStateKV("path", "unknown")
 		} else {
-			tid, e := trace.TraceIDFromHex(msg.Tracedata["TraceID"])
+			tid, e := trace.TraceIDFromHex(msg.H.Tracedata["TraceID"])
 			if e != nil {
+				c.Unlock()
 				slog.ErrorContext(nil, "[crpc.server] trace data fromat wrong",
-					slog.String("cip", peerip),
-					slog.String("path", path),
-					slog.String("trace_id", msg.Tracedata["TraceID"]))
+					slog.String("cip", p.GetRealPeerIP()),
+					slog.String("path", msg.H.Path),
+					slog.String("trace_id", msg.H.Tracedata["TraceID"]))
 				p.Close(false)
 				return
 			}
-			psid, e := trace.SpanIDFromHex(msg.Tracedata["SpanID"])
+			psid, e := trace.SpanIDFromHex(msg.H.Tracedata["SpanID"])
 			if e != nil {
+				c.Unlock()
 				slog.ErrorContext(nil, "[crpc.server] trace data fromat wrong",
-					slog.String("cip", peerip),
-					slog.String("path", path),
-					slog.String("p_span_id", msg.Tracedata["SpanID"]))
+					slog.String("cip", p.GetRealPeerIP()),
+					slog.String("path", msg.H.Path),
+					slog.String("p_span_id", msg.H.Tracedata["SpanID"]))
 				p.Close(false)
 				return
 			}
 			parent := trace.NewSpanData(tid, psid)
 			var app, host, method, path bool
-			for k, v := range msg.Tracedata {
+			for k, v := range msg.H.Tracedata {
 				if k == "TraceID" || k == "SpanID" {
 					continue
 				}
@@ -234,7 +357,7 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 				parent.SetStateKV("app", "unknown")
 			}
 			if !host {
-				parent.SetStateKV("host", peerip)
+				parent.SetStateKV("host", p.GetRealPeerIP())
 			}
 			if !method {
 				parent.SetStateKV("method", "unknown")
@@ -242,238 +365,128 @@ func (s *CrpcServer) insidehandler(path string, handlers ...OutsideHandler) func
 			if !path {
 				parent.SetStateKV("path", "unknown")
 			}
-			ctx, span = trace.NewSpan(ctx, "Corelib.Crpc", trace.Server, parent)
+			basectx, span = trace.NewSpan(p, "Corelib.Crpc", trace.Server, parent)
 		}
 		span.GetSelfSpanData().SetStateKV("app", s.self)
 		span.GetSelfSpanData().SetStateKV("host", host.Hostip)
 		span.GetSelfSpanData().SetStateKV("method", "CRPC")
-		span.GetSelfSpanData().SetStateKV("path", path)
+		span.GetSelfSpanData().SetStateKV("path", msg.H.Path)
 
-		if servertimeout := int64(s.getHandlerTimeout(path)); servertimeout > 0 {
+		//deal metadata
+		if msg.H.Metadata == nil {
+			msg.H.Metadata = map[string]string{"Client-IP": peerip}
+		} else if _, ok := msg.H.Metadata["Client-IP"]; !ok {
+			msg.H.Metadata["Client-IP"] = peerip
+		}
+		basectx = metadata.SetMetadata(basectx, msg.H.Metadata)
+
+		//deal timeout
+		var basecancel context.CancelFunc
+		if servertimeout := int64(s.getHandlerTimeout(msg.H.Path)); servertimeout > 0 {
 			serverdl := time.Now().UnixNano() + servertimeout
-			if msg.Deadline != 0 {
+			if msg.H.Deadline != 0 {
 				//compare use the small one
-				if msg.Deadline < serverdl {
-					var cancel context.CancelFunc
-					ctx, cancel = context.WithDeadline(ctx, time.Unix(0, msg.Deadline))
-					defer cancel()
+				if msg.H.Deadline < serverdl {
+					basectx, basecancel = context.WithDeadline(basectx, time.Unix(0, msg.H.Deadline))
 				} else {
-					var cancel context.CancelFunc
-					ctx, cancel = context.WithDeadline(ctx, time.Unix(0, serverdl))
-					defer cancel()
+					basectx, basecancel = context.WithDeadline(basectx, time.Unix(0, serverdl))
 				}
 			} else {
 				//use server timeout
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithDeadline(ctx, time.Unix(0, serverdl))
-				defer cancel()
+				basectx, basecancel = context.WithDeadline(basectx, time.Unix(0, serverdl))
 			}
-		} else if msg.Deadline != 0 {
+		} else if msg.H.Deadline != 0 {
 			//use client timeout
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithDeadline(ctx, time.Unix(0, msg.Deadline))
-			defer cancel()
+			basectx, basecancel = context.WithDeadline(basectx, time.Unix(0, msg.H.Deadline))
+		} else {
+			//no timeout
+			basectx, basecancel = context.WithCancel(basectx)
 		}
-		if msg.Metadata == nil {
-			msg.Metadata = map[string]string{"Client-IP": peerip}
-		} else if _, ok := msg.Metadata["Client-IP"]; !ok {
-			msg.Metadata["Client-IP"] = peerip
-		}
-		//logic
-		workctx := s.getContext(metadata.SetMetadata(ctx, msg.Metadata), p, msg, peerip, totalhandlers)
-		paniced := true
-		defer func() {
-			if paniced {
-				e := recover()
-				stack := make([]byte, 1024)
-				n := runtime.Stack(stack, false)
-				slog.ErrorContext(workctx, "[crpc.server] panic",
-					slog.String("cip", peerip),
-					slog.String("path", path),
-					slog.Any("panic", e),
-					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
-				msg.Path = ""
-				msg.Deadline = 0
-				msg.Body = nil
-				msg.Error = cerror.ErrPanic
-				msg.Metadata = nil
-				msg.Tracedata = nil
-			}
-			msg.Metadata = map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
-			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(workctx, d, nil, nil); e != nil {
+
+		//make workctx
+		rw := newrw(msg.H.Callid, msg.H.Path, 0, nil, nil, func(ctx context.Context, m *Msg) error {
+			d, _ := proto.Marshal(m)
+			e := p.SendMessage(ctx, d, nil, nil)
+			if e != nil {
 				if e == stream.ErrMsgLarge {
-					slog.ErrorContext(workctx, "[crpc.server] write response failed",
-						slog.String("cip", peerip),
-						slog.String("path", path),
-						slog.String("error", cerror.ErrRespmsgLen.Error()))
-					msg.Path = ""
-					msg.Deadline = 0
-					msg.Body = nil
-					msg.Error = cerror.ErrRespmsgLen
-					msg.Tracedata = nil
-					d, _ = proto.Marshal(msg)
-					if e = p.SendMessage(workctx, d, nil, nil); e != nil {
-						if e == stream.ErrConnClosed {
-							msg.Error = cerror.ErrClosed
-						} else {
-							msg.Error = cerror.Convert(e)
-						}
-						slog.ErrorContext(workctx, "[crpc.server] write response failed",
-							slog.String("cip", peerip),
-							slog.String("path", path),
-							slog.String("error", msg.Error.Error()))
-					}
+					e = cerror.ErrRespmsgLen
 				} else if e == stream.ErrConnClosed {
-					slog.ErrorContext(workctx, "[crpc.server] write response failed",
-						slog.String("cip", peerip),
-						slog.String("path", path),
-						slog.String("error", cerror.ErrClosed.Error()))
-					msg.Error = cerror.ErrClosed
+					e = cerror.ErrClosed
+				} else if e == context.DeadlineExceeded {
+					e = cerror.ErrDeadlineExceeded
+				} else if e == context.Canceled {
+					e = cerror.ErrCanceled
 				} else {
-					msg.Error = cerror.Convert(e)
-					slog.ErrorContext(workctx, "[crpc.server] write response failed",
-						slog.String("cip", peerip),
-						slog.String("path", path),
-						slog.String("error", msg.Error.Error()))
+					//this is impossible
+					e = cerror.Convert(e)
 				}
 			}
-			span.Finish(msg.Error)
-			peername, _ := span.GetParentSpanData().GetStateKV("app")
-			monitor.CrpcServerMonitor(peername, "CRPC", path, msg.Error, uint64(span.GetEnd()-span.GetStart()))
-			s.putContext(workctx)
-		}()
-		workctx.run()
-		paniced = false
-	}
-}
-
-// return false will close the connection
-func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]byte, string, bool) {
-	if s.stop.Closing() {
-		//self closing
-		return nil, "", false
-	}
-	if common.BTS(peerVerifyData) != s.self {
-		return nil, "", false
-	}
-	return nil, "", true
-}
-
-// return false will close the connection
-func (s *CrpcServer) onlinefunc(ctx context.Context, p *stream.Peer) bool {
-	if s.stop.Closing() {
-		//tel peer self closed
-		d, _ := proto.Marshal(&Msg{
-			Callid: 0,
-			Error:  cerror.ErrServerClosing,
+			return e
 		})
-		p.SendMessage(nil, d, nil, nil)
-	}
-	c := &client{
-		maxcallid: 1,
-		calls:     make(map[uint64]context.CancelFunc),
-	}
-	p.SetData(unsafe.Pointer(c))
-	slog.InfoContext(nil, "[crpc.server] online", slog.String("cip", p.GetRealPeerIP()))
-	return true
-}
-func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
-	msg := &Msg{}
-	if e := proto.Unmarshal(data, msg); e != nil {
-		slog.ErrorContext(nil, "[crpc.server] userdata format wrong", slog.String("cip", p.GetRealPeerIP()))
-		p.Close(false)
-		return
-	}
-	c := (*client)(p.GetData())
-	if msg.Type == MsgType_CANCEL {
+		if msg.WithB {
+			rw.cache(msg.B)
+		}
+		workctx := &ServerContext{
+			Context:    basectx,
+			CancelFunc: basecancel,
+			rw:         rw,
+			peer:       p,
+			peerip:     peerip,
+			handlers:   handlers,
+		}
+		c.ctxs[msg.H.Callid] = workctx
+		c.Unlock()
+		go func() {
+			defer func() {
+				if e := recover(); e != nil {
+					stack := make([]byte, 1024)
+					n := runtime.Stack(stack, false)
+					slog.ErrorContext(workctx, "[crpc.server] panic",
+						slog.String("cip", peerip),
+						slog.String("path", msg.H.Path),
+						slog.Any("panic", e),
+						slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
+					workctx.AbortWrite(cerror.ErrPanic)
+				}
+				span.Finish(workctx.e)
+				peername, _ := span.GetParentSpanData().GetStateKV("app")
+				monitor.CrpcServerMonitor(peername, "CRPC", msg.H.Path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
+				s.stop.DoneOne()
+			}()
+			workctx.run()
+			c.Lock()
+			if ctx, ok := c.ctxs[msg.H.Callid]; ok {
+				ctx.CancelFunc()
+				delete(c.ctxs, msg.H.Callid)
+			}
+			c.Unlock()
+		}()
+	case MsgType_Send:
 		c.RLock()
-		if cancel, ok := c.calls[msg.Callid]; ok {
-			cancel()
+		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
+			ctx.rw.cache(msg.B)
 		}
 		c.RUnlock()
-		return
+	case MsgType_Cancel:
+		c.RLock()
+		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
+			ctx.CancelFunc()
+		}
+		c.RUnlock()
+	case MsgType_CloseSend:
+		c.RLock()
+		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
+			ctx.rw.readstatus = 0
+			ctx.rw.reader.Close()
+		}
+		c.RUnlock()
+	case MsgType_CloseRead:
+		c.RLock()
+		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
+			ctx.rw.sendstatus = 0
+		}
+		c.RUnlock()
 	}
-	handler, ok := s.handler[msg.Path]
-	if !ok {
-		slog.ErrorContext(nil, "[crpc.server] path doesn't exist", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.Path))
-		msg.Path = ""
-		msg.Deadline = 0
-		msg.Body = nil
-		msg.Error = cerror.ErrNoapi
-		msg.Metadata = map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
-		msg.Tracedata = nil
-		d, _ := proto.Marshal(msg)
-		if e := p.SendMessage(nil, d, nil, nil); e != nil {
-			if e == stream.ErrMsgLarge {
-				e = cerror.ErrRespmsgLen
-			} else if e == stream.ErrConnClosed {
-				e = cerror.ErrClosed
-			}
-			slog.ErrorContext(nil, "[crpc.server] write response failed", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.Path), slog.String("error", e.Error()))
-		}
-		return
-	}
-	c.Lock()
-	if c.maxcallid == 0 {
-		c.Unlock()
-		//tell peer self closed
-		msg.Path = ""
-		msg.Deadline = 0
-		msg.Body = nil
-		msg.Error = cerror.ErrServerClosing
-		msg.Metadata = nil
-		msg.Tracedata = nil
-		d, _ := proto.Marshal(msg)
-		if e := p.SendMessage(nil, d, nil, nil); e != nil {
-			if e == stream.ErrMsgLarge {
-				e = cerror.ErrRespmsgLen
-			} else if e == stream.ErrConnClosed {
-				e = cerror.ErrClosed
-			}
-			slog.ErrorContext(nil, "[crpc.server] write response failed", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.Path), slog.String("error", e.Error()))
-		}
-		return
-	}
-	if e := s.stop.Add(1); e != nil {
-		c.Unlock()
-		msg.Path = ""
-		msg.Deadline = 0
-		msg.Body = nil
-		if e == graceful.ErrClosing {
-			//tell peer self closed
-			msg.Error = cerror.ErrServerClosing
-		} else {
-			//tell peer self busy
-			msg.Error = cerror.ErrBusy
-		}
-		msg.Metadata = nil
-		msg.Tracedata = nil
-		d, _ := proto.Marshal(msg)
-		if e := p.SendMessage(nil, d, nil, nil); e != nil {
-			if e == stream.ErrMsgLarge {
-				e = cerror.ErrRespmsgLen
-			} else if e == stream.ErrConnClosed {
-				e = cerror.ErrClosed
-			}
-			slog.ErrorContext(nil, "[crpc.server] write response failed", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.Path), slog.String("error", e.Error()))
-		}
-		return
-	}
-	c.maxcallid = msg.Callid
-	ctx, cancel := context.WithCancel(p)
-	c.calls[msg.Callid] = cancel
-	c.Unlock()
-	go func() {
-		defer s.stop.DoneOne()
-		handler(ctx, p, msg)
-		c.Lock()
-		if cancel, ok := c.calls[msg.Callid]; ok {
-			cancel()
-			delete(c.calls, msg.Callid)
-		}
-		c.Unlock()
-	}()
 }
 func (s *CrpcServer) offlinefunc(p *stream.Peer) {
 	slog.InfoContext(nil, "[crpc.server] offline", slog.String("cip", p.GetRealPeerIP()))

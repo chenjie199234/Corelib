@@ -221,6 +221,11 @@ func (p *Peer) Close(block bool) {
 	}
 }
 
+// 1-peer is a server,self is client,2-peer is a client,self is server
+func (p *Peer) GetPeerType() int {
+	return p.peertype
+}
+
 // if uniqueid return in verify callback function is empty,the peer's RemoteAddr(ip:port) will be returned
 func (p *Peer) GetUniqueID() string {
 	return p.uniqueid

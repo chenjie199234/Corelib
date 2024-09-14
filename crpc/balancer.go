@@ -61,8 +61,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData,
 	for _, server := range b.servers {
 		if _, ok := all[server.addr]; !ok {
 			//this app unregistered
-			server.dservers = nil
-			server.Pickinfo.SetDiscoverServerOffline(0)
+			server.unRegister()
 		}
 	}
 	//online app or update app's dservers
@@ -78,40 +77,19 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData,
 				addr:     addr,
 				dservers: registerdata.DServers,
 				peer:     nil,
-				lker:     &sync.Mutex{},
-				reqs:     make(map[uint64]*req, 10),
+				lker:     &sync.RWMutex{},
+				rws:      make(map[uint64]*rw, 10),
 				Pickinfo: &picker.ServerPickInfo{},
 			}
 			server.Pickinfo.SetDiscoverServerOnline(uint32(len(registerdata.DServers)))
 			b.servers[addr] = server
 			go b.c.start(server, false)
 		} else if registerdata == nil || len(registerdata.DServers) == 0 {
-			//this is not a new register and this register is offline
-			server.dservers = nil
-			server.Pickinfo.SetDiscoverServerOffline(0)
+			//this is not a new register and this register is unregistered
+			server.unRegister()
 		} else {
 			//this is not a new register
-			//unregister on which discovery server
-			dserveroffline := false
-			for dserver := range server.dservers {
-				if _, ok := registerdata.DServers[dserver]; !ok {
-					dserveroffline = true
-					break
-				}
-			}
-			//register on which new discovery server
-			for dserver := range registerdata.DServers {
-				if _, ok := server.dservers[dserver]; !ok {
-					dserveroffline = false
-					break
-				}
-			}
-			server.dservers = registerdata.DServers
-			if dserveroffline {
-				server.Pickinfo.SetDiscoverServerOffline(uint32(len(registerdata.DServers)))
-			} else {
-				server.Pickinfo.SetDiscoverServerOnline(uint32(len(registerdata.DServers)))
-			}
+			server.updateRegister(registerdata.DServers)
 		}
 	}
 }

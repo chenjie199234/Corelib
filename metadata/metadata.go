@@ -16,6 +16,21 @@ func GetMetadata(ctx context.Context) map[string]string {
 	return nil
 }
 func SetMetadata(ctx context.Context, md map[string]string) context.Context {
+	if ctx == nil {
+		if md == nil {
+			return context.WithValue(context.Background(), metadatakey{}, map[string]string{})
+		}
+		return context.WithValue(context.Background(), metadatakey{}, md)
+	}
+	if existmd := GetMetadata(ctx); existmd != nil {
+		for k := range existmd {
+			delete(existmd, k)
+		}
+		for k, v := range md {
+			existmd[k] = v
+		}
+		return ctx
+	}
 	if md == nil {
 		return context.WithValue(ctx, metadatakey{}, map[string]string{})
 	}

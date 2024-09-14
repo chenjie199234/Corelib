@@ -127,6 +127,7 @@ func (c *CrpcClient) GetServerIps() (ips []string, version interface{}, lasterro
 	return
 }
 
+/*
 // force - false graceful,wait all requests finish,true - not graceful,close all connections immediately
 func (c *CrpcClient) Close(force bool) {
 	if force {
@@ -136,6 +137,7 @@ func (c *CrpcClient) Close(force bool) {
 		c.stop.Close(c.resolver.Close, c.instance.Stop)
 	}
 }
+*/
 
 func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 	if reconnect && !c.balancer.ReconnectCheck(server) {
@@ -174,34 +176,33 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 		slog.ErrorContext(nil, "[crpc.client] userdata format wrong", slog.String("sname", c.server), slog.String("sip", server.addr))
 		return
 	}
-	server.lker.Lock()
-	if msg.Error != nil && cerror.Equal(msg.Error, cerror.ErrServerClosing) {
-		if atomic.SwapInt32(&server.closing, 1) == 0 {
-			//set the lowest pick priority
-			server.Pickinfo.SetDiscoverServerOffline(0)
-			//rebuild picker
-			c.balancer.RebuildPicker(server.addr, false)
-			//triger discover
-			c.resolver.Now()
+	switch msg.H.Type {
+	case MsgType_CloseSend:
+		if rw := server.getrw(msg.H.Callid); rw != nil {
+			rw.readstatus = 0
+			rw.reader.Close()
 		}
-		//all calls' callid big and equal then this msg's callid are unprocessed
-		for callid, req := range server.reqs {
-			if callid >= msg.Callid {
-				req.respmd = nil
-				req.respdata = nil
-				req.err = msg.Error
-				req.finish <- nil
-				delete(server.reqs, callid)
+	case MsgType_CloseRead:
+		if rw := server.getrw(msg.H.Callid); rw != nil {
+			rw.sendstatus = 0
+		}
+	case MsgType_Send:
+		if msg.B.Error != nil && cerror.Equal(msg.B.Error, cerror.ErrServerClosing) {
+			if atomic.SwapInt32(&server.closing, 1) == 0 {
+				//set the lowest pick priority
+				server.Pickinfo.SetDiscoverServerOffline(0)
+				//rebuild picker
+				c.balancer.RebuildPicker(server.addr, false)
+				//triger discover
+				c.resolver.Now()
 			}
 		}
-	} else if req, ok := server.reqs[msg.Callid]; ok {
-		req.respmd = msg.Metadata
-		req.respdata = msg.Body
-		req.err = msg.Error
-		req.finish <- nil
-		delete(server.reqs, msg.Callid)
+		if msg.H != nil {
+			if rw := server.getrw(msg.H.Callid); rw != nil {
+				rw.cache(msg.B)
+			}
+		}
 	}
-	server.lker.Unlock()
 }
 
 func (c *CrpcClient) offlinefunc(p *stream.Peer) {
@@ -209,14 +210,7 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	slog.InfoContext(nil, "[crpc.client] offline", slog.String("sname", c.server), slog.String("sip", server.addr))
 	server.setpeer(nil)
 	c.balancer.RebuildPicker(server.addr, false)
-	server.lker.Lock()
-	for callid, req := range server.reqs {
-		req.respdata = nil
-		req.err = cerror.ErrClosed
-		req.finish <- nil
-		delete(server.reqs, callid)
-	}
-	server.lker.Unlock()
+	server.cleanrw()
 	go c.start(server, true)
 }
 
@@ -228,21 +222,16 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 		return nil, cerror.ErrBusy
 	}
 	defer c.stop.DoneOne()
-	msg := &Msg{
-		Type:     MsgType_CALL,
-		Path:     path,
-		Body:     in,
-		Metadata: metadata.GetMetadata(ctx),
-	}
 	if c.c.GlobalTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
 		defer cancel()
 	}
+	var deadline int64
 	if dl, ok := ctx.Deadline(); ok {
-		msg.Deadline = dl.UnixNano()
+		deadline = dl.UnixNano()
 	}
-	r := c.getreq(msg)
+	md := metadata.GetMetadata(ctx)
 	for {
 		ctx, span := trace.NewSpan(ctx, "Corelib.Crpc", trace.Client, nil)
 		if span.GetParentSpanData().IsEmpty() {
@@ -256,7 +245,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 		span.GetSelfSpanData().SetStateKV("path", path)
 		selfmethod, _ := span.GetParentSpanData().GetStateKV("method")
 		selfpath, _ := span.GetParentSpanData().GetStateKV("path")
-		msg.Tracedata = map[string]string{
+		td := map[string]string{
 			"TraceID": span.GetSelfSpanData().GetTid().String(),
 			"SpanID":  span.GetSelfSpanData().GetSid().String(),
 			"app":     c.self,
@@ -269,9 +258,10 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 			return nil, e
 		}
 		span.GetSelfSpanData().SetStateKV("host", server.addr)
-		msg.Callid = atomic.AddUint64(&server.callid, 1)
-		if e = server.sendmessage(ctx, r); e != nil {
-			slog.ErrorContext(ctx, "[crpc.client] send request failed",
+		rw := server.createrw(path, deadline, md, td)
+		if e := rw.init(ctx, &MsgBody{Body: in}); e != nil {
+			server.closerw(rw.callid)
+			slog.ErrorContext(ctx, "[crpc.client] send call failed",
 				slog.String("sname", c.server),
 				slog.String("sip", server.addr),
 				slog.String("path", path),
@@ -284,38 +274,39 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 			}
 			return nil, e
 		}
-		select {
-		case <-r.finish:
-			cpuusage, _ := strconv.ParseFloat(r.respmd["Cpu-Usage"], 64)
-			span.Finish(r.err)
-			done(cpuusage, uint64(span.GetEnd()-span.GetStart()), r.err == nil)
-			monitor.CrpcClientMonitor(c.server, "CRPC", path, r.err, uint64(span.GetEnd()-span.GetStart()))
-			if r.err != nil {
-				if cerror.Equal(r.err, cerror.ErrServerClosing) {
-					//server is closing,this req can be retry
-					r.respmd = nil
-					r.respdata = nil
-					r.err = nil
-					continue
-				}
-				e = r.err
-			}
-			resp := r.respdata
-			c.putreq(r)
-			//resp and err maybe both nil
-			return resp, e
-		case <-ctx.Done():
-			server.lker.Lock()
-			delete(server.reqs, msg.Callid)
-			server.lker.Unlock()
-			c.putreq(r)
-			e = cerror.Convert(ctx.Err())
-			span.Finish(e)
-			done(0, 0, false)
-			monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(span.GetEnd()-span.GetStart()))
-			return nil, e
+		out, trail, e := rw.read(ctx)
+		span.Finish(e)
+		var cpuusage float64
+		if trail != nil {
+			cpuusage, _ = strconv.ParseFloat(trail["Cpu-Usage"], 64)
 		}
+		done(cpuusage, uint64(span.GetEnd()-span.GetStart()), e == nil)
+		monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(span.GetEnd()-span.GetStart()))
+		if e != nil {
+			if cerror.Equal(e, cerror.ErrCanceled) && trail == nil {
+				//client cancel,need to tell server
+				if ee := rw.cancel(); e != nil {
+					slog.ErrorContext(ctx, "[crpc.client] send cancel call failed",
+						slog.String("sname", c.server),
+						slog.String("sip", server.addr),
+						slog.String("path", path),
+						slog.String("error", ee.Error()))
+				}
+			}
+			server.closerw(rw.callid)
+			if cerror.Equal(e, cerror.ErrServerClosing) {
+				continue
+			}
+		} else {
+			server.closerw(rw.callid)
+		}
+		return out, e
 	}
+}
+
+// TODO
+func (c *CrpcClient) Stream(ctx context.Context, path string) (*rw, error) {
+	return nil, nil
 }
 
 type forceaddrkey struct{}
@@ -332,34 +323,4 @@ func WithForceAddr(ctx context.Context, forceaddr string) context.Context {
 		ctx = context.Background()
 	}
 	return context.WithValue(ctx, forceaddrkey{}, forceaddr)
-}
-
-type req struct {
-	finish   chan *struct{}
-	reqdata  *Msg
-	respdata []byte
-	respmd   map[string]string
-	err      *cerror.Error
-}
-
-func (c *CrpcClient) getreq(reqdata *Msg) *req {
-	r, ok := c.reqpool.Get().(*req)
-	if ok {
-		for len(r.finish) > 0 {
-			<-r.finish
-		}
-		r.reqdata = reqdata
-		r.respdata = nil
-		r.err = nil
-		return r
-	}
-	return &req{
-		finish:   make(chan *struct{}, 1),
-		reqdata:  reqdata,
-		respdata: nil,
-		err:      nil,
-	}
-}
-func (c *CrpcClient) putreq(r *req) {
-	c.reqpool.Put(r)
 }

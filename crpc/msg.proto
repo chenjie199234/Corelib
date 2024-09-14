@@ -4,16 +4,27 @@ option go_package="github.com/chenjie199234/Corelib/crpc;crpc";
 import "cerror/cerror.proto";
 
 enum MsgType{
-	CALL=0;
-	CANCEL=1;
+	Init=0;
+	Send=1;
+	Cancel=2;
+	CloseSend=3;
+	CloseRead=4;
 }
 message msg {
-	uint64 callid=1;
-	MsgType type=2;
-	string path=3;
-	int64 deadline=4;
-	bytes body=5;
-	cerror.Error error=6;
-	map<string,string> metadata=7;
-	map<string,string> tracedata=8;
+	message header {
+		uint64 callid=1;
+		string path=2;
+		MsgType type=3;
+		int64 deadline=4;
+		map<string,string> metadata=5;
+		map<string,string> tracedata=6;
+	}
+	message body {
+		bytes body=1;
+		cerror.Error error=2;//only from server to client
+		map<string,string> traildata=3;//only from server to client
+	}
+	header h=1;
+	body b=2;
+	bool with_b=3;
 }
