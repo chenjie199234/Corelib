@@ -265,7 +265,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 		span.GetSelfSpanData().SetStateKV("host", server.addr)
 		rw := server.createrw(path, deadline, md, td)
 		if e := rw.init(ctx, &MsgBody{Body: in}); e != nil {
-			server.closerw(rw.callid)
+			server.delrw(rw.callid)
 			slog.ErrorContext(ctx, "[crpc.client] send call failed",
 				slog.String("sname", c.server),
 				slog.String("sip", server.addr),
@@ -298,12 +298,12 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 						slog.String("error", ee.Error()))
 				}
 			}
-			server.closerw(rw.callid)
+			server.delrw(rw.callid)
 			if cerror.Equal(e, cerror.ErrServerClosing) {
 				continue
 			}
 		} else {
-			server.closerw(rw.callid)
+			server.delrw(rw.callid)
 		}
 		return out, e
 	}

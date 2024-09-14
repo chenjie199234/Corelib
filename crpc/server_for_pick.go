@@ -87,13 +87,9 @@ func (s *ServerForPick) getrw(callid uint64) *rw {
 	defer s.lker.RUnlock()
 	return s.rws[callid]
 }
-func (s *ServerForPick) closerw(callid uint64) {
+func (s *ServerForPick) delrw(callid uint64) {
 	s.lker.Lock()
 	defer s.lker.Unlock()
-	rw, ok := s.rws[callid]
-	if ok {
-		rw.reader.Close()
-	}
 	delete(s.rws, callid)
 }
 func (s *ServerForPick) cleanrw() {
