@@ -6,10 +6,9 @@ import "cerror/cerror.proto";
 enum MsgType{
 	Init=0;
 	Send=1;
-	Cancel=2;
-	CloseSend=3;
-	CloseRead=4;
-	CloseReadSend=5;
+	CloseSend=2;
+	CloseRead=3;
+	CloseReadSend=4;
 }
 message msg {
 	message header {
@@ -19,11 +18,11 @@ message msg {
 		int64 deadline=4;
 		map<string,string> metadata=5;
 		map<string,string> tracedata=6;
+		map<string,string> traildata=7;//only from server to client
 	}
 	message body {
 		bytes body=1;
 		cerror.Error error=2;//only from server to client
-		map<string,string> traildata=3;//only from server to client
 	}
 	header h=1;
 	body b=2;

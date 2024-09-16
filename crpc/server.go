@@ -222,7 +222,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			//tell peer self closed
 			msg.B.Body = nil
 			msg.B.Error = cerror.ErrServerClosing
-			msg.B.Traildata = nil
+			msg.H.Traildata = nil
 			msg.H.Metadata = nil
 			msg.H.Tracedata = nil
 			msg.H.Deadline = 0
@@ -255,11 +255,11 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			if e == graceful.ErrClosing {
 				//tell peer self closed
 				msg.B.Error = cerror.ErrServerClosing
-				msg.B.Traildata = nil
+				msg.H.Traildata = nil
 			} else {
 				//tell peer self busy
 				msg.B.Error = cerror.ErrBusy
-				msg.B.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
+				msg.H.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
 			}
 			msg.H.Metadata = nil
 			msg.H.Tracedata = nil
@@ -286,7 +286,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			c.Unlock()
 			slog.ErrorContext(nil, "[crpc.server] path doesn't exist", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.H.Path))
 			msg.B.Body = nil
-			msg.B.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
+			msg.H.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
 			msg.B.Error = cerror.ErrNoapi
 			msg.H.Metadata = nil
 			msg.H.Tracedata = nil
@@ -432,11 +432,11 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			rw.cache(msg.B)
 		}
 		workctx := &ServerContext{
-			Context:    basectx,
-			CancelFunc: basecancel,
-			rw:         rw,
-			peer:       p,
-			peerip:     peerip,
+			Context: basectx,
+			cancel:  basecancel,
+			rw:      rw,
+			peer:    p,
+			peerip:  peerip,
 		}
 		c.ctxs[msg.H.Callid] = workctx
 		c.Unlock()
@@ -464,23 +464,15 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				}
 			}
 			c.Lock()
-			if ctx, ok := c.ctxs[msg.H.Callid]; ok {
-				ctx.CancelFunc()
-				delete(c.ctxs, msg.H.Callid)
-			}
+			workctx.cancel()
+			delete(c.ctxs, msg.H.Callid)
 			c.Unlock()
-			rw.closereadwrite()
+			rw.closereadwrite(true)
 		}()
 	case MsgType_Send:
 		c.RLock()
 		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
 			ctx.rw.cache(msg.B)
-		}
-		c.RUnlock()
-	case MsgType_Cancel:
-		c.RLock()
-		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
-			ctx.CancelFunc()
 		}
 		c.RUnlock()
 	case MsgType_CloseRead:
@@ -499,9 +491,10 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	case MsgType_CloseReadSend:
 		c.RLock()
 		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
-			atomic.AndInt32(&ctx.rw.status, 0b0111)
-			atomic.AndInt32(&ctx.rw.status, 0b1011)
+			ctx.cancel()
+			atomic.AndInt32(&ctx.rw.status, 0b0011)
 			ctx.rw.reader.Close()
+			delete(c.ctxs, msg.H.Callid)
 		}
 		c.RUnlock()
 	}

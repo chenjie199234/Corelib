@@ -69,7 +69,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData,
 			server := &ServerForPick{
 				addr:     addr,
 				dservers: registerdata.DServers,
-				Pickinfo: &picker.ServerPickInfo{},
+				Pickinfo: picker.NewServerPickInfo(),
 			}
 			server.Pickinfo.SetDiscoverServerOnline(uint32(len(registerdata.DServers)))
 			b.servers[addr] = server
@@ -114,36 +114,36 @@ func (b *corelibBalancer) rebuildpicker() {
 	b.picker = picker.NewPicker(tmp)
 	return
 }
-func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, func(cpuusage float64, successwastetime uint64, success bool), error) {
+func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 	forceaddr, _ := ctx.Value(forceaddrkey{}).(string)
 	refresh := false
 	for {
-		server, done := b.picker.Pick(forceaddr)
+		server := b.picker.Pick(forceaddr)
 		if server != nil {
 			if dl, ok := ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic
-				done(0, 0, false)
-				return nil, nil, cerror.ErrDeadlineExceeded
+				server.GetServerPickInfo().Done(false)
+				return nil, cerror.ErrDeadlineExceeded
 			}
-			return server.(*ServerForPick), done, nil
+			return server.(*ServerForPick), nil
 		}
 		if refresh {
 			if b.lastResolveError != nil {
-				return nil, nil, b.lastResolveError
+				return nil, b.lastResolveError
 			}
 			if forceaddr != "" {
-				return nil, nil, cerror.ErrNoSpecificserver
+				return nil, cerror.ErrNoSpecificserver
 			}
-			return nil, nil, cerror.ErrNoserver
+			return nil, cerror.ErrNoserver
 		}
 		if e := b.ww.Wait(ctx, "CALL", b.c.resolver.Now, nil); e != nil {
 			if e == context.DeadlineExceeded {
-				return nil, nil, cerror.ErrDeadlineExceeded
+				return nil, cerror.ErrDeadlineExceeded
 			} else if e == context.Canceled {
-				return nil, nil, cerror.ErrCanceled
+				return nil, cerror.ErrCanceled
 			} else {
 				//this is impossible
-				return nil, nil, cerror.Convert(e)
+				return nil, cerror.Convert(e)
 			}
 		}
 		refresh = true

@@ -3,10 +3,12 @@ package crpc
 import (
 	"context"
 	"io"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/container/list"
+	"github.com/chenjie199234/Corelib/monitor"
 )
 
 type rw struct {
@@ -32,8 +34,8 @@ func newrw(callid uint64, path string, deadline int64, md, td map[string]string,
 		status:     0b1111,
 	}
 }
-func (this *rw) init(ctx context.Context, body *MsgBody) error {
-	return this.sender(ctx, &Msg{
+func (this *rw) init(body *MsgBody) error {
+	return this.sender(context.Background(), &Msg{
 		H: &MsgHeader{
 			Callid:    this.callid,
 			Path:      this.path,
@@ -45,14 +47,14 @@ func (this *rw) init(ctx context.Context, body *MsgBody) error {
 		WithB: body != nil,
 	})
 }
-func (this *rw) send(ctx context.Context, body *MsgBody) error {
+func (this *rw) send(body *MsgBody) error {
 	if this.status&0b0001 == 0 {
 		return cerror.ErrCanceled
 	}
 	if this.status&0b1000 == 0 {
 		return io.EOF
 	}
-	return this.sender(ctx, &Msg{
+	if e := this.sender(context.Background(), &Msg{
 		H: &MsgHeader{
 			Callid: this.callid,
 			Path:   this.path,
@@ -60,7 +62,14 @@ func (this *rw) send(ctx context.Context, body *MsgBody) error {
 		},
 		B:     body,
 		WithB: body != nil,
-	})
+	}); e != nil {
+		return e
+	}
+	if body.Error != nil {
+		//if we send error to peer,means we stop send
+		atomic.AndInt32(&this.status, 0b1110)
+	}
+	return nil
 }
 func (this *rw) closesend() error {
 	if old := atomic.AndInt32(&this.status, 0b1110); old&0b0001 == 0 {
@@ -87,57 +96,48 @@ func (this *rw) closeread() error {
 		},
 	})
 }
-func (this *rw) closereadwrite() error {
+func (this *rw) closereadwrite(trail bool) error {
 	atomic.AndInt32(&this.status, 0b1100)
 	this.reader.Close()
-	return this.sender(context.Background(), &Msg{
+	m := &Msg{
 		H: &MsgHeader{
 			Callid: this.callid,
 			Path:   this.path,
 			Type:   MsgType_CloseReadSend,
 		},
-	})
-}
-func (this *rw) cancel() error {
-	return this.sender(context.Background(), &Msg{
-		H: &MsgHeader{
-			Callid: this.callid,
-			Path:   this.path,
-			Type:   MsgType_Cancel,
-		},
-	})
-}
-func (this *rw) read(ctx context.Context) ([]byte, map[string]string, error) {
-	if this.status&0b0010 == 0 {
-		return nil, nil, cerror.ErrCanceled
 	}
-	m, e := this.reader.Pop(ctx)
+	if trail {
+		m.H.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
+	}
+	return this.sender(context.Background(), m)
+}
+func (this *rw) read() ([]byte, error) {
+	if this.status&0b0010 == 0 {
+		return nil, cerror.ErrCanceled
+	}
+	m, e := this.reader.Pop(context.Background())
 	if e != nil {
 		if e == list.ErrClosed {
 			if this.status&0b0100 == 0 {
-				return nil, nil, io.EOF
+				return nil, io.EOF
 			}
 			if this.status&0b0010 == 0 {
-				return nil, nil, cerror.ErrCanceled
+				return nil, cerror.ErrCanceled
 			}
-			return nil, nil, cerror.ErrClosed
-		} else if e == context.DeadlineExceeded {
-			return nil, nil, cerror.ErrDeadlineExceeded
-		} else if e == context.Canceled {
-			return nil, nil, cerror.ErrCanceled
+			return nil, cerror.ErrClosed
 		} else {
 			//this is impossible
-			return nil, nil, cerror.Convert(e)
+			return nil, cerror.Convert(e)
 		}
 	}
 	//fix interface nil problem
-	if m.Error == nil {
-		return m.Body, m.Traildata, nil
+	if m.Error == nil || m.Error.Code == 0 {
+		return m.Body, nil
 	}
 	//if we read error from peer,means peer stop send
 	atomic.AndInt32(&this.status, 0b1011)
 	this.reader.Close()
-	return m.Body, m.Traildata, m.Error
+	return m.Body, m.Error
 }
 func (this *rw) cache(m *MsgBody) error {
 	_, e := this.reader.Push(m)

@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
+
+	"github.com/chenjie199234/Corelib/container/ring"
 )
 
 type ServerForPick interface {
@@ -14,38 +16,60 @@ type ServerForPick interface {
 	GetServerAddr() string              //if this return empty,this server will nerver be picked by forceaddr
 }
 
+func NewServerPickInfo() *ServerPickInfo {
+	return &ServerPickInfo{
+		sf: ring.NewRing[bool](1000),
+	}
+}
+
 type ServerPickInfo struct {
 	discoverServerNum              uint32
 	discoverServerOfflineTimestamp int64
 	activecalls                    uint32 //current active calls
 	cpuusage                       float64
+	sf                             *ring.Ring[bool]
 	successfail                    uint64 //low 32bit is success,high 32bit is fail
-	successwastetime               uint64
 }
 
-func (spi *ServerPickInfo) Pick() func(cpuusage float64, successwastetime uint64, success bool) {
+func (spi *ServerPickInfo) Pick() {
+	//add active call num
 	atomic.AddUint32(&(spi.activecalls), 1)
-	return func(cpuusage float64, successwastetime uint64, success bool) {
-		//success fail
-		if success {
-			//cpuusage
-			atomic.StoreUint64((*uint64)(unsafe.Pointer(&spi.cpuusage)), *(*uint64)(unsafe.Pointer(&cpuusage)))
-			if successwastetime == 0 {
-				successwastetime = 1 //min waste time 1 nano second
-			}
-			//success wastetime
-			atomic.AddUint64(&spi.successwastetime, successwastetime)
-			spi.addsuccess()
-		} else {
-			spi.addfail()
-			if cpuusage != 0 {
-				//cpuusage
-				atomic.StoreUint64((*uint64)(unsafe.Pointer(&spi.cpuusage)), *(*uint64)(unsafe.Pointer(&cpuusage)))
+}
+func (spi *ServerPickInfo) UpdateCPU(cpuusage float64) {
+	if cpuusage != 0 {
+		atomic.StoreUint64((*uint64)(unsafe.Pointer(&spi.cpuusage)), *(*uint64)(unsafe.Pointer(&cpuusage)))
+	}
+}
+func (spi *ServerPickInfo) Done(success bool) {
+	if success {
+		for {
+			if spi.sf.Push(true) {
+				spi.addsuccess()
+				break
+			} else if data, e := spi.sf.Pop(nil); e == ring.ErrPopEmpty {
+				continue
+			} else if data {
+				spi.delsuccess()
+			} else {
+				spi.delfail()
 			}
 		}
-		//activecalls
-		atomic.AddUint32(&(spi.activecalls), math.MaxUint32)
+	} else {
+		for {
+			if spi.sf.Push(false) {
+				spi.addfail()
+				break
+			} else if data, e := spi.sf.Pop(nil); e == ring.ErrPopEmpty {
+				continue
+			} else if data {
+				spi.delsuccess()
+			} else {
+				spi.delfail()
+			}
+		}
 	}
+	//reduce active call num
+	atomic.AddUint32(&(spi.activecalls), math.MaxUint32)
 }
 
 func (spi *ServerPickInfo) GetActiveCalls() uint32 {
@@ -84,6 +108,7 @@ func (spi *ServerPickInfo) SetDiscoverServerOffline(DiscoverServerNum uint32) {
 	atomic.StoreUint32(&spi.discoverServerNum, DiscoverServerNum)
 	atomic.StoreInt64(&spi.discoverServerOfflineTimestamp, time.Now().UnixNano())
 }
+
 func (spi *ServerPickInfo) getsuccessfail() (success uint32, fail uint32) {
 	successfail := atomic.LoadUint64(&spi.successfail)
 	success = uint32(successfail & uint64(math.MaxUint32))
@@ -93,26 +118,27 @@ func (spi *ServerPickInfo) getsuccessfail() (success uint32, fail uint32) {
 func (spi *ServerPickInfo) addsuccess() {
 	atomic.AddUint64(&spi.successfail, 1)
 }
+func (spi *ServerPickInfo) delsuccess() {
+	atomic.AddUint64(&spi.successfail, math.MaxUint64)
+}
 func (spi *ServerPickInfo) addfail() {
 	atomic.AddUint64(&spi.successfail, 1<<32)
 }
-func (spi *ServerPickInfo) addwastetime(wastetime uint64) {
-	atomic.AddUint64(&spi.successwastetime, wastetime)
+func (spi *ServerPickInfo) delfail() {
+	atomic.AddUint64(&spi.successfail, math.MaxUint64-1<<32+1)
 }
 func (spi *ServerPickInfo) getload() float64 {
 	success, fail := spi.getsuccessfail()
-	successwastetime := atomic.LoadUint64(&spi.successwastetime)
 	activecalls := atomic.LoadUint32(&spi.activecalls)
 	cpuusage := math.Float64frombits(atomic.LoadUint64((*uint64)(unsafe.Pointer(&spi.cpuusage))))
 	if cpuusage < 0.01 {
 		cpuusage = 0.01
 	}
-
-	if success > 0 {
-		return float64(successwastetime) / float64(success) * float64(activecalls) * cpuusage * math.Cbrt(math.Cbrt(float64(fail+1)/float64(success+fail+1)))
+	errpercent := 0.0
+	if success+fail > 0 {
+		errpercent = float64(fail) / float64(success+fail)
 	}
-	//this is the new server
-	return float64(activecalls)
+	return float64(activecalls) * cpuusage * (1 + errpercent)
 }
 
 type Picker struct {
@@ -128,9 +154,9 @@ func (p *Picker) ServerLen() int {
 }
 
 // if the forceaddr is not empty,picker will try to return this specific addr's server,if not exist,nil will return
-func (p *Picker) Pick(forceaddr string) (ServerForPick, func(cpuusage float64, successwastetime uint64, success bool)) {
+func (p *Picker) Pick(forceaddr string) ServerForPick {
 	if len(p.servers) == 0 {
-		return nil, nil
+		return nil
 	}
 	if forceaddr != "" {
 		for _, v := range p.servers {
@@ -140,11 +166,12 @@ func (p *Picker) Pick(forceaddr string) (ServerForPick, func(cpuusage float64, s
 				continue
 			}
 			if !s.Pickable() {
-				return nil, nil
+				return nil
 			}
-			return s, s.GetServerPickInfo().Pick()
+			s.GetServerPickInfo().Pick()
+			return s
 		}
-		return nil, nil
+		return nil
 	}
 	var normal1, normal2, danger1, danger2, nightmare1, nightmare2 ServerForPick
 	startindex := rand.Intn(len(p.servers))
@@ -207,9 +234,10 @@ func (p *Picker) Pick(forceaddr string) (ServerForPick, func(cpuusage float64, s
 		s = nightmare1
 	}
 	if s == nil {
-		return nil, nil
+		return nil
 	}
-	return s, s.GetServerPickInfo().Pick()
+	s.GetServerPickInfo().Pick()
+	return s
 }
 
 func (p *Picker) compare(a, b ServerForPick) ServerForPick {

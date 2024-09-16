@@ -217,7 +217,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 				subconn:  sc,
 				dservers: dservers,
 				status:   int32(connectivity.Idle),
-				Pickinfo: &picker.ServerPickInfo{},
+				Pickinfo: picker.NewServerPickInfo(),
 			}
 			server.Pickinfo.SetDiscoverServerOnline(uint32(len(dservers)))
 			b.servers[addr.Addr] = server
@@ -299,11 +299,11 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 	forceaddr, _ := info.Ctx.Value(forceaddrkey{}).(string)
 	refresh := false
 	for {
-		server, done := b.picker.Pick(forceaddr)
+		server := b.picker.Pick(forceaddr)
 		if server != nil {
 			if dl, ok := info.Ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic
-				done(0, 0, false)
+				server.GetServerPickInfo().Done(false)
 				return balancer.PickResult{}, cerror.ErrDeadlineExceeded
 			}
 			span.GetSelfSpanData().SetStateKV("host", server.GetServerAddr())
@@ -311,13 +311,12 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 				SubConn: server.(*ServerForPick).subconn,
 				Done: func(doneinfo balancer.DoneInfo) {
 					e := transGrpcError(doneinfo.Err)
-					cpuusagestrs := doneinfo.Trailer.Get("Cpu-Usage")
-					var cpuusage float64
-					if len(cpuusagestrs) > 0 {
-						cpuusage, _ = strconv.ParseFloat(cpuusagestrs[0], 64)
+					if cpuusagestrs := doneinfo.Trailer.Get("Cpu-Usage"); len(cpuusagestrs) > 0 && cpuusagestrs[0] != "" {
+						cpuusage, _ := strconv.ParseFloat(cpuusagestrs[0], 64)
+						server.GetServerPickInfo().UpdateCPU(cpuusage)
 					}
 					span.Finish(e)
-					done(cpuusage, uint64(span.GetEnd()-span.GetStart()), e == nil)
+					server.GetServerPickInfo().Done(e == nil)
 					monitor.GrpcClientMonitor(b.c.server, "GRPC", info.FullMethodName, e, uint64(span.GetEnd()-span.GetStart()))
 					if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 						if atomic.SwapInt32(&server.(*ServerForPick).closing, 1) == 0 {
@@ -356,25 +355,22 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 		//maybe the forceaddr's server is connecting
 		b.lker.RLock()
 		s, ok := b.servers[forceaddr]
-		if refresh && !ok {
-			b.lker.RUnlock()
-			if b.lastResolveError != nil {
-				return balancer.PickResult{}, b.lastResolveError
-			}
-			return balancer.PickResult{}, cerror.ErrNoSpecificserver
-		} else if ok {
-			if s.closing == 1 {
+		if !ok { //the specific server not exist
+			if refresh {
+				b.lker.RUnlock()
+				if b.lastResolveError != nil {
+					return balancer.PickResult{}, b.lastResolveError
+				}
 				return balancer.PickResult{}, cerror.ErrNoSpecificserver
-			}
-			//server is connecting
-			if e := b.ww.Wait(info.Ctx, "SPECIFIC:"+forceaddr, b.c.resolver.Now, b.lker.RUnlock); e != nil {
+			} else if e := b.ww.Wait(info.Ctx, "CALL", b.c.resolver.Now, b.lker.RUnlock); e != nil { //wait the discover to refresh the server info
 				return balancer.PickResult{}, cerror.Convert(e)
+			} else {
+				refresh = true
 			}
-		} else if !refresh {
-			if e := b.ww.Wait(info.Ctx, "CALL", b.c.resolver.Now, b.lker.RUnlock); e != nil {
-				return balancer.PickResult{}, cerror.Convert(e)
-			}
-			refresh = true
+		} else if s.closing == 1 { //the specific server exist but it is closing
+			return balancer.PickResult{}, cerror.ErrNoSpecificserver
+		} else if e := b.ww.Wait(info.Ctx, "SPECIFIC:"+forceaddr, b.c.resolver.Now, b.lker.RUnlock); e != nil { //the specific server exist but is connecting,we need to wait
+			return balancer.PickResult{}, cerror.Convert(e)
 		}
 	}
 }

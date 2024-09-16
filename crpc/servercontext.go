@@ -2,17 +2,15 @@ package crpc
 
 import (
 	"context"
-	"strconv"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/metadata"
-	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
 )
 
 type ServerContext struct {
 	context.Context
-	context.CancelFunc
+	cancel context.CancelFunc
 	rw     *rw
 	peer   *stream.Peer
 	peerip string
@@ -25,8 +23,7 @@ func (c *ServerContext) Abort() {
 }
 
 func (c *ServerContext) Send(resp []byte) error {
-	traildata := map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
-	return c.rw.send(c.Context, &MsgBody{Body: resp, Traildata: traildata})
+	return c.rw.send(&MsgBody{Body: resp})
 }
 func (c *ServerContext) StopSend(e error) {
 	c.e = cerror.Convert(e)
@@ -34,19 +31,14 @@ func (c *ServerContext) StopSend(e error) {
 		panic("[crpc.Context.Abort] http code must in [400,999)")
 	}
 	if c.e != nil {
-		traildata := map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
-		c.rw.send(context.Background(), &MsgBody{Error: c.e, Traildata: traildata})
+		c.rw.send(&MsgBody{Error: c.e})
 	} else {
 		c.rw.closesend()
 	}
 }
 
-// context's cancel can wake up the block
-func (c *ServerContext) Read(ctx context.Context) ([]byte, error) {
-	body, _, e := c.rw.read(ctx)
-	if e != nil {
-		return nil, e
-	}
+func (c *ServerContext) Read() ([]byte, error) {
+	body, e := c.rw.read()
 	return body, e
 }
 func (c *ServerContext) StopRead() {

@@ -79,7 +79,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData,
 				peer:     nil,
 				lker:     &sync.RWMutex{},
 				rws:      make(map[uint64]*rw, 10),
-				Pickinfo: &picker.ServerPickInfo{},
+				Pickinfo: picker.NewServerPickInfo(),
 			}
 			server.Pickinfo.SetDiscoverServerOnline(uint32(len(registerdata.DServers)))
 			b.servers[addr] = server
@@ -150,55 +150,51 @@ func (b *corelibBalancer) RebuildPicker(serveraddr string, OnOff bool) {
 		b.ww.Wake("CALL")
 	}
 }
-func (b *corelibBalancer) Pick(ctx context.Context) (server *ServerForPick, done func(cpuusage float64, successwastetime uint64, success bool), e error) {
+func (b *corelibBalancer) Pick(ctx context.Context) (server *ServerForPick, e error) {
 	forceaddr, _ := ctx.Value(forceaddrkey{}).(string)
 	refresh := false
 	for {
-		server, done := b.picker.Pick(forceaddr)
+		server := b.picker.Pick(forceaddr)
 		if server != nil {
 			if dl, ok := ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic
-				done(0, 0, false)
-				return nil, nil, cerror.ErrDeadlineExceeded
+				server.GetServerPickInfo().Done(false)
+				return nil, cerror.ErrDeadlineExceeded
 			}
-			return server.(*ServerForPick), done, nil
+			return server.(*ServerForPick), nil
 		}
 		if forceaddr == "" {
 			if refresh {
 				if b.lastResolveError != nil {
-					return nil, done, b.lastResolveError
+					return nil, b.lastResolveError
 				}
-				return nil, nil, cerror.ErrNoserver
+				return nil, cerror.ErrNoserver
 			}
 			if e := b.ww.Wait(ctx, "CALL", b.c.resolver.Now, nil); e != nil {
-				return nil, nil, cerror.Convert(e)
+				return nil, cerror.Convert(e)
 			}
 			refresh = true
 			continue
 		}
 
-		//maybe the forceaddr's server is connecting
 		b.lker.RLock()
 		s, ok := b.servers[forceaddr]
-		if refresh && !ok {
-			b.lker.RUnlock()
-			if b.lastResolveError != nil {
-				return nil, done, b.lastResolveError
+		if !ok { //the specific server not exist
+			if refresh {
+				b.lker.RUnlock()
+				if b.lastResolveError != nil {
+					return nil, b.lastResolveError
+				}
+				return nil, cerror.ErrNoSpecificserver
+			} else if e := b.ww.Wait(ctx, "CALL", b.c.resolver.Now, b.lker.RUnlock); e != nil { //wait the discover to refresh the server info
+				return nil, cerror.Convert(e)
+			} else {
+				refresh = true
 			}
-			return nil, nil, cerror.ErrNoSpecificserver
-		} else if ok {
-			if s.closing == 1 {
-				return nil, nil, cerror.ErrNoSpecificserver
-			}
-			//server is connecting
-			if e := b.ww.Wait(ctx, "SPECIFIC:"+forceaddr, b.c.resolver.Now, b.lker.RUnlock); e != nil {
-				return nil, nil, cerror.Convert(e)
-			}
-		} else if !refresh {
-			if e := b.ww.Wait(ctx, "CALL", b.c.resolver.Now, b.lker.RUnlock); e != nil {
-				return nil, nil, cerror.Convert(e)
-			}
-			refresh = true
+		} else if s.closing == 1 { //the specific server exist but it is closing
+			return nil, cerror.ErrNoSpecificserver
+		} else if e := b.ww.Wait(ctx, "SPECIFIC:"+forceaddr, b.c.resolver.Now, b.lker.RUnlock); e != nil { //the specific server exist but is connecting,we need to wait
+			return nil, cerror.Convert(e)
 		}
 	}
 }

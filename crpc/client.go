@@ -185,11 +185,14 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 			rw.reader.Close()
 		}
 	case MsgType_CloseReadSend:
-		rw := server.getrw(msg.H.Callid)
-		if rw != nil {
-			atomic.AndInt32(&rw.status, 0b0111)
-			atomic.AndInt32(&rw.status, 0b1011)
+		if rw := server.getrw(msg.H.Callid); rw != nil {
+			atomic.AndInt32(&rw.status, 0b0011)
 			rw.reader.Close()
+			server.delrw(msg.H.Callid)
+		}
+		if msg.H.Traildata != nil {
+			cpuusage, _ := strconv.ParseFloat(msg.H.Traildata["Cpu-Usage"], 64)
+			server.GetServerPickInfo().UpdateCPU(cpuusage)
 		}
 	case MsgType_Send:
 		if msg.B.Error != nil && cerror.Equal(msg.B.Error, cerror.ErrServerClosing) {
@@ -219,12 +222,12 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	go c.start(server, true)
 }
 
-func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, error) {
+func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler func(ctx *CallContext) error) error {
 	if e := c.stop.Add(1); e != nil {
 		if e == graceful.ErrClosing {
-			return nil, cerror.ErrClientClosing
+			return cerror.ErrClientClosing
 		}
-		return nil, cerror.ErrBusy
+		return cerror.ErrBusy
 	}
 	defer c.stop.DoneOne()
 	if c.c.GlobalTimeout > 0 {
@@ -258,13 +261,13 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 			"method":  selfmethod,
 			"path":    selfpath,
 		}
-		server, done, e := c.balancer.Pick(ctx)
+		server, e := c.balancer.Pick(ctx)
 		if e != nil {
-			return nil, e
+			return e
 		}
 		span.GetSelfSpanData().SetStateKV("host", server.addr)
 		rw := server.createrw(path, deadline, md, td)
-		if e := rw.init(ctx, &MsgBody{Body: in}); e != nil {
+		if e := rw.init(&MsgBody{Body: in}); e != nil {
 			server.delrw(rw.callid)
 			slog.ErrorContext(ctx, "[crpc.client] send call failed",
 				slog.String("sname", c.server),
@@ -272,46 +275,134 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte) ([]byte, 
 				slog.String("path", path),
 				slog.String("error", e.Error()))
 			span.Finish(e)
-			done(0, 0, false)
+			server.GetServerPickInfo().Done(false)
 			monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(span.GetEnd()-span.GetStart()))
 			if cerror.Equal(e, cerror.ErrClosed) {
 				continue
 			}
-			return nil, e
+			return e
 		}
-		out, trail, e := rw.read(ctx)
-		span.Finish(e)
-		var cpuusage float64
-		if trail != nil {
-			cpuusage, _ = strconv.ParseFloat(trail["Cpu-Usage"], 64)
+		workctx := &CallContext{
+			Context: ctx,
+			rw:      rw,
+			s:       server,
 		}
-		done(cpuusage, uint64(span.GetEnd()-span.GetStart()), e == nil)
-		monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(span.GetEnd()-span.GetStart()))
-		if e != nil {
-			if cerror.Equal(e, cerror.ErrCanceled) && trail == nil {
-				//client cancel,need to tell server
-				if ee := rw.cancel(); e != nil {
-					slog.ErrorContext(ctx, "[crpc.client] send cancel call failed",
-						slog.String("sname", c.server),
-						slog.String("sip", server.addr),
-						slog.String("path", path),
-						slog.String("error", ee.Error()))
+		stop := make(chan *struct{})
+		go func() {
+			select {
+			case <-ctx.Done():
+				if ctx.Err() == context.Canceled {
+					rw.closereadwrite(false)
 				}
+			case <-stop:
+				return
 			}
-			server.delrw(rw.callid)
-			if cerror.Equal(e, cerror.ErrServerClosing) {
-				continue
-			}
-		} else {
-			server.delrw(rw.callid)
+		}()
+		ee := cerror.Convert(handler(workctx))
+		close(stop)
+		span.Finish(ee)
+		server.GetServerPickInfo().Done(ee == nil)
+		monitor.CrpcClientMonitor(c.server, "CRPC", path, ee, uint64(span.GetEnd()-span.GetStart()))
+		server.delrw(rw.callid)
+		if cerror.Equal(ee, cerror.ErrServerClosing) {
+			continue
 		}
-		return out, e
+		if ee != nil {
+			return ee
+		}
+		return nil
 	}
 }
 
-// TODO
-func (c *CrpcClient) Stream(ctx context.Context, path string) (*rw, error) {
-	return nil, nil
+func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *StreamContext) error) error {
+	if e := c.stop.Add(1); e != nil {
+		if e == graceful.ErrClosing {
+			return cerror.ErrClientClosing
+		}
+		return cerror.ErrBusy
+	}
+	defer c.stop.DoneOne()
+	if c.c.GlobalTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
+		defer cancel()
+	}
+	var deadline int64
+	if dl, ok := ctx.Deadline(); ok {
+		deadline = dl.UnixNano()
+	}
+	md := metadata.GetMetadata(ctx)
+	for {
+		ctx, span := trace.NewSpan(ctx, "Corelib.Crpc", trace.Client, nil)
+		if span.GetParentSpanData().IsEmpty() {
+			span.GetParentSpanData().SetStateKV("app", c.self)
+			span.GetParentSpanData().SetStateKV("host", host.Hostip)
+			span.GetParentSpanData().SetStateKV("method", "unknown")
+			span.GetParentSpanData().SetStateKV("path", "unknown")
+		}
+		span.GetSelfSpanData().SetStateKV("app", c.server)
+		span.GetSelfSpanData().SetStateKV("method", "CRPC")
+		span.GetSelfSpanData().SetStateKV("path", path)
+		selfmethod, _ := span.GetParentSpanData().GetStateKV("method")
+		selfpath, _ := span.GetParentSpanData().GetStateKV("path")
+		td := map[string]string{
+			"TraceID": span.GetSelfSpanData().GetTid().String(),
+			"SpanID":  span.GetSelfSpanData().GetSid().String(),
+			"app":     c.self,
+			"host":    host.Hostip,
+			"method":  selfmethod,
+			"path":    selfpath,
+		}
+		server, e := c.balancer.Pick(ctx)
+		if e != nil {
+			return e
+		}
+		span.GetSelfSpanData().SetStateKV("host", server.addr)
+		rw := server.createrw(path, deadline, md, td)
+		if e := rw.init(nil); e != nil {
+			server.delrw(rw.callid)
+			slog.ErrorContext(ctx, "[crpc.client] send init failed",
+				slog.String("sname", c.server),
+				slog.String("sip", server.addr),
+				slog.String("path", path),
+				slog.String("error", e.Error()))
+			span.Finish(e)
+			server.GetServerPickInfo().Done(false)
+			monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(span.GetEnd()-span.GetStart()))
+			if cerror.Equal(e, cerror.ErrClosed) {
+				continue
+			}
+			return e
+		}
+		workctx := &StreamContext{
+			Context: ctx,
+			rw:      rw,
+			s:       server,
+		}
+		stop := make(chan *struct{})
+		go func() {
+			select {
+			case <-ctx.Done():
+				if ctx.Err() == context.Canceled {
+					rw.closereadwrite(false)
+				}
+			case <-stop:
+				return
+			}
+		}()
+		ee := cerror.Convert(handler(workctx))
+		span.Finish(ee)
+		server.GetServerPickInfo().Done(ee == nil)
+		monitor.CrpcClientMonitor(c.server, "CRPC", path, ee, uint64(span.GetEnd()-span.GetStart()))
+		server.delrw(rw.callid)
+		if cerror.Equal(ee, cerror.ErrServerClosing) {
+			continue
+		}
+		if ee != nil {
+			return ee
+		}
+		return nil
+	}
 }
 
 type forceaddrkey struct{}

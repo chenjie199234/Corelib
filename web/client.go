@@ -323,7 +323,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		header.Set("Traceparent", span.GetSelfSpanData().FormatTraceParent())
 		header.Set("Tracestate", span.GetParentSpanData().FormatTraceState())
 		//pick server
-		server, done, e := c.balancer.Pick(ctx)
+		server, e := c.balancer.Pick(ctx)
 		if e != nil {
 			return nil, e
 		}
@@ -334,7 +334,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			req, e = http.NewRequestWithContext(ctx, method, "http://"+server.addr+path+query, body)
 		}
 		if e != nil {
-			done(0, 0, false)
+			server.GetServerPickInfo().Done(false)
 			e = cerror.Convert(e.(*url.Error).Unwrap())
 			return nil, e
 		}
@@ -346,14 +346,13 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		if e != nil {
 			e = cerror.Convert(e.(*url.Error).Unwrap())
 			span.Finish(e)
-			done(0, 0, false)
+			server.GetServerPickInfo().Done(false)
 			monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
 			return nil, e
 		}
-		cpuusagestr := resp.Header.Get("Cpu-Usage")
-		var cpuusage float64
-		if cpuusagestr != "" {
-			cpuusage, _ = strconv.ParseFloat(cpuusagestr, 64)
+		if cpuusagestr := resp.Header.Get("Cpu-Usage"); cpuusagestr != "" {
+			cpuusage, _ := strconv.ParseFloat(cpuusagestr, 64)
+			server.GetServerPickInfo().UpdateCPU(cpuusage)
 		}
 		if resp.StatusCode/100 != 2 {
 			var respbody []byte
@@ -370,7 +369,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			}
 		}
 		span.Finish(e)
-		done(cpuusage, uint64(span.GetEnd()-span.GetStart()), e == nil)
+		server.GetServerPickInfo().Done(e == nil)
 		monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
 		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 			if atomic.SwapInt32(&server.closing, 1) == 0 {
