@@ -77,6 +77,8 @@ func (c *ServerContext) GetClientIp() string {
 	return md["Client-IP"]
 }
 
+// ----------------------------------------------- for protobuf ------------------------------------------------------
+
 // ----------------------------------------------- client stream context ---------------------------------------------
 
 func NewClientStreamServerContext[reqtype protoreflect.ProtoMessage](ctx *ServerContext, newreq func() reqtype) *ClientStreamServerContext[reqtype] {
