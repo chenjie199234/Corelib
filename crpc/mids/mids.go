@@ -27,12 +27,12 @@ func AllMids() map[string]crpc.OutsideHandler {
 func RegMid(name string, handler crpc.OutsideHandler) {
 	all[name] = handler
 }
-func rate(ctx *crpc.Context) {
+func rate(ctx *crpc.ServerContext) {
 	if pass := publicmids.CrpcRate(ctx, ctx.GetPath()); !pass {
 		ctx.Abort(cerror.ErrBusy)
 	}
 }
-func token(ctx *crpc.Context) {
+func token(ctx *crpc.ServerContext) {
 	md := metadata.GetMetadata(ctx)
 	tokenstr := md["Token"]
 	if tokenstr == "" {
@@ -50,7 +50,7 @@ func token(ctx *crpc.Context) {
 	md["Token-User"] = t.UserID
 	md["Token-Data"] = t.Data
 }
-func session(ctx *crpc.Context) {
+func session(ctx *crpc.ServerContext) {
 	md := metadata.GetMetadata(ctx)
 	sessionstr := md["Session"]
 	if sessionstr == "" {
@@ -65,7 +65,7 @@ func session(ctx *crpc.Context) {
 	md["Session-User"] = userid
 	md["Session-Data"] = sessiondata
 }
-func accesskey(ctx *crpc.Context) {
+func accesskey(ctx *crpc.ServerContext) {
 	md := metadata.GetMetadata(ctx)
 	accesskey := md["Access-Key"]
 	if accesskey == "" {

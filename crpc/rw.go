@@ -20,6 +20,7 @@ type rw struct {
 	reader     *list.BlockList[*MsgBody]
 	sender     func(context.Context, *Msg) error
 	status     int32 //use right 4 bit,the bit from left to right:peer_read_status,peer_send_status,self_read_status,self_send_status
+	e          error
 }
 
 func newrw(callid uint64, path string, deadline int64, md, td map[string]string, sender func(context.Context, *Msg) error) *rw {
@@ -49,6 +50,9 @@ func (this *rw) init(body *MsgBody) error {
 }
 func (this *rw) send(body *MsgBody) error {
 	if this.status&0b0001 == 0 {
+		if this.e != nil {
+			return this.e
+		}
 		return cerror.ErrCanceled
 	}
 	if this.status&0b1000 == 0 {
@@ -96,8 +100,9 @@ func (this *rw) closeread() error {
 		},
 	})
 }
-func (this *rw) closereadwrite(trail bool) error {
+func (this *rw) closereadwrite(trail bool, e error) error {
 	atomic.AndInt32(&this.status, 0b1100)
+	this.e = e
 	this.reader.Close()
 	m := &Msg{
 		H: &MsgHeader{
@@ -113,11 +118,17 @@ func (this *rw) closereadwrite(trail bool) error {
 }
 func (this *rw) read() ([]byte, error) {
 	if this.status&0b0010 == 0 {
+		if this.e != nil {
+			return nil, this.e
+		}
 		return nil, cerror.ErrCanceled
 	}
 	m, e := this.reader.Pop(context.Background())
 	if e != nil {
 		if e == list.ErrClosed {
+			if this.e != nil {
+				return nil, this.e
+			}
 			if this.status&0b0100 == 0 {
 				return nil, io.EOF
 			}

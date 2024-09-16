@@ -450,7 +450,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 						slog.String("path", msg.H.Path),
 						slog.Any("panic", e),
 						slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
-					workctx.StopSend(cerror.ErrPanic)
+					workctx.Abort(cerror.ErrPanic)
 				}
 				span.Finish(workctx.e)
 				peername, _ := span.GetParentSpanData().GetStateKV("app")
@@ -459,7 +459,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			}()
 			for _, handler := range handlers {
 				handler(workctx)
-				if workctx.finish {
+				if workctx.finish == 1 {
 					break
 				}
 			}
@@ -467,7 +467,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			workctx.cancel()
 			delete(c.ctxs, msg.H.Callid)
 			c.Unlock()
-			rw.closereadwrite(true)
+			rw.closereadwrite(true, nil)
 		}()
 	case MsgType_Send:
 		c.RLock()

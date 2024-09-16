@@ -292,10 +292,14 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler f
 			select {
 			case <-ctx.Done():
 				if ctx.Err() == context.Canceled {
-					rw.closereadwrite(false)
+					rw.closereadwrite(false, cerror.ErrCanceled)
+				} else if ctx.Err() == context.DeadlineExceeded {
+					rw.closereadwrite(false, cerror.ErrDeadlineExceeded)
+				} else {
+					rw.closereadwrite(false, cerror.Convert(ctx.Err()))
 				}
 			case <-stop:
-				return
+				rw.closereadwrite(false, nil)
 			}
 		}()
 		ee := cerror.Convert(handler(workctx))
@@ -384,13 +388,18 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 			select {
 			case <-ctx.Done():
 				if ctx.Err() == context.Canceled {
-					rw.closereadwrite(false)
+					rw.closereadwrite(false, cerror.ErrCanceled)
+				} else if ctx.Err() == context.DeadlineExceeded {
+					rw.closereadwrite(false, cerror.ErrDeadlineExceeded)
+				} else {
+					rw.closereadwrite(false, cerror.Convert(ctx.Err()))
 				}
 			case <-stop:
-				return
+				rw.closereadwrite(false, nil)
 			}
 		}()
 		ee := cerror.Convert(handler(workctx))
+		close(stop)
 		span.Finish(ee)
 		server.GetServerPickInfo().Done(ee == nil)
 		monitor.CrpcClientMonitor(c.server, "CRPC", path, ee, uint64(span.GetEnd()-span.GetStart()))
