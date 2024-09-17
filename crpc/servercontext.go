@@ -81,28 +81,29 @@ func (c *ServerContext) GetClientIp() string {
 
 // ----------------------------------------------- client stream context ---------------------------------------------
 
-func NewClientStreamServerContext[reqtype protoreflect.ProtoMessage](ctx *ServerContext, newreq func() reqtype) *ClientStreamServerContext[reqtype] {
-	return &ClientStreamServerContext[reqtype]{Context: ctx.Context, sctx: ctx, newreq: newreq}
+func NewClientStreamServerContext[reqtype any](ctx *ServerContext) *ClientStreamServerContext[reqtype] {
+	return &ClientStreamServerContext[reqtype]{Context: ctx.Context, sctx: ctx}
 }
 
-type ClientStreamServerContext[reqtype protoreflect.ProtoMessage] struct {
+type ClientStreamServerContext[reqtype any] struct {
 	context.Context
-	sctx   *ServerContext
-	newreq func() reqtype
+	sctx *ServerContext
 }
 
-func (c *ClientStreamServerContext[reqtype]) Read() (reqtype, error) {
+func (c *ClientStreamServerContext[reqtype]) Read() (*reqtype, error) {
 	data, e := c.sctx.Read()
 	if e != nil {
-		var empty reqtype
-		return empty, e
+		return nil, e
 	}
-	req := c.newreq()
-	if e := proto.Unmarshal(data, req); e != nil {
-		var empty reqtype
-		return empty, e
+	var req any = new(reqtype)
+	m, ok := req.(protoreflect.ProtoMessage)
+	if !ok {
+		return nil, cerror.ErrSystem
 	}
-	return req, nil
+	if e := proto.Unmarshal(data, m); e != nil {
+		return nil, e
+	}
+	return req.(*reqtype), nil
 }
 func (c *ClientStreamServerContext[reqtype]) StopRead() {
 	c.StopRead()
@@ -119,17 +120,22 @@ func (c *ClientStreamServerContext[reqtype]) GetClientIp() string {
 
 // ----------------------------------------------- server stream context ---------------------------------------------
 
-func NewServerStreamServerContext[resptype protoreflect.ProtoMessage](ctx *ServerContext) *ServerStreamServerContext[resptype] {
+func NewServerStreamServerContext[resptype any](ctx *ServerContext) *ServerStreamServerContext[resptype] {
 	return &ServerStreamServerContext[resptype]{Context: ctx.Context, sctx: ctx}
 }
 
-type ServerStreamServerContext[resptype protoreflect.ProtoMessage] struct {
+type ServerStreamServerContext[resptype any] struct {
 	context.Context
 	sctx *ServerContext
 }
 
-func (c *ServerStreamServerContext[resptype]) Send(resp resptype) error {
-	d, e := proto.Marshal(resp)
+func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
+	var tmp any = resp
+	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
+	if !ok {
+		return cerror.ErrSystem
+	}
+	d, e := proto.Marshal(tmptmp)
 	if e != nil {
 		return e
 	}
@@ -150,34 +156,45 @@ func (c *ServerStreamServerContext[resptype]) GetClientIp() string {
 
 // ----------------------------------------------- all stream context ---------------------------------------------
 
-func NewAllStreamServerContext[reqtype, resptype protoreflect.ProtoMessage](ctx *ServerContext, newreq func() reqtype) *AllStreamServerContext[reqtype, resptype] {
-	return &AllStreamServerContext[reqtype, resptype]{sctx: ctx, Context: ctx.Context, newreq: newreq}
+func NewAllStreamServerContext[reqtype, resptype any](ctx *ServerContext) *AllStreamServerContext[reqtype, resptype] {
+	return &AllStreamServerContext[reqtype, resptype]{sctx: ctx, Context: ctx.Context}
 }
 
-type AllStreamServerContext[reqtype, resptype protoreflect.ProtoMessage] struct {
+type AllStreamServerContext[reqtype, resptype any] struct {
 	context.Context
-	sctx   *ServerContext
-	newreq func() reqtype
+	sctx *ServerContext
 }
 
-func (c *AllStreamServerContext[reqtype, resptype]) Read() (reqtype, error) {
+func (c *AllStreamServerContext[reqtype, resptype]) Read() (*reqtype, error) {
 	data, e := c.sctx.Read()
 	if e != nil {
-		var empty reqtype
-		return empty, e
+		return nil, e
 	}
-	req := c.newreq()
-	if e := proto.Unmarshal(data, req); e != nil {
-		var empty reqtype
-		return empty, e
+	var req any = new(reqtype)
+	m, ok := req.(protoreflect.ProtoMessage)
+	if !ok {
+		return nil, cerror.ErrSystem
 	}
-	return req, nil
+	if e := proto.Unmarshal(data, m); e != nil {
+		return nil, e
+	}
+	if v, ok := req.(interface{ Validate() string }); ok {
+		if errstr := v.Validate(); errstr != "" {
+			return nil, cerror.ErrReq
+		}
+	}
+	return req.(*reqtype), nil
 }
 func (c *AllStreamServerContext[reqtype, resptype]) StopRead() {
 	c.sctx.StopRead()
 }
-func (c *AllStreamServerContext[reqtype, resptype]) Send(resp resptype) error {
-	d, e := proto.Marshal(resp)
+func (c *AllStreamServerContext[reqtype, resptype]) Send(resp *resptype) error {
+	var tmp any = resp
+	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
+	if !ok {
+		return cerror.ErrSystem
+	}
+	d, e := proto.Marshal(tmptmp)
 	if e != nil {
 		return e
 	}
