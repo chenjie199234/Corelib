@@ -81,6 +81,30 @@ func (c *ServerContext) GetClientIp() string {
 
 // ----------------------------------------------- for protobuf ------------------------------------------------------
 
+// ----------------------------------------------- no stream context ---------------------------------------------
+
+func NewNoStreamServerContext(path string, ctx *ServerContext) *NoStreamServerContext {
+	return &NoStreamServerContext{path: path, sctx: ctx}
+}
+
+type NoStreamServerContext struct {
+	path string
+	sctx *ServerContext
+}
+
+func (c *NoStreamServerContext) GetPath() string {
+	return c.path
+}
+func (c *NoStreamServerContext) GetRemoteAddr() string {
+	return c.sctx.GetRemoteAddr()
+}
+func (c *NoStreamServerContext) GetRealPeerIp() string {
+	return c.sctx.GetRealPeerIp()
+}
+func (c *NoStreamServerContext) GetClientIp() string {
+	return c.sctx.GetClientIp()
+}
+
 // ----------------------------------------------- client stream context ---------------------------------------------
 
 func NewClientStreamServerContext[reqtype any](path string, ctx *ServerContext) *ClientStreamServerContext[reqtype] {
@@ -113,6 +137,9 @@ func (c *ClientStreamServerContext[reqtype]) Read() (*reqtype, error) {
 		}
 	}
 	return req.(*reqtype), nil
+}
+func (c *ClientStreamServerContext[reqtype]) GetPath() string {
+	return c.path
 }
 func (c *ClientStreamServerContext[reqtype]) StopRead() {
 	c.StopRead()
