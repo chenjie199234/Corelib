@@ -42,6 +42,7 @@ func (this *rw) init(body *MsgBody) error {
 			Path:      this.path,
 			Type:      MsgType_Init,
 			Deadline:  this.deadline,
+			Metadata:  this.metadata,
 			Tracedata: this.traceddata,
 		},
 		B:     body,
