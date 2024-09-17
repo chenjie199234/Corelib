@@ -2,10 +2,12 @@ package crpc
 
 import (
 	"context"
+	"log/slog"
 	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/metadata"
+	"github.com/chenjie199234/Corelib/pbex"
 	"github.com/chenjie199234/Corelib/stream"
 
 	"google.golang.org/protobuf/proto"
@@ -81,11 +83,12 @@ func (c *ServerContext) GetClientIp() string {
 
 // ----------------------------------------------- client stream context ---------------------------------------------
 
-func NewClientStreamServerContext[reqtype any](ctx *ServerContext) *ClientStreamServerContext[reqtype] {
-	return &ClientStreamServerContext[reqtype]{Context: ctx.Context, sctx: ctx}
+func NewClientStreamServerContext[reqtype any](path string, ctx *ServerContext) *ClientStreamServerContext[reqtype] {
+	return &ClientStreamServerContext[reqtype]{path: path, Context: ctx.Context, sctx: ctx}
 }
 
 type ClientStreamServerContext[reqtype any] struct {
+	path string
 	context.Context
 	sctx *ServerContext
 }
@@ -102,6 +105,12 @@ func (c *ClientStreamServerContext[reqtype]) Read() (*reqtype, error) {
 	}
 	if e := proto.Unmarshal(data, m); e != nil {
 		return nil, e
+	}
+	if v, ok := req.(pbex.Validater); ok {
+		if errstr := v.Validate(); errstr != "" {
+			slog.ErrorContext(c.Context, "["+c.path+"] validate failed", slog.String("error", errstr))
+			return nil, cerror.ErrReq
+		}
 	}
 	return req.(*reqtype), nil
 }
@@ -120,11 +129,12 @@ func (c *ClientStreamServerContext[reqtype]) GetClientIp() string {
 
 // ----------------------------------------------- server stream context ---------------------------------------------
 
-func NewServerStreamServerContext[resptype any](ctx *ServerContext) *ServerStreamServerContext[resptype] {
-	return &ServerStreamServerContext[resptype]{Context: ctx.Context, sctx: ctx}
+func NewServerStreamServerContext[resptype any](path string, ctx *ServerContext) *ServerStreamServerContext[resptype] {
+	return &ServerStreamServerContext[resptype]{path: path, Context: ctx.Context, sctx: ctx}
 }
 
 type ServerStreamServerContext[resptype any] struct {
+	path string
 	context.Context
 	sctx *ServerContext
 }
@@ -156,11 +166,12 @@ func (c *ServerStreamServerContext[resptype]) GetClientIp() string {
 
 // ----------------------------------------------- all stream context ---------------------------------------------
 
-func NewAllStreamServerContext[reqtype, resptype any](ctx *ServerContext) *AllStreamServerContext[reqtype, resptype] {
-	return &AllStreamServerContext[reqtype, resptype]{sctx: ctx, Context: ctx.Context}
+func NewAllStreamServerContext[reqtype, resptype any](path string, ctx *ServerContext) *AllStreamServerContext[reqtype, resptype] {
+	return &AllStreamServerContext[reqtype, resptype]{path: path, sctx: ctx, Context: ctx.Context}
 }
 
 type AllStreamServerContext[reqtype, resptype any] struct {
+	path string
 	context.Context
 	sctx *ServerContext
 }
@@ -180,6 +191,7 @@ func (c *AllStreamServerContext[reqtype, resptype]) Read() (*reqtype, error) {
 	}
 	if v, ok := req.(interface{ Validate() string }); ok {
 		if errstr := v.Validate(); errstr != "" {
+			slog.ErrorContext(c.Context, "["+c.path+"] validate failed", slog.String("error", errstr))
 			return nil, cerror.ErrReq
 		}
 	}

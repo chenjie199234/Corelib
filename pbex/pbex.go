@@ -7,6 +7,10 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
+type Validater interface {
+	Validate() (errstr string)
+}
+
 func NeedValidate(message *protogen.Message) bool {
 	if MessageHasEnum(message) {
 		return true
