@@ -56,9 +56,6 @@ func main() {
 					if !need {
 						continue
 					}
-					if m.Desc.IsStreamingClient() || m.Desc.IsStreamingServer() {
-						panic("stream is not supported")
-					}
 					if pbex.OneOfHasPBEX(m.Input) {
 						panic("oneof fields should not contain pbex")
 					}

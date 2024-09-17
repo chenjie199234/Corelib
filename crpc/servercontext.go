@@ -46,11 +46,11 @@ func (c *ServerContext) StopSend() {
 	c.rw.closesend()
 }
 
-func (c *ServerContext) Read() ([]byte, error) {
+func (c *ServerContext) Recv() ([]byte, error) {
 	body, e := c.rw.read()
 	return body, e
 }
-func (c *ServerContext) StopRead() {
+func (c *ServerContext) StopRecv() {
 	c.rw.closeread()
 }
 
@@ -108,42 +108,49 @@ func (c *NoStreamServerContext) GetClientIp() string {
 
 // ----------------------------------------------- client stream context ---------------------------------------------
 
-func NewClientStreamServerContext[reqtype any](path string, ctx *ServerContext) *ClientStreamServerContext[reqtype] {
-	return &ClientStreamServerContext[reqtype]{path: path, Context: ctx.Context, sctx: ctx}
+func NewClientStreamServerContext[reqtype any](path string, ctx *ServerContext, validatereq bool) *ClientStreamServerContext[reqtype] {
+	return &ClientStreamServerContext[reqtype]{path: path, Context: ctx.Context, sctx: ctx, validatereq: validatereq}
 }
 
 type ClientStreamServerContext[reqtype any] struct {
-	path string
+	path        string
+	validatereq bool
 	context.Context
 	sctx *ServerContext
 }
 
-func (c *ClientStreamServerContext[reqtype]) Read() (*reqtype, error) {
-	data, e := c.sctx.Read()
-	if e != nil {
-		return nil, e
-	}
+func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 	var req any = new(reqtype)
 	m, ok := req.(protoreflect.ProtoMessage)
 	if !ok {
+		//if use the protoc-go-crpc's generate code,this will not happen
+		slog.ErrorContext(c.Context, "["+c.path+"] request struct's type is not proto's message")
 		return nil, cerror.ErrSystem
 	}
-	if e := proto.Unmarshal(data, m); e != nil {
+	data, e := c.sctx.Recv()
+	if e != nil {
+		slog.ErrorContext(c.Context, "["+c.path+"] read request failed", slog.String("error", e.Error()))
 		return nil, e
 	}
-	if v, ok := req.(pbex.Validater); ok {
-		if errstr := v.Validate(); errstr != "" {
-			slog.ErrorContext(c.Context, "["+c.path+"] validate failed", slog.String("error", errstr))
-			return nil, cerror.ErrReq
+	if e := proto.Unmarshal(data, m); e != nil {
+		slog.ErrorContext(c.Context, "["+c.path+"] request decode failed", slog.String("error", e.Error()))
+		return nil, e
+	}
+	if c.validatereq {
+		if v, ok := req.(pbex.Validater); ok {
+			if errstr := v.Validate(); errstr != "" {
+				slog.ErrorContext(c.Context, "["+c.path+"] request validate failed", slog.String("error", errstr))
+				return nil, cerror.ErrReq
+			}
 		}
 	}
 	return req.(*reqtype), nil
 }
+func (c *ClientStreamServerContext[reqtype]) StopRecv() {
+	c.StopRecv()
+}
 func (c *ClientStreamServerContext[reqtype]) GetPath() string {
 	return c.path
-}
-func (c *ClientStreamServerContext[reqtype]) StopRead() {
-	c.StopRead()
 }
 func (c *ClientStreamServerContext[reqtype]) GetRemoteAddr() string {
 	return c.sctx.GetRemoteAddr()
@@ -171,16 +178,22 @@ func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
 	var tmp any = resp
 	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
 	if !ok {
+		//if use the protoc-go-crpc's generate code,this will not happen
+		slog.ErrorContext(c.Context, "["+c.path+"] response struct's type is not proto's message")
 		return cerror.ErrSystem
 	}
-	d, e := proto.Marshal(tmptmp)
+	d, _ := proto.Marshal(tmptmp)
+	e := c.sctx.Send(d)
 	if e != nil {
-		return e
+		slog.ErrorContext(c.Context, "["+c.path+"] send response failed", slog.String("error", e.Error()))
 	}
-	return c.sctx.Send(d)
+	return e
 }
 func (c *ServerStreamServerContext[resptype]) StopSend() {
 	c.sctx.StopSend()
+}
+func (c *ServerStreamServerContext[resptype]) GetPath() string {
+	return c.sctx.GetPath()
 }
 func (c *ServerStreamServerContext[resptype]) GetRemoteAddr() string {
 	return c.sctx.GetRemoteAddr()
@@ -194,54 +207,67 @@ func (c *ServerStreamServerContext[resptype]) GetClientIp() string {
 
 // ----------------------------------------------- all stream context ---------------------------------------------
 
-func NewAllStreamServerContext[reqtype, resptype any](path string, ctx *ServerContext) *AllStreamServerContext[reqtype, resptype] {
-	return &AllStreamServerContext[reqtype, resptype]{path: path, sctx: ctx, Context: ctx.Context}
+func NewAllStreamServerContext[reqtype, resptype any](path string, ctx *ServerContext, validatereq bool) *AllStreamServerContext[reqtype, resptype] {
+	return &AllStreamServerContext[reqtype, resptype]{path: path, sctx: ctx, Context: ctx.Context, validatereq: validatereq}
 }
 
 type AllStreamServerContext[reqtype, resptype any] struct {
-	path string
+	path        string
+	validatereq bool
 	context.Context
 	sctx *ServerContext
 }
 
-func (c *AllStreamServerContext[reqtype, resptype]) Read() (*reqtype, error) {
-	data, e := c.sctx.Read()
-	if e != nil {
-		return nil, e
-	}
+func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 	var req any = new(reqtype)
 	m, ok := req.(protoreflect.ProtoMessage)
 	if !ok {
+		//if use the protoc-go-crpc's generate code,this will not happen
+		slog.ErrorContext(c.Context, "["+c.path+"] request struct's type is not proto's message")
 		return nil, cerror.ErrSystem
 	}
-	if e := proto.Unmarshal(data, m); e != nil {
+	data, e := c.sctx.Recv()
+	if e != nil {
+		slog.ErrorContext(c.Context, "["+c.path+"] read request failed", slog.String("error", e.Error()))
 		return nil, e
 	}
-	if v, ok := req.(interface{ Validate() string }); ok {
-		if errstr := v.Validate(); errstr != "" {
-			slog.ErrorContext(c.Context, "["+c.path+"] validate failed", slog.String("error", errstr))
-			return nil, cerror.ErrReq
+	if e := proto.Unmarshal(data, m); e != nil {
+		slog.ErrorContext(c.Context, "["+c.path+"] request decode failed", slog.String("error", e.Error()))
+		return nil, e
+	}
+	if c.validatereq {
+		if v, ok := req.(interface{ Validate() string }); ok {
+			if errstr := v.Validate(); errstr != "" {
+				slog.ErrorContext(c.Context, "["+c.path+"] request validate failed", slog.String("error", errstr))
+				return nil, cerror.ErrReq
+			}
 		}
 	}
 	return req.(*reqtype), nil
 }
-func (c *AllStreamServerContext[reqtype, resptype]) StopRead() {
-	c.sctx.StopRead()
+func (c *AllStreamServerContext[reqtype, resptype]) StopRecv() {
+	c.sctx.StopRecv()
 }
 func (c *AllStreamServerContext[reqtype, resptype]) Send(resp *resptype) error {
 	var tmp any = resp
 	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
 	if !ok {
+		//if use the protoc-go-crpc's generate code,this will not happen
+		slog.ErrorContext(c.Context, "["+c.path+"] response struct's type is not proto's message")
 		return cerror.ErrSystem
 	}
-	d, e := proto.Marshal(tmptmp)
+	d, _ := proto.Marshal(tmptmp)
+	e := c.sctx.Send(d)
 	if e != nil {
-		return e
+		slog.ErrorContext(c.Context, "["+c.path+"] send response failed", slog.String("error", e.Error()))
 	}
-	return c.sctx.Send(d)
+	return e
 }
 func (c *AllStreamServerContext[reqtype, resptype]) StopSend() {
 	c.sctx.StopSend()
+}
+func (c *AllStreamServerContext[reqtype, resptype]) GetPath() string {
+	return c.sctx.GetPath()
 }
 func (c *AllStreamServerContext[reqtype, resptype]) GetRemoteAddr() string {
 	return c.sctx.GetRemoteAddr()

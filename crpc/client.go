@@ -263,13 +263,17 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler f
 		}
 		server, e := c.balancer.Pick(ctx)
 		if e != nil {
+			slog.ErrorContext(ctx, "[crpc.client] pick server failed",
+				slog.String("sname", c.server),
+				slog.String("path", path),
+				slog.String("error", e.Error()))
 			return e
 		}
 		span.GetSelfSpanData().SetStateKV("host", server.addr)
 		rw := server.createrw(path, deadline, md, td)
 		if e := rw.init(&MsgBody{Body: in}); e != nil {
 			server.delrw(rw.callid)
-			slog.ErrorContext(ctx, "[crpc.client] send call failed",
+			slog.ErrorContext(ctx, "[crpc.client] send request failed",
 				slog.String("sname", c.server),
 				slog.String("sip", server.addr),
 				slog.String("path", path),
@@ -359,13 +363,17 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 		}
 		server, e := c.balancer.Pick(ctx)
 		if e != nil {
+			slog.ErrorContext(ctx, "[crpc.client] pick server failed",
+				slog.String("sname", c.server),
+				slog.String("path", path),
+				slog.String("error", e.Error()))
 			return e
 		}
 		span.GetSelfSpanData().SetStateKV("host", server.addr)
 		rw := server.createrw(path, deadline, md, td)
 		if e := rw.init(nil); e != nil {
 			server.delrw(rw.callid)
-			slog.ErrorContext(ctx, "[crpc.client] send init failed",
+			slog.ErrorContext(ctx, "[crpc.client] init stream failed",
 				slog.String("sname", c.server),
 				slog.String("sip", server.addr),
 				slog.String("path", path),
