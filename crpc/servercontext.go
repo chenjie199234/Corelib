@@ -84,11 +84,12 @@ func (c *ServerContext) GetClientIp() string {
 // ----------------------------------------------- no stream context ---------------------------------------------
 
 func NewNoStreamServerContext(path string, ctx *ServerContext) *NoStreamServerContext {
-	return &NoStreamServerContext{path: path, sctx: ctx}
+	return &NoStreamServerContext{path: path, Context: ctx.Context, sctx: ctx}
 }
 
 type NoStreamServerContext struct {
 	path string
+	context.Context
 	sctx *ServerContext
 }
 
