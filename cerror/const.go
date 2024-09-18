@@ -7,7 +7,7 @@ import (
 
 // system,start from 1000
 var (
-	ErrServerClosing    = MakeCError(1000, http.StatusServiceUnavailable, "server is closing,retry this request")
+	ErrServerClosing    = MakeCError(1000, http.StatusServiceUnavailable, "server is closing")
 	ErrClientClosing    = MakeCError(1001, http.StatusBadRequest, "using closed client")
 	ErrTarget           = MakeCError(1002, http.StatusBadRequest, "wrong server,check the server group and name")
 	ErrNoapi            = MakeCError(1003, http.StatusNotImplemented, "api not implement")

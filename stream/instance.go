@@ -64,6 +64,8 @@ func (this *Instance) Stop() {
 func (this *Instance) GetPeerNum() int32 {
 	return this.mng.GetPeerNum()
 }
+
+// every peer will start a goroutine
 func (this *Instance) RangePeers(block bool, handler func(p *Peer)) {
 	this.mng.RangePeers(block, handler)
 }

@@ -88,7 +88,7 @@ func (this *rw) closesend() error {
 		},
 	})
 }
-func (this *rw) closeread() error {
+func (this *rw) closerecv() error {
 	if old := atomic.AndInt32(&this.status, 0b1101); old&0b0010 == 0 {
 		return nil
 	}
@@ -101,8 +101,10 @@ func (this *rw) closeread() error {
 		},
 	})
 }
-func (this *rw) closereadwrite(trail bool, e error) error {
-	atomic.AndInt32(&this.status, 0b1100)
+func (this *rw) closerecvsend(trail bool, e error) error {
+	if old := atomic.AndInt32(&this.status, 0b1100); old&0b0011 == 0 {
+		return nil
+	}
 	this.e = e
 	this.reader.Close()
 	m := &Msg{
@@ -117,7 +119,7 @@ func (this *rw) closereadwrite(trail bool, e error) error {
 	}
 	return this.sender(context.Background(), m)
 }
-func (this *rw) read() ([]byte, error) {
+func (this *rw) recv() ([]byte, error) {
 	if this.status&0b0010 == 0 {
 		if this.e != nil {
 			return nil, this.e

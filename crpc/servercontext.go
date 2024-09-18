@@ -43,9 +43,9 @@ func (c *ServerContext) Abort(e error) {
 			c.rw.send(&MsgBody{Error: c.e})
 		}
 	}
-	c.rw.closereadwrite(true, c.e)
+	c.rw.closerecvsend(true, c.e)
 	if httpcode != 0 {
-		panic("[crpc.context.Abort] unknown http code: " + strconv.FormatInt(int64(httpcode), 10))
+		panic("[crpc.context.Abort] unknown http code: " + strconv.Itoa(httpcode))
 	}
 }
 
@@ -59,11 +59,11 @@ func (c *ServerContext) StopSend() {
 
 // return io.EOF means client stop send
 func (c *ServerContext) Recv() ([]byte, error) {
-	body, e := c.rw.read()
+	body, e := c.rw.recv()
 	return body, e
 }
 func (c *ServerContext) StopRecv() {
-	c.rw.closeread()
+	c.rw.closerecv()
 }
 
 func (c *ServerContext) GetMethod() string {

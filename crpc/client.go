@@ -296,14 +296,14 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler f
 			select {
 			case <-ctx.Done():
 				if ctx.Err() == context.Canceled {
-					rw.closereadwrite(false, cerror.ErrCanceled)
+					rw.closerecvsend(false, cerror.ErrCanceled)
 				} else if ctx.Err() == context.DeadlineExceeded {
-					rw.closereadwrite(false, cerror.ErrDeadlineExceeded)
+					rw.closerecvsend(false, cerror.ErrDeadlineExceeded)
 				} else {
-					rw.closereadwrite(false, cerror.Convert(ctx.Err()))
+					rw.closerecvsend(false, cerror.Convert(ctx.Err()))
 				}
 			case <-stop:
-				rw.closereadwrite(false, nil)
+				rw.closerecvsend(false, nil)
 			}
 		}()
 		ee := cerror.Convert(handler(workctx))
@@ -396,14 +396,14 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 			select {
 			case <-ctx.Done():
 				if ctx.Err() == context.Canceled {
-					rw.closereadwrite(false, cerror.ErrCanceled)
+					rw.closerecvsend(false, cerror.ErrCanceled)
 				} else if ctx.Err() == context.DeadlineExceeded {
-					rw.closereadwrite(false, cerror.ErrDeadlineExceeded)
+					rw.closerecvsend(false, cerror.ErrDeadlineExceeded)
 				} else {
-					rw.closereadwrite(false, cerror.Convert(ctx.Err()))
+					rw.closerecvsend(false, cerror.Convert(ctx.Err()))
 				}
 			case <-stop:
-				rw.closereadwrite(false, nil)
+				rw.closerecvsend(false, nil)
 			}
 		}()
 		ee := cerror.Convert(handler(workctx))

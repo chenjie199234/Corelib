@@ -20,10 +20,10 @@ type CallContext struct {
 
 // return io.EOF means server stop send
 func (c *CallContext) Recv() ([]byte, error) {
-	return c.rw.read()
+	return c.rw.recv()
 }
 func (c *CallContext) StopRecv() {
-	c.rw.closeread()
+	c.rw.closerecv()
 }
 func (c *CallContext) GetServerAddr() string {
 	return c.s.GetServerAddr()
@@ -45,10 +45,10 @@ func (c *StreamContext) StopSend() {
 
 // return io.EOF means server stop send
 func (c *StreamContext) Recv() ([]byte, error) {
-	return c.rw.read()
+	return c.rw.recv()
 }
 func (c *StreamContext) StopRecv() {
-	c.rw.closeread()
+	c.rw.closerecv()
 }
 func (c *StreamContext) GetServerAddr() string {
 	return c.s.GetServerAddr()

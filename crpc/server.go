@@ -457,7 +457,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				delete(c.ctxs, msg.H.Callid)
 				c.Unlock()
 				if workctx.finish == 0 {
-					rw.closereadwrite(true, nil)
+					rw.closerecvsend(true, nil)
 				}
 
 				span.Finish(workctx.e)
