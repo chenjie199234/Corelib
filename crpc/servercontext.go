@@ -2,6 +2,7 @@ package crpc
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"sync/atomic"
 
@@ -39,6 +40,7 @@ func (c *ServerContext) Abort(e error) {
 	}
 }
 
+// return io.EOF means client stop recv
 func (c *ServerContext) Send(resp []byte) error {
 	return c.rw.send(&MsgBody{Body: resp})
 }
@@ -46,6 +48,7 @@ func (c *ServerContext) StopSend() {
 	c.rw.closesend()
 }
 
+// return io.EOF means client stop send
 func (c *ServerContext) Recv() ([]byte, error) {
 	body, e := c.rw.read()
 	return body, e
@@ -96,12 +99,20 @@ type NoStreamServerContext struct {
 func (c *NoStreamServerContext) GetPath() string {
 	return c.path
 }
+
+// get the direct peer's addr(maybe a proxy)
 func (c *NoStreamServerContext) GetRemoteAddr() string {
 	return c.sctx.GetRemoteAddr()
 }
+
+// get the real peer's ip which will not be confused by proxy
 func (c *NoStreamServerContext) GetRealPeerIp() string {
 	return c.sctx.GetRealPeerIp()
 }
+
+// this function try to return the first caller's ip(mostly time it will be the user's ip)
+// if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
+// if failed,the direct peer's ip will be returned(maybe a proxy)
 func (c *NoStreamServerContext) GetClientIp() string {
 	return c.sctx.GetClientIp()
 }
@@ -119,6 +130,7 @@ type ClientStreamServerContext[reqtype any] struct {
 	sctx *ServerContext
 }
 
+// return io.EOF means client stop send
 func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 	var req any = new(reqtype)
 	m, ok := req.(protoreflect.ProtoMessage)
@@ -129,7 +141,9 @@ func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 	}
 	data, e := c.sctx.Recv()
 	if e != nil {
-		slog.ErrorContext(c.Context, "["+c.path+"] read request failed", slog.String("error", e.Error()))
+		if e != io.EOF {
+			slog.ErrorContext(c.Context, "["+c.path+"] read request failed", slog.String("error", e.Error()))
+		}
 		return nil, e
 	}
 	if e := proto.Unmarshal(data, m); e != nil {
@@ -152,12 +166,20 @@ func (c *ClientStreamServerContext[reqtype]) StopRecv() {
 func (c *ClientStreamServerContext[reqtype]) GetPath() string {
 	return c.path
 }
+
+// get the direct peer's addr(maybe a proxy)
 func (c *ClientStreamServerContext[reqtype]) GetRemoteAddr() string {
 	return c.sctx.GetRemoteAddr()
 }
+
+// get the real peer's ip which will not be confused by proxy
 func (c *ClientStreamServerContext[reqtype]) GetRealPeerIp() string {
 	return c.sctx.GetRealPeerIp()
 }
+
+// this function try to return the first caller's ip(mostly time it will be the user's ip)
+// if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
+// if failed,the direct peer's ip will be returned(maybe a proxy)
 func (c *ClientStreamServerContext[reqtype]) GetClientIp() string {
 	return c.sctx.GetClientIp()
 }
@@ -174,6 +196,7 @@ type ServerStreamServerContext[resptype any] struct {
 	sctx *ServerContext
 }
 
+// return io.EOF means client stop recv
 func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
 	var tmp any = resp
 	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
@@ -184,7 +207,7 @@ func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
 	}
 	d, _ := proto.Marshal(tmptmp)
 	e := c.sctx.Send(d)
-	if e != nil {
+	if e != nil && e != io.EOF {
 		slog.ErrorContext(c.Context, "["+c.path+"] send response failed", slog.String("error", e.Error()))
 	}
 	return e
@@ -195,12 +218,20 @@ func (c *ServerStreamServerContext[resptype]) StopSend() {
 func (c *ServerStreamServerContext[resptype]) GetPath() string {
 	return c.sctx.GetPath()
 }
+
+// get the direct peer's addr(maybe a proxy)
 func (c *ServerStreamServerContext[resptype]) GetRemoteAddr() string {
 	return c.sctx.GetRemoteAddr()
 }
+
+// get the real peer's ip which will not be confused by proxy
 func (c *ServerStreamServerContext[resptype]) GetRealPeerIp() string {
 	return c.sctx.GetRealPeerIp()
 }
+
+// this function try to return the first caller's ip(mostly time it will be the user's ip)
+// if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
+// if failed,the direct peer's ip will be returned(maybe a proxy)
 func (c *ServerStreamServerContext[resptype]) GetClientIp() string {
 	return c.sctx.GetClientIp()
 }
@@ -218,6 +249,7 @@ type AllStreamServerContext[reqtype, resptype any] struct {
 	sctx *ServerContext
 }
 
+// return io.EOF means client stop send
 func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 	var req any = new(reqtype)
 	m, ok := req.(protoreflect.ProtoMessage)
@@ -228,7 +260,9 @@ func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 	}
 	data, e := c.sctx.Recv()
 	if e != nil {
-		slog.ErrorContext(c.Context, "["+c.path+"] read request failed", slog.String("error", e.Error()))
+		if e != io.EOF {
+			slog.ErrorContext(c.Context, "["+c.path+"] read request failed", slog.String("error", e.Error()))
+		}
 		return nil, e
 	}
 	if e := proto.Unmarshal(data, m); e != nil {
@@ -248,6 +282,8 @@ func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 func (c *AllStreamServerContext[reqtype, resptype]) StopRecv() {
 	c.sctx.StopRecv()
 }
+
+// return io.EOF means client stop recv
 func (c *AllStreamServerContext[reqtype, resptype]) Send(resp *resptype) error {
 	var tmp any = resp
 	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
@@ -258,7 +294,7 @@ func (c *AllStreamServerContext[reqtype, resptype]) Send(resp *resptype) error {
 	}
 	d, _ := proto.Marshal(tmptmp)
 	e := c.sctx.Send(d)
-	if e != nil {
+	if e != nil && e != io.EOF {
 		slog.ErrorContext(c.Context, "["+c.path+"] send response failed", slog.String("error", e.Error()))
 	}
 	return e
@@ -269,12 +305,20 @@ func (c *AllStreamServerContext[reqtype, resptype]) StopSend() {
 func (c *AllStreamServerContext[reqtype, resptype]) GetPath() string {
 	return c.sctx.GetPath()
 }
+
+// get the direct peer's addr(maybe a proxy)
 func (c *AllStreamServerContext[reqtype, resptype]) GetRemoteAddr() string {
 	return c.sctx.GetRemoteAddr()
 }
+
+// get the real peer's ip which will not be confused by proxy
 func (c *AllStreamServerContext[reqtype, resptype]) GetRealPeerIp() string {
 	return c.sctx.GetRealPeerIp()
 }
+
+// this function try to return the first caller's ip(mostly time it will be the user's ip)
+// if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
+// if failed,the direct peer's ip will be returned(maybe a proxy)
 func (c *AllStreamServerContext[reqtype, resptype]) GetClientIp() string {
 	return c.sctx.GetClientIp()
 }

@@ -6,38 +6,38 @@ import "pbex.proto";
 service test {
 	rpc call(callreq)returns(callresp){
 		option (pbex.method)="crpc";
-		option (pbex.crpc_midwares)="auth";
 	}
 	rpc clientstream(stream clientstreamreq)returns(clientstreamresp){
 		option (pbex.method)="crpc";
-		option (pbex.crpc_midwares)="auth";
 	}
 	rpc serverstream(serverstreamreq)returns(stream serverstreamresp){
 		option (pbex.method)="crpc";
-		option (pbex.crpc_midwares)="auth";
 	}
 	rpc allstream(stream allstreamreq)returns(stream allstreamresp){
 		option (pbex.method)="crpc";
-		option (pbex.crpc_midwares)="auth";
 	}
 }
 message callreq{
 	uint64 u64=1[(pbex.uint_gt)=10];
 }
 message callresp{
+	bool status=1;
 }
 message clientstreamreq{
 	uint64 u64=1[(pbex.uint_gt)=10];
 }
 message clientstreamresp{
+	bool status=1;
 }
 message serverstreamreq{
 	uint64 u64=1[(pbex.uint_gt)=10];
 }
 message serverstreamresp{
+	bool status=1;
 }
 message allstreamreq{
 	uint64 u64=1[(pbex.uint_gt)=10];
 }
 message allstreamresp{
+	bool status=1;
 }

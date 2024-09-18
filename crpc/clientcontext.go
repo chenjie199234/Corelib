@@ -2,6 +2,7 @@ package crpc
 
 import (
 	"context"
+	"io"
 	"log/slog"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -17,6 +18,7 @@ type CallContext struct {
 	s  *ServerForPick
 }
 
+// return io.EOF means server stop send
 func (c *CallContext) Recv() ([]byte, error) {
 	return c.rw.read()
 }
@@ -33,12 +35,15 @@ type StreamContext struct {
 	s  *ServerForPick
 }
 
+// return io.EOF means server stop recv
 func (c *StreamContext) Send(resp []byte) error {
 	return c.rw.send(&MsgBody{Body: resp})
 }
 func (c *StreamContext) StopSend() {
 	c.rw.closesend()
 }
+
+// return io.EOF means server stop send
 func (c *StreamContext) Recv() ([]byte, error) {
 	return c.rw.read()
 }
@@ -63,6 +68,7 @@ type ClientStreamClientContext[reqtype any] struct {
 	cctx *StreamContext
 }
 
+// return io.EOF means server stop recv
 func (c *ClientStreamClientContext[reqtype]) Send(req *reqtype) error {
 	var tmp any = req
 	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
@@ -81,16 +87,14 @@ func (c *ClientStreamClientContext[reqtype]) Send(req *reqtype) error {
 	}
 	d, _ := proto.Marshal(tmptmp)
 	e := c.cctx.Send(d)
-	if e != nil {
+	if e != nil && e != io.EOF {
 		slog.ErrorContext(c.Context, "["+c.path+"] send request failed", slog.String("error", e.Error()))
 	}
 	return e
 }
-
 func (c *ClientStreamClientContext[reqtype]) StopSend() {
 	c.cctx.StopSend()
 }
-
 func (c *ClientStreamClientContext[reqtype]) GetServerAddr() string {
 	return c.cctx.GetServerAddr()
 }
@@ -106,6 +110,7 @@ type ServerStreamClientContext[resptype any] struct {
 	cctx *CallContext
 }
 
+// return io.EOF means server stop send
 func (c *ServerStreamClientContext[resptype]) Recv() (*resptype, error) {
 	var resp any = new(resptype)
 	m, ok := resp.(protoreflect.ProtoMessage)
@@ -116,7 +121,9 @@ func (c *ServerStreamClientContext[resptype]) Recv() (*resptype, error) {
 	}
 	data, e := c.cctx.Recv()
 	if e != nil {
-		slog.ErrorContext(c.Context, "["+c.path+"] read response failed", slog.String("error", e.Error()))
+		if e != io.EOF {
+			slog.ErrorContext(c.Context, "["+c.path+"] read response failed", slog.String("error", e.Error()))
+		}
 		return nil, e
 	}
 	if e := proto.Unmarshal(data, m); e != nil {
@@ -125,11 +132,9 @@ func (c *ServerStreamClientContext[resptype]) Recv() (*resptype, error) {
 	}
 	return resp.(*resptype), nil
 }
-
 func (c *ServerStreamClientContext[resptype]) StopRecv() {
 	c.cctx.StopRecv()
 }
-
 func (c *ServerStreamClientContext[resptype]) GetServerAddr() string {
 	return c.cctx.GetServerAddr()
 }
@@ -146,6 +151,7 @@ type AllStreamClientContext[reqtype, resptype any] struct {
 	cctx *StreamContext
 }
 
+// return io.EOF means server stop recv
 func (c *AllStreamClientContext[reqtype, resptype]) Send(req *reqtype) error {
 	var tmp any = req
 	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
@@ -164,16 +170,16 @@ func (c *AllStreamClientContext[reqtype, resptype]) Send(req *reqtype) error {
 	}
 	d, _ := proto.Marshal(tmptmp)
 	e := c.cctx.Send(d)
-	if e != nil {
+	if e != nil && e != io.EOF {
 		slog.ErrorContext(c.Context, "["+c.path+"] send request failed", slog.String("error", e.Error()))
 	}
 	return e
 }
-
 func (c *AllStreamClientContext[reqtype, resptype]) StopSend() {
 	c.cctx.StopSend()
 }
 
+// return io.EOF means server stop send
 func (c *AllStreamClientContext[reqtype, resptype]) Recv() (*resptype, error) {
 	var resp any = new(resptype)
 	m, ok := resp.(protoreflect.ProtoMessage)
@@ -184,7 +190,9 @@ func (c *AllStreamClientContext[reqtype, resptype]) Recv() (*resptype, error) {
 	}
 	data, e := c.cctx.Recv()
 	if e != nil {
-		slog.ErrorContext(c.Context, "["+c.path+"] read response failed", slog.String("error", e.Error()))
+		if e != io.EOF {
+			slog.ErrorContext(c.Context, "["+c.path+"] read response failed", slog.String("error", e.Error()))
+		}
 		return nil, e
 	}
 	if e := proto.Unmarshal(data, m); e != nil {
@@ -193,7 +201,6 @@ func (c *AllStreamClientContext[reqtype, resptype]) Recv() (*resptype, error) {
 	}
 	return resp.(*resptype), nil
 }
-
 func (c *AllStreamClientContext[reqtype, resptype]) StopRecv() {
 	c.cctx.StopRecv()
 }

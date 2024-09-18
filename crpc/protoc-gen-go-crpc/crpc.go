@@ -501,6 +501,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("if e!=nil {")
 			g.P("return e")
 			g.P("}")
+			g.P("ctx.StopSend()")
 			g.P("if respbody,e = ctx.Recv();e!=nil{")
 			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] read response failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
 			g.P("}")
