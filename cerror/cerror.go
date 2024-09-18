@@ -18,8 +18,11 @@ func MakeCError(code int64, httpcode int32, msg string) *Error {
 	if code == 0 {
 		panic("error code can't be 0")
 	}
+	if httpcode < 400 {
+		panic("error's http code must >= 400")
+	}
 	if http.StatusText(int(httpcode)) == "" {
-		panic("unknown http code")
+		panic("error's http code unknown")
 	}
 	return &Error{
 		Code:     code,

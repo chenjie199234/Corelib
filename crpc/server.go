@@ -315,7 +315,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		if len(msg.H.Tracedata) == 0 || msg.H.Tracedata["TraceID"] == "" || msg.H.Tracedata["SpanID"] == "" {
 			basectx, span = trace.NewSpan(p, "Corelib.Crpc", trace.Server, nil)
 			span.GetParentSpanData().SetStateKV("app", "unknown")
-			span.GetParentSpanData().SetStateKV("host", p.GetRealPeerIP())
+			span.GetParentSpanData().SetStateKV("host", peerip)
 			span.GetParentSpanData().SetStateKV("method", "unknown")
 			span.GetParentSpanData().SetStateKV("path", "unknown")
 		} else {
@@ -452,6 +452,14 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 						slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
 					workctx.Abort(cerror.ErrPanic)
 				}
+				c.Lock()
+				workctx.cancel()
+				delete(c.ctxs, msg.H.Callid)
+				c.Unlock()
+				if workctx.finish == 0 {
+					rw.closereadwrite(true, nil)
+				}
+
 				span.Finish(workctx.e)
 				peername, _ := span.GetParentSpanData().GetStateKV("app")
 				monitor.CrpcServerMonitor(peername, "CRPC", msg.H.Path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
@@ -463,11 +471,6 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 					break
 				}
 			}
-			c.Lock()
-			workctx.cancel()
-			delete(c.ctxs, msg.H.Callid)
-			c.Unlock()
-			rw.closereadwrite(true, nil)
 		}()
 	case MsgType_Send:
 		c.RLock()

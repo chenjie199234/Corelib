@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net/http"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -25,18 +27,25 @@ type ServerContext struct {
 	e      *cerror.Error
 }
 
+// means stop recv and send
 func (c *ServerContext) Abort(e error) {
 	if atomic.SwapInt32(&c.finish, 1) != 0 {
 		return
 	}
-	ee := cerror.Convert(e)
-	if ee == nil {
-		c.rw.closesend()
-	} else if ee.Httpcode < 400 || ee.Httpcode > 999 {
-		panic("[crpc.Context.Abort] http code must in [400,999)")
-	} else {
-		c.e = ee
-		c.rw.send(&MsgBody{Error: c.e})
+	httpcode := 0
+	if ee := cerror.Convert(e); ee != nil {
+		if http.StatusText(int(ee.Httpcode)) == "" || ee.Httpcode < 400 {
+			c.e = cerror.ErrPanic
+			c.rw.send(&MsgBody{Error: c.e})
+			httpcode = int(ee.Httpcode)
+		} else {
+			c.e = ee
+			c.rw.send(&MsgBody{Error: c.e})
+		}
+	}
+	c.rw.closereadwrite(true, c.e)
+	if httpcode != 0 {
+		panic("[crpc.context.Abort] unknown http code: " + strconv.FormatInt(int64(httpcode), 10))
 	}
 }
 
