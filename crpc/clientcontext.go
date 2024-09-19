@@ -19,6 +19,8 @@ type CallContext struct {
 }
 
 // return io.EOF means server stop send
+// return cerror.ErrCanceled means self stop recv anymore in this Context
+// return cerror.ErrClosed means connection between client and server is closed
 func (c *CallContext) Recv() ([]byte, error) {
 	return c.rw.recv()
 }
@@ -36,6 +38,8 @@ type StreamContext struct {
 }
 
 // return io.EOF means server stop recv
+// return cerror.ErrCanceled means self stop send anymore in this Context
+// return cerror.ErrClosed means connection between client and server is closed
 func (c *StreamContext) Send(resp []byte) error {
 	return c.rw.send(&MsgBody{Body: resp})
 }
@@ -44,6 +48,8 @@ func (c *StreamContext) StopSend() {
 }
 
 // return io.EOF means server stop send
+// return cerror.ErrCanceled means self stop recv anymore in this Context
+// return cerror.ErrClosed means connection between client and server is closed
 func (c *StreamContext) Recv() ([]byte, error) {
 	return c.rw.recv()
 }
@@ -69,6 +75,8 @@ type ClientStreamClientContext[reqtype any] struct {
 }
 
 // return io.EOF means server stop recv
+// return cerror.ErrCanceled means self stop send anymore in this Context
+// return cerror.ErrClosed means connection between client and server is closed
 func (c *ClientStreamClientContext[reqtype]) Send(req *reqtype) error {
 	var tmp any = req
 	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
@@ -111,6 +119,8 @@ type ServerStreamClientContext[resptype any] struct {
 }
 
 // return io.EOF means server stop send
+// return cerror.ErrCanceled means self stop recv anymore in this Context
+// return cerror.ErrClosed means connection between client and server is closed
 func (c *ServerStreamClientContext[resptype]) Recv() (*resptype, error) {
 	var resp any = new(resptype)
 	m, ok := resp.(protoreflect.ProtoMessage)
@@ -152,6 +162,8 @@ type AllStreamClientContext[reqtype, resptype any] struct {
 }
 
 // return io.EOF means server stop recv
+// return cerror.ErrCanceled means self stop send anymore in this Context
+// return cerror.ErrClosed means connection between client and server is closed
 func (c *AllStreamClientContext[reqtype, resptype]) Send(req *reqtype) error {
 	var tmp any = req
 	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
@@ -180,6 +192,8 @@ func (c *AllStreamClientContext[reqtype, resptype]) StopSend() {
 }
 
 // return io.EOF means server stop send
+// return cerror.ErrCanceled means self stop recv anymore in this Context
+// return cerror.ErrClosed means connection between client and server is closed
 func (c *AllStreamClientContext[reqtype, resptype]) Recv() (*resptype, error) {
 	var resp any = new(resptype)
 	m, ok := resp.(protoreflect.ProtoMessage)

@@ -139,7 +139,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				method.Comments.Trailing)
 		}
 		if !method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
-			g.P(method.Comments.Leading, "//Context is *crpc.ServerStreamServerContext["+method.Output.GoIdent.GoName+"]\n",
+			g.P(method.Comments.Leading, "//Context is *crpc.ServerStreamServerContext["+method.Output.GoIdent.GoName+"]\n//Warning!Context will keep working when the server is graceful stopping and it will block the graceful stop until all Handler return\n",
 				method.GoName,
 				"(",
 				g.QualifiedGoIdent(contextPackage.Ident("Context")),
@@ -149,7 +149,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				method.Comments.Trailing)
 		}
 		if method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
-			g.P(method.Comments.Leading, "//Context is *crpc.ClientStreamServerContext["+method.Input.GoIdent.GoName+"]\n",
+			g.P(method.Comments.Leading, "//Context is *crpc.ClientStreamServerContext["+method.Input.GoIdent.GoName+"]\n//Warning!Context will keep working when the server is graceful stopping and it will block the graceful stop until all Handler return\n",
 				method.GoName,
 				"(",
 				g.QualifiedGoIdent(contextPackage.Ident("Context")),
@@ -159,7 +159,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				method.Comments.Trailing)
 		}
 		if method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
-			g.P(method.Comments.Leading, "//Context is *crpc.AllStreamServerContext["+method.Input.GoIdent.GoName+","+method.Output.GoIdent.GoName+"]\n",
+			g.P(method.Comments.Leading, "//Context is *crpc.AllStreamServerContext["+method.Input.GoIdent.GoName+","+method.Output.GoIdent.GoName+"]\n//Warning!Context will keep working when the server is graceful stopping and it will block the graceful stop until all Handler return\n",
 				method.GoName,
 				"(",
 				g.QualifiedGoIdent(contextPackage.Ident("Context")),
@@ -382,7 +382,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				method.Comments.Trailing)
 		}
 		if !method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
-			g.P(method.Comments.Leading,
+			g.P(method.Comments.Leading, "//Warning!handler and Context param in handler will keep working when the client is graceful stopping and it will block the graceful stop until all Handler return\n",
 				method.GoName,
 				"(ctx ",
 				g.QualifiedGoIdent(contextPackage.Ident("Context")),
@@ -392,7 +392,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				method.Comments.Trailing)
 		}
 		if method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
-			g.P(method.Comments.Leading,
+			g.P(method.Comments.Leading, "//Warning!handler and Context param in handler will keep working when the client is graceful stopping and it will block the graceful stop until all Handler return\n",
 				method.GoName,
 				"(ctx ",
 				g.QualifiedGoIdent(contextPackage.Ident("Context")),
@@ -402,7 +402,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				method.Comments.Trailing)
 		}
 		if method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
-			g.P(method.Comments.Leading,
+			g.P(method.Comments.Leading, "//Warning!handler and Context param in handler will keep working when the client is graceful stopping and it will block the graceful stop until all Handler return\n",
 				method.GoName,
 				"(ctx ",
 				g.QualifiedGoIdent(contextPackage.Ident("Context")),
