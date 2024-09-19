@@ -14,6 +14,7 @@ import (
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/trace"
+	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/waitwake"
 
 	"google.golang.org/grpc/attributes"
@@ -294,7 +295,20 @@ func (b *corelibBalancer) rebuildpicker(serveraddr string, OnOff bool) {
 	}
 }
 
-func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickResult, e error) {
+	if err := b.c.stop.Add(1); e != nil {
+		if err == graceful.ErrClosing {
+			e = cerror.ErrClientClosing
+		} else {
+			e = cerror.ErrBusy
+		}
+		return
+	}
+	defer func() {
+		if pickinfo.SubConn == nil || pickinfo.Done == nil {
+			b.c.stop.DoneOne()
+		}
+	}()
 	span := trace.SpanFromContext(info.Ctx)
 	forceaddr, _ := info.Ctx.Value(forceaddrkey{}).(string)
 	refresh := false
@@ -304,48 +318,53 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 			if dl, ok := info.Ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic
 				server.GetServerPickInfo().Done(false)
-				return balancer.PickResult{}, cerror.ErrDeadlineExceeded
+				e = cerror.ErrDeadlineExceeded
+				return
 			}
 			span.GetSelfSpanData().SetStateKV("host", server.GetServerAddr())
-			return balancer.PickResult{
-				SubConn: server.(*ServerForPick).subconn,
-				Done: func(doneinfo balancer.DoneInfo) {
-					e := transGrpcError(doneinfo.Err)
-					if cpuusagestrs := doneinfo.Trailer.Get("Cpu-Usage"); len(cpuusagestrs) > 0 && cpuusagestrs[0] != "" {
-						cpuusage, _ := strconv.ParseFloat(cpuusagestrs[0], 64)
-						server.GetServerPickInfo().UpdateCPU(cpuusage)
+			pickinfo.SubConn = server.(*ServerForPick).subconn
+			pickinfo.Done = func(doneinfo balancer.DoneInfo) {
+				e := transGrpcError(doneinfo.Err)
+				if cpuusagestrs := doneinfo.Trailer.Get("Cpu-Usage"); len(cpuusagestrs) > 0 && cpuusagestrs[0] != "" {
+					cpuusage, _ := strconv.ParseFloat(cpuusagestrs[0], 64)
+					server.GetServerPickInfo().UpdateCPU(cpuusage)
+				}
+				span.Finish(e)
+				server.GetServerPickInfo().Done(e == nil)
+				monitor.GrpcClientMonitor(b.c.server, "GRPC", info.FullMethodName, e, uint64(span.GetEnd()-span.GetStart()))
+				if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
+					if atomic.SwapInt32(&server.(*ServerForPick).closing, 1) == 0 {
+						//set the lowest pick priority
+						server.(*ServerForPick).Pickinfo.SetDiscoverServerOffline(0)
+						//rebuild picker
+						b.rebuildpicker(server.(*ServerForPick).addr, false)
+						//triger discover
+						b.c.resolver.Now()
 					}
-					span.Finish(e)
-					server.GetServerPickInfo().Done(e == nil)
-					monitor.GrpcClientMonitor(b.c.server, "GRPC", info.FullMethodName, e, uint64(span.GetEnd()-span.GetStart()))
-					if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
-						if atomic.SwapInt32(&server.(*ServerForPick).closing, 1) == 0 {
-							//set the lowest pick priority
-							server.(*ServerForPick).Pickinfo.SetDiscoverServerOffline(0)
-							//rebuild picker
-							b.rebuildpicker(server.(*ServerForPick).addr, false)
-							//triger discover
-							b.c.resolver.Now()
-						}
-					}
-				},
-			}, nil
+				}
+				b.c.stop.DoneOne()
+			}
+			return
 		}
 		if forceaddr == "" {
 			if refresh {
-				if b.lastResolveError != nil {
-					return balancer.PickResult{}, b.lastResolveError
+				e = b.lastResolveError
+				if e == nil {
+					e = cerror.ErrNoserver
 				}
-				return balancer.PickResult{}, cerror.ErrNoserver
+				return
 			}
-			if e := b.ww.Wait(info.Ctx, "CALL", b.c.resolver.Now, nil); e != nil {
-				if e == context.DeadlineExceeded {
-					return balancer.PickResult{}, cerror.ErrDeadlineExceeded
-				} else if e == context.Canceled {
-					return balancer.PickResult{}, cerror.ErrCanceled
+			if err := b.ww.Wait(info.Ctx, "CALL", b.c.resolver.Now, nil); e != nil {
+				if err == context.DeadlineExceeded {
+					e = cerror.ErrDeadlineExceeded
+					return
+				} else if err == context.Canceled {
+					e = cerror.ErrCanceled
+					return
 				} else {
 					//this is impossible
-					return balancer.PickResult{}, cerror.Convert(e)
+					e = cerror.Convert(e)
+					return
 				}
 			}
 			refresh = true
@@ -358,19 +377,23 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, err
 		if !ok { //the specific server not exist
 			if refresh {
 				b.lker.RUnlock()
-				if b.lastResolveError != nil {
-					return balancer.PickResult{}, b.lastResolveError
+				e = b.lastResolveError
+				if e == nil {
+					e = cerror.ErrNoSpecificserver
 				}
-				return balancer.PickResult{}, cerror.ErrNoSpecificserver
-			} else if e := b.ww.Wait(info.Ctx, "CALL", b.c.resolver.Now, b.lker.RUnlock); e != nil { //wait the discover to refresh the server info
-				return balancer.PickResult{}, cerror.Convert(e)
+				return
+			} else if err := b.ww.Wait(info.Ctx, "CALL", b.c.resolver.Now, b.lker.RUnlock); err != nil { //wait the discover to refresh the server info
+				e = cerror.Convert(e)
+				return
 			} else {
 				refresh = true
 			}
 		} else if s.closing == 1 { //the specific server exist but it is closing
-			return balancer.PickResult{}, cerror.ErrNoSpecificserver
-		} else if e := b.ww.Wait(info.Ctx, "SPECIFIC:"+forceaddr, b.c.resolver.Now, b.lker.RUnlock); e != nil { //the specific server exist but is connecting,we need to wait
-			return balancer.PickResult{}, cerror.Convert(e)
+			e = cerror.ErrNoSpecificserver
+			return
+		} else if err := b.ww.Wait(info.Ctx, "SPECIFIC:"+forceaddr, b.c.resolver.Now, b.lker.RUnlock); err != nil { //the specific server exist but is connecting,we need to wait
+			e = cerror.Convert(e)
+			return
 		}
 	}
 }

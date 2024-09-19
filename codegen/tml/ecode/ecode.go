@@ -34,8 +34,9 @@ var (
 	ErrBan               = cerror.ErrBan               //10010 // http code 403
 	ErrBusy              = cerror.ErrBusy              //10011 // http code 503
 	ErrNotExist          = cerror.ErrNotExist          //10012 // http code 404
-	ErrPasswordWrong     = cerror.ErrPasswordWrong     //10013 // http code 400
-	ErrPasswordLength    = cerror.ErrPasswordLength    //10014 // http code 400
+	ErrAlreadyExist      = cerror.ErrAlreadyExist      //10013 // http code 400
+	ErrPasswordWrong     = cerror.ErrPasswordWrong     //10014 // http code 400
+	ErrPasswordLength    = cerror.ErrPasswordLength    //10015 // http code 400
 
 	ErrBusiness1 = cerror.MakeCError(20001, http.StatusBadRequest, "business error 1")
 )

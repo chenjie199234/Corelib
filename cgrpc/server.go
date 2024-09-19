@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -33,7 +32,7 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
-type OutsideHandler func(*Context)
+type OutsideHandler func(*ServerContext)
 
 type ServerConfig struct {
 	//the default timeout for every rpc call,<=0 means no timeout
@@ -74,12 +73,11 @@ type CGrpcServer struct {
 	c              *ServerConfig
 	self           string
 	global         []OutsideHandler
-	ctxpool        *sync.Pool
 	server         *grpc.Server
 	clientnum      int32
+	reqnum         int64
 	services       map[string]*grpc.ServiceDesc
 	handlerTimeout map[string]time.Duration
-	totalreqnum    int64
 }
 
 // if tlsc is not nil,the tls will be actived
@@ -103,7 +101,6 @@ func NewCGrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tls
 		c:              c,
 		self:           selffullname,
 		global:         make([]OutsideHandler, 0),
-		ctxpool:        &sync.Pool{},
 		services:       make(map[string]*grpc.ServiceDesc),
 		handlerTimeout: make(map[string]time.Duration),
 	}
@@ -167,7 +164,7 @@ func (this *CGrpcServer) GetClientNum() int32 {
 	return this.clientnum
 }
 func (this *CGrpcServer) GetReqNum() int64 {
-	return this.totalreqnum
+	return this.reqnum
 }
 
 // force - false graceful,wait all requests finish,true - not graceful,close all connections immediately
@@ -212,7 +209,7 @@ func (s *CGrpcServer) Use(globalMids ...OutsideHandler) {
 }
 
 // thread unsafe
-func (s *CGrpcServer) RegisterHandler(sname, mname string, handlers ...OutsideHandler) {
+func (s *CGrpcServer) RegisterHandler(sname, mname string, clientstream, serverstream bool, handlers ...OutsideHandler) {
 	service, ok := s.services[sname]
 	if !ok {
 		service = &grpc.ServiceDesc{
@@ -224,25 +221,34 @@ func (s *CGrpcServer) RegisterHandler(sname, mname string, handlers ...OutsideHa
 		}
 		s.services[sname] = service
 	}
-	service.Methods = append(service.Methods, grpc.MethodDesc{
-		MethodName: mname,
-		Handler:    s.insidehandler(sname, mname, handlers...),
-	})
+	if clientstream || serverstream {
+		service.Streams = append(service.Streams, grpc.StreamDesc{
+			StreamName:    mname,
+			Handler:       s.streamhandler(sname, mname, handlers...),
+			ClientStreams: clientstream,
+			ServerStreams: serverstream,
+		})
+	} else {
+		service.Methods = append(service.Methods, grpc.MethodDesc{
+			MethodName: mname,
+			Handler:    s.pingponghandler(sname, mname, handlers...),
+		})
+	}
 }
-func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHandler) func(interface{}, context.Context, func(interface{}) error, grpc.UnaryServerInterceptor) (interface{}, error) {
+func (s *CGrpcServer) pingponghandler(sname, mname string, handlers ...OutsideHandler) func(interface{}, context.Context, func(any) error, grpc.UnaryServerInterceptor) (interface{}, error) {
 	path := "/" + sname + "/" + mname
 	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
 	copy(totalhandlers, s.global)
 	copy(totalhandlers[len(s.global):], handlers)
-	return func(_ interface{}, ctx context.Context, decode func(interface{}) error, _ grpc.UnaryServerInterceptor) (resp interface{}, e error) {
-		gmd, ok := gmetadata.FromIncomingContext(ctx)
+	return func(_ interface{}, basectx context.Context, decode func(any) error, _ grpc.UnaryServerInterceptor) (resp interface{}, e error) {
+		gmd, ok := gmetadata.FromIncomingContext(basectx)
 		if ok {
 			if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != s.self {
 				return nil, cerror.ErrTarget
 			}
 		}
-		atomic.AddInt64(&s.totalreqnum, 1)
-		defer atomic.AddInt64(&s.totalreqnum, -1)
+		atomic.AddInt64(&s.reqnum, 1)
+		defer atomic.AddInt64(&s.reqnum, -1)
 		//trace
 		peerip := ""
 		if ok {
@@ -253,10 +259,12 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			}
 		}
 		if peerip == "" {
-			conninfo := ctx.Value(serverconnkey{}).(*stats.ConnTagInfo)
+			conninfo := basectx.Value(serverconnkey{}).(*stats.ConnTagInfo)
 			remoteaddr := conninfo.RemoteAddr.String()
 			peerip = remoteaddr[:strings.LastIndex(remoteaddr, ":")]
 		}
+
+		//deal trace data
 		var span *trace.Span
 		if ok {
 			if traceparentstr := gmd.Get("traceparent"); len(traceparentstr) != 0 && traceparentstr[0] != "" {
@@ -269,7 +277,7 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 					return nil, cerror.ErrReq
 				}
 				parent := trace.NewSpanData(tid, psid)
-				if tracestatestr := gmd.Get("Tracestate"); len(tracestatestr) != 0 && tracestatestr[0] != "" {
+				if tracestatestr := gmd.Get("tracestate"); len(tracestatestr) != 0 && tracestatestr[0] != "" {
 					tmp, e := trace.ParseTraceState(tracestatestr[0])
 					if e != nil {
 						slog.ErrorContext(nil, "[cgrpc.server] trace data format wrong",
@@ -306,9 +314,9 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 						parent.SetStateKV("path", "unknown")
 					}
 				}
-				ctx, span = trace.NewSpan(ctx, "Corelib.CGrpc", trace.Server, parent)
+				basectx, span = trace.NewSpan(basectx, "Corelib.CGrpc", trace.Server, parent)
 			} else {
-				ctx, span = trace.NewSpan(ctx, "Corelib.CGrpc", trace.Server, nil)
+				basectx, span = trace.NewSpan(basectx, "Corelib.CGrpc", trace.Server, nil)
 				span.GetParentSpanData().SetStateKV("app", "unknown")
 				span.GetParentSpanData().SetStateKV("host", peerip)
 				span.GetParentSpanData().SetStateKV("method", "unknown")
@@ -319,14 +327,15 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 			span.GetSelfSpanData().SetStateKV("method", "GRPC")
 			span.GetSelfSpanData().SetStateKV("path", path)
 		}
-		//metadata
-		var cmd map[string]string
+
+		//deal metadata
+		var md map[string]string
 		if ok {
 			data := gmd.Get("Core-Metadata")
 			if len(data) != 0 {
-				cmd = make(map[string]string)
-				if e := json.Unmarshal(common.STB(data[0]), &cmd); e != nil {
-					slog.ErrorContext(ctx, "[cgrpc.server] metadata format wrong",
+				md = make(map[string]string)
+				if e := json.Unmarshal(common.STB(data[0]), &md); e != nil {
+					slog.ErrorContext(basectx, "[cgrpc.server] metadata format wrong",
 						slog.String("cip", peerip),
 						slog.String("path", path),
 						slog.String("metadata", data[0]))
@@ -334,23 +343,28 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 				}
 			}
 		}
-		if cmd == nil {
-			cmd = map[string]string{"Client-IP": peerip}
-		} else if _, ok := cmd["Client-IP"]; !ok {
-			cmd["Client-IP"] = peerip
+		if md == nil {
+			md = map[string]string{"Client-IP": peerip}
+		} else if _, ok := md["Client-IP"]; !ok {
+			md["Client-IP"] = peerip
 		}
+		basectx = cmetadata.SetMetadata(basectx, md)
+
 		//timeout
 		servertimeout := s.getHandlerTimeout(path)
 		if servertimeout > 0 {
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithDeadline(ctx, time.Now().Add(servertimeout))
+			basectx, cancel = context.WithDeadline(basectx, time.Now().Add(servertimeout))
 			defer cancel()
 		}
-		workctx := s.getcontext(cmetadata.SetMetadata(ctx, cmd), path, peerip, totalhandlers, decode)
-		paniced := true
+		workctx := &ServerContext{
+			Context:    basectx,
+			decodefunc: decode,
+			path:       path,
+			peerip:     peerip,
+		}
 		defer func() {
-			if paniced {
-				e := recover()
+			if e := recover(); e != nil {
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
 				slog.ErrorContext(workctx, "[cgrpc.server] panic",
@@ -358,20 +372,179 @@ func (s *CGrpcServer) insidehandler(sname, mname string, handlers ...OutsideHand
 					slog.String("path", path),
 					slog.Any("panic", e),
 					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
-				workctx.e = cerror.ErrPanic
-				workctx.resp = nil
+				workctx.Abort(cerror.ErrPanic)
 			}
-			grpc.SetTrailer(ctx, gmetadata.New(map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}))
+			grpc.SetTrailer(basectx, gmetadata.New(map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}))
 			span.Finish(workctx.e)
 			peername, _ := span.GetParentSpanData().GetStateKV("app")
 			monitor.GrpcServerMonitor(peername, "GRPC", path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
-			resp = workctx.resp
 			if workctx.e != nil {
 				e = workctx.e
+			} else {
+				resp = workctx.resp
 			}
 		}()
-		workctx.run()
-		paniced = false
+		for _, handler := range totalhandlers {
+			handler(workctx)
+			if workctx.finish == 1 {
+				break
+			}
+		}
+		return
+	}
+}
+func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHandler) func(srv any, stream grpc.ServerStream) error {
+	path := "/" + sname + "/" + mname
+	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
+	copy(totalhandlers, s.global)
+	copy(totalhandlers[len(s.global):], handlers)
+	return func(_ any, stream grpc.ServerStream) (e error) {
+		basectx := stream.Context()
+		gmd, ok := gmetadata.FromIncomingContext(basectx)
+		if ok {
+			if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != s.self {
+				return cerror.ErrTarget
+			}
+		}
+		atomic.AddInt64(&s.reqnum, 1)
+		defer atomic.AddInt64(&s.reqnum, -1)
+		//trace
+		peerip := ""
+		if ok {
+			if forward := gmd.Get("X-Forwarded-For"); len(forward) > 0 && len(forward[0]) > 0 {
+				peerip = strings.TrimSpace(strings.Split(forward[0], ",")[0])
+			} else if realip := gmd.Get("X-Real-Ip"); len(realip) > 0 && len(realip[0]) > 0 {
+				peerip = strings.TrimSpace(realip[0])
+			}
+		}
+		if peerip == "" {
+			conninfo := basectx.Value(serverconnkey{}).(*stats.ConnTagInfo)
+			remoteaddr := conninfo.RemoteAddr.String()
+			peerip = remoteaddr[:strings.LastIndex(remoteaddr, ":")]
+		}
+
+		//deal trace data
+		var span *trace.Span
+		if ok {
+			if traceparentstr := gmd.Get("traceparent"); len(traceparentstr) != 0 && traceparentstr[0] != "" {
+				tid, psid, e := trace.ParseTraceParent(traceparentstr[0])
+				if e != nil {
+					slog.ErrorContext(nil, "[cgrpc.server] trace data format wrong",
+						slog.String("cip", peerip),
+						slog.String("path", path),
+						slog.String("trace_parent", traceparentstr[0]))
+					return cerror.ErrReq
+				}
+				parent := trace.NewSpanData(tid, psid)
+				if tracestatestr := gmd.Get("tracestate"); len(tracestatestr) != 0 && tracestatestr[0] != "" {
+					tmp, e := trace.ParseTraceState(tracestatestr[0])
+					if e != nil {
+						slog.ErrorContext(nil, "[cgrpc.server] trace data format wrong",
+							slog.String("cip", peerip),
+							slog.String("path", path),
+							slog.String("trace_state", tracestatestr[0]))
+						return cerror.ErrReq
+					}
+					var app, host, method, path bool
+					for k, v := range tmp {
+						switch k {
+						case "app":
+							app = true
+						case "host":
+							host = true
+							peerip = v
+						case "method":
+							method = true
+						case "path":
+							path = true
+						}
+						parent.SetStateKV(k, v)
+					}
+					if !app {
+						parent.SetStateKV("app", "unknown")
+					}
+					if !host {
+						parent.SetStateKV("host", peerip)
+					}
+					if !method {
+						parent.SetStateKV("method", "unknown")
+					}
+					if !path {
+						parent.SetStateKV("path", "unknown")
+					}
+				}
+				basectx, span = trace.NewSpan(basectx, "Corelib.CGrpc", trace.Server, parent)
+			} else {
+				basectx, span = trace.NewSpan(basectx, "Corelib.CGrpc", trace.Server, nil)
+				span.GetParentSpanData().SetStateKV("app", "unknown")
+				span.GetParentSpanData().SetStateKV("host", peerip)
+				span.GetParentSpanData().SetStateKV("method", "unknown")
+				span.GetParentSpanData().SetStateKV("path", "unknown")
+			}
+			span.GetSelfSpanData().SetStateKV("app", s.self)
+			span.GetSelfSpanData().SetStateKV("host", host.Hostip)
+			span.GetSelfSpanData().SetStateKV("method", "GRPC")
+			span.GetSelfSpanData().SetStateKV("path", path)
+		}
+
+		//deal metadata
+		var md map[string]string
+		if ok {
+			data := gmd.Get("Core-Metadata")
+			if len(data) != 0 {
+				md = make(map[string]string)
+				if e := json.Unmarshal(common.STB(data[0]), &md); e != nil {
+					slog.ErrorContext(basectx, "[cgrpc.server] metadata format wrong",
+						slog.String("cip", peerip),
+						slog.String("path", path),
+						slog.String("metadata", data[0]))
+					return cerror.ErrReq
+				}
+			}
+		}
+		if md == nil {
+			md = map[string]string{"Client-IP": peerip}
+		} else if _, ok := md["Client-IP"]; !ok {
+			md["Client-IP"] = peerip
+		}
+		basectx = cmetadata.SetMetadata(basectx, md)
+
+		//timeout
+		servertimeout := s.getHandlerTimeout(path)
+		if servertimeout > 0 {
+			var cancel context.CancelFunc
+			basectx, cancel = context.WithDeadline(basectx, time.Now().Add(servertimeout))
+			defer cancel()
+		}
+		workctx := &ServerContext{
+			Context: basectx,
+			stream:  stream,
+			path:    path,
+			peerip:  peerip,
+		}
+		defer func() {
+			if e := recover(); e != nil {
+				stack := make([]byte, 1024)
+				n := runtime.Stack(stack, false)
+				slog.ErrorContext(workctx, "[cgrpc.server] panic",
+					slog.String("cip", peerip),
+					slog.String("path", path),
+					slog.Any("panic", e),
+					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
+				workctx.Abort(cerror.ErrPanic)
+			}
+			grpc.SetTrailer(basectx, gmetadata.New(map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}))
+			span.Finish(workctx.e)
+			peername, _ := span.GetParentSpanData().GetStateKV("app")
+			monitor.GrpcServerMonitor(peername, "GRPC", path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
+			e = workctx.e
+		}()
+		for _, handler := range totalhandlers {
+			handler(workctx)
+			if workctx.finish == 1 {
+				break
+			}
+		}
 		return
 	}
 }

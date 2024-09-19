@@ -49,8 +49,9 @@ var (
 	ErrBan            = MakeCError(10010, http.StatusForbidden, "ban")
 	ErrBusy           = MakeCError(10011, http.StatusServiceUnavailable, "busy")
 	ErrNotExist       = MakeCError(10012, http.StatusNotFound, "not exist")
-	ErrPasswordWrong  = MakeCError(10013, http.StatusBadRequest, "password wrong")
-	ErrPasswordLength = MakeCError(10014, http.StatusBadRequest, "password length must <=32")
+	ErrAlreadyExist   = MakeCError(10013, http.StatusBadRequest, "already exist")
+	ErrPasswordWrong  = MakeCError(10014, http.StatusBadRequest, "password wrong")
+	ErrPasswordLength = MakeCError(10015, http.StatusBadRequest, "password length must <=32")
 )
 
 // convert std error,always -1

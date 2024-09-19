@@ -116,8 +116,6 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 		stop:     graceful.New(),
 	}
 	opts := make([]grpc.DialOption, 0, 10)
-	opts = append(opts, grpc.WithChainUnaryInterceptor(client.gracefulInterceptor, client.timeoutInterceptor, client.callInterceptor))
-	opts = append(opts, grpc.WithChainStreamInterceptor())
 	opts = append(opts, experimental.WithBufferPool(bpool.GetPool()))
 	opts = append(opts, grpc.WithDisableRetry())
 	if tlsc == nil {
@@ -194,40 +192,16 @@ func WithForceAddr(ctx context.Context, forceaddr string) context.Context {
 }
 
 func (c *CGrpcClient) Invoke(ctx context.Context, path string, req, reply any, opts ...grpc.CallOption) error {
-	return c.conn.Invoke(ctx, path, req, reply, opts...)
-}
-
-// TDOD
-// In distributed system,this is not recommend.We should try our best to keep the program stateless.
-func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	stream, e := c.conn.NewStream(ctx, desc, path, opts...)
-	return stream, transGrpcError(e)
-}
-
-func (c *CGrpcClient) gracefulInterceptor(ctx context.Context, path string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	if e := c.stop.Add(1); e != nil {
-		if e == graceful.ErrClosing {
-			return cerror.ErrClientClosing
-		}
-		return cerror.ErrBusy
-	}
-	defer c.stop.DoneOne()
-	return invoker(ctx, path, req, reply, cc, opts...)
-}
-func (c *CGrpcClient) timeoutInterceptor(ctx context.Context, path string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	if c.c.GlobalTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
 		defer cancel()
 	}
-	return invoker(ctx, path, req, reply, cc, opts...)
-}
-func (c *CGrpcClient) callInterceptor(ctx context.Context, path string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	cmd := cmetadata.GetMetadata(ctx)
+	md := cmetadata.GetMetadata(ctx)
 	gmd := gmetadata.New(nil)
 	gmd.Set("Core-Target", c.server)
-	if len(cmd) > 0 {
-		d, _ := json.Marshal(cmd)
+	if len(md) > 0 {
+		d, _ := json.Marshal(md)
 		gmd.Set("Core-Metadata", common.BTS(d))
 	}
 	for {
@@ -243,22 +217,59 @@ func (c *CGrpcClient) callInterceptor(ctx context.Context, path string, req, rep
 		span.GetSelfSpanData().SetStateKV("path", path)
 		gmd.Set("traceparent", span.GetSelfSpanData().FormatTraceParent())
 		gmd.Set("tracestate", span.GetParentSpanData().FormatTraceState())
-		e := transGrpcError(invoker(gmetadata.NewOutgoingContext(ctx, gmd), path, req, reply, cc, opts...))
+		e := transGrpcError(c.conn.Invoke(gmetadata.NewOutgoingContext(ctx, gmd), path, req, reply))
 		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 			continue
 		}
-		//after transGrpcError the e's type is *cerror.Error
-		//when it return to the error interface,will make the return value always not nil
-		//this is the interface's feature
+		//fix the interface nil problem
 		if e == nil {
 			return nil
 		}
 		return e
 	}
 }
+
+func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	if c.c.GlobalTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
+		defer cancel()
+	}
+	md := cmetadata.GetMetadata(ctx)
+	gmd := gmetadata.New(nil)
+	gmd.Set("Core-Target", c.server)
+	if len(md) > 0 {
+		d, _ := json.Marshal(md)
+		gmd.Set("Core-Metadata", common.BTS(d))
+	}
+	for {
+		ctx, span := trace.NewSpan(ctx, "Corelib.CGrpc", trace.Client, nil)
+		if span.GetParentSpanData().IsEmpty() {
+			span.GetParentSpanData().SetStateKV("app", c.self)
+			span.GetParentSpanData().SetStateKV("host", host.Hostip)
+			span.GetParentSpanData().SetStateKV("method", "unknown")
+			span.GetParentSpanData().SetStateKV("path", "unknown")
+		}
+		span.GetSelfSpanData().SetStateKV("app", c.server)
+		span.GetSelfSpanData().SetStateKV("method", "GRPC")
+		span.GetSelfSpanData().SetStateKV("path", path)
+		gmd.Set("traceparent", span.GetSelfSpanData().FormatTraceParent())
+		gmd.Set("tracestate", span.GetParentSpanData().FormatTraceState())
+		stream, e := c.conn.NewStream(ctx, desc, path, opts...)
+		ee := transGrpcError(e)
+		if cerror.Equal(ee, cerror.ErrServerClosing) || cerror.Equal(ee, cerror.ErrTarget) {
+			continue
+		}
+		//fix the interface nil problem
+		if ee != nil {
+			return nil, ee
+		}
+		return stream, nil
+	}
+}
 func transGrpcError(e error) *cerror.Error {
-	if e == nil {
-		return nil
+	if ee, ok := e.(*cerror.Error); ok {
+		return ee
 	}
 	s, _ := status.FromError(e)
 	if s == nil {
@@ -274,13 +285,13 @@ func transGrpcError(e error) *cerror.Error {
 	case codes.Unknown:
 		return cerror.Decode(s.Message())
 	case codes.InvalidArgument:
-		return cerror.MakeCError(-1, http.StatusBadRequest, s.Message())
+		return cerror.ErrReq
 	case codes.NotFound:
-		return cerror.MakeCError(-1, http.StatusNotFound, s.Message())
+		return cerror.ErrNotExist
 	case codes.AlreadyExists:
-		return cerror.MakeCError(-1, http.StatusBadRequest, s.Message())
+		return cerror.ErrAlreadyExist
 	case codes.PermissionDenied:
-		return cerror.MakeCError(-1, http.StatusForbidden, s.Message())
+		return cerror.ErrPermission
 	case codes.ResourceExhausted:
 		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
 	case codes.FailedPrecondition:
@@ -290,7 +301,7 @@ func transGrpcError(e error) *cerror.Error {
 	case codes.OutOfRange:
 		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
 	case codes.Unimplemented:
-		return cerror.MakeCError(-1, http.StatusNotImplemented, s.Message())
+		return cerror.ErrNoapi
 	case codes.Internal:
 		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
 	case codes.Unavailable:
