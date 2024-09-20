@@ -379,9 +379,11 @@ func (s *CGrpcServer) pingponghandler(sname, mname string, handlers ...OutsideHa
 			peername, _ := span.GetParentSpanData().GetStateKV("app")
 			monitor.GrpcServerMonitor(peername, "GRPC", path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
 			if workctx.e != nil {
+				resp = nil
 				e = workctx.e
 			} else {
 				resp = workctx.resp
+				e = nil
 			}
 		}()
 		for _, handler := range totalhandlers {

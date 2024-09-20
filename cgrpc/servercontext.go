@@ -44,6 +44,23 @@ func (c *ServerContext) Abort(e error) {
 		panic("[cgrpc.Context.Abort] unknown http code: " + strconv.Itoa(httpcode))
 	}
 }
+
+// Warning!this function is only used for generated code,don't use it in any other place
+func (c *ServerContext) Read(req any) error {
+	if c.stream != nil {
+		return c.stream.RecvMsg(req)
+	}
+	return c.decodefunc(req)
+}
+
+// Warning!this function is only used for generated code,don't use it in any other place
+func (c *ServerContext) Write(resp any) error {
+	if c.stream != nil {
+		return c.stream.SendMsg(resp)
+	}
+	c.resp = resp
+	return nil
+}
 func (c *ServerContext) GetMethod() string {
 	return "GRPC"
 }
@@ -72,6 +89,9 @@ func (c *ServerContext) GetClientIp() string {
 
 // ----------------------------------------------- no stream context ---------------------------------------------
 func NewNoStreamServerContext(ctx *ServerContext) *NoStreamServerContext {
+	if ctx.decodefunc == nil {
+		return nil
+	}
 	return &NoStreamServerContext{Context: ctx.Context, sctx: ctx}
 }
 
@@ -174,6 +194,7 @@ type ServerStreamServerContext[resptype any] struct {
 	sctx *ServerContext
 }
 
+// Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
 	e := c.sctx.stream.SendMsg(resp)
 	if e != nil && e != io.EOF {
@@ -238,6 +259,8 @@ func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 	}
 	return req.(*reqtype), nil
 }
+
+// Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *AllStreamServerContext[reqtype, resptype]) Send(resp *resptype) error {
 	e := c.sctx.stream.SendMsg(resp)
 	if e != nil && e != io.EOF {

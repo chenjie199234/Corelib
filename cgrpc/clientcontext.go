@@ -26,6 +26,11 @@ type ClientStreamClientContext[reqtype any] struct {
 	stream      grpc.ClientStream
 }
 
+func (c *ClientStreamClientContext[reqtype]) GetPath() string {
+	return c.path
+}
+
+// Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *ClientStreamClientContext[reqtype]) Send(req *reqtype) error {
 	var tmp any = req
 	if c.validatereq {
@@ -63,6 +68,10 @@ type ServerStreamClientContext[resptype any] struct {
 	stream grpc.ClientStream
 }
 
+func (c *ServerStreamClientContext[resptype]) GetPath() string {
+	return c.path
+}
+
 func (c *ServerStreamClientContext[resptype]) Recv() (*resptype, error) {
 	resp := new(resptype)
 	if e := c.stream.RecvMsg(resp); e != nil {
@@ -96,6 +105,10 @@ type AllStreamClientContext[reqtype, resptype any] struct {
 	stream      grpc.ClientStream
 }
 
+func (c *AllStreamClientContext[reqtype, resptype]) GetPath() string {
+	return c.path
+}
+
 func (c *AllStreamClientContext[reqtype, resptype]) Recv() (*resptype, error) {
 	resp := new(resptype)
 	if e := c.stream.RecvMsg(resp); e != nil {
@@ -106,6 +119,8 @@ func (c *AllStreamClientContext[reqtype, resptype]) Recv() (*resptype, error) {
 	}
 	return resp, nil
 }
+
+// Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *AllStreamClientContext[reqtype, resptype]) Send(req *reqtype) error {
 	var tmp any = req
 	if c.validatereq {

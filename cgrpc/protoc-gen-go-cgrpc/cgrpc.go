@@ -125,9 +125,46 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if !need {
 			continue
 		}
-		g.P(method.Comments.Leading,
-			method.GoName, "(", g.QualifiedGoIdent(contextPackage.Ident("Context")), ",*", g.QualifiedGoIdent(method.Input.GoIdent), ")(*", g.QualifiedGoIdent(method.Output.GoIdent), ",error)",
-			method.Comments.Trailing)
+		if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
+			g.P(method.Comments.Leading, "//Context is *cgrpc.NoStreamServerContext\n",
+				method.GoName,
+				"(",
+				g.QualifiedGoIdent(contextPackage.Ident("Context")),
+				",*",
+				g.QualifiedGoIdent(method.Input.GoIdent),
+				")(*",
+				g.QualifiedGoIdent(method.Output.GoIdent),
+				",error)",
+				method.Comments.Trailing)
+		}
+		if !method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
+			g.P(method.Comments.Leading, "//Context is *cgrpc.ServerStreamServerContext["+method.Output.GoIdent.GoName+"]\n//Warning!Context will keep working when the server is graceful stopping and it will block the graceful stop until all Handler return\n",
+				method.GoName,
+				"(",
+				g.QualifiedGoIdent(contextPackage.Ident("Context")),
+				",*",
+				g.QualifiedGoIdent(method.Input.GoIdent),
+				")error",
+				method.Comments.Trailing)
+		}
+		if method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
+			g.P(method.Comments.Leading, "//Context is *cgrpc.ClientStreamServerContext["+method.Input.GoIdent.GoName+"]\n//Warning!Context will keep working when the server is graceful stopping and it will block the graceful stop until all Handler return\n",
+				method.GoName,
+				"(",
+				g.QualifiedGoIdent(contextPackage.Ident("Context")),
+				")(*",
+				g.QualifiedGoIdent(method.Output.GoIdent),
+				",error)",
+				method.Comments.Trailing)
+		}
+		if method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
+			g.P(method.Comments.Leading, "//Context is *cgrpc.AllStreamServerContext["+method.Input.GoIdent.GoName+","+method.Output.GoIdent.GoName+"]\n//Warning!Context will keep working when the server is graceful stopping and it will block the graceful stop until all Handler return\n",
+				method.GoName,
+				"(",
+				g.QualifiedGoIdent(contextPackage.Ident("Context")),
+				")error",
+				method.Comments.Trailing)
+		}
 	}
 	g.P("}")
 	g.P()
@@ -150,36 +187,90 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		}
 		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		fname := "func _" + service.GoName + "_" + method.GoName + "_" + "CGrpcHandler"
-		p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
-		freturn := g.QualifiedGoIdent(cgrpcPackage.Ident("OutsideHandler"))
-		g.P(fname, "(", p1, ")", freturn, "{")
-		g.P("return func(ctx *", g.QualifiedGoIdent(cgrpcPackage.Ident("Context")), "){")
-		g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
-		g.P("if e := ctx.DecodeReq(req); e != nil{")
-		g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] decode failed\")")
-		g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
-		g.P("return")
-		g.P("}")
-
-		if pbex.NeedValidate(method.Input) {
-			g.P("if errstr := req.Validate(); errstr != \"\" {")
-			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
+		if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
+			p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
+			freturn := g.QualifiedGoIdent(cgrpcPackage.Ident("OutsideHandler"))
+			g.P(fname, "(", p1, ")", freturn, "{")
+			g.P("return func(ctx *", g.QualifiedGoIdent(cgrpcPackage.Ident("ServerContext")), "){")
+			g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
+			g.P("if e := ctx.Read(req); e != nil{")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] decode failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
 			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 			g.P("return")
 			g.P("}")
-		}
 
-		g.P("resp,e:=handler(ctx,req)")
-		g.P("if e!=nil{")
-		g.P("ctx.Abort(e)")
-		g.P("return")
-		g.P("}")
-		g.P("if resp == nil{")
-		g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
-		g.P("}")
-		g.P("ctx.Write(resp)")
-		g.P("}")
-		g.P("}")
+			if pbex.NeedValidate(method.Input) {
+				g.P("if errstr := req.Validate(); errstr != \"\" {")
+				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
+				g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
+				g.P("return")
+				g.P("}")
+			}
+
+			g.P("resp,e:=handler(", g.QualifiedGoIdent(cgrpcPackage.Ident("NewNoStreamServerContext")), "(ctx),req)")
+			g.P("if e!=nil{")
+			g.P("ctx.Abort(e)")
+			g.P("return")
+			g.P("}")
+			g.P("if resp == nil{")
+			g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
+			g.P("}")
+			g.P("ctx.Write(resp)")
+			g.P("}")
+			g.P("}")
+		}
+		if !method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
+			p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")error"
+			freturn := g.QualifiedGoIdent(cgrpcPackage.Ident("OutsideHandler"))
+			g.P(fname, "(", p1, ")", freturn, "{")
+			g.P("return func(ctx *", g.QualifiedGoIdent(cgrpcPackage.Ident("ServerContext")), "){")
+			g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
+			g.P("if e:=ctx.Read(req);e!=nil{")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] decode failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
+			g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
+			g.P("return")
+			g.P("}")
+			if pbex.NeedValidate(method.Input) {
+				g.P("if errstr := req.Validate(); errstr != \"\" {")
+				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
+				g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
+				g.P("return")
+				g.P("}")
+			}
+			g.P("if e:=handler(", g.QualifiedGoIdent(cgrpcPackage.Ident("NewServerStreamServerContext")), "[", g.QualifiedGoIdent(method.Output.GoIdent), "](ctx),req);e!=nil{")
+			g.P("ctx.Abort(e)")
+			g.P("}")
+			g.P("}")
+			g.P("}")
+		}
+		if method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
+			p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
+			freturn := g.QualifiedGoIdent(cgrpcPackage.Ident("OutsideHandler"))
+			g.P(fname, "(", p1, ")", freturn, "{")
+			g.P("return func(ctx *", g.QualifiedGoIdent(cgrpcPackage.Ident("ServerContext")), "){")
+			g.P("resp,e:=handler(", g.QualifiedGoIdent(cgrpcPackage.Ident("NewClientStreamServerContext")), "[", g.QualifiedGoIdent(method.Input.GoIdent), "](ctx,", pbex.NeedValidate(method.Input), "))")
+			g.P("if e!=nil {")
+			g.P("ctx.Abort(e)")
+			g.P("return")
+			g.P("}")
+			g.P("if resp == nil{")
+			g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
+			g.P("}")
+			g.P("ctx.Write(resp)")
+			g.P("}")
+			g.P("}")
+		}
+		if method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
+			p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ")error"
+			freturn := g.QualifiedGoIdent(cgrpcPackage.Ident("OutsideHandler"))
+			g.P(fname, "(", p1, ")", freturn, "{")
+			g.P("return func(ctx *", g.QualifiedGoIdent(cgrpcPackage.Ident("ServerContext")), "){")
+			g.P("if e:=handler(", g.QualifiedGoIdent(cgrpcPackage.Ident("NewAllStreamServerContext")), "[", g.QualifiedGoIdent(method.Input.GoIdent), ",", g.QualifiedGoIdent(method.Output.GoIdent), "](ctx,", pbex.NeedValidate(method.Input), "));e!=nil{")
+			g.P("ctx.Abort(e)")
+			g.P("}")
+			g.P("}")
+			g.P("}")
+		}
 	}
 
 	//Server Register
@@ -225,15 +316,15 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("}")
 			g.P("}")
 			g.P("mids = append(mids,", fname, ")")
-			g.P("engine.RegisterHandler(", strconv.Quote(*file.Proto.Package+"."+string(service.Desc.Name())), ",", strconv.Quote(string(method.Desc.Name())), ",mids...)")
+			g.P("engine.RegisterHandler(", strconv.Quote(*file.Proto.Package+"."+string(service.Desc.Name())), ",", strconv.Quote(string(method.Desc.Name())), ",", method.Desc.IsStreamingClient(), ",", method.Desc.IsStreamingServer(), ",mids...)")
 			g.P("}")
 		} else {
-			g.P("engine.RegisterHandler(", strconv.Quote(*file.Proto.Package+"."+string(service.Desc.Name())), ",", strconv.Quote(string(method.Desc.Name())), ",", fname, ")")
+			g.P("engine.RegisterHandler(", strconv.Quote(*file.Proto.Package+"."+string(service.Desc.Name())), ",", strconv.Quote(string(method.Desc.Name())), ",", method.Desc.IsStreamingClient(), ",", method.Desc.IsStreamingServer(), ",", fname, ")")
 		}
 	}
 	g.P("}")
 }
-func genClient(_ *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
+func genClient(file *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
 	// Client interface.
 	clientName := service.GoName + "CGrpcClient"
 	lowclientName := strings.ToLower(clientName[:1]) + clientName[1:]
@@ -255,9 +346,46 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 		if !need {
 			continue
 		}
-		g.P(method.Comments.Leading,
-			method.GoName, "(", g.QualifiedGoIdent(contextPackage.Ident("Context")), ",*", g.QualifiedGoIdent(method.Input.GoIdent), ",...", g.QualifiedGoIdent(grpcPackage.Ident("CallOption")), ")(*", g.QualifiedGoIdent(method.Output.GoIdent), ",error)",
-			method.Comments.Trailing)
+		if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
+			g.P(method.Comments.Leading,
+				method.GoName,
+				"(",
+				g.QualifiedGoIdent(contextPackage.Ident("Context")),
+				",*",
+				g.QualifiedGoIdent(method.Input.GoIdent),
+				")(*",
+				g.QualifiedGoIdent(method.Output.GoIdent),
+				",error)",
+				method.Comments.Trailing)
+		}
+		if !method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
+			g.P(method.Comments.Leading, "//Warning!handler and Context param in handler will keep working when the client is graceful stopping and it will block the graceful stop until all Handler return\n",
+				method.GoName,
+				"(ctx ",
+				g.QualifiedGoIdent(contextPackage.Ident("Context")),
+				",req *",
+				g.QualifiedGoIdent(method.Input.GoIdent),
+				",handler func(*", g.QualifiedGoIdent(cgrpcPackage.Ident("ServerStreamClientContext")), "[", g.QualifiedGoIdent(method.Output.GoIdent), "])error)error",
+				method.Comments.Trailing)
+		}
+		if method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
+			g.P(method.Comments.Leading, "//Warning!handler and Context param in handler will keep working when the client is graceful stopping and it will block the graceful stop until all Handler return\n",
+				method.GoName,
+				"(ctx ",
+				g.QualifiedGoIdent(contextPackage.Ident("Context")),
+				",handler func(*", g.QualifiedGoIdent(cgrpcPackage.Ident("ClientStreamClientContext")), "[", g.QualifiedGoIdent(method.Input.GoIdent), "])error)(resp *",
+				g.QualifiedGoIdent(method.Output.GoIdent),
+				",e error)",
+				method.Comments.Trailing)
+		}
+		if method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
+			g.P(method.Comments.Leading, "//Warning!handler and Context param in handler will keep working when the client is graceful stopping and it will block the graceful stop until all Handler return\n",
+				method.GoName,
+				"(ctx ",
+				g.QualifiedGoIdent(contextPackage.Ident("Context")),
+				",handler func(*", g.QualifiedGoIdent(cgrpcPackage.Ident("AllStreamClientContext")), "[", g.QualifiedGoIdent(method.Input.GoIdent), ",", g.QualifiedGoIdent(method.Output.GoIdent), "])error)error",
+				method.Comments.Trailing)
+		}
 	}
 	g.P("}")
 	g.P()
@@ -285,21 +413,108 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 		if !need {
 			continue
 		}
+		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		pathname := "_CGrpcPath" + service.GoName + method.GoName
 		p1 := "ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context"))
-		p2 := "req *" + g.QualifiedGoIdent(method.Input.GoIdent)
-		p3 := "opts ..." + g.QualifiedGoIdent(grpcPackage.Ident("CallOption"))
-		freturn := "(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
-		g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ",", p3, ")", freturn, "{")
-		g.P("if req == nil {")
-		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
-		g.P("}")
+		if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
+			p2 := "req *" + g.QualifiedGoIdent(method.Input.GoIdent)
+			freturn := "(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
+			g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ")", freturn, "{")
+			g.P("if req == nil {")
+			g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
+			g.P("}")
 
-		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
-		g.P("if e:=c.cc.Invoke(ctx,", pathname, ",req,resp,opts...);e!=nil{")
-		g.P("return nil,e")
-		g.P("}")
-		g.P("return resp, nil")
-		g.P("}")
+			if pbex.NeedValidate(method.Input) {
+				g.P("if errstr := req.Validate(); errstr != \"\" {")
+				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
+				g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
+				g.P("}")
+			}
+
+			g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
+			g.P("if e:=c.cc.Invoke(ctx,", pathname, ",req,resp);e!=nil{")
+			g.P("return nil,e")
+			g.P("}")
+			g.P("return resp, nil")
+			g.P("}")
+		}
+		if !method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
+			p2 := "req *" + g.QualifiedGoIdent(method.Input.GoIdent)
+			p3 := "handler func(*" + g.QualifiedGoIdent(cgrpcPackage.Ident("ServerStreamClientContext")) + "[" + g.QualifiedGoIdent(method.Output.GoIdent) + "])error"
+			freturn := "error"
+			g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ",", p3, ")", freturn, "{")
+			g.P("if req == nil {")
+			g.P("return ", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
+			g.P("}")
+			if pbex.NeedValidate(method.Input) {
+				g.P("if errstr := req.Validate(); errstr != \"\" {")
+				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
+				g.P("return ", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
+				g.P("}")
+			}
+			g.P("desc := &", g.QualifiedGoIdent(grpcPackage.Ident("StreamDesc")), "{")
+			g.P("ServerStreams:true,")
+			g.P("StreamName:\"", method.Desc.Name(), "\",")
+			g.P("}")
+			g.P("stream,e:=c.cc.NewStream(ctx,desc,", pathname, ")")
+			g.P("if e!=nil{")
+			g.P("return e")
+			g.P("}")
+			g.P("if e:= stream.SendMsg(req);e!=nil{")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] send request failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
+			g.P("return e")
+			g.P("}")
+			g.P("if e:=stream.CloseSend();e!=nil{")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] send request failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
+			g.P("return e")
+			g.P("}")
+			g.P("return handler(", g.QualifiedGoIdent(cgrpcPackage.Ident("NewServerStreamClientContext")), "[", g.QualifiedGoIdent(method.Output.GoIdent), "](", pathname, ",", "stream))")
+			g.P("}")
+		}
+		if method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
+			p2 := "handler func(*" + g.QualifiedGoIdent(cgrpcPackage.Ident("ClientStreamClientContext")) + "[" + g.QualifiedGoIdent(method.Input.GoIdent) + "])error"
+			freturn := "(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
+			g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ")", freturn, "{")
+			g.P("desc := &", g.QualifiedGoIdent(grpcPackage.Ident("StreamDesc")), "{")
+			g.P("ClientStreams:true,")
+			g.P("StreamName:\"", method.Desc.Name(), "\",")
+			g.P("}")
+			g.P("stream,e:=c.cc.NewStream(ctx,desc,", pathname, ")")
+			g.P("if e!=nil{")
+			g.P("return nil,e")
+			g.P("}")
+			g.P("if e=handler(", g.QualifiedGoIdent(cgrpcPackage.Ident("NewClientStreamClientContext")), "[", g.QualifiedGoIdent(method.Input.GoIdent), "](", pathname, ",", "stream,", pbex.NeedValidate(method.Input), "));e!=nil{")
+			g.P("stream.CloseSend()")
+			g.P("return nil,e")
+			g.P("}")
+			g.P("if e=stream.CloseSend();e!=nil{")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] read response failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
+			g.P("return nil,e")
+			g.P("}")
+			g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
+			g.P("if e=stream.RecvMsg(resp);e!=nil{")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] read response failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
+			g.P("return nil,e")
+			g.P("}")
+			g.P("return resp,nil")
+			g.P("}")
+		}
+		if method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
+			p2 := "handler func(*" + g.QualifiedGoIdent(cgrpcPackage.Ident("AllStreamClientContext")) + "[" + g.QualifiedGoIdent(method.Input.GoIdent) + "," + g.QualifiedGoIdent(method.Output.GoIdent) + "])error"
+			g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ")error{")
+			g.P("desc := &", g.QualifiedGoIdent(grpcPackage.Ident("StreamDesc")), "{")
+			g.P("ClientStreams:true,")
+			g.P("ServerStreams:true,")
+			g.P("StreamName:\"", method.Desc.Name(), "\",")
+			g.P("}")
+			g.P("stream,e:=c.cc.NewStream(ctx,desc,", pathname, ")")
+			g.P("if e!=nil{")
+			g.P("return e")
+			g.P("}")
+			g.P("e = handler(", g.QualifiedGoIdent(cgrpcPackage.Ident("NewAllStreamClientContext")), "[", g.QualifiedGoIdent(method.Input.GoIdent), ",", g.QualifiedGoIdent(method.Output.GoIdent), "](", pathname, ",stream,", pbex.NeedValidate(method.Input), "))")
+			g.P("stream.CloseSend()")
+			g.P("return e")
+			g.P("}")
+		}
 	}
 }

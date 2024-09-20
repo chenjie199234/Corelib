@@ -52,6 +52,7 @@ func (c *ServerContext) Abort(e error) {
 // return io.EOF means client stop recv
 // return cerror.ErrCanceled means self stop send anymore in this Context
 // return cerror.ErrClosed means connection between client and server is closed
+// Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *ServerContext) Send(resp []byte) error {
 	return c.rw.send(&MsgBody{Body: resp})
 }
@@ -99,18 +100,17 @@ func (c *ServerContext) GetClientIp() string {
 
 // ----------------------------------------------- no stream context ---------------------------------------------
 
-func NewNoStreamServerContext(path string, ctx *ServerContext) *NoStreamServerContext {
-	return &NoStreamServerContext{path: path, Context: ctx.Context, sctx: ctx}
+func NewNoStreamServerContext(ctx *ServerContext) *NoStreamServerContext {
+	return &NoStreamServerContext{Context: ctx.Context, sctx: ctx}
 }
 
 type NoStreamServerContext struct {
-	path string
 	context.Context
 	sctx *ServerContext
 }
 
 func (c *NoStreamServerContext) GetPath() string {
-	return c.path
+	return c.sctx.GetPath()
 }
 
 // get the direct peer's addr(maybe a proxy)
@@ -132,12 +132,11 @@ func (c *NoStreamServerContext) GetClientIp() string {
 
 // ----------------------------------------------- client stream context ---------------------------------------------
 
-func NewClientStreamServerContext[reqtype any](path string, ctx *ServerContext, validatereq bool) *ClientStreamServerContext[reqtype] {
-	return &ClientStreamServerContext[reqtype]{path: path, Context: ctx.Context, sctx: ctx, validatereq: validatereq}
+func NewClientStreamServerContext[reqtype any](ctx *ServerContext, validatereq bool) *ClientStreamServerContext[reqtype] {
+	return &ClientStreamServerContext[reqtype]{Context: ctx.Context, sctx: ctx, validatereq: validatereq}
 }
 
 type ClientStreamServerContext[reqtype any] struct {
-	path        string
 	validatereq bool
 	context.Context
 	sctx *ServerContext
@@ -151,24 +150,24 @@ func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 	m, ok := req.(protoreflect.ProtoMessage)
 	if !ok {
 		//if use the protoc-go-crpc's generate code,this will not happen
-		slog.ErrorContext(c.Context, "["+c.path+"] request struct's type is not proto's message")
+		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request struct's type is not proto's message")
 		return nil, cerror.ErrSystem
 	}
 	data, e := c.sctx.Recv()
 	if e != nil {
 		if e != io.EOF {
-			slog.ErrorContext(c.Context, "["+c.path+"] read request failed", slog.String("error", e.Error()))
+			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] read request failed", slog.String("error", e.Error()))
 		}
 		return nil, e
 	}
 	if e := proto.Unmarshal(data, m); e != nil {
-		slog.ErrorContext(c.Context, "["+c.path+"] request decode failed", slog.String("error", e.Error()))
+		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
 		return nil, e
 	}
 	if c.validatereq {
 		if v, ok := req.(pbex.Validater); ok {
 			if errstr := v.Validate(); errstr != "" {
-				slog.ErrorContext(c.Context, "["+c.path+"] request validate failed", slog.String("error", errstr))
+				slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request validate failed", slog.String("error", errstr))
 				return nil, cerror.ErrReq
 			}
 		}
@@ -179,7 +178,7 @@ func (c *ClientStreamServerContext[reqtype]) StopRecv() {
 	c.StopRecv()
 }
 func (c *ClientStreamServerContext[reqtype]) GetPath() string {
-	return c.path
+	return c.sctx.GetPath()
 }
 
 // get the direct peer's addr(maybe a proxy)
@@ -201,12 +200,11 @@ func (c *ClientStreamServerContext[reqtype]) GetClientIp() string {
 
 // ----------------------------------------------- server stream context ---------------------------------------------
 
-func NewServerStreamServerContext[resptype any](path string, ctx *ServerContext) *ServerStreamServerContext[resptype] {
-	return &ServerStreamServerContext[resptype]{path: path, Context: ctx.Context, sctx: ctx}
+func NewServerStreamServerContext[resptype any](ctx *ServerContext) *ServerStreamServerContext[resptype] {
+	return &ServerStreamServerContext[resptype]{Context: ctx.Context, sctx: ctx}
 }
 
 type ServerStreamServerContext[resptype any] struct {
-	path string
 	context.Context
 	sctx *ServerContext
 }
@@ -214,18 +212,19 @@ type ServerStreamServerContext[resptype any] struct {
 // return io.EOF means client stop recv
 // return cerror.ErrCanceled means self stop send anymore in this Context
 // return cerror.ErrClosed means connection between client and server is closed
+// Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
 	var tmp any = resp
 	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
 	if !ok {
 		//if use the protoc-go-crpc's generate code,this will not happen
-		slog.ErrorContext(c.Context, "["+c.path+"] response struct's type is not proto's message")
+		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] response struct's type is not proto's message")
 		return cerror.ErrSystem
 	}
 	d, _ := proto.Marshal(tmptmp)
 	e := c.sctx.Send(d)
 	if e != nil && e != io.EOF {
-		slog.ErrorContext(c.Context, "["+c.path+"] send response failed", slog.String("error", e.Error()))
+		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] send response failed", slog.String("error", e.Error()))
 	}
 	return e
 }
@@ -255,12 +254,11 @@ func (c *ServerStreamServerContext[resptype]) GetClientIp() string {
 
 // ----------------------------------------------- all stream context ---------------------------------------------
 
-func NewAllStreamServerContext[reqtype, resptype any](path string, ctx *ServerContext, validatereq bool) *AllStreamServerContext[reqtype, resptype] {
-	return &AllStreamServerContext[reqtype, resptype]{path: path, sctx: ctx, Context: ctx.Context, validatereq: validatereq}
+func NewAllStreamServerContext[reqtype, resptype any](ctx *ServerContext, validatereq bool) *AllStreamServerContext[reqtype, resptype] {
+	return &AllStreamServerContext[reqtype, resptype]{sctx: ctx, Context: ctx.Context, validatereq: validatereq}
 }
 
 type AllStreamServerContext[reqtype, resptype any] struct {
-	path        string
 	validatereq bool
 	context.Context
 	sctx *ServerContext
@@ -274,24 +272,24 @@ func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 	m, ok := req.(protoreflect.ProtoMessage)
 	if !ok {
 		//if use the protoc-go-crpc's generate code,this will not happen
-		slog.ErrorContext(c.Context, "["+c.path+"] request struct's type is not proto's message")
+		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request struct's type is not proto's message")
 		return nil, cerror.ErrSystem
 	}
 	data, e := c.sctx.Recv()
 	if e != nil {
 		if e != io.EOF {
-			slog.ErrorContext(c.Context, "["+c.path+"] read request failed", slog.String("error", e.Error()))
+			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] read request failed", slog.String("error", e.Error()))
 		}
 		return nil, e
 	}
 	if e := proto.Unmarshal(data, m); e != nil {
-		slog.ErrorContext(c.Context, "["+c.path+"] request decode failed", slog.String("error", e.Error()))
+		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
 		return nil, e
 	}
 	if c.validatereq {
 		if v, ok := req.(interface{ Validate() string }); ok {
 			if errstr := v.Validate(); errstr != "" {
-				slog.ErrorContext(c.Context, "["+c.path+"] request validate failed", slog.String("error", errstr))
+				slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request validate failed", slog.String("error", errstr))
 				return nil, cerror.ErrReq
 			}
 		}
@@ -305,18 +303,19 @@ func (c *AllStreamServerContext[reqtype, resptype]) StopRecv() {
 // return io.EOF means client stop recv
 // return cerror.ErrCanceled means self stop send anymore in this Context
 // return cerror.ErrClosed means connection between client and server is closed
+// Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *AllStreamServerContext[reqtype, resptype]) Send(resp *resptype) error {
 	var tmp any = resp
 	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
 	if !ok {
 		//if use the protoc-go-crpc's generate code,this will not happen
-		slog.ErrorContext(c.Context, "["+c.path+"] response struct's type is not proto's message")
+		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] response struct's type is not proto's message")
 		return cerror.ErrSystem
 	}
 	d, _ := proto.Marshal(tmptmp)
 	e := c.sctx.Send(d)
 	if e != nil && e != io.EOF {
-		slog.ErrorContext(c.Context, "["+c.path+"] send response failed", slog.String("error", e.Error()))
+		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] send response failed", slog.String("error", e.Error()))
 	}
 	return e
 }

@@ -186,7 +186,6 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if !need {
 			continue
 		}
-		pathname := "_CrpcPath" + service.GoName + method.GoName
 		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		fname := "func _" + service.GoName + "_" + method.GoName + "_" + "CrpcHandler"
 		if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
@@ -215,7 +214,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				g.P("}")
 			}
 
-			g.P("resp,e:=handler(", g.QualifiedGoIdent(crpcPackage.Ident("NewNoStreamServerContext")), "(", pathname, ",ctx),req)")
+			g.P("resp,e:=handler(", g.QualifiedGoIdent(crpcPackage.Ident("NewNoStreamServerContext")), "(ctx),req)")
 			g.P("if e!=nil{")
 			g.P("ctx.Abort(e)")
 			g.P("return")
@@ -255,7 +254,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				g.P("return")
 				g.P("}")
 			}
-			g.P("if e:=handler(", g.QualifiedGoIdent(crpcPackage.Ident("NewServerStreamServerContext")), "[", g.QualifiedGoIdent(method.Output.GoIdent), "](", pathname, ",ctx),req);e!=nil{")
+			g.P("if e:=handler(", g.QualifiedGoIdent(crpcPackage.Ident("NewServerStreamServerContext")), "[", g.QualifiedGoIdent(method.Output.GoIdent), "](ctx),req);e!=nil{")
 			g.P("ctx.Abort(e)")
 			g.P("return")
 			g.P("}")
@@ -267,7 +266,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			freturn := g.QualifiedGoIdent(crpcPackage.Ident("OutsideHandler"))
 			g.P(fname, "(", p1, ")", freturn, "{")
 			g.P("return func(ctx *", g.QualifiedGoIdent(crpcPackage.Ident("ServerContext")), "){")
-			g.P("resp,e:=handler(", g.QualifiedGoIdent(crpcPackage.Ident("NewClientStreamServerContext")), "[", g.QualifiedGoIdent(method.Input.GoIdent), "](", pathname, ",ctx,", pbex.NeedValidate(method.Input), "))")
+			g.P("resp,e:=handler(", g.QualifiedGoIdent(crpcPackage.Ident("NewClientStreamServerContext")), "[", g.QualifiedGoIdent(method.Input.GoIdent), "](ctx,", pbex.NeedValidate(method.Input), "))")
 			g.P("if e!=nil {")
 			g.P("ctx.Abort(e)")
 			g.P("return")
@@ -287,7 +286,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			freturn := g.QualifiedGoIdent(crpcPackage.Ident("OutsideHandler"))
 			g.P(fname, "(", p1, ")", freturn, "{")
 			g.P("return func(ctx *", g.QualifiedGoIdent(crpcPackage.Ident("ServerContext")), "){")
-			g.P("e:=handler(", g.QualifiedGoIdent(crpcPackage.Ident("NewAllStreamServerContext")), "[", g.QualifiedGoIdent(method.Input.GoIdent), ",", g.QualifiedGoIdent(method.Output.GoIdent), "](", pathname, ",ctx,", pbex.NeedValidate(method.Input), "))")
+			g.P("e:=handler(", g.QualifiedGoIdent(crpcPackage.Ident("NewAllStreamServerContext")), "[", g.QualifiedGoIdent(method.Input.GoIdent), ",", g.QualifiedGoIdent(method.Output.GoIdent), "](ctx,", pbex.NeedValidate(method.Input), "))")
 			g.P("if e!=nil {")
 			g.P("ctx.Abort(e)")
 			g.P("}")
@@ -488,7 +487,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			}
 			g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
 			g.P("return c.cc.Call(ctx,", pathname, ",reqd,func(ctx *", g.QualifiedGoIdent(crpcPackage.Ident("CallContext")), ")error{")
-			g.P("return handler(", g.QualifiedGoIdent(crpcPackage.Ident("NewServerStreamClientContext")), "[", g.QualifiedGoIdent(method.Output.GoIdent), "](", pathname, ",ctx))")
+			g.P("return handler(", g.QualifiedGoIdent(crpcPackage.Ident("NewServerStreamClientContext")), "[", g.QualifiedGoIdent(method.Output.GoIdent), "](ctx))")
 			g.P("})")
 			g.P("}")
 		}
@@ -497,7 +496,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ")(*", g.QualifiedGoIdent(method.Output.GoIdent), ",error){")
 			g.P("var respbody []byte")
 			g.P("if e:=c.cc.Stream(ctx,", pathname, ",func(ctx *", g.QualifiedGoIdent(crpcPackage.Ident("StreamContext")), ")error{")
-			g.P("e:=handler(", g.QualifiedGoIdent(crpcPackage.Ident("NewClientStreamClientContext")), "[", g.QualifiedGoIdent(method.Input.GoIdent), "](", pathname, ",", "ctx,", pbex.NeedValidate(method.Input), "))")
+			g.P("e:=handler(", g.QualifiedGoIdent(crpcPackage.Ident("NewClientStreamClientContext")), "[", g.QualifiedGoIdent(method.Input.GoIdent), "](ctx,", pbex.NeedValidate(method.Input), "))")
 			g.P("if e!=nil {")
 			g.P("return e")
 			g.P("}")
@@ -523,7 +522,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			p2 := "handler func(*" + g.QualifiedGoIdent(crpcPackage.Ident("AllStreamClientContext")) + "[" + g.QualifiedGoIdent(method.Input.GoIdent) + "," + g.QualifiedGoIdent(method.Output.GoIdent) + "])error"
 			g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ")error{")
 			g.P("return c.cc.Stream(ctx,", pathname, ",func(ctx *", g.QualifiedGoIdent(crpcPackage.Ident("StreamContext")), ")error{")
-			g.P("return handler(", g.QualifiedGoIdent(crpcPackage.Ident("NewAllStreamClientContext")), "[", g.QualifiedGoIdent(method.Input.GoIdent), ",", g.QualifiedGoIdent(method.Output.GoIdent), "](", pathname, ",ctx,", pbex.NeedValidate(method.Input), "))")
+			g.P("return handler(", g.QualifiedGoIdent(crpcPackage.Ident("NewAllStreamClientContext")), "[", g.QualifiedGoIdent(method.Input.GoIdent), ",", g.QualifiedGoIdent(method.Output.GoIdent), "](ctx,", pbex.NeedValidate(method.Input), "))")
 			g.P("})")
 			g.P("}")
 		}

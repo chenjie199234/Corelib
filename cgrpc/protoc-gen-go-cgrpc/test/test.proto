@@ -4,132 +4,41 @@ package test;
 option go_package="github.com/chenjie199234/Corelib/web/protoc-gen-go-cgrpc/test;test";
 import "pbex.proto";
 service test {
-	rpc hello(helloreq)returns(helloresp){
-		option (pbex.method)="get";
-		option (pbex.method)="crpc";
+	rpc call(callreq)returns(callresp){
 		option (pbex.method)="grpc";
-		option (pbex.web_midwares)="user";
-		option (pbex.web_midwares)="limit";
+		option (pbex.cgrpc_midwares)="auth";
 	}
-	rpc world(worldreq)returns(worldresp){
-		option (pbex.method)="post";
-		option (pbex.method)="crpc";
-		// option (pbex.method)="grpc";
-		option (pbex.web_midwares)="user";
-		option (pbex.web_midwares)="limit";
+	rpc clientstream(stream clientstreamreq)returns(clientstreamresp){
+		option (pbex.method)="grpc";
 	}
-}
-enum TestEnum {
-	ENUMA=0;
-	ENUMB=1;
-}
-message helloreq{
-	bool bl = 1;
-	optional bool blo = 2;
-	repeated bool bls = 3;
-	int32 i32=4[(pbex.int_in)=1];
-	optional int32 i32o=5;
-	repeated int32 ri32=6[(pbex.int_not_in)=1];
-	uint32 ui32=7[(pbex.uint_in)=1];
-	optional uint32 ui32o=8;
-	repeated uint32 rui32=9[(pbex.map_repeated_len_gt)=2,(pbex.uint_not_in)=1];
-	int64 i64=10;
-	optional int64 i64o=11;
-	repeated int64 ri64=12;
-	uint64 ui64=13;
-	optional uint64 ui64o=14;
-	repeated uint64 rui64=15;
-	bytes bs=16;
-	optional bytes bso=17;
-	repeated bytes rbs=18;
-	string ss=19;
-	optional string sso=20;
-	repeated string rss=21[(pbex.string_bytes_reg_match)="abc*"];
-	float f=22;
-	optional float fo=23;
-	repeated float rf=24;
-	double d=25;
-	optional double do=26;
-	repeated double rd=27;
-	TestEnum e=28;
-	optional TestEnum eo=29;
-	repeated TestEnum re=30;
-	oneof o{
-		bool obl=31;
-		int32 oi32=32;
-		uint32 oui32=33;
-		int64 oi64=34;
-		uint64 oui64=35;
-		bytes obs=36;
-		string oss=37;
-		float of=38;
-		double od=39;
-		TestEnum oe=40;
+	rpc serverstream(serverstreamreq)returns(stream serverstreamresp){
+		option (pbex.method)="grpc";
+	}
+	rpc allstream(stream allstreamreq)returns(stream allstreamresp){
+		option (pbex.method)="grpc";
 	}
 }
-message helloresp{
-
+message callreq{
+	uint64 u64=1[(pbex.uint_gt)=10];
 }
-message worldreq{
-	helloreq m=1;
-	optional helloreq mo=2;
-	repeated helloreq rm=3;
-
-	map<int32,int32> mi32_i32=4;
-	map<int32,uint32> mi32_ui32=5;
-	map<int32,int64> mi32_i64=6;
-	map<int32,uint64> mi32_ui64=7;
-	map<int32,bytes> mi32_bs=8;
-	map<int32,string> mi32_ss=9;
-	map<int32,float> mi32_f=10;
-	map<int32,double> mi32_d=11;
-	map<int32,TestEnum> mi32_e=12;
-	map<int32,helloreq> mi32_m=13;
-
-	map<uint32,int32> mui32_i32=14;
-	map<uint32,uint32> mui32_ui32=15;
-	map<uint32,int64> mui32_i64=16;
-	map<uint32,uint64> mui32_ui64=17;
-	map<uint32,bytes> mui32_bs=18;
-	map<uint32,string> mui32_ss=19[(pbex.map_value_string_bytes_reg_match)="xyz*"];
-	map<uint32,float> mui32_f=20;
-	map<uint32,double> mui32_d=21;
-	map<uint32,TestEnum> mui32_e=22;
-	map<uint32,helloreq> mui32_m=23;
-
-	map<int64,int32> mi64_i32=24;
-	map<int64,uint32> mi64_ui32=25;
-	map<int64,int64> mi64_i64=26;
-	map<int64,uint64> mi64_ui64=27;
-	map<int64,bytes> mi64_bs=28;
-	map<int64,string> mi64_ss=29;
-	map<int64,float> mi64_f=30;
-	map<int64,double> mi64_d=31;
-	map<int64,TestEnum> mi64_e=32;
-	map<int64,helloreq> mi64_m=33;
-
-	map<uint64,int32> mui64_i32=34;
-	map<uint64,uint32> mui64_ui32=35;
-	map<uint64,int64> mui64_i64=36;
-	map<uint64,uint64> mui64_ui64=37;
-	map<uint64,bytes> mui64_bs=38;
-	map<uint64,string> mui64_ss=39;
-	map<uint64,float> mui64_f=40;
-	map<uint64,double> mui64_d=41;
-	map<uint64,TestEnum> mui64_e=42;
-	map<uint64,helloreq> mui64_m=43;
-
-	map<string,int32> mss_i32=44[(pbex.map_key_string_reg_match)="key*"];
-	map<string,uint32> mss_ui32=45;
-	map<string,int64> mss_i64=46;
-	map<string,uint64> mss_ui64=47;
-	map<string,bytes> mss_bs=48;
-	map<string,string> mss_ss=49;
-	map<string,float> mss_f=50;
-	map<string,double> mss_d=51;
-	map<string,TestEnum> mss_e=52;
-	map<string,helloreq> mss_m=53;
+message callresp{
+	bool status=1;
 }
-message worldresp{
-	worldreq result=1;
+message clientstreamreq{
+	uint64 u64=1[(pbex.uint_gt)=10];
+}
+message clientstreamresp{
+	bool status=1;
+}
+message serverstreamreq{
+	uint64 u64=1[(pbex.uint_gt)=10];
+}
+message serverstreamresp{
+	bool status=1;
+}
+message allstreamreq{
+	uint64 u64=1[(pbex.uint_gt)=10];
+}
+message allstreamresp{
+	bool status=1;
 }
