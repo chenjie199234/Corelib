@@ -240,7 +240,7 @@ func (s *CGrpcServer) pingponghandler(sname, mname string, handlers ...OutsideHa
 	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
 	copy(totalhandlers, s.global)
 	copy(totalhandlers[len(s.global):], handlers)
-	return func(_ interface{}, basectx context.Context, decode func(any) error, _ grpc.UnaryServerInterceptor) (resp interface{}, e error) {
+	return func(_ interface{}, basectx context.Context, decode func(any) error, _ grpc.UnaryServerInterceptor) (resp interface{}, err error) {
 		gmd, ok := gmetadata.FromIncomingContext(basectx)
 		if ok {
 			if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != s.self {
@@ -378,12 +378,13 @@ func (s *CGrpcServer) pingponghandler(sname, mname string, handlers ...OutsideHa
 			span.Finish(workctx.e)
 			peername, _ := span.GetParentSpanData().GetStateKV("app")
 			monitor.GrpcServerMonitor(peername, "GRPC", path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
+			//fix the interface nil problem
 			if workctx.e != nil {
 				resp = nil
-				e = workctx.e
+				err = workctx.e
 			} else {
 				resp = workctx.resp
-				e = nil
+				err = nil
 			}
 		}()
 		for _, handler := range totalhandlers {
@@ -400,7 +401,7 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
 	copy(totalhandlers, s.global)
 	copy(totalhandlers[len(s.global):], handlers)
-	return func(_ any, stream grpc.ServerStream) (e error) {
+	return func(_ any, stream grpc.ServerStream) (err error) {
 		basectx := stream.Context()
 		gmd, ok := gmetadata.FromIncomingContext(basectx)
 		if ok {
@@ -488,6 +489,7 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 			span.GetSelfSpanData().SetStateKV("method", "GRPC")
 			span.GetSelfSpanData().SetStateKV("path", path)
 		}
+		//fix the interface nil problem
 
 		//deal metadata
 		var md map[string]string
@@ -539,7 +541,12 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 			span.Finish(workctx.e)
 			peername, _ := span.GetParentSpanData().GetStateKV("app")
 			monitor.GrpcServerMonitor(peername, "GRPC", path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
-			e = workctx.e
+			//fix the interface nil problem
+			if workctx.e != nil {
+				err = workctx.e
+			} else {
+				err = nil
+			}
 		}()
 		for _, handler := range totalhandlers {
 			handler(workctx)
