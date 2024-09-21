@@ -27,9 +27,7 @@ $$$
 
 ## 环境变量
 $$$
-LOG_LEVEL                               日志等级,debug,info(default),warn,error
 LOG_TRACE                               是否开启链路追踪,1-开启,0-关闭(default)
-LOG_TARGET                              日志输出目标,std-输出到标准输出,file-输出到文件(当前工作目录的./log/目录下)
 PROJECT                                 该项目所属的项目,[a-z][0-9],第一个字符必须是[a-z]
 GROUP                                   该项目所属的项目下的小组,[a-z][0-9],第一个字符必须是[a-z]
 RUN_ENV                                 当前运行环境,如:test,pre,prod
