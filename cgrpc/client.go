@@ -270,7 +270,9 @@ type ClientStreamWraper struct {
 }
 
 func (cs *ClientStreamWraper) Header() (gmetadata.MD, error) {
-	return cs.c.Header()
+	md, e := cs.c.Header()
+	e = transGrpcError(e, true)
+	return md, e
 }
 func (cs *ClientStreamWraper) Trailer() gmetadata.MD {
 	return cs.c.Trailer()
