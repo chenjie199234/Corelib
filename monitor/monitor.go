@@ -1,7 +1,6 @@
 package monitor
 
 import (
-	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -15,14 +14,9 @@ func init() {
 	if runtime.GOOS != "linux" && runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
 		panic("[monitor] unsupported GOOS")
 	}
-	if str := os.Getenv("MONITOR"); str == "" || str == "<MONITOR>" {
-		slog.Warn("[monitor] env MONITOR missing,monitor closed")
-		return
-	} else if n, e := strconv.Atoi(str); e != nil || n != 0 && n != 1 {
-		slog.Warn("[monitor] env MONITOR format error,must in [0,1],monitor closed")
-		return
-	} else if n == 0 {
-		slog.Warn("[monitor] env MONITOR is 0,monitor closed")
+	if str := os.Getenv("MONITOR"); str != "" && str != "<MONITOR>" && str != "0" && str != "1" {
+		panic("[monitor] os env MONITOR error,must in [0,1]")
+	} else if str != "1" {
 		return
 	}
 	initmem()
