@@ -23,11 +23,7 @@ func main() {
 		fmt.Printf("protoc-gen-browser %s\n", version.String())
 		return
 	}
-	var flags flag.FlagSet
-	gentob := flags.Bool("gen_tob", false, "")
-	protogen.Options{
-		ParamFunc: flags.Set,
-	}.Run(func(gen *protogen.Plugin) error {
+	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
 		//pre check
 		for _, f := range gen.Files {
 			if !f.Generate {
@@ -50,6 +46,9 @@ func main() {
 					if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 						continue
 					}
+					if m.Desc.IsStreamingClient() || m.Desc.IsStreamingServer() {
+						continue
+					}
 					emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
 					need := 0
 					for _, em := range emethod {
@@ -63,9 +62,6 @@ func main() {
 					}
 					if need > 1 {
 						panic(fmt.Sprintf("method: %s in service: %s,only one http method can be setted", m.Desc.Name(), s.Desc.Name()))
-					}
-					if m.Desc.IsStreamingClient() || m.Desc.IsStreamingServer() {
-						panic("stream is not supported")
 					}
 					if pbex.OneOfHasPBEX(m.Input) {
 						panic("oneof fields should not contain pbex")
@@ -94,13 +90,9 @@ func main() {
 				}
 			}
 			//delete old file
-			oldtocfile := f.GeneratedFilenamePrefix + "_browser_toc.ts"
+			oldtocfile := f.GeneratedFilenamePrefix + "_browser.ts"
 			if e := os.RemoveAll(oldtocfile); e != nil {
 				panic("remove old file " + oldtocfile + " error:" + e.Error())
-			}
-			oldtobfile := f.GeneratedFilenamePrefix + "_browser_tob.ts"
-			if e := os.RemoveAll(oldtobfile); e != nil {
-				panic("remove old file " + oldtobfile + " error:" + e.Error())
 			}
 		}
 		//gen file
@@ -111,10 +103,7 @@ func main() {
 			if f.Desc.Options().(*descriptorpb.FileOptions).GetDeprecated() {
 				continue
 			}
-			generateFile(gen, f, true)
-			if *gentob {
-				generateFile(gen, f, false)
-			}
+			generateFile(gen, f)
 		}
 		gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 		return nil

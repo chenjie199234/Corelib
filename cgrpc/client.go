@@ -113,7 +113,7 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 		stop:     graceful.New(),
 	}
 	opts := make([]grpc.DialOption, 0, 10)
-	opts = append(opts, experimental.WithBufferPool(bpool.GetPool()))
+	opts = append(opts, experimental.WithBufferPool(bpool.GetGrpcPool()))
 	opts = append(opts, grpc.WithDisableRetry())
 	if tlsc == nil {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))

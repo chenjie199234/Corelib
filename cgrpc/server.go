@@ -105,7 +105,7 @@ func NewCGrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tls
 		handlerTimeout: make(map[string]time.Duration),
 	}
 	opts := make([]grpc.ServerOption, 0, 10)
-	opts = append(opts, experimental.BufferPool(bpool.GetPool()))
+	opts = append(opts, experimental.BufferPool(bpool.GetGrpcPool()))
 	opts = append(opts, grpc.MaxRecvMsgSize(int(c.MaxMsgLen)))
 	opts = append(opts, grpc.StatsHandler(serverinstance))
 	opts = append(opts, grpc.UnknownServiceHandler(func(_ interface{}, stream grpc.ServerStream) error {

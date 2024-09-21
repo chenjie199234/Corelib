@@ -55,6 +55,9 @@ func genService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedF
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
+		if m.Desc.IsStreamingClient() || m.Desc.IsStreamingServer() {
+			continue
+		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
 		need := ""
 		for _, em := range emethod {

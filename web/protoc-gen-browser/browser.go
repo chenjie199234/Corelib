@@ -16,20 +16,14 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
-// target toc-true,tob-false
-func generateFile(gen *protogen.Plugin, file *protogen.File, target bool) *protogen.GeneratedFile {
-	var filename string
-	if target {
-		filename = file.GeneratedFilenamePrefix + "_browser_toc.ts"
-	} else {
-		filename = file.GeneratedFilenamePrefix + "_browser_tob.ts"
-	}
+func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
+	filename := file.GeneratedFilenamePrefix + "_browser.ts"
 	g := gen.NewGeneratedFile(filename, file.GoImportPath)
 
 	genFileComment(gen, file, g)
 
 	//gen req and resp
-	enums, msgs, tojson, toform, fromobj, methodcount := prepare(file, g, target)
+	enums, msgs, tojson, toform, fromobj, methodcount := prepare(file, g)
 	if methodcount == 0 {
 		return g
 	}
@@ -47,22 +41,16 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, target bool) *proto
 		_, genfromobj := fromobj[m.GoIdent.String()]
 		genMessage(m, g, gentojson, gentoform, genfromobj)
 	}
-	genCall(g, target)
+	genCall(g)
 	for _, service := range file.Services {
 		if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 			continue
 		}
 		//gen path
-		if genPath(file, service, g, target) == 0 {
+		if genPath(file, service, g) == 0 {
 			continue
 		}
-		if target {
-			//gen toc service
-			genToCService(file, service, g)
-		} else {
-			//gen tob service
-			genToBService(file, service, g)
-		}
+		genService(file, service, g)
 	}
 	return g
 }
@@ -84,8 +72,7 @@ func genFileComment(gen *protogen.Plugin, file *protogen.File, g *protogen.Gener
 	g.P()
 }
 
-// target toc-true,tob-false
-func prepare(file *protogen.File, _ *protogen.GeneratedFile, target bool) (enums []*protogen.Enum,
+func prepare(file *protogen.File, _ *protogen.GeneratedFile) (enums []*protogen.Enum,
 	msgs []*protogen.Message,
 	tojson map[string]*struct{},
 	toform map[string]*struct{},
@@ -105,16 +92,14 @@ func prepare(file *protogen.File, _ *protogen.GeneratedFile, target bool) (enums
 			if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 				continue
 			}
+			if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
+				continue
+			}
 			emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
 			need := ""
 			for _, em := range emethod {
 				em = strings.ToUpper(em)
-				if target {
-					if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
-						need = em
-						break
-					}
-				} else if em == "CRPC" {
+				if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
 					need = em
 					break
 				}
@@ -122,23 +107,14 @@ func prepare(file *protogen.File, _ *protogen.GeneratedFile, target bool) (enums
 			if need == "" {
 				continue
 			}
-			if target {
-				//toc
-				tmpmsgs[method.Input.GoIdent.String()] = method.Input
-				if need == "GET" || need == "DELETE" {
-					toform[method.Input.GoIdent.String()] = nil
-				} else {
-					tojson[method.Input.GoIdent.String()] = nil
-				}
-				tmpmsgs[method.Output.GoIdent.String()] = method.Output
-				fromobj[method.Output.GoIdent.String()] = nil
+			tmpmsgs[method.Input.GoIdent.String()] = method.Input
+			if need == "GET" || need == "DELETE" {
+				toform[method.Input.GoIdent.String()] = nil
 			} else {
-				//tob
-				tmpmsgs[method.Input.GoIdent.String()] = method.Input
 				tojson[method.Input.GoIdent.String()] = nil
-				tmpmsgs[method.Output.GoIdent.String()] = method.Output
-				fromobj[method.Output.GoIdent.String()] = nil
 			}
+			tmpmsgs[method.Output.GoIdent.String()] = method.Output
+			fromobj[method.Output.GoIdent.String()] = nil
 			methodcount++
 		}
 	}
@@ -965,24 +941,21 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 	g.P("}")
 }
 
-// target toc-true,tob-false
-func genPath(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile, target bool) int {
+func genPath(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) int {
 	count := 0
 	for _, method := range s.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
+		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
+			continue
+		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
 		need := false
 		for _, em := range emethod {
 			em = strings.ToUpper(em)
-			if target {
-				if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
-					need = true
-					break
-				}
-			} else if em == "CRPC" {
+			if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
 				need = true
 				break
 			}
@@ -997,7 +970,7 @@ func genPath(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile
 	}
 	return count
 }
-func genToCService(_ *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) {
+func genService(_ *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) {
 	clientName := s.GoName + "BrowserClientToC"
 	g.P("//ToC means this is for users")
 	g.P("export class ", clientName, " {")
@@ -1010,6 +983,9 @@ func genToCService(_ *protogen.File, s *protogen.Service, g *protogen.GeneratedF
 	for _, method := range s.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
+			continue
+		}
+		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
 			continue
 		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
@@ -1050,72 +1026,8 @@ func genToCService(_ *protogen.File, s *protogen.Service, g *protogen.GeneratedF
 	g.P("\tprivate host: string")
 	g.P("}")
 }
-func genToBService(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) {
-	clientName := s.GoName + "BrowserClientToB"
-	g.P("//ToB means this is for internal")
-	g.P("//ToB client must be used with https://github.com/chenjie199234/admin")
-	g.P("//If your are not using 'admin' as your tob request's proxy gate,don't use this")
-	g.P("export class ", clientName, " {")
-	g.P("\tconstructor(proxyhost: string,serverprojectid: Array<number>,servergroup: string){")
-	g.P("\t\tif(!proxyhost || proxyhost.length==0){")
-	g.P("\t\t\tthrow \"", clientName, "'s proxyhost missing\"")
-	g.P("\t\t}")
-	g.P("\t\tif(!serverprojectid || serverprojectid.length!=2){")
-	g.P("\t\t\tthrow \"", clientName, "'s serverprojectid missing or wrong\"")
-	g.P("\t\t}")
-	g.P("\t\tif(!servergroup || servergroup.length==0){")
-	g.P("\t\t\tthrow \"", clientName, "'s servergroup missing\"")
-	g.P("\t\t}")
-	g.P("\t\tthis.host=proxyhost")
-	g.P("\t\tthis.projectid=serverprojectid")
-	g.P("\t\tthis.group=servergroup")
-	g.P("\t}")
-	for _, method := range s.Methods {
-		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
-		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
-			continue
-		}
-		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
-		need := false
-		for _, em := range emethod {
-			em = strings.ToUpper(em)
-			if em == "CRPC" {
-				need = true
-				break
-			}
-		}
-		if !need {
-			continue
-		}
-		pathname := "_WebPath" + s.GoName + method.GoName
-		g.P("\t//timeout's unit is millisecond,it will be used when > 0")
-		g.P("\t", method.Desc.Name(), "(header: Object,req: ", method.Input.GoIdent.GoName, ",timeout: number,error: (arg: LogicError)=>void,success: (arg: ", method.Output.GoIdent.GoName, ")=>void){")
-		g.P("\t\tif(!header){")
-		g.P("\t\t\theader={}")
-		g.P("\t\t}")
-		g.P("\t\theader[\"Content-Type\"] = \"application/json\"")
-		g.P("\t\tlet realreq = {")
-		g.P("\t\t\tproject_id:this.projectid,")
-		g.P("\t\t\tg_name:this.group,")
-		g.P("\t\t\ta_name:", strconv.Quote(*file.Proto.Package), ",")
-		g.P("\t\t\tpath:", pathname, ",")
-		g.P("\t\t\tdata:JSON.stringify(req),")
-		g.P("\t\t}")
-		g.P("\t\tcall(timeout,this.host+\"/admin.app/proxy\",{method:\"POST\",headers:header,body:JSON.stringify(realreq)},error,function(arg: Object){")
-		g.P("\t\t\tlet r=new ", method.Output.GoIdent.GoName, "()")
-		g.P("\t\t\tr.fromOBJ(arg)")
-		g.P("\t\t\tsuccess(r)")
-		g.P("\t\t})")
-		g.P("\t}")
-	}
-	g.P("\tprivate host: string")
-	g.P("\tprivate projectid: Array<number>")
-	g.P("\tprivate group: string")
-	g.P("}")
-}
 
-// target toc-true,tob-false
-func genCall(g *protogen.GeneratedFile, target bool) {
+func genCall(g *protogen.GeneratedFile) {
 	g.P("//timeout's unit is millisecond,it will be used when > 0")
 	g.P("function call(timeout: number,url: string,opts: Object,error: (arg: LogicError)=>void,success: (arg: Object)=>void){")
 	g.P("\tlet tid: number|null = null")
@@ -1137,11 +1049,7 @@ func genCall(g *protogen.GeneratedFile, target bool) {
 	g.P("\t\tif(!ok){")
 	g.P("\t\t\tthrow d")
 	g.P("\t\t}")
-	if target {
-		g.P("\t\tsuccess(d)")
-	} else {
-		g.P("\t\tsuccess(JSON.parse(d.data))")
-	}
+	g.P("\t\tsuccess(d)")
 	g.P("\t})")
 	g.P("\t.catch(e=>{")
 	g.P("\t\tif(e instanceof Error){")

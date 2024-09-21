@@ -46,6 +46,9 @@ func main() {
 					if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 						continue
 					}
+					if m.Desc.IsStreamingClient() || m.Desc.IsStreamingServer() {
+						continue
+					}
 					emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
 					need := 0
 					for _, em := range emethod {
@@ -59,9 +62,6 @@ func main() {
 					}
 					if need > 1 {
 						panic(fmt.Sprintf("method: %s in service: %s,only one http method can be setted", m.Desc.Name(), s.Desc.Name()))
-					}
-					if m.Desc.IsStreamingClient() || m.Desc.IsStreamingServer() {
-						panic("stream is not supported")
 					}
 					if pbex.OneOfHasPBEX(m.Input) {
 						panic("oneof fields should not contain pbex")

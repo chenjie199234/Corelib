@@ -6,18 +6,41 @@ import "pbex.proto";
 service test {
 	rpc hello(helloreq)returns(helloresp){
 		option (pbex.method)="get";
-		option (pbex.method)="crpc";
-		option (pbex.method)="grpc";
 		option (pbex.web_midwares)="user";
 		option (pbex.web_midwares)="limit";
 	}
 	rpc world(worldreq)returns(worldresp){
 		option (pbex.method)="post";
-		option (pbex.method)="crpc";
-		option (pbex.method)="grpc";
 		option (pbex.web_midwares)="user";
 		option (pbex.web_midwares)="limit";
 	}
+	rpc client_stream(stream client_stream_req)returns(client_stream_resp){
+		option (pbex.method)="get";
+	}
+	rpc server_stream(server_stream_req)returns(stream server_stream_resp){
+		option (pbex.method)="get";
+	}
+	rpc all_stream(stream all_stream_req)returns(stream all_stream_resp){
+		option (pbex.method)="get";
+	}
+}
+message client_stream_req{
+
+}
+message client_stream_resp{
+
+}
+message server_stream_req{
+
+}
+message server_stream_resp{
+
+}
+message all_stream_req{
+
+}
+message all_stream_resp{
+
 }
 enum TestEnum {
 	ENUMA=0;

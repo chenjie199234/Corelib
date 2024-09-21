@@ -100,6 +100,9 @@ func genPath(file *protogen.File, service *protogen.Service, g *protogen.Generat
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
+		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
+			continue
+		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
 		need := false
 		for _, em := range emethod {
@@ -128,6 +131,9 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
+		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
+			continue
+		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
 		need := false
 		for _, em := range emethod {
@@ -150,6 +156,9 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	for _, method := range service.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
+			continue
+		}
+		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
 			continue
 		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
@@ -735,6 +744,9 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
+		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
+			continue
+		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
 		need := ""
 		for _, em := range emethod {
@@ -813,6 +825,9 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
+		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
+			continue
+		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
 		need := false
 		for _, em := range emethod {
@@ -846,6 +861,9 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 	for _, method := range service.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
+			continue
+		}
+		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
 			continue
 		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
