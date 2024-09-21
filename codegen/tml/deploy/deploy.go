@@ -5,7 +5,7 @@ import (
 	"text/template"
 )
 
-const docker = `FROM golang:1.18-buster as builder
+const docker = `FROM golang:1.23.1 as builder
 ENV GOSUMDB='off' \
 	GOOS='linux' \
 	GOARCH='amd64' \
@@ -16,7 +16,7 @@ ADD . /code
 WORKDIR /code
 RUN echo "start build" && go mod tidy && go build -o main && echo "end build"
 
-FROM debian:buster
+FROM debian:stable
 RUN apt-get update && apt-get install -y ca-certificates curl inetutils-telnet inetutils-ping inetutils-traceroute dnsutils iproute2 procps net-tools neovim && mkdir /root/app
 WORKDIR /root/app
 EXPOSE 6060 8000 9000 10000

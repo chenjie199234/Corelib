@@ -9,11 +9,9 @@ import (
 const txt = `package config
 
 import (
-	"context"
+	"log/slog"
 	"os"
 	"strconv"
-	"log/slog"
-	"strings"
 	"time"
 
 	"{{.}}/model"

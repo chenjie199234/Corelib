@@ -8,9 +8,11 @@ import (
 const txt = `package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
