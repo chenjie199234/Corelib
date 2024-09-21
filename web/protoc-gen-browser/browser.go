@@ -971,8 +971,7 @@ func genPath(file *protogen.File, s *protogen.Service, g *protogen.GeneratedFile
 	return count
 }
 func genService(_ *protogen.File, s *protogen.Service, g *protogen.GeneratedFile) {
-	clientName := s.GoName + "BrowserClientToC"
-	g.P("//ToC means this is for users")
+	clientName := s.GoName + "BrowserClient"
 	g.P("export class ", clientName, " {")
 	g.P("\tconstructor(host: string){")
 	g.P("\t\tif(!host || host.length==0){")
