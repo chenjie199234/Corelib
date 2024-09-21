@@ -22,8 +22,7 @@ const index = `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{.}}</title>
   </head>
-  <body style="margin:0px;padding:0px;border:0px none white">
-    <div id="app" style="width:100vw;height:100vh;overflow:hidden;background-color:white"></div>
+  <body style="margin:0px;padding:0px;border:0px none white;width:100vw;height:100vh;overflow:hidden;background-color:white">
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>`
@@ -57,7 +56,7 @@ const tsc = `{
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
+    "moduleDetection": "force",
     "isolatedModules": true,
     "noEmit": true,
     "noEmitOnError": true,
