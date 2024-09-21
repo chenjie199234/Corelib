@@ -48,15 +48,15 @@ func (c *ServerContext) Abort(e error) {
 // Warning!this function is only used for generated code,don't use it in any other place
 func (c *ServerContext) Read(req any) error {
 	if c.stream != nil {
-		return c.stream.RecvMsg(req)
+		return transGrpcError(c.stream.RecvMsg(req), false)
 	}
-	return c.decodefunc(req)
+	return transGrpcError(c.decodefunc(req), false)
 }
 
 // Warning!this function is only used for generated code,don't use it in any other place
 func (c *ServerContext) Write(resp any) error {
 	if c.stream != nil {
-		return c.stream.SendMsg(resp)
+		return transGrpcError(c.stream.SendMsg(resp), false)
 	}
 	c.resp = resp
 	return nil
@@ -141,7 +141,7 @@ type ClientStreamServerContext[reqtype any] struct {
 
 func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 	var req any = new(reqtype)
-	if e := c.sctx.stream.RecvMsg(req); e != nil {
+	if e := transGrpcError(c.sctx.stream.RecvMsg(req), false); e != nil {
 		if e != io.EOF {
 			slog.ErrorContext(c.Context, "["+c.sctx.path+"] read request failed", slog.String("error", e.Error()))
 		}
@@ -196,7 +196,7 @@ type ServerStreamServerContext[resptype any] struct {
 
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
-	e := c.sctx.stream.SendMsg(resp)
+	e := transGrpcError(c.sctx.stream.SendMsg(resp), false)
 	if e != nil && e != io.EOF {
 		slog.ErrorContext(c.Context, "["+c.sctx.path+"] send response failed", slog.String("error", e.Error()))
 	}
@@ -243,7 +243,7 @@ type AllStreamServerContext[reqtype, resptype any] struct {
 
 func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 	var req any = new(reqtype)
-	if e := c.sctx.stream.RecvMsg(req); e != nil {
+	if e := transGrpcError(c.sctx.stream.RecvMsg(req), false); e != nil {
 		if e != io.EOF {
 			slog.ErrorContext(c.Context, "["+c.sctx.path+"] read request failed", slog.String("error", e.Error()))
 		}
@@ -262,7 +262,7 @@ func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *AllStreamServerContext[reqtype, resptype]) Send(resp *resptype) error {
-	e := c.sctx.stream.SendMsg(resp)
+	e := transGrpcError(c.sctx.stream.SendMsg(resp), false)
 	if e != nil && e != io.EOF {
 		slog.ErrorContext(c.Context, "["+c.sctx.path+"] send response failed", slog.String("error", e.Error()))
 	}

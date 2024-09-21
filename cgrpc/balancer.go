@@ -324,7 +324,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 			span.GetSelfSpanData().SetStateKV("host", server.GetServerAddr())
 			pickinfo.SubConn = server.(*ServerForPick).subconn
 			pickinfo.Done = func(doneinfo balancer.DoneInfo) {
-				e := transGrpcError(doneinfo.Err)
+				e := transGrpcError(doneinfo.Err, false)
 				if cpuusagestrs := doneinfo.Trailer.Get("Cpu-Usage"); len(cpuusagestrs) > 0 && cpuusagestrs[0] != "" {
 					cpuusage, _ := strconv.ParseFloat(cpuusagestrs[0], 64)
 					server.GetServerPickInfo().UpdateCPU(cpuusage)

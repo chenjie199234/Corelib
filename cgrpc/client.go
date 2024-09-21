@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"net/http"
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -23,14 +22,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/keepalive"
 	gmetadata "google.golang.org/grpc/metadata"
 	gresolver "google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/status"
 )
 
 type ClientConfig struct {
@@ -217,7 +214,7 @@ func (c *CGrpcClient) Invoke(ctx context.Context, path string, req, reply any, o
 		span.GetSelfSpanData().SetStateKV("path", path)
 		gmd.Set("traceparent", span.GetSelfSpanData().FormatTraceParent())
 		gmd.Set("tracestate", span.GetParentSpanData().FormatTraceState())
-		e := transGrpcError(c.conn.Invoke(gmetadata.NewOutgoingContext(ctx, gmd), path, req, reply))
+		e := transGrpcError(c.conn.Invoke(gmetadata.NewOutgoingContext(ctx, gmd), path, req, reply), true)
 		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 			continue
 		}
@@ -256,7 +253,7 @@ func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path
 		gmd.Set("traceparent", span.GetSelfSpanData().FormatTraceParent())
 		gmd.Set("tracestate", span.GetParentSpanData().FormatTraceState())
 		stream, e := c.conn.NewStream(ctx, desc, path, opts...)
-		ee := transGrpcError(e)
+		ee := transGrpcError(e, true)
 		if cerror.Equal(ee, cerror.ErrServerClosing) || cerror.Equal(ee, cerror.ErrTarget) {
 			continue
 		}
@@ -264,55 +261,29 @@ func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path
 		if ee != nil {
 			return nil, ee
 		}
-		return stream, nil
+		return &ClientStreamWraper{c: stream}, nil
 	}
 }
-func transGrpcError(e error) *cerror.Error {
-	if ee, ok := e.(*cerror.Error); ok {
-		return ee
-	}
-	s, _ := status.FromError(e)
-	if s == nil {
-		return nil
-	}
-	switch s.Code() {
-	case codes.OK:
-		return nil
-	case codes.Canceled:
-		return cerror.ErrCanceled
-	case codes.DeadlineExceeded:
-		return cerror.ErrDeadlineExceeded
-	case codes.Unknown:
-		return cerror.Decode(s.Message())
-	case codes.InvalidArgument:
-		return cerror.ErrReq
-	case codes.NotFound:
-		return cerror.ErrNotExist
-	case codes.AlreadyExists:
-		return cerror.ErrAlreadyExist
-	case codes.PermissionDenied:
-		return cerror.ErrPermission
-	case codes.ResourceExhausted:
-		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
-	case codes.FailedPrecondition:
-		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
-	case codes.Aborted:
-		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
-	case codes.OutOfRange:
-		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
-	case codes.Unimplemented:
-		return cerror.ErrNoapi
-	case codes.Internal:
-		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
-	case codes.Unavailable:
-		return cerror.MakeCError(-1, http.StatusServiceUnavailable, s.Message())
-	case codes.DataLoss:
-		return cerror.MakeCError(-1, http.StatusNotFound, s.Message())
-	case codes.Unauthenticated:
-		return cerror.MakeCError(-1, http.StatusUnauthorized, s.Message())
-	default:
-		ee := cerror.Decode(s.Message())
-		ee.SetHttpcode(int32(s.Code()))
-		return ee
-	}
+
+type ClientStreamWraper struct {
+	c grpc.ClientStream
+}
+
+func (cs *ClientStreamWraper) Header() (gmetadata.MD, error) {
+	return cs.c.Header()
+}
+func (cs *ClientStreamWraper) Trailer() gmetadata.MD {
+	return cs.c.Trailer()
+}
+func (cs *ClientStreamWraper) CloseSend() error {
+	return transGrpcError(cs.c.CloseSend(), true)
+}
+func (cs *ClientStreamWraper) Context() context.Context {
+	return cs.c.Context()
+}
+func (cs *ClientStreamWraper) SendMsg(m any) error {
+	return transGrpcError(cs.c.SendMsg(m), true)
+}
+func (cs *ClientStreamWraper) RecvMsg(m any) error {
+	return transGrpcError(cs.c.RecvMsg(m), true)
 }
