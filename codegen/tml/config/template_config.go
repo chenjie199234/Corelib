@@ -18,7 +18,6 @@ import (
 
 	"{{.}}/model"
 
-	"github.com/chenjie199234/Corelib/trace"
 	configsdk "github.com/chenjie199234/admin/sdk/config"
 )
 
@@ -36,63 +35,9 @@ var EC *EnvConfig
 // RemoteConfigSdk -
 var RemoteConfigSdk *configsdk.ConfigSdk
 
-type LogHandler struct {
-	slog.Handler
-}
-
-func (l *LogHandler) Handle(ctx context.Context, record slog.Record) error {
-	var traceattr *slog.Attr
-	if record.NumAttrs() > 0 {
-		attrs := make([]slog.Attr, 0, record.NumAttrs())
-		record.Attrs(func(a slog.Attr) bool {
-			if a.Key == "traceid"{
-				traceattr = &a
-			}
-			attrs = append(attrs, a)
-			return true
-		})
-		record = slog.NewRecord(record.Time, record.Level, record.Message, record.PC)
-		record.AddAttrs(slog.Attr{
-			Key:   "msg_kvs",
-			Value: slog.GroupValue(attrs...),
-		})
-	}
-	if trace.LogTrace(){
-		if traceattr == nil {
-			if span := trace.SpanFromContext(ctx); span != nil {
-				tmp := slog.String("traceid", span.GetSelfSpanData().GetTid().String())
-				traceattr = &tmp
-			}
-		}
-		if traceattr != nil {
-			record.AddAttrs(*traceattr)
-		}
-	}
-	return l.Handler.Handle(ctx, record)
-}
-
 // notice is a sync function
 // don't write block logic inside it
 func Init(notice func(c *AppConfig)) {
-	slog.SetDefault(slog.New(&LogHandler{
-		slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			AddSource: true,
-			ReplaceAttr: func(groups []string, attr slog.Attr) slog.Attr {
-				if len(groups) == 0 && attr.Key == "function" {
-					return slog.Attr{}
-				}
-				if len(groups) == 0 && attr.Key == slog.SourceKey {
-					s := attr.Value.Any().(*slog.Source)
-					if index := strings.Index(s.File, "corelib@v"); index != -1 {
-						s.File = s.File[index:]
-					} else if index = strings.Index(s.File, "Corelib@v"); index != -1 {
-						s.File = s.File[index:]
-					}
-				}
-				return attr
-			},
-		}),
-	}))
 	initenv()
 	if EC.ConfigType != nil && *EC.ConfigType == 1 {
 		tmer := time.NewTimer(time.Second * 2)
