@@ -27,12 +27,12 @@ func AllMids() map[string]cgrpc.OutsideHandler {
 func RegMid(name string, handler cgrpc.OutsideHandler) {
 	all[name] = handler
 }
-func rate(ctx *cgrpc.Context) {
+func rate(ctx *cgrpc.ServerContext) {
 	if pass := publicmids.GrpcRate(ctx, ctx.GetPath()); !pass {
 		ctx.Abort(cerror.ErrBusy)
 	}
 }
-func token(ctx *cgrpc.Context) {
+func token(ctx *cgrpc.ServerContext) {
 	md := metadata.GetMetadata(ctx)
 	tokenstr := md["Token"]
 	if tokenstr == "" {
@@ -50,7 +50,7 @@ func token(ctx *cgrpc.Context) {
 	md["Token-User"] = t.UserID
 	md["Token-Data"] = t.Data
 }
-func session(ctx *cgrpc.Context) {
+func session(ctx *cgrpc.ServerContext) {
 	md := metadata.GetMetadata(ctx)
 	sessionstr := md["Session"]
 	if sessionstr == "" {
@@ -65,7 +65,7 @@ func session(ctx *cgrpc.Context) {
 	md["Session-User"] = userid
 	md["Session-Data"] = sessiondata
 }
-func accesskey(ctx *cgrpc.Context) {
+func accesskey(ctx *cgrpc.ServerContext) {
 	md := metadata.GetMetadata(ctx)
 	accesskey := md["Access-Key"]
 	if accesskey == "" {
