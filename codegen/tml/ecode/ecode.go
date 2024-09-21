@@ -25,19 +25,18 @@ var (
 	ErrReq               = cerror.ErrReq               //10001 // http code 400
 	ErrResp              = cerror.ErrResp              //10002 // http code 500
 	ErrSystem            = cerror.ErrSystem            //10003 // http code 500
-	ErrAuth              = cerror.ErrAuth              //10004 // http code 401
-	ErrToken             = cerror.ErrToken             //10005 // http code 401
-	ErrSession           = cerror.ErrSession           //10006 // http code 401
-	ErrAccessKey         = cerror.ErrAccessKey         //10007 // http code 401
-	ErrAccessSign        = cerror.ErrAccessSign        //10008 // http code 401
-	ErrPermission        = cerror.ErrPermission        //10009 // http code 403
-	ErrTooFast           = cerror.ErrTooFast           //10010 // http code 403
-	ErrBan               = cerror.ErrBan               //10011 // http code 403
-	ErrBusy              = cerror.ErrBusy              //10012 // http code 503
-	ErrNotExist          = cerror.ErrNotExist          //10013 // http code 404
-	ErrAlreadyExist      = cerror.ErrAlreadyExist      //10014 // http code 400
-	ErrPasswordWrong     = cerror.ErrPasswordWrong     //10015 // http code 400
-	ErrPasswordLength    = cerror.ErrPasswordLength    //10016 // http code 400
+	ErrToken             = cerror.ErrToken             //10004 // http code 401
+	ErrSession           = cerror.ErrSession           //10005 // http code 401
+	ErrAccessKey         = cerror.ErrAccessKey         //10006 // http code 401
+	ErrAccessSign        = cerror.ErrAccessSign        //10007 // http code 401
+	ErrPermission        = cerror.ErrPermission        //10008 // http code 403
+	ErrTooFast           = cerror.ErrTooFast           //10009 // http code 403
+	ErrBan               = cerror.ErrBan               //10010 // http code 403
+	ErrBusy              = cerror.ErrBusy              //10011 // http code 503
+	ErrNotExist          = cerror.ErrNotExist          //10012 // http code 404
+	ErrAlreadyExist      = cerror.ErrAlreadyExist      //10013 // http code 400
+	ErrPasswordWrong     = cerror.ErrPasswordWrong     //10014 // http code 400
+	ErrPasswordLength    = cerror.ErrPasswordLength    //10015 // http code 400
 
 	ErrBusiness1 = cerror.MakeCError(20001, http.StatusBadRequest, "business error 1")
 )

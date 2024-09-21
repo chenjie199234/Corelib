@@ -80,7 +80,7 @@ func transGrpcError(e error, clientorserver bool) error {
 	case codes.DataLoss:
 		return cerror.MakeCError(-1, http.StatusNotFound, s.Message())
 	case codes.Unauthenticated:
-		return cerror.ErrAuth
+		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
 	default:
 		ee := cerror.Decode(s.Message())
 		ee.SetHttpcode(int32(s.Code()))
