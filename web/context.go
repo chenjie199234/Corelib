@@ -14,80 +14,43 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-func (s *WebServer) getContext(c context.Context, w http.ResponseWriter, r *http.Request, realip string, handlers []OutsideHandler) *Context {
-	ctx, ok := s.ctxpool.Get().(*Context)
-	if !ok {
-		ctx = &Context{
-			Context:  c,
-			w:        w,
-			r:        r,
-			realip:   realip,
-			handlers: handlers,
-			finish:   0,
-			e:        nil,
-		}
-		return ctx
-	}
-	ctx.Context = c
-	ctx.w = w
-	ctx.r = r
-	ctx.realip = realip
-	ctx.handlers = handlers
-	ctx.finish = 0
-	ctx.e = nil
-	return ctx
-}
-
-func (s *WebServer) putContext(ctx *Context) {
-	ctx.r = nil
-	ctx.w = nil
-	if ctx.bodyerr != nil {
-		bpool.Put(&ctx.body)
-	}
-	ctx.body = nil
-	ctx.bodyerr = nil
-	s.ctxpool.Put(ctx)
-}
-
 type Context struct {
 	context.Context
-	w        http.ResponseWriter
-	r        *http.Request
-	realip   string
-	handlers []OutsideHandler
-	finish   int32
-	body     []byte
-	bodyerr  error
-	e        *cerror.Error
-}
-
-func (c *Context) run() {
-	for _, handler := range c.handlers {
-		handler(c)
-		if c.finish != 0 {
-			break
-		}
-	}
+	w       http.ResponseWriter
+	r       *http.Request
+	realip  string
+	finish  int32
+	body    []byte
+	bodyerr error
+	e       *cerror.Error
 }
 
 func (c *Context) Abort(e error) {
-	if !atomic.CompareAndSwapInt32(&c.finish, 0, -1) {
+	if atomic.SwapInt32(&c.finish, 1) != 0 {
 		return
 	}
-	c.e = cerror.Convert(e)
+	httpcode := 0
+	if ee := cerror.Convert(e); ee != nil {
+		if http.StatusText(int(ee.Httpcode)) == "" || ee.Httpcode < 400 {
+			c.e = cerror.ErrPanic
+			httpcode = int(ee.Httpcode)
+		} else {
+			c.e = ee
+		}
+	}
 	if c.e != nil {
 		c.w.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
 		c.w.Header().Set("Content-Type", "application/json")
-		if c.e.Httpcode < 400 || c.e.Httpcode > 999 {
-			panic("[web.Context.Abort] httpcode must in [400,999]")
-		}
 		c.w.WriteHeader(int(c.e.Httpcode))
 		c.w.Write(common.STB(c.e.Json()))
+	}
+	if httpcode != 0 {
+		panic("[web.Context.Abort] unknown http code: " + strconv.Itoa(httpcode))
 	}
 }
 
 func (c *Context) Write(contenttype string, msg []byte) {
-	if !atomic.CompareAndSwapInt32(&c.finish, 0, 1) {
+	if atomic.SwapInt32(&c.finish, 1) != 0 {
 		return
 	}
 	c.w.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
@@ -96,12 +59,8 @@ func (c *Context) Write(contenttype string, msg []byte) {
 	c.w.Write(msg)
 }
 
-func (c *Context) WriteString(contenttype, msg string) {
-	c.Write(contenttype, common.STB(msg))
-}
-
 func (c *Context) Redirect(code int, url string) {
-	if !atomic.CompareAndSwapInt32(&c.finish, 0, 2) {
+	if atomic.SwapInt32(&c.finish, 1) != 0 {
 		return
 	}
 	if code != 301 && code != 302 && code != 307 && code != 308 {

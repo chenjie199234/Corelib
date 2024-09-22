@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -144,7 +143,6 @@ type WebServer struct {
 	self           string
 	c              *ServerConfig
 	tlsc           *tls.Config
-	ctxpool        *sync.Pool
 	clientnum      int32 //without hijacked
 	stop           *graceful.Graceful
 	closetimer     *time.Timer
@@ -177,7 +175,6 @@ func NewWebServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tlsc 
 		self:           selffullname,
 		c:              c,
 		tlsc:           tlsc,
-		ctxpool:        &sync.Pool{},
 		stop:           graceful.New(),
 		closetimer:     time.NewTimer(0),
 		handlerTimeout: make(map[string]map[string]time.Duration),

@@ -147,7 +147,14 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			continue
 		}
 		g.P(method.Comments.Leading,
-			method.GoName, "(", g.QualifiedGoIdent(contextPackage.Ident("Context")), ",*", g.QualifiedGoIdent(method.Input.GoIdent), ")(*", g.QualifiedGoIdent(method.Output.GoIdent), ",error)",
+			method.GoName,
+			"(",
+			g.QualifiedGoIdent(contextPackage.Ident("Context")),
+			",*",
+			g.QualifiedGoIdent(method.Input.GoIdent),
+			")(*",
+			g.QualifiedGoIdent(method.Output.GoIdent),
+			",error)",
 			method.Comments.Trailing)
 	}
 	g.P("}")

@@ -328,11 +328,14 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 		}
 		defer r.s.stop.DoneOne()
 		//logic
-		workctx := r.s.getContext(metadata.SetMetadata(ctx, md), resp, req, peerip, totalhandlers)
-		paniced := true
+		workctx := &Context{
+			Context: metadata.SetMetadata(ctx, md),
+			w:       resp,
+			r:       req,
+			realip:  peerip,
+		}
 		defer func() {
-			if paniced {
-				e := recover()
+			if e := recover(); e != nil {
 				stack := make([]byte, 1024)
 				n := runtime.Stack(stack, false)
 				slog.ErrorContext(workctx, "[web.server] panic",
@@ -341,19 +344,18 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 					slog.String("method", method),
 					slog.Any("panic", e),
 					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
-				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
-				resp.Header().Set("Content-Type", "application/json")
-				resp.WriteHeader(int(cerror.ErrPanic.Httpcode))
-				resp.Write(common.STB(cerror.ErrPanic.Json()))
-				workctx.e = cerror.ErrPanic
+				workctx.Abort(cerror.ErrPanic)
 			}
 			span.Finish(workctx.e)
 			peername, _ := span.GetParentSpanData().GetStateKV("app")
 			monitor.WebServerMonitor(peername, method, path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
-			r.s.putContext(workctx)
 		}()
-		workctx.run()
-		paniced = false
+		for _, handler := range totalhandlers {
+			handler(workctx)
+			if workctx.finish != 0 {
+				break
+			}
+		}
 	}
 }
 func (r *Router) notFoundHandler(w http.ResponseWriter, req *http.Request) {
