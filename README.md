@@ -18,17 +18,25 @@
 	Web framework,this contains protobuf plugin to generate code from proto file
 ## cgrpc
 	grpc framework,this contains protobuf plugin to generate code from proto file
-## stream
-	stream connection framework,use websocket's frame format,so this can support rawtcp and websocket at the same time on same port
 ## crpc
 	a new rpc framework(20-30% fast then grpc),this contains protobuf plugin to generate code from proto file
-## id
-	snow flake
-## log
-	log and trace log
-## pool
-	sync.Pool for []byte and bufio.Reader and bufio.Writer
+## pbex
+    protobuf extension for message validate,this is used in the web/crpc/cgrpc framework
+## stream
+	stream connection framework,use websocket's frame format,so this can support rawtcp and websocket at the same time on same port
+## ws
+    a simple ws handshake and message recv and send framework
 ## container
 	some useful struct
+## monitor
+    Promethus support
+## mysql
+    mysql driver wraper,add trace support and read write seprate
+## mongo
+    mongodb driver wraper,add trace support
+## redis
+    redis driver wraper,add trace support and some useful function(bloom filter,rate limiter,message queue,verify code check)
+## email
+    simple email client used to send email
 ## superd
 	fork child process to exec some other program,like supervisor

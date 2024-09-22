@@ -36,10 +36,8 @@ func (op OPCode) IsControl() bool {
 var ErrNotWS = errors.New("not a websocket connection")
 var ErrRequestLineFormat = errors.New("http request line format wrong")
 var ErrResponseLineFormat = errors.New("http response line format wrong")
-var ErrHttpVersion = errors.New("http version wrong")
-var ErrHttpMethod = errors.New("http method wrong")
 var ErrHeaderLineFormat = errors.New("http header line format wrong")
-var ErrSign = errors.New("sign error")
+var ErrAcceptSign = errors.New("accept sign wrong")
 
 var ErrMsgLarge = errors.New("message too large")
 var ErrMsgFin = errors.New("message must be fin")

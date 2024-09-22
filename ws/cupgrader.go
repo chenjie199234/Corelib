@@ -99,10 +99,6 @@ func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header 
 				e = ErrResponseLineFormat
 				return
 			}
-			if !bytes.Equal(pieces[0], []byte{'H', 'T', 'T', 'P', '/', '1', '.', '1'}) {
-				e = ErrHttpVersion
-				return
-			}
 			if !bytes.Equal(pieces[1], []byte{'1', '0', '1'}) {
 				e = ErrResponseLineFormat
 				return
@@ -142,7 +138,7 @@ func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header 
 				h.Write(nonce)
 				h.Write([]byte{'2', '5', '8', 'E', 'A', 'F', 'A', '5', '-', 'E', '9', '1', '4', '-', '4', '7', 'D', 'A', '-', '9', '5', 'C', 'A', '-', 'C', '5', 'A', 'B', '0', 'D', 'C', '8', '5', 'B', '1', '1'})
 				if base64.StdEncoding.EncodeToString(h.Sum(nil)) != common.BTS(pieces[1]) {
-					e = ErrSign
+					e = ErrAcceptSign
 					return
 				}
 			case "sec-websocket-version":
