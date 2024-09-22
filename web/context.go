@@ -18,7 +18,7 @@ type Context struct {
 	context.Context
 	w       http.ResponseWriter
 	r       *http.Request
-	realip  string
+	peerip  string
 	finish  int32
 	body    []byte
 	bodyerr error
@@ -107,7 +107,7 @@ func (c *Context) GetRemoteAddr() string {
 
 // get the real peer's ip which will not be confused by proxy
 func (c *Context) GetRealPeerIp() string {
-	return c.realip
+	return c.peerip
 }
 
 // this function try to return the first caller's ip(mostly time it will be the user's ip)

@@ -332,7 +332,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 			Context: metadata.SetMetadata(ctx, md),
 			w:       resp,
 			r:       req,
-			realip:  peerip,
+			peerip:  peerip,
 		}
 		defer func() {
 			if e := recover(); e != nil {
