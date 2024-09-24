@@ -97,8 +97,7 @@ func main() {
 		xweb.UpdateHandlerTimeout(ac.HandlerTimeout)
 		xweb.UpdateWebPathRewrite(ac.WebPathRewrite)
 		publicmids.UpdateRateConfig(ac.HandlerRate)
-		publicmids.UpdateTokenConfig(ac.TokenSecret, ac.SessionTokenExpire.StdDuration())
-		publicmids.UpdateSessionConfig(ac.SessionTokenExpire.StdDuration())
+		publicmids.UpdateTokenConfig(ac.TokenSecret)
 		publicmids.UpdateAccessConfig(ac.Accesses)
 	})
 	if rateredis := config.GetRedis("rate_redis"); rateredis != nil {

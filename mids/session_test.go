@@ -19,8 +19,7 @@ func Test_Session(t *testing.T) {
 		IOTimeout:       ctime.Duration(time.Second),
 	}, nil)
 	UpdateSessionRedisInstance(client)
-	UpdateSessionConfig(time.Second)
-	sessionstr := MakeSession(context.Background(), "1", "123")
+	sessionstr := MakeSession(context.Background(), "1", "123",time.Second)
 	if sessionstr == "" {
 		t.Fatal("should make session success")
 	}
@@ -39,7 +38,7 @@ func Test_Session(t *testing.T) {
 	if status {
 		t.Fatal("should not verify success")
 	}
-	sessionstr = MakeSession(context.Background(), "1", "123")
+	sessionstr = MakeSession(context.Background(), "1", "123",time.Second)
 	if sessionstr == "" {
 		t.Fatal("should make session success")
 	}

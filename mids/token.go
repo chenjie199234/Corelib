@@ -20,18 +20,16 @@ type Token struct {
 }
 
 var tokensecret string
-var tokenexpire time.Duration
 
-func UpdateTokenConfig(secret string, expire time.Duration) {
+func UpdateTokenConfig(secret string) {
 	tokensecret = secret
-	tokenexpire = expire
 }
 
 // return empty means make token failed
 // put the return data in web's Token header or metadata's Token field
-func MakeToken(ctx context.Context, puber, deployenv, runenv, userid, data string) string {
+func MakeToken(ctx context.Context, puber, deployenv, runenv, userid, data string, expire time.Duration) string {
 	start := time.Now()
-	end := start.Add(tokenexpire)
+	end := start.Add(expire)
 	t, _ := json.Marshal(&Token{
 		Puber:     puber,
 		DeployEnv: deployenv,

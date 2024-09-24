@@ -14,11 +14,7 @@ import (
 )
 
 var sessionredis *redis.Client
-var sessionexpire time.Duration
 
-func UpdateSessionConfig(expire time.Duration) {
-	sessionexpire = expire
-}
 func UpdateSessionRedisInstance(c *redis.Client) {
 	if c == nil {
 		slog.WarnContext(nil, "[session] redis missing,all session event will be failed")
@@ -31,7 +27,7 @@ func UpdateSessionRedisInstance(c *redis.Client) {
 
 // return empty means make session failed
 // user should put the return data in web's Session header or metadata's Session field
-func MakeSession(ctx context.Context, userid, data string) string {
+func MakeSession(ctx context.Context, userid, data string,expire time.Duration) string {
 	redisclient := sessionredis
 	if redisclient == nil {
 		slog.ErrorContext(ctx, "[session.make] redis missing")
@@ -40,7 +36,7 @@ func MakeSession(ctx context.Context, userid, data string) string {
 	result := make([]byte, 8)
 	rand.Read(result)
 	sessionid := hex.EncodeToString(result)
-	if _, e := redisclient.SetEx(ctx, "session_"+userid, sessionid+"_"+data, sessionexpire).Result(); e != nil {
+	if _, e := redisclient.SetEx(ctx, "session_"+userid, sessionid+"_"+data, expire).Result(); e != nil {
 		slog.ErrorContext(ctx, "[session.make] write session data failed", slog.String("userid", userid), slog.String("error", e.Error()))
 		return ""
 	}

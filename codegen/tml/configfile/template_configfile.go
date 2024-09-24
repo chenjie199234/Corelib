@@ -147,7 +147,6 @@ const app = `{
 		}]
 	},
 	"token_secret":"test",
-	"session_token_expire":"24h",
 	"service":{
 
 	}
