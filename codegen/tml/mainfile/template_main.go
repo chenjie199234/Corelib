@@ -20,6 +20,7 @@ import (
 	"{{.}}/dao"
 	"{{.}}/server/xcrpc"
 	"{{.}}/server/xgrpc"
+	"{{.}}/server/xraw"
 	"{{.}}/server/xweb"
 	"{{.}}/service"
 
