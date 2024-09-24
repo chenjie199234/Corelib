@@ -36,7 +36,7 @@ func StartRawServer() {
 		tlsc = &tls.Config{Certificates: certificates}
 	}
 	s, _ = stream.NewInstance(&stream.InstanceConfig{
-		TcpC:               &stream.TcpConfig{ConnectTimeout: c.ConnectTimeout.StdDuration()},
+		TcpC:               &stream.TcpConfig{ConnectTimeout: c.ConnectTimeout.StdDuration(), MaxMsgLen: c.MaxMsgLen},
 		HeartprobeInterval: c.HeartProbe.StdDuration(),
 		GroupNum:           c.GroupNum,
 		VerifyFunc:         rawVerify,
