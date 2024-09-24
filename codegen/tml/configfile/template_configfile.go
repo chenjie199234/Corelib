@@ -6,6 +6,13 @@ import (
 )
 
 const source = `{
+	"raw_server":{
+		"connect_timeout":"500ms",
+		"heart_probe":"10s",
+		"group_num":100,
+		"certs":{
+		}
+	},
 	"cgrpc_server":{
 		"connect_timeout":"500ms",
 		"idle_timeout":"0",

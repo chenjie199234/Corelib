@@ -145,6 +145,15 @@ func main() {
 		}
 		wg.Done()
 	}()
+	wg.Add(1)
+	go func() {
+		xraw.StartRawServer()
+		select {
+		case ch <- syscall.SIGTERM:
+		default:
+		}
+		wg.Done()
+	}()
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-ch
 	//stop the whole business service
@@ -163,6 +172,11 @@ func main() {
 	wg.Add(1)
 	go func() {
 		xgrpc.StopCGrpcServer(false)
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		xraw.StopRawServer()
 		wg.Done()
 	}()
 	wg.Wait()

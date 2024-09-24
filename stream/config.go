@@ -93,7 +93,10 @@ type InstanceConfig struct {
 	SendIdleTimeout time.Duration
 
 	//split connections into groups
-	//every group will have an independence RWMutex to control online and offline
+	//each group has an independence RWMutex to control online and offline
+	//each group's connections' heart probe check is in an independence goroutine
+	//small group num will increase to lock conflict
+	//big group num will increate the goroutine num
 	//default 100
 	GroupNum uint16
 
