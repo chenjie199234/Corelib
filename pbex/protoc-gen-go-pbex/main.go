@@ -22,6 +22,7 @@ func main() {
 		//pre check
 		needfile := make(map[string]bool)
 		for _, f := range gen.Files {
+			needfile[f.Desc.Path()] = false
 			if !f.Generate {
 				continue
 			}
@@ -35,8 +36,10 @@ func main() {
 				if pbex.OneOfHasPBEX(m) {
 					panic("oneof fields should not contain pbex")
 				}
+				if pbex.NeedValidate(m) {
+					needfile[f.Desc.Path()] = true
+				}
 			}
-			needfile[f.Desc.Path()] = len(f.Messages) > 0
 			//delete old file
 			oldfile := f.GeneratedFilenamePrefix + "_pbex.pb.go"
 			if e := os.RemoveAll(oldfile); e != nil {
