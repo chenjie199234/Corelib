@@ -498,7 +498,7 @@ func index(timewaste uint64) int64 {
 
 type pathinfo struct {
 	TotalCount     uint32
-	ErrCodeCount   map[int64]uint32 //key:error code,value:count
+	ErrCodeCount   map[int32]uint32 //key:error code,value:count
 	TotaltimeWaste uint64           //nano second
 	maxTimewaste   uint64           //nano second
 	timewaste      [5001]uint32     //index:0-4999(1ms-5000ms) each 1ms,index:5000 more then 5s,value:count

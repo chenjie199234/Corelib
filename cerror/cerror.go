@@ -14,7 +14,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-func MakeCError(code int64, httpcode int32, msg string) *Error {
+func MakeCError(code int32, httpcode int32, msg string) *Error {
 	if code == 0 {
 		panic("error code can't be 0")
 	}
@@ -31,17 +31,17 @@ func MakeCError(code int64, httpcode int32, msg string) *Error {
 	}
 }
 func (this *Error) Error() string {
-	return "code=" + strconv.FormatInt(this.Code, 10) + ",msg=" + this.Msg
+	return "code=" + strconv.FormatInt(int64(this.Code), 10) + ",msg=" + this.Msg
 }
 func (this *Error) Json() string {
 	d, _ := json.Marshal(this.Msg)
-	return "{\"code\":" + strconv.FormatInt(this.Code, 10) + ",\"msg\":" + common.BTS(d) + "}"
+	return "{\"code\":" + strconv.FormatInt(int64(this.Code), 10) + ",\"msg\":" + common.BTS(d) + "}"
 }
 func (this *Error) GRPCStatus() *status.Status {
 	return status.New(codes.Code(this.Httpcode), this.Error())
 }
 func (this *Error) SlogAttr() *slog.Attr {
-	return &slog.Attr{Key: "error", Value: slog.GroupValue(slog.Int64("code", this.Code), slog.String("msg", this.Msg))}
+	return &slog.Attr{Key: "error", Value: slog.GroupValue(slog.Int64("code", int64(this.Code)), slog.String("msg", this.Msg))}
 }
 func (this *Error) SetHttpcode(httpcode int32) {
 	this.Httpcode = httpcode
@@ -105,11 +105,11 @@ func Decode(estr string) *Error {
 		if !strings.HasPrefix(p1, "code=") || !strings.HasPrefix(p2, "msg=") {
 			return MakeCError(-1, 500, estr)
 		}
-		code, e := strconv.ParseInt(p1[5:], 10, 64)
+		code, e := strconv.ParseInt(p1[5:], 10, 32)
 		if e != nil {
 			return MakeCError(-1, 500, estr)
 		}
 		msg := p2[4:]
-		return MakeCError(code, 500, msg)
+		return MakeCError(int32(code), 500, msg)
 	}
 }

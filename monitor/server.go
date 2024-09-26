@@ -47,7 +47,7 @@ func WebServerMonitor(peername, method, path string, e error, timewaste uint64) 
 	pinfo, ok := peer[recordpath]
 	if !ok {
 		pinfo = &pathinfo{
-			ErrCodeCount: make(map[int64]uint32),
+			ErrCodeCount: make(map[int32]uint32),
 			lker:         &sync.Mutex{},
 		}
 		peer[recordpath] = pinfo
@@ -85,7 +85,7 @@ func GrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo, ok := peer[recordpath]
 	if !ok {
 		pinfo = &pathinfo{
-			ErrCodeCount: make(map[int64]uint32),
+			ErrCodeCount: make(map[int32]uint32),
 			lker:         &sync.Mutex{},
 		}
 		peer[recordpath] = pinfo
@@ -122,7 +122,7 @@ func CrpcServerMonitor(peername, method, path string, e error, timewaste uint64)
 	pinfo, ok := peer[recordpath]
 	if !ok {
 		pinfo = &pathinfo{
-			ErrCodeCount: make(map[int64]uint32),
+			ErrCodeCount: make(map[int32]uint32),
 			lker:         &sync.Mutex{},
 		}
 		peer[recordpath] = pinfo
