@@ -11,7 +11,6 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func MakeCError(code int32, httpcode int32, msg string) *Error {
@@ -83,8 +82,7 @@ func Decode(estr string) *Error {
 	if estr[0] == '{' && estr[len(estr)-1] == '}' {
 		//json format
 		tmp := &Error{}
-		//protojson can support "number string" or "number" for field:code
-		if e := (protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}).Unmarshal(common.STB(estr), tmp); e != nil {
+		if e := json.Unmarshal(common.STB(estr), tmp); e != nil {
 			return MakeCError(-1, 500, estr)
 		}
 		if tmp.Code == 0 {
