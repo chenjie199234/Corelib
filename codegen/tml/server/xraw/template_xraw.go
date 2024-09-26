@@ -8,11 +8,11 @@ import (
 const txt = `package xraw
 
 import (
-	"context"
 	"crypto/tls"
 	"log/slog"
 
 	"{{.}}/config"
+	"{{.}}/service"
 
 	"github.com/chenjie199234/Corelib/stream"
 )
@@ -39,12 +39,14 @@ func StartRawServer() {
 		TcpC:               &stream.TcpConfig{ConnectTimeout: c.ConnectTimeout.StdDuration(), MaxMsgLen: c.MaxMsgLen},
 		HeartprobeInterval: c.HeartProbe.StdDuration(),
 		GroupNum:           c.GroupNum,
-		VerifyFunc:         rawVerify,
-		OnlineFunc:         rawOnline,
-		PingPongFunc:       rawPingPong,
-		UserdataFunc:       rawUser,
-		OfflineFunc:        rawOffline,
+		VerifyFunc:         service.SvcRaw.RawVerify,
+		OnlineFunc:         service.SvcRaw.RawOnline,
+		PingPongFunc:       service.SvcRaw.RawPingPong,
+		UserdataFunc:       service.SvcRaw.RawUser,
+		OfflineFunc:        service.SvcRaw.RawOffline,
 	})
+
+	service.SvcRaw.SetStreamInstance(s)
 
 	if e := s.StartServer(":7000", tlsc); e != nil && e != stream.ErrServerClosed {
 		slog.ErrorContext(nil, "[xraw] start server failed", slog.String("error", e.Error()))
@@ -58,18 +60,6 @@ func StopRawServer() {
 	if s != nil {
 		s.Stop()
 	}
-}
-func rawVerify(ctx context.Context, peerVerifyData []byte) (response []byte, uniqueid string, success bool) {
-	return nil, "", false
-}
-func rawOnline(ctx context.Context, p *stream.Peer) (success bool) {
-	return false
-}
-func rawPingPong(p *stream.Peer) {
-}
-func rawUser(p *stream.Peer, userdata []byte) {
-}
-func rawOffline(p *stream.Peer) {
 }`
 
 func CreatePathAndFile(packagename string) {

@@ -29,6 +29,7 @@ import (
 	"github.com/chenjie199234/Corelib/codegen/tml/server/xraw"
 	"github.com/chenjie199234/Corelib/codegen/tml/server/xweb"
 	"github.com/chenjie199234/Corelib/codegen/tml/service"
+	serviceraw "github.com/chenjie199234/Corelib/codegen/tml/service/raw"
 	servicestatus "github.com/chenjie199234/Corelib/codegen/tml/service/status"
 	"github.com/chenjie199234/Corelib/codegen/tml/service/sub"
 	"github.com/chenjie199234/Corelib/codegen/tml/util"
@@ -217,6 +218,7 @@ func createBaseProject() {
 	dao.CreatePathAndFile(*packagename)
 
 	subdao.CreatePathAndFile("status")
+	subdao.CreatePathAndFile("raw")
 
 	mainfile.CreatePathAndFile(*packagename)
 
@@ -224,6 +226,7 @@ func createBaseProject() {
 
 	model.CreatePathAndFile(*appname)
 	submodel.CreatePathAndFile("status")
+	submodel.CreatePathAndFile("raw")
 
 	util.CreatePathAndFile()
 
@@ -238,6 +241,7 @@ func createBaseProject() {
 	service.CreatePathAndFile(*packagename)
 
 	servicestatus.CreatePathAndFile(*packagename)
+	serviceraw.CreatePathAndFile(*packagename)
 
 	cmd.CreatePathAndFile(*packagename, *appname)
 

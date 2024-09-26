@@ -9,11 +9,15 @@ const txt = `package service
 
 import (
 	"{{.}}/dao"
+	"{{.}}/service/raw"
 	"{{.}}/service/status"
 )
 
 // SvcStatus one specify sub service
 var SvcStatus *status.Service
+
+// SvcRaw one specify sub service
+var SvcRaw *raw.Service
 
 // StartService start the whole service
 func StartService() error {
@@ -22,6 +26,7 @@ func StartService() error {
 	}
 	//start sub service
 	SvcStatus = status.Start()
+	SvcRaw = raw.Start()
 	return nil
 }
 
@@ -29,6 +34,7 @@ func StartService() error {
 func StopService() {
 	//stop sub service
 	SvcStatus.Stop()
+	SvcRaw.Stop()
 }`
 
 func CreatePathAndFile(packagename string) {

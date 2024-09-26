@@ -24,6 +24,7 @@ func main() {
 	}
 	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
 		//pre check
+		needfile := make(map[string]bool)
 		for _, f := range gen.Files {
 			if !f.Generate {
 				continue
@@ -56,6 +57,7 @@ func main() {
 					if !need {
 						continue
 					}
+					needfile[f.Desc.Path()] = true
 					if pbex.OneOfHasPBEX(m.Input) {
 						panic("oneof fields should not contain pbex")
 					}
@@ -72,10 +74,7 @@ func main() {
 		}
 		//gen file
 		for _, f := range gen.Files {
-			if !f.Generate {
-				continue
-			}
-			if f.Desc.Options().(*descriptorpb.FileOptions).GetDeprecated() {
+			if status, ok := needfile[f.Desc.Path()]; !ok || !status {
 				continue
 			}
 			generateFile(gen, f)

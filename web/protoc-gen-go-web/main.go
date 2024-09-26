@@ -25,6 +25,7 @@ func main() {
 	}
 	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
 		//pre check
+		needfile := make(map[string]bool)
 		for _, f := range gen.Files {
 			if !f.Generate {
 				continue
@@ -60,6 +61,7 @@ func main() {
 					if need == 0 {
 						continue
 					}
+					needfile[f.Desc.Path()] = true
 					if need > 1 {
 						panic(fmt.Sprintf("method: %s in service: %s,only one http method can be setted", m.Desc.Name(), s.Desc.Name()))
 					}
@@ -97,10 +99,7 @@ func main() {
 		}
 		//gen file
 		for _, f := range gen.Files {
-			if !f.Generate {
-				continue
-			}
-			if f.Desc.Options().(*descriptorpb.FileOptions).GetDeprecated() {
+			if status, ok := needfile[f.Desc.Path()]; !ok || !status {
 				continue
 			}
 			generateFile(gen, f)

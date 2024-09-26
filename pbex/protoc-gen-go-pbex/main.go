@@ -20,8 +20,12 @@ func main() {
 	}
 	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
 		//pre check
+		needfile := make(map[string]bool)
 		for _, f := range gen.Files {
 			if !f.Generate {
+				continue
+			}
+			if f.Desc.Options().(*descriptorpb.FileOptions).GetDeprecated() {
 				continue
 			}
 			if *f.Proto.Syntax != "proto3" {
@@ -32,6 +36,7 @@ func main() {
 					panic("oneof fields should not contain pbex")
 				}
 			}
+			needfile[f.Desc.Path()] = len(f.Messages) > 0
 			//delete old file
 			oldfile := f.GeneratedFilenamePrefix + "_pbex.pb.go"
 			if e := os.RemoveAll(oldfile); e != nil {
@@ -40,10 +45,7 @@ func main() {
 		}
 		//gen file
 		for _, f := range gen.Files {
-			if !f.Generate {
-				continue
-			}
-			if f.Desc.Options().(*descriptorpb.FileOptions).GetDeprecated() {
+			if status, ok := needfile[f.Desc.Path()]; !ok || !status {
 				continue
 			}
 			generateFile(gen, f)
