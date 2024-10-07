@@ -79,6 +79,7 @@ func (d *DnsD) Stop() {
 // don't close the returned channel,it will be closed in cases:
 // 1.the cancel function be called
 // 2.this discover stopped
+// don't forget to call the returned cancel function if u don't need the notice channel
 func (d *DnsD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 	ch := make(chan *struct{}, 1)
 	d.lker.Lock()
@@ -151,7 +152,9 @@ func (d *DnsD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, error) 
 }
 
 func (d *DnsD) run() {
+	tker := time.NewTicker(d.interval)
 	defer func() {
+		tker.Stop()
 		d.lker.Lock()
 		for notice := range d.notices {
 			delete(d.notices, notice)
@@ -159,7 +162,6 @@ func (d *DnsD) run() {
 		}
 		d.lker.Unlock()
 	}()
-	tker := time.NewTicker(d.interval)
 	for {
 		select {
 		case <-d.ctx.Done():
@@ -213,9 +215,6 @@ func (d *DnsD) run() {
 		}
 		d.status = 0
 		d.lker.Unlock()
-		for len(tker.C) > 0 {
-			<-tker.C
-		}
 	}
 }
 func (d *DnsD) CheckTarget(target string) bool {
