@@ -19,7 +19,7 @@ RUN echo "start build" && go mod tidy && go build -o main && echo "end build"
 FROM debian:stable
 RUN apt-get update && apt-get install -y ca-certificates curl inetutils-telnet inetutils-ping inetutils-traceroute dnsutils iproute2 procps net-tools neovim && mkdir /root/app
 WORKDIR /root/app
-EXPOSE 6060 8000 9000 10000
+EXPOSE 6060 7000 8000 9000 10000
 COPY --from=builder /code/main /code/AppConfig.json /code/SourceConfig.json ./
 ENTRYPOINT ["./main"]`
 
