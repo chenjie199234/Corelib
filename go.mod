@@ -4,7 +4,7 @@ go 1.23.2
 
 require (
 	github.com/go-sql-driver/mysql v1.8.1
-	github.com/redis/go-redis/v9 v9.6.2
+	github.com/redis/go-redis/v9 v9.7.0
 	github.com/shirou/gopsutil/v4 v4.24.9
 	go.mongodb.org/mongo-driver v1.17.1
 	golang.org/x/net v0.30.0

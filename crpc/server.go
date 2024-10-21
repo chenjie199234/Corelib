@@ -131,6 +131,7 @@ func (s *CrpcServer) tellAllPeerSelfClosed() {
 			c.stop = true
 			c.Unlock()
 			d, _ := proto.Marshal(&Msg{
+				H: &MsgHeader{Callid: 0, Type: MsgType_Send},
 				B: &MsgBody{Error: cerror.ErrServerClosing},
 			})
 			p.SendMessage(nil, d, nil, nil)
@@ -194,6 +195,7 @@ func (s *CrpcServer) onlinefunc(ctx context.Context, p *stream.Peer) bool {
 	if s.stop.Closing() {
 		//tel peer self closed
 		d, _ := proto.Marshal(&Msg{
+			H: &MsgHeader{Callid: 0, Type: MsgType_Send},
 			B: &MsgBody{Error: cerror.ErrServerClosing},
 		})
 		p.SendMessage(nil, d, nil, nil)

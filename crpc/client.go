@@ -205,7 +205,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 				c.resolver.Now()
 			}
 		}
-		if msg.H != nil {
+		if msg.H.Callid != 0 {
 			if rw := server.getrw(msg.H.Callid); rw != nil {
 				rw.cache(msg.B)
 			}
