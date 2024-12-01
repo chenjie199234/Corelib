@@ -37,7 +37,7 @@ var ErrNotWS = errors.New("not a websocket connection")
 var ErrRequestLineFormat = errors.New("http request line format wrong")
 var ErrResponseLineFormat = errors.New("http response line format wrong")
 var ErrHeaderLineFormat = errors.New("http header line format wrong")
-var ErrAcceptSign = errors.New("accept sign wrong")
+var ErrAcceptSign = errors.New("websocket accept sign wrong")
 
 var ErrMsgLarge = errors.New("message too large")
 var ErrMsgFin = errors.New("message must be fin")
