@@ -11,8 +11,13 @@ import (
 
 	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/pool/cpool"
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/ctime"
+	"github.com/chenjie199234/Corelib/util/name"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Config struct {
@@ -69,24 +74,26 @@ func (c *Client) SendHtmlEmail(ctx context.Context, to []string, subject string,
 	return c.do(ctx, to, subject, "text/html; charset=UTF-8", body)
 }
 func (c *Client) do(ctx context.Context, to []string, subject string, mimetype string, body []byte) (e error) {
-	ctx, span := trace.NewSpan(ctx, "Corelib.Email", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("email", c.c.EmailName)
-	span.GetSelfSpanData().SetStateKV("host", c.c.Host+":"+strconv.FormatUint(uint64(c.c.Port), 10))
-	span.GetSelfSpanData().SetStateKV("subject", subject)
-	span.GetSelfSpanData().SetStateKV("self", c.c.Account)
-	count := 0
-	for _, v := range to {
-		count += len(v)
-		if count > 256 {
-			break
+	_, span := otel.Tracer(name.GetSelfFullName()).Start(
+		ctx,
+		"send email",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", c.c.EmailName),
+			attribute.String("server.addr", c.c.Host+":"+strconv.FormatUint(uint64(c.c.Port), 10)),
+			attribute.String("server.account", c.c.Account),
+			attribute.String("receiver.addr", strings.Join(to, ",")),
+			attribute.String("receiver.subject", subject),
+		),
+	)
+	defer func() {
+		if e == nil {
+			span.SetStatus(codes.Error, e.Error())
+		} else {
+			span.SetStatus(codes.Ok, "")
 		}
-	}
-	if count > 256 {
-		span.GetSelfSpanData().SetStateKV("targets", strconv.Itoa(len(to))+" targets")
-	} else {
-		span.GetSelfSpanData().SetStateKV("targets", strings.Join(to, ";"))
-	}
-	defer span.Finish(e)
+		span.End()
+	}()
 	for {
 		var client *smtp.Client
 		if client, e = c.p.Get(ctx); e != nil {
