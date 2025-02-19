@@ -45,6 +45,9 @@ func (l *LogHandler) Handle(ctx context.Context, record slog.Record) error {
 			attrs = append(attrs, a)
 			return true
 		})
+		if record.Message == "trace" {
+			record.PC = 0
+		}
 		record = slog.NewRecord(record.Time, record.Level, record.Message, record.PC)
 		record.AddAttrs(slog.Attr{
 			Key:   "msg_kvs",

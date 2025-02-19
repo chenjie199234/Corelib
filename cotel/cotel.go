@@ -45,6 +45,8 @@ func Init() error {
 		sampler = trace.NeverSample()
 	}
 	tp := trace.NewTracerProvider(
+		//when use the log as the exporter,we can use syncer
+		//when use other exporter,we should use batcher(more effective)
 		trace.WithSyncer(&slogTraceExporter{}),
 		trace.WithResource(resource.NewSchemaless(
 			attribute.String("service.name", name.GetSelfFullName()),
