@@ -64,7 +64,10 @@ func Stop() {
 
 func TraceIDFromContext(ctx context.Context) string {
 	span := otrace.SpanFromContext(ctx)
-	return span.SpanContext().TraceID().String()
+	if span.SpanContext().IsValid() {
+		return span.SpanContext().TraceID().String()
+	}
+	return ""
 }
 
 type slogTraceExporter struct {
