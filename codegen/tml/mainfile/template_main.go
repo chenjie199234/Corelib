@@ -24,13 +24,13 @@ import (
 	"{{.}}/server/xweb"
 	"{{.}}/service"
 
+	"github.com/chenjie199234/Corelib/cotel"
 	publicmids "github.com/chenjie199234/Corelib/mids"
 	_ "github.com/chenjie199234/Corelib/monitor"
-	"github.com/chenjie199234/Corelib/trace"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/redis/go-redis/v9"
-	_ "go.mongodb.org/mongo-driver/mongo/v2"
+	_ "go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 type LogHandler struct {
@@ -38,13 +38,9 @@ type LogHandler struct {
 }
 
 func (l *LogHandler) Handle(ctx context.Context, record slog.Record) error {
-	var traceattr *slog.Attr
 	if record.NumAttrs() > 0 {
 		attrs := make([]slog.Attr, 0, record.NumAttrs())
 		record.Attrs(func(a slog.Attr) bool {
-			if a.Key == "traceid"{
-				traceattr = &a
-			}
 			attrs = append(attrs, a)
 			return true
 		})
@@ -54,16 +50,9 @@ func (l *LogHandler) Handle(ctx context.Context, record slog.Record) error {
 			Value: slog.GroupValue(attrs...),
 		})
 	}
-	if trace.LogTrace(){
-		if traceattr == nil {
-			if span := trace.SpanFromContext(ctx); span != nil {
-				tmp := slog.String("traceid", span.GetSelfSpanData().GetTid().String())
-				traceattr = &tmp
-			}
-		}
-		if traceattr != nil {
-			record.AddAttrs(*traceattr)
-		}
+	if cotel.LogTrace() {
+		traceid := cotel.TraceIDFromContext(ctx)
+		record.AddAttrs(slog.String("traceid", traceid))
 	}
 	return l.Handler.Handle(ctx, record)
 }
