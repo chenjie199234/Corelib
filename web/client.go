@@ -18,13 +18,16 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
-	"github.com/chenjie199234/Corelib/monitor"
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
-	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type ClientConfig struct {
@@ -57,12 +60,11 @@ func (c *ClientConfig) validate() {
 }
 
 type WebClient struct {
-	self   string
-	server string
-	c      *ClientConfig
-	tlsc   *tls.Config
-	dialer *net.Dialer
-	client *http.Client
+	serverfullname string
+	c              *ClientConfig
+	tlsc           *tls.Config
+	dialer         *net.Dialer
+	client         *http.Client
 
 	resolver *resolver.CorelibResolver
 	balancer *corelibBalancer
@@ -72,36 +74,36 @@ type WebClient struct {
 }
 
 // if tlsc is not nil,the tls will be actived
-func NewWebClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfapp, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*WebClient, error) {
+func NewWebClient(c *ClientConfig, d discover.DI, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*WebClient, error) {
 	if tlsc != nil {
+		if len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
+			return nil, errors.New("[web.client] tls certificate setting missing")
+		}
 		tlsc = tlsc.Clone()
 	}
-	//pre check
+	if e := name.HasSelfFullName(); e != nil {
+		return nil, e
+	}
 	serverfullname, e := name.MakeFullName(serverproject, servergroup, serverapp)
 	if e != nil {
 		return nil, e
 	}
-	selffullname, e := name.MakeFullName(selfproject, selfgroup, selfapp)
-	if e != nil {
-		return nil, e
-	}
-	if c == nil {
-		c = &ClientConfig{}
-	}
-	c.validate()
 	if d == nil {
 		return nil, errors.New("[web.client] missing discover")
 	}
 	if !d.CheckTarget(serverfullname) {
 		return nil, errors.New("[web.client] discover's target app not match")
 	}
+	if c == nil {
+		c = &ClientConfig{}
+	}
+	c.validate()
 
 	client := &WebClient{
-		self:   selffullname,
-		server: serverfullname,
-		c:      c,
-		tlsc:   tlsc,
-		dialer: &net.Dialer{},
+		serverfullname: serverfullname,
+		c:              c,
+		tlsc:           tlsc,
+		dialer:         &net.Dialer{},
 
 		discover: d,
 
@@ -135,9 +137,9 @@ func (c *WebClient) dial(ctx context.Context, network, addr string) (net.Conn, e
 	}
 	conn, e := c.dialer.DialContext(ctx, network, addr)
 	if e != nil {
-		slog.ErrorContext(ctx, "[web.client] dial failed", slog.String("sname", c.server), slog.String("sip", addr), slog.String("error", e.Error()))
+		slog.ErrorContext(ctx, "[web.client] dial failed", slog.String("sname", c.serverfullname), slog.String("sip", addr), slog.String("error", e.Error()))
 	} else {
-		slog.InfoContext(ctx, "[web.client] online", slog.String("sname", c.server), slog.String("sip", addr))
+		slog.InfoContext(ctx, "[web.client] online", slog.String("sname", c.serverfullname), slog.String("sip", addr))
 	}
 	return conn, e
 }
@@ -155,7 +157,7 @@ func (c *WebClient) dialtls(ctx context.Context, network, addr string) (net.Conn
 	}
 	conn, e := c.dialer.DialContext(ctx, network, addr)
 	if e != nil {
-		slog.ErrorContext(ctx, "[web.client] dial failed", slog.String("sname", c.server), slog.String("sip", addr), slog.String("error", e.Error()))
+		slog.ErrorContext(ctx, "[web.client] dial failed", slog.String("sname", c.serverfullname), slog.String("sip", addr), slog.String("error", e.Error()))
 		return nil, e
 	}
 	tmptlsc := c.tlsc.Clone()
@@ -164,10 +166,10 @@ func (c *WebClient) dialtls(ctx context.Context, network, addr string) (net.Conn
 	}
 	tc := tls.Client(conn, tmptlsc)
 	if e = tc.HandshakeContext(ctx); e != nil {
-		slog.ErrorContext(ctx, "[web.client] tls handshake failed", slog.String("sname", c.server), slog.String("sip", addr), slog.String("error", e.Error()))
+		slog.ErrorContext(ctx, "[web.client] tls handshake failed", slog.String("sname", c.serverfullname), slog.String("sip", addr), slog.String("error", e.Error()))
 		return nil, e
 	} else {
-		slog.InfoContext(ctx, "[web.client] online", slog.String("sname", c.server), slog.String("sip", addr))
+		slog.InfoContext(ctx, "[web.client] online", slog.String("sname", c.serverfullname), slog.String("sip", addr))
 	}
 	return tc, nil
 }
@@ -203,6 +205,9 @@ func forbiddenHeader(header http.Header) bool {
 	if header.Get("Core-Target") != "" {
 		return true
 	}
+	if header.Get("Core-Self") != "" {
+		return true
+	}
 	if header.Get("Core-Deadline") != "" {
 		return true
 	}
@@ -234,17 +239,17 @@ func WithForceAddr(ctx context.Context, forceaddr string) context.Context {
 	return context.WithValue(ctx, forceaddrkey{}, forceaddr)
 }
 
-// "Core-Deadline" "Core-Target" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
+// "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (resp *http.Response, e error) {
 	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil)
 }
 
-// "Core-Deadline" "Core-Target" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
+// "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (resp *http.Response, e error) {
 	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
 }
 
-// "Core-Deadline" "Core-Target" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
+// "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewReader(body))
@@ -252,7 +257,7 @@ func (c *WebClient) Post(ctx context.Context, path, query string, header http.He
 	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil)
 }
 
-// "Core-Deadline" "Core-Target" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
+// "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewReader(body))
@@ -260,7 +265,7 @@ func (c *WebClient) Put(ctx context.Context, path, query string, header http.Hea
 	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil)
 }
 
-// "Core-Deadline" "Core-Target" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
+// "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
 	if len(body) != 0 {
 		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewReader(body))
@@ -289,7 +294,8 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 	if header == nil {
 		header = make(http.Header)
 	}
-	header.Set("Core-Target", c.server)
+	header.Set("Core-Target", c.serverfullname)
+	header.Set("Core-Self", name.GetSelfFullName())
 	if len(metadata) != 0 {
 		d, _ := json.Marshal(metadata)
 		header.Set("Core-Metadata", common.BTS(d))
@@ -310,23 +316,20 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		header.Set("Core-Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
 	for {
-		ctx, span := trace.NewSpan(ctx, "Corelib.Web", trace.Client, nil)
-		if span.GetParentSpanData().IsEmpty() {
-			span.GetParentSpanData().SetStateKV("app", c.self)
-			span.GetParentSpanData().SetStateKV("host", host.Hostip)
-			span.GetParentSpanData().SetStateKV("method", "unknown")
-			span.GetParentSpanData().SetStateKV("path", "unknown")
-		}
-		span.GetSelfSpanData().SetStateKV("app", c.server)
-		span.GetSelfSpanData().SetStateKV("method", method)
-		span.GetSelfSpanData().SetStateKV("path", path)
-		header.Set("Traceparent", span.GetSelfSpanData().FormatTraceParent())
-		header.Set("Tracestate", span.GetParentSpanData().FormatTraceState())
+		tctx, span := otel.Tracer(name.GetSelfFullName()).Start(
+			ctx,
+			"call web",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(attribute.String("url.path", path), attribute.String("server.name", c.serverfullname)))
+		otel.GetTextMapPropagator().Inject(tctx, propagation.HeaderCarrier(header))
 		//pick server
 		server, e := c.balancer.Pick(ctx)
 		if e != nil {
+			span.SetStatus(codes.Error, e.Error())
+			span.End()
 			return nil, e
 		}
+		span.SetAttributes(attribute.String("server.addr", server.addr))
 		var req *http.Request
 		if c.tlsc != nil {
 			req, e = http.NewRequestWithContext(ctx, method, "https://"+server.addr+path+query, body)
@@ -334,25 +337,28 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			req, e = http.NewRequestWithContext(ctx, method, "http://"+server.addr+path+query, body)
 		}
 		if e != nil {
-			server.GetServerPickInfo().Done(false)
 			e = cerror.Convert(e.(*url.Error).Unwrap())
+			server.GetServerPickInfo().Done(false)
+			span.SetStatus(codes.Error, e.Error())
+			span.End()
 			return nil, e
 		}
-		span.GetSelfSpanData().SetStateKV("host", req.URL.Scheme+"://"+req.URL.Host)
 		req.Header = header
 		//start call
 		var resp *http.Response
 		resp, e = c.client.Do(req)
 		if e != nil {
 			e = cerror.Convert(e.(*url.Error).Unwrap())
-			span.Finish(e)
 			server.GetServerPickInfo().Done(false)
-			monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
+			span.SetStatus(codes.Error, e.Error())
+			span.End()
+			// monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
 			return nil, e
 		}
 		if cpuusagestr := resp.Header.Get("Cpu-Usage"); cpuusagestr != "" {
 			cpuusage, _ := strconv.ParseFloat(cpuusagestr, 64)
 			server.GetServerPickInfo().UpdateCPU(cpuusage)
+			resp.Header.Del("Cpu-Usage")
 		}
 		if resp.StatusCode/100 != 2 {
 			var respbody []byte
@@ -367,21 +373,54 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				ee.SetHttpcode(int32(resp.StatusCode))
 				e = ee
 			}
-		}
-		span.Finish(e)
-		server.GetServerPickInfo().Done(e == nil)
-		monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
-		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
-			if atomic.SwapInt32(&server.closing, 1) == 0 {
-				//set the lowest pick priority
-				server.Pickinfo.SetDiscoverServerOffline(0)
-				//rebuild picker
-				c.balancer.rebuildpicker()
-				//triger discover
-				c.resolver.Now()
+			server.GetServerPickInfo().Done(false)
+			span.SetStatus(codes.Error, e.Error())
+			span.End()
+			// monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
+			if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
+				if atomic.SwapInt32(&server.closing, 1) == 0 {
+					//set the lowest pick priority
+					server.Pickinfo.SetDiscoverServerOffline(0)
+					//rebuild picker
+					c.balancer.rebuildpicker()
+					//triger discover
+					c.resolver.Now()
+				}
+				continue
 			}
-			continue
+			return nil, e
 		}
+		resp.Body = &wrappedbody{body: resp.Body, span: span}
 		return resp, e
 	}
+}
+
+type wrappedbody struct {
+	span trace.Span
+	body io.ReadCloser
+}
+
+func (b *wrappedbody) Read(p []byte) (n int, err error) {
+	n, e := b.body.Read(p)
+	if e != nil {
+		if e == io.EOF {
+			b.span.SetStatus(codes.Ok, "")
+			b.span.End()
+			// monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
+		} else {
+			e = cerror.Convert(e)
+			b.span.SetStatus(codes.Error, e.Error())
+			b.span.End()
+			// monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
+		}
+	}
+	return n, e
+}
+func (b *wrappedbody) Close() error {
+	if b.span.IsRecording() {
+		b.span.SetStatus(codes.Ok, "")
+		b.span.End()
+		// monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
+	}
+	return b.body.Close()
 }

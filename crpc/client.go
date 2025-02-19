@@ -15,15 +15,17 @@ import (
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/metadata"
-	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
-	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -45,11 +47,10 @@ type ClientConfig struct {
 }
 
 type CrpcClient struct {
-	self     string
-	server   string
-	c        *ClientConfig
-	tlsc     *tls.Config
-	instance *stream.Instance
+	serverfullname string
+	c              *ClientConfig
+	tlsc           *tls.Config
+	instance       *stream.Instance
 
 	resolver *resolver.CorelibResolver
 	balancer *corelibBalancer
@@ -60,13 +61,17 @@ type CrpcClient struct {
 }
 
 // if tlsc is not nil,the tls will be actived
-func NewCrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfapp, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*CrpcClient, error) {
-	//pre check
-	serverfullname, e := name.MakeFullName(serverproject, servergroup, serverapp)
-	if e != nil {
+func NewCrpcClient(c *ClientConfig, d discover.DI, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*CrpcClient, error) {
+	if tlsc != nil {
+		if len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
+			return nil, errors.New("[crpc.client] tls certificate setting missing")
+		}
+		tlsc = tlsc.Clone()
+	}
+	if e := name.HasSelfFullName(); e != nil {
 		return nil, e
 	}
-	selffullname, e := name.MakeFullName(selfproject, selfgroup, selfapp)
+	serverfullname, e := name.MakeFullName(serverproject, servergroup, serverapp)
 	if e != nil {
 		return nil, e
 	}
@@ -80,10 +85,9 @@ func NewCrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfa
 		return nil, errors.New("[crpc.client] discover's target app not match")
 	}
 	client := &CrpcClient{
-		self:   selffullname,
-		server: serverfullname,
-		c:      c,
-		tlsc:   tlsc,
+		serverfullname: serverfullname,
+		c:              c,
+		tlsc:           tlsc,
 
 		discover: d,
 
@@ -142,7 +146,7 @@ func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 		//can't reconnect to server
 		return
 	}
-	if !c.instance.StartClient(server.addr, false, common.STB(c.server), c.tlsc) {
+	if !c.instance.StartClient(server.addr, false, common.STB(c.serverfullname), c.tlsc) {
 		go c.start(server, true)
 	}
 }
@@ -162,7 +166,7 @@ func (c *CrpcClient) onlinefunc(ctx context.Context, p *stream.Peer) bool {
 	server.setpeer(p)
 	server.closing = 0
 	c.balancer.RebuildPicker(server.addr, true)
-	slog.InfoContext(nil, "[crpc.client] online", slog.String("sname", c.server), slog.String("sip", server.addr))
+	slog.InfoContext(nil, "[crpc.client] online", slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
 	return true
 }
 
@@ -171,7 +175,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
-		slog.ErrorContext(nil, "[crpc.client] userdata format wrong", slog.String("sname", c.server), slog.String("sip", server.addr))
+		slog.ErrorContext(nil, "[crpc.client] userdata format wrong", slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
 		return
 	}
 	switch msg.H.Type {
@@ -215,7 +219,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 
 func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
-	slog.InfoContext(nil, "[crpc.client] offline", slog.String("sname", c.server), slog.String("sip", server.addr))
+	slog.InfoContext(nil, "[crpc.client] offline", slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
 	server.setpeer(nil)
 	c.balancer.RebuildPicker(server.addr, false)
 	server.cleanrw()
@@ -241,46 +245,37 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler f
 	}
 	md := metadata.GetMetadata(ctx)
 	for {
-		ctx, span := trace.NewSpan(ctx, "Corelib.Crpc", trace.Client, nil)
-		if span.GetParentSpanData().IsEmpty() {
-			span.GetParentSpanData().SetStateKV("app", c.self)
-			span.GetParentSpanData().SetStateKV("host", host.Hostip)
-			span.GetParentSpanData().SetStateKV("method", "unknown")
-			span.GetParentSpanData().SetStateKV("path", "unknown")
-		}
-		span.GetSelfSpanData().SetStateKV("app", c.server)
-		span.GetSelfSpanData().SetStateKV("method", "CRPC")
-		span.GetSelfSpanData().SetStateKV("path", path)
-		selfmethod, _ := span.GetParentSpanData().GetStateKV("method")
-		selfpath, _ := span.GetParentSpanData().GetStateKV("path")
-		td := map[string]string{
-			"TraceID": span.GetSelfSpanData().GetTid().String(),
-			"SpanID":  span.GetSelfSpanData().GetSid().String(),
-			"app":     c.self,
-			"host":    host.Hostip,
-			"method":  selfmethod,
-			"path":    selfpath,
-		}
+		td := make(map[string]string)
+		td["Core-Self"] = name.GetSelfFullName()
+		tctx, span := otel.Tracer(name.GetSelfFullName()).Start(
+			ctx,
+			"call crpc",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(attribute.String("url.path", path), attribute.String("server.name", c.serverfullname)))
+		otel.GetTextMapPropagator().Inject(tctx, propagation.MapCarrier(td))
 		server, e := c.balancer.Pick(ctx)
 		if e != nil {
 			slog.ErrorContext(ctx, "[crpc.client] pick server failed",
-				slog.String("sname", c.server),
+				slog.String("sname", c.serverfullname),
 				slog.String("path", path),
 				slog.String("error", e.Error()))
+			span.SetStatus(codes.Error, e.Error())
+			span.End()
 			return e
 		}
-		span.GetSelfSpanData().SetStateKV("host", server.addr)
+		span.SetAttributes(attribute.String("server.addr", server.addr))
 		rw := server.createrw(path, deadline, md, td)
 		if e := rw.init(&MsgBody{Body: in}); e != nil {
 			server.delrw(rw.callid)
 			slog.ErrorContext(ctx, "[crpc.client] send request failed",
-				slog.String("sname", c.server),
+				slog.String("sname", c.serverfullname),
 				slog.String("sip", server.addr),
 				slog.String("path", path),
 				slog.String("error", e.Error()))
-			span.Finish(e)
 			server.GetServerPickInfo().Done(false)
-			monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(span.GetEnd()-span.GetStart()))
+			span.SetStatus(codes.Error, e.Error())
+			span.End()
+			// monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(span.GetEnd()-span.GetStart()))
 			if cerror.Equal(e, cerror.ErrClosed) {
 				continue
 			}
@@ -307,10 +302,15 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler f
 			}
 		}()
 		ee := cerror.Convert(handler(workctx))
-		close(stop)
-		span.Finish(ee)
 		server.GetServerPickInfo().Done(ee == nil)
-		monitor.CrpcClientMonitor(c.server, "CRPC", path, ee, uint64(span.GetEnd()-span.GetStart()))
+		close(stop)
+		if ee != nil {
+			span.SetStatus(codes.Error, ee.Error())
+		} else {
+			span.SetStatus(codes.Ok, "")
+		}
+		span.End()
+		// monitor.CrpcClientMonitor(c.server, "CRPC", path, ee, uint64(span.GetEnd()-span.GetStart()))
 		server.delrw(rw.callid)
 		if cerror.Equal(ee, cerror.ErrServerClosing) {
 			continue
@@ -341,46 +341,37 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 	}
 	md := metadata.GetMetadata(ctx)
 	for {
-		ctx, span := trace.NewSpan(ctx, "Corelib.Crpc", trace.Client, nil)
-		if span.GetParentSpanData().IsEmpty() {
-			span.GetParentSpanData().SetStateKV("app", c.self)
-			span.GetParentSpanData().SetStateKV("host", host.Hostip)
-			span.GetParentSpanData().SetStateKV("method", "unknown")
-			span.GetParentSpanData().SetStateKV("path", "unknown")
-		}
-		span.GetSelfSpanData().SetStateKV("app", c.server)
-		span.GetSelfSpanData().SetStateKV("method", "CRPC")
-		span.GetSelfSpanData().SetStateKV("path", path)
-		selfmethod, _ := span.GetParentSpanData().GetStateKV("method")
-		selfpath, _ := span.GetParentSpanData().GetStateKV("path")
-		td := map[string]string{
-			"TraceID": span.GetSelfSpanData().GetTid().String(),
-			"SpanID":  span.GetSelfSpanData().GetSid().String(),
-			"app":     c.self,
-			"host":    host.Hostip,
-			"method":  selfmethod,
-			"path":    selfpath,
-		}
+		td := make(map[string]string)
+		td["Core-Self"] = name.GetSelfFullName()
+		tctx, span := otel.Tracer(name.GetSelfFullName()).Start(
+			ctx,
+			"call crpc",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(attribute.String("url.path", path), attribute.String("server.name", c.serverfullname)))
+		otel.GetTextMapPropagator().Inject(tctx, propagation.MapCarrier(td))
 		server, e := c.balancer.Pick(ctx)
 		if e != nil {
 			slog.ErrorContext(ctx, "[crpc.client] pick server failed",
-				slog.String("sname", c.server),
+				slog.String("sname", c.serverfullname),
 				slog.String("path", path),
 				slog.String("error", e.Error()))
+			span.SetStatus(codes.Error, e.Error())
+			span.End()
 			return e
 		}
-		span.GetSelfSpanData().SetStateKV("host", server.addr)
+		span.SetAttributes(attribute.String("server.addr", server.addr))
 		rw := server.createrw(path, deadline, md, td)
 		if e := rw.init(nil); e != nil {
 			server.delrw(rw.callid)
 			slog.ErrorContext(ctx, "[crpc.client] init stream failed",
-				slog.String("sname", c.server),
+				slog.String("sname", c.serverfullname),
 				slog.String("sip", server.addr),
 				slog.String("path", path),
 				slog.String("error", e.Error()))
-			span.Finish(e)
 			server.GetServerPickInfo().Done(false)
-			monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(span.GetEnd()-span.GetStart()))
+			span.SetStatus(codes.Error, e.Error())
+			span.End()
+			// monitor.CrpcClientMonitor(c.server, "CRPC", path, e, uint64(span.GetEnd()-span.GetStart()))
 			if cerror.Equal(e, cerror.ErrClosed) {
 				continue
 			}
@@ -407,10 +398,15 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 			}
 		}()
 		ee := cerror.Convert(handler(workctx))
-		close(stop)
-		span.Finish(ee)
 		server.GetServerPickInfo().Done(ee == nil)
-		monitor.CrpcClientMonitor(c.server, "CRPC", path, ee, uint64(span.GetEnd()-span.GetStart()))
+		close(stop)
+		if ee != nil {
+			span.SetStatus(codes.Error, ee.Error())
+		} else {
+			span.SetStatus(codes.Ok, "")
+		}
+		span.End()
+		// monitor.CrpcClientMonitor(c.server, "CRPC", path, ee, uint64(span.GetEnd()-span.GetStart()))
 		server.delrw(rw.callid)
 		if cerror.Equal(ee, cerror.ErrServerClosing) {
 			continue

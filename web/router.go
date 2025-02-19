@@ -19,10 +19,15 @@ import (
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/pool/bpool"
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/graceful"
-	"github.com/chenjie199234/Corelib/util/host"
+	"github.com/chenjie199234/Corelib/util/name"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Router struct {
@@ -186,83 +191,48 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 	copy(totalhandlers[len(r.globalmids):], handlers)
 	return func(resp http.ResponseWriter, req *http.Request) {
 		//target
-		if target := req.Header.Get("Core-Target"); target != "" && target != r.s.self {
+		if target := req.Header.Get("Core-Target"); target != "" && target != name.GetSelfFullName() {
 			resp.Header().Set("Content-Type", "application/json")
 			resp.WriteHeader(int(cerror.ErrTarget.Httpcode))
 			resp.Write(common.STB(cerror.ErrTarget.Json()))
 			return
 		}
-		//trace
-		var ctx context.Context
-		var span *trace.Span
-		peerip := realip(req)
-		if traceparentstr := req.Header.Get("Traceparent"); traceparentstr != "" {
-			tid, psid, e := trace.ParseTraceParent(traceparentstr)
-			if e != nil {
-				slog.ErrorContext(nil, "[web.server] trace data format wrong",
-					slog.String("cip", peerip),
-					slog.String("path", path),
-					slog.String("method", method),
-					slog.String("trace_parent", traceparentstr))
+		//check server status
+		if e := r.s.stop.Add(1); e != nil {
+			if r.s.c.WaitCloseMode == 0 {
+				//refresh close wait
+				r.s.closetimer.Reset(r.s.c.WaitCloseTime.StdDuration())
+			}
+			if e == graceful.ErrClosing {
+				//tell peer self closed
 				resp.Header().Set("Content-Type", "application/json")
-				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
-				resp.Write(common.STB(cerror.ErrReq.Json()))
-				return
+				resp.WriteHeader(int(cerror.ErrServerClosing.Httpcode))
+				resp.Write(common.STB(cerror.ErrServerClosing.Json()))
+			} else {
+				//tell peer self busy
+				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
+				resp.Header().Set("Content-Type", "application/json")
+				resp.WriteHeader(int(cerror.ErrBusy.Httpcode))
+				resp.Write(common.STB(cerror.ErrBusy.Json()))
 			}
-			parent := trace.NewSpanData(tid, psid)
-			if tracestatestr := req.Header.Get("Tracestate"); tracestatestr != "" {
-				tmp, e := trace.ParseTraceState(tracestatestr)
-				if e != nil {
-					slog.ErrorContext(nil, "[web.server] trace data format wrong",
-						slog.String("cip", peerip),
-						slog.String("path", path),
-						slog.String("method", method),
-						slog.String("trace_state", tracestatestr))
-					resp.Header().Set("Content-Type", "application/json")
-					resp.WriteHeader(int(cerror.ErrReq.Httpcode))
-					resp.Write(common.STB(cerror.ErrReq.Json()))
-					return
-				}
-				var app, host, method, path bool
-				for k, v := range tmp {
-					switch k {
-					case "app":
-						app = true
-					case "host":
-						host = true
-						peerip = v
-					case "method":
-						method = true
-					case "path":
-						path = true
-					}
-					parent.SetStateKV(k, v)
-				}
-				if !app {
-					parent.SetStateKV("app", "unknown")
-				}
-				if !host {
-					parent.SetStateKV("host", peerip)
-				}
-				if !method {
-					parent.SetStateKV("method", "unknown")
-				}
-				if !path {
-					parent.SetStateKV("path", "unknown")
-				}
-			}
-			ctx, span = trace.NewSpan(req.Context(), "Corelib.Web", trace.Server, parent)
-		} else {
-			ctx, span = trace.NewSpan(req.Context(), "Corelib.Web", trace.Server, nil)
-			span.GetParentSpanData().SetStateKV("app", "unknown")
-			span.GetParentSpanData().SetStateKV("host", peerip)
-			span.GetParentSpanData().SetStateKV("method", "unknown")
-			span.GetParentSpanData().SetStateKV("path", "unknown")
+			return
 		}
-		span.GetSelfSpanData().SetStateKV("app", r.s.self)
-		span.GetSelfSpanData().SetStateKV("host", host.Hostip)
-		span.GetSelfSpanData().SetStateKV("method", method)
-		span.GetSelfSpanData().SetStateKV("path", path)
+		defer r.s.stop.DoneOne()
+
+		peerip := realip(req)
+
+		//trace
+		clientname := req.Header.Get("Core-Self")
+		if clientname == "" {
+			clientname = "unknown"
+		}
+		ctx, span := otel.Tracer(name.GetSelfFullName()).Start(
+			otel.GetTextMapPropagator().Extract(req.Context(), propagation.HeaderCarrier(req.Header)),
+			"handle web",
+			trace.WithSpanKind(trace.SpanKindServer),
+			trace.WithAttributes(attribute.String("url.path", path), attribute.String("client.name", clientname), attribute.String("client.ip", peerip)))
+
+		//metadata
 		var md map[string]string
 		if mdstr := req.Header.Get("Core-Metadata"); mdstr != "" {
 			md = make(map[string]string)
@@ -272,10 +242,12 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 					slog.String("path", path),
 					slog.String("method", method),
 					slog.String("metadata", mdstr))
+				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
 				resp.Write(common.STB(cerror.ErrReq.Json()))
-				span.Finish(cerror.ErrReq)
+				span.SetStatus(codes.Error, cerror.ErrReq.Error())
+				span.End()
 				return
 			}
 		}
@@ -293,10 +265,12 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 					slog.String("path", path),
 					slog.String("method", method),
 					slog.String("deadline", temp))
+				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
 				resp.Write(common.STB(cerror.ErrReq.Json()))
-				span.Finish(cerror.ErrReq)
+				span.SetStatus(codes.Error, cerror.ErrReq.Error())
+				span.End()
 				return
 			}
 			if clientdl != 0 {
@@ -305,28 +279,6 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 				defer cancel()
 			}
 		}
-		//check server status
-		if e := r.s.stop.Add(1); e != nil {
-			if r.s.c.WaitCloseMode == 0 {
-				//refresh close wait
-				r.s.closetimer.Reset(r.s.c.WaitCloseTime.StdDuration())
-			}
-			if e == graceful.ErrClosing {
-				//tell peer self closed
-				resp.Header().Set("Content-Type", "application/json")
-				resp.WriteHeader(int(cerror.ErrServerClosing.Httpcode))
-				resp.Write(common.STB(cerror.ErrServerClosing.Json()))
-				span.Finish(cerror.ErrServerClosing)
-			} else {
-				//tell peer self busy
-				resp.Header().Set("Content-Type", "application/json")
-				resp.WriteHeader(int(cerror.ErrBusy.Httpcode))
-				resp.Write(common.STB(cerror.ErrBusy.Json()))
-				span.Finish(cerror.ErrBusy)
-			}
-			return
-		}
-		defer r.s.stop.DoneOne()
 		//logic
 		workctx := &Context{
 			Context: metadata.SetMetadata(ctx, md),
@@ -346,9 +298,12 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
 				workctx.Abort(cerror.ErrPanic)
 			}
-			span.Finish(workctx.e)
-			peername, _ := span.GetParentSpanData().GetStateKV("app")
-			monitor.WebServerMonitor(peername, method, path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
+			if workctx.e != nil {
+				span.SetStatus(codes.Error, workctx.e.Error())
+			} else {
+				span.SetStatus(codes.Ok, "")
+			}
+			span.End()
 		}()
 		for _, handler := range totalhandlers {
 			handler(workctx)

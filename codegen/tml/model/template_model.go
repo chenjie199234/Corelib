@@ -10,6 +10,7 @@ const txt = `package model
 import (
 	"os"
 
+	"github.com/chenjie199234/Corelib/cotel"
 	"github.com/chenjie199234/Corelib/util/name"
 )
 
@@ -24,17 +25,15 @@ var Project = os.Getenv("PROJECT")
 
 func init() {
 	if Group == "" || Group == "<GROUP>" {
-		panic("missing GROUP env")
-	}
-	if name.SingleCheck(Group, false) != nil {
-		panic("env GROUP format wrong")
+	  panic("missing env:GROUP")
 	}
 	if Project == "" || Project == "<PROJECT>" {
-		panic("missing PROJECT env")
+	  panic("missing env:PROJECT ")
 	}
-	if name.SingleCheck(Project, false) != nil {
-		panic("env PROJECT format wrong")
+	if e := name.SetSelfFullName(Project, Group, Name); e != nil {
+	  panic(e)
 	}
+	cotel.Init()
 }`
 
 func CreatePathAndFile(appname string) {

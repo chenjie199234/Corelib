@@ -12,11 +12,12 @@ import (
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/picker"
 	"github.com/chenjie199234/Corelib/internal/resolver"
-	"github.com/chenjie199234/Corelib/monitor"
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/waitwake"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -176,7 +177,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 					case connectivity.Shutdown:
 						if oldstatus == int32(connectivity.Ready) {
 							//offline
-							slog.InfoContext(nil, "[cgrpc.client] offline", slog.String("sname", b.c.server), slog.String("sip", server.addr))
+							slog.InfoContext(nil, "[cgrpc.client] offline", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
 							go b.rebuildpicker(server.addr, false)
 						}
 						delete(b.servers, addr.Addr)
@@ -184,7 +185,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 					case connectivity.Idle:
 						if oldstatus == int32(connectivity.Ready) {
 							//offline
-							slog.InfoContext(nil, "[cgrpc.client] offline", slog.String("sname", b.c.server), slog.String("sip", server.addr))
+							slog.InfoContext(nil, "[cgrpc.client] offline", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
 							go b.rebuildpicker(server.addr, false)
 						}
 						if len(server.dservers) == 0 {
@@ -199,13 +200,13 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 					case connectivity.Ready:
 						//online
 						server.closing = 0
-						slog.InfoContext(nil, "[cgrpc.client] online", slog.String("sname", b.c.server), slog.String("sip", server.addr))
+						slog.InfoContext(nil, "[cgrpc.client] online", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
 						go b.rebuildpicker(server.addr, true)
 					case connectivity.TransientFailure:
 						//connect failed
-						slog.ErrorContext(nil, "[cgrpc.client] connect failed", slog.String("sname", b.c.server), slog.String("sip", server.addr), slog.String("error", s.ConnectionError.Error()))
+						slog.ErrorContext(nil, "[cgrpc.client] connect failed", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr), slog.String("error", s.ConnectionError.Error()))
 					case connectivity.Connecting:
-						slog.InfoContext(nil, "[cgrpc.client] connecting", slog.String("sname", b.c.server), slog.String("sip", server.addr))
+						slog.InfoContext(nil, "[cgrpc.client] connecting", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
 					}
 				},
 			})
@@ -268,7 +269,7 @@ func (b *corelibBalancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubC
 func (b *corelibBalancer) Close() {
 	for _, server := range b.servers {
 		server.subconn.Shutdown()
-		slog.InfoContext(nil, "[cgrpc.client] offline", slog.String("sname", b.c.server), slog.String("sip", server.addr))
+		slog.InfoContext(nil, "[cgrpc.client] offline", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
 	}
 	b.servers = make(map[string]*ServerForPick)
 	b.lastResolveError = cerror.ErrClientClosing
@@ -321,7 +322,6 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 				e = cerror.ErrDeadlineExceeded
 				return
 			}
-			span.GetSelfSpanData().SetStateKV("host", server.GetServerAddr())
 			pickinfo.SubConn = server.(*ServerForPick).subconn
 			pickinfo.Done = func(doneinfo balancer.DoneInfo) {
 				e := transGrpcError(doneinfo.Err, false)
@@ -329,9 +329,15 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 					cpuusage, _ := strconv.ParseFloat(cpuusagestrs[0], 64)
 					server.GetServerPickInfo().UpdateCPU(cpuusage)
 				}
-				span.Finish(e)
 				server.GetServerPickInfo().Done(e == nil)
-				monitor.GrpcClientMonitor(b.c.server, "GRPC", info.FullMethodName, e, uint64(span.GetEnd()-span.GetStart()))
+				span.SetAttributes(attribute.String("server.addr", server.(*ServerForPick).addr))
+				if e != nil {
+					span.SetStatus(codes.Error, e.Error())
+				} else {
+					span.SetStatus(codes.Ok, "")
+				}
+				span.End()
+				// monitor.GrpcClientMonitor(b.c.server, "GRPC", info.FullMethodName, e, uint64(span.GetEnd()-span.GetStart()))
 				if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 					if atomic.SwapInt32(&server.(*ServerForPick).closing, 1) == 0 {
 						//set the lowest pick priority

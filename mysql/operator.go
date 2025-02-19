@@ -8,7 +8,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/chenjie199234/Corelib/trace"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var ErrSlaveExec = errors.New("do exec cmd on slave node")
@@ -24,76 +27,131 @@ func (c *cdb) Stats() sql.DBStats {
 	return c.db.Stats()
 }
 func (c *cdb) PingContext(ctx context.Context) error {
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", c.name)
-	span.GetSelfSpanData().SetStateKV("host", c.addr)
-	span.GetSelfSpanData().SetStateKV("cmd", "Ping")
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", c.name),
+			attribute.String("server.addr", c.addr),
+			attribute.String("mysql.cmd", "Ping"),
+		),
+	)
 	if c.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	e := c.db.PingContext(ctx)
-	span.Finish(e)
+	if e != nil {
+		span.SetStatus(codes.Error, e.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return e
 }
 func (c *cdb) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", c.name)
-	span.GetSelfSpanData().SetStateKV("host", c.addr)
-	span.GetSelfSpanData().SetStateKV("cmd", "QueryRow")
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", c.name),
+			attribute.String("server.addr", c.addr),
+			attribute.String("mysql.cmd", "QueryRow"),
+		),
+	)
 	if c.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	r := c.db.QueryRowContext(ctx, query, args...)
-	span.Finish(r.Err())
+	if r.Err() != nil {
+		span.SetStatus(codes.Error, r.Err().Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return r
 }
 func (c *cdb) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", c.name)
-	span.GetSelfSpanData().SetStateKV("host", c.addr)
-	span.GetSelfSpanData().SetStateKV("cmd", "Query")
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", c.name),
+			attribute.String("server.addr", c.addr),
+			attribute.String("mysql.cmd", "Query"),
+		),
+	)
 	if c.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	rs, e := c.db.QueryContext(ctx, query, args...)
-	span.Finish(e)
+	if e != nil {
+		span.SetStatus(codes.Error, e.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return rs, e
 }
 func (c *cdb) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	if !c.master {
 		return nil, ErrSlaveExec
 	}
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", c.name)
-	span.GetSelfSpanData().SetStateKV("host", c.addr)
-	span.GetSelfSpanData().SetStateKV("cmd", "Exec")
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", c.name),
+			attribute.String("server.addr", c.addr),
+			attribute.String("mysql.cmd", "Exec"),
+		),
+	)
 	if c.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	r, e := c.db.ExecContext(ctx, query, args...)
-	span.Finish(e)
+	if e != nil {
+		span.SetStatus(codes.Error, e.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return r, e
 }
 func (c *cdb) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", c.name)
-	span.GetSelfSpanData().SetStateKV("host", c.addr)
-	span.GetSelfSpanData().SetStateKV("cmd", "Begin")
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", c.name),
+			attribute.String("server.addr", c.addr),
+			attribute.String("mysql.cmd", "Begin"),
+		),
+	)
 	if c.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	tx, e := c.db.BeginTx(ctx, opts)
-	span.Finish(e)
+	if e != nil {
+		span.SetStatus(codes.Error, e.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return tx, e
 }
 func (c *cdb) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
@@ -118,17 +176,28 @@ func (c *cdb) PrepareContext(ctx context.Context, query string) (*sql.Stmt, erro
 			return nil, ErrSlaveExec
 		}
 	}
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", c.name)
-	span.GetSelfSpanData().SetStateKV("host", c.addr)
-	span.GetSelfSpanData().SetStateKV("cmd", "Prepare")
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", c.name),
+			attribute.String("server.addr", c.addr),
+			attribute.String("mysql.cmd", "Prepare"),
+		),
+	)
 	if c.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	stmt, e := c.db.PrepareContext(ctx, query)
-	span.Finish(e)
+	if e != nil {
+		span.SetStatus(codes.Error, e.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return stmt, e
 }
 func (c *cdb) Close() error {
@@ -216,48 +285,81 @@ type Tx struct {
 }
 
 func (t *Tx) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", t.db.name)
-	span.GetSelfSpanData().SetStateKV("host", t.db.addr)
-	span.GetSelfSpanData().SetStateKV("cmd", "TxQueryRow")
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", t.db.name),
+			attribute.String("server.addr", t.db.addr),
+			attribute.String("mysql.cmd", "TxQueryRow"),
+		),
+	)
 	if t.db.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	r := t.t.QueryRowContext(ctx, query, args...)
-	span.Finish(r.Err())
+	if r.Err() != nil {
+		span.SetStatus(codes.Error, r.Err().Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return r
 }
 func (t *Tx) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", t.db.name)
-	span.GetSelfSpanData().SetStateKV("host", t.db.addr)
-	span.GetSelfSpanData().SetStateKV("cmd", "TxQuery")
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", t.db.name),
+			attribute.String("server.addr", t.db.addr),
+			attribute.String("mysql.cmd", "TxQuery"),
+		),
+	)
 	if t.db.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	rs, e := t.t.QueryContext(ctx, query, args...)
-	span.Finish(e)
+	if e != nil {
+		span.SetStatus(codes.Error, e.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return rs, e
 }
 func (t *Tx) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	if !t.db.master {
 		return nil, ErrSlaveExec
 	}
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", t.db.name)
-	span.GetSelfSpanData().SetStateKV("host", t.db.addr)
-	span.GetSelfSpanData().SetStateKV("cmd", "TxExec")
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", t.db.name),
+			attribute.String("server.addr", t.db.addr),
+			attribute.String("mysql.cmd", "TxExec"),
+		),
+	)
 	if t.db.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	r, e := t.t.ExecContext(ctx, query, args...)
-	span.Finish(e)
+	if e != nil {
+		span.SetStatus(codes.Error, e.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return r, e
 }
 
@@ -284,17 +386,28 @@ func (t *Tx) PrepareContext(ctx context.Context, query string) (*Stmt, error) {
 			return nil, ErrSlaveExec
 		}
 	}
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", t.db.name)
-	span.GetSelfSpanData().SetStateKV("host", t.db.addr)
-	span.GetSelfSpanData().SetStateKV("cmd", "TxPrepare")
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", t.db.name),
+			attribute.String("server.addr", t.db.addr),
+			attribute.String("mysql.cmd", "TxPrepare"),
+		),
+	)
 	if t.db.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	newstmt, e := t.t.PrepareContext(ctx, query)
-	span.Finish(e)
+	if e != nil {
+		span.SetStatus(codes.Error, e.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return &Stmt{
 		tx:    t,
 		query: query,
@@ -302,31 +415,53 @@ func (t *Tx) PrepareContext(ctx context.Context, query string) (*Stmt, error) {
 	}, nil
 }
 func (t *Tx) Commit(ctx context.Context) error {
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", t.db.name)
-	span.GetSelfSpanData().SetStateKV("host", t.db.addr)
-	span.GetSelfSpanData().SetStateKV("cmd", "Commit")
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", t.db.name),
+			attribute.String("server.addr", t.db.addr),
+			attribute.String("mysql.cmd", "Commit"),
+		),
+	)
 	if t.db.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	e := t.t.Commit()
-	span.Finish(e)
+	if e != nil {
+		span.SetStatus(codes.Error, e.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return e
 }
 func (t *Tx) Rollback(ctx context.Context) error {
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", t.db.name)
-	span.GetSelfSpanData().SetStateKV("host", t.db.addr)
-	span.GetSelfSpanData().SetStateKV("cmd", "Rollback")
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", t.db.name),
+			attribute.String("server.addr", t.db.addr),
+			attribute.String("mysql.cmd", "Rollback"),
+		),
+	)
 	if t.db.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	e := t.t.Rollback()
-	span.Finish(e)
+	if e != nil {
+		span.SetStatus(codes.Error, e.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return e
 }
 func (o Operator) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) {
@@ -358,21 +493,32 @@ func (s *Stmt) QueryRowContext(ctx context.Context, args ...any) *sql.Row {
 		//this is random
 		break
 	}
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", db.name)
-	span.GetSelfSpanData().SetStateKV("host", db.addr)
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", db.name),
+			attribute.String("server.addr", db.addr),
+		),
+	)
 	if s.tx == nil {
-		span.GetSelfSpanData().SetStateKV("cmd", "StmtQueryRow")
+		span.SetAttributes(attribute.String("mysql.cmd", "StmtQueryRow"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("cmd", "TxStmtQueryRow")
+		span.SetAttributes(attribute.String("mysql.cmd", "TxStmtQueryRow"))
 	}
 	if db.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	r := stmt.QueryRowContext(ctx, args...)
-	span.Finish(r.Err())
+	if r.Err() != nil {
+		span.SetStatus(codes.Error, r.Err().Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return r
 }
 func (s *Stmt) QueryContext(ctx context.Context, args ...any) (*sql.Rows, error) {
@@ -382,21 +528,32 @@ func (s *Stmt) QueryContext(ctx context.Context, args ...any) (*sql.Rows, error)
 		//this is random
 		break
 	}
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", db.name)
-	span.GetSelfSpanData().SetStateKV("host", db.addr)
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", db.name),
+			attribute.String("server.addr", db.addr),
+		),
+	)
 	if s.tx == nil {
-		span.GetSelfSpanData().SetStateKV("cmd", "StmtQuery")
+		span.SetAttributes(attribute.String("mysql.cmd", "StmtQuery"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("cmd", "TxStmtQuery")
+		span.SetAttributes(attribute.String("mysql.cmd", "TxStmtQuery"))
 	}
 	if db.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	rs, e := stmt.QueryContext(ctx, args...)
-	span.Finish(e)
+	if e != nil {
+		span.SetStatus(codes.Error, e.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return rs, e
 }
 func (s *Stmt) ExecContext(ctx context.Context, args ...any) (sql.Result, error) {
@@ -409,21 +566,32 @@ func (s *Stmt) ExecContext(ctx context.Context, args ...any) (sql.Result, error)
 	if !db.master {
 		return nil, ErrSlaveExec
 	}
-	ctx, span := trace.NewSpan(ctx, "Corelib.Mysql", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mysql", db.name)
-	span.GetSelfSpanData().SetStateKV("host", db.addr)
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mysql",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", db.name),
+			attribute.String("server.addr", db.addr),
+		),
+	)
 	if s.tx == nil {
-		span.GetSelfSpanData().SetStateKV("cmd", "StmtExec")
+		span.SetAttributes(attribute.String("mysql.cmd", "StmtExec"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("cmd", "TxStmtExec")
+		span.SetAttributes(attribute.String("mysql.cmd", "TxStmtExec"))
 	}
 	if db.master {
-		span.GetSelfSpanData().SetStateKV("role", "master")
+		span.SetAttributes(attribute.String("mysql.role", "master"))
 	} else {
-		span.GetSelfSpanData().SetStateKV("role", "slave")
+		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	r, e := stmt.ExecContext(ctx, args...)
-	span.Finish(e)
+	if e != nil {
+		span.SetStatus(codes.Error, e.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 	return r, e
 }
 func (s *Stmt) Close() error {

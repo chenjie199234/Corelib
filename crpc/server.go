@@ -18,13 +18,16 @@ import (
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
-	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -49,7 +52,6 @@ type ServerConfig struct {
 type CrpcServer struct {
 	c              *ServerConfig
 	tlsc           *tls.Config
-	self           string
 	global         []OutsideHandler
 	handler        map[string][]OutsideHandler
 	handlerTimeout map[string]time.Duration
@@ -63,11 +65,15 @@ type client struct {
 }
 
 // if tlsc is not nil,the tls will be actived
-func NewCrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tlsc *tls.Config) (*CrpcServer, error) {
-	//pre check
-	selffullname, e := name.MakeFullName(selfproject, selfgroup, selfapp)
-	if e != nil {
+func NewCrpcServer(c *ServerConfig, tlsc *tls.Config) (*CrpcServer, error) {
+	if e := name.HasSelfFullName(); e != nil {
 		return nil, e
+	}
+	if tlsc != nil {
+		if len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
+			return nil, errors.New("[crpc.server] tls certificate setting missing")
+		}
+		tlsc = tlsc.Clone()
 	}
 	if c == nil {
 		c = &ServerConfig{}
@@ -75,7 +81,6 @@ func NewCrpcServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tlsc
 	serverinstance := &CrpcServer{
 		c:              c,
 		tlsc:           tlsc,
-		self:           selffullname,
 		global:         make([]OutsideHandler, 0, 10),
 		handler:        make(map[string][]OutsideHandler, 10),
 		handlerTimeout: make(map[string]time.Duration),
@@ -184,7 +189,7 @@ func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]b
 		//self closing
 		return nil, "", false
 	}
-	if common.BTS(peerVerifyData) != s.self {
+	if common.BTS(peerVerifyData) != name.GetSelfFullName() {
 		return nil, "", false
 	}
 	return nil, "", true
@@ -309,77 +314,18 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			}
 			return
 		}
-
-		//deal trace data
 		peerip := p.GetRealPeerIP()
-		var basectx context.Context
-		var span *trace.Span
-		if len(msg.H.Tracedata) == 0 || msg.H.Tracedata["TraceID"] == "" || msg.H.Tracedata["SpanID"] == "" {
-			basectx, span = trace.NewSpan(p, "Corelib.Crpc", trace.Server, nil)
-			span.GetParentSpanData().SetStateKV("app", "unknown")
-			span.GetParentSpanData().SetStateKV("host", peerip)
-			span.GetParentSpanData().SetStateKV("method", "unknown")
-			span.GetParentSpanData().SetStateKV("path", "unknown")
-		} else {
-			tid, e := trace.TraceIDFromHex(msg.H.Tracedata["TraceID"])
-			if e != nil {
-				c.Unlock()
-				slog.ErrorContext(nil, "[crpc.server] trace data fromat wrong",
-					slog.String("cip", p.GetRealPeerIP()),
-					slog.String("path", msg.H.Path),
-					slog.String("trace_id", msg.H.Tracedata["TraceID"]))
-				p.Close(false)
-				return
-			}
-			psid, e := trace.SpanIDFromHex(msg.H.Tracedata["SpanID"])
-			if e != nil {
-				c.Unlock()
-				slog.ErrorContext(nil, "[crpc.server] trace data fromat wrong",
-					slog.String("cip", p.GetRealPeerIP()),
-					slog.String("path", msg.H.Path),
-					slog.String("p_span_id", msg.H.Tracedata["SpanID"]))
-				p.Close(false)
-				return
-			}
-			parent := trace.NewSpanData(tid, psid)
-			var app, host, method, path bool
-			for k, v := range msg.H.Tracedata {
-				if k == "TraceID" || k == "SpanID" {
-					continue
-				}
-				switch k {
-				case "app":
-					app = true
-				case "host":
-					host = true
-					peerip = v
-				case "method":
-					method = true
-				case "path":
-					path = true
-				}
-				parent.SetStateKV(k, v)
-			}
-			if !app {
-				parent.SetStateKV("app", "unknown")
-			}
-			if !host {
-				parent.SetStateKV("host", p.GetRealPeerIP())
-			}
-			if !method {
-				parent.SetStateKV("method", "unknown")
-			}
-			if !path {
-				parent.SetStateKV("path", "unknown")
-			}
-			basectx, span = trace.NewSpan(p, "Corelib.Crpc", trace.Server, parent)
+		//trace
+		clientname := msg.H.Tracedata["Core-Self"]
+		if clientname == "" {
+			clientname = "unknown"
 		}
-		span.GetSelfSpanData().SetStateKV("app", s.self)
-		span.GetSelfSpanData().SetStateKV("host", host.Hostip)
-		span.GetSelfSpanData().SetStateKV("method", "CRPC")
-		span.GetSelfSpanData().SetStateKV("path", msg.H.Path)
-
-		//deal metadata
+		basectx, span := otel.Tracer(name.GetSelfFullName()).Start(
+			otel.GetTextMapPropagator().Extract(p, propagation.MapCarrier(msg.H.Tracedata)),
+			"handle crpc",
+			trace.WithSpanKind(trace.SpanKindServer),
+			trace.WithAttributes(attribute.String("url.path", msg.H.Path), attribute.String("client.name", clientname), attribute.String("client.ip", peerip)))
+		//metadata
 		if msg.H.Metadata == nil {
 			msg.H.Metadata = map[string]string{"Client-IP": peerip}
 		} else if _, ok := msg.H.Metadata["Client-IP"]; !ok {
@@ -387,7 +333,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		}
 		basectx = metadata.SetMetadata(basectx, msg.H.Metadata)
 
-		//deal timeout
+		//client timeout
 		var basecancel context.CancelFunc
 		if servertimeout := int64(s.getHandlerTimeout(msg.H.Path)); servertimeout > 0 {
 			serverdl := time.Now().UnixNano() + servertimeout
@@ -462,9 +408,13 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 					rw.closerecvsend(true, nil)
 				}
 
-				span.Finish(workctx.e)
-				peername, _ := span.GetParentSpanData().GetStateKV("app")
-				monitor.CrpcServerMonitor(peername, "CRPC", msg.H.Path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
+				if workctx.e != nil {
+					span.SetStatus(codes.Error, workctx.e.Error())
+				} else {
+					span.SetStatus(codes.Ok, "")
+				}
+				span.End()
+				// monitor.CrpcServerMonitor(peername, "CRPC", msg.H.Path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
 				s.stop.DoneOne()
 			}()
 			for _, handler := range handlers {

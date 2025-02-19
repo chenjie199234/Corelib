@@ -9,14 +9,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chenjie199234/Corelib/cerror"
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/ctime"
 
-	gevent "go.mongodb.org/mongo-driver/event"
-	gmongo "go.mongodb.org/mongo-driver/mongo"
-	goptions "go.mongodb.org/mongo-driver/mongo/options"
-	greadpref "go.mongodb.org/mongo-driver/mongo/readpref"
+	gbson "go.mongodb.org/mongo-driver/v2/bson"
+	gevent "go.mongodb.org/mongo-driver/v2/event"
+	gmongo "go.mongodb.org/mongo-driver/v2/mongo"
+	goptions "go.mongodb.org/mongo-driver/v2/mongo/options"
+	greadpref "go.mongodb.org/mongo-driver/v2/mongo/readpref"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Config struct {
@@ -134,7 +137,7 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	if tlsc != nil {
 		opts = opts.SetTLSConfig(tlsc)
 	}
-	client, e := gmongo.Connect(context.Background(), opts)
+	client, e := gmongo.Connect(opts)
 	if e != nil {
 		return nil, e
 	}
@@ -148,13 +151,13 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 type monitor struct {
 	sync.Mutex
 	mongoname string
-	spans     map[string]*trace.Span
+	spans     map[string]trace.Span
 }
 
 func newMonitor(mongoname string) *gevent.CommandMonitor {
 	m := &monitor{
 		mongoname: mongoname,
-		spans:     make(map[string]*trace.Span),
+		spans:     make(map[string]trace.Span),
 	}
 	return &gevent.CommandMonitor{
 		Started:   m.Started,
@@ -164,12 +167,18 @@ func newMonitor(mongoname string) *gevent.CommandMonitor {
 }
 func (m *monitor) Started(ctx context.Context, evt *gevent.CommandStartedEvent) {
 	hostname, port := peerInfo(evt)
-	_, span := trace.NewSpan(ctx, "Corelib.Mongo", trace.Client, nil)
-	span.GetSelfSpanData().SetStateKV("mongo", m.mongoname)
-	span.GetSelfSpanData().SetStateKV("host", hostname+":"+strconv.Itoa(port))
-	span.GetSelfSpanData().SetStateKV("db", evt.DatabaseName)
-	span.GetSelfSpanData().SetStateKV("col", colInfo(evt))
-	span.GetSelfSpanData().SetStateKV("cmd", evt.CommandName)
+	_, span := otel.Tracer("").Start(
+		ctx,
+		"call mongodb",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("server.name", m.mongoname),
+			attribute.String("server.addr", hostname+":"+strconv.Itoa(port)),
+			attribute.String("mongo.db", evt.DatabaseName),
+			attribute.String("mongo.col", colInfo(evt)),
+			attribute.String("mongo.cmd", evt.CommandName),
+		),
+	)
 	m.Lock()
 	defer m.Unlock()
 	m.spans[evt.ConnectionID+"-"+strconv.FormatInt(evt.RequestID, 10)] = span
@@ -178,7 +187,7 @@ func (m *monitor) Succeeded(ctx context.Context, evt *gevent.CommandSucceededEve
 	m.Finished(&evt.CommandFinishedEvent, nil)
 }
 func (m *monitor) Failed(ctx context.Context, evt *gevent.CommandFailedEvent) {
-	m.Finished(&evt.CommandFinishedEvent, cerror.Decode(evt.Failure))
+	m.Finished(&evt.CommandFinishedEvent, evt.Failure)
 }
 func (m *monitor) Finished(evt *gevent.CommandFinishedEvent, err error) {
 	m.Lock()
@@ -191,25 +200,24 @@ func (m *monitor) Finished(evt *gevent.CommandFinishedEvent, err error) {
 	if !ok {
 		return
 	}
-	span.Finish(err)
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
 }
 
 func colInfo(evt *gevent.CommandStartedEvent) string {
-	v, e := evt.Command.LookupErr(evt.CommandName)
-	if e == nil {
-		colname, ok := v.StringValueOK()
-		if ok {
-			return colname
+	elt := evt.Command.Index(0)
+	if key, err := elt.KeyErr(); err == nil && key == evt.CommandName {
+		var v gbson.RawValue
+		if v, err = elt.ValueErr(); err != nil || v.Type != gbson.TypeString {
+			return "collection unknown"
 		}
+		return v.StringValue()
 	}
-	v, e = evt.Command.LookupErr("collection")
-	if e == nil {
-		colname, ok := v.StringValueOK()
-		if ok {
-			return colname
-		}
-	}
-	return ""
+	return "collection unknown"
 }
 func peerInfo(evt *gevent.CommandStartedEvent) (hostname string, port int) {
 	hostname = evt.ConnectionID

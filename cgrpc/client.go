@@ -12,13 +12,16 @@ import (
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	cmetadata "github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/pool/bpool"
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
-	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
@@ -67,11 +70,10 @@ func (c *ClientConfig) validate() {
 }
 
 type CGrpcClient struct {
-	self   string
-	server string
-	c      *ClientConfig
-	tlsc   *tls.Config
-	conn   *grpc.ClientConn
+	serverfullname string
+	c              *ClientConfig
+	tlsc           *tls.Config
+	conn           *grpc.ClientConn
 
 	resolver *resolver.CorelibResolver
 	balancer *corelibBalancer
@@ -81,16 +83,17 @@ type CGrpcClient struct {
 }
 
 // if tlsc is not nil,the tls will be actived
-func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, selfapp, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*CGrpcClient, error) {
+func NewCGrpcClient(c *ClientConfig, d discover.DI, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*CGrpcClient, error) {
 	if tlsc != nil {
+		if len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
+			return nil, errors.New("[cgrpc.client] tls certificate setting missing")
+		}
 		tlsc = tlsc.Clone()
 	}
-	//pre check
-	serverfullname, e := name.MakeFullName(serverproject, servergroup, serverapp)
-	if e != nil {
+	if e := name.HasSelfFullName(); e != nil {
 		return nil, e
 	}
-	selffullname, e := name.MakeFullName(selfproject, selfgroup, selfapp)
+	serverfullname, e := name.MakeFullName(serverproject, servergroup, serverapp)
 	if e != nil {
 		return nil, e
 	}
@@ -105,12 +108,11 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, selfproject, selfgroup, self
 		return nil, errors.New("[cgrpc.client] discover's target app not match")
 	}
 	client := &CGrpcClient{
-		self:     selffullname,
-		server:   serverfullname,
-		c:        c,
-		tlsc:     tlsc,
-		discover: d,
-		stop:     graceful.New(),
+		serverfullname: serverfullname,
+		c:              c,
+		tlsc:           tlsc,
+		discover:       d,
+		stop:           graceful.New(),
 	}
 	opts := make([]grpc.DialOption, 0, 10)
 	opts = append(opts, experimental.WithBufferPool(bpool.GetGrpcPool()))
@@ -196,31 +198,30 @@ func (c *CGrpcClient) Invoke(ctx context.Context, path string, req, reply any, o
 	}
 	md := cmetadata.GetMetadata(ctx)
 	gmd := gmetadata.New(nil)
-	gmd.Set("Core-Target", c.server)
+	gmd.Set("Core-Target", c.serverfullname)
+	gmd.Set("Core-Self", name.GetSelfFullName())
 	if len(md) > 0 {
 		d, _ := json.Marshal(md)
 		gmd.Set("Core-Metadata", common.BTS(d))
 	}
 	for {
-		ctx, span := trace.NewSpan(ctx, "Corelib.CGrpc", trace.Client, nil)
-		if span.GetParentSpanData().IsEmpty() {
-			span.GetParentSpanData().SetStateKV("app", c.self)
-			span.GetParentSpanData().SetStateKV("host", host.Hostip)
-			span.GetParentSpanData().SetStateKV("method", "unknown")
-			span.GetParentSpanData().SetStateKV("path", "unknown")
-		}
-		span.GetSelfSpanData().SetStateKV("app", c.server)
-		span.GetSelfSpanData().SetStateKV("method", "GRPC")
-		span.GetSelfSpanData().SetStateKV("path", path)
-		gmd.Set("traceparent", span.GetSelfSpanData().FormatTraceParent())
-		gmd.Set("tracestate", span.GetParentSpanData().FormatTraceState())
+		ctx, span := otel.Tracer(name.GetSelfFullName()).Start(
+			ctx,
+			"call grpc",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(attribute.String("url.path", path), attribute.String("server.name", c.serverfullname)))
+		otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(gmd))
+
 		e := transGrpcError(c.conn.Invoke(gmetadata.NewOutgoingContext(ctx, gmd), path, req, reply), true)
-		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
-			continue
-		}
-		//fix the interface nil problem
 		if e == nil {
 			return nil
+		}
+		//the span will be ended at the balancer's pick's Done function
+		//but if pick server failed,the Done function will not be called
+		span.SetStatus(codes.Error, e.Error())
+		span.End()
+		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
+			continue
 		}
 		return e
 	}
@@ -234,34 +235,33 @@ func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path
 	}
 	md := cmetadata.GetMetadata(ctx)
 	gmd := gmetadata.New(nil)
-	gmd.Set("Core-Target", c.server)
+	gmd.Set("Core-Target", c.serverfullname)
+	gmd.Set("Core-Self", name.GetSelfFullName())
 	if len(md) > 0 {
 		d, _ := json.Marshal(md)
 		gmd.Set("Core-Metadata", common.BTS(d))
 	}
 	for {
-		ctx, span := trace.NewSpan(ctx, "Corelib.CGrpc", trace.Client, nil)
-		if span.GetParentSpanData().IsEmpty() {
-			span.GetParentSpanData().SetStateKV("app", c.self)
-			span.GetParentSpanData().SetStateKV("host", host.Hostip)
-			span.GetParentSpanData().SetStateKV("method", "unknown")
-			span.GetParentSpanData().SetStateKV("path", "unknown")
-		}
-		span.GetSelfSpanData().SetStateKV("app", c.server)
-		span.GetSelfSpanData().SetStateKV("method", "GRPC")
-		span.GetSelfSpanData().SetStateKV("path", path)
-		gmd.Set("traceparent", span.GetSelfSpanData().FormatTraceParent())
-		gmd.Set("tracestate", span.GetParentSpanData().FormatTraceState())
-		stream, e := c.conn.NewStream(ctx, desc, path, opts...)
+		ctx, span := otel.Tracer(name.GetSelfFullName()).Start(
+			ctx,
+			"call grpc",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(attribute.String("url.path", path), attribute.String("server.name", c.serverfullname)))
+		otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(gmd))
+
+		stream, e := c.conn.NewStream(gmetadata.NewOutgoingContext(ctx, gmd), desc, path, opts...)
 		ee := transGrpcError(e, true)
+		if ee == nil {
+			return &ClientStreamWraper{c: stream}, nil
+		}
+		//the span will be ended at the balancer's pick's Done function
+		//but if pick server failed,the Done function will not be called
+		span.SetStatus(codes.Error, ee.Error())
+		span.End()
 		if cerror.Equal(ee, cerror.ErrServerClosing) || cerror.Equal(ee, cerror.ErrTarget) {
 			continue
 		}
-		//fix the interface nil problem
-		if ee != nil {
-			return nil, ee
-		}
-		return &ClientStreamWraper{c: stream}, nil
+		return nil, ee
 	}
 }
 

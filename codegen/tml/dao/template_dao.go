@@ -48,7 +48,7 @@ func NewApi() error {
 	//	admintlsc = &tlsc.Config{}
 	//	...
 	//}
-	//exampleAdminDiscover, e := discoversdk.NewAdminDiscover(model.Project, model.Group, model.Name, "exampleproject", "examplegroup", "examplename", admintlsc)
+	//exampleAdminDiscover, e := discoversdk.NewAdminDiscover("adminproject", "admingroup", "admin", admintlsc)
 	//if e != nil {
 	//	return e
 	//}
@@ -64,7 +64,7 @@ func NewApi() error {
 	_ = cgrpcc //avoid unuse
 
 	//init cgrpc client below
-	//examplecgrpc, e := cgrpc.NewCGrpcClient(cgrpcc, examplediscover, model.Project, model.Group, model.Name, "exampleproject", "examplegroup", "examplename", exampletlsc)
+	//examplecgrpc, e := cgrpc.NewCGrpcClient(cgrpcc, examplediscover, "exampleproject", "examplegroup", "examplename", exampletlsc)
 	//if e != nil {
 	//         return e
 	//}
@@ -74,7 +74,7 @@ func NewApi() error {
 	_ = crpcc //avoid unuse
 
 	//init crpc client below
-	//examplecrpc, e := crpc.NewCrpcClient(crpcc, examplediscover, model.Project, model.Group, model.Name, "exampleproject", "examplegroup", "examplename", exampletlsc)
+	//examplecrpc, e := crpc.NewCrpcClient(crpcc, examplediscover, "exampleproject", "examplegroup", "examplename", exampletlsc)
 	//if e != nil {
 	// 	return e
 	//}
@@ -84,7 +84,7 @@ func NewApi() error {
 	_ = webc //avoid unuse
 
 	//init web client below
-	//exampleweb, e := web.NewWebClient(webc, examplediscover, model.Project, model.Group, model.Name, "exampleproject", "examplegroup", "examplename", exampletlsc)
+	//exampleweb, e := web.NewWebClient(webc, examplediscover, "exampleproject", "examplegroup", "examplename", exampletlsc)
 	//if e != nil {
 	// 	return e
 	//}

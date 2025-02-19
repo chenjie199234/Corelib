@@ -30,7 +30,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/redis/go-redis/v9"
-	_ "go.mongodb.org/mongo-driver/mongo"
+	_ "go.mongodb.org/mongo-driver/mongo/v2"
 )
 
 type LogHandler struct {

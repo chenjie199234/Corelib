@@ -18,9 +18,9 @@ require (
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/redis/go-redis/v9 v9.7.0
-	go.mongodb.org/mongo-driver v1.17.1
-	google.golang.org/grpc v1.68.0
-	google.golang.org/protobuf v1.35.2
+	go.mongodb.org/mongo-driver/v2 v2.0.0
+	google.golang.org/grpc v1.70.0
+	google.golang.org/protobuf v1.36.5
 )`
 
 func CreatePathAndFile(packagename string) {

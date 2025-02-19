@@ -140,7 +140,6 @@ func (c *ServerConfig) validate() {
 }
 
 type WebServer struct {
-	self           string
 	c              *ServerConfig
 	tlsc           *tls.Config
 	clientnum      int32 //without hijacked
@@ -154,17 +153,15 @@ type WebServer struct {
 type localport struct{}
 
 // if tlsc is not nil,the tls will be actived
-func NewWebServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tlsc *tls.Config) (*WebServer, error) {
+func NewWebServer(c *ServerConfig, tlsc *tls.Config) (*WebServer, error) {
+	if e := name.HasSelfFullName(); e != nil {
+		return nil, e
+	}
 	if tlsc != nil {
 		if len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
 			return nil, errors.New("[web.server] tls certificate setting missing")
 		}
 		tlsc = tlsc.Clone()
-	}
-	//pre check
-	selffullname, e := name.MakeFullName(selfproject, selfgroup, selfapp)
-	if e != nil {
-		return nil, e
 	}
 	if c == nil {
 		c = &ServerConfig{}
@@ -172,7 +169,6 @@ func NewWebServer(c *ServerConfig, selfproject, selfgroup, selfapp string, tlsc 
 	c.validate()
 	//new server
 	instance := &WebServer{
-		self:           selffullname,
 		c:              c,
 		tlsc:           tlsc,
 		stop:           graceful.New(),

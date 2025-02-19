@@ -9,10 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chenjie199234/Corelib/trace"
 	"github.com/chenjie199234/Corelib/util/ctime"
 
 	gredis "github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Config struct {
@@ -262,27 +265,49 @@ func (m *monitor) DialHook(hook gredis.DialHook) gredis.DialHook {
 }
 func (m *monitor) ProcessHook(hook gredis.ProcessHook) gredis.ProcessHook {
 	return func(ctx context.Context, cmd gredis.Cmder) error {
-		ctx, span := trace.NewSpan(ctx, "Corelib.Redis", trace.Client, nil)
-		span.GetSelfSpanData().SetStateKV("redis", m.redisname)
-		span.GetSelfSpanData().SetStateKV("host", m.addr)
-		span.GetSelfSpanData().SetStateKV("cmd", cmd.FullName())
+		_, span := otel.Tracer("").Start(
+			ctx,
+			"call redis",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(
+				attribute.String("server.name", m.redisname),
+				attribute.String("server.addr", m.addr),
+				attribute.String("redis.cmd", cmd.FullName()),
+			),
+		)
 		e := hook(ctx, cmd)
-		span.Finish(e)
+		if e != nil {
+			span.SetStatus(codes.Error, e.Error())
+		} else {
+			span.SetStatus(codes.Ok, "")
+		}
+		span.End()
 		return e
 	}
 }
 func (m *monitor) ProcessPipelineHook(hook gredis.ProcessPipelineHook) gredis.ProcessPipelineHook {
 	return func(ctx context.Context, cmds []gredis.Cmder) error {
-		ctx, span := trace.NewSpan(ctx, "Corelib.Redis", trace.Client, nil)
-		span.GetSelfSpanData().SetStateKV("redis", m.redisname)
-		span.GetSelfSpanData().SetStateKV("host", m.addr)
-		cmdnames := make([]string, 0, len(cmds))
+		tmp := make([]string, 0, len(cmds))
 		for _, cmd := range cmds {
-			cmdnames = append(cmdnames, cmd.FullName())
+			tmp = append(tmp, cmd.FullName())
 		}
-		span.GetSelfSpanData().SetStateKV("cmds", strings.Join(cmdnames, ","))
+		_, span := otel.Tracer("").Start(
+			ctx,
+			"call redis",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(
+				attribute.String("server.name", m.redisname),
+				attribute.String("server.addr", m.addr),
+				attribute.String("redis.cmds", strings.Join(tmp, ",")),
+			),
+		)
 		e := hook(ctx, cmds)
-		span.Finish(e)
+		if e != nil {
+			span.SetStatus(codes.Error, e.Error())
+		} else {
+			span.SetStatus(codes.Ok, "")
+		}
+		span.End()
 		return e
 	}
 }
