@@ -171,6 +171,7 @@ func main() {
 		wg.Done()
 	}()
 	wg.Wait()
+	cotel.Stop()
 }`
 
 func CreatePathAndFile(packagename string) {
