@@ -13,7 +13,6 @@ import (
 
 	"{{.}}/api"
 	"{{.}}/config"
-	"{{.}}/model"
 	"{{.}}/service"
 
 	"github.com/chenjie199234/Corelib/util/ctime"
@@ -40,7 +39,7 @@ func StartWebServer() {
 		tlsc = &tls.Config{Certificates: certificates}
 	}
 	var e error
-	if s, e = web.NewWebServer(c.ServerConfig, model.Project, model.Group, model.Name, tlsc); e != nil {
+	if s, e = web.NewWebServer(c.ServerConfig, tlsc); e != nil {
 		slog.ErrorContext(nil, "[xweb] new server failed", slog.String("error",e.Error()))
 		return
 	}

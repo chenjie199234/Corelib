@@ -13,7 +13,6 @@ import (
 
 	"{{.}}/api"
 	"{{.}}/config"
-	"{{.}}/model"
 	"{{.}}/service"
 
 	"github.com/chenjie199234/Corelib/cgrpc"
@@ -40,7 +39,7 @@ func StartCGrpcServer() {
 		tlsc = &tls.Config{Certificates: certificates}
 	}
 	var e error
-	if s, e = cgrpc.NewCGrpcServer(c.ServerConfig, model.Project, model.Group, model.Name, tlsc); e != nil {
+	if s, e = cgrpc.NewCGrpcServer(c.ServerConfig, tlsc); e != nil {
 		slog.ErrorContext(nil, "[xgrpc] new server failed", slog.String("error",e.Error()))
 		return
 	}

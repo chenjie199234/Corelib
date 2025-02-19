@@ -13,7 +13,6 @@ import (
 
 	"{{.}}/api"
 	"{{.}}/config"
-	"{{.}}/model"
 	"{{.}}/service"
 
 	"github.com/chenjie199234/Corelib/crpc"
@@ -40,7 +39,7 @@ func StartCrpcServer() {
 		tlsc = &tls.Config{Certificates: certificates}
 	}
 	var e error
-	if s, e = crpc.NewCrpcServer(c.ServerConfig, model.Project, model.Group, model.Name, tlsc); e != nil {
+	if s, e = crpc.NewCrpcServer(c.ServerConfig, tlsc); e != nil {
 		slog.ErrorContext(nil, "[xcrpc] new server failed", slog.String("error",e.Error()))
 		return
 	}
