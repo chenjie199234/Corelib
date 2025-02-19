@@ -45,7 +45,7 @@ func Init() error {
 		sampler = trace.NeverSample()
 	}
 	tp := trace.NewTracerProvider(
-		trace.WithBatcher(&slogTraceExporter{}),
+		trace.WithSyncer(&slogTraceExporter{}),
 		trace.WithResource(resource.NewSchemaless(
 			attribute.String("service.name", name.GetSelfFullName()),
 			attribute.String("host.id", host.Hostname),
