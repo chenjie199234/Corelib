@@ -18,6 +18,7 @@ import (
 
 	"{{.}}/config"
 	"{{.}}/dao"
+	"_ {{.}}/model"
 	"{{.}}/server/xcrpc"
 	"{{.}}/server/xgrpc"
 	"{{.}}/server/xraw"

@@ -4,8 +4,6 @@ import (
 	"errors"
 )
 
-var fullname string
-
 // [a-z][0-9][-],first character must in [a-z],last character must in [a-z][0-9]
 func SingleCheck(name string, dash bool) error {
 	if len(name) == 0 {
@@ -43,6 +41,9 @@ func MakeFullName(project, group, app string) (string, error) {
 	}
 	return project + "-" + group + "." + app, nil
 }
+
+var fullname string
+
 func SetSelfFullName(project, group, app string) error {
 	if fullname != "" {
 		return errors.New("[name] self full name already setted")
