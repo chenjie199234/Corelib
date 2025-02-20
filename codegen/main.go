@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/chenjie199234/Corelib/codegen/tml/api"
@@ -39,21 +38,13 @@ import (
 var appname = flag.String("n", "", "app name\ncharacter:[a-z][0-9]\nfirst character must in [a-z]")
 var packagename = flag.String("p", "", "package name\nmust be app name or end with app name\nif this is empty the app name will be used as the package name\nthis is useful when your project will be uploaded to github or gitlab\ne.g. github.com/path_to_the_repo/app_name")
 
-var update = flag.Bool("update", false, "update Corelib's tools\ndon't use this direct by codegen,use the cmd.sh/cmd.bat in your project instead")
-
 var gensub = flag.String("sub", "", "create subservice in this app\ncharacter:[a-z][0-9]\nfirst character must in [a-z]\ndon't use this direct by codegen,use the cmd.sh/cmd.bat in your project instead")
 var genkube = flag.Bool("kube", false, "create project's kubernetes config file\ndon't use this direct by codegen,use the cmd.sh/cmd.bat in your project instead")
 var genhtml = flag.Bool("html", false, "create project's html template\ndon't use this direct by codegen,use the cmd.sh/cmd.bat in your project instead")
 
 func init() {
 	flag.Parse()
-	if *update {
-		if data, e := os.ReadFile("./go.mod"); e != nil {
-			panic("read ./go.mod error: " + e.Error())
-		} else if !strings.Contains(string(data), "github.com/chenjie199234/Corelib") {
-			panic("this project was not created by github.com/chenjie199234/Corelib")
-		}
-	} else if e := cname.SingleCheck(*appname, false); e != nil {
+	if e := cname.SingleCheck(*appname, false); e != nil {
 		panic(e)
 	} else {
 		if *packagename == "" {
@@ -133,75 +124,51 @@ func init() {
 	}
 }
 func main() {
-	if *update {
-		updatetools()
-	} else {
-		step := 0
-		if _, e := os.Stat("./go.mod"); e != nil && !os.IsNotExist(e) {
-			panic("get ./go.mod info error: " + e.Error())
-		} else if e != nil {
-			//create base project
-			if finfo, e := os.Stat("./" + *appname); e != nil {
-				if !os.IsNotExist(e) {
-					panic("get ./" + *appname + " info error: " + e.Error())
-				}
-				if e := os.MkdirAll("./"+*appname, 0755); e != nil {
-					panic("mkdir ./" + *appname + " error: " + e.Error())
-				}
-			} else if !finfo.IsDir() {
-				panic("./" + *appname + " exist and it is not a dir")
-			} else if files, e := os.ReadDir("./" + *appname); e != nil {
-				panic("./" + *appname + " check dir empty error: " + e.Error())
-			} else if len(files) > 0 {
-				panic("./" + *appname + " exist and it is not an empty dir")
+	step := 0
+	if _, e := os.Stat("./go.mod"); e != nil && !os.IsNotExist(e) {
+		panic("get ./go.mod info error: " + e.Error())
+	} else if e != nil {
+		//create base project
+		if finfo, e := os.Stat("./" + *appname); e != nil {
+			if !os.IsNotExist(e) {
+				panic("get ./" + *appname + " info error: " + e.Error())
 			}
-			if e = os.Chdir("./" + *appname); e != nil {
-				panic("cd ./" + *appname + " error: " + e.Error())
+			if e := os.MkdirAll("./"+*appname, 0755); e != nil {
+				panic("mkdir ./" + *appname + " error: " + e.Error())
 			}
-			createBaseProject()
-			step++
+		} else if !finfo.IsDir() {
+			panic("./" + *appname + " exist and it is not a dir")
+		} else if files, e := os.ReadDir("./" + *appname); e != nil {
+			panic("./" + *appname + " check dir empty error: " + e.Error())
+		} else if len(files) > 0 {
+			panic("./" + *appname + " exist and it is not an empty dir")
 		}
-		if len(*gensub) != 0 {
-			if step > 0 {
-				fmt.Println("=================================================================================================================")
-			}
-			createSubProject()
-			step++
+		if e = os.Chdir("./" + *appname); e != nil {
+			panic("cd ./" + *appname + " error: " + e.Error())
 		}
-		if *genkube {
-			if step > 0 {
-				fmt.Println("=================================================================================================================")
-			}
-			createKubernetes()
-			step++
-		}
-		if *genhtml {
-			if step > 0 {
-				fmt.Println("=================================================================================================================")
-			}
-			createHtml()
-		}
+		createBaseProject()
+		step++
 	}
-}
-
-func updatetools() {
-	fmt.Println("start update corelib tools.")
-	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/chenjie199234/Corelib")
-	output, e := cmd.CombinedOutput()
-	if e != nil {
-		fmt.Println(strings.TrimSpace(string(output)))
-		fmt.Println("update corelib tools error: " + e.Error())
-		return
+	if len(*gensub) != 0 {
+		if step > 0 {
+			fmt.Println("=================================================================================================================")
+		}
+		createSubProject()
+		step++
 	}
-	cmd = exec.Command("go", "install", "./...")
-	cmd.Dir = strings.TrimSpace(string(output))
-	output, e = cmd.CombinedOutput()
-	if e != nil {
-		fmt.Println(strings.TrimSpace(string(output)))
-		fmt.Println("update corelib tools error: " + e.Error())
-		return
+	if *genkube {
+		if step > 0 {
+			fmt.Println("=================================================================================================================")
+		}
+		createKubernetes()
+		step++
 	}
-	fmt.Println("update corelib tools success!")
+	if *genhtml {
+		if step > 0 {
+			fmt.Println("=================================================================================================================")
+		}
+		createHtml()
+	}
 }
 func createBaseProject() {
 	fmt.Println("start create base app.")

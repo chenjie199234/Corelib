@@ -14,7 +14,7 @@ cd $(dirname $0)
 help() {
 	echo "cmd.sh — every thing you need"
 	echo "         please install git"
-	echo "         please install golang(1.21+)"
+	echo "         please install golang(1.24+)"
 	echo "         please install protoc           (github.com/protocolbuffers/protobuf)"
 	echo "         please install protoc-gen-go    (github.com/protocolbuffers/protobuf-go)"
 	echo "         please install codegen          (github.com/chenjie199234/Corelib)"
@@ -35,7 +35,7 @@ pb() {
 	rm ./api/*.md
 	rm ./api/*.ts
 	go mod tidy
-	codegen -update
+	update()
 	corelib=$(go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib)
 	protoc -I ./ -I $corelib --go_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --go-pbex_out=paths=source_relative:. ./api/*.proto
@@ -49,20 +49,28 @@ pb() {
 
 sub() {
 	go mod tidy
-	codegen -update
+	update()
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -sub $1
 }
 
 kube() {
 	go mod tidy
-	codegen -update
+	update()
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -kube
 }
 
 html() {
 	go mod tidy
-	codegen -update
+	update()
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -html
+}
+
+update() {
+	corelib=$(go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib)
+	workdir=$(pwd)
+	cd $corelib
+	go install ./...
+	cd $workdir
 }
 
 if !(type git >/dev/null 2>&1);then
@@ -115,10 +123,11 @@ if [[ $# == 2 ]] && [[ "$1" == "sub" ]];then
 	exit 0
 fi
 
-echo "option unsupport"
 help`
 const txtbat = `@echo off
 REM      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
+
+for /f "tokens=2 delims=:." %%a in ('chcp') Do set codepage=%%a
 
 cd %~dp0
 
@@ -226,7 +235,7 @@ goto :help
 	del >nul 2>nul .\api\*.md
 	del >nul 2>nul .\api\*.ts
 	go mod tidy
-	codegen -update
+	call :update
 	for /f %%a in ('go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib') do set corelib=%%a
 	protoc -I ./ -I %corelib% --go_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I %corelib% --go-pbex_out=paths=source_relative:. ./api/*.proto
@@ -240,26 +249,39 @@ goto :end
 
 :kube
 	go mod tidy
-	codegen -update
+	call :update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -kube
 goto :end
 
 :html
 	go mod tidy
-	codegen -update
+	call :update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -html
 goto :end
 
 :sub
 	go mod tidy
-	codegen -update
+	call :update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -sub %2
 goto :end
+
+:update
+	chcp 65001 >null 2>&1
+	echo "start update corelib tools"
+	for /f %%a in ('go list -m -f "{{.Dir}}" github.com/chenjie199234/Corelib') do set corelib=%%a
+	set workdir=%cd%
+	cd %corelib%
+	go install ./...
+	cd %workdir%
+	echo "update corelib tools success"
+	pause
+	chcp %codepage% >null 2>&1
+goto :eof
 
 :help
 	echo cmd.bat - every thing you need
 	echo           please install git
-	echo           please install golang(1.21+)
+	echo           please install golang(1.24+)
 	echo           please install protoc           (github.com/protocolbuffers/protobuf)
 	echo           please install protoc-gen-go    (github.com/protocolbuffers/protobuf-go)
 	echo           please install codegen          (github.com/chenjie199234/Corelib)
@@ -274,7 +296,6 @@ goto :end
 	echo    html                      Create html template.
 	echo    h/-h/help/-help/--help    Show this message.
 :end
-pause
 exit /b 0`
 
 type data struct {

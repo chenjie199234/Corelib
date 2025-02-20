@@ -18,7 +18,7 @@ import (
 
 	"{{.}}/config"
 	"{{.}}/dao"
-	"_ {{.}}/model"
+	_ "{{.}}/model"
 	"{{.}}/server/xcrpc"
 	"{{.}}/server/xgrpc"
 	"{{.}}/server/xraw"
