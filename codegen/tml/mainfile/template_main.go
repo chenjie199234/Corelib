@@ -55,8 +55,9 @@ func (l *LogHandler) Handle(ctx context.Context, record slog.Record) error {
 		})
 	}
 	if cotel.LogTrace() {
-		traceid := cotel.TraceIDFromContext(ctx)
-		record.AddAttrs(slog.String("traceid", traceid))
+		if traceid := cotel.TraceIDFromContext(ctx); traceid != "" {
+			record.AddAttrs(slog.String("traceid", traceid))
+		}
 	}
 	return l.Handler.Handle(ctx, record)
 }

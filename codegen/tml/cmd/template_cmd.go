@@ -266,7 +266,7 @@ goto :end
 goto :end
 
 :update
-	chcp 65001 >null 2>&1
+	chcp 65001 >NUL 2>&1
 	echo "start update corelib tools"
 	for /f %%a in ('go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib') do set corelib=%%a
 	set workdir=%cd%
@@ -275,7 +275,7 @@ goto :end
 	cd %workdir%
 	echo "update corelib tools success"
 	pause
-	chcp %codepage% >null 2>&1
+	chcp %codepage% >NUL 2>&1
 goto :eof
 
 :help
