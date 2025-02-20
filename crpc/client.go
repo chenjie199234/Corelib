@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"sync"
@@ -298,6 +299,9 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler f
 					rw.closerecvsend(false, cerror.Convert(ctx.Err()))
 				}
 			case <-stop:
+				if rw == nil {
+					fmt.Println("rw nil")
+				}
 				rw.closerecvsend(false, nil)
 			}
 		}()

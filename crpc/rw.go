@@ -2,6 +2,7 @@ package crpc
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strconv"
 	"sync/atomic"
@@ -104,6 +105,9 @@ func (this *rw) closerecv() error {
 func (this *rw) closerecvsend(trail bool, e error) error {
 	if old := atomic.AndInt32(&this.status, 0b1100); old&0b0011 == 0 {
 		return nil
+	}
+	if this == nil {
+		fmt.Println("this nil")
 	}
 	this.e = e
 	this.reader.Close()

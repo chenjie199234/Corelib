@@ -94,7 +94,8 @@ func (s *slogTraceExporter) ExportSpans(ctx context.Context, spans []trace.ReadO
 			slog.Time("StartTime", stub.StartTime),
 			slog.Time("EndTime", stub.EndTime),
 			slog.Any("Resource", stub.Resource),
-			slog.Any("Attributes", stub.Attributes))
+			slog.Any("Attributes", stub.Attributes),
+			slog.Any("Status", stub.Status))
 	}
 	return nil
 }

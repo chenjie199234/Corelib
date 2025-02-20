@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log/slog"
 	"runtime"
 	"strconv"
@@ -405,6 +406,9 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				delete(c.ctxs, msg.H.Callid)
 				c.Unlock()
 				if workctx.finish == 0 {
+					if rw == nil {
+						fmt.Println("rw nil")
+					}
 					rw.closerecvsend(true, nil)
 				}
 
