@@ -7,8 +7,8 @@ enum MsgType{
 	Init=0;
 	Send=1;
 	CloseSend=2;
-	CloseRead=3;
-	CloseReadSend=4;
+	CloseRecv=3;
+	CloseRecvSend=4;
 }
 message msg {
 	message header {

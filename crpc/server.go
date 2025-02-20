@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"log/slog"
 	"runtime"
 	"strconv"
@@ -405,12 +404,6 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				workctx.cancel()
 				delete(c.ctxs, msg.H.Callid)
 				c.Unlock()
-				if workctx.finish == 0 {
-					if rw == nil {
-						fmt.Println("rw nil")
-					}
-					rw.closerecvsend(true, nil)
-				}
 
 				if workctx.e != nil {
 					span.SetStatus(codes.Error, workctx.e.Error())
@@ -419,6 +412,10 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				}
 				span.End()
 				// monitor.CrpcServerMonitor(peername, "CRPC", msg.H.Path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
+
+				if workctx.finish == 0 {
+					rw.closerecvsend(true, nil)
+				}
 				s.stop.DoneOne()
 			}()
 			for _, handler := range handlers {
@@ -434,7 +431,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			ctx.rw.cache(msg.B)
 		}
 		c.RUnlock()
-	case MsgType_CloseRead:
+	case MsgType_CloseRecv:
 		c.RLock()
 		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
 			atomic.AndInt32(&ctx.rw.status, 0b0111)
@@ -447,7 +444,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			ctx.rw.reader.Close()
 		}
 		c.RUnlock()
-	case MsgType_CloseReadSend:
+	case MsgType_CloseRecvSend:
 		c.RLock()
 		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
 			ctx.cancel()

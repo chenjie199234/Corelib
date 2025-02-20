@@ -2,7 +2,6 @@ package crpc
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"strconv"
 	"sync/atomic"
@@ -98,24 +97,21 @@ func (this *rw) closerecv() error {
 		H: &MsgHeader{
 			Callid: this.callid,
 			Path:   this.path,
-			Type:   MsgType_CloseRead,
+			Type:   MsgType_CloseRecv,
 		},
 	})
 }
-func (this *rw) closerecvsend(trail bool, e error) error {
+func (this *rw) closerecvsend(trail bool, err error) error {
 	if old := atomic.AndInt32(&this.status, 0b1100); old&0b0011 == 0 {
 		return nil
 	}
-	if this == nil {
-		fmt.Println("this nil")
-	}
-	this.e = e
+	this.e = err
 	this.reader.Close()
 	m := &Msg{
 		H: &MsgHeader{
 			Callid: this.callid,
 			Path:   this.path,
-			Type:   MsgType_CloseReadSend,
+			Type:   MsgType_CloseRecvSend,
 		},
 	}
 	if trail {

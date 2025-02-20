@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"log/slog"
 	"strconv"
 	"sync"
@@ -180,7 +179,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 		return
 	}
 	switch msg.H.Type {
-	case MsgType_CloseRead:
+	case MsgType_CloseRecv:
 		if rw := server.getrw(msg.H.Callid); rw != nil {
 			atomic.AndInt32(&rw.status, 0b0111)
 		}
@@ -189,7 +188,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 			atomic.AndInt32(&rw.status, 0b1011)
 			rw.reader.Close()
 		}
-	case MsgType_CloseReadSend:
+	case MsgType_CloseRecvSend:
 		if rw := server.getrw(msg.H.Callid); rw != nil {
 			atomic.AndInt32(&rw.status, 0b0011)
 			rw.reader.Close()
@@ -299,9 +298,6 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler f
 					rw.closerecvsend(false, cerror.Convert(ctx.Err()))
 				}
 			case <-stop:
-				if rw == nil {
-					fmt.Println("rw nil")
-				}
 				rw.closerecvsend(false, nil)
 			}
 		}()
