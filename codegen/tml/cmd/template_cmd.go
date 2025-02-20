@@ -127,7 +127,7 @@ help`
 const txtbat = `@echo off
 REM      Warning!!!!!!!!!!!This file is readonly!Don't modify this file!
 
-for /f "tokens=2 delims=:." %%a in ('chcp') Do set codepage=%%a
+for /f "tokens=2 delims=:." %%a in ('chcp') do set codepage=%%a
 
 cd %~dp0
 
@@ -268,7 +268,7 @@ goto :end
 :update
 	chcp 65001 >null 2>&1
 	echo "start update corelib tools"
-	for /f %%a in ('go list -m -f "{{.Dir}}" github.com/chenjie199234/Corelib') do set corelib=%%a
+	for /f %%a in ('go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib') do set corelib=%%a
 	set workdir=%cd%
 	cd %corelib%
 	go install ./...
