@@ -19,12 +19,12 @@ type rw struct {
 	deadline   int64
 	reader     *list.BlockList[*MsgBody]
 	sender     func(context.Context, *Msg) error
-	status     int32 //use right 4 bit,the bit from left to right:peer_read_status,peer_send_status,self_read_status,self_send_status
+	status     atomic.Int32 //use right 4 bit,the bit from left to right:peer_read_status,peer_send_status,self_read_status,self_send_status
 	e          error
 }
 
 func newrw(callid uint64, path string, deadline int64, md, td map[string]string, sender func(context.Context, *Msg) error) *rw {
-	return &rw{
+	tmp := &rw{
 		callid:     callid,
 		path:       path,
 		metadata:   md,
@@ -32,8 +32,9 @@ func newrw(callid uint64, path string, deadline int64, md, td map[string]string,
 		deadline:   deadline,
 		reader:     list.NewBlockList[*MsgBody](),
 		sender:     sender,
-		status:     0b1111,
 	}
+	tmp.status.Store(0b1111)
+	return tmp
 }
 func (this *rw) init(body *MsgBody) error {
 	return this.sender(context.Background(), &Msg{
@@ -50,13 +51,13 @@ func (this *rw) init(body *MsgBody) error {
 	})
 }
 func (this *rw) send(body *MsgBody) error {
-	if this.status&0b0001 == 0 {
+	if this.status.Load()&0b0001 == 0 {
 		if this.e != nil {
 			return this.e
 		}
 		return cerror.ErrCanceled
 	}
-	if this.status&0b1000 == 0 {
+	if this.status.Load()&0b1000 == 0 {
 		return io.EOF
 	}
 	if e := this.sender(context.Background(), &Msg{
@@ -72,12 +73,12 @@ func (this *rw) send(body *MsgBody) error {
 	}
 	if body.Error != nil {
 		//if we send error to peer,means we stop send
-		atomic.AndInt32(&this.status, 0b1110)
+		this.status.And(0b1110)
 	}
 	return nil
 }
 func (this *rw) closesend() error {
-	if old := atomic.AndInt32(&this.status, 0b1110); old&0b0001 == 0 {
+	if old := this.status.And(0b1110); old&0b0001 == 0 {
 		return nil
 	}
 	return this.sender(context.Background(), &Msg{
@@ -89,7 +90,7 @@ func (this *rw) closesend() error {
 	})
 }
 func (this *rw) closerecv() error {
-	if old := atomic.AndInt32(&this.status, 0b1101); old&0b0010 == 0 {
+	if old := this.status.And(0b1101); old&0b0010 == 0 {
 		return nil
 	}
 	this.reader.Close()
@@ -102,7 +103,7 @@ func (this *rw) closerecv() error {
 	})
 }
 func (this *rw) closerecvsend(trail bool, err error) error {
-	if old := atomic.AndInt32(&this.status, 0b1100); old&0b0011 == 0 {
+	if old := this.status.And(0b1100); old&0b0011 == 0 {
 		return nil
 	}
 	this.e = err
@@ -120,7 +121,7 @@ func (this *rw) closerecvsend(trail bool, err error) error {
 	return this.sender(context.Background(), m)
 }
 func (this *rw) recv() ([]byte, error) {
-	if this.status&0b0010 == 0 {
+	if this.status.Load()&0b0010 == 0 {
 		if this.e != nil {
 			return nil, this.e
 		}
@@ -132,10 +133,10 @@ func (this *rw) recv() ([]byte, error) {
 			if this.e != nil {
 				return nil, this.e
 			}
-			if this.status&0b0100 == 0 {
+			if this.status.Load()&0b0100 == 0 {
 				return nil, io.EOF
 			}
-			if this.status&0b0010 == 0 {
+			if this.status.Load()&0b0010 == 0 {
 				return nil, cerror.ErrCanceled
 			}
 			return nil, cerror.ErrClosed
@@ -149,7 +150,7 @@ func (this *rw) recv() ([]byte, error) {
 		return m.Body, nil
 	}
 	//if we read error from peer,means peer stop send
-	atomic.AndInt32(&this.status, 0b1011)
+	this.status.And(0b1011)
 	this.reader.Close()
 	return m.Body, m.Error
 }

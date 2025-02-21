@@ -181,16 +181,16 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	switch msg.H.Type {
 	case MsgType_CloseRecv:
 		if rw := server.getrw(msg.H.Callid); rw != nil {
-			atomic.AndInt32(&rw.status, 0b0111)
+			rw.status.And(0b0111)
 		}
 	case MsgType_CloseSend:
 		if rw := server.getrw(msg.H.Callid); rw != nil {
-			atomic.AndInt32(&rw.status, 0b1011)
+			rw.status.And(0b1011)
 			rw.reader.Close()
 		}
 	case MsgType_CloseRecvSend:
 		if rw := server.getrw(msg.H.Callid); rw != nil {
-			atomic.AndInt32(&rw.status, 0b0011)
+			rw.status.And(0b0011)
 			rw.reader.Close()
 			server.delrw(msg.H.Callid)
 		}

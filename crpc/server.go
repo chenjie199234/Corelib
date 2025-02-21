@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -434,13 +433,13 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	case MsgType_CloseRecv:
 		c.RLock()
 		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
-			atomic.AndInt32(&ctx.rw.status, 0b0111)
+			ctx.rw.status.And(0b0111)
 		}
 		c.RUnlock()
 	case MsgType_CloseSend:
 		c.RLock()
 		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
-			atomic.AndInt32(&ctx.rw.status, 0b1011)
+			ctx.rw.status.And(0b1011)
 			ctx.rw.reader.Close()
 		}
 		c.RUnlock()
@@ -448,7 +447,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		c.Lock()
 		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
 			ctx.cancel()
-			atomic.AndInt32(&ctx.rw.status, 0b0011)
+			ctx.rw.status.And(0b0011)
 			ctx.rw.reader.Close()
 			delete(c.ctxs, msg.H.Callid)
 		}
