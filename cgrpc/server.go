@@ -221,6 +221,26 @@ func (s *CGrpcServer) RegisterHandler(sname, mname string, clientstream, servers
 		})
 	}
 }
+
+type wrapmetadata gmetadata.MD
+
+func (md wrapmetadata) Get(k string) string {
+	data := (gmetadata.MD)(md).Get(k)
+	if len(data) == 0 {
+		return ""
+	}
+	return data[0]
+}
+func (md wrapmetadata) Set(k, v string) {
+	(gmetadata.MD)(md).Set(k, v)
+}
+func (md wrapmetadata) Keys() []string {
+	keys := make([]string, 0, len(md))
+	for k := range md {
+		keys = append(keys, k)
+	}
+	return keys
+}
 func (s *CGrpcServer) pingponghandler(sname, mname string, handlers ...OutsideHandler) func(interface{}, context.Context, func(any) error, grpc.UnaryServerInterceptor) (interface{}, error) {
 	path := "/" + sname + "/" + mname
 	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
@@ -238,13 +258,20 @@ func (s *CGrpcServer) pingponghandler(sname, mname string, handlers ...OutsideHa
 
 		//trace
 		clientname := "unknown"
+		tracedata := make(map[string]string)
 		if ok {
 			if data := gmd.Get("Core-Self"); len(data) != 0 && len(data[0]) != 0 {
 				clientname = data[0]
 			}
+			if data := gmd.Get("Traceparent"); len(data) != 0 && len(data[0]) != 0 {
+				tracedata["Traceparent"] = data[0]
+			}
+			if data := gmd.Get("Tracestate"); len(data) != 0 && len(data[0]) != 0 {
+				tracedata["Tracestate"] = data[0]
+			}
 		}
 		basectx, span := otel.Tracer(name.GetSelfFullName()).Start(
-			otel.GetTextMapPropagator().Extract(basectx, propagation.HeaderCarrier(gmd)),
+			otel.GetTextMapPropagator().Extract(basectx, wrapmetadata(gmd)),
 			"handle grpc",
 			trace.WithSpanKind(trace.SpanKindServer),
 			trace.WithAttributes(attribute.String("url.path", path), attribute.String("client.name", clientname), attribute.String("client.ip", peerip)))
@@ -342,7 +369,7 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 			}
 		}
 		basectx, span := otel.Tracer(name.GetSelfFullName()).Start(
-			otel.GetTextMapPropagator().Extract(basectx, propagation.HeaderCarrier(gmd)),
+			otel.GetTextMapPropagator().Extract(basectx, wrapmetadata(gmd)),
 			"handle grpc",
 			trace.WithSpanKind(trace.SpanKindServer),
 			trace.WithAttributes(attribute.String("url.path", path), attribute.String("client.name", clientname), attribute.String("client.ip", peerip)))

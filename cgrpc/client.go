@@ -232,13 +232,13 @@ func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
 		defer cancel()
 	}
-	md := cmetadata.GetMetadata(ctx)
-	gmd := gmetadata.New(nil)
-	gmd.Set("Core-Target", c.serverfullname)
-	gmd.Set("Core-Self", name.GetSelfFullName())
-	if len(md) > 0 {
+
+	gmd := make(map[string]string)
+	gmd["Core-Target"] = c.serverfullname
+	gmd["Core-Self"] = name.GetSelfFullName()
+	if md := cmetadata.GetMetadata(ctx); len(md) > 0 {
 		d, _ := json.Marshal(md)
-		gmd.Set("Core-Metadata", common.BTS(d))
+		gmd["Core-Metadata"] = common.BTS(d)
 	}
 	for {
 		ctx, span := otel.Tracer(name.GetSelfFullName()).Start(
@@ -246,9 +246,9 @@ func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path
 			"call grpc",
 			trace.WithSpanKind(trace.SpanKindClient),
 			trace.WithAttributes(attribute.String("url.path", path), attribute.String("server.name", c.serverfullname)))
-		otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(gmd))
+		otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(gmd))
 
-		stream, e := c.conn.NewStream(gmetadata.NewOutgoingContext(ctx, gmd), desc, path, opts...)
+		stream, e := c.conn.NewStream(gmetadata.NewOutgoingContext(ctx, gmetadata.New(gmd)), desc, path, opts...)
 		ee := transGrpcError(e, true)
 		if ee == nil {
 			return &ClientStreamWraper{c: stream}, nil
