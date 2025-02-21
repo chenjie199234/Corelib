@@ -2,9 +2,11 @@ package crpc
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strconv"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/container/list"
@@ -105,6 +107,9 @@ func (this *rw) closerecvsend(trail bool, err error) error {
 	if old := atomic.AndInt32(&this.status, 0b1100); old&0b0011 == 0 {
 		return nil
 	}
+	fmt.Printf("%p", this)
+	thisaddr := atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this)))
+	fmt.Println(thisaddr)
 	this.e = err
 	this.reader.Close()
 	m := &Msg{
