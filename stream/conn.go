@@ -118,7 +118,7 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 		rpool.Put(p.cr)
 		return
 	}
-	if 4+uint64(len(serververifydata)) > uint64(p.peerMaxMsgLen) {
+	if 4+uint64(len(serververifydata)) > uint64(p.peerMaxMsgLen.Load()) {
 		slog.ErrorContext(nil, "[Stream.sworker] server response verify data too large", slog.String("cip", p.c.RemoteAddr().String()))
 		p.c.Close()
 		rpool.Put(p.cr)
@@ -134,7 +134,7 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 	buf := bpool.Get(4)
 	defer bpool.Put(&buf)
 	buf = buf[:4]
-	binary.BigEndian.PutUint32(buf, p.selfMaxMsgLen)
+	binary.BigEndian.PutUint32(buf, p.selfMaxMsgLen.Load())
 	if len(serververifydata) == 0 {
 		if e := ws.WriteMsg(p.c, buf, true, true, false); e != nil {
 			slog.ErrorContext(nil, "[Stream.sworker] write verify data to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
@@ -258,7 +258,7 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 	buf := bpool.Get(4)
 	defer bpool.Put(&buf)
 	buf = buf[:4]
-	binary.BigEndian.PutUint32(buf, p.selfMaxMsgLen)
+	binary.BigEndian.PutUint32(buf, p.selfMaxMsgLen.Load())
 	if len(clientverifydata) == 0 {
 		if e := ws.WriteMsg(p.c, buf, true, true, false); e != nil {
 			slog.ErrorContext(nil, "[Stream.cworker] write verify data to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
@@ -327,7 +327,7 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 
 func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 	var response []byte
-	if e := ws.Read(p.cr, p.selfMaxMsgLen, false, func(opcode ws.OPCode, data []byte) (readmore bool) {
+	if e := ws.Read(p.cr, p.selfMaxMsgLen.Load(), false, func(opcode ws.OPCode, data []byte) (readmore bool) {
 		switch {
 		case !opcode.IsControl():
 			if len(data) < 4 {
@@ -347,10 +347,11 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 				}
 				return false
 			}
-			p.lastactive = time.Now().UnixNano()
-			p.recvidlestart = p.lastactive
-			p.sendidlestart = p.lastactive
-			p.peerMaxMsgLen = senderMaxRecvMsgLen
+			now := time.Now()
+			p.lastactive.Store(now.UnixNano())
+			p.recvidlestart.Store(now.UnixNano())
+			p.sendidlestart.Store(now.UnixNano())
+			p.peerMaxMsgLen.Store(senderMaxRecvMsgLen)
 			r, u, success := this.c.VerifyFunc(ctx, data[4:])
 			if !success {
 				if p.peertype == _PEER_CLIENT {
@@ -424,16 +425,16 @@ func (this *Instance) handle(p *Peer) {
 		}
 		return
 	}
-	if e = ws.Read(p.cr, p.selfMaxMsgLen, false, func(opcode ws.OPCode, data []byte) (readmore bool) {
+	if e = ws.Read(p.cr, p.selfMaxMsgLen.Load(), false, func(opcode ws.OPCode, data []byte) (readmore bool) {
 		switch {
 		case !opcode.IsControl():
 			now := time.Now()
-			p.lastactive = now.UnixNano()
-			p.recvidlestart = now.UnixNano()
+			p.lastactive.Store(now.UnixNano())
+			p.recvidlestart.Store(now.UnixNano())
 			this.c.UserdataFunc(p, data)
 			return true
 		case opcode.IsPing():
-			p.lastactive = time.Now().UnixNano()
+			p.lastactive.Store(time.Now().UnixNano())
 			//write back
 			if e := ws.WritePong(p.c, data, false); e != nil {
 				if p.peertype == _PEER_CLIENT {
@@ -457,9 +458,9 @@ func (this *Instance) handle(p *Peer) {
 				return false
 			}
 			sendtime := binary.BigEndian.Uint64(data)
-			p.lastactive = time.Now().UnixNano()
-			p.netlag = p.lastactive - int64(sendtime)
-			if p.netlag < 0 {
+			p.lastactive.Store(time.Now().UnixNano())
+			p.netlag.Store(p.lastactive.Load() - int64(sendtime))
+			if p.netlag.Load() < 0 {
 				if p.peertype == _PEER_CLIENT {
 					slog.ErrorContext(nil, "[Stream.handle] client pong msg broken", slog.String("cip", p.c.RemoteAddr().String()))
 				} else {

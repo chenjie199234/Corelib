@@ -17,7 +17,7 @@ type connmng struct {
 	heartprobe      time.Duration
 	groupHeartIndex uint64
 	groups          []*group
-	peernum         int32
+	peernum         atomic.Int32
 	delpeerch       chan *struct{}
 	closewait       *sync.WaitGroup
 }
@@ -42,7 +42,6 @@ func newconnmng(groupnum uint16, heartprobe, sendidletimeout, recvidletimeout ti
 		heartprobe:      heartprobe,
 		groupHeartIndex: rand.Uint64(),
 		groups:          make([]*group, groupnum),
-		peernum:         0,
 		delpeerch:       make(chan *struct{}, 1),
 		closewait:       &sync.WaitGroup{},
 	}
@@ -90,12 +89,12 @@ func (m *connmng) AddPeer(p *Peer) error {
 	}
 	p.peergroup = g
 	for {
-		old := atomic.LoadInt32(&m.peernum)
+		old := m.peernum.Load()
 		if old < 0 {
 			g.Unlock()
 			return errClosing
 		}
-		if atomic.CompareAndSwapInt32(&m.peernum, old, old+1) {
+		if m.peernum.CompareAndSwap(old, old+1) {
 			g.peers[uniqueid] = p
 			break
 		}
@@ -110,7 +109,7 @@ func (m *connmng) DelPeer(p *Peer) {
 	p.peergroup.Unlock()
 	p.peergroup = nil
 	close(p.blocknotice)
-	atomic.AddInt32(&m.peernum, -1)
+	m.peernum.Add(-1)
 	select {
 	case m.delpeerch <- nil:
 	default:
@@ -130,11 +129,11 @@ func (m *connmng) GetPeer(uniqueid string) *Peer {
 // old connections working
 func (m *connmng) PreStop() {
 	for {
-		old := atomic.LoadInt32(&m.peernum)
+		old := m.peernum.Load()
 		if old < 0 {
 			return
 		}
-		if atomic.CompareAndSwapInt32(&m.peernum, old, old-math.MaxInt32) {
+		if m.peernum.CompareAndSwap(old, old-math.MaxInt32) {
 			return
 		}
 	}
@@ -145,8 +144,8 @@ func (m *connmng) PreStop() {
 func (m *connmng) Stop() {
 	defer m.closewait.Wait()
 	for {
-		if old := atomic.LoadInt32(&m.peernum); old >= 0 {
-			if atomic.CompareAndSwapInt32(&m.peernum, old, old-math.MaxInt32) {
+		if old := m.peernum.Load(); old >= 0 {
+			if m.peernum.CompareAndSwap(old, old-math.MaxInt32) {
 				break
 			}
 		} else {
@@ -167,7 +166,7 @@ func (m *connmng) Stop() {
 	}
 }
 func (m *connmng) GetPeerNum() int32 {
-	peernum := atomic.LoadInt32(&m.peernum)
+	peernum := m.peernum.Load()
 	if peernum >= 0 {
 		return peernum
 	} else {
@@ -175,10 +174,10 @@ func (m *connmng) GetPeerNum() int32 {
 	}
 }
 func (m *connmng) Finishing() bool {
-	return atomic.LoadInt32(&m.peernum) < 0
+	return m.peernum.Load() < 0
 }
 func (m *connmng) Finished() bool {
-	return atomic.LoadInt32(&m.peernum) == -math.MaxInt32
+	return m.peernum.Load() == -math.MaxInt32
 }
 func (m *connmng) RangePeers(block bool, handler func(p *Peer)) {
 	if block {

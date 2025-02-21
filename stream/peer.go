@@ -30,8 +30,8 @@ const (
 type Peer struct {
 	uniqueid       string //if this is empty,the uniqueid will be setted with the peer's RemoteAddr(ip:port)
 	blocknotice    chan *struct{}
-	selfMaxMsgLen  uint32
-	peerMaxMsgLen  uint32
+	selfMaxMsgLen  atomic.Uint32
+	peerMaxMsgLen  atomic.Uint32
 	peergroup      *group
 	status         int32 //1 - working,0 - closed
 	dispatcher     chan *struct{}
@@ -40,10 +40,10 @@ type Peer struct {
 	rawconnectaddr string //only useful when peertype is _PEER_SERVER,this is the server's raw connect addr
 	peertype       int
 	header         http.Header    //if this is not nil,means this is a websocket peer
-	lastactive     int64          //unixnano timestamp
-	recvidlestart  int64          //unixnano timestamp
-	sendidlestart  int64          //unixnano timestamp
-	netlag         int64          //unixnano
+	lastactive     atomic.Int64   //unixnano timestamp
+	recvidlestart  atomic.Int64   //unixnano timestamp
+	sendidlestart  atomic.Int64   //unixnano timestamp
+	netlag         atomic.Int64   //unixnano
 	data           unsafe.Pointer //user data
 	context.Context
 	context.CancelFunc
@@ -56,11 +56,11 @@ func newPeer(selfMaxMsgLen uint32, peertype int, rawconnectaddr string) *Peer {
 		blocknotice:    make(chan *struct{}),
 		rawconnectaddr: rawconnectaddr,
 		peertype:       peertype,
-		selfMaxMsgLen:  selfMaxMsgLen,
 		dispatcher:     make(chan *struct{}, 1),
 		Context:        ctx,
 		CancelFunc:     cancel,
 	}
+	p.selfMaxMsgLen.Store(selfMaxMsgLen)
 	p.dispatcher <- nil
 	return p
 }
@@ -70,7 +70,7 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 		return
 	}
 	now := nowtime.UnixNano()
-	if now-atomic.LoadInt64(&p.lastactive) > int64(heart) {
+	if now-p.lastactive.Load() > int64(heart) {
 		//heartbeat timeout
 		if p.peertype == _PEER_CLIENT {
 			slog.ErrorContext(nil, "[Stream.checkheart] heart timeout", slog.String("cip", p.c.RemoteAddr().String()))
@@ -80,7 +80,7 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 		p.c.Close()
 		return
 	}
-	if now-atomic.LoadInt64(&p.sendidlestart) > int64(sendidle) {
+	if now-p.sendidlestart.Load() > int64(sendidle) {
 		//send idle timeout
 		if p.peertype == _PEER_CLIENT {
 			slog.ErrorContext(nil, "[Stream.checkheart] send idle timeout", slog.String("cip", p.c.RemoteAddr().String()))
@@ -90,7 +90,7 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 		p.c.Close()
 		return
 	}
-	if recvidle > 0 && now-atomic.LoadInt64(&p.recvidlestart) > int64(recvidle) {
+	if recvidle > 0 && now-p.recvidlestart.Load() > int64(recvidle) {
 		//recv idle timeout
 		if p.peertype == _PEER_CLIENT {
 			slog.ErrorContext(nil, "[Stream.checkheart] recv idle timeout", slog.String("cip", p.c.RemoteAddr().String()))
@@ -115,7 +115,7 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 			p.c.Close()
 			return
 		}
-		p.sendidlestart = now
+		p.sendidlestart.Store(now)
 	}()
 }
 
@@ -157,7 +157,7 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 	if len(userdata) == 0 {
 		return nil
 	}
-	if uint64(len(userdata)) > uint64(p.peerMaxMsgLen) {
+	if uint64(len(userdata)) > uint64(p.peerMaxMsgLen.Load()) {
 		return ErrMsgLarge
 	}
 	if ctx == nil {
@@ -192,7 +192,7 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 			}
 			return ErrConnClosed
 		}
-		p.sendidlestart = time.Now().UnixNano()
+		p.sendidlestart.Store(time.Now().UnixNano())
 		first = false
 	}
 	if as != nil {
@@ -209,7 +209,7 @@ func (p *Peer) SendPing() error {
 	if e := ws.WritePing(p.c, buf, false); e != nil {
 		return e
 	}
-	p.sendidlestart = now.UnixNano()
+	p.sendidlestart.Store(now.UnixNano())
 	return nil
 }
 
@@ -237,7 +237,7 @@ func (p *Peer) GetLocalPort() string {
 }
 
 func (p *Peer) GetNetlag() int64 {
-	return atomic.LoadInt64(&p.netlag)
+	return p.netlag.Load()
 }
 
 // only useful when peertype is _PEER_SERVER,this is the server's raw connect addr
@@ -276,7 +276,7 @@ func (p *Peer) GetHeader() http.Header {
 }
 
 func (p *Peer) GetPeerMaxMsgLen() uint32 {
-	return p.peerMaxMsgLen
+	return p.peerMaxMsgLen.Load()
 }
 
 func (p *Peer) GetData() unsafe.Pointer {
