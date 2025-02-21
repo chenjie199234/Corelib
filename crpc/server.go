@@ -445,14 +445,14 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		}
 		c.RUnlock()
 	case MsgType_CloseRecvSend:
-		c.RLock()
+		c.Lock()
 		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
 			ctx.cancel()
 			atomic.AndInt32(&ctx.rw.status, 0b0011)
 			ctx.rw.reader.Close()
 			delete(c.ctxs, msg.H.Callid)
 		}
-		c.RUnlock()
+		c.Unlock()
 	}
 }
 func (s *CrpcServer) offlinefunc(p *stream.Peer) {
