@@ -26,7 +26,7 @@ func NewBlockList[T any]() *BlockList[T] {
 func (bl *BlockList[T]) Push(data T) (int64, error) {
 	var oldcount int64
 	for {
-		oldcount = bl.count
+		oldcount = atomic.LoadInt64(&bl.count)
 		if oldcount < 0 {
 			return oldcount + math.MaxInt64, ErrClosed
 		}
@@ -69,7 +69,7 @@ func (bl *BlockList[T]) Pop(ctx context.Context) (T, error) {
 	}
 }
 func (bl *BlockList[T]) Count() int64 {
-	count := bl.count
+	count := atomic.LoadInt64(&bl.count)
 	if count < 0 {
 		count += math.MaxInt64
 	}
@@ -77,7 +77,7 @@ func (bl *BlockList[T]) Count() int64 {
 }
 func (bl *BlockList[T]) Close() {
 	for {
-		oldcount := bl.count
+		oldcount := atomic.LoadInt64(&bl.count)
 		if oldcount < 0 {
 			return
 		}
