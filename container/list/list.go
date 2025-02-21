@@ -31,10 +31,10 @@ func (l *List[T]) Push(data T) {
 		value: data,
 		next:  nil,
 	}
-	temptail := l.tail
+	temptail := (*node[T])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&l.tail))))
 	for {
-		for temptail.next != nil {
-			temptail = temptail.next
+		for atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&temptail.next))) != nil {
+			temptail = (*node[T])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&temptail.next))))
 		}
 		if atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&temptail.next)), nil, unsafe.Pointer(n)) {
 			break
@@ -51,18 +51,19 @@ var ErrPopCheckFailed = errors.New("pop list check failed")
 // if e == ErrPopCheckFailed the data will return but it will not be poped from the list
 func (l *List[T]) Pop(check func(d T) bool) (data T, e error) {
 	for {
-		oldhead := l.head
-		if oldhead.next == nil {
+		oldhead := (*node[T])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&l.head))))
+		oldheadnext := (*node[T])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&oldhead.next))))
+		if oldheadnext == nil {
 			e = ErrPopEmpty
 			return
 		}
-		if check != nil && !check(oldhead.next.value) {
-			data = oldhead.next.value
+		if check != nil && !check(oldheadnext.value) {
+			data = oldheadnext.value
 			e = ErrPopCheckFailed
 			return
 		}
 		if atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&l.head)), unsafe.Pointer(oldhead), unsafe.Pointer(oldhead.next)) {
-			return oldhead.next.value, nil
+			return oldheadnext.value, nil
 		}
 		runtime.Gosched()
 	}
