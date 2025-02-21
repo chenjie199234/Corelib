@@ -56,7 +56,7 @@ func (bl *BlockList[T]) Pop(ctx context.Context) (T, error) {
 			atomic.AddInt64(&bl.count, -1)
 			return data, nil
 		}
-		if bl.count < 0 {
+		if atomic.LoadInt64(&bl.count) < 0 {
 			var empty T
 			return empty, ErrClosed
 		}
