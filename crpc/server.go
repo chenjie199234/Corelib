@@ -319,7 +319,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		if clientname == "" {
 			clientname = "unknown"
 		}
-		basectx, span := otel.Tracer(name.GetSelfFullName()).Start(
+		basectx, span := otel.Tracer("Corelib.crpc.server").Start(
 			otel.GetTextMapPropagator().Extract(p, propagation.MapCarrier(msg.H.Tracedata)),
 			"handle crpc",
 			trace.WithSpanKind(trace.SpanKindServer),

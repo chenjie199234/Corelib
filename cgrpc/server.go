@@ -269,7 +269,7 @@ func (s *CGrpcServer) pingponghandler(sname, mname string, handlers ...OutsideHa
 				tracedata["Tracestate"] = data[0]
 			}
 		}
-		basectx, span := otel.Tracer(name.GetSelfFullName()).Start(
+		basectx, span := otel.Tracer("Corelib.cgrpc.server").Start(
 			otel.GetTextMapPropagator().Extract(basectx, wrapmetadata(gmd)),
 			"handle grpc",
 			trace.WithSpanKind(trace.SpanKindServer),
@@ -367,7 +367,7 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 				clientname = data[0]
 			}
 		}
-		basectx, span := otel.Tracer(name.GetSelfFullName()).Start(
+		basectx, span := otel.Tracer("Corelib.cgrpc.server").Start(
 			otel.GetTextMapPropagator().Extract(basectx, wrapmetadata(gmd)),
 			"handle grpc",
 			trace.WithSpanKind(trace.SpanKindServer),

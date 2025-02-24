@@ -265,7 +265,7 @@ func (m *monitor) DialHook(hook gredis.DialHook) gredis.DialHook {
 }
 func (m *monitor) ProcessHook(hook gredis.ProcessHook) gredis.ProcessHook {
 	return func(ctx context.Context, cmd gredis.Cmder) error {
-		_, span := otel.Tracer("").Start(
+		_, span := otel.Tracer("Corelib.redis.client").Start(
 			ctx,
 			"call redis",
 			trace.WithSpanKind(trace.SpanKindClient),

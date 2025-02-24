@@ -167,7 +167,7 @@ func newMonitor(mongoname string) *gevent.CommandMonitor {
 }
 func (m *monitor) Started(ctx context.Context, evt *gevent.CommandStartedEvent) {
 	hostname, port := peerInfo(evt)
-	_, span := otel.Tracer("").Start(
+	_, span := otel.Tracer("Corelib.mongo.client").Start(
 		ctx,
 		"call mongodb",
 		trace.WithSpanKind(trace.SpanKindClient),

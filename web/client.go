@@ -316,7 +316,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		header.Set("Core-Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
 	for {
-		tctx, span := otel.Tracer(name.GetSelfFullName()).Start(
+		tctx, span := otel.Tracer("Corelib.web.client").Start(
 			ctx,
 			"call web",
 			trace.WithSpanKind(trace.SpanKindClient),

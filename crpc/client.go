@@ -247,7 +247,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler f
 	for {
 		td := make(map[string]string)
 		td["Core-Self"] = name.GetSelfFullName()
-		tctx, span := otel.Tracer(name.GetSelfFullName()).Start(
+		tctx, span := otel.Tracer("Corelib.crpc.client").Start(
 			ctx,
 			"call crpc",
 			trace.WithSpanKind(trace.SpanKindClient),

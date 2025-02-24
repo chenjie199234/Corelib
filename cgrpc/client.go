@@ -204,7 +204,7 @@ func (c *CGrpcClient) Invoke(ctx context.Context, path string, req, reply any, o
 		gmd["Core-Metadata"] = common.BTS(d)
 	}
 	for {
-		ctx, span := otel.Tracer(name.GetSelfFullName()).Start(
+		ctx, span := otel.Tracer("Corelib.cgrpc.client").Start(
 			ctx,
 			"call grpc",
 			trace.WithSpanKind(trace.SpanKindClient),
@@ -241,7 +241,7 @@ func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path
 		gmd["Core-Metadata"] = common.BTS(d)
 	}
 	for {
-		ctx, span := otel.Tracer(name.GetSelfFullName()).Start(
+		ctx, span := otel.Tracer("Corelib.cgrpc.client").Start(
 			ctx,
 			"call grpc",
 			trace.WithSpanKind(trace.SpanKindClient),

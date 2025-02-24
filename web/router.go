@@ -226,7 +226,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 		if clientname == "" {
 			clientname = "unknown"
 		}
-		ctx, span := otel.Tracer(name.GetSelfFullName()).Start(
+		ctx, span := otel.Tracer("Corelib.web.server").Start(
 			otel.GetTextMapPropagator().Extract(req.Context(), propagation.HeaderCarrier(req.Header)),
 			"handle web",
 			trace.WithSpanKind(trace.SpanKindServer),
