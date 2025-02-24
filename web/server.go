@@ -16,9 +16,6 @@ import (
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/name"
-
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 )
 
 type OutsideHandler func(*Context)
@@ -213,18 +210,7 @@ func (s *WebServer) NewRouter() *Router {
 	return router
 }
 func (s *WebServer) SetRouter(r *Router) {
-	if s.tlsc != nil {
-		//h2 enabled in ServeTLS
-		s.s.Handler = r
-	} else {
-		//enable h2c
-		s.s.Handler = h2c.NewHandler(r, &http2.Server{
-			NewWriteScheduler:         func() http2.WriteScheduler { return http2.NewPriorityWriteScheduler(nil) },
-			IdleTimeout:               s.c.IdleTimeout.StdDuration(),
-			MaxDecoderHeaderTableSize: uint32(s.c.MaxRequestHeader),
-			MaxEncoderHeaderTableSize: uint32(s.c.MaxRequestHeader),
-		})
-	}
+	s.s.Handler = r
 	r.printPath()
 }
 
