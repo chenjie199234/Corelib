@@ -25,7 +25,7 @@ func NewServerPickInfo() *ServerPickInfo {
 type ServerPickInfo struct {
 	discoverServerNum              uint32
 	discoverServerOfflineTimestamp int64
-	activecalls                    uint32 //current active calls
+	activecalls                    atomic.Uint32 //current active calls
 	cpuusage                       float64
 	sf                             *ring.Ring[bool]
 	successfail                    uint64 //low 32bit is success,high 32bit is fail
@@ -33,7 +33,7 @@ type ServerPickInfo struct {
 
 func (spi *ServerPickInfo) Pick() {
 	//add active call num
-	atomic.AddUint32(&(spi.activecalls), 1)
+	spi.activecalls.Add(1)
 }
 func (spi *ServerPickInfo) UpdateCPU(cpuusage float64) {
 	if cpuusage != 0 {
@@ -69,11 +69,11 @@ func (spi *ServerPickInfo) Done(success bool) {
 		}
 	}
 	//reduce active call num
-	atomic.AddUint32(&(spi.activecalls), math.MaxUint32)
+	spi.activecalls.Add(math.MaxUint32)
 }
 
 func (spi *ServerPickInfo) GetActiveCalls() uint32 {
-	return atomic.LoadUint32(&spi.activecalls)
+	return spi.activecalls.Load()
 }
 
 // if DiscoverServerNum > 0
@@ -129,7 +129,7 @@ func (spi *ServerPickInfo) delfail() {
 }
 func (spi *ServerPickInfo) getload() float64 {
 	success, fail := spi.getsuccessfail()
-	activecalls := atomic.LoadUint32(&spi.activecalls)
+	activecalls := spi.activecalls.Load()
 	cpuusage := math.Float64frombits(atomic.LoadUint64((*uint64)(unsafe.Pointer(&spi.cpuusage))))
 	if cpuusage < 0.01 {
 		cpuusage = 0.01

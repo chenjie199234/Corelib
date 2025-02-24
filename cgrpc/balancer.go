@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
@@ -288,7 +289,8 @@ func (b *corelibBalancer) rebuildpicker(serveraddr string, OnOff bool) {
 		}
 	}
 	b.lker.RUnlock()
-	b.picker = picker.NewPicker(tmp)
+	newpicker := picker.NewPicker(tmp)
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&b.picker)), unsafe.Pointer(newpicker))
 	b.ww.Wake("SPECIFIC:" + serveraddr)
 	if OnOff {
 		//when online server,wake the block call
@@ -314,7 +316,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 	forceaddr, _ := info.Ctx.Value(forceaddrkey{}).(string)
 	refresh := false
 	for {
-		server := b.picker.Pick(forceaddr)
+		server := (*picker.Picker)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&b.picker)))).Pick(forceaddr)
 		if server != nil {
 			if dl, ok := info.Ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic

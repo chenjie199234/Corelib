@@ -3,7 +3,9 @@ package crpc
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
@@ -143,7 +145,8 @@ func (b *corelibBalancer) RebuildPicker(serveraddr string, OnOff bool) {
 		}
 	}
 	b.lker.RUnlock()
-	b.picker = picker.NewPicker(tmp)
+	newpicker := picker.NewPicker(tmp)
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&b.picker)), unsafe.Pointer(newpicker))
 	b.ww.Wake("SPECIFIC:" + serveraddr)
 	if OnOff {
 		//when online server,wake the block call
@@ -154,7 +157,7 @@ func (b *corelibBalancer) Pick(ctx context.Context) (server *ServerForPick, e er
 	forceaddr, _ := ctx.Value(forceaddrkey{}).(string)
 	refresh := false
 	for {
-		server := b.picker.Pick(forceaddr)
+		server := (*picker.Picker)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&b.picker)))).Pick(forceaddr)
 		if server != nil {
 			if dl, ok := ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic
