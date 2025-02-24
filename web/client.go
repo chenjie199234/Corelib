@@ -109,13 +109,16 @@ func NewWebClient(c *ClientConfig, d discover.DI, serverproject, servergroup, se
 
 		stop: graceful.New(),
 	}
+	p := &http.Protocols{}
+	p.SetHTTP2(true)
+	p.SetUnencryptedHTTP2(true)
 	client.client = &http.Client{
 		Transport: &http.Transport{
 			Proxy:                  http.ProxyFromEnvironment,
 			DialContext:            client.dial,
 			DialTLSContext:         client.dialtls,
 			TLSClientConfig:        tlsc,
-			ForceAttemptHTTP2:      true,
+			Protocols:              p,
 			MaxIdleConnsPerHost:    256,
 			IdleConnTimeout:        c.IdleTimeout.StdDuration(),
 			MaxResponseHeaderBytes: int64(c.MaxResponseHeader),

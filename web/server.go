@@ -173,12 +173,17 @@ func NewWebServer(c *ServerConfig, tlsc *tls.Config) (*WebServer, error) {
 		handlerTimeout: make(map[string]map[string]time.Duration),
 		handlerRewrite: make(map[string]map[string]string),
 	}
+	p := &http.Protocols{}
+	p.SetHTTP2(true)
+	p.SetUnencryptedHTTP2(true)
+	p.SetHTTP1(true)
 	instance.s = &http.Server{
 		ErrorLog:          slog.NewLogLogger(slog.Default().Handler(), slog.LevelInfo),
 		TLSConfig:         tlsc,
 		ReadHeaderTimeout: c.ConnectTimeout.StdDuration(),
 		IdleTimeout:       c.IdleTimeout.StdDuration(),
 		MaxHeaderBytes:    int(c.MaxRequestHeader),
+		Protocols:         p,
 		ConnState: func(c net.Conn, s http.ConnState) {
 			if s == http.StateNew {
 				atomic.AddInt32(&instance.clientnum, 1)
