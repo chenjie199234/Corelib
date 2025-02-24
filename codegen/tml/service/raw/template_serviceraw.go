@@ -10,6 +10,7 @@ const txt = `package raw
 import (
 	"context"
 	"sync/atomic"
+	"unsafe"
 	// "log/slog"
 
 	// "{{.}}/config"
