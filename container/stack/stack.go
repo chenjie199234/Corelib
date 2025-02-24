@@ -25,10 +25,10 @@ func NewStack[T any]() *Stack[T] {
 func (s *Stack[T]) Push(data T) {
 	n := &node[T]{
 		value: data,
-		pre:   s.top,
+		pre:   (*node[T])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.top)))),
 	}
 	for !atomic.CompareAndSwapPointer((*unsafe.Pointer)((unsafe.Pointer)(&s.top)), unsafe.Pointer(n.pre), unsafe.Pointer(n)) {
-		n.pre = s.top
+		n.pre = (*node[T])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.top))))
 	}
 }
 
@@ -39,8 +39,9 @@ var ErrPopCheckFailed = errors.New("pop stack check failed")
 // if e == ErrPopCheckFailed the data will return but it will not be poped from the stack
 func (s *Stack[T]) Pop(check func(d T) bool) (data T, e error) {
 	for {
-		oldtop := s.top
-		if oldtop.pre == nil {
+		oldtop := (*node[T])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.top))))
+		oldtoppre := (*node[T])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&oldtop.pre))))
+		if oldtoppre == nil {
 			e = ErrPopEmpty
 			return
 		}
