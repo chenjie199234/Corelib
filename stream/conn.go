@@ -9,7 +9,6 @@ import (
 	"math"
 	"net"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/pool/bpool"
@@ -172,11 +171,11 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 		}
 	}
 	//verify finished,status set to true
-	atomic.StoreInt32(&p.status, 1)
+	p.status.Store(1)
 	if this.c.OnlineFunc != nil {
 		if !this.c.OnlineFunc(ctx, p) {
 			slog.ErrorContext(nil, "[Stream.sworker] online failed", slog.String("cip", p.c.RemoteAddr().String()))
-			atomic.StoreInt32(&p.status, 0)
+			p.status.Store(0)
 			this.mng.DelPeer(p)
 			p.CancelFunc()
 			p.c.Close()
@@ -307,11 +306,11 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 		return false
 	}
 	//verify finished set status to true
-	atomic.StoreInt32(&p.status, 1)
+	p.status.Store(1)
 	if this.c.OnlineFunc != nil {
 		if !this.c.OnlineFunc(ctx, p) {
 			slog.ErrorContext(nil, "[Stream.cworker] online failed", slog.String("sip", p.c.RemoteAddr().String()))
-			atomic.StoreInt32(&p.status, 0)
+			p.status.Store(0)
 			this.mng.DelPeer(p)
 			p.CancelFunc()
 			p.c.Close()
@@ -402,7 +401,7 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 }
 func (this *Instance) handle(p *Peer) {
 	defer func() {
-		atomic.StoreInt32(&p.status, 0)
+		p.status.Store(0)
 		p.c.Close()
 		if this.c.OfflineFunc != nil {
 			this.c.OfflineFunc(p)

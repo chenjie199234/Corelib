@@ -33,7 +33,7 @@ type Peer struct {
 	selfMaxMsgLen  atomic.Uint32
 	peerMaxMsgLen  atomic.Uint32
 	peergroup      *group
-	status         int32 //1 - working,0 - closed
+	status         atomic.Int32 //1 - working,0 - closed
 	dispatcher     chan *struct{}
 	cr             *bufio.Reader
 	c              net.Conn
@@ -66,7 +66,7 @@ func newPeer(selfMaxMsgLen uint32, peertype int, rawconnectaddr string) *Peer {
 }
 
 func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time.Time) {
-	if atomic.LoadInt32(&p.status) != 1 {
+	if p.status.Load() != 1 {
 		return
 	}
 	now := nowtime.UnixNano()
@@ -121,14 +121,14 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 
 func (p *Peer) getDispatcher(ctx context.Context) error {
 	//first check
-	if atomic.LoadInt32(&p.status) != 1 {
+	if p.status.Load() != 1 {
 		return ErrConnClosed
 	}
 	select {
 	case _, ok := <-p.dispatcher:
 		if !ok {
 			return ErrConnClosed
-		} else if atomic.LoadInt32(&p.status) != 1 {
+		} else if p.status.Load() != 1 {
 			//double check
 			close(p.dispatcher)
 			return ErrConnClosed
@@ -139,7 +139,7 @@ func (p *Peer) getDispatcher(ctx context.Context) error {
 	}
 }
 func (p *Peer) putDispatcher() {
-	if atomic.LoadInt32(&p.status) == 1 {
+	if p.status.Load() == 1 {
 		p.dispatcher <- nil
 	} else {
 		close(p.dispatcher)
@@ -214,7 +214,7 @@ func (p *Peer) SendPing() error {
 }
 
 func (p *Peer) Close(block bool) {
-	atomic.StoreInt32(&p.status, 0)
+	p.status.Store(0)
 	p.c.Close()
 	if block {
 		<-p.blocknotice
