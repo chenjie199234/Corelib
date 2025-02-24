@@ -10,6 +10,8 @@ const txt = `package xweb
 import (
 	"crypto/tls"
 	"log/slog"
+	"sync/atomic"
+	"unsafe"
 
 	"{{.}}/api"
 	"{{.}}/config"
@@ -38,15 +40,17 @@ func StartWebServer() {
 		}
 		tlsc = &tls.Config{Certificates: certificates}
 	}
-	var e error
-	if s, e = web.NewWebServer(c.ServerConfig, tlsc); e != nil {
+	server, e := web.NewWebServer(c.ServerConfig, tlsc)
+	if e != nil {
 		slog.ErrorContext(nil, "[xweb] new server failed", slog.String("error",e.Error()))
 		return
 	}
+	//avoid race when build/run in -race mode
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s)), unsafe.Pointer(server))
 	UpdateHandlerTimeout(config.AC.HandlerTimeout)
 	UpdateWebPathRewrite(config.AC.WebPathRewrite)
 
-	r := s.NewRouter()
+	r := server.NewRouter()
 
 	//this place can register global midwares
 	//r.Use(globalmidwares)
@@ -56,8 +60,8 @@ func StartWebServer() {
 	//example
 	//api.RegisterExampleWebServer(r, service.SvcExample, mids.AllMids())
 
-	s.SetRouter(r)
-	if e = s.StartWebServer(":8000"); e != nil && e != web.ErrServerClosed {
+	server.SetRouter(r)
+	if e = server.StartWebServer(":8000"); e != nil && e != web.ErrServerClosed {
 		slog.ErrorContext(nil, "[xweb] start server failed", slog.String("error",e.Error()))
 		return
 	}
@@ -67,23 +71,29 @@ func StartWebServer() {
 // UpdateHandlerTimeout -
 // first key path,second key method,value timeout duration
 func UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
-	if s != nil {
-		s.UpdateHandlerTimeout(timeout)
+	//avoid race when build/run in -race mode
+	tmps := (*web.WebServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
+	if tmps != nil {
+		tmps.UpdateHandlerTimeout(timeout)
 	}
 }
 
 // UpdateWebPathRewrite -
 // first key method,second key origin url,value rewrite url
 func UpdateWebPathRewrite(rewrite map[string]map[string]string) {
-	if s != nil {
-		s.UpdateHandlerRewrite(rewrite)
+	//avoid race when build/run in -race mode
+	tmps := (*web.WebServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
+	if tmps != nil {
+		tmps.UpdateHandlerRewrite(rewrite)
 	}
 }
 
 // StopWebServer force - false(graceful),true(not graceful)
 func StopWebServer(force bool) {
-	if s != nil {
-		s.StopWebServer(force)
+	//avoid race when build/run in -race mode
+	tmps := (*web.WebServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
+	if tmps != nil {
+		tmps.StopWebServer(force)
 	}
 }`
 
