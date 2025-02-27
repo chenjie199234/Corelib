@@ -44,7 +44,9 @@ func init() {
 func collectCPU() (float64, float64, float64) {
 	cpulker.Lock()
 	defer func() {
-		maxUsageCPU = -maxUsageCPU
+		if maxUsageCPU > 0 {
+			maxUsageCPU = -maxUsageCPU
+		}
 		cpulker.Unlock()
 	}()
 	//cgroup

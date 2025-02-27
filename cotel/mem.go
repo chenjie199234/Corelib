@@ -14,9 +14,9 @@ import (
 
 var memlker sync.RWMutex
 
-var totalMem uint64     //bytes
-var maxUsageMEM uint64  //bytes
-var lastUsageMEM uint64 //bytes
+var totalMem int64     //bytes
+var maxUsageMEM int64  //bytes
+var lastUsageMEM int64 //bytes
 
 func init() {
 	cgroup := getTotalMEM()
@@ -35,7 +35,7 @@ func init() {
 	}()
 }
 
-func collectMEM() (uint64, uint64, uint64) {
+func collectMEM() (int64, int64, int64) {
 	memlker.Lock()
 	defer func() {
 		maxUsageMEM = -maxUsageMEM
@@ -47,7 +47,7 @@ func collectMEM() (uint64, uint64, uint64) {
 	return totalMem, lastUsageMEM, maxUsageMEM
 }
 
-func GetMEM() (uint64, uint64, uint64) {
+func GetMEM() (int64, int64, int64) {
 	memlker.RLock()
 	defer memlker.RUnlock()
 	if maxUsageMEM < 0 {
@@ -60,7 +60,7 @@ func getTotalMEM() (cgroup bool) {
 	defer func() {
 		if totalMem == 0 {
 			memory, _ := mem.VirtualMemory()
-			totalMem = memory.Total
+			totalMem = int64(memory.Total)
 		}
 	}()
 	if runtime.GOOS != "linux" {
@@ -86,10 +86,10 @@ func getTotalMEM() (cgroup bool) {
 		panic("[cotel.mem] get pc memory info error: " + e.Error())
 	}
 	if memory.Total > limit && limit != 0 {
-		totalMem = limit
+		totalMem = int64(limit)
 		return true
 	}
-	totalMem = memory.Total
+	totalMem = int64(memory.Total)
 	return false
 }
 
@@ -103,7 +103,7 @@ func cgroupMEM() {
 	if usagestr[len(usagestr)-1] == 10 {
 		usagestr = usagestr[:len(usagestr)-1]
 	}
-	usage, e := strconv.ParseUint(common.BTS(usagestr), 10, 64)
+	usage, e := strconv.ParseInt(common.BTS(usagestr), 10, 64)
 	if e != nil {
 		slog.Error("[cotel.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes data format wrong", slog.String("usage_in_bytes", common.BTS(usagestr)))
 		return
@@ -115,7 +115,7 @@ func cgroupMEM() {
 }
 func gopsutilMEM() {
 	memory, _ := mem.VirtualMemory()
-	lastUsageMEM = memory.Used
+	lastUsageMEM = int64(memory.Used)
 	if lastUsageMEM > maxUsageMEM {
 		maxUsageMEM = lastUsageMEM
 	}
