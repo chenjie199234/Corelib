@@ -15,6 +15,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/cotel"
+	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -321,7 +322,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		if clientname == "" {
 			clientname = "unknown"
 		}
-		basectx, span := otel.Tracer("Corelib.crpc.server").Start(
+		basectx, span := otel.Tracer("Corelib.crpc.server", trace.WithInstrumentationVersion(version.String())).Start(
 			otel.GetTextMapPropagator().Extract(p, propagation.MapCarrier(msg.H.Tracedata)),
 			"handle crpc",
 			trace.WithSpanKind(trace.SpanKindServer),

@@ -16,6 +16,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/cotel"
+	"github.com/chenjie199234/Corelib/internal/version"
 	cmetadata "github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -269,7 +270,7 @@ func (s *CGrpcServer) pingponghandler(sname, mname string, handlers ...OutsideHa
 				tracedata["Tracestate"] = data[0]
 			}
 		}
-		basectx, span := otel.Tracer("Corelib.cgrpc.server").Start(
+		basectx, span := otel.Tracer("Corelib.cgrpc.server", trace.WithInstrumentationVersion(version.String())).Start(
 			otel.GetTextMapPropagator().Extract(basectx, wrapmetadata(gmd)),
 			"handle grpc",
 			trace.WithSpanKind(trace.SpanKindServer),
@@ -368,7 +369,7 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 				clientname = data[0]
 			}
 		}
-		basectx, span := otel.Tracer("Corelib.cgrpc.server").Start(
+		basectx, span := otel.Tracer("Corelib.cgrpc.server", trace.WithInstrumentationVersion(version.String())).Start(
 			otel.GetTextMapPropagator().Extract(basectx, wrapmetadata(gmd)),
 			"handle grpc",
 			trace.WithSpanKind(trace.SpanKindServer),

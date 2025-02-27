@@ -10,6 +10,7 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
+	"github.com/chenjie199234/Corelib/internal/version"
 	cmetadata "github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -204,7 +205,7 @@ func (c *CGrpcClient) Invoke(ctx context.Context, path string, req, reply any, o
 		gmd["Core-Metadata"] = common.BTS(d)
 	}
 	for {
-		ctx, span := otel.Tracer("Corelib.cgrpc.client").Start(
+		ctx, span := otel.Tracer("Corelib.cgrpc.client", trace.WithInstrumentationVersion(version.String())).Start(
 			ctx,
 			"call grpc",
 			trace.WithSpanKind(trace.SpanKindClient),
@@ -241,7 +242,7 @@ func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path
 		gmd["Core-Metadata"] = common.BTS(d)
 	}
 	for {
-		ctx, span := otel.Tracer("Corelib.cgrpc.client").Start(
+		ctx, span := otel.Tracer("Corelib.cgrpc.client", trace.WithInstrumentationVersion(version.String())).Start(
 			ctx,
 			"call grpc",
 			trace.WithSpanKind(trace.SpanKindClient),

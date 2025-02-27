@@ -18,6 +18,7 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
+	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
@@ -319,7 +320,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		header.Set("Core-Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
 	for {
-		tctx, span := otel.Tracer("Corelib.web.client").Start(
+		tctx, span := otel.Tracer("Corelib.web.client", trace.WithInstrumentationVersion(version.String())).Start(
 			ctx,
 			"call web",
 			trace.WithSpanKind(trace.SpanKindClient),

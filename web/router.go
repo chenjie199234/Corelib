@@ -17,6 +17,7 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/container/trie"
 	"github.com/chenjie199234/Corelib/cotel"
+	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -26,7 +27,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
@@ -229,7 +229,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 		if clientname == "" {
 			clientname = "unknown"
 		}
-		ctx, span := otel.Tracer("Corelib.web.server").Start(
+		ctx, span := otel.Tracer("Corelib.web.server", trace.WithInstrumentationVersion(version.String())).Start(
 			otel.GetTextMapPropagator().Extract(req.Context(), propagation.HeaderCarrier(req.Header)),
 			"handle web",
 			trace.WithSpanKind(trace.SpanKindServer),
@@ -311,7 +311,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 			span.End()
 			st := span.(sdktrace.ReadOnlySpan).StartTime()
 			et := span.(sdktrace.ReadOnlySpan).EndTime()
-			m, _ := otel.Meter("Corelib.web.server").Int64Histogram(path)
+			m, _ := otel.Meter("Corelib.web.server").Int64Histogram(path + ".time")
 			m.Record(context.Background(), et.UnixNano()-st.UnixNano())
 		}()
 		for _, handler := range totalhandlers {

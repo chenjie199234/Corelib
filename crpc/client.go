@@ -14,6 +14,7 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
+	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
@@ -247,7 +248,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler f
 	for {
 		td := make(map[string]string)
 		td["Core-Self"] = name.GetSelfFullName()
-		tctx, span := otel.Tracer("Corelib.crpc.client").Start(
+		tctx, span := otel.Tracer("Corelib.crpc.client", trace.WithInstrumentationVersion(version.String())).Start(
 			ctx,
 			"call crpc",
 			trace.WithSpanKind(trace.SpanKindClient),
@@ -343,7 +344,7 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 	for {
 		td := make(map[string]string)
 		td["Core-Self"] = name.GetSelfFullName()
-		tctx, span := otel.Tracer(name.GetSelfFullName()).Start(
+		tctx, span := otel.Tracer("Corelib.crpc.client", trace.WithInstrumentationVersion(version.String())).Start(
 			ctx,
 			"call crpc",
 			trace.WithSpanKind(trace.SpanKindClient),
