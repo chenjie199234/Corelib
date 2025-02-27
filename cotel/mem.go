@@ -47,13 +47,13 @@ func collectMEM() (int64, int64, int64) {
 	return totalMem, lastUsageMEM, maxUsageMEM
 }
 
-func GetMEM() (int64, int64, int64) {
+func GetMEM() (uint64, uint64, uint64) {
 	memlker.RLock()
 	defer memlker.RUnlock()
 	if maxUsageMEM < 0 {
-		return totalMem, lastUsageMEM, -maxUsageMEM
+		return uint64(totalMem), uint64(lastUsageMEM), uint64(-maxUsageMEM)
 	}
-	return totalMem, lastUsageMEM, maxUsageMEM
+	return uint64(totalMem), uint64(lastUsageMEM), uint64(maxUsageMEM)
 }
 
 func getTotalMEM() (cgroup bool) {
