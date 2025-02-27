@@ -78,15 +78,15 @@ func Init() error {
 		panic("[cotel] metric not support prometheus now")
 	}
 	otel.SetMeterProvider(metric.NewMeterProvider(mopts...))
-	cpuc, _ := otel.Meter("host").Float64ObservableGauge("cpu_cur_usage", ometric.WithUnit("%"))
-	cpum, _ := otel.Meter("host").Float64ObservableGauge("cpu_max_usage", ometric.WithUnit("%"))
-	cpua, _ := otel.Meter("host").Float64ObservableGauge("cpu_avg_usage", ometric.WithUnit("%"))
-	memc, _ := otel.Meter("host").Float64ObservableGauge("mem_cur_usage", ometric.WithUnit("%"))
-	memm, _ := otel.Meter("host").Float64ObservableGauge("mem_max_usage", ometric.WithUnit("%"))
-	gc, _ := otel.Meter("host").Int64ObservableGauge("gc", ometric.WithUnit("ns"))
-	goroutine, _ := otel.Meter("host").Int64ObservableGauge("goroutine", ometric.WithUnit("1"))
-	thread, _ := otel.Meter("host").Int64ObservableGauge("thread", ometric.WithUnit("1"))
-	otel.Meter("host").RegisterCallback(func(ctx context.Context, s ometric.Observer) error {
+	cpuc, _ := otel.Meter("Host").Float64ObservableGauge("cpu_cur_usage", ometric.WithUnit("%"))
+	cpum, _ := otel.Meter("Host").Float64ObservableGauge("cpu_max_usage", ometric.WithUnit("%"))
+	cpua, _ := otel.Meter("Host").Float64ObservableGauge("cpu_avg_usage", ometric.WithUnit("%"))
+	memc, _ := otel.Meter("Host").Float64ObservableGauge("mem_cur_usage", ometric.WithUnit("%"))
+	memm, _ := otel.Meter("Host").Float64ObservableGauge("mem_max_usage", ometric.WithUnit("%"))
+	gc, _ := otel.Meter("Host").Int64ObservableGauge("gc", ometric.WithUnit("ns"))
+	goroutine, _ := otel.Meter("Host").Int64ObservableGauge("goroutine", ometric.WithUnit("1"))
+	thread, _ := otel.Meter("Host").Int64ObservableGauge("thread", ometric.WithUnit("1"))
+	otel.Meter("Host").RegisterCallback(func(ctx context.Context, s ometric.Observer) error {
 		lastcpu, maxcpu, avgcpu := collectCPU()
 		totalmem, lastmem, maxmem := collectMEM()
 		goroutinenum, threadnum, gctime := getGo()
@@ -179,7 +179,7 @@ func (s *slogMetricExporter) Export(ctx context.Context, metrics *metricdata.Res
 	for _, m := range metrics.ScopeMetrics {
 		gattrs := make([]any, 0, len(m.Metrics))
 		for _, mm := range m.Metrics {
-			gattrs = append(gattrs, slog.Any(mm.Name, mm.Data))
+			gattrs = append(gattrs, slog.Any(mm.Name+"("+mm.Unit+")", mm.Data))
 		}
 		attrs = append(attrs, slog.Group(m.Scope.Name, gattrs...))
 	}
