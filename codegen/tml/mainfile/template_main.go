@@ -148,7 +148,7 @@ func main() {
 		}
 		wg.Done()
 	}()
-	pprofserver := &http.Server{addr:":6060"}
+	pprofserver := &http.Server{Addr:":6060"}
 	wg.Add(1)
 	go func(){
 		pprofserver.ListenAndServe()
