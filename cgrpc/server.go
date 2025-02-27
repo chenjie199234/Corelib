@@ -26,6 +26,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -217,7 +219,7 @@ func (s *CGrpcServer) RegisterHandler(sname, mname string, clientstream, servers
 	} else {
 		service.Methods = append(service.Methods, grpc.MethodDesc{
 			MethodName: mname,
-			Handler:    s.pingponghandler(sname, mname, handlers...),
+			Handler:    s.echohandler(sname, mname, handlers...),
 		})
 	}
 }
@@ -241,7 +243,7 @@ func (md wrapmetadata) Keys() []string {
 	}
 	return keys
 }
-func (s *CGrpcServer) pingponghandler(sname, mname string, handlers ...OutsideHandler) func(any, context.Context, func(any) error, grpc.UnaryServerInterceptor) (any, error) {
+func (s *CGrpcServer) echohandler(sname, mname string, handlers ...OutsideHandler) func(any, context.Context, func(any) error, grpc.UnaryServerInterceptor) (any, error) {
 	path := "/" + sname + "/" + mname
 	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
 	copy(totalhandlers, s.global)
@@ -335,7 +337,16 @@ func (s *CGrpcServer) pingponghandler(sname, mname string, handlers ...OutsideHa
 				err = nil
 			}
 			span.End()
-			// monitor.GrpcServerMonitor(peername, "GRPC", path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
+			mstatus, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+			if workctx.e != nil {
+				mstatus.Record(context.Background(), 1)
+			} else {
+				mstatus.Record(context.Background(), 0)
+			}
+			mtime, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+			st := span.(sdktrace.ReadOnlySpan).StartTime()
+			et := span.(sdktrace.ReadOnlySpan).EndTime()
+			mtime.Record(context.Background(), float64(et.UnixNano()-st.UnixNano())/1000000.0)
 		}()
 		for _, handler := range totalhandlers {
 			handler(workctx)
@@ -432,7 +443,16 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 				err = nil
 			}
 			span.End()
-			// monitor.GrpcServerMonitor(peername, "GRPC", path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
+			mstatus, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+			if workctx.e != nil {
+				mstatus.Record(context.Background(), 1)
+			} else {
+				mstatus.Record(context.Background(), 0)
+			}
+			mtime, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+			st := span.(sdktrace.ReadOnlySpan).StartTime()
+			et := span.(sdktrace.ReadOnlySpan).EndTime()
+			mtime.Record(context.Background(), float64(et.UnixNano()-st.UnixNano())/1000000.0)
 		}()
 		for _, handler := range totalhandlers {
 			handler(workctx)

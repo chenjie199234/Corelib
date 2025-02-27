@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/cotel"
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/internal/version"
@@ -21,7 +22,9 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -218,8 +221,11 @@ func (c *CGrpcClient) Invoke(ctx context.Context, path string, req, reply any, o
 		}
 		//the span will be ended at the balancer's pick's Done function
 		//but if pick server failed,the Done function will not be called
-		span.SetStatus(codes.Error, e.Error())
-		span.End()
+		if span.IsRecording() {
+			span.SetStatus(codes.Error, e.Error())
+			span.End()
+			c.recordmetric(path, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, true)
+		}
 		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 			continue
 		}
@@ -256,13 +262,26 @@ func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path
 		}
 		//the span will be ended at the balancer's pick's Done function
 		//but if pick server failed,the Done function will not be called
-		span.SetStatus(codes.Error, ee.Error())
-		span.End()
+		if span.IsRecording() {
+			span.SetStatus(codes.Error, ee.Error())
+			span.End()
+			c.recordmetric(path, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, true)
+		}
 		if cerror.Equal(ee, cerror.ErrServerClosing) || cerror.Equal(ee, cerror.ErrTarget) {
 			continue
 		}
 		return nil, ee
 	}
+}
+func (c *CGrpcClient) recordmetric(path string, usetimems float64, err bool) {
+	mstatus, _ := otel.Meter("Corelib.cgrpc.client", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+	if err {
+		mstatus.Record(context.Background(), 1)
+	} else {
+		mstatus.Record(context.Background(), 0)
+	}
+	mtime, _ := otel.Meter("Corelib.cgrpc.client", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+	mtime.Record(context.Background(), usetimems)
 }
 
 type ClientStreamWraper struct {

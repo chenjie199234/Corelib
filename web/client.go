@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/cotel"
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/internal/version"
@@ -27,7 +28,9 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -331,6 +334,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		if e != nil {
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
+			c.recordmetric(path, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, true)
 			return nil, e
 		}
 		span.SetAttributes(attribute.String("server.addr", server.addr))
@@ -345,6 +349,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			server.GetServerPickInfo().Done(false)
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
+			c.recordmetric(path, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, true)
 			return nil, e
 		}
 		req.Header = header
@@ -356,7 +361,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			server.GetServerPickInfo().Done(false)
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
-			// monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
+			c.recordmetric(path, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, true)
 			return nil, e
 		}
 		if cpuusagestr := resp.Header.Get("Cpu-Usage"); cpuusagestr != "" {
@@ -380,7 +385,6 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			server.GetServerPickInfo().Done(false)
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
-			// monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
 			if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 				if atomic.SwapInt32(&server.closing, 1) == 0 {
 					//set the lowest pick priority
@@ -392,14 +396,17 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				}
 				continue
 			}
+			c.recordmetric(path, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, true)
 			return nil, e
 		}
-		resp.Body = &wrappedbody{body: resp.Body, span: span}
+		resp.Body = &wrappedbody{c: c, path: path, body: resp.Body, span: span}
 		return resp, e
 	}
 }
 
 type wrappedbody struct {
+	c    *WebClient
+	path string
 	span trace.Span
 	body io.ReadCloser
 }
@@ -410,12 +417,12 @@ func (b *wrappedbody) Read(p []byte) (n int, err error) {
 		if e == io.EOF {
 			b.span.SetStatus(codes.Ok, "")
 			b.span.End()
-			// monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
+			b.c.recordmetric(b.path, float64(b.span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-b.span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, false)
 		} else {
 			e = cerror.Convert(e)
 			b.span.SetStatus(codes.Error, e.Error())
 			b.span.End()
-			// monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
+			b.c.recordmetric(b.path, float64(b.span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-b.span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, true)
 		}
 	}
 	return n, e
@@ -424,7 +431,18 @@ func (b *wrappedbody) Close() error {
 	if b.span.IsRecording() {
 		b.span.SetStatus(codes.Ok, "")
 		b.span.End()
-		// monitor.WebClientMonitor(c.server, method, path, e, uint64(span.GetEnd()-span.GetStart()))
+		b.c.recordmetric(b.path, float64(b.span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-b.span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, false)
 	}
 	return b.body.Close()
+}
+
+func (c *WebClient) recordmetric(path string, usetimems float64, err bool) {
+	mstatus, _ := otel.Meter("Corelib.web.client", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+	if err {
+		mstatus.Record(context.Background(), 1)
+	} else {
+		mstatus.Record(context.Background(), 0)
+	}
+	mtime, _ := otel.Meter("Corelib.web.client", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+	mtime.Record(context.Background(), usetimems)
 }

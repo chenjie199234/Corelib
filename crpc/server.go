@@ -26,7 +26,9 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 )
@@ -413,8 +415,16 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 					span.SetStatus(codes.Ok, "")
 				}
 				span.End()
-				// monitor.CrpcServerMonitor(peername, "CRPC", msg.H.Path, workctx.e, uint64(span.GetEnd()-span.GetStart()))
-
+				mstatus, _ := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(msg.H.Path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+				if workctx.e != nil {
+					mstatus.Record(context.Background(), 1)
+				} else {
+					mstatus.Record(context.Background(), 0)
+				}
+				mtime, _ := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(msg.H.Path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+				st := span.(sdktrace.ReadOnlySpan).StartTime()
+				et := span.(sdktrace.ReadOnlySpan).EndTime()
+				mtime.Record(context.Background(), float64(et.UnixNano()-st.UnixNano())/1000000.0)
 				if workctx.finish == 0 {
 					rw.closerecvsend(true, nil)
 				}
