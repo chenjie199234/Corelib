@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/cotel"
 	"github.com/chenjie199234/Corelib/metadata"
-	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
 )
@@ -39,7 +39,8 @@ func (c *Context) Abort(e error) {
 		}
 	}
 	if c.e != nil {
-		c.w.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
+		lastcpu, _, _ := cotel.GetCPU()
+		c.w.Header().Set("Cpu-Usage", strconv.FormatFloat(lastcpu, 'g', 10, 64))
 		c.w.Header().Set("Content-Type", "application/json")
 		c.w.WriteHeader(int(c.e.Httpcode))
 		c.w.Write(common.STB(c.e.Json()))
@@ -53,7 +54,8 @@ func (c *Context) Write(contenttype string, msg []byte) {
 	if atomic.SwapInt32(&c.finish, 1) != 0 {
 		return
 	}
-	c.w.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
+	lastcpu, _, _ := cotel.GetCPU()
+	c.w.Header().Set("Cpu-Usage", strconv.FormatFloat(lastcpu, 'g', 10, 64))
 	c.w.Header().Set("Content-Type", contenttype)
 	c.w.WriteHeader(http.StatusOK)
 	c.w.Write(msg)

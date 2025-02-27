@@ -15,7 +15,7 @@ import (
 
 // SubBroadcast will sub max 128 datas in one cycle
 // last: wether this is the last data in this cycle
-type BroadcastHandler func(data map[string]interface{}, last bool)
+type BroadcastHandler func(data map[string]any, last bool)
 
 // SubBroadcast sub data which is pubbed after the sub action
 // due to go-redis doesn't support to wake up the block cmd actively now
@@ -58,7 +58,7 @@ func (c *Client) SubBroadcast(broadcast string, shard uint8, handler BroadcastHa
 
 // shard: is used to split data into different redis streams
 // key: is only used to shard values into different redis node(hash),if key is empty,values will be sharded randomly
-func (c *Client) PubBroadcast(ctx context.Context, broadcast string, shard uint8, key string, values map[string]interface{}) error {
+func (c *Client) PubBroadcast(ctx context.Context, broadcast string, shard uint8, key string, values map[string]any) error {
 	if broadcast == "" || shard == 0 {
 		panic("[redis.broadcast.pub] broadcast name or shard num missing")
 	}

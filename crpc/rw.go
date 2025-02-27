@@ -8,7 +8,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/container/list"
-	"github.com/chenjie199234/Corelib/monitor"
+	"github.com/chenjie199234/Corelib/cotel"
 )
 
 type rw struct {
@@ -116,7 +116,8 @@ func (this *rw) closerecvsend(trail bool, err error) error {
 		},
 	}
 	if trail {
-		m.H.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
+		lastcpu, _, _ := cotel.GetCPU()
+		m.H.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(lastcpu, 'g', 10, 64)}
 	}
 	return this.sender(context.Background(), m)
 }

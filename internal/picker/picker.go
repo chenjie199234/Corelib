@@ -131,9 +131,7 @@ func (spi *ServerPickInfo) getload() float64 {
 	success, fail := spi.getsuccessfail()
 	activecalls := spi.activecalls.Load()
 	cpuusage := math.Float64frombits(atomic.LoadUint64((*uint64)(unsafe.Pointer(&spi.cpuusage))))
-	if cpuusage < 0.01 {
-		cpuusage = 0.01
-	}
+	cpuusage = max(cpuusage, 0.01)
 	errpercent := 0.0
 	if success+fail > 0 {
 		errpercent = float64(fail) / float64(success+fail)

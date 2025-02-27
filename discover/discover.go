@@ -10,7 +10,7 @@ const (
 )
 
 // version can only be int64 or string(should only be used with != or ==)
-type Version interface{}
+type Version any
 
 type DI interface {
 	// triger discover action once right now.

@@ -14,8 +14,8 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/cotel"
 	"github.com/chenjie199234/Corelib/metadata"
-	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/stream"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
@@ -265,7 +265,8 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			} else {
 				//tell peer self busy
 				msg.B.Error = cerror.ErrBusy
-				msg.H.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
+				lastcpu, _, _ := cotel.GetCPU()
+				msg.H.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(lastcpu, 'g', 10, 64)}
 			}
 			msg.H.Metadata = nil
 			msg.H.Tracedata = nil
@@ -292,7 +293,8 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			c.Unlock()
 			slog.ErrorContext(nil, "[crpc.server] path doesn't exist", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.H.Path))
 			msg.B.Body = nil
-			msg.H.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}
+			lastcpu, _, _ := cotel.GetCPU()
+			msg.H.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(lastcpu, 'g', 10, 64)}
 			msg.B.Error = cerror.ErrNoapi
 			msg.H.Metadata = nil
 			msg.H.Tracedata = nil

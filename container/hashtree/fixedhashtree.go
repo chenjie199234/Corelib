@@ -17,7 +17,7 @@ func NewFixedHashtree[T any](h hash.Hash, width, tall int) *FixedHashtree[T] {
 		return nil
 	}
 	total := 0
-	for i := 0; i < tall; i++ {
+	for i := range tall {
 		total += int(math.Pow(float64(width), float64(i)))
 	}
 	instance := &hashtree[T]{

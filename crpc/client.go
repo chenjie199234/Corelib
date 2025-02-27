@@ -121,7 +121,7 @@ func (c *CrpcClient) ResolveNow() {
 
 // get the server's addrs from the discover.DI(the param in NewCrpcClient)
 // version can be int64 or string(should only be used with == or !=)
-func (c *CrpcClient) GetServerIps() (ips []string, version interface{}, lasterror error) {
+func (c *CrpcClient) GetServerIps() (ips []string, version any, lasterror error) {
 	tmp, version, e := c.discover.GetAddrs(discover.NotNeed)
 	ips = make([]string, 0, len(tmp))
 	for k := range tmp {

@@ -78,14 +78,14 @@ spec:
               value: <GROUP>
             - name: PROJECT
               value: <PROJECT>
-            - name: LOG_TRACE
-              value: <LOG_TRACE>
+            - name: TRACE
+              value: <TRACE>
+            - name: METRIC
+              value: <METRIC>
             - name: DEPLOY_ENV
               value: <DEPLOY_ENV>
             - name: RUN_ENV
               value: <RUN_ENV>
-            - name: MONITOR
-              value: <MONITOR>
             - name: CONFIG_TYPE
               value: <CONFIG_TYPE>
             - name: REMOTE_CONFIG_SECRET

@@ -10,14 +10,14 @@ type LruCache[T any] struct {
 	maxcap int64
 	curcap int64
 	ttl    time.Duration
-	buf    map[interface{}]*node[T]
+	buf    map[any]*node[T]
 	head   *node[T]
 	tail   *node[T]
 	pool   *sync.Pool
 }
 type kv[T any] struct {
 	ttl   int64 //unixnano
-	key   interface{}
+	key   any
 	value T
 }
 
@@ -35,7 +35,7 @@ func New[T any](maxcap int64, ttl time.Duration) *LruCache[T] {
 	return &LruCache[T]{
 		maxcap: maxcap,
 		ttl:    ttl,
-		buf:    make(map[interface{}]*node[T], int(float64(maxcap)*float64(1.3))),
+		buf:    make(map[any]*node[T], int(float64(maxcap)*float64(1.3))),
 		pool:   &sync.Pool{},
 	}
 }
@@ -88,7 +88,7 @@ func (l *LruCache[T]) insert(v *node[T]) {
 		l.curcap++
 	}
 }
-func (l *LruCache[T]) Get(key interface{}) (data T, ok bool) {
+func (l *LruCache[T]) Get(key any) (data T, ok bool) {
 	v, ok := l.buf[key]
 	if !ok {
 		return
@@ -104,7 +104,7 @@ func (l *LruCache[T]) Get(key interface{}) (data T, ok bool) {
 	l.refresh(v)
 	return v.data.value, true
 }
-func (l *LruCache[T]) Set(key interface{}, value T) {
+func (l *LruCache[T]) Set(key any, value T) {
 	if v, ok := l.buf[key]; ok {
 		v.data.value = value
 		if l.ttl > 0 {

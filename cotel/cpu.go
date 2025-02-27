@@ -1,4 +1,4 @@
-package monitor
+package cotel
 
 import (
 	"log/slog"
@@ -12,14 +12,14 @@ import (
 	"github.com/shirou/gopsutil/v4/cpu"
 )
 
-var cpulker sync.Mutex
+var cpulker sync.RWMutex
 
 var CPUNum float64
-var MaxUsageCPU float64
-var AverageUsageCPU float64
-var LastUsageCPU float64
+var maxUsageCPU float64
+var averageUsageCPU float64
+var lastUsageCPU float64
 
-func initcpu() {
+func init() {
 	cgroup := getCPUNum()
 	if cgroup {
 		cgroupCPU(time.Now().UnixNano())
@@ -41,10 +41,10 @@ func initcpu() {
 	}()
 }
 
-func cpuCollect() (float64, float64, float64) {
+func collectCPU() (float64, float64, float64) {
 	cpulker.Lock()
 	defer func() {
-		MaxUsageCPU = -MaxUsageCPU
+		maxUsageCPU = -maxUsageCPU
 		cpulker.Unlock()
 	}()
 	//cgroup
@@ -54,19 +54,19 @@ func cpuCollect() (float64, float64, float64) {
 	//gopsutil
 	cpuTotalStart = cpuTotalLast
 	cpuIdleStart = cpuIdleLast
-	if MaxUsageCPU < 0 {
-		return LastUsageCPU, -MaxUsageCPU, AverageUsageCPU
+	if maxUsageCPU < 0 {
+		return lastUsageCPU, -maxUsageCPU, averageUsageCPU
 	}
-	return LastUsageCPU, MaxUsageCPU, AverageUsageCPU
+	return lastUsageCPU, maxUsageCPU, averageUsageCPU
 }
 
 func GetCPU() (float64, float64, float64) {
-	cpulker.Lock()
-	defer cpulker.Unlock()
-	if MaxUsageCPU < 0 {
-		return LastUsageCPU, -MaxUsageCPU, AverageUsageCPU
+	cpulker.RLock()
+	defer cpulker.RUnlock()
+	if maxUsageCPU < 0 {
+		return lastUsageCPU, -maxUsageCPU, averageUsageCPU
 	}
-	return LastUsageCPU, MaxUsageCPU, AverageUsageCPU
+	return lastUsageCPU, maxUsageCPU, averageUsageCPU
 }
 
 func getCPUNum() (cgroup bool) {
@@ -81,7 +81,7 @@ func getCPUNum() (cgroup bool) {
 	quotastr, e := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_quota_us")
 	if e != nil {
 		if !os.IsNotExist(e) {
-			panic("[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us error: " + e.Error())
+			panic("[cotel.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us error: " + e.Error())
 		}
 		return false
 	}
@@ -91,14 +91,14 @@ func getCPUNum() (cgroup bool) {
 	}
 	quota, e := strconv.ParseInt(common.BTS(quotastr), 10, 64)
 	if e != nil {
-		panic("[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us data format wrong: " + e.Error())
+		panic("[cotel.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us data format wrong: " + e.Error())
 	}
 	if quota <= 0 {
 		return false
 	}
 	periodstr, e := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_period_us")
 	if e != nil {
-		panic("[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us success,but read /sys/fs/cgroup/cpu/cpu.cfs_period_us error: " + e.Error())
+		panic("[cotel.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us success,but read /sys/fs/cgroup/cpu/cpu.cfs_period_us error: " + e.Error())
 	}
 	//delete '/n' if exist
 	if periodstr[len(periodstr)-1] == 10 {
@@ -106,7 +106,7 @@ func getCPUNum() (cgroup bool) {
 	}
 	period, e := strconv.ParseInt(common.BTS(periodstr), 10, 64)
 	if e != nil {
-		panic("[monitor.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us success,but read /sys/fs/cgroup/cpu/cpu.cfs_period_us data format wrong: " + e.Error())
+		panic("[cotel.cpu] read /sys/fs/cgroup/cpu/cpu.cfs_quota_us success,but read /sys/fs/cgroup/cpu/cpu.cfs_period_us data format wrong: " + e.Error())
 	}
 	CPUNum = float64(quota) / float64(period)
 	return true
@@ -129,11 +129,11 @@ func gopsutilCPU() {
 		cpuIdleStart = idle
 		return
 	}
-	LastUsageCPU = 1 - (idle-cpuIdleLast)/(total-cpuTotalLast)
-	if LastUsageCPU > MaxUsageCPU {
-		MaxUsageCPU = LastUsageCPU
+	lastUsageCPU = 1 - (idle-cpuIdleLast)/(total-cpuTotalLast)
+	if lastUsageCPU > maxUsageCPU {
+		maxUsageCPU = lastUsageCPU
 	}
-	AverageUsageCPU = 1 - (idle-cpuIdleStart)/(total-cpuTotalStart)
+	averageUsageCPU = 1 - (idle-cpuIdleStart)/(total-cpuTotalStart)
 	cpuTotalLast = total
 	cpuIdleLast = idle
 }
@@ -148,7 +148,7 @@ var cpuUsageLastTime int64
 func cgroupCPU(now int64) {
 	usagestr, e := os.ReadFile("/sys/fs/cgroup/cpu/cpuacct.usage")
 	if e != nil {
-		slog.Error("[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage failed", slog.String("error", e.Error()))
+		slog.Error("[cotel.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage failed", slog.String("error", e.Error()))
 		return
 	}
 	if usagestr[len(usagestr)-1] == 10 {
@@ -156,7 +156,7 @@ func cgroupCPU(now int64) {
 	}
 	usage, e := strconv.ParseInt(common.BTS(usagestr), 10, 64)
 	if e != nil {
-		slog.Error("[monitor.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage data format wrong", slog.String("usage", common.BTS(usagestr)))
+		slog.Error("[cotel.cpu] read /sys/fs/cgroup/cpu/cpuacct.usage data format wrong", slog.String("usage", common.BTS(usagestr)))
 		return
 	}
 	oldUsage := cpuUsageLast
@@ -167,9 +167,9 @@ func cgroupCPU(now int64) {
 		cpuUsageStartTime = now
 		return
 	}
-	LastUsageCPU = float64(cpuUsageLast-oldUsage) / CPUNum / float64((time.Millisecond * 100).Nanoseconds())
-	if LastUsageCPU > MaxUsageCPU {
-		MaxUsageCPU = LastUsageCPU
+	lastUsageCPU = float64(cpuUsageLast-oldUsage) / CPUNum / float64((time.Millisecond * 100).Nanoseconds())
+	if lastUsageCPU > maxUsageCPU {
+		maxUsageCPU = lastUsageCPU
 	}
-	AverageUsageCPU = float64(cpuUsageLast-cpuUsageStart) / CPUNum / float64(cpuUsageLastTime-cpuUsageStartTime)
+	averageUsageCPU = float64(cpuUsageLast-cpuUsageStart) / CPUNum / float64(cpuUsageLastTime-cpuUsageStartTime)
 }

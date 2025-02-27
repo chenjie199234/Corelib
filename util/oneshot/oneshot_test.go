@@ -11,7 +11,7 @@ import (
 func Test_Once(t *testing.T) {
 	wg := new(sync.WaitGroup)
 	wg.Add(10)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
 			defer wg.Done()
 			r, e := Do("test", testcall)

@@ -40,7 +40,7 @@ return 1`)
 // Warning!In redis cluster mode,multi key should route to the same redis node!Please set the source name carefully
 func (c *Client) RateLimit(ctx context.Context, rates map[string][2]uint64) (bool, error) {
 	keys := make([]string, len(rates))
-	values := make([]interface{}, len(rates)*2)
+	values := make([]any, len(rates)*2)
 	i := 0
 	for k, v := range rates {
 		keys[i] = k

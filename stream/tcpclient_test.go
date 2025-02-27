@@ -15,7 +15,7 @@ import (
 func Test_Tcpclient(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	go func() {
-		for count := 0; count < 10000; count++ {
+		for range 10000 {
 			tcpclientinstance, _ := NewInstance(&InstanceConfig{
 				HeartprobeInterval: time.Second,
 				TcpC:               &TcpConfig{

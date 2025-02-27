@@ -197,8 +197,7 @@ func prepare(file *protogen.File, _ *protogen.GeneratedFile) (enums []*protogen.
 func genEnum(e *protogen.Enum, g *protogen.GeneratedFile) {
 	g.P("export enum ", e.GoIdent.GoName, "{")
 	for i, v := range e.Values {
-		comments := strings.Split(strings.TrimSuffix(v.Comments.Leading.String(), "\n"), "\n")
-		for _, comment := range comments {
+		for comment := range strings.SplitSeq(strings.TrimSuffix(v.Comments.Leading.String(), "\n"), "\n") {
 			if comment == "" {
 				continue
 			}
@@ -232,8 +231,7 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 			oneof[f.Oneof.GoIdent.String()] = nil
 			g.P("\t", f.Oneof.Desc.Name(), ":")
 			for _, oneoff := range f.Oneof.Fields {
-				comments := strings.Split(strings.TrimSuffix(oneoff.Comments.Leading.String(), "\n"), "\n")
-				for _, comment := range comments {
+				for comment := range strings.SplitSeq(strings.TrimSuffix(oneoff.Comments.Leading.String(), "\n"), "\n") {
 					if comment == "" {
 						continue
 					}
@@ -288,8 +286,7 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 			g.P("\t\tnull = null")
 			continue
 		}
-		comments := strings.Split(strings.TrimSuffix(f.Comments.Leading.String(), "\n"), "\n")
-		for _, comment := range comments {
+		for comment := range strings.SplitSeq(strings.TrimSuffix(f.Comments.Leading.String(), "\n"), "\n") {
 			if comment == "" {
 				continue
 			}

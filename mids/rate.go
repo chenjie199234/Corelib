@@ -14,13 +14,13 @@ import (
 
 type rate struct {
 	c     *redis.Client
-	grpc  map[string][][3]interface{} //key path
-	crpc  map[string][][3]interface{} //key path
-	get   map[string][][3]interface{} //key path
-	post  map[string][][3]interface{} //key path
-	put   map[string][][3]interface{} //key path
-	patch map[string][][3]interface{} //key path
-	del   map[string][][3]interface{} //key path
+	grpc  map[string][][3]any //key path
+	crpc  map[string][][3]any //key path
+	get   map[string][][3]any //key path
+	post  map[string][][3]any //key path
+	put   map[string][][3]any //key path
+	patch map[string][][3]any //key path
+	del   map[string][][3]any //key path
 }
 
 var rateinstance *rate
@@ -51,13 +51,13 @@ func UpdateRateRedisInstance(c *redis.Client) {
 
 // key path
 func UpdateRateConfig(c MultiPathRateConfigs) {
-	grpc := make(map[string][][3]interface{})  //key path
-	crpc := make(map[string][][3]interface{})  //key path
-	get := make(map[string][][3]interface{})   //key path
-	post := make(map[string][][3]interface{})  //key path
-	put := make(map[string][][3]interface{})   //key path
-	patch := make(map[string][][3]interface{}) //key path
-	del := make(map[string][][3]interface{})   //key path
+	grpc := make(map[string][][3]any)  //key path
+	crpc := make(map[string][][3]any)  //key path
+	get := make(map[string][][3]any)   //key path
+	post := make(map[string][][3]any)  //key path
+	put := make(map[string][][3]any)   //key path
+	patch := make(map[string][][3]any) //key path
+	del := make(map[string][][3]any)   //key path
 	for path, pathraterules := range c {
 		if path == "" {
 			path = "/"
@@ -70,7 +70,7 @@ func UpdateRateConfig(c MultiPathRateConfigs) {
 				return
 			}
 
-			var rateinfo [3]interface{}
+			var rateinfo [3]any
 			rateinfo[0] = pathraterule.RateType + "_rate_{" + path + "}_" + strings.Join(pathraterule.Methods, "_") + "_" + strconv.FormatUint(pathraterule.Period, 10)
 			rateinfo[1] = pathraterule.MaxRate
 			rateinfo[2] = pathraterule.Period
@@ -78,37 +78,37 @@ func UpdateRateConfig(c MultiPathRateConfigs) {
 				switch strings.ToUpper(m) {
 				case "GRPC":
 					if _, ok := grpc[path]; !ok {
-						grpc[path] = make([][3]interface{}, 0, 3)
+						grpc[path] = make([][3]any, 0, 3)
 					}
 					grpc[path] = append(grpc[path], rateinfo)
 				case "CRPC":
 					if _, ok := crpc[path]; !ok {
-						crpc[path] = make([][3]interface{}, 0, 3)
+						crpc[path] = make([][3]any, 0, 3)
 					}
 					crpc[path] = append(crpc[path], rateinfo)
 				case "GET":
 					if _, ok := get[path]; !ok {
-						get[path] = make([][3]interface{}, 0, 3)
+						get[path] = make([][3]any, 0, 3)
 					}
 					get[path] = append(get[path], rateinfo)
 				case "POST":
 					if _, ok := post[path]; !ok {
-						post[path] = make([][3]interface{}, 0, 3)
+						post[path] = make([][3]any, 0, 3)
 					}
 					post[path] = append(post[path], rateinfo)
 				case "PUT":
 					if _, ok := put[path]; !ok {
-						put[path] = make([][3]interface{}, 0, 3)
+						put[path] = make([][3]any, 0, 3)
 					}
 					put[path] = append(put[path], rateinfo)
 				case "PATCH":
 					if _, ok := patch[path]; !ok {
-						patch[path] = make([][3]interface{}, 0, 3)
+						patch[path] = make([][3]any, 0, 3)
 					}
 					patch[path] = append(patch[path], rateinfo)
 				case "DELETE":
 					if _, ok := del[path]; !ok {
-						del[path] = make([][3]interface{}, 0, 3)
+						del[path] = make([][3]any, 0, 3)
 					}
 					del[path] = append(del[path], rateinfo)
 				}
@@ -124,7 +124,7 @@ func UpdateRateConfig(c MultiPathRateConfigs) {
 	rateinstance.del = del
 }
 
-func checkrate(ctx context.Context, infos [][3]interface{}) bool {
+func checkrate(ctx context.Context, infos [][3]any) bool {
 	redisclient := rateinstance.c
 	if redisclient == nil {
 		slog.ErrorContext(ctx, "[rate] redis missing")

@@ -3,6 +3,7 @@ package mids
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"strings"
 	"sync/atomic"
 	"unsafe"
@@ -55,51 +56,37 @@ func UpdateAccessConfig(c MultiPathAccessConfigs) {
 					if _, ok := grpc[path]; !ok {
 						grpc[path] = make(map[string]string)
 					}
-					for accessid, accesskey := range pathaccessrule.Accesses {
-						grpc[path][accessid] = accesskey
-					}
+					maps.Copy(grpc[path], pathaccessrule.Accesses)
 				case "CRPC":
 					if _, ok := crpc[path]; !ok {
 						crpc[path] = make(map[string]string)
 					}
-					for accessid, accesskey := range pathaccessrule.Accesses {
-						crpc[path][accessid] = accesskey
-					}
+					maps.Copy(crpc[path], pathaccessrule.Accesses)
 				case "GET":
 					if _, ok := get[path]; !ok {
 						get[path] = make(map[string]string)
 					}
-					for accessid, accesskey := range pathaccessrule.Accesses {
-						get[path][accessid] = accesskey
-					}
+					maps.Copy(get[path], pathaccessrule.Accesses)
 				case "POST":
 					if _, ok := post[path]; !ok {
 						post[path] = make(map[string]string)
 					}
-					for accessid, accesskey := range pathaccessrule.Accesses {
-						post[path][accessid] = accesskey
-					}
+					maps.Copy(post[path], pathaccessrule.Accesses)
 				case "PUT":
 					if _, ok := put[path]; !ok {
 						put[path] = make(map[string]string)
 					}
-					for accessid, accesskey := range pathaccessrule.Accesses {
-						put[path][accessid] = accesskey
-					}
+					maps.Copy(put[path], pathaccessrule.Accesses)
 				case "PATCH":
 					if _, ok := patch[path]; !ok {
 						patch[path] = make(map[string]string)
 					}
-					for accessid, accesskey := range pathaccessrule.Accesses {
-						patch[path][accessid] = accesskey
-					}
+					maps.Copy(patch[path], pathaccessrule.Accesses)
 				case "DELETE":
 					if _, ok := del[path]; !ok {
 						del[path] = make(map[string]string)
 					}
-					for accessid, accesskey := range pathaccessrule.Accesses {
-						del[path][accessid] = accesskey
-					}
+					maps.Copy(del[path], pathaccessrule.Accesses)
 				}
 			}
 		}

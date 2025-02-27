@@ -32,12 +32,12 @@ func Test_Broadcast(t *testing.T) {
 	lker2 := sync.Mutex{}
 	suber3 := make(map[string]int, 10000)
 	lker3 := sync.Mutex{}
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		suber1[strconv.Itoa(i)] = i
 		suber2[strconv.Itoa(i)] = i
 		suber3[strconv.Itoa(i)] = i
 	}
-	if _ = client.SubBroadcast("testbroadcast", 2, func(values map[string]interface{}, last bool) {
+	if _ = client.SubBroadcast("testbroadcast", 2, func(values map[string]any, last bool) {
 		//suber 1
 		lker1.Lock()
 		defer func() {
@@ -61,7 +61,7 @@ func Test_Broadcast(t *testing.T) {
 		t.Fatal("sub 1 failed:", e)
 		return
 	}
-	if _ = client.SubBroadcast("testbroadcast", 2, func(values map[string]interface{}, last bool) {
+	if _ = client.SubBroadcast("testbroadcast", 2, func(values map[string]any, last bool) {
 		//suber 2
 		lker2.Lock()
 		defer func() {
@@ -85,7 +85,7 @@ func Test_Broadcast(t *testing.T) {
 		t.Fatal("sub 2 failed:", e)
 		return
 	}
-	if _ = client.SubBroadcast("testbroadcast", 2, func(values map[string]interface{}, last bool) {
+	if _ = client.SubBroadcast("testbroadcast", 2, func(values map[string]any, last bool) {
 		//suber 3
 		lker3.Lock()
 		defer func() {
@@ -111,13 +111,13 @@ func Test_Broadcast(t *testing.T) {
 	}
 	time.Sleep(time.Second)
 	var timestamp int
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		if i == 5000 {
 			timestamp = int(time.Now().Unix()) + 1
 			time.Sleep(time.Second * 2)
 		}
 		str := strconv.Itoa(i)
-		if e := client.PubBroadcast(context.Background(), "testbroadcast", 2, str, map[string]interface{}{str: i}); e != nil {
+		if e := client.PubBroadcast(context.Background(), "testbroadcast", 2, str, map[string]any{str: i}); e != nil {
 			t.Fatal("pub failed:", e)
 		}
 	}

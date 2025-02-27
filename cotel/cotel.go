@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/util/host"
@@ -11,57 +13,110 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	ometric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	otrace "go.opentelemetry.io/otel/trace"
-	// "go.opentelemetry.io/otel/sdk/metric"
 )
 
-var logtrace bool
+var traceexporter string
+var metricexporter string
 
 func init() {
-	if str := os.Getenv("LOG_TRACE"); str != "" && str != "<LOG_TRACE>" && str != "0" && str != "1" {
-		panic("[cotel] os env LOG_TRACE error,must in [0,1]")
+	traceenv := strings.ToLower(os.Getenv("TRACE"))
+	if traceenv != "" && traceenv != "<TRACE>" && traceenv != "log" && traceenv != "oltp" && traceenv != "zipkin" {
+		panic("[cotel] os env TRACE error,must in [\"\",\"log\",\"oltp\",\"zipkin\"]")
 	} else {
-		logtrace = str == "1"
+		traceexporter = traceenv
+	}
+	metricenv := strings.ToLower(os.Getenv("METRIC"))
+	if metricenv != "" && metricenv != "<METRIC>" && metricenv != "log" && metricenv != "oltp" && metricenv != "prometheus" {
+		panic("[cotel] os env METRIC error,must in [\"\",\"log\",\"oltp\",\"prometheus\"]")
+	} else {
+		metricexporter = metricenv
 	}
 }
-func LogTrace() bool {
-	return logtrace
-}
-
 func Init() error {
 	if e := name.HasSelfFullName(); e != nil {
 		return e
 	}
+	resources := resource.NewSchemaless(
+		attribute.String("service.name", name.GetSelfFullName()),
+		attribute.String("host.id", host.Hostname),
+		attribute.String("host.ip", host.Hostip))
 	//trace
 	otel.SetTextMapPropagator(propagation.TraceContext{})
-	var sampler trace.Sampler
-	if logtrace {
-		sampler = trace.AlwaysSample()
+	topts := make([]trace.TracerProviderOption, 0, 3)
+	topts = append(topts, trace.WithResource(resources))
+	if traceexporter != "" {
+		topts = append(topts, trace.WithSampler(trace.AlwaysSample()))
 	} else {
-		sampler = trace.NeverSample()
+		topts = append(topts, trace.WithSampler(trace.NeverSample()))
 	}
-	tp := trace.NewTracerProvider(
-		//when use the log as the exporter,we can use syncer
-		//when use other exporter,we should use batcher(more effective)
-		trace.WithSyncer(&slogTraceExporter{}),
-		trace.WithResource(resource.NewSchemaless(
-			attribute.String("service.name", name.GetSelfFullName()),
-			attribute.String("host.id", host.Hostname),
-			attribute.String("host.ip", host.Hostip))),
-		trace.WithSampler(sampler),
-	)
-	otel.SetTracerProvider(tp)
+	switch traceexporter {
+	case "log":
+		topts = append(topts, trace.WithSyncer(&slogTraceExporter{}))
+	case "oltp":
+		panic("[cotel] trace not support oltp now")
+	case "zipkin":
+		panic("[cotel] trace not support zipkin now")
+	}
+	otel.SetTracerProvider(trace.NewTracerProvider(topts...))
 	//metric
-	// metric.NewMeterProvider()
+	mopts := make([]metric.Option, 0, 2)
+	mopts = append(mopts, metric.WithResource(resources))
+	switch metricexporter {
+	case "log":
+		mopts = append(mopts, metric.WithReader(metric.NewPeriodicReader(&slogMetricExporter{})))
+	case "oltp":
+		panic("[cotel] metric not support oltp now")
+	case "prometheus":
+		panic("[cotel] metric not support prometheus now")
+	}
+	otel.SetMeterProvider(metric.NewMeterProvider(mopts...))
+	cpuc, _ := otel.Meter("host").Float64ObservableGauge("cpu_cur_usage", ometric.WithUnit("%"))
+	cpum, _ := otel.Meter("host").Float64ObservableGauge("cpu_max_usage", ometric.WithUnit("%"))
+	cpua, _ := otel.Meter("host").Float64ObservableGauge("cpu_avg_usage", ometric.WithUnit("%"))
+	memc, _ := otel.Meter("host").Float64ObservableGauge("mem_cur", ometric.WithUnit("%"))
+	memm, _ := otel.Meter("host").Float64ObservableGauge("mem_max", ometric.WithUnit("%"))
+	gc, _ := otel.Meter("host").Int64ObservableGauge("gc", ometric.WithUnit("ns"))
+	goroutine, _ := otel.Meter("host").Int64ObservableGauge("goroutine", ometric.WithUnit("1"))
+	thread, _ := otel.Meter("host").Int64ObservableGauge("thread", ometric.WithUnit("1"))
+	otel.Meter("host").RegisterCallback(func(ctx context.Context, s ometric.Observer) error {
+		lastcpu, maxcpu, avgcpu := collectCPU()
+		totalmem, lastmem, maxmem := collectMEM()
+		goroutinenum, threadnum, gctime := getGo()
+		s.ObserveFloat64(cpuc, lastcpu*100.0)
+		s.ObserveFloat64(cpum, maxcpu*100.0)
+		s.ObserveFloat64(cpua, avgcpu*100.0)
+		s.ObserveFloat64(memc, float64(lastmem)/float64(totalmem)*100.0)
+		s.ObserveFloat64(memm, float64(maxmem)/float64(totalmem)*100.0)
+		s.ObserveInt64(gc, int64(gctime))
+		s.ObserveInt64(goroutine, int64(goroutinenum))
+		s.ObserveInt64(thread, int64(threadnum))
+		return nil
+	}, cpuc, cpum, cpua, memc, memm, gc, goroutine, thread)
 	return nil
 }
+
 func Stop() {
-	otel.GetTracerProvider().(*trace.TracerProvider).ForceFlush(context.Background())
-	otel.GetTracerProvider().(*trace.TracerProvider).Shutdown(context.Background())
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		otel.GetTracerProvider().(*trace.TracerProvider).ForceFlush(context.Background())
+		otel.GetTracerProvider().(*trace.TracerProvider).Shutdown(context.Background())
+		wg.Done()
+	}()
+	go func() {
+		otel.GetMeterProvider().(*metric.MeterProvider).ForceFlush(context.Background())
+		otel.GetMeterProvider().(*metric.MeterProvider).Shutdown(context.Background())
+		wg.Done()
+	}()
+	wg.Wait()
 }
 
 func TraceIDFromContext(ctx context.Context) string {
@@ -101,6 +156,40 @@ func (s *slogTraceExporter) ExportSpans(ctx context.Context, spans []trace.ReadO
 }
 
 func (s *slogTraceExporter) Shutdown(ctx context.Context) error {
+	s.stopped.Store(true)
+	return nil
+}
+
+type slogMetricExporter struct {
+	stopped atomic.Bool
+}
+
+func (s *slogMetricExporter) Temporality(p metric.InstrumentKind) metricdata.Temporality {
+	return metric.DefaultTemporalitySelector(p)
+}
+func (s *slogMetricExporter) Aggregation(p metric.InstrumentKind) metric.Aggregation {
+	return metric.DefaultAggregationSelector(p)
+}
+func (s *slogMetricExporter) Export(ctx context.Context, metrics *metricdata.ResourceMetrics) error {
+	if s.stopped.Load() {
+		return nil
+	}
+	attrs := make([]any, 0, 10)
+	attrs = append(attrs, slog.Any("Resource", metrics.Resource))
+	for _, m := range metrics.ScopeMetrics {
+		gattrs := make([]any, 0, len(m.Metrics))
+		for _, mm := range m.Metrics {
+			gattrs = append(gattrs, slog.Any(mm.Name, mm.Data))
+		}
+		attrs = append(attrs, slog.Group(m.Scope.Name, gattrs...))
+	}
+	slog.Info("metric", attrs...)
+	return nil
+}
+func (s *slogMetricExporter) ForceFlush(context.Context) error {
+	return nil
+}
+func (s *slogMetricExporter) Shutdown(context.Context) error {
 	s.stopped.Store(true)
 	return nil
 }

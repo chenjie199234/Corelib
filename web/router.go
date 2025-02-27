@@ -16,8 +16,8 @@ import (
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/container/trie"
+	"github.com/chenjie199234/Corelib/cotel"
 	"github.com/chenjie199234/Corelib/metadata"
-	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/graceful"
@@ -210,7 +210,8 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 				resp.Write(common.STB(cerror.ErrServerClosing.Json()))
 			} else {
 				//tell peer self busy
-				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
+				lastcpu, _, _ := cotel.GetCPU()
+				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(lastcpu, 'g', 10, 64))
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrBusy.Httpcode))
 				resp.Write(common.STB(cerror.ErrBusy.Json()))
@@ -242,7 +243,8 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 					slog.String("path", path),
 					slog.String("method", method),
 					slog.String("metadata", mdstr))
-				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
+				lastcpu, _, _ := cotel.GetCPU()
+				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(lastcpu, 'g', 10, 64))
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
 				resp.Write(common.STB(cerror.ErrReq.Json()))
@@ -265,7 +267,8 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 					slog.String("path", path),
 					slog.String("method", method),
 					slog.String("deadline", temp))
-				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64))
+				lastcpu, _, _ := cotel.GetCPU()
+				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(lastcpu, 'g', 10, 64))
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
 				resp.Write(common.STB(cerror.ErrReq.Json()))

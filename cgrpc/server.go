@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/cotel"
 	cmetadata "github.com/chenjie199234/Corelib/metadata"
-	"github.com/chenjie199234/Corelib/monitor"
 	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
@@ -106,7 +106,7 @@ func NewCGrpcServer(c *ServerConfig, tlsc *tls.Config) (*CGrpcServer, error) {
 	opts = append(opts, experimental.BufferPool(bpool.GetGrpcPool()))
 	opts = append(opts, grpc.MaxRecvMsgSize(int(c.MaxMsgLen)))
 	opts = append(opts, grpc.StatsHandler(serverinstance.statshandler))
-	opts = append(opts, grpc.UnknownServiceHandler(func(_ interface{}, stream grpc.ServerStream) error {
+	opts = append(opts, grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
 		ctx := stream.Context()
 		rpcinfo := ctx.Value(serverrpckey{}).(*stats.RPCTagInfo)
 		peerip := ctx.Value(serverconnkey{}).(string)
@@ -240,12 +240,12 @@ func (md wrapmetadata) Keys() []string {
 	}
 	return keys
 }
-func (s *CGrpcServer) pingponghandler(sname, mname string, handlers ...OutsideHandler) func(interface{}, context.Context, func(any) error, grpc.UnaryServerInterceptor) (interface{}, error) {
+func (s *CGrpcServer) pingponghandler(sname, mname string, handlers ...OutsideHandler) func(any, context.Context, func(any) error, grpc.UnaryServerInterceptor) (any, error) {
 	path := "/" + sname + "/" + mname
 	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
 	copy(totalhandlers, s.global)
 	copy(totalhandlers[len(s.global):], handlers)
-	return func(_ interface{}, basectx context.Context, decode func(any) error, _ grpc.UnaryServerInterceptor) (resp interface{}, err error) {
+	return func(_ any, basectx context.Context, decode func(any) error, _ grpc.UnaryServerInterceptor) (resp any, err error) {
 		gmd, ok := gmetadata.FromIncomingContext(basectx)
 		if ok {
 			if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != name.GetSelfFullName() {
@@ -321,7 +321,8 @@ func (s *CGrpcServer) pingponghandler(sname, mname string, handlers ...OutsideHa
 					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
 				workctx.Abort(cerror.ErrPanic)
 			}
-			grpc.SetTrailer(basectx, gmetadata.New(map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}))
+			lastcpu, _, _ := cotel.GetCPU()
+			grpc.SetTrailer(basectx, gmetadata.New(map[string]string{"Cpu-Usage": strconv.FormatFloat(lastcpu, 'g', 10, 64)}))
 			//fix the interface nil problem
 			if workctx.e != nil {
 				span.SetStatus(codes.Error, workctx.e.Error())
@@ -419,7 +420,8 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
 				workctx.Abort(cerror.ErrPanic)
 			}
-			grpc.SetTrailer(basectx, gmetadata.New(map[string]string{"Cpu-Usage": strconv.FormatFloat(monitor.LastUsageCPU, 'g', 10, 64)}))
+			lastcpu, _, _ := cotel.GetCPU()
+			grpc.SetTrailer(basectx, gmetadata.New(map[string]string{"Cpu-Usage": strconv.FormatFloat(lastcpu, 'g', 10, 64)}))
 			//fix the interface nil problem
 			if workctx.e != nil {
 				span.SetStatus(codes.Error, workctx.e.Error())

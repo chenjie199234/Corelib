@@ -107,7 +107,7 @@ func (c *Client) PriorityMQFinishTaskPub(ctx context.Context, group, task string
 }
 
 // return go-redis.Nil means task is finishing or is finished
-func (c *Client) PriorityMQPub(ctx context.Context, group, task, channel string, datas ...interface{}) error {
+func (c *Client) PriorityMQPub(ctx context.Context, group, task, channel string, datas ...any) error {
 	if group == "" || task == "" || channel == "" {
 		panic("[redis.prioritymq.pub] group or task or channel missing")
 	}
@@ -125,7 +125,7 @@ func (c *Client) PriorityMQSub(group, channel string, concurrencynum uint, subha
 		panic("[redis.prioritymq.sub] group or channel or concurrency num missing")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	for i := 0; i < int(concurrencynum); i++ {
+	for range concurrencynum {
 		go func() {
 			var tasks []string
 			var result []string

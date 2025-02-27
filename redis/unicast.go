@@ -79,7 +79,7 @@ func (c *Client) SubUnicast(unicast string, shard uint8, handler UnicastHandler)
 // shard: is used to split data into different redis lists
 // key: is only used to shard values into different redis node(hash),if key is empty,values will be sharded randomly
 // return gredis.Nil means the unicast doesn't exist
-func (c *Client) PubUnicast(ctx context.Context, unicast string, shard uint8, key string, values ...interface{}) error {
+func (c *Client) PubUnicast(ctx context.Context, unicast string, shard uint8, key string, values ...any) error {
 	if unicast == "" || shard == 0 {
 		panic("[redis.unicast.pub] unicast name or shard num missing")
 	}

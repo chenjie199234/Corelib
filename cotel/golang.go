@@ -1,18 +1,18 @@
-package monitor
+package cotel
 
 import (
 	"runtime"
 )
 
-var LastGCWasteTime uint64
+var lastGCWasteTime uint64
 
-func golangCollect() (uint64, uint64, uint64) {
+func getGo() (uint64, uint64, uint64) {
 	routinenum := runtime.NumGoroutine()
 	threadnum, _ := runtime.ThreadCreateProfile(nil)
 
 	meminfo := &runtime.MemStats{}
 	runtime.ReadMemStats(meminfo)
-	gctime := meminfo.PauseTotalNs - uint64(LastGCWasteTime)
-	LastGCWasteTime = meminfo.PauseTotalNs
+	gctime := meminfo.PauseTotalNs - uint64(lastGCWasteTime)
+	lastGCWasteTime = meminfo.PauseTotalNs
 	return uint64(routinenum), uint64(threadnum), gctime
 }

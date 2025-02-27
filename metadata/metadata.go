@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"context"
+	"maps"
 )
 
 type metadatakey struct{}
@@ -26,9 +27,7 @@ func SetMetadata(ctx context.Context, md map[string]string) context.Context {
 		for k := range existmd {
 			delete(existmd, k)
 		}
-		for k, v := range md {
-			existmd[k] = v
-		}
+		maps.Copy(existmd, md)
 		return ctx
 	}
 	if md == nil {
@@ -36,9 +35,7 @@ func SetMetadata(ctx context.Context, md map[string]string) context.Context {
 	}
 	//copy
 	tmp := make(map[string]string, len(md))
-	for k, v := range md {
-		tmp[k] = v
-	}
+	maps.Copy(tmp, md)
 	return context.WithValue(ctx, metadatakey{}, tmp)
 }
 
@@ -60,15 +57,11 @@ func CopyMetadata(dst, src context.Context) (context.Context, bool) {
 			delete(dstmd, k)
 		}
 		//copy new
-		for k, v := range srcmd {
-			dstmd[k] = v
-		}
+		maps.Copy(dstmd, srcmd)
 		return dst, true
 	}
 	tmp := make(map[string]string, len(srcmd))
-	for k, v := range srcmd {
-		tmp[k] = v
-	}
+	maps.Copy(tmp, srcmd)
 	return context.WithValue(dst, metadatakey{}, tmp), true
 }
 func AddMetadata(ctx context.Context, key, value string) context.Context {

@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"net/http"
+	_ "net/http/pprof"
 
 	"{{.}}/config"
 	"{{.}}/dao"
@@ -54,10 +56,8 @@ func (l *LogHandler) Handle(ctx context.Context, record slog.Record) error {
 			Value: slog.GroupValue(attrs...),
 		})
 	}
-	if cotel.LogTrace() {
-		if traceid := cotel.TraceIDFromContext(ctx); traceid != "" {
-			record.AddAttrs(slog.String("traceid", traceid))
-		}
+	if traceid := cotel.TraceIDFromContext(ctx); traceid != "" {
+		record.AddAttrs(slog.String("traceid", traceid))
 	}
 	return l.Handler.Handle(ctx, record)
 }
@@ -149,6 +149,16 @@ func main() {
 		}
 		wg.Done()
 	}()
+	pprofserver := &http.Server{addr:":6060"}
+	wg.Add(1)
+	go func(){
+		pprofserver.ListenAndServe()
+		select {
+		case ch <- syscall.SIGTERM:
+		default:
+		}
+		wg.Done()
+	}()
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-ch
 	//stop the whole business service
@@ -173,6 +183,11 @@ func main() {
 	go func() {
 		xraw.StopRawServer()
 		wg.Done()
+	}()
+	wg.Add(1)
+	go func(){
+	  pprofserver.Shutdown(context.Background())
+	  wg.Done()
 	}()
 	wg.Wait()
 	cotel.Stop()

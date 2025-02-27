@@ -34,9 +34,9 @@ func Test_PriorityMQ(t *testing.T) {
 		}
 		t.Log("can sub now")
 	}()
-	channel1 := make([]interface{}, 0, 500)
-	channel2 := make([]interface{}, 0, 500)
-	for i := 0; i < 1000; i++ {
+	channel1 := make([]any, 0, 500)
+	channel2 := make([]any, 0, 500)
+	for i := range 1000 {
 		if i%2 == 0 {
 			channel1 = append(channel1, strconv.AppendInt(nil, int64(i), 10))
 		} else {

@@ -1,4 +1,4 @@
-package monitor
+package cotel
 
 import (
 	"log/slog"
@@ -12,13 +12,13 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 )
 
-var memlker sync.Mutex
+var memlker sync.RWMutex
 
-var TotalMem uint64     //bytes
-var MaxUsageMEM uint64  //bytes
-var LastUsageMEM uint64 //bytes
+var totalMem uint64     //bytes
+var maxUsageMEM uint64  //bytes
+var lastUsageMEM uint64 //bytes
 
-func initmem() {
+func init() {
 	cgroup := getTotalMEM()
 	go func() {
 		tker := time.NewTicker(time.Millisecond * 100)
@@ -35,32 +35,32 @@ func initmem() {
 	}()
 }
 
-func memCollect() (uint64, uint64, uint64) {
+func collectMEM() (uint64, uint64, uint64) {
 	memlker.Lock()
 	defer func() {
-		MaxUsageMEM = -MaxUsageMEM
+		maxUsageMEM = -maxUsageMEM
 		memlker.Unlock()
 	}()
-	if MaxUsageMEM < 0 {
-		return TotalMem, LastUsageMEM, -MaxUsageMEM
+	if maxUsageMEM < 0 {
+		return totalMem, lastUsageMEM, -maxUsageMEM
 	}
-	return TotalMem, LastUsageMEM, MaxUsageMEM
+	return totalMem, lastUsageMEM, maxUsageMEM
 }
 
 func GetMEM() (uint64, uint64, uint64) {
-	memlker.Lock()
-	defer memlker.Unlock()
-	if MaxUsageMEM < 0 {
-		return TotalMem, LastUsageMEM, -MaxUsageMEM
+	memlker.RLock()
+	defer memlker.RUnlock()
+	if maxUsageMEM < 0 {
+		return totalMem, lastUsageMEM, -maxUsageMEM
 	}
-	return TotalMem, LastUsageMEM, MaxUsageMEM
+	return totalMem, lastUsageMEM, maxUsageMEM
 }
 
 func getTotalMEM() (cgroup bool) {
 	defer func() {
-		if TotalMem == 0 {
+		if totalMem == 0 {
 			memory, _ := mem.VirtualMemory()
-			TotalMem = memory.Total
+			totalMem = memory.Total
 		}
 	}()
 	if runtime.GOOS != "linux" {
@@ -69,7 +69,7 @@ func getTotalMEM() (cgroup bool) {
 	limitstr, e := os.ReadFile("/sys/fs/cgroup/memory/memory.limit_in_bytes")
 	if e != nil {
 		if !os.IsNotExist(e) {
-			panic("[monitor.mem] read /sys/fs/cgroup/memory/memory.limit_in_bytes error: " + e.Error())
+			panic("[cotel.mem] read /sys/fs/cgroup/memory/memory.limit_in_bytes error: " + e.Error())
 		}
 		return false
 	}
@@ -79,24 +79,24 @@ func getTotalMEM() (cgroup bool) {
 	}
 	limit, e := strconv.ParseUint(common.BTS(limitstr), 10, 64)
 	if e != nil {
-		panic("[monitor.mem] read /sys/fs/cgroup/memory/memory.limit_in_bytes data format wrong:" + e.Error())
+		panic("[cotel.mem] read /sys/fs/cgroup/memory/memory.limit_in_bytes data format wrong:" + e.Error())
 	}
 	memory, e := mem.VirtualMemory()
 	if e != nil {
-		panic("[monitor.mem] get pc memory info error: " + e.Error())
+		panic("[cotel.mem] get pc memory info error: " + e.Error())
 	}
 	if memory.Total > limit && limit != 0 {
-		TotalMem = limit
+		totalMem = limit
 		return true
 	}
-	TotalMem = memory.Total
+	totalMem = memory.Total
 	return false
 }
 
 func cgroupMEM() {
 	usagestr, e := os.ReadFile("/sys/fs/cgroup/memory/memory.usage_in_bytes")
 	if e != nil {
-		slog.Error("[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes failed", slog.String("error", e.Error()))
+		slog.Error("[cotel.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes failed", slog.String("error", e.Error()))
 		return
 	}
 	//drop \n
@@ -105,18 +105,18 @@ func cgroupMEM() {
 	}
 	usage, e := strconv.ParseUint(common.BTS(usagestr), 10, 64)
 	if e != nil {
-		slog.Error("[monitor.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes data format wrong", slog.String("usage_in_bytes", common.BTS(usagestr)))
+		slog.Error("[cotel.mem] read /sys/fs/cgroup/memory/memory.usage_in_bytes data format wrong", slog.String("usage_in_bytes", common.BTS(usagestr)))
 		return
 	}
-	LastUsageMEM = usage
-	if LastUsageMEM > MaxUsageMEM {
-		MaxUsageMEM = LastUsageMEM
+	lastUsageMEM = usage
+	if lastUsageMEM > maxUsageMEM {
+		maxUsageMEM = lastUsageMEM
 	}
 }
 func gopsutilMEM() {
 	memory, _ := mem.VirtualMemory()
-	LastUsageMEM = memory.Used
-	if LastUsageMEM > MaxUsageMEM {
-		MaxUsageMEM = LastUsageMEM
+	lastUsageMEM = memory.Used
+	if lastUsageMEM > maxUsageMEM {
+		maxUsageMEM = lastUsageMEM
 	}
 }

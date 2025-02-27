@@ -127,8 +127,7 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 			g.P("\t//" + strings.Join(oneofs, ",") + " can only exist one")
 		}
 		fop := f.Desc.Options().(*descriptorpb.FieldOptions)
-		comments := strings.Split(strings.TrimSuffix(f.Comments.Leading.String()+f.Comments.Trailing.String(), "\n"), "\n")
-		for _, comment := range comments {
+		for comment := range strings.SplitSeq(strings.TrimSuffix(f.Comments.Leading.String()+f.Comments.Trailing.String(), "\n"), "\n") {
 			if comment == "" {
 				continue
 			}

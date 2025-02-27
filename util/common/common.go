@@ -21,7 +21,7 @@ func MakeRandCode(length uint16) string {
 	b := make([]byte, length)
 	for {
 		r := rand.Uint64()
-		for i := 0; i < 59; i++ {
+		for i := range 59 {
 			b[length-1] = letters[((r>>i)<<58)>>58]
 			length--
 			if length == 0 {

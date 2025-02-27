@@ -40,7 +40,7 @@ func Test_Unicast(t *testing.T) {
 		lker.Unlock()
 	})
 	time.Sleep(time.Second * 3)
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		e := client.PubUnicast(context.Background(), "test", 20, strconv.Itoa(i), strconv.AppendInt(nil, int64(i), 10))
 		if e != nil {
 			t.Fatal(e)
@@ -50,7 +50,7 @@ func Test_Unicast(t *testing.T) {
 	<-done
 	t.Log("finish sub")
 	cancel()
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		s := strconv.Itoa(i)
 		v, ok := r[s]
 		if !ok {
