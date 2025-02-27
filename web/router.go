@@ -26,7 +26,9 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -307,6 +309,10 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 				span.SetStatus(codes.Ok, "")
 			}
 			span.End()
+			st := span.(sdktrace.ReadOnlySpan).StartTime()
+			et := span.(sdktrace.ReadOnlySpan).EndTime()
+			m, _ := otel.Meter("Corelib.web.server").Int64Histogram(path)
+			m.Record(context.Background(), et.UnixNano()-st.UnixNano())
 		}()
 		for _, handler := range totalhandlers {
 			handler(workctx)
