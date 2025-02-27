@@ -10,13 +10,13 @@ const txt = `package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
 	"sync"
 	"syscall"
-	"net/http"
-	_ "net/http/pprof"
 
 	"{{.}}/config"
 	"{{.}}/dao"
@@ -29,7 +29,6 @@ import (
 
 	"github.com/chenjie199234/Corelib/cotel"
 	publicmids "github.com/chenjie199234/Corelib/mids"
-	_ "github.com/chenjie199234/Corelib/monitor"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/redis/go-redis/v9"
