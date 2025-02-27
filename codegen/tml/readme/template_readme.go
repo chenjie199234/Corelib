@@ -33,7 +33,7 @@ GROUP                                   该项目所属的项目下的小组,[a-
 RUN_ENV                                 当前运行环境,如:test,pre,prod
 DEPLOY_ENV                              部署环境,如:ali-kube-shanghai-1,ali-host-hangzhou-1
 TRACE                                   是否开启链路追踪,空-不启用,不空-trace输出方式,[log,oltp,zipkin]
-MONITOR                                 是否开启系统监控采集,空-不启用,不空-metric输出方式,[log,oltp,prometheus]
+METRIC                                  是否开启系统监控采集,空-不启用,不空-metric输出方式,[log,oltp,prometheus]
 
 CONFIG_TYPE                             配置类型:0-使用本地配置.1-使用admin服务的远程配置中心功能
 REMOTE_CONFIG_SECRET                    当CONFIG_TYPE为1时,admin服务中,该服务使用的配置加密密钥,最长31个字符
