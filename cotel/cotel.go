@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
 
@@ -127,19 +128,19 @@ func Init() error {
 		mopts = append(mopts, metric.WithReader(metric.NewPeriodicReader(exporter)))
 	case "prometheus":
 		promRegister = prometheus.NewRegistry()
-		exporter, _ := oprometheus.New(oprometheus.WithRegisterer(promRegister), oprometheus.WithoutCounterSuffixes())
+		exporter, _ := oprometheus.New(oprometheus.WithoutUnits(), oprometheus.WithoutScopeInfo(), oprometheus.WithRegisterer(promRegister), oprometheus.WithoutCounterSuffixes())
 		mopts = append(mopts, metric.WithReader(exporter))
 	}
 	otel.SetMeterProvider(metric.NewMeterProvider(mopts...))
-	cpuc, _ := otel.Meter("Host").Float64ObservableGauge("cpu_cur_usage", ometric.WithUnit("%"))
-	cpum, _ := otel.Meter("Host").Float64ObservableGauge("cpu_max_usage", ometric.WithUnit("%"))
-	cpua, _ := otel.Meter("Host").Float64ObservableGauge("cpu_avg_usage", ometric.WithUnit("%"))
-	memc, _ := otel.Meter("Host").Float64ObservableGauge("mem_cur_usage", ometric.WithUnit("%"))
-	memm, _ := otel.Meter("Host").Float64ObservableGauge("mem_max_usage", ometric.WithUnit("%"))
-	gc, _ := otel.Meter("Host").Int64ObservableGauge("gc", ometric.WithUnit("ns"))
-	goroutine, _ := otel.Meter("Host").Int64ObservableGauge("goroutine", ometric.WithUnit("1"))
-	thread, _ := otel.Meter("Host").Int64ObservableGauge("thread", ometric.WithUnit("1"))
-	otel.Meter("Host").RegisterCallback(func(ctx context.Context, s ometric.Observer) error {
+	cpuc, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("cpu_cur_usage", ometric.WithUnit("%"))
+	cpum, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("cpu_max_usage", ometric.WithUnit("%"))
+	cpua, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("cpu_avg_usage", ometric.WithUnit("%"))
+	memc, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("mem_cur_usage", ometric.WithUnit("%"))
+	memm, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("mem_max_usage", ometric.WithUnit("%"))
+	gc, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Int64ObservableGauge("gc", ometric.WithUnit("ns"))
+	goroutine, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Int64ObservableGauge("goroutine", ometric.WithUnit("1"))
+	thread, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Int64ObservableGauge("thread", ometric.WithUnit("1"))
+	otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).RegisterCallback(func(ctx context.Context, s ometric.Observer) error {
 		lastcpu, maxcpu, avgcpu := collectCPU()
 		totalmem, lastmem, maxmem := collectMEM()
 		goroutinenum, threadnum, gctime := getGo()
