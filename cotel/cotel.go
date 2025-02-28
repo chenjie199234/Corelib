@@ -12,6 +12,7 @@ import (
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -20,7 +21,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/exporters/prometheus"
+	oprometheus "go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/exporters/zipkin"
 	ometric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
@@ -31,6 +32,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	otrace "go.opentelemetry.io/otel/trace"
 )
+
+var promRegister prometheus.Registerer
 
 func Init() error {
 	if e := name.HasSelfFullName(); e != nil {
@@ -123,7 +126,8 @@ func Init() error {
 		}
 		mopts = append(mopts, metric.WithReader(metric.NewPeriodicReader(exporter)))
 	case "prometheus":
-		exporter, _ := prometheus.New(prometheus.WithoutScopeInfo(), prometheus.WithoutCounterSuffixes())
+		promRegister = prometheus.NewRegistry()
+		exporter, _ := oprometheus.New(oprometheus.WithRegisterer(promRegister), oprometheus.WithoutCounterSuffixes())
 		mopts = append(mopts, metric.WithReader(exporter))
 	}
 	otel.SetMeterProvider(metric.NewMeterProvider(mopts...))
@@ -166,11 +170,10 @@ func Stop() {
 	wg.Wait()
 }
 func GetPrometheusHandler() http.Handler {
-	metricenv := strings.TrimSpace(strings.ToLower(os.Getenv("METRIC")))
-	if metricenv != "prometheus" {
+	if promRegister == nil {
 		return nil
 	}
-	return promhttp.Handler()
+	return promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{Registry: promRegister, ErrorLog: slog.NewLogLogger(slog.Default().Handler(), slog.LevelInfo)})
 }
 
 func TraceIDFromContext(ctx context.Context) string {
