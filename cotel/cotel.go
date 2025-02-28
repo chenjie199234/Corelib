@@ -128,7 +128,7 @@ func Init() error {
 		mopts = append(mopts, metric.WithReader(metric.NewPeriodicReader(exporter)))
 	case "prometheus":
 		promRegister = prometheus.NewRegistry()
-		exporter, _ := oprometheus.New(oprometheus.WithoutUnits(), oprometheus.WithoutScopeInfo(), oprometheus.WithRegisterer(promRegister), oprometheus.WithoutCounterSuffixes())
+		exporter, _ := oprometheus.New(oprometheus.WithoutUnits(), oprometheus.WithRegisterer(promRegister), oprometheus.WithoutCounterSuffixes())
 		mopts = append(mopts, metric.WithReader(exporter))
 	}
 	otel.SetMeterProvider(metric.NewMeterProvider(mopts...))
