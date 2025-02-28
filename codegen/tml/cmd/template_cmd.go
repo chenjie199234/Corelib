@@ -39,7 +39,7 @@ pb() {
 		echo "go mod tidy failed"
 		exit 1
 	fi
-	update()
+	update
 	corelib=$(go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib)
 	protoc -I ./ -I $corelib --go_out=paths=source_relative:. ./api/*.proto
 	protoc -I ./ -I $corelib --go-pbex_out=paths=source_relative:. ./api/*.proto
@@ -57,7 +57,7 @@ sub() {
 		echo "go mod tidy failed"
 		exit 1
 	fi
-	update()
+	update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -sub $1
 }
 
@@ -67,7 +67,7 @@ kube() {
 		echo "go mod tidy failed"
 		exit 1
 	fi
-	update()
+	update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -kube
 }
 
@@ -77,7 +77,7 @@ html() {
 		echo "go mod tidy failed"
 		exit 1
 	fi
-	update()
+	update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -html
 }
 

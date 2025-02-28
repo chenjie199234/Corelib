@@ -107,12 +107,10 @@ func Stop() {
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
-		otel.GetTracerProvider().(*trace.TracerProvider).ForceFlush(context.Background())
 		otel.GetTracerProvider().(*trace.TracerProvider).Shutdown(context.Background())
 		wg.Done()
 	}()
 	go func() {
-		otel.GetMeterProvider().(*metric.MeterProvider).ForceFlush(context.Background())
 		otel.GetMeterProvider().(*metric.MeterProvider).Shutdown(context.Background())
 		wg.Done()
 	}()
