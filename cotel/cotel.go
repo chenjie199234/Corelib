@@ -33,7 +33,7 @@ import (
 	otrace "go.opentelemetry.io/otel/trace"
 )
 
-var promRegister prometheus.Registerer
+var promRegister *prometheus.Registry
 
 func Init() error {
 	if e := name.HasSelfFullName(); e != nil {
@@ -173,7 +173,7 @@ func GetPrometheusHandler() http.Handler {
 	if promRegister == nil {
 		return nil
 	}
-	return promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{Registry: promRegister, ErrorLog: slog.NewLogLogger(slog.Default().Handler(), slog.LevelInfo)})
+	return promhttp.HandlerFor(promRegister, promhttp.HandlerOpts{ErrorLog: slog.NewLogLogger(slog.Default().Handler(), slog.LevelInfo)})
 }
 
 func TraceIDFromContext(ctx context.Context) string {
