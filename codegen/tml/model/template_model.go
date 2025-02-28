@@ -10,7 +10,6 @@ const txt = `package model
 import (
 	"os"
 
-	"github.com/chenjie199234/Corelib/cotel"
 	"github.com/chenjie199234/Corelib/util/name"
 )
 
@@ -33,7 +32,6 @@ func init() {
 	if e := name.SetSelfFullName(Project, Group, Name); e != nil {
 	  panic(e)
 	}
-	cotel.Init()
 }`
 
 func CreatePathAndFile(appname string) {

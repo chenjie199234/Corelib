@@ -81,6 +81,7 @@ func main() {
 			},
 		}),
 	}))
+	cotel.Init()
 	config.Init(func(ac *config.AppConfig) {
 		//this is a notice callback every time appconfig changes
 		//this function works in sync mode
@@ -148,10 +149,13 @@ func main() {
 		}
 		wg.Done()
 	}()
-	pprofserver := &http.Server{Addr:":6060"}
+	pserver := &http.Server{Addr:":6060"}
 	wg.Add(1)
 	go func(){
-		pprofserver.ListenAndServe()
+		if h:=cotel.GetPrometheusHandler();h!=nil{
+			http.Handle("/metrics", h)
+		}
+		pserver.ListenAndServe()
 		select {
 		case ch <- syscall.SIGTERM:
 		default:
@@ -185,7 +189,7 @@ func main() {
 	}()
 	wg.Add(1)
 	go func(){
-	  pprofserver.Shutdown(context.Background())
+	  pserver.Shutdown(context.Background())
 	  wg.Done()
 	}()
 	wg.Wait()

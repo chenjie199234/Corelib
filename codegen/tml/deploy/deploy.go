@@ -5,7 +5,7 @@ import (
 	"text/template"
 )
 
-const docker = `FROM golang:1.23.2 as builder
+const docker = `FROM golang:1.24.0 as builder
 ENV GOSUMDB='off' \
 	GOOS='linux' \
 	GOARCH='amd64' \
@@ -80,8 +80,16 @@ spec:
               value: <PROJECT>
             - name: TRACE
               value: <TRACE>
+            - name: ZIPKIN_URL
+              value: <ZIPKIN_URL>
+            - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+              value: <OTEL_EXPORTER_OTLP_TRACES_ENDPOINT>
             - name: METRIC
               value: <METRIC>
+            - name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+              value: <OTEL_EXPORTER_OTLP_METRICS_ENDPOINT>
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: <OTEL_EXPORTER_OTLP_ENDPOINT>
             - name: DEPLOY_ENV
               value: <DEPLOY_ENV>
             - name: RUN_ENV

@@ -3,6 +3,7 @@ package cotel
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -11,8 +12,16 @@ import (
 	"github.com/chenjie199234/Corelib/util/host"
 	"github.com/chenjie199234/Corelib/util/name"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/exporters/zipkin"
 	ometric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -23,26 +32,17 @@ import (
 	otrace "go.opentelemetry.io/otel/trace"
 )
 
-var traceexporter string
-var metricexporter string
-
-func init() {
-	traceenv := strings.ToLower(os.Getenv("TRACE"))
-	if traceenv != "" && traceenv != "<TRACE>" && traceenv != "log" && traceenv != "oltp" && traceenv != "zipkin" {
-		panic("[cotel] os env TRACE error,must in [\"\",\"log\",\"oltp\",\"zipkin\"]")
-	} else {
-		traceexporter = traceenv
-	}
-	metricenv := strings.ToLower(os.Getenv("METRIC"))
-	if metricenv != "" && metricenv != "<METRIC>" && metricenv != "log" && metricenv != "oltp" && metricenv != "prometheus" {
-		panic("[cotel] os env METRIC error,must in [\"\",\"log\",\"oltp\",\"prometheus\"]")
-	} else {
-		metricexporter = metricenv
-	}
-}
 func Init() error {
 	if e := name.HasSelfFullName(); e != nil {
 		return e
+	}
+	traceenv := strings.TrimSpace(strings.ToLower(os.Getenv("TRACE")))
+	if traceenv != "" && traceenv != "<TRACE>" && traceenv != "log" && traceenv != "otlp" && traceenv != "zipkin" {
+		panic("[cotel] os env TRACE error,must in [\"\",\"log\",\"otlphttp\",\"otlpgrpc\",\"zipkin\"]")
+	}
+	metricenv := strings.TrimSpace(strings.ToLower(os.Getenv("METRIC")))
+	if metricenv != "" && metricenv != "<METRIC>" && metricenv != "log" && metricenv != "otlp" && metricenv != "prometheus" {
+		panic("[cotel] os env METRIC error,must in [\"\",\"log\",\"otlphttp\",\"otlpgrpc\",\"prometheus\"]")
 	}
 	resources := resource.NewSchemaless(
 		attribute.String("service.name", name.GetSelfFullName()),
@@ -52,30 +52,79 @@ func Init() error {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 	topts := make([]trace.TracerProviderOption, 0, 3)
 	topts = append(topts, trace.WithResource(resources))
-	if traceexporter != "" {
+	if traceenv != "" {
 		topts = append(topts, trace.WithSampler(trace.AlwaysSample()))
 	} else {
 		topts = append(topts, trace.WithSampler(trace.NeverSample()))
 	}
-	switch traceexporter {
+	switch traceenv {
 	case "log":
 		topts = append(topts, trace.WithSyncer(&slogTraceExporter{}))
-	case "oltp":
-		panic("[cotel] trace not support oltp now")
+	case "otlphttp":
+		str1 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")))
+		str2 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")))
+		if (str1 == "" || str1 == "<OTEL_EXPORTER_OTLP_TRACES_ENDPOINT>") && (str2 == "" || str2 == "<OTEL_EXPORTER_OTLP_ENDPOINT>") {
+			panic("[cotel] os env OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT missing,when os env TRACE is otlp...")
+		}
+		exporter, e := otlptrace.New(context.Background(), otlptracehttp.NewClient())
+		if e != nil {
+			panic("[cotel] os env OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT error,when os env TRACE is otlp...")
+		}
+		topts = append(topts, trace.WithBatcher(exporter))
+	case "otlpgrpc":
+		str1 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")))
+		str2 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")))
+		if (str1 == "" || str1 == "<OTEL_EXPORTER_OTLP_TRACES_ENDPOINT>") && (str2 == "" || str2 == "<OTEL_EXPORTER_OTLP_ENDPOINT>") {
+			panic("[cotel] os env OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT missing,when os env TRACE is otlp...")
+		}
+		exporter, e := otlptrace.New(context.Background(), otlptracegrpc.NewClient())
+		if e != nil {
+			panic("[cotel] os env OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT error,when os env TRACE is otlp...")
+		}
+		topts = append(topts, trace.WithBatcher(exporter))
 	case "zipkin":
-		panic("[cotel] trace not support zipkin now")
+		str := strings.TrimSpace(strings.ToLower(os.Getenv("ZIPKIN_URL")))
+		if str == "" || str == "<ZIPKIN_URL>" {
+			panic("[cotel] os env ZIPKIN_URL missing,when os env TRACE is zipkin")
+		}
+		exporter, e := zipkin.New(str, zipkin.WithLogger(slog.NewLogLogger(slog.Default().Handler(), slog.LevelInfo)))
+		if e != nil {
+			panic("[cotel] os env ZIPKIN_URL error,when os env TRACE is zipkin")
+		}
+		topts = append(topts, trace.WithBatcher(exporter))
 	}
 	otel.SetTracerProvider(trace.NewTracerProvider(topts...))
 	//metric
 	mopts := make([]metric.Option, 0, 2)
 	mopts = append(mopts, metric.WithResource(resources))
-	switch metricexporter {
+	switch metricenv {
 	case "log":
 		mopts = append(mopts, metric.WithReader(metric.NewPeriodicReader(&slogMetricExporter{})))
-	case "oltp":
-		panic("[cotel] metric not support oltp now")
+	case "otlphttp":
+		str1 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")))
+		str2 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")))
+		if (str1 == "" || str1 == "<OTEL_EXPORTER_OTLP_METRICS_ENDPOINT>") && (str2 == "" || str2 == "<OTEL_EXPORTER_OTLP_ENDPOINT>") {
+			panic("[cotel] os env OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT missing,when os env METRIC is otlp...")
+		}
+		exporter, e := otlpmetrichttp.New(context.Background())
+		if e != nil {
+			panic("[cotel] os env OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT error,when os env METRIC is otlp...")
+		}
+		mopts = append(mopts, metric.WithReader(metric.NewPeriodicReader(exporter)))
+	case "otlpgrpc":
+		str1 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")))
+		str2 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")))
+		if (str1 == "" || str1 == "<OTEL_EXPORTER_OTLP_METRICS_ENDPOINT>") && (str2 == "" || str2 == "<OTEL_EXPORTER_OTLP_ENDPOINT>") {
+			panic("[cotel] os env OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT missing,when os env METRIC is otlp...")
+		}
+		exporter, e := otlpmetricgrpc.New(context.Background())
+		if e != nil {
+			panic("[cotel] os env OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT error,when os env METRIC is otlp...")
+		}
+		mopts = append(mopts, metric.WithReader(metric.NewPeriodicReader(exporter)))
 	case "prometheus":
-		panic("[cotel] metric not support prometheus now")
+		exporter, _ := prometheus.New(prometheus.WithoutScopeInfo(), prometheus.WithoutCounterSuffixes())
+		mopts = append(mopts, metric.WithReader(exporter))
 	}
 	otel.SetMeterProvider(metric.NewMeterProvider(mopts...))
 	cpuc, _ := otel.Meter("Host").Float64ObservableGauge("cpu_cur_usage", ometric.WithUnit("%"))
@@ -115,6 +164,13 @@ func Stop() {
 		wg.Done()
 	}()
 	wg.Wait()
+}
+func GetPrometheusHandler() http.Handler {
+	metricenv := strings.TrimSpace(strings.ToLower(os.Getenv("METRIC")))
+	if metricenv != "prometheus" {
+		return nil
+	}
+	return promhttp.Handler()
 }
 
 func TraceIDFromContext(ctx context.Context) string {
