@@ -35,6 +35,10 @@ pb() {
 	rm ./api/*.md
 	rm ./api/*.ts
 	go mod tidy
+	if [[ $? != 0 ]];then
+		echo "go mod tidy failed"
+		exit 1
+	fi
 	update()
 	corelib=$(go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib)
 	protoc -I ./ -I $corelib --go_out=paths=source_relative:. ./api/*.proto
@@ -49,18 +53,30 @@ pb() {
 
 sub() {
 	go mod tidy
+	if [[ $? != 0 ]];then
+		echo "go mod tidy failed"
+		exit 1
+	fi
 	update()
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -sub $1
 }
 
 kube() {
 	go mod tidy
+	if [[ $? != 0 ]];then
+		echo "go mod tidy failed"
+		exit 1
+	fi
 	update()
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -kube
 }
 
 html() {
 	go mod tidy
+	if [[ $? != 0 ]];then
+		echo "go mod tidy failed"
+		exit 1
+	fi
 	update()
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -html
 }
@@ -75,27 +91,27 @@ update() {
 
 if !(type git >/dev/null 2>&1);then
 	echo "missing dependence: git"
-	exit 0
+	exit 1
 fi
 
 if !(type go >/dev/null 2>&1);then
 	echo "missing dependence: golang"
-	exit 0
+	exit 1
 fi
 
 if !(type protoc >/dev/null 2>&1);then
 	echo "missing dependence: protoc"
-	exit 0
+	exit 1
 fi
 
 if !(type protoc-gen-go >/dev/null 2>&1);then
 	echo "missing dependence: protoc-gen-go"
-	exit 0
+	exit 1
 fi
 
 if !(type codegen >/dev/null 2>&1);then
 	echo "missing dependence: codegen"
-	exit 0
+	exit 1
 fi
 
 if [[ $# == 0 ]] || [[ "$1" == "h" ]] || [[ "$1" == "help" ]] || [[ "$1" == "-h" ]] || [[ "$1" == "-help" ]] || [[ "$1" == "--help" ]]; then
@@ -134,31 +150,31 @@ cd %~dp0
 where /q git.exe
 if %errorlevel% == 1 (
 	echo "missing dependence: git"
-	goto :end
+	exit /b 1
 )
 
 where /q go.exe
 if %errorlevel% == 1 (
 	echo "missing dependence: golang"
-	goto :end
+	exit /b 1
 )
 
 where /q protoc.exe
 if %errorlevel% == 1 (
 	echo "missing dependence: protoc"
-	goto :end
+	exit /b 1
 )
 
 where /q protoc-gen-go.exe
 if %errorlevel% == 1 (
 	echo "missing dependence: protoc-gen-go"
-	goto :end
+	exit /b 1
 )
 
 where /q codegen.exe
 if %errorlevel% == 1 (
 	echo "missing dependence: codegen"
-	goto :end
+	exit /b 1
 )
 
 if "%1" == "" (
@@ -235,6 +251,10 @@ goto :help
 	del >nul 2>nul .\api\*.md
 	del >nul 2>nul .\api\*.ts
 	go mod tidy
+	if %errorlevel% == 1 (
+		echo "go mod tidy failed"
+		exit /b 1
+	)
 	call :update
 	for /f %%a in ('go list -m -f {{"\"{{.Dir}}\""}} github.com/chenjie199234/Corelib') do set corelib=%%a
 	protoc -I ./ -I %corelib% --go_out=paths=source_relative:. ./api/*.proto
@@ -249,18 +269,30 @@ goto :end
 
 :kube
 	go mod tidy
+	if %errorlevel% == 1 (
+		echo "go mod tidy failed"
+		exit /b 1
+	)
 	call :update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -kube
 goto :end
 
 :html
 	go mod tidy
+	if %errorlevel% == 1 (
+		echo "go mod tidy failed"
+		exit /b 1
+	)
 	call :update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -html
 goto :end
 
 :sub
 	go mod tidy
+	if %errorlevel% == 1 (
+		echo "go mod tidy failed"
+		exit /b 1
+	)
 	call :update
 	codegen -n {{.ProjectName}} -p {{.PackageName}} -sub %2
 goto :end
