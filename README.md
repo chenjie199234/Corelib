@@ -1,7 +1,5 @@
 # Corelib
 ![image](Corelib.jpg)
-# Warning
-    1.don't use golang 1.24.0,this version has a panic bug in golang's compiler
 # Use
 	1.install golang(1.24+)
 	2.install git
