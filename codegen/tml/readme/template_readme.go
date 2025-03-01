@@ -34,9 +34,9 @@ RUN_ENV                                 当前运行环境,如:test,pre,prod
 DEPLOY_ENV                              部署环境,如:ali-kube-shanghai-1,ali-host-hangzhou-1
 TRACE                                   是否开启链路追踪,空-不启用,不空-trace输出方式,[log,otlphttp,otlpgrpc,zipkin]
 ZIPKIN_URL                              当TRACE为zipkin时,该变量为zipkin服务器的推送url
-OTEL_EXPORTER_OTLP_TRACES_ENDPOINT      当TRACE为oltphttp或oltpgrpc时,该变量为oltp服务器的推送url
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT      当TRACE为otlphttp或otlpgrpc时,该变量为otlp服务器的推送url
 METRIC                                  是否开启系统监控采集,空-不启用,不空-metric输出方式,[log,otlphttp,otlpgrpc,prometheus]
-OTEL_EXPORTER_OTLP_METRICS_ENDPOINT     当METRIC为oltphttp或oltpgrpc时,该变量为oltp服务器的推送url
+OTEL_EXPORTER_OTLP_METRICS_ENDPOINT     当METRIC为otlphttp或otlpgrpc时,该变量为otlp服务器的推送url
 OTEL_EXPORTER_OTLP_ENDPOINT             二合一,可取代OTEL_EXPORTER_OTLP_TRACES_ENDPOINT和OTEL_EXPORTER_OTLP_METRICS_ENDPOINT,但优先级比前两者低
 
 CONFIG_TYPE                             配置类型:0-使用本地配置.1-使用admin服务的远程配置中心功能

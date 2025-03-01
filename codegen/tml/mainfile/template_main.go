@@ -149,6 +149,8 @@ func main() {
 		}
 		wg.Done()
 	}()
+	//this is the server for pprof and prometheus(if METRIC env is prometheus)
+	//this server should not be exposed to the public internet
 	pserver := &http.Server{Addr:":6060"}
 	wg.Add(1)
 	go func(){
