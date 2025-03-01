@@ -17,10 +17,10 @@ import (
 )
 
 func main() {
-	showversion := flag.Bool("version", false, "print the version and exit")
+	ver := flag.Bool("v", false, "version info")
 	flag.Parse()
-	if *showversion {
-		fmt.Printf("protoc-gen-go-web %s\n", version.String())
+	if *ver {
+		fmt.Println(version.String())
 		return
 	}
 	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
