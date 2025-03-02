@@ -2,6 +2,7 @@ package name
 
 import (
 	"errors"
+	"sync"
 )
 
 // [a-z][0-9][-],first character must in [a-z],last character must in [a-z][0-9]
@@ -42,12 +43,15 @@ func MakeFullName(project, group, app string) (string, error) {
 	return project + "-" + group + "." + app, nil
 }
 
+var lker sync.RWMutex
 var fullname string
 var project string
 var group string
 var app string
 
 func SetSelfFullName(p, g, a string) error {
+	lker.Lock()
+	defer lker.Unlock()
 	if fullname != "" {
 		return errors.New("[name] self full name already setted")
 	}
@@ -62,20 +66,30 @@ func SetSelfFullName(p, g, a string) error {
 	return nil
 }
 func GetSelfFullName() string {
+	lker.RLock()
+	defer lker.RUnlock()
 	return fullname
 }
 func HasSelfFullName() error {
+	lker.RLock()
+	defer lker.RUnlock()
 	if fullname == "" {
 		return errors.New("[name] missing self full name")
 	}
 	return nil
 }
 func GetSelfProject() string {
+	lker.RLock()
+	defer lker.RUnlock()
 	return project
 }
 func GetSelfGroup() string {
+	lker.RLock()
+	defer lker.RUnlock()
 	return group
 }
 func GetSelfApp() string {
+	lker.RLock()
+	defer lker.RUnlock()
 	return app
 }
