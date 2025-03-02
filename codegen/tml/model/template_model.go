@@ -27,7 +27,7 @@ func init() {
 	  panic("missing env:GROUP")
 	}
 	if Project == "" || Project == "<PROJECT>" {
-	  panic("missing env:PROJECT ")
+	  panic("missing env:PROJECT")
 	}
 	if e := name.SetSelfFullName(Project, Group, Name); e != nil {
 	  panic(e)
