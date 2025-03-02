@@ -55,7 +55,7 @@ func SetSelfFullName(p, g, a string) error {
 	if fullname != "" {
 		return errors.New("[name] self full name already setted")
 	}
-	str, e := MakeFullName(project, group, app)
+	str, e := MakeFullName(p, g, a)
 	if e != nil {
 		return e
 	}
