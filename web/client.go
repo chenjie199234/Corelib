@@ -80,9 +80,6 @@ type WebClient struct {
 // if tlsc is not nil,the tls will be actived
 func NewWebClient(c *ClientConfig, d discover.DI, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*WebClient, error) {
 	if tlsc != nil {
-		if len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
-			return nil, errors.New("[web.client] tls certificate setting missing")
-		}
 		tlsc = tlsc.Clone()
 	}
 	if e := name.HasSelfFullName(); e != nil {

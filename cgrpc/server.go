@@ -85,14 +85,14 @@ type CGrpcServer struct {
 
 // if tlsc is not nil,the tls will be actived
 func NewCGrpcServer(c *ServerConfig, tlsc *tls.Config) (*CGrpcServer, error) {
+	if e := name.HasSelfFullName(); e != nil {
+		return nil, e
+	}
 	if tlsc != nil {
 		if len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
 			return nil, errors.New("[cgrpc.server] tls certificate setting missing")
 		}
 		tlsc = tlsc.Clone()
-	}
-	if e := name.HasSelfFullName(); e != nil {
-		return nil, e
 	}
 	if c == nil {
 		c = &ServerConfig{}
