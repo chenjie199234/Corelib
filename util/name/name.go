@@ -43,8 +43,11 @@ func MakeFullName(project, group, app string) (string, error) {
 }
 
 var fullname string
+var project string
+var group string
+var app string
 
-func SetSelfFullName(project, group, app string) error {
+func SetSelfFullName(p, g, a string) error {
 	if fullname != "" {
 		return errors.New("[name] self full name already setted")
 	}
@@ -53,6 +56,9 @@ func SetSelfFullName(project, group, app string) error {
 		return e
 	}
 	fullname = str
+	project = p
+	group = g
+	app = a
 	return nil
 }
 func GetSelfFullName() string {
@@ -63,4 +69,13 @@ func HasSelfFullName() error {
 		return errors.New("[name] missing self full name")
 	}
 	return nil
+}
+func GetSelfProject() string {
+	return project
+}
+func GetSelfGroup() string {
+	return group
+}
+func GetSelfApp() string {
+	return app
 }
