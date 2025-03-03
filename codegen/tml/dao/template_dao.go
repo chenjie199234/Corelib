@@ -10,7 +10,9 @@ const txt = `package dao
 import (
 	"{{.}}/config"
 	// "{{.}}/model"
-	// discoversdk "github.com/chenjie199234/admin/sdk/discover"
+
+	// adminsdk "github.com/chenjie199234/admin/sdk"
+	// admindiscover "github.com/chenjie199234/admin/sdk/discover"
 	// "github.com/chenjie199234/Corelib/discover"
 	// "github.com/chenjie199234/Corelib/cgrpc"
 	// "github.com/chenjie199234/Corelib/crpc"
@@ -48,7 +50,8 @@ func NewApi() error {
 	//	admintlsc = &tlsc.Config{}
 	//	...
 	//}
-	//exampleAdminDiscover, e := discoversdk.NewAdminDiscover("adminproject", "admingroup", "admin", admintlsc)
+	//adminsdk.Init(model.Project, model.Group, model.Name)
+	//exampleAdminDiscover, e := admindiscover.NewAdminDiscover("exampleproject", "examplegroup", "examplename", admintlsc)
 	//if e != nil {
 	//	return e
 	//}
