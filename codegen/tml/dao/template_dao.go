@@ -11,7 +11,6 @@ import (
 	"{{.}}/config"
 	// "{{.}}/model"
 
-	// adminsdk "github.com/chenjie199234/admin/sdk"
 	// admindiscover "github.com/chenjie199234/admin/sdk/discover"
 	// "github.com/chenjie199234/Corelib/discover"
 	// "github.com/chenjie199234/Corelib/cgrpc"
@@ -50,7 +49,6 @@ func NewApi() error {
 	//	admintlsc = &tlsc.Config{}
 	//	...
 	//}
-	//adminsdk.Init(model.Project, model.Group, model.Name)
 	//exampleAdminDiscover, e := admindiscover.NewAdminDiscover("exampleproject", "examplegroup", "examplename", admintlsc)
 	//if e != nil {
 	//	return e

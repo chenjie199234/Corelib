@@ -20,7 +20,7 @@ import (
 
 	"{{.}}/config"
 	"{{.}}/dao"
-	_ "{{.}}/model"
+	"{{.}}/model"
 	"{{.}}/server/xcrpc"
 	"{{.}}/server/xgrpc"
 	"{{.}}/server/xraw"
@@ -29,6 +29,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cotel"
 	publicmids "github.com/chenjie199234/Corelib/mids"
+	adminsdk "github.com/chenjie199234/admin/sdk"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/redis/go-redis/v9"
@@ -82,6 +83,7 @@ func main() {
 		}),
 	}))
 	cotel.Init()
+	adminsdk.Init(model.Project, model.Group, model.Name)
 	config.Init(func(ac *config.AppConfig) {
 		//this is a notice callback every time appconfig changes
 		//this function works in sync mode
