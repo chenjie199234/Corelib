@@ -170,6 +170,7 @@ func Stop() {
 	}()
 	wg.Wait()
 }
+
 func GetPrometheusHandler() http.Handler {
 	if promRegister == nil {
 		return nil
@@ -183,6 +184,11 @@ func TraceIDFromContext(ctx context.Context) string {
 		return span.SpanContext().TraceID().String()
 	}
 	return ""
+}
+
+// copy the trace info from ctx to a new Context(without deadline)
+func CloneTrace(ctx context.Context) context.Context {
+	return otrace.ContextWithSpan(context.Background(), otrace.SpanFromContext(ctx))
 }
 
 type slogTraceExporter struct {
