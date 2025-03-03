@@ -69,7 +69,8 @@ const tsc = `{
     "noImplicitThis": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+	"noUncheckedSideEffectImports": true
   },
   "include": ["src"]
 }`
