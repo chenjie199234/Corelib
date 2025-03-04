@@ -261,7 +261,9 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler f
 				slog.String("error", e.Error()))
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
-			c.recordmetric(path, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, true)
+			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			}
 			return e
 		}
 		span.SetAttributes(attribute.String("server.addr", server.addr))
@@ -279,7 +281,9 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler f
 			if cerror.Equal(e, cerror.ErrClosed) {
 				continue
 			}
-			c.recordmetric(path, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, true)
+			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			}
 			return e
 		}
 		workctx := &CallContext{
@@ -315,7 +319,9 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler f
 		if cerror.Equal(ee, cerror.ErrServerClosing) {
 			continue
 		}
-		c.recordmetric(path, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, ee != nil)
+		if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+			c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, ee != nil)
+		}
 		//fix the interface not nil problem
 		if ee != nil {
 			return ee
@@ -359,7 +365,9 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 				slog.String("error", e.Error()))
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
-			c.recordmetric(path, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, true)
+			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			}
 			return e
 		}
 		span.SetAttributes(attribute.String("server.addr", server.addr))
@@ -377,7 +385,9 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 			if cerror.Equal(e, cerror.ErrClosed) {
 				continue
 			}
-			c.recordmetric(path, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, true)
+			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			}
 			return e
 		}
 		workctx := &StreamContext{
@@ -413,7 +423,9 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 		if cerror.Equal(ee, cerror.ErrServerClosing) {
 			continue
 		}
-		c.recordmetric(path, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, ee != nil)
+		if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+			c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, ee != nil)
+		}
 		//fix the interface not nil problem
 		if ee != nil {
 			return ee
@@ -422,16 +434,14 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 	}
 }
 func (c *CrpcClient) recordmetric(path string, usetimems float64, err bool) {
-	if cotel.NeedMetric() {
-		mstatus, _ := otel.Meter("Corelib.crpc.client", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
-		if err {
-			mstatus.Record(context.Background(), 1)
-		} else {
-			mstatus.Record(context.Background(), 0)
-		}
-		mtime, _ := otel.Meter("Corelib.crpc.client", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-		mtime.Record(context.Background(), usetimems)
+	mstatus, _ := otel.Meter("Corelib.crpc.client", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+	if err {
+		mstatus.Record(context.Background(), 1)
+	} else {
+		mstatus.Record(context.Background(), 0)
 	}
+	mtime, _ := otel.Meter("Corelib.crpc.client", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+	mtime.Record(context.Background(), usetimems)
 }
 
 type forceaddrkey struct{}

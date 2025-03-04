@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/cotel"
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/picker"
 	"github.com/chenjie199234/Corelib/internal/resolver"
@@ -340,7 +341,9 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 					span.SetStatus(codes.Ok, "")
 				}
 				span.End()
-				b.c.recordmetric(info.FullMethodName, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, e != nil)
+				if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+					b.c.recordmetric(info.FullMethodName, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, e != nil)
+				}
 				// monitor.GrpcClientMonitor(b.c.server, "GRPC", info.FullMethodName, e, uint64(span.GetEnd()-span.GetStart()))
 				if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 					if !server.(*ServerForPick).closing.Swap(true) {

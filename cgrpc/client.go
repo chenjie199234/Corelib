@@ -221,7 +221,9 @@ func (c *CGrpcClient) Invoke(ctx context.Context, path string, req, reply any, o
 		if span.IsRecording() {
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
-			c.recordmetric(path, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, true)
+			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			}
 		}
 		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 			continue
@@ -262,7 +264,9 @@ func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path
 		if span.IsRecording() {
 			span.SetStatus(codes.Error, ee.Error())
 			span.End()
-			c.recordmetric(path, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, true)
+			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			}
 		}
 		if cerror.Equal(ee, cerror.ErrServerClosing) || cerror.Equal(ee, cerror.ErrTarget) {
 			continue
@@ -271,16 +275,14 @@ func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path
 	}
 }
 func (c *CGrpcClient) recordmetric(path string, usetimems float64, err bool) {
-	if cotel.NeedMetric() {
-		mstatus, _ := otel.Meter("Corelib.cgrpc.client", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
-		if err {
-			mstatus.Record(context.Background(), 1)
-		} else {
-			mstatus.Record(context.Background(), 0)
-		}
-		mtime, _ := otel.Meter("Corelib.cgrpc.client", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-		mtime.Record(context.Background(), usetimems)
+	mstatus, _ := otel.Meter("Corelib.cgrpc.client", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+	if err {
+		mstatus.Record(context.Background(), 1)
+	} else {
+		mstatus.Record(context.Background(), 0)
 	}
+	mtime, _ := otel.Meter("Corelib.cgrpc.client", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+	mtime.Record(context.Background(), usetimems)
 }
 
 type ClientStreamWraper struct {

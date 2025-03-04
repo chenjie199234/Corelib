@@ -337,7 +337,7 @@ func (s *CGrpcServer) echohandler(sname, mname string, handlers ...OutsideHandle
 				err = nil
 			}
 			span.End()
-			if cotel.NeedMetric() {
+			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
 				mstatus, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
 				if workctx.e != nil {
 					mstatus.Record(context.Background(), 1)
@@ -345,9 +345,7 @@ func (s *CGrpcServer) echohandler(sname, mname string, handlers ...OutsideHandle
 					mstatus.Record(context.Background(), 0)
 				}
 				mtime, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-				st := span.(sdktrace.ReadOnlySpan).StartTime()
-				et := span.(sdktrace.ReadOnlySpan).EndTime()
-				mtime.Record(context.Background(), float64(et.UnixNano()-st.UnixNano())/1000000.0)
+				mtime.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0)
 			}
 		}()
 		for _, handler := range totalhandlers {
@@ -445,7 +443,7 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 				err = nil
 			}
 			span.End()
-			if cotel.NeedMetric() {
+			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
 				mstatus, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
 				if workctx.e != nil {
 					mstatus.Record(context.Background(), 1)
@@ -453,9 +451,7 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 					mstatus.Record(context.Background(), 0)
 				}
 				mtime, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-				st := span.(sdktrace.ReadOnlySpan).StartTime()
-				et := span.(sdktrace.ReadOnlySpan).EndTime()
-				mtime.Record(context.Background(), float64(et.UnixNano()-st.UnixNano())/1000000.0)
+				mtime.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0)
 			}
 		}()
 		for _, handler := range totalhandlers {
