@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -383,7 +382,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
 			if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
-				if atomic.SwapInt32(&server.closing, 1) == 0 {
+				if !server.closing.Swap(true) {
 					//set the lowest pick priority
 					server.Pickinfo.SetDiscoverServerOffline(0)
 					//rebuild picker

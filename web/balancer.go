@@ -43,7 +43,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData,
 	b.lker.Lock()
 	defer func() {
 		for _, server := range b.servers {
-			server.closing = 0
+			server.closing.Store(false)
 		}
 		b.rebuildpicker()
 		b.ww.Wake("CALL")
@@ -102,7 +102,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData,
 			} else {
 				server.Pickinfo.SetDiscoverServerOnline(uint32(len(registerdata.DServers)))
 			}
-			server.closing = 0
+			server.closing.Store(false)
 		}
 	}
 }

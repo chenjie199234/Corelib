@@ -18,7 +18,7 @@ type ServerForPick struct {
 	addr     string
 	dservers map[string]*struct{} //this app registered on which discovery server
 	peer     *stream.Peer
-	closing  int32
+	closing  atomic.Bool
 
 	//active calls
 	lker *sync.RWMutex
@@ -34,7 +34,7 @@ func (s *ServerForPick) GetServerAddr() string {
 	return s.addr
 }
 func (s *ServerForPick) Pickable() bool {
-	return s.peer != nil && s.closing == 0
+	return s.peer != nil && !s.closing.Load()
 }
 
 func (s *ServerForPick) getpeer() *stream.Peer {

@@ -194,7 +194,7 @@ func (b *corelibBalancer) Pick(ctx context.Context) (server *ServerForPick, e er
 			} else {
 				refresh = true
 			}
-		} else if s.closing == 1 { //the specific server exist but it is closing
+		} else if s.closing.Load() { //the specific server exist but it is closing
 			return nil, cerror.ErrNoSpecificserver
 		} else if e := b.ww.Wait(ctx, "SPECIFIC:"+forceaddr, b.c.resolver.Now, b.lker.RUnlock); e != nil { //the specific server exist but is connecting,we need to wait
 			return nil, cerror.Convert(e)

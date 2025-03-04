@@ -1,6 +1,8 @@
 package cgrpc
 
 import (
+	"sync/atomic"
+
 	"github.com/chenjie199234/Corelib/internal/picker"
 
 	"google.golang.org/grpc/balancer"
@@ -12,7 +14,7 @@ type ServerForPick struct {
 	subconn  balancer.SubConn
 	dservers map[string]*struct{} //this app registered on which discovery server
 	status   int32
-	closing  int32
+	closing  atomic.Bool
 
 	Pickinfo *picker.ServerPickInfo
 }
@@ -24,5 +26,5 @@ func (s *ServerForPick) GetServerAddr() string {
 	return s.addr
 }
 func (s *ServerForPick) Pickable() bool {
-	return s.status == int32(connectivity.Ready) && s.closing == 0
+	return s.status == int32(connectivity.Ready) && !s.closing.Load()
 }

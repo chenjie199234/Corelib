@@ -201,7 +201,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 						}
 					case connectivity.Ready:
 						//online
-						server.closing = 0
+						server.closing.Store(false)
 						slog.InfoContext(nil, "[cgrpc.client] online", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
 						go b.rebuildpicker(server.addr, true)
 					case connectivity.TransientFailure:
@@ -343,7 +343,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 				b.c.recordmetric(info.FullMethodName, float64(span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()-span.(sdktrace.ReadOnlySpan).StartTime().UnixNano())/1000000.0, e != nil)
 				// monitor.GrpcClientMonitor(b.c.server, "GRPC", info.FullMethodName, e, uint64(span.GetEnd()-span.GetStart()))
 				if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
-					if atomic.SwapInt32(&server.(*ServerForPick).closing, 1) == 0 {
+					if !server.(*ServerForPick).closing.Swap(true) {
 						//set the lowest pick priority
 						server.(*ServerForPick).Pickinfo.SetDiscoverServerOffline(0)
 						//rebuild picker
@@ -398,7 +398,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 			} else {
 				refresh = true
 			}
-		} else if s.closing == 1 { //the specific server exist but it is closing
+		} else if s.closing.Load() { //the specific server exist but it is closing
 			e = cerror.ErrNoSpecificserver
 			return
 		} else if err := b.ww.Wait(info.Ctx, "SPECIFIC:"+forceaddr, b.c.resolver.Now, b.lker.RUnlock); err != nil { //the specific server exist but is connecting,we need to wait

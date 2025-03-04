@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -165,7 +164,7 @@ func (c *CrpcClient) onlinefunc(ctx context.Context, p *stream.Peer) bool {
 	}
 	p.SetData(unsafe.Pointer(server))
 	server.setpeer(p)
-	server.closing = 0
+	server.closing.Store(false)
 	c.balancer.RebuildPicker(server.addr, true)
 	slog.InfoContext(nil, "[crpc.client] online", slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
 	return true
@@ -201,7 +200,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 		}
 	case MsgType_Send:
 		if msg.B.Error != nil && cerror.Equal(msg.B.Error, cerror.ErrServerClosing) {
-			if atomic.SwapInt32(&server.closing, 1) == 0 {
+			if !server.closing.Swap(true) {
 				//set the lowest pick priority
 				server.Pickinfo.SetDiscoverServerOffline(0)
 				//rebuild picker
