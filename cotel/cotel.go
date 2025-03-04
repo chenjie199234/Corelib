@@ -172,7 +172,9 @@ func Stop() {
 		wg.Done()
 	}()
 	go func() {
-		otel.GetMeterProvider().(*metric.MeterProvider).Shutdown(context.Background())
+		if needmetric {
+			otel.GetMeterProvider().(*metric.MeterProvider).Shutdown(context.Background())
+		}
 		wg.Done()
 	}()
 	wg.Wait()

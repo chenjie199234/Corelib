@@ -166,6 +166,9 @@ func newMonitor(mongoname string) *gevent.CommandMonitor {
 	}
 }
 func (m *monitor) Started(ctx context.Context, evt *gevent.CommandStartedEvent) {
+	if evt.CommandName == "getMore" {
+		return
+	}
 	hostname, port := peerInfo(evt)
 	_, span := otel.Tracer("Corelib.mongo.client").Start(
 		ctx,
