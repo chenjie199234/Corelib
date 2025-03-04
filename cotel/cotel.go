@@ -63,6 +63,7 @@ func Init() error {
 		topts = append(topts, trace.WithSampler(trace.NeverSample()))
 	}
 	switch traceenv {
+	case "":
 	case "log":
 		topts = append(topts, trace.WithSyncer(&slogTraceExporter{}))
 	case "otlphttp":
