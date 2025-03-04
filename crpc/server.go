@@ -415,16 +415,18 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 					span.SetStatus(codes.Ok, "")
 				}
 				span.End()
-				mstatus, _ := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(msg.H.Path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
-				if workctx.e != nil {
-					mstatus.Record(context.Background(), 1)
-				} else {
-					mstatus.Record(context.Background(), 0)
+				if cotel.NeedMetric() {
+					mstatus, _ := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(msg.H.Path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+					if workctx.e != nil {
+						mstatus.Record(context.Background(), 1)
+					} else {
+						mstatus.Record(context.Background(), 0)
+					}
+					mtime, _ := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(msg.H.Path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+					st := span.(sdktrace.ReadOnlySpan).StartTime()
+					et := span.(sdktrace.ReadOnlySpan).EndTime()
+					mtime.Record(context.Background(), float64(et.UnixNano()-st.UnixNano())/1000000.0)
 				}
-				mtime, _ := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(msg.H.Path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-				st := span.(sdktrace.ReadOnlySpan).StartTime()
-				et := span.(sdktrace.ReadOnlySpan).EndTime()
-				mtime.Record(context.Background(), float64(et.UnixNano()-st.UnixNano())/1000000.0)
 				if workctx.finish == 0 {
 					rw.closerecvsend(true, nil)
 				}

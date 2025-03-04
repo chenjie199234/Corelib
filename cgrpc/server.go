@@ -337,16 +337,18 @@ func (s *CGrpcServer) echohandler(sname, mname string, handlers ...OutsideHandle
 				err = nil
 			}
 			span.End()
-			mstatus, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
-			if workctx.e != nil {
-				mstatus.Record(context.Background(), 1)
-			} else {
-				mstatus.Record(context.Background(), 0)
+			if cotel.NeedMetric() {
+				mstatus, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+				if workctx.e != nil {
+					mstatus.Record(context.Background(), 1)
+				} else {
+					mstatus.Record(context.Background(), 0)
+				}
+				mtime, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+				st := span.(sdktrace.ReadOnlySpan).StartTime()
+				et := span.(sdktrace.ReadOnlySpan).EndTime()
+				mtime.Record(context.Background(), float64(et.UnixNano()-st.UnixNano())/1000000.0)
 			}
-			mtime, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-			st := span.(sdktrace.ReadOnlySpan).StartTime()
-			et := span.(sdktrace.ReadOnlySpan).EndTime()
-			mtime.Record(context.Background(), float64(et.UnixNano()-st.UnixNano())/1000000.0)
 		}()
 		for _, handler := range totalhandlers {
 			handler(workctx)
@@ -443,16 +445,18 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 				err = nil
 			}
 			span.End()
-			mstatus, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
-			if workctx.e != nil {
-				mstatus.Record(context.Background(), 1)
-			} else {
-				mstatus.Record(context.Background(), 0)
+			if cotel.NeedMetric() {
+				mstatus, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+				if workctx.e != nil {
+					mstatus.Record(context.Background(), 1)
+				} else {
+					mstatus.Record(context.Background(), 0)
+				}
+				mtime, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+				st := span.(sdktrace.ReadOnlySpan).StartTime()
+				et := span.(sdktrace.ReadOnlySpan).EndTime()
+				mtime.Record(context.Background(), float64(et.UnixNano()-st.UnixNano())/1000000.0)
 			}
-			mtime, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-			st := span.(sdktrace.ReadOnlySpan).StartTime()
-			et := span.(sdktrace.ReadOnlySpan).EndTime()
-			mtime.Record(context.Background(), float64(et.UnixNano()-st.UnixNano())/1000000.0)
 		}()
 		for _, handler := range totalhandlers {
 			handler(workctx)

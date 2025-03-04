@@ -434,12 +434,14 @@ func (b *wrappedbody) Close() error {
 }
 
 func (c *WebClient) recordmetric(path string, usetimems float64, err bool) {
-	mstatus, _ := otel.Meter("Corelib.web.client", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
-	if err {
-		mstatus.Record(context.Background(), 1)
-	} else {
-		mstatus.Record(context.Background(), 0)
+	if cotel.NeedMetric() {
+		mstatus, _ := otel.Meter("Corelib.web.client", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+		if err {
+			mstatus.Record(context.Background(), 1)
+		} else {
+			mstatus.Record(context.Background(), 0)
+		}
+		mtime, _ := otel.Meter("Corelib.web.client", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+		mtime.Record(context.Background(), usetimems)
 	}
-	mtime, _ := otel.Meter("Corelib.web.client", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-	mtime.Record(context.Background(), usetimems)
 }
