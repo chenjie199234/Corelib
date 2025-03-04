@@ -64,6 +64,7 @@ func Init() error {
 	}
 	switch traceenv {
 	case "":
+		fallthrough
 	case "log":
 		topts = append(topts, trace.WithSyncer(&slogTraceExporter{}))
 	case "otlphttp":
