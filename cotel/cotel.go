@@ -34,7 +34,7 @@ import (
 	otrace "go.opentelemetry.io/otel/trace"
 )
 
-var needmetric bool
+var needtrace, needmetric bool
 var promRegister *prometheus.Registry
 
 func Init() error {
@@ -57,16 +57,14 @@ func Init() error {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 	topts := make([]trace.TracerProviderOption, 0, 3)
 	topts = append(topts, trace.WithResource(resources))
-	if traceenv != "" {
-		topts = append(topts, trace.WithSampler(trace.AlwaysSample()))
-	} else {
-		topts = append(topts, trace.WithSampler(trace.NeverSample()))
-	}
+	topts = append(topts, trace.WithSampler(trace.AlwaysSample()))
 	switch traceenv {
 	case "":
-		fallthrough
+		topts = append(topts, trace.WithSyncer(&slogTraceExporter{}))
+		needtrace = false
 	case "log":
 		topts = append(topts, trace.WithSyncer(&slogTraceExporter{}))
+		needtrace = true
 	case "otlphttp":
 		str1 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")))
 		str2 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")))
@@ -78,6 +76,7 @@ func Init() error {
 			panic("[cotel] os env OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT error,when os env TRACE is otlp...")
 		}
 		topts = append(topts, trace.WithBatcher(exporter))
+		needtrace = true
 	case "otlpgrpc":
 		str1 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")))
 		str2 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")))
@@ -89,6 +88,7 @@ func Init() error {
 			panic("[cotel] os env OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT error,when os env TRACE is otlp...")
 		}
 		topts = append(topts, trace.WithBatcher(exporter))
+		needtrace = true
 	case "zipkin":
 		str := strings.TrimSpace(strings.ToLower(os.Getenv("ZIPKIN_URL")))
 		if str == "" || str == "<ZIPKIN_URL>" {
@@ -99,6 +99,7 @@ func Init() error {
 			panic("[cotel] os env ZIPKIN_URL error,when os env TRACE is zipkin")
 		}
 		topts = append(topts, trace.WithBatcher(exporter))
+		needtrace = true
 	}
 	otel.SetTracerProvider(trace.NewTracerProvider(topts...))
 	//metric
@@ -212,6 +213,9 @@ type slogTraceExporter struct {
 
 func (s *slogTraceExporter) ExportSpans(ctx context.Context, spans []trace.ReadOnlySpan) error {
 	if s.stopped.Load() {
+		return nil
+	}
+	if !needtrace {
 		return nil
 	}
 	if len(spans) == 0 {
