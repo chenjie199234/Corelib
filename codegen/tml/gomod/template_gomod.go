@@ -10,7 +10,7 @@ import (
 
 const txt = `module {{.}}
 
-go 1.24
+go 1.24.1
 
 require (
 	github.com/chenjie199234/admin main
