@@ -1,7 +1,7 @@
 # Corelib
 ![image](Corelib.jpg)
 # Use
-	1.install golang(1.24+)
+	1.install golang(1.24.1+)
 	2.install git
 	3.install protoc
 	4.install protoc-gen-go
