@@ -14,7 +14,7 @@ cd $(dirname $0)
 help() {
 	echo "cmd.sh — every thing you need"
 	echo "         please install git"
-	echo "         please install golang(1.24+)"
+	echo "         please install golang(1.24.1+)"
 	echo "         please install protoc           (github.com/protocolbuffers/protobuf)"
 	echo "         please install protoc-gen-go    (github.com/protocolbuffers/protobuf-go)"
 	echo "         please install codegen          (github.com/chenjie199234/Corelib)"
@@ -313,7 +313,7 @@ goto :eof
 :help
 	echo cmd.bat - every thing you need
 	echo           please install git
-	echo           please install golang(1.24+)
+	echo           please install golang(1.24.1+)
 	echo           please install protoc           (github.com/protocolbuffers/protobuf)
 	echo           please install protoc-gen-go    (github.com/protocolbuffers/protobuf-go)
 	echo           please install codegen          (github.com/chenjie199234/Corelib)
