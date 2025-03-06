@@ -141,7 +141,7 @@ func Init() error {
 		needmetric = true
 	case "prometheus":
 		promRegister = prometheus.NewRegistry()
-		exporter, _ := oprometheus.New(oprometheus.WithoutUnits(), oprometheus.WithRegisterer(promRegister), oprometheus.WithoutCounterSuffixes())
+		exporter, _ := oprometheus.New(oprometheus.WithRegisterer(promRegister))
 		mopts = append(mopts, metric.WithReader(exporter))
 		needmetric = true
 	}
