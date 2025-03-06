@@ -34,6 +34,8 @@ import (
 	otrace "go.opentelemetry.io/otel/trace"
 )
 
+var tp *trace.TracerProvider
+var mp *metric.MeterProvider
 var needtrace, needmetric bool
 var promRegister *prometheus.Registry
 
@@ -60,6 +62,9 @@ func Init() error {
 	topts = append(topts, trace.WithSampler(trace.AlwaysSample()))
 	switch traceenv {
 	case "":
+		//even we don't need the trace,we still need to keep the trace chain
+		//so we can't use the trace.NeverSample()
+		//we use the log exporter but print nothing
 		topts = append(topts, trace.WithSyncer(&slogTraceExporter{}))
 		needtrace = false
 	case "log":
@@ -101,7 +106,8 @@ func Init() error {
 		topts = append(topts, trace.WithBatcher(exporter))
 		needtrace = true
 	}
-	otel.SetTracerProvider(trace.NewTracerProvider(topts...))
+	tp = trace.NewTracerProvider(topts...)
+	otel.SetTracerProvider(tp)
 	//metric
 	mopts := make([]metric.Option, 0, 2)
 	mopts = append(mopts, metric.WithResource(resources))
@@ -140,7 +146,8 @@ func Init() error {
 		needmetric = true
 	}
 	if needmetric {
-		otel.SetMeterProvider(metric.NewMeterProvider(mopts...))
+		mp = metric.NewMeterProvider(mopts...)
+		otel.SetMeterProvider(mp)
 		cpuc, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("cpu_cur_usage", ometric.WithUnit("%"))
 		cpum, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("cpu_max_usage", ometric.WithUnit("%"))
 		cpua, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("cpu_avg_usage", ometric.WithUnit("%"))
@@ -171,12 +178,12 @@ func Stop() {
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
-		otel.GetTracerProvider().(*trace.TracerProvider).Shutdown(context.Background())
+		tp.Shutdown(context.Background())
 		wg.Done()
 	}()
 	go func() {
 		if needmetric {
-			otel.GetMeterProvider().(*metric.MeterProvider).Shutdown(context.Background())
+			mp.Shutdown(context.Background())
 		}
 		wg.Done()
 	}()
