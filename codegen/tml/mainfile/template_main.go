@@ -85,6 +85,7 @@ func main() {
 		slog.Error("init cotel failed", slog.String("error", e.Error()))
 		return
 	}
+	defer cotel.Stop()
 	config.Init(func(ac *config.AppConfig) {
 		//this is a notice callback every time appconfig changes
 		//this function works in sync mode
@@ -198,7 +199,6 @@ func main() {
 	  wg.Done()
 	}()
 	wg.Wait()
-	cotel.Stop()
 }`
 
 func CreatePathAndFile(packagename string) {
