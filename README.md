@@ -8,8 +8,8 @@
 	5.[download the codegen in release] or [clone this repo and go into the codegen dir and install it by go install]
 	6.make sure the codegen's path is in the system's or user's PATH env
 	7.use this command to generate the base code:codegen -n projectname -p packagename
-	(projectname format,character must in [a-z][0-9],first character must in [a-z])
-	(packagename must end with projectname,default:projectname,e.g. github.com/path_to_the_repo/projectname)
+	(projectname format:character must in [a-z][0-9],first character must in [a-z])
+	(packagename format:must end with projectname,default:projectname,e.g. github.com/path_to_the_repo/projectname)
 # Description
 ## codegen
 	generate the base code,if you want to use this lib,this is the start
