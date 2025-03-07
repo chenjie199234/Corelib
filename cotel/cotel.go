@@ -15,6 +15,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/model"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -140,6 +141,7 @@ func Init() error {
 		mopts = append(mopts, metric.WithReader(metric.NewPeriodicReader(exporter)))
 		needmetric = true
 	case "prometheus":
+		model.NameEscapingScheme = model.NoEscaping
 		promRegister = prometheus.NewRegistry()
 		exporter, _ := oprometheus.New(oprometheus.WithRegisterer(promRegister))
 		mopts = append(mopts, metric.WithReader(exporter))
