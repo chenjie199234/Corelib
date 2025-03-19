@@ -226,7 +226,10 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	go c.start(server, true)
 }
 
-func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler func(ctx *CallContext) error) error {
+func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder Encoder, handler func(ctx *CallContext) error) error {
+	if encoder == Encoder_Unknown || encoder > Encoder_Json {
+		return cerror.ErrReq
+	}
 	if e := c.stop.Add(1); e != nil {
 		if e == graceful.ErrClosing {
 			return cerror.ErrClientClosing
@@ -268,7 +271,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, handler f
 		}
 		span.SetAttributes(attribute.String("server.addr", server.addr))
 		rw := server.createrw(path, deadline, md, td)
-		if e := rw.init(&MsgBody{Body: in}); e != nil {
+		if e := rw.init(&MsgBody{Body: in, BodyEncoder: encoder}); e != nil {
 			server.delrw(rw.callid)
 			slog.ErrorContext(ctx, "[crpc.client] send request failed",
 				slog.String("sname", c.serverfullname),

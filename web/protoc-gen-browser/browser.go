@@ -27,6 +27,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 	if methodcount == 0 {
 		return g
 	}
+	g.P("// @ts-nocheck")
 	g.P("export interface LogicError{")
 	g.P("\tcode: number;")
 	g.P("\tmsg: string;")

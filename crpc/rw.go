@@ -121,39 +121,38 @@ func (this *rw) closerecvsend(trail bool, err error) error {
 	}
 	return this.sender(context.Background(), m)
 }
-func (this *rw) recv() ([]byte, error) {
+func (this *rw) recv() ([]byte, Encoder, error) {
 	if this.status.Load()&0b0010 == 0 {
 		if this.e != nil {
-			return nil, this.e
+			return nil, Encoder_Unknown, this.e
 		}
-		return nil, cerror.ErrCanceled
+		return nil, Encoder_Unknown, cerror.ErrCanceled
 	}
 	m, e := this.reader.Pop(context.Background())
 	if e != nil {
 		if e == list.ErrClosed {
 			if this.e != nil {
-				return nil, this.e
+				return nil, Encoder_Unknown, this.e
 			}
 			if this.status.Load()&0b0100 == 0 {
-				return nil, io.EOF
+				return nil, Encoder_Unknown, io.EOF
 			}
 			if this.status.Load()&0b0010 == 0 {
-				return nil, cerror.ErrCanceled
+				return nil, Encoder_Unknown, cerror.ErrCanceled
 			}
-			return nil, cerror.ErrClosed
+			return nil, Encoder_Unknown, cerror.ErrClosed
 		} else {
 			//this is impossible
-			return nil, cerror.Convert(e)
+			return nil, Encoder_Unknown, cerror.Convert(e)
 		}
 	}
-	//fix interface nil problem
 	if m.Error == nil || m.Error.Code == 0 {
-		return m.Body, nil
+		return m.Body, m.BodyEncoder, nil
 	}
 	//if we read error from peer,means peer stop send
 	this.status.And(0b1011)
 	this.reader.Close()
-	return m.Body, m.Error
+	return nil, Encoder_Unknown, m.Error
 }
 func (this *rw) cache(m *MsgBody) error {
 	_, e := this.reader.Push(m)

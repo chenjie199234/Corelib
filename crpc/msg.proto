@@ -10,6 +10,11 @@ enum MsgType{
 	CloseRecv=3;
 	CloseRecvSend=4;
 }
+enum Encoder{
+	Unknown=0;
+	Protobuf=1;
+	Json=2;
+}
 message msg {
 	message header {
 		uint64 callid=1;
@@ -22,7 +27,8 @@ message msg {
 	}
 	message body {
 		bytes body=1;
-		cerror.Error error=2;//only from server to client
+		Encoder body_encoder=2;
+		cerror.Error error=3;//only from server to client
 	}
 	header h=1;
 	body b=2;

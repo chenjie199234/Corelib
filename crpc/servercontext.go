@@ -13,6 +13,7 @@ import (
 	"github.com/chenjie199234/Corelib/pbex"
 	"github.com/chenjie199234/Corelib/stream"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -53,8 +54,8 @@ func (c *ServerContext) Abort(e error) {
 // return cerror.ErrCanceled means self stop send anymore in this Context
 // return cerror.ErrClosed means connection between client and server is closed
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
-func (c *ServerContext) Send(resp []byte) error {
-	return c.rw.send(&MsgBody{Body: resp})
+func (c *ServerContext) Send(resp []byte, encoder Encoder) error {
+	return c.rw.send(&MsgBody{Body: resp, BodyEncoder: encoder})
 }
 func (c *ServerContext) StopSend() {
 	c.rw.closesend()
@@ -63,9 +64,8 @@ func (c *ServerContext) StopSend() {
 // return io.EOF means client stop send
 // return cerror.ErrCanceled means self stop recv anymore in this Context
 // return cerror.ErrClosed means connection between client and server is closed
-func (c *ServerContext) Recv() ([]byte, error) {
-	body, e := c.rw.recv()
-	return body, e
+func (c *ServerContext) Recv() ([]byte, Encoder, error) {
+	return c.rw.recv()
 }
 func (c *ServerContext) StopRecv() {
 	c.rw.closerecv()
@@ -130,8 +130,7 @@ func (c *NoStreamServerContext) GetClientIp() string {
 	return c.sctx.GetClientIp()
 }
 
-// ----------------------------------------------- client stream context ---------------------------------------------
-
+// ------------------------ client stream context ------------------------------------------------------------
 func NewClientStreamServerContext[reqtype any](ctx *ServerContext, validatereq bool) *ClientStreamServerContext[reqtype] {
 	return &ClientStreamServerContext[reqtype]{Context: ctx.Context, sctx: ctx, validatereq: validatereq}
 }
@@ -153,16 +152,27 @@ func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request struct's type is not proto's message")
 		return nil, cerror.ErrSystem
 	}
-	data, e := c.sctx.Recv()
+	data, encoder, e := c.sctx.Recv()
 	if e != nil {
 		if e != io.EOF {
 			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] read request failed", slog.String("error", e.Error()))
 		}
 		return nil, e
 	}
-	if e := proto.Unmarshal(data, m); e != nil {
-		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
-		return nil, e
+	switch encoder {
+	case Encoder_Protobuf:
+		if e := proto.Unmarshal(data, m); e != nil {
+			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
+			return nil, e
+		}
+	case Encoder_Json:
+		if e := protojson.Unmarshal(data, m); e != nil {
+			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
+			return nil, e
+		}
+	default:
+		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request encoder unknown")
+		return nil, cerror.ErrReq
 	}
 	if c.validatereq {
 		if v, ok := req.(pbex.Validater); ok {
@@ -198,15 +208,18 @@ func (c *ClientStreamServerContext[reqtype]) GetClientIp() string {
 	return c.sctx.GetClientIp()
 }
 
-// ----------------------------------------------- server stream context ---------------------------------------------
-
-func NewServerStreamServerContext[resptype any](ctx *ServerContext) *ServerStreamServerContext[resptype] {
-	return &ServerStreamServerContext[resptype]{Context: ctx.Context, sctx: ctx}
+// ------------------------ server stream context(this is for protobuf,so Send's encoder always be Encoder_Protobuf) -----------
+func NewServerStreamServerContext[resptype any](ctx *ServerContext, encoder Encoder) *ServerStreamServerContext[resptype] {
+	if encoder == Encoder_Unknown || encoder > Encoder_Json {
+		return nil
+	}
+	return &ServerStreamServerContext[resptype]{Context: ctx.Context, sctx: ctx, encoder: encoder}
 }
 
 type ServerStreamServerContext[resptype any] struct {
 	context.Context
-	sctx *ServerContext
+	sctx    *ServerContext
+	encoder Encoder
 }
 
 // return io.EOF means client stop recv
@@ -221,8 +234,14 @@ func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
 		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] response struct's type is not proto's message")
 		return cerror.ErrSystem
 	}
-	d, _ := proto.Marshal(tmptmp)
-	e := c.sctx.Send(d)
+	var d []byte
+	switch c.encoder {
+	case Encoder_Protobuf:
+		d, _ = proto.Marshal(tmptmp)
+	case Encoder_Json:
+		d, _ = protojson.Marshal(tmptmp)
+	}
+	e := c.sctx.Send(d, c.encoder)
 	if e != nil && e != io.EOF {
 		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] send response failed", slog.String("error", e.Error()))
 	}
@@ -252,8 +271,7 @@ func (c *ServerStreamServerContext[resptype]) GetClientIp() string {
 	return c.sctx.GetClientIp()
 }
 
-// ----------------------------------------------- all stream context ---------------------------------------------
-
+// ------------------------ all stream context(this is for protobuf,so Send's encoder always be Encoder_Protobuf) -----------
 func NewAllStreamServerContext[reqtype, resptype any](ctx *ServerContext, validatereq bool) *AllStreamServerContext[reqtype, resptype] {
 	return &AllStreamServerContext[reqtype, resptype]{sctx: ctx, Context: ctx.Context, validatereq: validatereq}
 }
@@ -275,16 +293,27 @@ func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request struct's type is not proto's message")
 		return nil, cerror.ErrSystem
 	}
-	data, e := c.sctx.Recv()
+	data, encoder, e := c.sctx.Recv()
 	if e != nil {
 		if e != io.EOF {
 			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] read request failed", slog.String("error", e.Error()))
 		}
 		return nil, e
 	}
-	if e := proto.Unmarshal(data, m); e != nil {
-		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
-		return nil, e
+	switch encoder {
+	case Encoder_Protobuf:
+		if e := proto.Unmarshal(data, m); e != nil {
+			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
+			return nil, e
+		}
+	case Encoder_Json:
+		if e := protojson.Unmarshal(data, m); e != nil {
+			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
+			return nil, e
+		}
+	default:
+		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request encoder unknown")
+		return nil, cerror.ErrReq
 	}
 	if c.validatereq {
 		if v, ok := req.(interface{ Validate() string }); ok {
@@ -313,7 +342,7 @@ func (c *AllStreamServerContext[reqtype, resptype]) Send(resp *resptype) error {
 		return cerror.ErrSystem
 	}
 	d, _ := proto.Marshal(tmptmp)
-	e := c.sctx.Send(d)
+	e := c.sctx.Send(d, Encoder_Protobuf)
 	if e != nil && e != io.EOF {
 		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] send response failed", slog.String("error", e.Error()))
 	}

@@ -22,7 +22,7 @@ const index = `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{.}}</title>
   </head>
-  <body id="app" style="margin:0px;padding:0px;border:0px none white;width:100vw;height:100vh;overflow:hidden;background-color:white">
+  <body id="app" style="width:100vw;height:100vh;overflow:hidden">
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>`
@@ -38,6 +38,7 @@ const pkg = `{
     "preview": "vite preview"
   },
   "devDependencies": {
+    "vite-tsconfig-paths": "latest",
     "typescript": "latest",
     "vite": "latest"
   },
@@ -47,6 +48,9 @@ const pkg = `{
 
 const tsc = `{
   "compilerOptions": {
+    "paths":{
+      "@api/*":["../api/*"]
+    },
     "target": "ES2020",
     "useDefineForClassFields": true,
     "module": "ESNext",
@@ -74,6 +78,12 @@ const tsc = `{
   },
   "include": ["src"]
 }`
+const vitec = `import { defineConfig } from "vite"
+import tsconfigPaths from "vite-tsconfig-paths"
+
+export default defineConfig({
+  plugins: [tsconfigPaths()],
+})`
 
 const main = `document.querySelector<HTMLDivElement>('#app')!.innerHTML="hello world"`
 
@@ -145,6 +155,20 @@ func CreatePathAndFile(projectname string) {
 	}
 	if e := tscfile.Close(); e != nil {
 		panic("close ./html/tsconfig.json error: " + e.Error())
+	}
+	//./html/vite.config.ts
+	vitecfile, e := os.OpenFile("./html/vite.config.ts", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if e != nil {
+		panic("open ./html/vite.config.ts error: " + e.Error())
+	}
+	if _, e := vitecfile.WriteString(vitec); e != nil {
+		panic("write ./html/vite.config.ts error: " + e.Error())
+	}
+	if e := vitecfile.Sync(); e != nil {
+		panic("sync ./html/vite.config.ts error: " + e.Error())
+	}
+	if e := vitecfile.Close(); e != nil {
+		panic("close ./html/vite.config.ts error: " + e.Error())
 	}
 	//./html/src/main.ts
 	mainfile, e := os.OpenFile("./html/src/main.ts", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
