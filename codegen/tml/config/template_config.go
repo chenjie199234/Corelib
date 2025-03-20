@@ -397,6 +397,11 @@ func initsource() {
 		initmysql()
 		wg.Done()
 	}()
+	wg.Add(1)
+	go func() {
+		initemail()
+		wg.Done()
+	}()
 	wg.Wait()
 }
 func initraw() {
