@@ -228,6 +228,7 @@ import (
 
 	"github.com/chenjie199234/Corelib/cgrpc"
 	"github.com/chenjie199234/Corelib/crpc"
+	"github.com/chenjie199234/Corelib/email"
 	"github.com/chenjie199234/Corelib/mongo"
 	"github.com/chenjie199234/Corelib/mysql"
 	"github.com/chenjie199234/Corelib/redis"
