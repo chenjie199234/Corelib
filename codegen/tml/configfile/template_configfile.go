@@ -117,6 +117,16 @@ const source = `{
 			"io_timeout":"500ms",
 			"dial_timeout":"250ms"
 		}
+	},
+	"email":{
+		"example_email":{
+			"max_open":100,
+			"max_conn_idletime":"3m",
+			"host":"smtp.example.com",
+			"port":587,
+			"account":"account@example.com",
+			"password":"xxx"
+		}
 	}
 }`
 const app = `{

@@ -238,16 +238,17 @@ import (
 
 // sourceConfig can't hot update
 type sourceConfig struct {
-	RawServer   *RawServerConfig        $json:"raw_server"$
-	CGrpcServer *CGrpcServerConfig      $json:"cgrpc_server"$
-	CGrpcClient *CGrpcClientConfig      $json:"cgrpc_client"$
-	CrpcServer  *CrpcServerConfig       $json:"crpc_server"$
-	CrpcClient  *CrpcClientConfig       $json:"crpc_client"$
-	WebServer   *WebServerConfig        $json:"web_server"$
-	WebClient   *WebClientConfig        $json:"web_client"$
-	Mongo       map[string]*MongoConfig $json:"mongo"$ //key example:xx_mongo
-	Mysql       map[string]*MysqlConfig $json:"mysql"$ //key example:xx_mysql
-	Redis       map[string]*RedisConfig $json:"redis"$ //key example:xx_redis
+	RawServer   *RawServerConfig         $json:"raw_server"$
+	CGrpcServer *CGrpcServerConfig       $json:"cgrpc_server"$
+	CGrpcClient *CGrpcClientConfig       $json:"cgrpc_client"$
+	CrpcServer  *CrpcServerConfig        $json:"crpc_server"$
+	CrpcClient  *CrpcClientConfig        $json:"crpc_client"$
+	WebServer   *WebServerConfig         $json:"web_server"$
+	WebClient   *WebClientConfig         $json:"web_client"$
+	Mongo       map[string]*MongoConfig  $json:"mongo"$ //key example:xx_mongo
+	Mysql       map[string]*MysqlConfig  $json:"mysql"$ //key example:xx_mysql
+	Redis       map[string]*RedisConfig  $json:"redis"$ //key example:xx_redis
+	Email       map[string]*email.Config $json:"email"$ //key example:xx_email
 }
 
 // RawServerConfig -
@@ -329,6 +330,8 @@ var mongos map[string]*mongo.Client
 var mysqls map[string]*mysql.Client
 
 var rediss map[string]*redis.Client
+
+var emails map[string]*email.Client
 
 func initlocalsource() {
 	data, e := os.ReadFile("./SourceConfig.json")
@@ -564,9 +567,6 @@ func initredis(){
 		if redisc.MaxConnIdletime <= 0 {
 			redisc.MaxConnIdletime = ctime.Duration(time.Minute * 5)
 		}
-		if redisc.IOTimeout <= 0 {
-			redisc.IOTimeout = ctime.Duration(time.Millisecond * 500)
-		}
 		if redisc.DialTimeout <= 0 {
 			redisc.DialTimeout = ctime.Duration(time.Millisecond * 250)
 		}
@@ -627,9 +627,6 @@ func initmongo(){
 		if mongoc.MaxConnIdletime <= 0 {
 			mongoc.MaxConnIdletime = ctime.Duration(time.Minute * 5)
 		}
-		if mongoc.IOTimeout <= 0 {
-			mongoc.IOTimeout = ctime.Duration(time.Millisecond * 500)
-		}
 		if mongoc.DialTimeout <= 0 {
 			mongoc.DialTimeout = ctime.Duration(time.Millisecond * 250)
 		}
@@ -686,9 +683,6 @@ func initmysql(){
 		if mysqlc.MaxConnIdletime <= 0 {
 			mysqlc.MaxConnIdletime = ctime.Duration(time.Minute * 5)
 		}
-		if mysqlc.IOTimeout <= 0 {
-			mysqlc.IOTimeout = ctime.Duration(time.Millisecond * 500)
-		}
 		if mysqlc.DialTimeout <= 0 {
 			mysqlc.DialTimeout = ctime.Duration(time.Millisecond * 250)
 		}
@@ -731,6 +725,39 @@ func initmysql(){
 			}
 			lker.Lock()
 			mysqls[mysqlc.MysqlName] = c
+			lker.Unlock()
+		}()
+	}
+	wg.Wait()
+}
+func initemail() {
+	for k, emailc := range sc.Email {
+		if k == "example_email" {
+			continue
+		}
+		emailc.EmailName = k
+		if emailc.Port == 0 {
+			emailc.Port = 587
+		}
+	}
+	emails = make(map[string]*email.Client, len(sc.Email))
+	lker := sync.Mutex{}
+	wg := sync.WaitGroup{}
+	for k, v := range sc.Email {
+		if k == "example_email" {
+			continue
+		}
+		emailc := v
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c, e := email.NewEmail(emailc)
+			if e != nil {
+				slog.ErrorContext(nil, "[config.initemail] failed", slog.String("email", emailc.EmailName), slog.String("error", e.Error()))
+				os.Exit(1)
+			}
+			lker.Lock()
+			emails[emailc.EmailName] = c
 			lker.Unlock()
 		}()
 	}
@@ -788,6 +815,12 @@ func GetMysql(mysqlname string) *mysql.Client {
 // return nil means not exist
 func GetRedis(redisname string) *redis.Client {
 	return rediss[redisname]
+}
+
+// GetEmail get a redis client by email's instance name
+// return nil means not exist
+func GetEmail(emailname string) *email.Client {
+	return emails[emailname]
 }`
 
 func CreatePathAndFile(packagename string) {
