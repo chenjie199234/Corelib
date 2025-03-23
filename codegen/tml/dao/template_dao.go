@@ -9,7 +9,6 @@ const txt = `package dao
 
 import (
 	"{{.}}/config"
-	// "{{.}}/model"
 
 	// admindiscover "github.com/chenjie199234/admin/sdk/discover"
 	// "github.com/chenjie199234/Corelib/discover"
