@@ -84,7 +84,7 @@ func (c *Context) GetResponse() http.ResponseWriter {
 	return c.w
 }
 func (c *Context) GetHost() string {
-	return c.r.URL.Host
+	return c.r.Host
 }
 func (c *Context) GetPath() string {
 	return c.r.URL.Path
