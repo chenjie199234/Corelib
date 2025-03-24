@@ -48,7 +48,6 @@ ADMIN_SERVICE_WEB_PORT                  当使用admin服务的远程配置中�
 ADMIN_SERVICE_CONFIG_ACCESS_KEY         当使用admin服务的远程配置中心功能时,admin服务的授权码
 ADMIN_SERVICE_DISCOVER_ACCESS_KEY       当使用admin服务的服务发现功能时,admin服务的授权码
 ADMIN_SERVICE_PERMISSION_ACCESS_KEY     当使用admin服务的权限控制功能时,admin服务的授权码
-
 $$$
 
 ## 配置文件
