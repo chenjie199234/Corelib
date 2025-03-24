@@ -81,6 +81,9 @@ func Decode(estr string) *Error {
 		return ErrCanceled
 	}
 	if estr[0] == '{' && estr[len(estr)-1] == '}' {
+		if len(estr) == 2 {
+			return nil
+		}
 		//json format
 		tmp := &Error{}
 		//protojson can support "number string" or "number" for field:code
@@ -88,28 +91,28 @@ func Decode(estr string) *Error {
 			return MakeCError(-1, 500, estr)
 		}
 		if tmp.Code == 0 {
-			return nil
+			tmp.Code = -1
+			tmp.Msg = estr
 		}
 		if tmp.Httpcode == 0 {
 			tmp.Httpcode = 500
 		}
 		return tmp
-	} else {
-		//text format
-		index := strings.Index(estr, ",")
-		if index == -1 {
-			return MakeCError(-1, 500, estr)
-		}
-		p1 := estr[:index]
-		p2 := estr[index+1:]
-		if !strings.HasPrefix(p1, "code=") || !strings.HasPrefix(p2, "msg=") {
-			return MakeCError(-1, 500, estr)
-		}
-		code, e := strconv.ParseInt(p1[5:], 10, 32)
-		if e != nil {
-			return MakeCError(-1, 500, estr)
-		}
-		msg := p2[4:]
-		return MakeCError(int32(code), 500, msg)
 	}
+	//text format
+	index := strings.Index(estr, ",")
+	if index == -1 {
+		return MakeCError(-1, 500, estr)
+	}
+	p1 := estr[:index]
+	p2 := estr[index+1:]
+	if !strings.HasPrefix(p1, "code=") || !strings.HasPrefix(p2, "msg=") {
+		return MakeCError(-1, 500, estr)
+	}
+	code, e := strconv.ParseInt(p1[5:], 10, 32)
+	if e != nil {
+		return MakeCError(-1, 500, estr)
+	}
+	msg := p2[4:]
+	return MakeCError(int32(code), 500, msg)
 }
