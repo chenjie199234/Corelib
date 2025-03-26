@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -47,6 +48,7 @@ type ServerConfig struct {
 	//client's Options request cache time,<=0 means ignore this setting(depend on the client's default)
 	CorsMaxAge ctime.Duration `json:"cors_max_age"`
 	//static source files(.html .js .css...)'s root path,empty means no static source file
+	//this path can't be the parent of the executable file's parent dir
 	SrcRootPath string `json:"src_root_path"`
 }
 
@@ -200,7 +202,7 @@ func NewWebServer(c *ServerConfig, tlsc *tls.Config) (*WebServer, error) {
 	return instance, nil
 }
 
-var ErrSrcRootNotDir = errors.New("[web.server] src root path not a dir")
+var ErrSrcPathWrong = errors.New("[web.server] src root path wrong")
 
 func (s *WebServer) NewRouter() (*Router, error) {
 	router := &Router{
@@ -213,6 +215,15 @@ func (s *WebServer) NewRouter() (*Router, error) {
 		deleteTree: trie.NewTrie[http.HandlerFunc](),
 	}
 	if s.c.SrcRootPath != "" {
+		p, _ := os.Executable()
+		p = filepath.Dir(p)
+		pp, e := filepath.Abs(s.c.SrcRootPath)
+		if e != nil {
+			return nil, ErrSrcPathWrong
+		}
+		if strings.Contains(p, pp) {
+			return nil, ErrSrcPathWrong
+		}
 		for {
 			info, e := os.Stat(s.c.SrcRootPath)
 			if e != nil {
@@ -226,7 +237,7 @@ func (s *WebServer) NewRouter() (*Router, error) {
 					return nil, e
 				}
 			} else if !info.IsDir() {
-				return nil, ErrSrcRootNotDir
+				return nil, ErrSrcPathWrong
 			}
 			break
 		}
