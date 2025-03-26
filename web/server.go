@@ -199,7 +199,10 @@ func NewWebServer(c *ServerConfig, tlsc *tls.Config) (*WebServer, error) {
 	<-instance.closetimer.C
 	return instance, nil
 }
-func (s *WebServer) NewRouter() *Router {
+
+var ErrSrcRootNotDir = errors.New("[web.server] src root path not a dir")
+
+func (s *WebServer) NewRouter() (*Router, error) {
 	router := &Router{
 		s:          s,
 		globalmids: make([]OutsideHandler, 0, 10),
@@ -210,9 +213,26 @@ func (s *WebServer) NewRouter() *Router {
 		deleteTree: trie.NewTrie[http.HandlerFunc](),
 	}
 	if s.c.SrcRootPath != "" {
+		for {
+			info, e := os.Stat(s.c.SrcRootPath)
+			if e != nil {
+				if !os.IsNotExist(e) {
+					return nil, e
+				}
+				if e = os.MkdirAll(s.c.SrcRootPath, 0755); e != nil {
+					if os.IsExist(e) {
+						continue
+					}
+					return nil, e
+				}
+			} else if !info.IsDir() {
+				return nil, ErrSrcRootNotDir
+			}
+			break
+		}
 		router.srcroot = os.DirFS(s.c.SrcRootPath)
 	}
-	return router
+	return router, nil
 }
 func (s *WebServer) SetRouter(r *Router) {
 	s.s.Handler = r

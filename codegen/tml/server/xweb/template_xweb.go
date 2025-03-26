@@ -50,7 +50,11 @@ func StartWebServer() {
 	UpdateHandlerTimeout(config.AC.HandlerTimeout)
 	UpdateWebPathRewrite(config.AC.WebPathRewrite)
 
-	r := server.NewRouter()
+	r, e := server.NewRouter()
+	if e != nil {
+		slog.ErrorContext(nil, "[xweb] new router failed", slog.String("error",e.Error()))
+		return
+	}
 
 	//this place can register global midwares
 	//r.Use(globalmidwares)
