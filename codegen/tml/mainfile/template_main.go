@@ -68,7 +68,7 @@ func main() {
 		slog.Error("[main] get the executable file path failed", slog.String("error", e.Error()))
 		return
 	}
-	if !strings.Contains(os.Args[0], "go-build") {
+	if !strings.Contains(p, "go-build") && !strings.Contains(p, os.Getenv("GOCACHE")) {
 		//not start from go run
 		p = filepath.Dir(p)
 		if e = os.Chdir(p); e != nil {
