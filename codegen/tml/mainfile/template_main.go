@@ -68,10 +68,13 @@ func main() {
 		slog.Error("[main] get the executable file path failed", slog.String("error", e.Error()))
 		return
 	}
-	p = filepath.Dir(p)
-	if e = os.Chdir(p); e != nil {
-		slog.Error("[main] change the current work dir to the executable file path failed", slog.String("error", e.Error()))
-		return
+	if !strings.Contains(os.Args[0], "go-build") {
+		//not start from go run
+		p = filepath.Dir(p)
+		if e = os.Chdir(p); e != nil {
+			slog.Error("[main] change the current work dir to the executable file path failed", slog.String("error", e.Error()))
+			return
+		}
 	}
 	slog.SetDefault(slog.New(&LogHandler{
 		slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
