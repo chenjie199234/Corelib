@@ -155,7 +155,7 @@ func (c *ServerStreamClientContext[resptype]) Recv() (*resptype, error) {
 			return nil, e
 		}
 	case Encoder_Json:
-		if e := protojson.Unmarshal(data, m); e != nil {
+		if e := (protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}).Unmarshal(data, m); e != nil {
 			slog.ErrorContext(c.Context, "["+c.cctx.GetPath()+"] response decode failed", slog.String("error", e.Error()))
 			return nil, e
 		}
@@ -239,7 +239,7 @@ func (c *AllStreamClientContext[reqtype, resptype]) Recv() (*resptype, error) {
 			return nil, e
 		}
 	case Encoder_Json:
-		if e := protojson.Unmarshal(data, m); e != nil {
+		if e := (protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}).Unmarshal(data, m); e != nil {
 			slog.ErrorContext(c.Context, "["+c.cctx.GetPath()+"] response decode failed", slog.String("error", e.Error()))
 			return nil, e
 		}
