@@ -3,10 +3,10 @@ module github.com/chenjie199234/Corelib
 go 1.24.1
 
 require (
-	github.com/go-sql-driver/mysql v1.9.0
+	github.com/go-sql-driver/mysql v1.9.1
 	github.com/prometheus/client_golang v1.21.1
-	github.com/prometheus/common v0.62.0
-	github.com/redis/go-redis/v9 v9.7.1
+	github.com/prometheus/common v0.63.0
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/shirou/gopsutil/v4 v4.25.2
 	go.mongodb.org/mongo-driver/v2 v2.1.0
 	go.opentelemetry.io/otel v1.35.0
@@ -22,7 +22,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
 	google.golang.org/grpc v1.71.0
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/protobuf v1.36.6
 	k8s.io/api v0.32.3
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.3
