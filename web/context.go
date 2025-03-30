@@ -190,16 +190,15 @@ func (c *Context) GetBody() ([]byte, error) {
 	if c.body != nil || c.bodyerr != nil {
 		return c.body, c.bodyerr
 	}
-	b := bpool.Get(int(c.GetContentLength()))
+	b := bpool.Get(int(c.GetContentLength()) + 1)
 	for {
 		n, e := c.r.Body.Read(b[len(b):cap(b)])
 		b = b[:len(b)+n]
-		if e != nil && e == io.EOF {
-			break
-		}
 		if e != nil {
-			c.bodyerr = e
-			bpool.Put(&b)
+			if e != io.EOF {
+				c.bodyerr = e
+				bpool.Put(&b)
+			}
 			break
 		}
 		if len(b) == cap(b) {
