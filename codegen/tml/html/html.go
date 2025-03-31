@@ -13,7 +13,8 @@ const git = `*
 !/src/
 !/src/*
 !/src/**/
-!/src/**/*`
+!/src/**/*
+!vite.config.ts`
 
 const index = `<!DOCTYPE html>
 <html lang="en">
@@ -85,7 +86,7 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
 })`
 
-const main = `document.querySelector<HTMLDivElement>('#app')!.innerHTML="hello world"`
+const js = `document.querySelector<HTMLDivElement>('#app')!.innerHTML="hello world"`
 
 func CreatePathAndFile(projectname string) {
 	var e error
@@ -170,18 +171,18 @@ func CreatePathAndFile(projectname string) {
 	if e := vitecfile.Close(); e != nil {
 		panic("close ./html/vite.config.ts error: " + e.Error())
 	}
-	//./html/src/main.ts
-	mainfile, e := os.OpenFile("./html/src/main.ts", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	//./html/src/index.ts
+	jsfile, e := os.OpenFile("./html/src/index.ts", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		panic("open ./html/src/main.ts error: " + e.Error())
+		panic("open ./html/src/index.ts error: " + e.Error())
 	}
-	if _, e := mainfile.WriteString(main); e != nil {
-		panic("write ./html/src/main.ts error: " + e.Error())
+	if _, e := jsfile.WriteString(js); e != nil {
+		panic("write ./html/src/index.ts error: " + e.Error())
 	}
-	if e := mainfile.Sync(); e != nil {
-		panic("sync ./html/src/main.ts error: " + e.Error())
+	if e := jsfile.Sync(); e != nil {
+		panic("sync ./html/src/index.ts error: " + e.Error())
 	}
-	if e := mainfile.Close(); e != nil {
-		panic("close ./html/src/main.ts error: " + e.Error())
+	if e := jsfile.Close(); e != nil {
+		panic("close ./html/src/index.ts error: " + e.Error())
 	}
 }
