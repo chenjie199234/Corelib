@@ -100,22 +100,18 @@ func main() {
 		return
 	}
 	defer cotel.Stop()
-	first := true
 	config.Init(func(ac *config.AppConfig) {
 		//this is a notice callback every time appconfig changes
 		//this function works in sync mode
 		//don't write block logic inside this
-		if !first {
-			dao.UpdateAppConfig(ac)
-			xcrpc.UpdateHandlerTimeout(ac.HandlerTimeout)
-			xgrpc.UpdateHandlerTimeout(ac.HandlerTimeout)
-			xweb.UpdateHandlerTimeout(ac.HandlerTimeout)
-			xweb.UpdateWebPathRewrite(ac.WebPathRewrite)
-			publicmids.UpdateRateConfig(ac.HandlerRate)
-			publicmids.UpdateTokenConfig(ac.TokenSecret)
-			publicmids.UpdateAccessConfig(ac.Accesses)
-		}
-		first = false
+		dao.UpdateAppConfig(ac)
+		xcrpc.UpdateHandlerTimeout(ac.HandlerTimeout)
+		xgrpc.UpdateHandlerTimeout(ac.HandlerTimeout)
+		xweb.UpdateHandlerTimeout(ac.HandlerTimeout)
+		xweb.UpdateWebPathRewrite(ac.WebPathRewrite)
+		publicmids.UpdateRateConfig(ac.HandlerRate)
+		publicmids.UpdateTokenConfig(ac.TokenSecret)
+		publicmids.UpdateAccessConfig(ac.Accesses)
 	})
 	if rateredis := config.GetRedis("rate_redis"); rateredis != nil {
 		publicmids.UpdateRateRedisInstance(rateredis)

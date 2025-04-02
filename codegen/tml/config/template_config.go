@@ -144,9 +144,6 @@ func initlocalapp(notice func(*AppConfig)) {
 	}
 	validateAppConfig(AC)
 	slog.InfoContext(nil, "[config.local.app] update success", slog.Any("config", AC))
-	if notice != nil {
-		notice(AC)
-	}
 	watcher, e = fsnotify.NewWatcher()
 	if e != nil {
 		slog.ErrorContext(nil, "[config.local.app] create watcher for hot update failed", slog.String("error",e.Error()))
@@ -204,11 +201,12 @@ func initremoteapp(notice func(*AppConfig), wait chan *struct{}) (stopwatch func
 			return
 		}
 		validateAppConfig(c)
-		AC = c
-		slog.InfoContext(nil, "[config.remote.app] update success", slog.Any("config", AC))
-		if notice != nil {
-			notice(AC)
+		slog.InfoContext(nil, "[config.remote.app] update success", slog.Any("config", c))
+		if notice != nil && AC != nil {
+			//this is a update
+			notice(c)
 		}
+		AC = c
 		select {
 		case wait <- nil:
 		default:
