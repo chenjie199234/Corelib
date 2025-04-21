@@ -72,16 +72,15 @@ func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 	var gmysqlc *gmysql.Config
 	gmysqlc = gmysql.NewConfig()
 	gmysqlc.Net = "tcp"
+	defaultcharset := "utf8mb4"
+	defaultcollation := "utf8mb4_unicode_ci"
 	if c.Charset != "" {
-		gmysqlc.Params = map[string]string{"charset": c.Charset}
-	} else {
-		gmysqlc.Params = map[string]string{"charset": "utf8mb4"}
+		defaultcharset = c.Charset
 	}
 	if c.Collation != "" {
-		gmysqlc.Collation = c.Collation
-	} else {
-		gmysqlc.Collation = "utf8mb4_unicode_ci"
+		defaultcollation = c.Collation
 	}
+	gmysqlc.Apply(gmysql.Charset(defaultcharset, defaultcollation))
 	gmysqlc.TLS = tlsc
 	if c.DialTimeout <= 0 {
 		gmysqlc.Timeout = time.Second * 5
