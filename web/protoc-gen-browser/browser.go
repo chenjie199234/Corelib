@@ -891,9 +891,9 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 						g.P("\t\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
 						g.P("\t\t\t\t\tlet rawstr=''")
 						g.P("\t\t\t\t\tthis.", f.Oneof.Desc.Name(), ".value.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
-						g.P("\t\t\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
+						g.P("\t\t\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+encodeURIComponent(window.btoa(rawstr))")
 					} else {
-						g.P("\t\t\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+this.", f.Oneof.Desc.Name(), ".value")
+						g.P("\t\t\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+encodeURIComponent(this.", f.Oneof.Desc.Name(), ".value)")
 					}
 					g.P("\t\t\t\t\tquery.push(tmp)")
 					g.P("\t\t\t\t\tbreak")
@@ -911,9 +911,9 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 					g.P("\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
 					g.P("\t\t\t\tlet rawstr=''")
 					g.P("\t\t\t\tvalue.forEach((element)=>{rawstr+=String.fromCharCode(element)})")
-					g.P("\t\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
+					g.P("\t\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+encodeURIComponent(window.btoa(rawstr))")
 				} else {
-					g.P("\t\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+value")
+					g.P("\t\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+encodeURIComponent(value)")
 				}
 				g.P("\t\t\t\tquery.push(tmp)")
 				g.P("\t\t\t}")
@@ -925,15 +925,15 @@ func genMessage(m *protogen.Message, g *protogen.GeneratedFile, gentojson, gento
 					g.P("\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
 					g.P("\t\t\tlet rawstr=''")
 					g.P("\t\t\tthis.", f.Desc.Name(), ".forEach((element)=>{rawstr+=String.fromCharCode(element)})")
-					g.P("\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+window.btoa(rawstr)")
+					g.P("\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+encodeURIComponent(window.btoa(rawstr))")
 				} else {
-					g.P("\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+this.", f.Desc.Name())
+					g.P("\t\t\tlet tmp=", strconv.Quote(string(f.Desc.Name())+"="), "+encodeURIComponent(this.", f.Desc.Name()+")")
 				}
 				g.P("\t\t\tquery.push(tmp)")
 				g.P("\t\t}")
 			}
 		}
-		g.P("\t\treturn encodeURIComponent(query.join('&'))")
+		g.P("\t\treturn query.join('&')")
 		g.P("\t}")
 	}
 	g.P("}")
