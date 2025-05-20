@@ -33,13 +33,13 @@ type Service struct {
 }
 
 // Start -
-func Start() *Service {
+func Start() (*Service, error) {
 	return &Service{
 		stop: graceful.New(),
 
 		//statusDao: statusdao.NewDao(config.GetMysql("status_mysql"), config.GetRedis("status_redis"), config.GetMongo("status_mongo")),
 		statusDao: statusdao.NewDao(nil, nil, nil),
-	}
+	}, nil
 }
 
 // Ping -

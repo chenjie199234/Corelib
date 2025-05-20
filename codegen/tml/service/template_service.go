@@ -21,12 +21,17 @@ var SvcRaw *raw.Service
 
 // StartService start the whole service
 func StartService() error {
-	if e := dao.NewApi(); e != nil {
+	var e error
+	if e = dao.NewApi(); e != nil {
 		return e
 	}
 	//start sub service
-	SvcStatus = status.Start()
-	SvcRaw = raw.Start()
+	if SvcStatus, e = status.Start(); e != nil {
+		return e
+	}
+	if SvcRaw, e = raw.Start(); e != nil {
+		return e
+	}
 	return nil
 }
 

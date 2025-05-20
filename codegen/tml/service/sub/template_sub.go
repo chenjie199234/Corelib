@@ -30,12 +30,12 @@ type Service struct {
 }
 
 // Start -
-func Start() *Service {
+func Start() (*Service, error) {
 	return &Service{
 		stop: graceful.New(),
 
 		{{.Sname}}Dao: {{.Sname}}dao.NewDao(config.GetMysql("{{.Sname}}_mysql"), config.GetRedis("{{.Sname}}_redis"), config.GetMongo("{{.Sname}}_mongo")),
-	}
+	}, nil
 }
 
 // Stop -

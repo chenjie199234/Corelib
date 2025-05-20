@@ -17,9 +17,9 @@ require (
 	github.com/chenjie199234/Corelib %s
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-sql-driver/mysql v1.9.2
-	github.com/redis/go-redis/v9 v9.7.3
-	go.mongodb.org/mongo-driver/v2 v2.2.0
-	google.golang.org/grpc v1.72.0
+	github.com/redis/go-redis/v9 v9.8.0
+	go.mongodb.org/mongo-driver/v2 v2.2.1
+	google.golang.org/grpc v1.72.1
 	google.golang.org/protobuf v1.36.6
 )`
 

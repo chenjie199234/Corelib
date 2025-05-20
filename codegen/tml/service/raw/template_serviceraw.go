@@ -31,13 +31,13 @@ type Service struct {
 }
 
 // Start -
-func Start() *Service {
+func Start() (*Service, error) {
 	return &Service{
 		stop: graceful.New(),
 
 		//rawDao: rawdao.NewDao(config.GetMysql("raw_mysql"), config.GetRedis("raw_redis"), config.GetMongo("raw_mongo")),
 		rawDao: rawdao.NewDao(nil, nil, nil),
-	}
+	}, nil
 }
 
 func (s *Service) SetStreamInstance(instance *stream.Instance) {

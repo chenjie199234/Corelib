@@ -220,6 +220,7 @@ func (f *RotateFile) Write(data []byte) (int, error) {
 		return 0, fmt.Errorf("[rotatefile.Write] rotate file closed")
 	}
 	buf := bpool.Get(len(data))
+	buf = buf[:len(data)]
 	copy(buf, data)
 	f.caslist.Push(buf)
 	select {
