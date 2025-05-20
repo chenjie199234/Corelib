@@ -1,6 +1,6 @@
 module github.com/chenjie199234/Corelib
 
-go 1.24.1
+go 1.24.3
 
 require (
 	github.com/go-sql-driver/mysql v1.9.2
