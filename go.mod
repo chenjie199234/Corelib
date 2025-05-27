@@ -5,7 +5,6 @@ go 1.24.3
 require (
 	github.com/go-sql-driver/mysql v1.9.2
 	github.com/prometheus/client_golang v1.22.0
-	// github.com/prometheus/common v0.64.0
 	github.com/redis/go-redis/v9 v9.8.0
 	github.com/shirou/gopsutil/v4 v4.25.4
 	go.mongodb.org/mongo-driver/v2 v2.2.1
