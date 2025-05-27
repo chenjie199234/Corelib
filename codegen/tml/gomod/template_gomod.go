@@ -19,7 +19,7 @@ require (
 	github.com/go-sql-driver/mysql v1.9.2
 	github.com/redis/go-redis/v9 v9.8.0
 	go.mongodb.org/mongo-driver/v2 v2.2.1
-	google.golang.org/grpc v1.72.1
+	google.golang.org/grpc v1.72.2
 	google.golang.org/protobuf v1.36.6
 )`
 
