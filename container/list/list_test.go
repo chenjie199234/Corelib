@@ -11,7 +11,7 @@ func Test_List(T *testing.T) {
 	start := make(chan int)
 	go func() {
 		<-start
-		for i := 0; i < 10000; i++ {
+		for i := range 10000 {
 			l.Push(i)
 		}
 	}()

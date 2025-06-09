@@ -13,7 +13,7 @@ func Test_Id(t *testing.T) {
 	lker := new(sync.Mutex)
 	data = make(map[uint64]struct{}, 1000)
 	New(1)
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		go func(index int) {
 			for {
 				time.Sleep(time.Millisecond)
