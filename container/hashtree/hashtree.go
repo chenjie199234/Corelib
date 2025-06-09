@@ -73,7 +73,7 @@ func (h *hashtree[T]) ReCaculateSingle(index int) {
 func (h *hashtree[T]) ReCaculateMulti(indexes []int) {
 	sort.Ints(indexes)
 	//remove too small
-	for i := 0; i < len(indexes); i++ {
+	for i := range len(indexes) {
 		if indexes[i] >= 0 {
 			indexes = indexes[i:]
 			break
@@ -137,7 +137,7 @@ func (h *hashtree[T]) Caculate(index int) []byte {
 	} else {
 		piece = append(piece, h.nodes[index].data.Hstr)
 	}
-	for j := 0; j < h.width; j++ {
+	for j := range h.width {
 		if childstart+j >= len(h.nodes) {
 			break
 		}

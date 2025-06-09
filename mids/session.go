@@ -27,7 +27,7 @@ func UpdateSessionRedisInstance(c *redis.Client) {
 
 // return empty means make session failed
 // user should put the return data in web's Session header or metadata's Session field
-func MakeSession(ctx context.Context, userid, data string,expire time.Duration) string {
+func MakeSession(ctx context.Context, userid, data string, expire time.Duration) string {
 	redisclient := sessionredis
 	if redisclient == nil {
 		slog.ErrorContext(ctx, "[session.make] redis missing")

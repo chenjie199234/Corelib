@@ -6,14 +6,14 @@
 
 package heap
 
-//thread unsafe
+// thread unsafe
 type Heap[T any] struct {
 	direction func(a, b T) bool
 	datas     []T
 }
 
-//direction return a > b max heap
-//direction return a < b min heap
+// direction return a > b max heap
+// direction return a < b min heap
 func NewHeap[T any](direction func(a, b T) bool) *Heap[T] {
 	if direction == nil {
 		return nil
@@ -51,7 +51,7 @@ func (this *Heap[T]) Push(data T) {
 	}
 }
 
-//only get not delete,return false means this is an empty heap
+// only get not delete,return false means this is an empty heap
 func (this *Heap[T]) GetRoot() (data T, ok bool) {
 	if len(this.datas) > 0 {
 		return this.datas[0], true
@@ -59,7 +59,7 @@ func (this *Heap[T]) GetRoot() (data T, ok bool) {
 	return
 }
 
-//get and delete
+// get and delete
 func (this *Heap[T]) PopRoot() (data T, ok bool) {
 	if len(this.datas) == 0 {
 		return
