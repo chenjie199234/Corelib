@@ -16,10 +16,10 @@ require (
 	github.com/chenjie199234/admin main
 	github.com/chenjie199234/Corelib %s
 	github.com/fsnotify/fsnotify v1.9.0
-	github.com/go-sql-driver/mysql v1.9.2
-	github.com/redis/go-redis/v9 v9.10.0
+	github.com/go-sql-driver/mysql v1.9.3
+	github.com/redis/go-redis/v9 v9.11.0
 	go.mongodb.org/mongo-driver/v2 v2.2.2
-	google.golang.org/grpc v1.73.0
+	google.golang.org/grpc v1.74.2
 	google.golang.org/protobuf v1.36.6
 )`
 

@@ -280,6 +280,10 @@ func (b *corelibBalancer) Close() {
 	b.ww.Wake("CALL")
 }
 
+func (b *corelibBalancer) ExitIdle() {
+	// we always keep connection,there will not exist idle status,so we don't need this function
+}
+
 // OnOff - true,online
 // OnOff - false,offline
 func (b *corelibBalancer) rebuildpicker(serveraddr string, OnOff bool) {
