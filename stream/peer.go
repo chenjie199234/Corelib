@@ -73,9 +73,9 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	if now-p.lastactive.Load() > int64(heart) {
 		//heartbeat timeout
 		if p.peertype == _PEER_CLIENT {
-			slog.ErrorContext(nil, "[Stream.checkheart] heart timeout", slog.String("cip", p.c.RemoteAddr().String()))
+			slog.Error("[Stream.checkheart] heart timeout", slog.String("cip", p.c.RemoteAddr().String()))
 		} else {
-			slog.ErrorContext(nil, "[Stream.checkheart] heart timeout", slog.String("sip", p.c.RemoteAddr().String()))
+			slog.Error("[Stream.checkheart] heart timeout", slog.String("sip", p.c.RemoteAddr().String()))
 		}
 		p.c.Close()
 		return
@@ -83,9 +83,9 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	if now-p.sendidlestart.Load() > int64(sendidle) {
 		//send idle timeout
 		if p.peertype == _PEER_CLIENT {
-			slog.ErrorContext(nil, "[Stream.checkheart] send idle timeout", slog.String("cip", p.c.RemoteAddr().String()))
+			slog.Error("[Stream.checkheart] send idle timeout", slog.String("cip", p.c.RemoteAddr().String()))
 		} else {
-			slog.ErrorContext(nil, "[Stream.checkheart] send idle timeout", slog.String("sip", p.c.RemoteAddr().String()))
+			slog.Error("[Stream.checkheart] send idle timeout", slog.String("sip", p.c.RemoteAddr().String()))
 		}
 		p.c.Close()
 		return
@@ -93,9 +93,9 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	if recvidle > 0 && now-p.recvidlestart.Load() > int64(recvidle) {
 		//recv idle timeout
 		if p.peertype == _PEER_CLIENT {
-			slog.ErrorContext(nil, "[Stream.checkheart] recv idle timeout", slog.String("cip", p.c.RemoteAddr().String()))
+			slog.Error("[Stream.checkheart] recv idle timeout", slog.String("cip", p.c.RemoteAddr().String()))
 		} else {
-			slog.ErrorContext(nil, "[Stream.checkheart] recv idle timeout", slog.String("sip", p.c.RemoteAddr().String()))
+			slog.Error("[Stream.checkheart] recv idle timeout", slog.String("sip", p.c.RemoteAddr().String()))
 		}
 		p.c.Close()
 		return
@@ -108,9 +108,9 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 		binary.BigEndian.PutUint64(buf, uint64(now))
 		if e := ws.WritePing(p.c, buf, false); e != nil {
 			if p.peertype == _PEER_CLIENT {
-				slog.ErrorContext(nil, "[Stream.checkheart] write ping to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+				slog.Error("[Stream.checkheart] write ping to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 			} else {
-				slog.ErrorContext(nil, "[Stream.checkheart] write ping to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+				slog.Error("[Stream.checkheart] write ping to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 			}
 			p.c.Close()
 			return

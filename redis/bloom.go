@@ -131,7 +131,7 @@ func (c *Client) NewBloom(ctx context.Context, bloomname string, groupnum uint64
 	}
 	//init memory in redis
 	eg := egroup.GetGroup(ctx)
-	for i := uint64(0); i < groupnum; i++ {
+	for i := range groupnum {
 		index := i
 		eg.Go(func(gctx context.Context) error {
 			key := bloomname + "_" + strconv.FormatUint(index, 10)
@@ -217,7 +217,7 @@ func (c *Client) DelBloom(ctx context.Context, bloomname string, groupnum uint64
 		panic("[redis.bloom.del] bloom name or group num missing")
 	}
 	eg := egroup.GetGroup(ctx)
-	for i := uint64(0); i < groupnum; i++ {
+	for i := range groupnum {
 		index := i
 		eg.Go(func(gctx context.Context) error {
 			key := bloomname + "_" + strconv.FormatUint(index, 10)

@@ -165,7 +165,7 @@ func (d *DnsD) run() {
 	for {
 		select {
 		case <-d.ctx.Done():
-			slog.InfoContext(nil, "[discover.dns] discover stopped",
+			slog.Info("[discover.dns] discover stopped",
 				slog.String("target", d.target),
 				slog.String("host", d.host),
 				slog.Duration("interval", d.interval))
@@ -177,14 +177,14 @@ func (d *DnsD) run() {
 		d.status = 1
 		addrs, e := net.DefaultResolver.LookupHost(d.ctx, d.host)
 		if e != nil && cerror.Equal(errors.Unwrap(e), cerror.ErrCanceled) {
-			slog.InfoContext(nil, "[discover.dns] discover stopped", slog.String("target", d.target),
+			slog.Info("[discover.dns] discover stopped", slog.String("target", d.target),
 				slog.String("host", d.host),
 				slog.Duration("interval", d.interval))
 			d.lasterror = cerror.ErrDiscoverStopped
 			return
 		}
 		if e != nil {
-			slog.ErrorContext(nil, "[discover.dns] look up failed", slog.String("target", d.target),
+			slog.Error("[discover.dns] look up failed", slog.String("target", d.target),
 				slog.String("host", d.host),
 				slog.Duration("interval", d.interval),
 				slog.String("error", e.Error()))

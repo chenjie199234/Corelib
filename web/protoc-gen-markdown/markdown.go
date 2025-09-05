@@ -1180,7 +1180,6 @@ func jsondoc(g *protogen.GeneratedFile, m *protogen.Message, nest, skipoptions b
 	for _, k := range keys {
 		jsondoc(g, newmessage[k], true, skipoptions, checked)
 	}
-	return
 }
 func formdoc(g *protogen.GeneratedFile, m *protogen.Message) {
 	g.P("------------------------------------------------------------------------------------------------------------")

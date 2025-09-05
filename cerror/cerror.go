@@ -60,9 +60,10 @@ func Convert(e error) *Error {
 	if e == nil {
 		return nil
 	}
-	if e == context.DeadlineExceeded {
+	switch e {
+	case context.DeadlineExceeded:
 		return ErrDeadlineExceeded
-	} else if e == context.Canceled {
+	case context.Canceled:
 		return ErrCanceled
 	}
 	result, ok := e.(*Error)

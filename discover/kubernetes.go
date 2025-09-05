@@ -189,7 +189,7 @@ func (d *KubernetesD) list() {
 		pods, e := kubeclient.CoreV1().Pods(d.namespace).List(d.ctx, metav1.ListOptions{LabelSelector: d.labelselector, FieldSelector: d.fieldselector})
 		if e != nil {
 			if cerror.Equal(e, cerror.ErrCanceled) {
-				slog.InfoContext(nil, "[discover.kubernetes] discover stopped",
+				slog.Info("[discover.kubernetes] discover stopped",
 					slog.String("target", d.target),
 					slog.String("namespace", d.namespace),
 					slog.String("labelselector", d.labelselector),
@@ -197,7 +197,7 @@ func (d *KubernetesD) list() {
 				d.lasterror = cerror.ErrDiscoverStopped
 				return
 			}
-			slog.ErrorContext(nil, "[discover.kubernetes] list failed",
+			slog.Error("[discover.kubernetes] list failed",
 				slog.String("target", d.target),
 				slog.String("namespace", d.namespace),
 				slog.String("labelselector", d.labelselector),
@@ -247,7 +247,6 @@ func (d *KubernetesD) list() {
 		d.lker.Unlock()
 		break
 	}
-	return
 }
 func (d *KubernetesD) watch() {
 	var e error
@@ -265,7 +264,7 @@ func (d *KubernetesD) watch() {
 		}
 		if d.watcher, e = kubeclient.CoreV1().Pods(d.namespace).Watch(d.ctx, opts); e != nil {
 			if cerror.Equal(e, cerror.ErrCanceled) {
-				slog.InfoContext(nil, "[discover.kubernetes] discover stopped",
+				slog.Info("[discover.kubernetes] discover stopped",
 					slog.String("target", d.target),
 					slog.String("namespace", d.namespace),
 					slog.String("labelselector", d.labelselector),
@@ -273,7 +272,7 @@ func (d *KubernetesD) watch() {
 				d.lasterror = cerror.ErrDiscoverStopped
 				return
 			}
-			slog.ErrorContext(nil, "[discover.kubernetes] watch failed",
+			slog.Error("[discover.kubernetes] watch failed",
 				slog.String("target", d.target),
 				slog.String("namespace", d.namespace),
 				slog.String("labelselector", d.labelselector),
@@ -297,7 +296,7 @@ func (d *KubernetesD) watch() {
 			var ok bool
 			select {
 			case <-d.ctx.Done():
-				slog.InfoContext(nil, "[discover.kubernetes] discover stopped",
+				slog.Info("[discover.kubernetes] discover stopped",
 					slog.String("target", d.target),
 					slog.String("namespace", d.namespace),
 					slog.String("labelselector", d.labelselector),
@@ -308,7 +307,7 @@ func (d *KubernetesD) watch() {
 				if !ok {
 					select {
 					case <-d.ctx.Done():
-						slog.InfoContext(nil, "[discover.kubernetes] discover stopped",
+						slog.Info("[discover.kubernetes] discover stopped",
 							slog.String("target", d.target),
 							slog.String("namespace", d.namespace),
 							slog.String("labelselector", d.labelselector),
@@ -377,7 +376,7 @@ func (d *KubernetesD) watch() {
 			case watch.Error:
 				failed = true
 				e = apierrors.FromObject(event.Object)
-				slog.ErrorContext(nil, "[discover.kubernetes] watch failed",
+				slog.Error("[discover.kubernetes] watch failed",
 					slog.String("target", d.target),
 					slog.String("namespace", d.namespace),
 					slog.String("labelselector", d.labelselector),
@@ -397,7 +396,6 @@ func (d *KubernetesD) watch() {
 				} else {
 					retrayDealy = 0
 				}
-				break
 			}
 			if failed {
 				break

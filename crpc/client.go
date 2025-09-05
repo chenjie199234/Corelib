@@ -166,7 +166,7 @@ func (c *CrpcClient) onlinefunc(ctx context.Context, p *stream.Peer) bool {
 	server.setpeer(p)
 	server.closing.Store(false)
 	c.balancer.RebuildPicker(server.addr, true)
-	slog.InfoContext(nil, "[crpc.client] online", slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
+	slog.Info("[crpc.client] online", slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
 	return true
 }
 
@@ -175,7 +175,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
-		slog.ErrorContext(nil, "[crpc.client] userdata format wrong", slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
+		slog.Error("[crpc.client] userdata format wrong", slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
 		return
 	}
 	switch msg.H.Type {
@@ -219,7 +219,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 
 func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
-	slog.InfoContext(nil, "[crpc.client] offline", slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
+	slog.Info("[crpc.client] offline", slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
 	server.setpeer(nil)
 	c.balancer.RebuildPicker(server.addr, false)
 	server.cleanrw()

@@ -40,20 +40,14 @@ func NewSuper() *Super {
 		defer func() {
 			instance.closech <- struct{}{}
 		}()
-		for {
-			select {
-			case fullappname, ok := <-instance.notice:
-				if !ok {
-					return
-				}
-				instance.lker.Lock()
-				delete(instance.apps, fullappname)
-				if instance.status == s_CLOSING && len(instance.apps) == 0 {
-					instance.lker.Unlock()
-					return
-				}
+		for fullappname := range instance.notice {
+			instance.lker.Lock()
+			delete(instance.apps, fullappname)
+			if instance.status == s_CLOSING && len(instance.apps) == 0 {
 				instance.lker.Unlock()
+				return
 			}
+			instance.lker.Unlock()
 		}
 	}()
 	return instance
@@ -74,7 +68,6 @@ func (s *Super) CloseSuper() {
 	}
 	s.lker.Unlock()
 	<-s.closech
-	return
 }
 func dirop(path string) error {
 	finfo, e := os.Lstat(path)

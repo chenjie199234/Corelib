@@ -333,7 +333,7 @@ func (r *Router) notFoundHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusNotFound)
 	w.Write(common.STB(cerror.ErrNotExist.Error()))
-	slog.ErrorContext(nil, "[web.server] path not exist",
+	slog.Error("[web.server] path not exist",
 		slog.String("cip", realip(req)),
 		slog.String("path", req.URL.Path),
 		slog.String("method", req.Method))
@@ -347,7 +347,7 @@ func (r *Router) srcFileHandler(resp http.ResponseWriter, req *http.Request) {
 		resp.Header().Set("Content-Type", "application/json")
 		resp.WriteHeader(int(cerror.ErrSystem.Httpcode))
 		resp.Write(common.STB(cerror.ErrSystem.Json()))
-		slog.ErrorContext(nil, "[web.server] open static src file failed",
+		slog.Error("[web.server] open static src file failed",
 			slog.String("cip", realip(req)),
 			slog.String("path", req.URL.Path),
 			slog.String("method", req.Method),
@@ -356,7 +356,7 @@ func (r *Router) srcFileHandler(resp http.ResponseWriter, req *http.Request) {
 		resp.Header().Set("Content-Type", "application/json")
 		resp.WriteHeader(int(cerror.ErrSystem.Httpcode))
 		resp.Write(common.STB(cerror.ErrSystem.Json()))
-		slog.ErrorContext(nil, "[web.server] get static src file info failed",
+		slog.Error("[web.server] get static src file info failed",
 			slog.String("cip", realip(req)),
 			slog.String("path", req.URL.Path),
 			slog.String("method", req.Method),
@@ -366,7 +366,7 @@ func (r *Router) srcFileHandler(resp http.ResponseWriter, req *http.Request) {
 		resp.Header().Set("Content-Type", "application/json")
 		resp.WriteHeader(int(cerror.ErrNotExist.Httpcode))
 		resp.Write(common.STB(cerror.ErrNotExist.Json()))
-		slog.ErrorContext(nil, "[web.server] static src file not exist",
+		slog.Error("[web.server] static src file not exist",
 			slog.String("cip", realip(req)),
 			slog.String("path", req.URL.Path),
 			slog.String("method", req.Method))
@@ -411,7 +411,7 @@ func (r *Router) corsOptions(resp http.ResponseWriter, req *http.Request) {
 	}
 	if resp.Header().Get("Access-Control-Allow-Origin") == "" {
 		resp.WriteHeader(http.StatusForbidden)
-		slog.ErrorContext(nil, "[web.server] cors check failed",
+		slog.Error("[web.server] cors check failed",
 			slog.String("cip", realip(req)),
 			slog.String("path", req.URL.Path),
 			slog.String("method", req.Method))
@@ -432,7 +432,6 @@ func (r *Router) corsOptions(resp http.ResponseWriter, req *http.Request) {
 		resp.Header().Set("Access-Control-Max-Age", strconv.Itoa(int(r.s.c.CorsMaxAge.StdDuration().Seconds())))
 	}
 	resp.WriteHeader(http.StatusNoContent)
-	return
 }
 func (r *Router) corsNormal(resp http.ResponseWriter, req *http.Request) bool {
 	origin := strings.TrimSpace(req.Header.Get("Origin"))
@@ -470,7 +469,7 @@ func (r *Router) corsNormal(resp http.ResponseWriter, req *http.Request) bool {
 		resp.Header().Set("Content-Type", "application/json")
 		resp.WriteHeader(int(cerror.ErrCors.Httpcode))
 		resp.Write(common.STB(cerror.ErrCors.Json()))
-		slog.ErrorContext(nil, "[web.server] cors check failed",
+		slog.Error("[web.server] cors check failed",
 			slog.String("cip", realip(req)),
 			slog.String("path", req.URL.Path),
 			slog.String("method", req.Method))

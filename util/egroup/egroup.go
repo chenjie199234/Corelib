@@ -50,9 +50,7 @@ func (g *Group) Go(f func(context.Context) error) error {
 	if g.init != 1 {
 		return errors.New("[egroup] group must be created by GetGroup and didn't call PutGroup before use it")
 	}
-	g.wg.Add(1)
-	go func() {
-		defer g.wg.Done()
+	g.wg.Go(func() {
 		e := f(g.ctx)
 		if e != nil {
 			if atomic.SwapInt32(&g.done, 1) == 0 {
@@ -62,6 +60,6 @@ func (g *Group) Go(f func(context.Context) error) error {
 				}
 			}
 		}
-	}()
+	})
 	return nil
 }

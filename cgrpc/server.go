@@ -113,7 +113,7 @@ func NewCGrpcServer(c *ServerConfig, tlsc *tls.Config) (*CGrpcServer, error) {
 		ctx := stream.Context()
 		rpcinfo := ctx.Value(serverrpckey{}).(*stats.RPCTagInfo)
 		peerip := ctx.Value(serverconnkey{}).(string)
-		slog.ErrorContext(nil, "[cgrpc.server] path doesn't exist", slog.String("cip", peerip), slog.String("path", rpcinfo.FullMethodName))
+		slog.Error("[cgrpc.server] path doesn't exist", slog.String("cip", peerip), slog.String("path", rpcinfo.FullMethodName))
 		return cerror.ErrNoapi
 	}))
 	opts = append(opts, grpc.ConnectionTimeout(c.ConnectTimeout.StdDuration()))
@@ -505,9 +505,9 @@ func (s *sStatsHandler) HandleConn(ctx context.Context, stat stats.ConnStats) {
 	switch stat.(type) {
 	case *stats.ConnBegin:
 		s.clientnum.Add(1)
-		slog.InfoContext(nil, "[cgrpc.server] online", slog.String("cip", peerip))
+		slog.Info("[cgrpc.server] online", slog.String("cip", peerip))
 	case *stats.ConnEnd:
 		s.clientnum.Add(-1)
-		slog.InfoContext(nil, "[cgrpc.server] offline", slog.String("cip", peerip))
+		slog.Info("[cgrpc.server] offline", slog.String("cip", peerip))
 	}
 }

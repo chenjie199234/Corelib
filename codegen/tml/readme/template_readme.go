@@ -57,7 +57,7 @@ SourceConfig.json该文件配置了该服务需要使用的资源配置,不热�
 $$$`
 
 func CreatePathAndFile(projectname string) {
-	readmetemplate, e := template.New("./README.md").Parse(strings.Replace(txt, "$", "`", -1))
+	readmetemplate, e := template.New("./README.md").Parse(strings.ReplaceAll(txt, "$", "`"))
 	if e != nil {
 		panic("parse ./README.md template error: " + e.Error())
 	}

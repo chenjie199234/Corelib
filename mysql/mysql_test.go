@@ -39,5 +39,4 @@ func Test_Mysql(t *testing.T) {
 		t.Fatal(e)
 		return
 	}
-	return
 }

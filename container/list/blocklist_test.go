@@ -1,6 +1,7 @@
 package list
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -20,7 +21,7 @@ func Test_BlockList(t *testing.T) {
 		}
 	}()
 	for {
-		data, e := l.Pop(nil)
+		data, e := l.Pop(context.Background())
 		if e != nil {
 			break
 		}

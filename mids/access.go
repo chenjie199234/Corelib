@@ -101,7 +101,7 @@ func UpdateAccessConfig(c MultiPathAccessConfigs) {
 }
 func UpdateReplayDefendRedisInstance(c *redis.Client) {
 	if c == nil {
-		slog.WarnContext(nil, "[access.sign] redis missing,replay attack may happened")
+		slog.Warn("[access.sign] redis missing,replay attack may happened")
 	}
 	oldp := (*redis.Client)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&accessInstance.c)), unsafe.Pointer(c)))
 	if oldp != nil {

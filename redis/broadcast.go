@@ -26,7 +26,7 @@ func (c *Client) SubBroadcast(broadcast string, shard uint8, handler BroadcastHa
 		panic("[redis.broadcast.sub] broadcast name or shard num missing")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	for i := uint8(0); i < shard; i++ {
+	for i := range shard {
 		stream := "broadcast_" + broadcast + "_" + strconv.Itoa(int(i))
 		go func() {
 			id := "$"
@@ -82,15 +82,13 @@ func (c *Client) DelBroadcast(ctx context.Context, broadcast string, shard uint8
 		panic("[redis.broadcast.del] broadcast name or shard num missing")
 	}
 	wg := sync.WaitGroup{}
-	for i := uint8(0); i < shard; i++ {
+	for i := range shard {
 		stream := "broadcast_" + broadcast + "_" + strconv.Itoa(int(i))
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if _, err := c.Del(ctx, stream).Result(); err != nil {
 				e = err
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	return
@@ -103,15 +101,13 @@ func (c *Client) TrimBroadcast(ctx context.Context, broadcast string, shard uint
 		panic("[redis.broadcast.trim] broadcast name or shard num missing")
 	}
 	wg := sync.WaitGroup{}
-	for i := uint8(0); i < shard; i++ {
+	for i := range shard {
 		stream := "broadcast_" + broadcast + "_" + strconv.Itoa(int(i))
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if _, err := c.XTrimMinID(ctx, stream, strconv.FormatUint(timestamp*1000, 10)+"-0").Result(); err != nil {
 				e = err
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	return

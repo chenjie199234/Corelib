@@ -45,12 +45,12 @@ var firstwsclient int64
 var firstwsclientpeer *Peer
 
 func wsclienthandleonline(_ context.Context, p *Peer) bool {
-	if atomic.SwapInt64(&firsttcpclient, 1) == 0 {
-		firsttcpclientpeer = p
+	if atomic.SwapInt64(&firstwsclient, 1) == 0 {
+		firstwsclientpeer = p
 		go func() {
 			for {
 				time.Sleep(time.Second)
-				if e := p.SendMessage(nil, bytes.Repeat([]byte{'a'}, 1024000), nil, nil); e != nil {
+				if e := p.SendMessage(context.Background(), bytes.Repeat([]byte{'a'}, 1024000), nil, nil); e != nil {
 					fmt.Println(e)
 				}
 			}
@@ -59,10 +59,8 @@ func wsclienthandleonline(_ context.Context, p *Peer) bool {
 	return true
 }
 
-var firstwsclientpingpong int64
-
 func wsclientpingpong(p *Peer) {
-	if p == firsttcpclientpeer {
+	if p == firstwsclientpeer {
 		fmt.Println("ping pong:", p.GetNetlag())
 	}
 }

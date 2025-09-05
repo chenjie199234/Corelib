@@ -26,5 +26,4 @@ func Test_Mongo(t *testing.T) {
 		t.Fatal(e)
 		return
 	}
-	return
 }

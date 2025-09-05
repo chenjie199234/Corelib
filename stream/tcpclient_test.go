@@ -50,7 +50,7 @@ func tcpclienthandleonline(ctx context.Context, p *Peer) bool {
 		go func() {
 			for {
 				time.Sleep(time.Second)
-				if e := p.SendMessage(nil, bytes.Repeat([]byte{'a'}, 1024000), nil, nil); e != nil {
+				if e := p.SendMessage(context.Background(), bytes.Repeat([]byte{'a'}, 1024000), nil, nil); e != nil {
 					fmt.Println(e)
 				}
 			}
@@ -58,8 +58,6 @@ func tcpclienthandleonline(ctx context.Context, p *Peer) bool {
 	}
 	return true
 }
-
-var firsttcpclientpingpong int64
 
 func tcpclientpingpong(p *Peer) {
 	if p == firsttcpclientpeer {

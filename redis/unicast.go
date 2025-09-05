@@ -32,7 +32,7 @@ func (c *Client) SubUnicast(unicast string, shard uint8, handler UnicastHandler)
 		panic("[redis.unicast.sub] unicast name or shard num missing")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	for i := uint8(0); i < shard; i++ {
+	for i := range shard {
 		list := "unicast_" + unicast + "_" + strconv.Itoa(int(i))
 		go func() {
 			time.Sleep(time.Duration(rand.Int63n(time.Second.Nanoseconds() * 5)))

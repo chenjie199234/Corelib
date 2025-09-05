@@ -102,9 +102,7 @@ func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 	}
 	lker := &sync.Mutex{}
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		tmpc := gmysqlc.Clone()
 		tmpc.Addr = c.Master.Addr
 		if c.Master.UserName != "" {
@@ -123,13 +121,11 @@ func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 		lker.Lock()
 		client.master = append(client.master, &cdb{db: tmpdb, master: true, addr: c.Master.Addr, name: c.MysqlName})
 		lker.Unlock()
-	}()
+	})
 	if c.Slaves != nil && len(c.Slaves.Addrs) > 0 {
 		for _, v := range c.Slaves.Addrs {
 			addr := v
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				tmpc := gmysqlc.Clone()
 				tmpc.Addr = addr
 				if c.Slaves.UserName != "" {
@@ -148,27 +144,23 @@ func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 				lker.Lock()
 				client.slave = append(client.slave, &cdb{db: tmpdb, master: false, addr: addr, name: c.MysqlName})
 				lker.Unlock()
-			}()
+			})
 		}
 	}
 	wg.Wait()
 	if e != nil {
 		return nil, e
 	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := client.master.PingContext(nil); err != nil {
+	wg.Go(func() {
+		if err := client.master.PingContext(context.Background()); err != nil {
 			e = err
 		}
-	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := client.slave.PingContext(nil); err != nil {
+	})
+	wg.Go(func() {
+		if err := client.slave.PingContext(context.Background()); err != nil {
 			e = err
 		}
-	}()
+	})
 	wg.Wait()
 	return client, e
 }
@@ -185,20 +177,16 @@ func (c *Client) Slave() Operator {
 func (c *Client) PingContext(ctx context.Context) error {
 	var e error
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if err := c.master.PingContext(ctx); err != nil {
 			e = err
 		}
-	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	})
+	wg.Go(func() {
 		if err := c.slave.PingContext(ctx); err != nil {
 			e = err
 		}
-	}()
+	})
 	wg.Wait()
 	return e
 }

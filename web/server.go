@@ -187,9 +187,12 @@ func NewWebServer(c *ServerConfig, tlsc *tls.Config) (*WebServer, error) {
 		MaxHeaderBytes:    int(c.MaxRequestHeader),
 		Protocols:         p,
 		ConnState: func(c net.Conn, s http.ConnState) {
-			if s == http.StateNew {
+			switch s {
+			case http.StateNew:
 				atomic.AddInt32(&instance.clientnum, 1)
-			} else if s == http.StateHijacked || s == http.StateClosed {
+			case http.StateHijacked:
+				fallthrough
+			case http.StateClosed:
 				atomic.AddInt32(&instance.clientnum, -1)
 			}
 		},

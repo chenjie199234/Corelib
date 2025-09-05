@@ -107,16 +107,17 @@ func (s *ServerForPick) sendmessage(ctx context.Context, m *Msg) (e error) {
 	}
 	d, _ := proto.Marshal(m)
 	if e = p.SendMessage(ctx, d, nil, nil); e != nil {
-		if e == stream.ErrMsgLarge {
+		switch e {
+		case stream.ErrMsgLarge:
 			e = cerror.ErrReqmsgLen
-		} else if e == stream.ErrConnClosed {
+		case stream.ErrConnClosed:
 			e = cerror.ErrClosed
 			s.caspeer(p, nil)
-		} else if e == context.DeadlineExceeded {
+		case context.DeadlineExceeded:
 			e = cerror.ErrDeadlineExceeded
-		} else if e == context.Canceled {
+		case context.Canceled:
 			e = cerror.ErrCanceled
-		} else {
+		default:
 			//this is impossible
 			e = cerror.Convert(e)
 		}

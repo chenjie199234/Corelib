@@ -223,13 +223,11 @@ func (o Operator) PingContext(ctx context.Context) error {
 		wg := &sync.WaitGroup{}
 		for _, v := range o {
 			db := v
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				if err := db.PingContext(ctx); err != nil {
 					e = err
 				}
-			}()
+			})
 		}
 		wg.Wait()
 		return e
@@ -245,13 +243,11 @@ func (o Operator) Close() error {
 		wg := &sync.WaitGroup{}
 		for _, v := range o {
 			db := v
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				if err := db.Close(); err != nil {
 					e = err
 				}
-			}()
+			})
 		}
 		wg.Wait()
 		return e
@@ -608,13 +604,11 @@ func (s *Stmt) Close() error {
 		wg := &sync.WaitGroup{}
 		for _, v := range s.stmts {
 			stmt := v
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				if err := stmt.Close(); err != nil {
 					e = err
 				}
-			}()
+			})
 		}
 		wg.Wait()
 		return e
@@ -641,16 +635,14 @@ func (o Operator) PrepareContext(ctx context.Context, query string) (*Stmt, erro
 		for _, v := range o {
 			db := v
 			stmts[db] = nil
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				stmt, err := db.PrepareContext(ctx, query)
 				if err != nil {
 					e = err
 					return
 				}
 				stmts[db] = stmt
-			}()
+			})
 		}
 		wg.Wait()
 		if e != nil {

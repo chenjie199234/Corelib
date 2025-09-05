@@ -26,7 +26,7 @@ func New(sid uint64) {
 	if atomic.SwapInt64(&inited, 1) == 1 {
 		return
 	}
-	if sid < 0 || sid > 7 {
+	if sid > 7 {
 		panic("[ID.init]serviceid range wrong,only support [0-7]")
 	}
 	serverid = sid

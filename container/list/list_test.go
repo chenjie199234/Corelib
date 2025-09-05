@@ -78,14 +78,15 @@ func Test_List(T *testing.T) {
 				return d < *checkvalue
 			})
 			if e != nil {
-				if e == ErrPopEmpty {
+				switch e {
+				case ErrPopEmpty:
 					lker.RLock()
 					if len(exist) == 100000 {
 						lker.RUnlock()
 						return
 					}
 					lker.RUnlock()
-				} else if e == ErrPopCheckFailed {
+				case ErrPopCheckFailed:
 					*checkvalue = 100000
 				}
 			} else {
@@ -99,69 +100,51 @@ func Test_List(T *testing.T) {
 			}
 		}
 	}
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		checkvalue := 10000
 		<-start
 		f(&checkvalue)
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
+	})
+	wg.Go(func() {
 		checkvalue := 20000
 		<-start
 		f(&checkvalue)
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
+	})
+	wg.Go(func() {
 		checkvalue := 30000
 		<-start
 		f(&checkvalue)
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
+	})
+	wg.Go(func() {
 		checkvalue := 40000
 		<-start
 		f(&checkvalue)
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
+	})
+	wg.Go(func() {
 		checkvalue := 50000
 		<-start
 		f(&checkvalue)
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
+	})
+	wg.Go(func() {
 		checkvalue := 60000
 		<-start
 		f(&checkvalue)
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
+	})
+	wg.Go(func() {
 		checkvalue := 70000
 		<-start
 		f(&checkvalue)
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
+	})
+	wg.Go(func() {
 		checkvalue := 80000
 		<-start
 		f(&checkvalue)
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
+	})
+	wg.Go(func() {
 		checkvalue := 90000
 		<-start
 		f(&checkvalue)
-		wg.Done()
-	}()
+	})
 	time.Sleep(time.Millisecond)
 	close(start)
 	wg.Wait()

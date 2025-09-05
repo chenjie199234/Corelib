@@ -115,7 +115,6 @@ func (b *corelibBalancer) rebuildpicker() {
 	}
 	newpicker := picker.NewPicker(tmp)
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&b.picker)), unsafe.Pointer(newpicker))
-	return
 }
 func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 	forceaddr, _ := ctx.Value(forceaddrkey{}).(string)
@@ -140,11 +139,12 @@ func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 			return nil, cerror.ErrNoserver
 		}
 		if e := b.ww.Wait(ctx, "CALL", b.c.resolver.Now, nil); e != nil {
-			if e == context.DeadlineExceeded {
+			switch e {
+			case context.DeadlineExceeded:
 				return nil, cerror.ErrDeadlineExceeded
-			} else if e == context.Canceled {
+			case context.Canceled:
 				return nil, cerror.ErrCanceled
-			} else {
+			default:
 				//this is impossible
 				return nil, cerror.Convert(e)
 			}

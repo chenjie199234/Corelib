@@ -180,7 +180,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 					case connectivity.Shutdown:
 						if oldstatus == int32(connectivity.Ready) {
 							//offline
-							slog.InfoContext(nil, "[cgrpc.client] offline", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
+							slog.Info("[cgrpc.client] offline", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
 							go b.rebuildpicker(server.addr, false)
 						}
 						delete(b.servers, addr.Addr)
@@ -188,7 +188,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 					case connectivity.Idle:
 						if oldstatus == int32(connectivity.Ready) {
 							//offline
-							slog.InfoContext(nil, "[cgrpc.client] offline", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
+							slog.Info("[cgrpc.client] offline", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
 							go b.rebuildpicker(server.addr, false)
 						}
 						if len(server.dservers) == 0 {
@@ -203,13 +203,13 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 					case connectivity.Ready:
 						//online
 						server.closing.Store(false)
-						slog.InfoContext(nil, "[cgrpc.client] online", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
+						slog.Info("[cgrpc.client] online", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
 						go b.rebuildpicker(server.addr, true)
 					case connectivity.TransientFailure:
 						//connect failed
-						slog.ErrorContext(nil, "[cgrpc.client] connect failed", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr), slog.String("error", s.ConnectionError.Error()))
+						slog.Error("[cgrpc.client] connect failed", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr), slog.String("error", s.ConnectionError.Error()))
 					case connectivity.Connecting:
-						slog.InfoContext(nil, "[cgrpc.client] connecting", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
+						slog.Info("[cgrpc.client] connecting", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
 					}
 				},
 			})
@@ -272,7 +272,7 @@ func (b *corelibBalancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubC
 func (b *corelibBalancer) Close() {
 	for _, server := range b.servers {
 		server.subconn.Shutdown()
-		slog.InfoContext(nil, "[cgrpc.client] offline", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
+		slog.Info("[cgrpc.client] offline", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
 	}
 	b.servers = make(map[string]*ServerForPick)
 	b.lastResolveError = cerror.ErrClientClosing
@@ -372,13 +372,14 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 				return
 			}
 			if err := b.ww.Wait(info.Ctx, "CALL", b.c.resolver.Now, nil); e != nil {
-				if err == context.DeadlineExceeded {
+				switch err {
+				case context.DeadlineExceeded:
 					e = cerror.ErrDeadlineExceeded
 					return
-				} else if err == context.Canceled {
+				case context.Canceled:
 					e = cerror.ErrCanceled
 					return
-				} else {
+				default:
 					//this is impossible
 					e = cerror.Convert(e)
 					return

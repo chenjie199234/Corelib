@@ -359,7 +359,7 @@ func CreatePathAndFile(packagename, projectname string) {
 		panic("close ./cmd.sh error: " + e.Error())
 	}
 	//./cmd.bat
-	battemplate, e := template.New("./cmd.bat").Parse(strings.Replace(txtbat, "\n", "\r\n", -1))
+	battemplate, e := template.New("./cmd.bat").Parse(strings.ReplaceAll(txtbat, "\n", "\r\n"))
 	if e != nil {
 		panic("parse ./cmd.bat error: " + e.Error())
 	}

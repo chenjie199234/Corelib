@@ -141,7 +141,7 @@ func (s *CrpcServer) tellAllPeerSelfClosed() {
 				H: &MsgHeader{Callid: 0, Type: MsgType_Send},
 				B: &MsgBody{Error: cerror.ErrServerClosing},
 			})
-			p.SendMessage(nil, d, nil, nil)
+			p.SendMessage(context.Background(), d, nil, nil)
 		}
 	})
 }
@@ -205,20 +205,20 @@ func (s *CrpcServer) onlinefunc(ctx context.Context, p *stream.Peer) bool {
 			H: &MsgHeader{Callid: 0, Type: MsgType_Send},
 			B: &MsgBody{Error: cerror.ErrServerClosing},
 		})
-		p.SendMessage(nil, d, nil, nil)
+		p.SendMessage(context.Background(), d, nil, nil)
 	}
 	c := &client{
 		stop: false,
 		ctxs: make(map[uint64]*ServerContext),
 	}
 	p.SetData(unsafe.Pointer(c))
-	slog.InfoContext(nil, "[crpc.server] online", slog.String("cip", p.GetRealPeerIP()))
+	slog.Info("[crpc.server] online", slog.String("cip", p.GetRealPeerIP()))
 	return true
 }
 func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
-		slog.ErrorContext(nil, "[crpc.server] userdata format wrong", slog.String("cip", p.GetRealPeerIP()))
+		slog.Error("[crpc.server] userdata format wrong", slog.String("cip", p.GetRealPeerIP()))
 		p.Close(false)
 		return
 	}
@@ -237,14 +237,15 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			msg.H.Deadline = 0
 			msg.H.Type = MsgType_Send
 			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(nil, d, nil, nil); e != nil {
-				if e == stream.ErrConnClosed {
+			if e := p.SendMessage(context.Background(), d, nil, nil); e != nil {
+				switch e {
+				case stream.ErrConnClosed:
 					e = cerror.ErrClosed
-				} else if e == stream.ErrMsgLarge {
+				case stream.ErrMsgLarge:
 					//this is impossible
 					e = cerror.ErrRespmsgLen
 				}
-				slog.ErrorContext(nil, "[crpc.server] write response failed",
+				slog.Error("[crpc.server] write response failed",
 					slog.String("cip", p.GetRealPeerIP()),
 					slog.String("path", msg.H.Path),
 					slog.String("error", e.Error()))
@@ -254,7 +255,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		if _, ok := c.ctxs[msg.H.Callid]; ok {
 			//this is impossible
 			c.Unlock()
-			slog.ErrorContext(nil, "[crpc.server] duplicate init callid", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.H.Path))
+			slog.Error("[crpc.server] duplicate init callid", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.H.Path))
 			p.Close(false)
 			return
 		}
@@ -276,14 +277,15 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			msg.H.Deadline = 0
 			msg.H.Type = MsgType_Send
 			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(nil, d, nil, nil); e != nil {
-				if e == stream.ErrConnClosed {
+			if e := p.SendMessage(context.Background(), d, nil, nil); e != nil {
+				switch e {
+				case stream.ErrConnClosed:
 					e = cerror.ErrClosed
-				} else if e == stream.ErrMsgLarge {
+				case stream.ErrMsgLarge:
 					//this is impossible
 					e = cerror.ErrRespmsgLen
 				}
-				slog.ErrorContext(nil, "[crpc.server] write response failed",
+				slog.Error("[crpc.server] write response failed",
 					slog.String("cip", p.GetRealPeerIP()),
 					slog.String("path", msg.H.Path),
 					slog.String("error", e.Error()))
@@ -294,7 +296,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		handlers, ok := s.handler[msg.H.Path]
 		if !ok {
 			c.Unlock()
-			slog.ErrorContext(nil, "[crpc.server] path doesn't exist", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.H.Path))
+			slog.Error("[crpc.server] path doesn't exist", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.H.Path))
 			msg.B.Body = nil
 			lastcpu, _, _ := cotel.GetCPU()
 			msg.H.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(lastcpu, 'g', 10, 64)}
@@ -304,14 +306,15 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			msg.H.Deadline = 0
 			msg.H.Type = MsgType_Send
 			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(nil, d, nil, nil); e != nil {
-				if e == stream.ErrConnClosed {
+			if e := p.SendMessage(context.Background(), d, nil, nil); e != nil {
+				switch e {
+				case stream.ErrConnClosed:
 					e = cerror.ErrClosed
-				} else if e == stream.ErrMsgLarge {
+				case stream.ErrMsgLarge:
 					//this is impossible
 					e = cerror.ErrRespmsgLen
 				}
-				slog.ErrorContext(nil, "[crpc.server] write response failed",
+				slog.Error("[crpc.server] write response failed",
 					slog.String("cip", p.GetRealPeerIP()),
 					slog.String("path", msg.H.Path),
 					slog.String("error", e.Error()))
@@ -364,19 +367,19 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		rw := newrw(msg.H.Callid, msg.H.Path, 0, nil, nil, func(ctx context.Context, m *Msg) error {
 			d, _ := proto.Marshal(m)
 			e := p.SendMessage(ctx, d, nil, nil)
-			if e != nil {
-				if e == stream.ErrMsgLarge {
-					e = cerror.ErrRespmsgLen
-				} else if e == stream.ErrConnClosed {
-					e = cerror.ErrClosed
-				} else if e == context.DeadlineExceeded {
-					e = cerror.ErrDeadlineExceeded
-				} else if e == context.Canceled {
-					e = cerror.ErrCanceled
-				} else {
-					//this is impossible
-					e = cerror.Convert(e)
-				}
+			switch e {
+			case stream.ErrMsgLarge:
+				e = cerror.ErrRespmsgLen
+			case stream.ErrConnClosed:
+				e = cerror.ErrClosed
+			case context.DeadlineExceeded:
+				e = cerror.ErrDeadlineExceeded
+			case context.Canceled:
+				e = cerror.ErrCanceled
+			case nil:
+			default:
+				//this is impossible
+				e = cerror.Convert(e)
 			}
 			return e
 		})
@@ -468,5 +471,5 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	}
 }
 func (s *CrpcServer) offlinefunc(p *stream.Peer) {
-	slog.InfoContext(nil, "[crpc.server] offline", slog.String("cip", p.GetRealPeerIP()))
+	slog.Info("[crpc.server] offline", slog.String("cip", p.GetRealPeerIP()))
 }

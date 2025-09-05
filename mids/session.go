@@ -17,7 +17,7 @@ var sessionredis *redis.Client
 
 func UpdateSessionRedisInstance(c *redis.Client) {
 	if c == nil {
-		slog.WarnContext(nil, "[session] redis missing,all session event will be failed")
+		slog.Warn("[session] redis missing,all session event will be failed")
 	}
 	oldp := (*redis.Client)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&sessionredis)), unsafe.Pointer(c)))
 	if oldp != nil {

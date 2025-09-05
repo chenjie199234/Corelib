@@ -64,20 +64,14 @@ func (a *app) startApp() {
 			a.logfile.Close()
 			a.s.notice <- a.project + "." + a.group + "." + a.app
 		}()
-		for {
-			select {
-			case lpid, ok := <-a.notice:
-				if !ok {
-					return
-				}
-				a.plker.Lock()
-				delete(a.processes, lpid)
-				if a.status == a_CLOSING && len(a.processes) == 0 {
-					a.plker.Unlock()
-					return
-				}
+		for lpid := range a.notice {
+			a.plker.Lock()
+			delete(a.processes, lpid)
+			if a.status == a_CLOSING && len(a.processes) == 0 {
 				a.plker.Unlock()
+				return
 			}
+			a.plker.Unlock()
 		}
 	}()
 }

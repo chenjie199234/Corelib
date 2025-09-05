@@ -21,7 +21,6 @@ const (
 	ioPackage        = protogen.GoImportPath("io")
 	contextPackage   = protogen.GoImportPath("context")
 	base64Package    = protogen.GoImportPath("encoding/base64")
-	stdjsonPackage   = protogen.GoImportPath("encoding/json")
 	strconvPackage   = protogen.GoImportPath("strconv")
 	slogPackage      = protogen.GoImportPath("log/slog")
 	protoPackage     = protogen.GoImportPath("google.golang.org/protobuf/proto")

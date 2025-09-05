@@ -41,7 +41,7 @@ type PathRateRule struct {
 
 func UpdateRateRedisInstance(c *redis.Client) {
 	if c == nil {
-		slog.WarnContext(nil, "[rate] redis missing,all rate check will be failed")
+		slog.Warn("[rate] redis missing,all rate check will be failed")
 	}
 	oldp := (*redis.Client)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.c)), unsafe.Pointer(c)))
 	if oldp != nil {
@@ -66,7 +66,7 @@ func UpdateRateConfig(c MultiPathRateConfigs) {
 		}
 		for _, pathraterule := range pathraterules {
 			if pathraterule.RateType != "path" && pathraterule.RateType != "token" && pathraterule.RateType != "session" {
-				slog.ErrorContext(nil, "[rate] rate config's rate_type must be path/token/session", slog.String("path", path), slog.String("rate_type", pathraterule.RateType))
+				slog.Error("[rate] rate config's rate_type must be path/token/session", slog.String("path", path), slog.String("rate_type", pathraterule.RateType))
 				return
 			}
 
