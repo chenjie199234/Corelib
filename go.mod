@@ -5,9 +5,9 @@ go 1.25.0
 require (
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/prometheus/client_golang v1.23.1
-	github.com/redis/go-redis/v9 v9.13.0
-	github.com/shirou/gopsutil/v4 v4.25.8
-	go.mongodb.org/mongo-driver/v2 v2.3.0
+	github.com/redis/go-redis/v9 v9.14.1
+	github.com/shirou/gopsutil/v4 v4.25.9
+	go.mongodb.org/mongo-driver/v2 v2.3.1
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.38.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.38.0
@@ -20,8 +20,8 @@ require (
 	go.opentelemetry.io/otel/sdk v1.38.0
 	go.opentelemetry.io/otel/sdk/metric v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
-	google.golang.org/grpc v1.75.0
-	google.golang.org/protobuf v1.36.8
+	google.golang.org/grpc v1.76.0
+	google.golang.org/protobuf v1.36.10
 	k8s.io/api v0.34.0
 	k8s.io/apimachinery v0.34.0
 	k8s.io/client-go v0.34.0
@@ -34,7 +34,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
-	github.com/ebitengine/purego v0.8.4 // indirect
+	github.com/ebitengine/purego v0.9.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
