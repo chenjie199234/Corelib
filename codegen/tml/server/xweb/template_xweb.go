@@ -33,7 +33,7 @@ func StartWebServer() {
 		for cert, key := range c.Certs {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
-				slog.ErrorContext(nil, "[xweb] load cert failed:", slog.String("cert", cert), slog.String("key", key), slog.String("error",e.Error()))
+				slog.Error("[xweb] load cert failed:", slog.String("cert", cert), slog.String("key", key), slog.String("error",e.Error()))
 				return 
 			}
 			certificates = append(certificates, temp)
@@ -42,7 +42,7 @@ func StartWebServer() {
 	}
 	server, e := web.NewWebServer(c.ServerConfig, tlsc)
 	if e != nil {
-		slog.ErrorContext(nil, "[xweb] new server failed", slog.String("error",e.Error()))
+		slog.Error("[xweb] new server failed", slog.String("error",e.Error()))
 		return
 	}
 	//avoid race when build/run in -race mode
@@ -52,7 +52,7 @@ func StartWebServer() {
 
 	r, e := server.NewRouter()
 	if e != nil {
-		slog.ErrorContext(nil, "[xweb] new router failed", slog.String("error",e.Error()))
+		slog.Error("[xweb] new router failed", slog.String("error",e.Error()))
 		return
 	}
 
@@ -66,10 +66,10 @@ func StartWebServer() {
 
 	server.SetRouter(r)
 	if e = server.StartWebServer(":8000"); e != nil && e != web.ErrServerClosed {
-		slog.ErrorContext(nil, "[xweb] start server failed", slog.String("error",e.Error()))
+		slog.Error("[xweb] start server failed", slog.String("error",e.Error()))
 		return
 	}
-	slog.InfoContext(nil, "[xweb] server closed")
+	slog.Info("[xweb] server closed")
 }
 
 // UpdateHandlerTimeout -

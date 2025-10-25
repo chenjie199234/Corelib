@@ -51,7 +51,7 @@ func Init(notice func(c *AppConfig)) {
 				sourceinit = true
 				stopwatchsource()
 			case <-tmer.C:
-				slog.ErrorContext(nil,"[config.Init] timeout")
+				slog.Error(config.Init] timeout")
 				os.Exit(1)
 			}
 			if appinit && sourceinit {
@@ -69,29 +69,29 @@ func initenv() {
 	if str, ok := os.LookupEnv("CONFIG_TYPE"); ok && str != "<CONFIG_TYPE>" && str != "" {
 		configtype, e := strconv.Atoi(str)
 		if e != nil || (configtype != 0 && configtype != 1 && configtype != 2) {
-			slog.ErrorContext(nil, "[config.initenv] env CONFIG_TYPE must be number in [0,1,2]")
+			slog.Error("[config.initenv] env CONFIG_TYPE must be number in [0,1,2]")
 			os.Exit(1)
 		}
 		EC.ConfigType = &configtype
 	} else {
-		slog.WarnContext(nil, "[config.initenv] missing env CONFIG_TYPE")
+		slog.Warn("[config.initenv] missing env CONFIG_TYPE")
 	}
 	if EC.ConfigType != nil && *EC.ConfigType == 1 {
 		var e error
 		if RemoteConfigSdk, e = configsdk.NewConfigSdk(nil); e != nil {
-			slog.ErrorContext(nil, "[config.initenv] new remote config sdk failed")
+			slog.Error("[config.initenv] new remote config sdk failed")
 			os.Exit(1)
 		}
 	}
 	if str, ok := os.LookupEnv("RUN_ENV"); ok && str != "<RUN_ENV>" && str != "" {
 		EC.RunEnv = &str
 	} else {
-		slog.WarnContext(nil, "[config.initenv] missing env RUN_ENV")
+		slog.Warn("[config.initenv] missing env RUN_ENV")
 	}
 	if str, ok := os.LookupEnv("DEPLOY_ENV"); ok && str != "<DEPLOY_ENV>" && str != "" {
 		EC.DeployEnv = &str
 	} else {
-		slog.WarnContext(nil, "[config.initenv] missing env DEPLOY_ENV")
+		slog.Warn("[config.initenv] missing env DEPLOY_ENV")
 	}
 }`
 const apptxt = `package config
@@ -134,26 +134,26 @@ var watcher *fsnotify.Watcher
 func initlocalapp(notice func(*AppConfig)) {
 	data, e := os.ReadFile("./AppConfig.json")
 	if e != nil {
-		slog.ErrorContext(nil, "[config.local.app] read config file failed", slog.String("error", e.Error()))
+		slog.Error("[config.local.app] read config file failed", slog.String("error", e.Error()))
 		os.Exit(1)
 	}
 	AC = &AppConfig{}
 	if e = json.Unmarshal(data, AC); e != nil {
-		slog.ErrorContext(nil, "[config.local.app] config file format wrong", slog.String("error",e.Error()))
+		slog.Error("[config.local.app] config file format wrong", slog.String("error",e.Error()))
 		os.Exit(1)
 	}
 	validateAppConfig(AC)
-	slog.InfoContext(nil, "[config.local.app] update success", slog.Any("config", AC))
+	slog.Info("[config.local.app] update success", slog.Any("config", AC))
 	if notice != nil {
 		notice(AC)
 	}
 	watcher, e = fsnotify.NewWatcher()
 	if e != nil {
-		slog.ErrorContext(nil, "[config.local.app] create watcher for hot update failed", slog.String("error",e.Error()))
+		slog.Error("[config.local.app] create watcher for hot update failed", slog.String("error",e.Error()))
 		os.Exit(1)
 	}
 	if e = watcher.Add("./"); e != nil {
-		slog.ErrorContext(nil, "[config.local.app] create watcher for hot update failed", slog.String("error",e.Error()))
+		slog.Error("[config.local.app] create watcher for hot update failed", slog.String("error",e.Error()))
 		os.Exit(1)
 	}
 	go func() {
@@ -168,17 +168,17 @@ func initlocalapp(notice func(*AppConfig)) {
 				}
 				data, e := os.ReadFile("./AppConfig.json")
 				if e != nil {
-					slog.ErrorContext(nil, "[config.local.app] hot update read config file failed", slog.String("error",e.Error()))
+					slog.Error("[config.local.app] hot update read config file failed", slog.String("error",e.Error()))
 					continue
 				}
 				c := &AppConfig{}
 				if e = json.Unmarshal(data, c); e != nil {
-					slog.ErrorContext(nil, "[config.local.app] hot update config file format wrong", slog.String("error",e.Error()))
+					slog.Error("[config.local.app] hot update config file format wrong", slog.String("error",e.Error()))
 					continue
 				}
 				validateAppConfig(c)
 				AC = c
-				slog.InfoContext(nil, "[config.local.app] update success", slog.Any("config", AC))
+				slog.Info("[config.local.app] update success", slog.Any("config", AC))
 				if notice != nil {
 					notice(AC)
 				}
@@ -186,7 +186,7 @@ func initlocalapp(notice func(*AppConfig)) {
 				if !ok {
 					return
 				}
-				slog.ErrorContext(nil, "[config.local.app] hot update watcher failed", slog.String("error",err.Error()))
+				slog.Error("[config.local.app] hot update watcher failed", slog.String("error",err.Error()))
 			}
 		}
 	}()
@@ -195,16 +195,16 @@ func initremoteapp(notice func(*AppConfig), wait chan *struct{}) (stopwatch func
 	return RemoteConfigSdk.Watch("AppConfig", func(key, keyvalue, keytype string) {
 		//only support json
 		if keytype != "json" {
-			slog.ErrorContext(nil, "[config.remote.app] config data can only support json format")
+			slog.Error("[config.remote.app] config data can only support json format")
 			return
 		}
 		c := &AppConfig{}
 		if e := json.Unmarshal(common.STB(keyvalue), c); e != nil {
-			slog.ErrorContext(nil, "[config.remote.app] config data format wrong", slog.String("error",e.Error()))
+			slog.Error("[config.remote.app] config data format wrong", slog.String("error",e.Error()))
 			return
 		}
 		validateAppConfig(c)
-		slog.InfoContext(nil, "[config.remote.app] update success", slog.Any("config", c))
+		slog.Info("[config.remote.app] update success", slog.Any("config", c))
 		AC = c
 		if notice != nil {
 			notice(AC)
@@ -337,22 +337,22 @@ var emails map[string]*email.Client
 func initlocalsource() {
 	data, e := os.ReadFile("./SourceConfig.json")
 	if e != nil {
-		slog.ErrorContext(nil, "[config.local.source] read config file failed", slog.String("error",e.Error()))
+		slog.Error("[config.local.source] read config file failed", slog.String("error",e.Error()))
 		os.Exit(1)
 	}
 	sc = &sourceConfig{}
 	if e = json.Unmarshal(data, sc); e != nil {
-		slog.ErrorContext(nil, "[config.local.source] config file format wrong", slog.String("error",e.Error()))
+		slog.Error("[config.local.source] config file format wrong", slog.String("error",e.Error()))
 		os.Exit(1)
 	}
-	slog.InfoContext(nil, "[config.local.source] update success", slog.Any("config", sc))
+	slog.Info("[config.local.source] update success", slog.Any("config", sc))
 	initsource()
 }
 func initremotesource(wait chan *struct{}) (stopwatch func()) {
 	return RemoteConfigSdk.Watch("SourceConfig", func(key, keyvalue, keytype string) {
 		//only support json
 		if keytype != "json" {
-			slog.ErrorContext(nil, "[config.remote.source] config data can only support json format")
+			slog.Error("[config.remote.source] config data can only support json format")
 			return
 		}
 		//source config only init once
@@ -361,11 +361,11 @@ func initremotesource(wait chan *struct{}) (stopwatch func()) {
 		}
 		c := &sourceConfig{}
 		if e := json.Unmarshal(common.STB(keyvalue), c); e != nil {
-			slog.ErrorContext(nil, "[config.remote.source] config data format wrong", slog.String("error",e.Error()))
+			slog.Error("[config.remote.source] config data format wrong", slog.String("error",e.Error()))
 			return
 		}
 		sc = c
-		slog.InfoContext(nil, "[config.remote.source] update success", slog.Any("config", sc))
+		slog.Info("[config.remote.source] update success", slog.Any("config", sc))
 		initsource()
 		select {
 		case wait <- nil:
@@ -508,7 +508,7 @@ func initwebserver() {
 		}
 	} else {
 		if sc.WebServer.WaitCloseMode != 0 && sc.WebServer.WaitCloseMode != 1 {
-			slog.ErrorContext(nil, "[config.initwebserver] wait_close_mode must be 0 or 1")
+			slog.Error("[config.initwebserver] wait_close_mode must be 0 or 1")
 			os.Exit(1)
 		}
 		if sc.WebServer.ConnectTimeout <= 0 {
@@ -577,12 +577,12 @@ func initredis(){
 					for _, certpath := range redisc.SpecificCAPaths {
 						cert, e := os.ReadFile(certpath)
 						if e != nil {
-							slog.ErrorContext(nil, "[config.initredis] read specific cert failed",
+							slog.Error("[config.initredis] read specific cert failed",
 								slog.String("redis", redisc.RedisName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
-							slog.ErrorContext(nil, "[config.initredis] specific cert load failed",
+							slog.Error("[config.initredis] specific cert load failed",
 								slog.String("redis", redisc.RedisName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
 							os.Exit(1)
 						}
@@ -591,7 +591,7 @@ func initredis(){
 			}
 			c, e := redis.NewRedis(redisc.Config, tlsc)
 			if e != nil {
-				slog.ErrorContext(nil, "[config.initredis] failed",
+				slog.Error("[config.initredis] failed",
 					slog.String("redis", redisc.RedisName), slog.String("error",e.Error()))
 				os.Exit(1)
 			}
@@ -635,12 +635,12 @@ func initmongo(){
 					for _, certpath := range mongoc.SpecificCAPaths {
 						cert, e := os.ReadFile(certpath)
 						if e != nil {
-							slog.ErrorContext(nil, "[config.initmongo] read specific cert failed",
+							slog.Error("[config.initmongo] read specific cert failed",
 								slog.String("mongo", mongoc.MongoName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
-							slog.ErrorContext(nil, "[config.initmongo] specific cert load failed",
+							slog.Error("[config.initmongo] specific cert load failed",
 								slog.String("mongo", mongoc.MongoName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
 							os.Exit(1)
 						}
@@ -649,7 +649,7 @@ func initmongo(){
 			}
 			c, e := mongo.NewMongo(mongoc.Config, tlsc)
 			if e != nil {
-				slog.ErrorContext(nil, "[config.initmongo] failed", slog.String("mongo", mongoc.MongoName), slog.String("error",e.Error()))
+				slog.Error("[config.initmongo] failed", slog.String("mongo", mongoc.MongoName), slog.String("error",e.Error()))
 				os.Exit(1)
 			}
 			lker.Lock()
@@ -689,12 +689,12 @@ func initmysql(){
 					for _, certpath := range mysqlc.SpecificCAPaths {
 						cert, e := os.ReadFile(certpath)
 						if e != nil {
-							slog.ErrorContext(nil, "[config.initmysql] read specific cert failed",
+							slog.Error("[config.initmysql] read specific cert failed",
 								slog.String("mysql", mysqlc.MysqlName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
 							os.Exit(1)
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
-							slog.ErrorContext(nil, "[config.initmysql] specific cert load failed",
+							slog.Error("[config.initmysql] specific cert load failed",
 								slog.String("mysql", mysqlc.MysqlName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
 							os.Exit(1)
 						}
@@ -703,7 +703,7 @@ func initmysql(){
 			}
 			c, e := mysql.NewMysql(mysqlc.Config, tlsc)
 			if e != nil {
-				slog.ErrorContext(nil, "[config.initmysql] failed", slog.String("mysql", mysqlc.MysqlName), slog.String("error",e.Error()))
+				slog.Error("[config.initmysql] failed", slog.String("mysql", mysqlc.MysqlName), slog.String("error",e.Error()))
 				os.Exit(1)
 			}
 			lker.Lock()
@@ -734,7 +734,7 @@ func initemail() {
 		wg.Go(func() {
 			c, e := email.NewEmail(emailc)
 			if e != nil {
-				slog.ErrorContext(nil, "[config.initemail] failed", slog.String("email", emailc.EmailName), slog.String("error", e.Error()))
+				slog.Error("[config.initemail] failed", slog.String("email", emailc.EmailName), slog.String("error", e.Error()))
 				os.Exit(1)
 			}
 			lker.Lock()

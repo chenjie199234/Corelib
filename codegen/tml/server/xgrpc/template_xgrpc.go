@@ -33,7 +33,7 @@ func StartCGrpcServer() {
 		for cert, key := range c.Certs {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
-				slog.ErrorContext(nil, "[xgrpc] load cert failed:", slog.String("cert", cert), slog.String("key", key), slog.String("error",e.Error()))
+				slog.Error("[xgrpc] load cert failed:", slog.String("cert", cert), slog.String("key", key), slog.String("error",e.Error()))
 				return 
 			}
 			certificates = append(certificates, temp)
@@ -42,7 +42,7 @@ func StartCGrpcServer() {
 	}
 	server, e := cgrpc.NewCGrpcServer(c.ServerConfig, tlsc)
 	if e != nil {
-		slog.ErrorContext(nil, "[xgrpc] new server failed", slog.String("error",e.Error()))
+		slog.Error("[xgrpc] new server failed", slog.String("error",e.Error()))
 		return
 	}
 	//avoid race when build/run in -race mode
@@ -58,10 +58,10 @@ func StartCGrpcServer() {
 	//api.RegisterExampleCGrpcServer(server, service.SvcExample, mids.AllMids())
 
 	if e = server.StartCGrpcServer(":10000"); e != nil && e != cgrpc.ErrServerClosed {
-		slog.ErrorContext(nil, "[xgrpc] start server failed", slog.String("error",e.Error()))
+		slog.Error("[xgrpc] start server failed", slog.String("error",e.Error()))
 		return
 	}
-	slog.InfoContext(nil, "[xgrpc] server closed")
+	slog.Info("[xgrpc] server closed")
 }
 
 // UpdateHandlerTimeout -

@@ -30,7 +30,7 @@ func StartRawServer() {
 		for cert, key := range c.Certs {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
-				slog.ErrorContext(nil, "[xraw] load cert failed:", slog.String("cert", cert), slog.String("key", key), slog.String("error", e.Error()))
+				slog.Error("[xraw] load cert failed:", slog.String("cert", cert), slog.String("key", key), slog.String("error", e.Error()))
 				return
 			}
 			certificates = append(certificates, temp)
@@ -53,10 +53,10 @@ func StartRawServer() {
 	service.SvcRaw.SetStreamInstance(server)
 
 	if e := server.StartServer(":7000", tlsc); e != nil && e != stream.ErrServerClosed {
-		slog.ErrorContext(nil, "[xraw] start server failed", slog.String("error", e.Error()))
+		slog.Error("[xraw] start server failed", slog.String("error", e.Error()))
 		return
 	}
-	slog.InfoContext(nil, "[xraw] server closed")
+	slog.Info("[xraw] server closed")
 }
 
 // StopRawServer -

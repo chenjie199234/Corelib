@@ -116,16 +116,16 @@ func main() {
 	if rateredis := config.GetRedis("rate_redis"); rateredis != nil {
 		publicmids.UpdateRateRedisInstance(rateredis)
 	} else {
-		slog.WarnContext(nil, "[main] rate redis missing,all rate check will be failed")
+		slog.Warn("[main] rate redis missing,all rate check will be failed")
 	}
 	if sessionredis := config.GetRedis("session_redis"); sessionredis != nil {
 		publicmids.UpdateSessionRedisInstance(sessionredis)
 	} else {
-		slog.WarnContext(nil, "[main] session redis missing,all session event will be failed")
+		slog.Warn("[main] session redis missing,all session event will be failed")
 	}
 	//start the whole business service
 	if e := service.StartService(); e != nil {
-		slog.ErrorContext(nil, "[main] start service failed", slog.String("error",e.Error()))
+		slog.Error("[main] start service failed", slog.String("error",e.Error()))
 		return
 	}
 	//start low level net service
