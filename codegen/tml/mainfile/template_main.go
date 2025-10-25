@@ -131,47 +131,38 @@ func main() {
 	//start low level net service
 	ch := make(chan os.Signal, 1)
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		xcrpc.StartCrpcServer()
 		select {
 		case ch <- syscall.SIGTERM:
 		default:
 		}
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
+	})
+	wg.Go(func() {
 		xweb.StartWebServer()
 		select {
 		case ch <- syscall.SIGTERM:
 		default:
 		}
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
+	})
+	wg.Go(func() {
 		xgrpc.StartCGrpcServer()
 		select {
 		case ch <- syscall.SIGTERM:
 		default:
 		}
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
+	})
+	wg.Go(func() {
 		xraw.StartRawServer()
 		select {
 		case ch <- syscall.SIGTERM:
 		default:
 		}
-		wg.Done()
-	}()
+	})
 	//this is the server for pprof and prometheus(if METRIC env is prometheus)
 	//this server should not be exposed to the public internet
 	pserver := &http.Server{Addr:":6060"}
-	wg.Add(1)
-	go func(){
+	wg.Go(func(){
 		if h:=cotel.GetPrometheusHandler();h!=nil{
 			http.Handle("/metrics", h)
 		}
@@ -180,38 +171,27 @@ func main() {
 		case ch <- syscall.SIGTERM:
 		default:
 		}
-		wg.Done()
-	}()
+	})
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-ch
 	//stop the whole business service
 	service.StopService()
 	//stop low level net service
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		xcrpc.StopCrpcServer(false)
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
+	})
+	wg.Go(func() {
 		xweb.StopWebServer(false)
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
+	})
+	wg.Go(func() {
 		xgrpc.StopCGrpcServer(false)
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
+	})
+	wg.Go(func() {
 		xraw.StopRawServer()
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func(){
+	})
+	wg.Go(func(){
 	  pserver.Shutdown(context.Background())
-	  wg.Done()
-	}()
+	})
 	wg.Wait()
 }`
 

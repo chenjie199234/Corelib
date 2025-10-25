@@ -382,26 +382,10 @@ func initsource() {
 	initwebserver()
 	initwebclient()
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		initredis()
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
-		initmongo()
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
-		initmysql()
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
-		initemail()
-		wg.Done()
-	}()
+	wg.Go(initredis)
+	wg.Go(initmongo)
+	wg.Go(initmysql)
+	wg.Go(initemail)
 	wg.Wait()
 }
 func initraw() {
@@ -584,9 +568,7 @@ func initredis(){
 			continue
 		}
 		redisc := v
-		wg.Add(1)
-		go func(){
-			defer wg.Done()
+		wg.Go(func(){
 			var tlsc *tls.Config
 			if redisc.TLS {
 				tlsc = &tls.Config{}
@@ -616,7 +598,7 @@ func initredis(){
 			lker.Lock()
 			rediss[redisc.RedisName] = c
 			lker.Unlock()
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -644,9 +626,7 @@ func initmongo(){
 			continue
 		}
 		mongoc := v
-		wg.Add(1)
-		go func(){
-			defer wg.Done()
+		wg.Go(func(){
 			var tlsc *tls.Config
 			if mongoc.TLS {
 				tlsc = &tls.Config{}
@@ -675,7 +655,7 @@ func initmongo(){
 			lker.Lock()
 			mongos[mongoc.MongoName] = c
 			lker.Unlock()
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -700,9 +680,7 @@ func initmysql(){
 			continue
 		}
 		mysqlc := v
-		wg.Add(1)
-		go func(){
-			defer wg.Done()
+		wg.Go(func(){
 			var tlsc *tls.Config
 			if mysqlc.TLS {
 				tlsc = &tls.Config{}
@@ -731,7 +709,7 @@ func initmysql(){
 			lker.Lock()
 			mysqls[mysqlc.MysqlName] = c
 			lker.Unlock()
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -753,9 +731,7 @@ func initemail() {
 			continue
 		}
 		emailc := v
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			c, e := email.NewEmail(emailc)
 			if e != nil {
 				slog.ErrorContext(nil, "[config.initemail] failed", slog.String("email", emailc.EmailName), slog.String("error", e.Error()))
@@ -764,7 +740,7 @@ func initemail() {
 			lker.Lock()
 			emails[emailc.EmailName] = c
 			lker.Unlock()
-		}()
+		})
 	}
 	wg.Wait()
 }
