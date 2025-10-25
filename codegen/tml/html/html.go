@@ -42,8 +42,6 @@ const pkg = `{
     "vite-tsconfig-paths": "latest",
     "typescript": "latest",
     "vite": "latest"
-  },
-  "dependencies": {
   }
 }`
 
