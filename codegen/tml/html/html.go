@@ -56,13 +56,15 @@ const tsc = `{
     "useDefineForClassFields": true,
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
+	"types": ["vite/client"],
     "skipLibCheck": true,
 
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "moduleDetection": "force",
+    "verbatimModuleSyntax": true,
     "isolatedModules": true,
+    "moduleDetection": "force",
     "noEmit": true,
     "noEmitOnError": true,
 
