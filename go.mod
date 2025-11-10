@@ -5,9 +5,9 @@ go 1.25.0
 require (
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/prometheus/client_golang v1.23.1
-	github.com/redis/go-redis/v9 v9.14.1
-	github.com/shirou/gopsutil/v4 v4.25.9
-	go.mongodb.org/mongo-driver/v2 v2.3.1
+	github.com/redis/go-redis/v9 v9.16.0
+	github.com/shirou/gopsutil/v4 v4.25.10
+	go.mongodb.org/mongo-driver/v2 v2.4.0
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.38.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.38.0
@@ -80,7 +80,7 @@ require (
 	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
-	golang.org/x/sys v0.35.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/term v0.34.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
