@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"log/slog"
-	"strconv"
 	"sync"
 	"time"
 	"unsafe"
@@ -194,10 +193,6 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 			rw.reader.Close()
 			server.delrw(msg.H.Callid)
 		}
-		if msg.H.Traildata != nil {
-			cpuusage, _ := strconv.ParseFloat(msg.H.Traildata["Cpu-Usage"], 64)
-			server.GetServerPickInfo().UpdateCPU(cpuusage)
-		}
 	case MsgType_Send:
 		if msg.B.Error != nil && cerror.Equal(msg.B.Error, cerror.ErrServerClosing) {
 			if !server.closing.Swap(true) {
@@ -278,9 +273,9 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 				slog.String("sip", server.addr),
 				slog.String("path", path),
 				slog.String("error", e.Error()))
-			server.GetServerPickInfo().Done(false)
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
+			server.GetServerPickInfo().Done(false, 0)
 			if cerror.Equal(e, cerror.ErrClosed) {
 				continue
 			}
@@ -299,18 +294,17 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			select {
 			case <-ctx.Done():
 				if ctx.Err() == context.Canceled {
-					rw.closerecvsend(false, cerror.ErrCanceled)
+					rw.closerecvsend(cerror.ErrCanceled)
 				} else if ctx.Err() == context.DeadlineExceeded {
-					rw.closerecvsend(false, cerror.ErrDeadlineExceeded)
+					rw.closerecvsend(cerror.ErrDeadlineExceeded)
 				} else {
-					rw.closerecvsend(false, cerror.Convert(ctx.Err()))
+					rw.closerecvsend(cerror.Convert(ctx.Err()))
 				}
 			case <-stop:
-				rw.closerecvsend(false, nil)
+				rw.closerecvsend(nil)
 			}
 		}()
 		ee := cerror.Convert(handler(workctx))
-		server.GetServerPickInfo().Done(ee == nil)
 		close(stop)
 		if ee != nil {
 			span.SetStatus(codes.Error, ee.Error())
@@ -319,11 +313,14 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 		}
 		span.End()
 		server.delrw(rw.callid)
+		etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+		stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+		server.GetServerPickInfo().Done(ee == nil, uint64(etime-stime))
 		if cerror.Equal(ee, cerror.ErrServerClosing) {
 			continue
 		}
-		if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-			c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, ee != nil)
+		if cotel.NeedMetric() {
+			c.recordmetric(path, float64(etime-stime)/1000000.0, ee != nil)
 		}
 		//fix the interface not nil problem
 		if ee != nil {
@@ -382,9 +379,9 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 				slog.String("sip", server.addr),
 				slog.String("path", path),
 				slog.String("error", e.Error()))
-			server.GetServerPickInfo().Done(false)
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
+			server.GetServerPickInfo().Done(false, 0)
 			if cerror.Equal(e, cerror.ErrClosed) {
 				continue
 			}
@@ -403,18 +400,17 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 			select {
 			case <-ctx.Done():
 				if ctx.Err() == context.Canceled {
-					rw.closerecvsend(false, cerror.ErrCanceled)
+					rw.closerecvsend(cerror.ErrCanceled)
 				} else if ctx.Err() == context.DeadlineExceeded {
-					rw.closerecvsend(false, cerror.ErrDeadlineExceeded)
+					rw.closerecvsend(cerror.ErrDeadlineExceeded)
 				} else {
-					rw.closerecvsend(false, cerror.Convert(ctx.Err()))
+					rw.closerecvsend(cerror.Convert(ctx.Err()))
 				}
 			case <-stop:
-				rw.closerecvsend(false, nil)
+				rw.closerecvsend(nil)
 			}
 		}()
 		ee := cerror.Convert(handler(workctx))
-		server.GetServerPickInfo().Done(ee == nil)
 		close(stop)
 		if ee != nil {
 			span.SetStatus(codes.Error, ee.Error())
@@ -423,11 +419,14 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 		}
 		span.End()
 		server.delrw(rw.callid)
+		etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+		stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+		server.GetServerPickInfo().Done(ee == nil, uint64(etime-stime))
 		if cerror.Equal(ee, cerror.ErrServerClosing) {
 			continue
 		}
-		if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-			c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, ee != nil)
+		if cotel.NeedMetric() {
+			c.recordmetric(path, float64(etime-stime)/1000000.0, ee != nil)
 		}
 		//fix the interface not nil problem
 		if ee != nil {

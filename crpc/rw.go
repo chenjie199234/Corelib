@@ -3,12 +3,10 @@ package crpc
 import (
 	"context"
 	"io"
-	"strconv"
 	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/container/list"
-	"github.com/chenjie199234/Corelib/cotel"
 )
 
 type rw struct {
@@ -102,7 +100,7 @@ func (this *rw) closerecv() error {
 		},
 	})
 }
-func (this *rw) closerecvsend(trail bool, err error) error {
+func (this *rw) closerecvsend(err error) error {
 	if old := this.status.And(0b1100); old&0b0011 == 0 {
 		return nil
 	}
@@ -114,10 +112,6 @@ func (this *rw) closerecvsend(trail bool, err error) error {
 			Path:   this.path,
 			Type:   MsgType_CloseRecvSend,
 		},
-	}
-	if trail {
-		lastcpu, _, _ := cotel.GetCPU()
-		m.H.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(lastcpu, 'g', 10, 64)}
 	}
 	return this.sender(context.Background(), m)
 }

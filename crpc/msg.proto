@@ -23,7 +23,6 @@ message msg {
 		int64 deadline=4;
 		map<string,string> metadata=5;
 		map<string,string> tracedata=6;
-		map<string,string> traildata=7;//only from server to client
 	}
 	message body {
 		bytes body=1;

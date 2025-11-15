@@ -7,32 +7,37 @@ import (
 
 type WaitWake struct {
 	lker    *sync.Mutex
-	notices map[string]map[chan *struct{}]*struct{}
+	notices map[string]*notice
+}
+type notice struct {
+	ch    chan *struct{}
+	count uint64
 }
 
 func NewWaitWake() *WaitWake {
 	return &WaitWake{
 		lker:    &sync.Mutex{},
-		notices: make(map[string]map[chan *struct{}]*struct{}, 10),
+		notices: make(map[string]*notice),
 	}
 }
 
-// doOnce and doEvery will run in goroutine
+// doOnce and doEvery will run in different goroutine,so there has no order
 // the doDoce function(if doOnce is not nil) will run only when there is no Wait on the key now
 // the doEvery function(if doEvery is not nil) will run every time call the Wait
 func (w *WaitWake) Wait(ctx context.Context, key string, doOnce func(), doEvery func()) error {
-	notice := make(chan *struct{}, 1)
 	w.lker.Lock()
-	notices, ok := w.notices[key]
+	n, ok := w.notices[key]
 	if !ok {
-		notices = make(map[chan *struct{}]*struct{}, 10)
-		w.notices[key] = notices
-	}
-	notices[notice] = nil
-	if len(notices) == 1 {
+		n = &notice{
+			ch:    make(chan *struct{}),
+			count: 1,
+		}
+		w.notices[key] = n
 		if doOnce != nil {
 			go doOnce()
 		}
+	} else {
+		n.count++
 	}
 	if doEvery != nil {
 		go doEvery()
@@ -41,24 +46,21 @@ func (w *WaitWake) Wait(ctx context.Context, key string, doOnce func(), doEvery 
 	select {
 	case <-ctx.Done():
 		w.lker.Lock()
-		delete(notices, notice)
-		if len(notices) == 0 {
+		n.count--
+		if n.count == 0 {
 			delete(w.notices, key)
 		}
 		w.lker.Unlock()
 		return ctx.Err()
-	case <-notice:
+	case <-n.ch:
 		return nil
 	}
 }
 func (w *WaitWake) Wake(key string) {
 	w.lker.Lock()
 	defer w.lker.Unlock()
-	for notice := range w.notices[key] {
-		delete(w.notices[key], notice)
-		if notice != nil {
-			notice <- nil
-		}
+	if n, ok := w.notices[key]; ok {
+		close(n.ch)
+		delete(w.notices, key)
 	}
-	delete(w.notices, key)
 }

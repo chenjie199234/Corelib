@@ -213,8 +213,6 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 				resp.Write(common.STB(cerror.ErrServerClosing.Json()))
 			} else {
 				//tell peer self busy
-				lastcpu, _, _ := cotel.GetCPU()
-				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(lastcpu, 'g', 10, 64))
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrBusy.Httpcode))
 				resp.Write(common.STB(cerror.ErrBusy.Json()))
@@ -246,8 +244,6 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 					slog.String("path", path),
 					slog.String("method", method),
 					slog.String("metadata", mdstr))
-				lastcpu, _, _ := cotel.GetCPU()
-				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(lastcpu, 'g', 10, 64))
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
 				resp.Write(common.STB(cerror.ErrReq.Json()))
@@ -270,8 +266,6 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 					slog.String("path", path),
 					slog.String("method", method),
 					slog.String("deadline", temp))
-				lastcpu, _, _ := cotel.GetCPU()
-				resp.Header().Set("Cpu-Usage", strconv.FormatFloat(lastcpu, 'g', 10, 64))
 				resp.Header().Set("Content-Type", "application/json")
 				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
 				resp.Write(common.STB(cerror.ErrReq.Json()))

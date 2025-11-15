@@ -3,7 +3,6 @@ package cgrpc
 import (
 	"context"
 	"log/slog"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -326,18 +325,13 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 		if server != nil {
 			if dl, ok := info.Ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic
-				server.GetServerPickInfo().Done(false)
+				server.GetServerPickInfo().Done(false, 0)
 				e = cerror.ErrDeadlineExceeded
 				return
 			}
 			pickinfo.SubConn = server.(*ServerForPick).subconn
 			pickinfo.Done = func(doneinfo balancer.DoneInfo) {
 				e := transGrpcError(doneinfo.Err, false)
-				if cpuusagestrs := doneinfo.Trailer.Get("Cpu-Usage"); len(cpuusagestrs) > 0 && cpuusagestrs[0] != "" {
-					cpuusage, _ := strconv.ParseFloat(cpuusagestrs[0], 64)
-					server.GetServerPickInfo().UpdateCPU(cpuusage)
-				}
-				server.GetServerPickInfo().Done(e == nil)
 				span.SetAttributes(attribute.String("server.addr", server.(*ServerForPick).addr))
 				if e != nil {
 					span.SetStatus(codes.Error, e.Error())
@@ -345,8 +339,11 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 					span.SetStatus(codes.Ok, "")
 				}
 				span.End()
-				if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-					b.c.recordmetric(info.FullMethodName, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, e != nil)
+				etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+				stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+				server.GetServerPickInfo().Done(e == nil, uint64(etime-stime))
+				if cotel.NeedMetric() {
+					b.c.recordmetric(info.FullMethodName, float64(etime-stime)/1000000.0, e != nil)
 				}
 				// monitor.GrpcClientMonitor(b.c.server, "GRPC", info.FullMethodName, e, uint64(span.GetEnd()-span.GetStart()))
 				if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {

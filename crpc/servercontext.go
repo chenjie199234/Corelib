@@ -44,7 +44,7 @@ func (c *ServerContext) Abort(e error) {
 			c.rw.send(&MsgBody{Error: c.e})
 		}
 	}
-	c.rw.closerecvsend(true, c.e)
+	c.rw.closerecvsend(c.e)
 	if httpcode != 0 {
 		panic("[crpc.context.Abort] unknown http code: " + strconv.Itoa(httpcode))
 	}

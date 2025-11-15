@@ -194,7 +194,6 @@ type MsgHeader struct {
 	Deadline      int64                  `protobuf:"varint,4,opt,name=deadline,proto3" json:"deadline,omitempty"`
 	Metadata      map[string]string      `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Tracedata     map[string]string      `protobuf:"bytes,6,rep,name=tracedata,proto3" json:"tracedata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Traildata     map[string]string      `protobuf:"bytes,7,rep,name=traildata,proto3" json:"traildata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` //only from server to client
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -271,13 +270,6 @@ func (x *MsgHeader) GetTracedata() map[string]string {
 	return nil
 }
 
-func (x *MsgHeader) GetTraildata() map[string]string {
-	if x != nil {
-		return x.Traildata
-	}
-	return nil
-}
-
 type MsgBody struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Body          []byte                 `protobuf:"bytes,1,opt,name=body,proto3" json:"body,omitempty"`
@@ -342,26 +334,22 @@ var File_crpc_msg_proto protoreflect.FileDescriptor
 
 const file_crpc_msg_proto_rawDesc = "" +
 	"\n" +
-	"\x0ecrpc/msg.proto\x12\x04crpc\x1a\x13cerror/cerror.proto\"\xb6\x05\n" +
+	"\x0ecrpc/msg.proto\x12\x04crpc\x1a\x13cerror/cerror.proto\"\xb9\x04\n" +
 	"\x03msg\x12\x1e\n" +
 	"\x01h\x18\x01 \x01(\v2\x10.crpc.msg.headerR\x01h\x12\x1c\n" +
 	"\x01b\x18\x02 \x01(\v2\x0e.crpc.msg.bodyR\x01b\x12\x15\n" +
-	"\x06with_b\x18\x03 \x01(\bR\x05withB\x1a\xe6\x03\n" +
+	"\x06with_b\x18\x03 \x01(\bR\x05withB\x1a\xe9\x02\n" +
 	"\x06header\x12\x16\n" +
 	"\x06callid\x18\x01 \x01(\x04R\x06callid\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12!\n" +
 	"\x04type\x18\x03 \x01(\x0e2\r.crpc.MsgTypeR\x04type\x12\x1a\n" +
 	"\bdeadline\x18\x04 \x01(\x03R\bdeadline\x12:\n" +
 	"\bmetadata\x18\x05 \x03(\v2\x1e.crpc.msg.header.MetadataEntryR\bmetadata\x12=\n" +
-	"\ttracedata\x18\x06 \x03(\v2\x1f.crpc.msg.header.TracedataEntryR\ttracedata\x12=\n" +
-	"\ttraildata\x18\a \x03(\v2\x1f.crpc.msg.header.TraildataEntryR\ttraildata\x1a;\n" +
+	"\ttracedata\x18\x06 \x03(\v2\x1f.crpc.msg.header.TracedataEntryR\ttracedata\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a<\n" +
 	"\x0eTracedataEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a<\n" +
-	"\x0eTraildataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aq\n" +
 	"\x04body\x12\x12\n" +
@@ -392,7 +380,7 @@ func file_crpc_msg_proto_rawDescGZIP() []byte {
 }
 
 var file_crpc_msg_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_crpc_msg_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_crpc_msg_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_crpc_msg_proto_goTypes = []any{
 	(MsgType)(0),         // 0: crpc.MsgType
 	(Encoder)(0),         // 1: crpc.Encoder
@@ -401,8 +389,7 @@ var file_crpc_msg_proto_goTypes = []any{
 	(*MsgBody)(nil),      // 4: crpc.msg.body
 	nil,                  // 5: crpc.msg.header.MetadataEntry
 	nil,                  // 6: crpc.msg.header.TracedataEntry
-	nil,                  // 7: crpc.msg.header.TraildataEntry
-	(*cerror.Error)(nil), // 8: cerror.Error
+	(*cerror.Error)(nil), // 7: cerror.Error
 }
 var file_crpc_msg_proto_depIdxs = []int32{
 	3, // 0: crpc.msg.h:type_name -> crpc.msg.header
@@ -410,14 +397,13 @@ var file_crpc_msg_proto_depIdxs = []int32{
 	0, // 2: crpc.msg.header.type:type_name -> crpc.MsgType
 	5, // 3: crpc.msg.header.metadata:type_name -> crpc.msg.header.MetadataEntry
 	6, // 4: crpc.msg.header.tracedata:type_name -> crpc.msg.header.TracedataEntry
-	7, // 5: crpc.msg.header.traildata:type_name -> crpc.msg.header.TraildataEntry
-	1, // 6: crpc.msg.body.body_encoder:type_name -> crpc.Encoder
-	8, // 7: crpc.msg.body.error:type_name -> cerror.Error
-	8, // [8:8] is the sub-list for method output_type
-	8, // [8:8] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	1, // 5: crpc.msg.body.body_encoder:type_name -> crpc.Encoder
+	7, // 6: crpc.msg.body.error:type_name -> cerror.Error
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_crpc_msg_proto_init() }
@@ -431,7 +417,7 @@ func file_crpc_msg_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_crpc_msg_proto_rawDesc), len(file_crpc_msg_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   6,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

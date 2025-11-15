@@ -124,7 +124,7 @@ func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 		if server != nil {
 			if dl, ok := ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
 				//at least 5ms for net lag and server logic
-				server.GetServerPickInfo().Done(false)
+				server.GetServerPickInfo().Done(false, 0)
 				return nil, cerror.ErrDeadlineExceeded
 			}
 			return server.(*ServerForPick), nil

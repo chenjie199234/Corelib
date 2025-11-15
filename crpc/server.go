@@ -7,7 +7,6 @@ import (
 	"errors"
 	"log/slog"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -231,7 +230,6 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			//tell peer self closed
 			msg.B.Body = nil
 			msg.B.Error = cerror.ErrServerClosing
-			msg.H.Traildata = nil
 			msg.H.Metadata = nil
 			msg.H.Tracedata = nil
 			msg.H.Deadline = 0
@@ -265,12 +263,9 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			if e == graceful.ErrClosing {
 				//tell peer self closed
 				msg.B.Error = cerror.ErrServerClosing
-				msg.H.Traildata = nil
 			} else {
 				//tell peer self busy
 				msg.B.Error = cerror.ErrBusy
-				lastcpu, _, _ := cotel.GetCPU()
-				msg.H.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(lastcpu, 'g', 10, 64)}
 			}
 			msg.H.Metadata = nil
 			msg.H.Tracedata = nil
@@ -298,8 +293,6 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			c.Unlock()
 			slog.Error("[crpc.server] path doesn't exist", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.H.Path))
 			msg.B.Body = nil
-			lastcpu, _, _ := cotel.GetCPU()
-			msg.H.Traildata = map[string]string{"Cpu-Usage": strconv.FormatFloat(lastcpu, 'g', 10, 64)}
 			msg.B.Error = cerror.ErrNoapi
 			msg.H.Metadata = nil
 			msg.H.Tracedata = nil
@@ -429,7 +422,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 					mtime.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0)
 				}
 				if workctx.finish == 0 {
-					rw.closerecvsend(true, nil)
+					rw.closerecvsend(nil)
 				}
 				s.stop.DoneOne()
 			}()

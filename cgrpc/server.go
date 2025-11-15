@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"net"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -324,8 +323,6 @@ func (s *CGrpcServer) echohandler(sname, mname string, handlers ...OutsideHandle
 					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
 				workctx.Abort(cerror.ErrPanic)
 			}
-			lastcpu, _, _ := cotel.GetCPU()
-			grpc.SetTrailer(basectx, gmetadata.New(map[string]string{"Cpu-Usage": strconv.FormatFloat(lastcpu, 'g', 10, 64)}))
 			//fix the interface nil problem
 			if workctx.e != nil {
 				span.SetStatus(codes.Error, workctx.e.Error())
@@ -432,8 +429,6 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
 				workctx.Abort(cerror.ErrPanic)
 			}
-			lastcpu, _, _ := cotel.GetCPU()
-			grpc.SetTrailer(basectx, gmetadata.New(map[string]string{"Cpu-Usage": strconv.FormatFloat(lastcpu, 'g', 10, 64)}))
 			//fix the interface nil problem
 			if workctx.e != nil {
 				span.SetStatus(codes.Error, workctx.e.Error())

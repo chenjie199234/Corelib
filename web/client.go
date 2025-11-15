@@ -344,9 +344,9 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		}
 		if e != nil {
 			e = cerror.Convert(e.(*url.Error).Unwrap())
-			server.GetServerPickInfo().Done(false)
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
+			server.GetServerPickInfo().Done(false, 0)
 			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
 				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
 			}
@@ -358,18 +358,15 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		resp, e = c.client.Do(req)
 		if e != nil {
 			e = cerror.Convert(e.(*url.Error).Unwrap())
-			server.GetServerPickInfo().Done(false)
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
-			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+			stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+			server.GetServerPickInfo().Done(false, uint64(etime-stime))
+			if cotel.NeedMetric() {
+				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
 			return nil, e
-		}
-		if cpuusagestr := resp.Header.Get("Cpu-Usage"); cpuusagestr != "" {
-			cpuusage, _ := strconv.ParseFloat(cpuusagestr, 64)
-			server.GetServerPickInfo().UpdateCPU(cpuusage)
-			resp.Header.Del("Cpu-Usage")
 		}
 		if resp.StatusCode/100 != 2 {
 			var respbody []byte
@@ -384,9 +381,11 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				ee.SetHttpcode(int32(resp.StatusCode))
 				e = ee
 			}
-			server.GetServerPickInfo().Done(false)
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
+			etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+			stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+			server.GetServerPickInfo().Done(false, uint64(etime-stime))
 			if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
 				if !server.closing.Swap(true) {
 					//set the lowest pick priority
@@ -398,8 +397,8 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				}
 				continue
 			}
-			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			if cotel.NeedMetric() {
+				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
 			return nil, e
 		}

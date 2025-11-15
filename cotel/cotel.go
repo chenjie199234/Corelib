@@ -148,28 +148,16 @@ func Init() error {
 	if needmetric {
 		mp = metric.NewMeterProvider(mopts...)
 		otel.SetMeterProvider(mp)
-		cpuc, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("cpu_cur_usage", ometric.WithUnit("%"))
-		cpum, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("cpu_max_usage", ometric.WithUnit("%"))
-		cpua, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("cpu_avg_usage", ometric.WithUnit("%"))
-		memc, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("mem_cur_usage", ometric.WithUnit("%"))
-		memm, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("mem_max_usage", ometric.WithUnit("%"))
-		gc, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Int64ObservableGauge("gc", ometric.WithUnit("ns"))
+		gc, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Int64ObservableCounter("gc", ometric.WithUnit("ns"))
 		goroutine, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Int64ObservableGauge("goroutine", ometric.WithUnit("1"))
 		thread, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Int64ObservableGauge("thread", ometric.WithUnit("1"))
 		otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).RegisterCallback(func(ctx context.Context, s ometric.Observer) error {
-			lastcpu, maxcpu, avgcpu := collectCPU()
-			totalmem, lastmem, maxmem := collectMEM()
 			goroutinenum, threadnum, gctime := getGo()
-			s.ObserveFloat64(cpuc, lastcpu*100.0)
-			s.ObserveFloat64(cpum, maxcpu*100.0)
-			s.ObserveFloat64(cpua, avgcpu*100.0)
-			s.ObserveFloat64(memc, float64(lastmem)/float64(totalmem)*100.0)
-			s.ObserveFloat64(memm, float64(maxmem)/float64(totalmem)*100.0)
 			s.ObserveInt64(gc, int64(gctime))
 			s.ObserveInt64(goroutine, int64(goroutinenum))
 			s.ObserveInt64(thread, int64(threadnum))
 			return nil
-		}, cpuc, cpum, cpua, memc, memm, gc, goroutine, thread)
+		}, gc, goroutine, thread)
 	}
 	return nil
 }

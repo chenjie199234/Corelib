@@ -5,42 +5,52 @@ import (
 	"math/rand"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/container/ring"
 )
 
 type ServerForPick interface {
 	Pickable() bool
-	GetServerPickInfo() *ServerPickInfo //if this return,this server will nerver be picked
+	GetServerPickInfo() *ServerPickInfo //if this return nil,this server will nerver be picked
 	GetServerAddr() string              //if this return empty,this server will nerver be picked by forceaddr
 }
 
 func NewServerPickInfo() *ServerPickInfo {
 	return &ServerPickInfo{
-		sf: ring.NewRing[bool](1000),
+		sf:    ring.NewRing[bool](1000),
+		ctime: ring.NewRing[uint64](1000),
 	}
 }
 
 type ServerPickInfo struct {
 	discoverServerNum              uint32
 	discoverServerOfflineTimestamp int64
-	activecalls                    atomic.Uint32 //current active calls
-	cpuusage                       float64
-	sf                             *ring.Ring[bool]
-	successfail                    uint64 //low 32bit is success,high 32bit is fail
+	activecalls                    atomic.Uint32      //current active calls
+	sf                             *ring.Ring[bool]   //the last 1000 calls' success and fail status
+	sfdata                         uint64             //right 32bit is success count,left 32bit is fail count
+	ctime                          *ring.Ring[uint64] //the last 1000 calls' cost time,unixnano
+	timedata                       uint64             //right 10bit is count,left 54bit is the total call time for the last 1000 calls
 }
 
 func (spi *ServerPickInfo) Pick() {
 	//add active call num
 	spi.activecalls.Add(1)
 }
-func (spi *ServerPickInfo) UpdateCPU(cpuusage float64) {
-	if cpuusage != 0 {
-		atomic.StoreUint64((*uint64)(unsafe.Pointer(&spi.cpuusage)), *(*uint64)(unsafe.Pointer(&cpuusage)))
+
+// costtime is unixnano
+func (spi *ServerPickInfo) Done(success bool, costtime uint64) {
+	if costtime != 0 {
+		for {
+			if spi.ctime.Push(costtime) {
+				spi.addcosttime(costtime)
+				break
+			} else if data, e := spi.ctime.Pop(nil); e == ring.ErrPopEmpty {
+				continue
+			} else {
+				spi.delcosttime(data)
+			}
+		}
 	}
-}
-func (spi *ServerPickInfo) Done(success bool) {
 	if success {
 		for {
 			if spi.sf.Push(true) {
@@ -110,33 +120,42 @@ func (spi *ServerPickInfo) SetDiscoverServerOffline(DiscoverServerNum uint32) {
 }
 
 func (spi *ServerPickInfo) getsuccessfail() (success uint32, fail uint32) {
-	successfail := atomic.LoadUint64(&spi.successfail)
+	successfail := atomic.LoadUint64(&spi.sfdata)
 	success = uint32(successfail & uint64(math.MaxUint32))
 	fail = uint32(successfail >> 32)
 	return
 }
 func (spi *ServerPickInfo) addsuccess() {
-	atomic.AddUint64(&spi.successfail, 1)
+	atomic.AddUint64(&spi.sfdata, 1)
 }
 func (spi *ServerPickInfo) delsuccess() {
-	atomic.AddUint64(&spi.successfail, math.MaxUint64)
+	atomic.AddUint64(&spi.sfdata, math.MaxUint64)
 }
 func (spi *ServerPickInfo) addfail() {
-	atomic.AddUint64(&spi.successfail, 1<<32)
+	atomic.AddUint64(&spi.sfdata, 1<<32)
 }
 func (spi *ServerPickInfo) delfail() {
-	atomic.AddUint64(&spi.successfail, math.MaxUint64-1<<32+1)
+	atomic.AddUint64(&spi.sfdata, math.MaxUint64-1<<32+1)
+}
+func (spi *ServerPickInfo) getcosttime() (totaltime uint64, count uint64) {
+	timedata := atomic.LoadUint64(&spi.timedata)
+	totaltime = timedata >> 10
+	count = (timedata << 54) >> 54
+	return
+}
+func (spi *ServerPickInfo) addcosttime(costtime uint64) {
+	atomic.AddUint64(&spi.timedata, costtime<<10+1)
+}
+func (spi *ServerPickInfo) delcosttime(costtime uint64) {
+	atomic.AddUint64(&spi.timedata, math.MaxUint64-(costtime<<10+1)+1)
 }
 func (spi *ServerPickInfo) getload() float64 {
 	success, fail := spi.getsuccessfail()
+	costtime, count := spi.getcosttime()
 	activecalls := spi.activecalls.Load()
-	cpuusage := math.Float64frombits(atomic.LoadUint64((*uint64)(unsafe.Pointer(&spi.cpuusage))))
-	cpuusage = max(cpuusage, 0.01)
-	errpercent := 0.0
-	if success+fail > 0 {
-		errpercent = float64(fail) / float64(success+fail)
-	}
-	return float64(activecalls) * cpuusage * (1 + errpercent)
+	return math.Atan(math.Sqrt(math.Cbrt(float64(activecalls)))) *
+		math.Atan(math.Sqrt(math.Cbrt(float64(costtime)/float64(count)))) *
+		(1 + float64(fail)/float64(success+fail))
 }
 
 type Picker struct {
@@ -166,7 +185,11 @@ func (p *Picker) Pick(forceaddr string) ServerForPick {
 			if !s.Pickable() {
 				return nil
 			}
-			s.GetServerPickInfo().Pick()
+			info := s.GetServerPickInfo()
+			if info == nil {
+				return nil
+			}
+			info.Pick()
 			return s
 		}
 		return nil
