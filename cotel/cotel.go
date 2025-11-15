@@ -163,19 +163,18 @@ func Init() error {
 }
 
 func Stop() {
-	wg := sync.WaitGroup{}
-	wg.Add(2)
-	go func() {
-		tp.Shutdown(context.Background())
-		wg.Done()
-	}()
-	go func() {
-		if needmetric {
+	if needmetric {
+		wg := sync.WaitGroup{}
+		wg.Go(func() {
+			tp.Shutdown(context.Background())
+		})
+		wg.Go(func() {
 			mp.Shutdown(context.Background())
-		}
-		wg.Done()
-	}()
-	wg.Wait()
+		})
+		wg.Wait()
+	} else {
+		tp.Shutdown(context.Background())
+	}
 }
 
 func NeedMetric() bool {
