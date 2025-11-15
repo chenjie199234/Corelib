@@ -51,7 +51,7 @@ func Init(notice func(c *AppConfig)) {
 				sourceinit = true
 				stopwatchsource()
 			case <-tmer.C:
-				slog.Error(config.Init] timeout")
+				slog.Error("config.Init] timeout")
 				os.Exit(1)
 			}
 			if appinit && sourceinit {
