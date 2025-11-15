@@ -31,15 +31,8 @@ message pingreq{
 message pingresp{
 	int64 client_timestamp=1;
 	int64 server_timestamp=2;
-	uint64 total_mem=3;
-	uint64 cur_mem_usage=4;
-	uint64 max_mem_usage=5;
-	double cpu_num=6;
-	double cur_cpu_usage=7;
-	double avg_cpu_usage=8;
-	double max_cpu_usage=9;
-	string host=10;
-	string ip=11;
+	string host=3;
+	string ip=4;
 }`
 
 type data struct {
