@@ -157,7 +157,7 @@ func Init() error {
 		mem, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("mem_usage", ometric.WithUnit("1"))
 		otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).RegisterCallback(func(ctx context.Context, s ometric.Observer) error {
 			s.ObserveFloat64(cpu, curcpu)
-			s.ObserveFloat64(mem, float64(curmem)/float64(totalmem))
+			s.ObserveFloat64(mem, float64(curmem)/float64(totalmem)*100.0 /*to percent*/)
 			gcinfo := &debug.GCStats{}
 			debug.ReadGCStats(gcinfo)
 			s.ObserveInt64(gc, gcinfo.PauseTotal.Nanoseconds())

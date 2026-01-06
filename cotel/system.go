@@ -3,6 +3,7 @@ package cotel
 import (
 	"bytes"
 	"log/slog"
+	"math"
 	"os"
 	"runtime"
 	"strconv"
@@ -102,7 +103,8 @@ func init() {
 						if e != nil {
 							slog.Error("/sys/fs/cgroup/cpu.stat data broken", slog.String("error", e.Error()))
 						}
-						curcpu = (float64(now-last) * 1000.0) /*转为纳秒*/ / (cpunum * 500_000_000) /*转为纳秒*/
+						tmp := (float64(now-last) * 1000.0) /*to nanosecond*/ / (cpunum * 500_000_000) /*to nanosecond*/ * 100.0 /*to percent*/
+						curcpu = math.Min(100, math.Max(0, tmp))
 						last = now
 						break
 					}
@@ -138,5 +140,5 @@ func init() {
 }
 
 func GetCpuMemUsage() (float64, float64, string, uint64, float64, string) {
-	return cpunum, curcpu, cputype, totalmem, float64(curmem) / float64(totalmem), memtype
+	return cpunum, curcpu, cputype, totalmem, float64(curmem) / float64(totalmem) * 100.0 /*to percent*/, memtype
 }
