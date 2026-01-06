@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -151,13 +153,19 @@ func Init() error {
 		gc, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Int64ObservableCounter("gc", ometric.WithUnit("ns"))
 		goroutine, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Int64ObservableGauge("goroutine", ometric.WithUnit("1"))
 		thread, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Int64ObservableGauge("thread", ometric.WithUnit("1"))
+		cpu, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("cpu_usage", ometric.WithUnit("1"))
+		mem, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("mem_usage", ometric.WithUnit("1"))
 		otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).RegisterCallback(func(ctx context.Context, s ometric.Observer) error {
-			goroutinenum, threadnum, gctime := getGo()
-			s.ObserveInt64(gc, int64(gctime))
-			s.ObserveInt64(goroutine, int64(goroutinenum))
+			s.ObserveFloat64(cpu, curcpu)
+			s.ObserveFloat64(mem, float64(curmem)/float64(totalmem))
+			gcinfo := &debug.GCStats{}
+			debug.ReadGCStats(gcinfo)
+			s.ObserveInt64(gc, gcinfo.PauseTotal.Nanoseconds())
+			s.ObserveInt64(goroutine, int64(runtime.NumGoroutine()))
+			threadnum, _ := runtime.ThreadCreateProfile(nil)
 			s.ObserveInt64(thread, int64(threadnum))
 			return nil
-		}, gc, goroutine, thread)
+		}, cpu, mem, gc, goroutine, thread)
 	}
 	return nil
 }

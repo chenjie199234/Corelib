@@ -17,6 +17,7 @@ import (
 	statusdao "{{.}}/dao/status"
 	// "{{.}}/ecode"
 
+	"github.com/chenjie199234/Corelib/cotel"
 	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/host"
 	// "github.com/chenjie199234/Corelib/cgrpc"
@@ -52,11 +53,18 @@ func (s *Service) Ping(ctx context.Context, in *api.Pingreq) (*api.Pingresp, err
 	//if _, ok := ctx.(*web.Context); ok {
 	//        slog.InfoContext(ctx, "this is a web call")
 	//}
+	cpu,cpuu,cput,mem,memu,memt := cotel.GetCpuMemUsage()
 	return &api.Pingresp{
 		ClientTimestamp: in.Timestamp,
 		ServerTimestamp: time.Now().UnixNano(),
 		Host:            host.Hostname,
 		Ip:              host.Hostip,
+		CpuNum:          cpu,
+		CpuUsage:        cpuu,
+		CpuType:         cput,
+		MemTotal:        mem,
+		MemUsage:        memu,
+		MemType:         memt,
 	}, nil
 }
 

@@ -33,6 +33,12 @@ message pingresp{
 	int64 server_timestamp=2;
 	string host=3;
 	string ip=4;
+	double cpu_num=5;
+	double cpu_usage=6;
+	string cpu_type=7;
+	uint64 mem_total=8;
+	double mem_usage=9;
+	string mem_type=10;
 }`
 
 type data struct {

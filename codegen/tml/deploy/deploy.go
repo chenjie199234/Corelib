@@ -64,11 +64,11 @@ spec:
               containerPort: 10000
           resources:
             limits:
-              memory: 4096Mi
-              cpu: 4000m
+              memory: "4096Mi"
+              cpu: "4000m"
             requests:
-              memory: 256Mi
-              cpu: 250m
+              memory: "256Mi"
+              cpu: "1000m"
           env:
             - name: HOSTIP
               valueFrom:
