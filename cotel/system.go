@@ -136,6 +136,7 @@ func init() {
 		}
 	}()
 }
-func GetCpuMemUsage() (float64, float64, string, float64, uint64, string) {
-	return cpunum, curcpu, cputype, float64(curmem) / float64(totalmem), totalmem, memtype
+
+func GetCpuMemUsage() (float64, float64, string, uint64, float64, string) {
+	return cpunum, curcpu, cputype, totalmem, float64(curmem) / float64(totalmem), memtype
 }
