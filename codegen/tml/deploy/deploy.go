@@ -5,7 +5,7 @@ import (
 	"text/template"
 )
 
-const docker = `FROM golang:1.25.0 as builder
+const docker = `FROM golang:1.25.5 as builder
 ENV GOSUMDB='off' \
 	GOOS='linux' \
 	GOARCH='amd64' \
@@ -16,8 +16,8 @@ ADD . /code
 WORKDIR /code
 RUN echo "start build" && go mod tidy && go build -o main && echo "end build"
 
-FROM debian:stable
-RUN apt-get update && apt-get install -y ca-certificates curl inetutils-telnet inetutils-ping inetutils-traceroute dnsutils iproute2 procps net-tools neovim && mkdir /root/app
+FROM alpine:3.23.2
+RUN mkdir /root/app
 WORKDIR /root/app
 EXPOSE 6060 7000 8000 9000 10000
 COPY --from=builder /code/main /code/AppConfig.json /code/SourceConfig.json ./
@@ -48,6 +48,18 @@ spec:
       labels:
         app: {{.AppName}}
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - {{.AppName}}
+              topologyKey: kubernetes.io/hostname
       containers:
         - name: {{.AppName}}
           image: <IMAGE>
@@ -123,13 +135,11 @@ spec:
           livenessProbe:
             tcpSocket:
               port: 8000
-            initialDelaySeconds: 5
+            initialDelaySeconds: 0
             timeoutSeconds: 1
             periodSeconds: 1
             successThreshold: 1
             failureThreshold: 3
-      imagePullSecrets:
-        - name: <PROJECT>-<GROUP>-secret
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -150,19 +160,23 @@ spec:
       resource:
         name: memory
         target:
+          # the Utilization is based on the requests not the limits
+          # so we use AverageValue and set the value close to the limits
           type: AverageValue
           averageValue: 3500Mi
     - type: Resource
       resource:
         name: cpu
         target:
+          # the Utilization is based on the requests not the limits
+          # so we use AverageValue and set the value close to the limits
           type: AverageValue
           averageValue: 3400m{{ if .NeedService }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{.AppName}}-headless
+  name: {{.AppName}}-service-headless
   namespace: <PROJECT>-<GROUP>
   labels:
     app: {{.AppName}}
@@ -182,7 +196,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{.AppName}}
+  name: {{.AppName}}-service
   namespace: <PROJECT>-<GROUP>
   labels:
     app: {{.AppName}}
@@ -209,7 +223,7 @@ spec:
     - host: <HOST>
       http:
         paths:
-          - path: /{{.AppName}}.*
+          - path: /{{.AppName}}\..*
             pathType: Prefix
             backend:
               service:
