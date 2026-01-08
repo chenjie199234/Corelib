@@ -61,6 +61,7 @@ func init() {
 		} else if bytes.Equal(mm, []byte{'m', 'a', 'x'}) {
 			memtype = "host"
 		} else {
+			mm = bytes.TrimSpace(mm)
 			limit, e := strconv.ParseUint(common.BTS(mm), 10, 64)
 			if e != nil {
 				panic("/sys/fs/cgroup/memory.max data broken")
@@ -121,6 +122,7 @@ func init() {
 				if e != nil {
 					slog.Error("read /sys/fs/cgroup/memory.current failed", slog.String("error", e.Error()))
 				} else {
+					s = bytes.TrimSpace(s)
 					if cur, e := strconv.ParseUint(common.BTS(s), 10, 64); e != nil {
 						slog.Error("data in /sys/fs/cgroup/memory.current broken",
 							slog.String("data", common.BTS(s)), slog.String("error", e.Error()))
