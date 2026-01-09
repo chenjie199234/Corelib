@@ -69,7 +69,7 @@ func init() {
 					panic("read /sys/fs/cgroup/memory.max failed,error:" + e.Error())
 				}
 				memtype = "host"
-			} else if bytes.Equal(mm, []byte{'m', 'a', 'x'}) {
+			} else if bytes.HasPrefix(mm, []byte{'m', 'a', 'x'}) {
 				memtype = "host"
 			} else {
 				mm = bytes.TrimSpace(mm)
