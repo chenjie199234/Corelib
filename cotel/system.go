@@ -69,16 +69,18 @@ func init() {
 					panic("read /sys/fs/cgroup/memory.max failed,error:" + e.Error())
 				}
 				memtype = "host"
-			} else if bytes.HasPrefix(mm, []byte{'m', 'a', 'x'}) {
-				memtype = "host"
 			} else {
 				mm = bytes.TrimSpace(mm)
-				limit, e := strconv.ParseUint(common.BTS(mm), 10, 64)
-				if e != nil {
-					panic("/sys/fs/cgroup/memory.max data broken")
+				if bytes.HasPrefix(mm, []byte{'m', 'a', 'x'}) {
+					memtype = "host"
+				} else {
+					limit, e := strconv.ParseUint(common.BTS(mm), 10, 64)
+					if e != nil {
+						panic("/sys/fs/cgroup/memory.max data broken")
+					}
+					totalmem = limit
+					memtype = "cgroupv2"
 				}
-				totalmem = limit
-				memtype = "cgroupv2"
 			}
 		} else {
 			if cm, e := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_quota_us"); e != nil {
