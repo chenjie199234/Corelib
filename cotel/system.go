@@ -20,14 +20,13 @@ import (
 var lker sync.RWMutex
 
 var last uint64
+var cputype string
 var cpunum float64
 var curcpu float64 //percent
 
+var memtype string
 var totalmem uint64
 var curmem uint64
-
-var cputype string
-var memtype string
 
 func init() {
 	cgroupv := ""
@@ -58,6 +57,9 @@ func init() {
 	}()
 }
 func readcpu(cgroupv string) {
+	cputype = ""
+	cpunum = 0
+	curcpu = 0
 	if host.Container {
 		if cgroupv == "v2" {
 			if cm, e := os.ReadFile("/sys/fs/cgroup/cpu.max"); e != nil {
@@ -72,28 +74,19 @@ func readcpu(cgroupv string) {
 				cm = bytes.TrimSpace(cm)
 				if bytes.HasPrefix(cm, []byte{'m', 'a', 'x'}) {
 					cputype = "host"
+				} else if parts := bytes.Fields(cm); len(parts) != 2 {
+					slog.Error("[cotel.system.cpu] file data broken",
+						slog.String("file", "/sys/fs/cgroup/cpu.max"),
+						slog.String("data", common.BTS(cm)))
+				} else if limit, e := strconv.ParseUint(common.BTS(parts[0]), 10, 64); e != nil {
+					slog.Error("[cotel.system.cpu] file data broken",
+						slog.String("file", "/sys/fs/cgroup/cpu.max"),
+						slog.String("data", common.BTS(cm)))
+				} else if period, e := strconv.ParseUint(common.BTS(parts[1]), 10, 64); e != nil || period == 0 {
+					slog.Error("[cotel.system.cpu] file data broken",
+						slog.String("file", "/sys/fs/cgroup/cpu.max"),
+						slog.String("data", common.BTS(cm)))
 				} else {
-					parts := bytes.Fields(cm)
-					if len(parts) != 2 {
-						slog.Error("[cotel.system.cpu] file data broken",
-							slog.String("file", "/sys/fs/cgroup/cpu.max"),
-							slog.String("data", common.BTS(cm)))
-						return
-					}
-					limit, e := strconv.ParseUint(common.BTS(parts[0]), 10, 64)
-					if e != nil || limit == 0 {
-						slog.Error("[cotel.system.cpu] file data broken",
-							slog.String("file", "/sys/fs/cgroup/cpu.max"),
-							slog.String("data", common.BTS(cm)))
-						return
-					}
-					period, e := strconv.ParseUint(common.BTS(parts[1]), 10, 64)
-					if e != nil || period == 0 {
-						slog.Error("[cotel.system.cpu] file data broken",
-							slog.String("file", "/sys/fs/cgroup/cpu.max"),
-							slog.String("data", common.BTS(cm)))
-						return
-					}
 					cpunum = float64(limit) / float64(period)
 					cputype = "cgroupv2"
 				}
@@ -108,33 +101,26 @@ func readcpu(cgroupv string) {
 			cputype = "host"
 		} else {
 			cm = bytes.TrimSpace(cm)
-			limit, e := strconv.ParseInt(common.BTS(cm), 10, 64)
-			if e != nil || limit == 0 {
+			if limit, e := strconv.ParseInt(common.BTS(cm), 10, 64); e != nil {
 				slog.Error("[cotel.system.cpu] file data broken",
 					slog.String("file", "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"),
 					slog.String("data", common.BTS(cm)))
-				return
-			}
-			if limit < 0 {
+			} else if limit < 0 {
 				cputype = "host"
+			} else if cp, e := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_period_us"); e != nil {
+				slog.Error("[cotel.system.cpu] read file failed",
+					slog.String("file", "/sys/fs/cgroup/cpu/cpu.cfs_period_us"),
+					slog.String("error", e.Error()))
 			} else {
-				cp, e := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_period_us")
-				if e != nil {
-					slog.Error("[cotel.system.cpu] read file failed",
-						slog.String("file", "/sys/fs/cgroup/cpu/cpu.cfs_period_us"),
-						slog.String("error", e.Error()))
-					return
-				}
 				cp = bytes.TrimSpace(cp)
-				period, e := strconv.ParseUint(common.BTS(cp), 10, 64)
-				if e != nil || period == 0 {
+				if period, e := strconv.ParseUint(common.BTS(cp), 10, 64); e != nil || period == 0 {
 					slog.Error("[cotel.system.cpu] file data broken",
 						slog.String("file", "/sys/fs/cgroup/cpu/cpu.cfs_period_us"),
 						slog.String("data", common.BTS(cp)))
-					return
+				} else {
+					cpunum = float64(uint64(limit)) / float64(period)
+					cputype = "cgroupv1"
 				}
-				cpunum = float64(uint64(limit)) / float64(period)
-				cputype = "cgroupv1"
 			}
 		}
 	} else {
@@ -142,7 +128,9 @@ func readcpu(cgroupv string) {
 	}
 	switch cputype {
 	case "cgroupv2":
-		if cs, e := os.ReadFile("/sys/fs/cgroup/cpu.stat"); e != nil {
+		if cpunum == 0 {
+			curcpu = 0
+		} else if cs, e := os.ReadFile("/sys/fs/cgroup/cpu.stat"); e != nil {
 			slog.Error("[cotel.system.cpu] read file failed",
 				slog.String("file", "/sys/fs/cgroup/cpu.stat"),
 				slog.String("error", e.Error()))
@@ -171,8 +159,9 @@ func readcpu(cgroupv string) {
 			}
 		}
 	case "cgroupv1":
-		s, e := os.ReadFile("/sys/fs/cgroup/cpu/cpuacct.usage")
-		if e != nil {
+		if cpunum == 0 {
+			curcpu = 0
+		} else if s, e := os.ReadFile("/sys/fs/cgroup/cpu/cpuacct.usage"); e != nil {
 			slog.Error("[cotel.system.cpu] read file failed",
 				slog.String("file", "/sys/fs/cgroup/cpu/cpuacct.usage"),
 				slog.String("error", e.Error()))
@@ -199,6 +188,9 @@ func readcpu(cgroupv string) {
 	}
 }
 func readmem(cgroupv string) {
+	memtype = ""
+	totalmem = 0
+	curmem = 0
 	if host.Container {
 		if cgroupv == "v2" {
 			if mm, e := os.ReadFile("/sys/fs/cgroup/memory.max"); e != nil {
@@ -251,8 +243,10 @@ func readmem(cgroupv string) {
 	}
 	switch memtype {
 	case "cgroupv2":
-		s, e := os.ReadFile("/sys/fs/cgroup/memory.current")
-		if e != nil {
+		if totalmem == 0 {
+			return
+		}
+		if s, e := os.ReadFile("/sys/fs/cgroup/memory.current"); e != nil {
 			slog.Error("[cotel.system.mem] read file failed",
 				slog.String("file", "/sys/fs/cgroup/memory.current"),
 				slog.String("error", e.Error()))
@@ -267,8 +261,10 @@ func readmem(cgroupv string) {
 			}
 		}
 	case "cgroupv1":
-		s, e := os.ReadFile("/sys/fs/cgroup/memory/memory.usage_in_bytes")
-		if e != nil {
+		if totalmem == 0 {
+			return
+		}
+		if s, e := os.ReadFile("/sys/fs/cgroup/memory/memory.usage_in_bytes"); e != nil {
 			slog.Error("[cotel.system.mem] read file failed",
 				slog.String("file", "/sys/fs/cgroup/memory/memory.usage_in_bytes"),
 				slog.String("error", e.Error()))
@@ -296,7 +292,7 @@ func GetCpuMemUsage() (float64, float64, string, uint64, float64, string) {
 	lker.RLock()
 	defer lker.RUnlock()
 	if totalmem == 0 {
-		return cpunum, curcpu, cputype, 0, 0, ""
+		return cpunum, curcpu, cputype, 0, 0, memtype
 	}
 	return cpunum, curcpu, cputype, totalmem, float64(curmem) / float64(totalmem) * 100.0 /*to percent*/, memtype
 }
