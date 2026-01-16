@@ -82,6 +82,9 @@ func readcpu(cgroupv string) {
 					slog.Error("[cotel.system.cpu] file data broken",
 						slog.String("file", "/sys/fs/cgroup/cpu.max"),
 						slog.String("data", common.BTS(cm)))
+				} else if limit == 0 {
+					cpunum = 0
+					cputype = "cgroupv2"
 				} else if period, e := strconv.ParseUint(common.BTS(parts[1]), 10, 64); e != nil || period == 0 {
 					slog.Error("[cotel.system.cpu] file data broken",
 						slog.String("file", "/sys/fs/cgroup/cpu.max"),
@@ -107,6 +110,9 @@ func readcpu(cgroupv string) {
 					slog.String("data", common.BTS(cm)))
 			} else if limit < 0 {
 				cputype = "host"
+			} else if limit == 0 {
+				cpunum = 0
+				cputype = "cgroupv1"
 			} else if cp, e := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_period_us"); e != nil {
 				slog.Error("[cotel.system.cpu] read file failed",
 					slog.String("file", "/sys/fs/cgroup/cpu/cpu.cfs_period_us"),
