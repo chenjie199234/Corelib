@@ -126,7 +126,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			continue
 		}
 		if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
-			g.P(method.Comments.Leading, "//Context is *cgrpc.NoStreamServerContext\n",
+			g.P(method.Comments.Leading, "//Context is cgrpc.NoStreamServerContext\n",
 				method.GoName,
 				"(",
 				g.QualifiedGoIdent(contextPackage.Ident("Context")),
@@ -207,7 +207,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				g.P("}")
 			}
 
-			g.P("resp,e:=handler(", g.QualifiedGoIdent(cgrpcPackage.Ident("NewNoStreamServerContext")), "(ctx),req)")
+			g.P("resp,e:=handler(ctx,req)")
 			g.P("if e!=nil{")
 			g.P("ctx.Abort(e)")
 			g.P("return")

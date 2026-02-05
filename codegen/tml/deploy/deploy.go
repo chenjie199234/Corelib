@@ -16,7 +16,7 @@ ADD . /code
 WORKDIR /code
 RUN echo "start build" && go mod tidy && go build -o main && echo "end build"
 
-FROM alpine:3.23.2
+FROM alpine:3.23.3
 RUN mkdir /root/app
 WORKDIR /root/app
 EXPOSE 6060 7000 8000 9000 10000

@@ -99,35 +99,17 @@ func (c *ServerContext) GetClientIp() string {
 // ----------------------------------------------- for protobuf ------------------------------------------------------
 
 // ----------------------------------------------- no stream context ---------------------------------------------
-
-func NewNoStreamServerContext(ctx *ServerContext) *NoStreamServerContext {
-	return &NoStreamServerContext{Context: ctx.Context, sctx: ctx}
-}
-
-type NoStreamServerContext struct {
+type NoStreamServerContext interface {
 	context.Context
-	sctx *ServerContext
-}
-
-func (c *NoStreamServerContext) GetPath() string {
-	return c.sctx.GetPath()
-}
-
-// get the direct peer's addr(maybe a proxy)
-func (c *NoStreamServerContext) GetRemoteAddr() string {
-	return c.sctx.GetRemoteAddr()
-}
-
-// get the real peer's ip which will not be confused by proxy
-func (c *NoStreamServerContext) GetRealPeerIp() string {
-	return c.sctx.GetRealPeerIp()
-}
-
-// this function try to return the first caller's ip(mostly time it will be the user's ip)
-// if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
-// if failed,the direct peer's ip will be returned(maybe a proxy)
-func (c *NoStreamServerContext) GetClientIp() string {
-	return c.sctx.GetClientIp()
+	GetPath() string
+	// get the direct peer's addr(maybe a proxy)
+	GetRemoteAddr() string
+	// get the real peer's ip which will not be confused by proxy
+	GetRealPeerIp() string
+	// this function try to return the first caller's ip(mostly time it will be the user's ip)
+	// if can't get the first caller's ip,try to return the real peer's ip which will not be confused by proxy
+	// if failed,the direct peer's ip will be returned(maybe a proxy)
+	GetClientIp() string
 }
 
 // ------------------------ client stream context ------------------------------------------------------------
