@@ -44,10 +44,10 @@ func Start() (*Service, error) {
 
 // Ping -
 func (s *Service) Ping(ctx context.Context, in *api.Pingreq) (*api.Pingresp, error) {
-	//if _, ok := ctx.(*crpc.Context); ok {
+	//if _, ok := ctx.(crpc.NoStreamServerContext); ok {
 	//        slog.InfoContext(ctx, "this is a crpc call")
 	//}
-	//if _, ok := ctx.(*cgrpc.Context); ok {
+	//if _, ok := ctx.(cgrpc.NoStreamServerContext); ok {
 	//        slog.InfoContext(ctx, "this is a cgrpc call")
 	//}
 	//if _, ok := ctx.(*web.Context); ok {

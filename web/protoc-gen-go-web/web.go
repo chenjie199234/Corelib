@@ -255,11 +255,12 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)>0{")
 							g.P("req.", field.GoName, "=make([]bool,0,len(forms))")
 							g.P("for _,form:=range forms{")
-							g.P("if form == ", strconv.Quote("true"), "{")
+							g.P("switch form {")
+							g.P("case \"true\":")
 							g.P("req.", field.GoName, "= append(req.", field.GoName, ",true)")
-							g.P("}else if form == ", strconv.Quote("false"), "{")
+							g.P("case \"false\":")
 							g.P("req.", field.GoName, "= append(req.", field.GoName, ",false)")
-							g.P("}else{")
+							g.P("default:")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
@@ -278,7 +279,8 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							} else if field.Desc.HasOptionalKeyword() {
 								g.P("if form!=", strconv.Quote("null"), "{")
 							}
-							g.P("if form==", strconv.Quote("true"), "{")
+							g.P("switch form {")
+							g.P("case \"true\":")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("req.", field.Oneof.GoName, "=&", g.QualifiedGoIdent(field.GoIdent), "{true}")
 							} else if field.Desc.HasOptionalKeyword() {
@@ -287,7 +289,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							} else {
 								g.P("req.", field.GoName, "=true")
 							}
-							g.P("}else if form==", strconv.Quote("false"), "{")
+							g.P("case \"false\":")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("req.", field.Oneof.GoName, "=&", g.QualifiedGoIdent(field.GoIdent), "{false}")
 							} else if field.Desc.HasOptionalKeyword() {
@@ -296,7 +298,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							} else {
 								g.P("req.", field.GoName, "=false")
 							}
-							g.P("}else{")
+							g.P("default:")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
