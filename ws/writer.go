@@ -5,8 +5,6 @@ import (
 	"encoding/binary"
 	"math"
 	"net"
-
-	"github.com/chenjie199234/Corelib/pool/bpool"
 )
 
 // 0                   1                   2                   3
@@ -70,8 +68,7 @@ func makeheader(buf *[]byte, fin, firstpiece, mask bool, length uint64, msgtype 
 
 // RFC 6455: all message from client to server must be masked
 func WriteMsg(conn net.Conn, data []byte, fin, firstpiece, mask bool) error {
-	buf := bpool.Get(len(data) + 14)
-	defer bpool.Put(&buf)
+	buf := make([]byte, 0, len(data)+14)
 	maskkey := makeheader(&buf, fin, firstpiece, mask, uint64(len(data)), uint8(_BINARY))
 	headlen := len(buf)
 	buf = append(buf, data...)
@@ -90,8 +87,7 @@ func WritePing(conn net.Conn, data []byte, mask bool) error {
 	if len(data) > 125 {
 		return ErrMsgLarge
 	}
-	buf := bpool.Get(6 + len(data))
-	defer bpool.Put(&buf)
+	buf := make([]byte, 0, len(data)+6)
 	maskkey := makeheader(&buf, true, true, mask, uint64(len(data)), uint8(_PING))
 	headlen := len(buf)
 	buf = append(buf, data...)
@@ -110,8 +106,7 @@ func WritePong(conn net.Conn, data []byte, mask bool) error {
 	if len(data) > 125 {
 		return ErrMsgLarge
 	}
-	buf := bpool.Get(6 + len(data))
-	defer bpool.Put(&buf)
+	buf := make([]byte, 0, len(data)+6)
 	maskkey := makeheader(&buf, true, true, mask, uint64(len(data)), uint8(_PONG))
 	headlen := len(buf)
 	buf = append(buf, data...)

@@ -9,8 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/chenjie199234/Corelib/pool/bpool"
-	"github.com/chenjie199234/Corelib/pool/cpool"
+	"github.com/chenjie199234/Corelib/pool"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/name"
 
@@ -31,7 +30,7 @@ type Config struct {
 }
 type Client struct {
 	c *Config
-	p *cpool.CPool[*smtp.Client]
+	p *pool.Pool[*smtp.Client]
 }
 
 func NewEmail(c *Config) (*Client, error) {
@@ -46,7 +45,7 @@ func NewEmail(c *Config) (*Client, error) {
 	}
 	return &Client{
 		c: c,
-		p: cpool.NewCPool(uint32(c.MaxOpen), func() (*smtp.Client, error) {
+		p: pool.NewCPool(uint32(c.MaxOpen), func() (*smtp.Client, error) {
 			client, e := smtp.Dial(c.Host + ":" + strconv.FormatUint(uint64(c.Port), 10))
 			if e != nil {
 				return nil, e
@@ -101,7 +100,7 @@ func (c *Client) do(ctx context.Context, to []string, subject string, mimetype s
 		}
 		if e = client.Noop(); e != nil {
 			client.Close()
-			c.p.AbandonOne()
+			c.p.Put(client, true)
 			continue
 		}
 		email := c.formemail(to, subject, mimetype, body)
@@ -109,15 +108,13 @@ func (c *Client) do(ctx context.Context, to []string, subject string, mimetype s
 		if e, del = c.sendemail(client, to, email); e != nil {
 			if del {
 				client.Close()
-				c.p.AbandonOne()
+				c.p.Put(client, true)
 			} else {
-				c.p.Put(client)
+				c.p.Put(client, false)
 			}
-			bpool.Put(&email)
 			return
 		}
-		c.p.Put(client)
-		bpool.Put(&email)
+		c.p.Put(client, false)
 		return
 	}
 }
@@ -140,7 +137,7 @@ func (c *Client) formemail(to []string, subject string, mimetype string, body []
 	//body
 	count += len(body)
 
-	buf := bpool.Get(count)
+	buf := make([]byte, 0, count)
 	//from
 	buf = append(buf, "From: "...)
 	buf = append(buf, c.c.Account...)

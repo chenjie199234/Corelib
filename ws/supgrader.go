@@ -8,11 +8,11 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-// doesn't support sub protocol and extension
+// Warning! Http header's each line's max length is 256
+// Warning! Doesn't support sub protocol and extension
 // example:
 // ver conn net.Conn
 // ... get the client conn
@@ -31,11 +31,10 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 	var accept string
 	var check uint8
 	header = make(http.Header)
-	buf := bpool.Get(256)
-	defer bpool.Put(&buf)
+	buf := make([]byte, 0, 256)
 	for {
 		line, prefix, err := reader.ReadLine()
-		if e != nil {
+		if err != nil {
 			e = err
 			return
 		}
@@ -53,21 +52,20 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 			break
 		}
 		if len(buf) == 0 {
-			//deal the line
+			//the line is the all
 		} else if len(line) == 0 {
-			//deal the buf
+			//the buf is the all
 			line = buf
 		} else if len(buf)+len(line) <= cap(buf) {
-			//deal the buf+line
+			//the buf+line is the all
 			buf = append(buf, line...)
 			line = buf
 		} else {
 			e = ErrHeaderLineFormat
 			return
 		}
-		//deal
 		if path == "" {
-			//deal the request line
+			//the request line
 			pieces := bytes.Split(line, []byte{' '})
 			for i := range pieces {
 				pieces[i] = bytes.TrimSpace(pieces[i])
@@ -84,7 +82,7 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 				path = string(pieces[1])
 			}
 		} else {
-			//deal the header line
+			//the header line
 			index := bytes.Index(line, []byte{':'})
 			if index == -1 {
 				e = ErrHeaderLineFormat
@@ -134,8 +132,8 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 		return
 	}
 	buf = append(buf, "HTTP/1.1 101 Switching Protocols\r\n"...)
-	buf = append(buf, "Upgrade: websocket\r\n"...)
 	buf = append(buf, "Connection: Upgrade\r\n"...)
+	buf = append(buf, "Upgrade: websocket\r\n"...)
 	// buf = append(buf, "Sec-WebSocket-Version: 13\r\n"...)
 	buf = append(buf, "Sec-WebSocket-Accept: "...)
 	buf = append(buf, accept...)

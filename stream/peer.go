@@ -13,7 +13,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/ws"
 )
 
@@ -102,9 +101,7 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 	}
 	//send heart probe data
 	go func() {
-		buf := bpool.Get(8)
-		defer bpool.Put(&buf)
-		buf = buf[:8]
+		buf := make([]byte, 8)
 		binary.BigEndian.PutUint64(buf, uint64(now))
 		if e := ws.WritePing(p.c, buf, false); e != nil {
 			if p.peertype == _PEER_CLIENT {
@@ -201,9 +198,7 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 	return nil
 }
 func (p *Peer) SendPing() error {
-	buf := bpool.Get(8)
-	defer bpool.Put(&buf)
-	buf = buf[:8]
+	buf := make([]byte, 8)
 	now := time.Now()
 	binary.BigEndian.PutUint64(buf, uint64(now.UnixNano()))
 	if e := ws.WritePing(p.c, buf, false); e != nil {

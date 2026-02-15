@@ -19,7 +19,6 @@ import (
 	"github.com/chenjie199234/Corelib/cotel"
 	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/metadata"
-	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/name"
@@ -75,9 +74,7 @@ func cleanPath(origin string) string {
 		return "/"
 	}
 	var realpos int
-	buf := bpool.Get(len(origin) + 1) // +1 for not start from '/'
-	defer bpool.Put(&buf)
-	buf = buf[:len(origin)+1]
+	buf := make([]byte, len(origin)+1)
 	if origin[0] != '/' {
 		buf[0] = '/'
 		realpos = 1
@@ -138,7 +135,7 @@ func cleanPath(origin string) string {
 	if realpos > 1 && buf[realpos-1] == '/' {
 		realpos--
 	}
-	return string(buf[:realpos])
+	return common.BTS(buf[:realpos])
 }
 func realip(r *http.Request) string {
 	ip := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
@@ -280,7 +277,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 			}
 		}
 		//logic
-		workctx := &Context{
+		workctx := &ServerContext{
 			Context: metadata.SetMetadata(ctx, md),
 			w:       resp,
 			r:       req,

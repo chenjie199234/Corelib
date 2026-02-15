@@ -19,7 +19,7 @@ import (
 	"github.com/chenjie199234/Corelib/util/name"
 )
 
-type OutsideHandler func(*Context)
+type OutsideHandler func(*ServerContext)
 
 type ServerConfig struct {
 	//mode 0:must have no active requests and must wait at lease WaitCloseTime

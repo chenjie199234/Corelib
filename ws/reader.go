@@ -5,8 +5,6 @@ import (
 	"encoding/binary"
 	"io"
 	"math"
-
-	"github.com/chenjie199234/Corelib/pool/bpool"
 )
 
 // 0                   1                   2                   3
@@ -69,14 +67,13 @@ func decodeFirstSecond(reader *bufio.Reader) (fin, rsv1, rsv2, rsv3 bool, opcode
 }
 
 // RFC 6455: all message from client to server must be masked
+// Warning!
+// Don't keep and reuse the []byte data in handler
+// It will be changed when next message coming
+// copy it if you need to keep and reuse
 func Read(reader *bufio.Reader, maxmsglen uint32, mustmask bool, handler func(OPCode, []byte) (readmore bool)) error {
 	code := _CONTINUE
 	var buf []byte
-	defer func() {
-		if buf != nil {
-			bpool.Put(&buf)
-		}
-	}()
 	for {
 		fin, _, _, _, curcode, mask, payloadlen, e := decodeFirstSecond(reader)
 		if e != nil {
@@ -96,8 +93,7 @@ func Read(reader *bufio.Reader, maxmsglen uint32, mustmask bool, handler func(OP
 			}
 		}
 		if buf == nil {
-			buf = bpool.Get(256)
-			buf = buf[:8]
+			buf = make([]byte, 8, 256)
 		}
 		switch payloadlen {
 		case 127:
@@ -124,8 +120,16 @@ func Read(reader *bufio.Reader, maxmsglen uint32, mustmask bool, handler func(OP
 			}
 		}
 		if payloadlen > 0 {
-			buf = bpool.CheckCap(&buf, len(buf)+int(payloadlen))
-			buf = buf[:len(buf)+int(payloadlen)]
+			factor := 1
+			for len(buf)+int(payloadlen) > cap(buf)*factor {
+				//need more cap
+				factor++
+			}
+			if factor > 1 {
+				tmp := make([]byte, len(buf)+int(payloadlen), cap(buf)*factor)
+				copy(tmp, buf)
+				buf = tmp
+			}
 			if _, e := io.ReadFull(reader, buf[len(buf)-int(payloadlen):]); e != nil {
 				return e
 			}
@@ -142,8 +146,7 @@ func Read(reader *bufio.Reader, maxmsglen uint32, mustmask bool, handler func(OP
 			if !handler(code, buf[8:]) {
 				return nil
 			}
-			if len(buf) > 4096 {
-				bpool.Put(&buf)
+			if len(buf) >= 4096 {
 				buf = nil
 			} else {
 				buf = buf[:8]

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/container/list"
-	"github.com/chenjie199234/Corelib/pool/bpool"
 )
 
 // thread unsafe
@@ -99,7 +98,6 @@ func (f *RotateFile) run() {
 			} else {
 				f.curlen += int64(n)
 			}
-			bpool.Put(&buf)
 			return true
 		}
 		return false
@@ -212,6 +210,7 @@ func (f *RotateFile) CleanNow(lastModTimestampBeforeThisNS int64) error {
 func (f *RotateFile) GetCurFileLen() int64 {
 	return f.curlen
 }
+
 func (f *RotateFile) Write(data []byte) (int, error) {
 	if len(data) == 0 {
 		return 0, nil
@@ -219,8 +218,7 @@ func (f *RotateFile) Write(data []byte) (int, error) {
 	if atomic.LoadInt32(&f.status) == 0 {
 		return 0, fmt.Errorf("[rotatefile.Write] rotate file closed")
 	}
-	buf := bpool.Get(len(data))
-	buf = buf[:len(data)]
+	buf := make([]byte, len(data))
 	copy(buf, data)
 	f.caslist.Push(buf)
 	select {

@@ -28,7 +28,6 @@ const (
 	webPackage       = protogen.GoImportPath("github.com/chenjie199234/Corelib/web")
 	commonPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/util/common")
 	metadataPackage  = protogen.GoImportPath("github.com/chenjie199234/Corelib/metadata")
-	poolPackage      = protogen.GoImportPath("github.com/chenjie199234/Corelib/pool/bpool")
 	cerrorPackage    = protogen.GoImportPath("github.com/chenjie199234/Corelib/cerror")
 )
 
@@ -191,11 +190,11 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
 		freturn := g.QualifiedGoIdent(webPackage.Ident("OutsideHandler"))
 		g.P(fname, "(", p1, ")", freturn, "{")
-		g.P("return func(ctx *", g.QualifiedGoIdent(webPackage.Ident("Context")), "){")
+		g.P("return func(ctx *", g.QualifiedGoIdent(webPackage.Ident("ServerContext")), "){")
 		g.P("req:=new(", g.QualifiedGoIdent(method.Input.GoIdent), ")")
 		if len(method.Input.Fields) > 0 {
 			if need == "POST" || need == "PUT" || need == "PATCH" {
-				g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetContentType(),", strconv.Quote("application/json"), "){")
+				g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetRequest().Header.Get(\"Content-Type\"),", strconv.Quote("application/json"), "){")
 				g.P("data, e := ctx.GetBody()")
 				g.P("if e!=nil{")
 				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] get body failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
@@ -209,7 +208,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				g.P("return")
 				g.P("}")
 				g.P("}")
-				g.P("}else if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetContentType(),", strconv.Quote("application/x-protobuf"), "){")
+				g.P("}else if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetRequest().Header.Get(\"Content-Type\"),", strconv.Quote("application/x-protobuf"), "){")
 				g.P("data, e := ctx.GetBody()")
 				g.P("if e!=nil{")
 				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] get body failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
@@ -231,7 +230,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				}
 			}
 			if reqsimple {
-				g.P("if e:=ctx.ParseForm();e!=nil{")
+				g.P("if e:=ctx.GetRequest().ParseForm();e!=nil{")
 				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] parse form failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
 				g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 				g.P("return")
@@ -252,7 +251,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					switch field.Desc.Kind() {
 					case protoreflect.BoolKind:
 						if field.Desc.IsList() {
-							g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)>0{")
+							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
 							g.P("req.", field.GoName, "=make([]bool,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("switch form {")
@@ -268,7 +267,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("}")
 							g.P("}")
 						} else {
-							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
@@ -310,7 +309,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						}
 					case protoreflect.EnumKind:
 						if field.Desc.IsList() {
-							g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)>0{")
+							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
 							g.P("req.", field.GoName, "=make([]", g.QualifiedGoIdent(field.Enum.GoIdent), ",0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseInt")), "(form,10,32);e!=nil || num < 0{")
@@ -323,7 +322,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("}")
 							g.P("}")
 						} else {
-							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
@@ -360,7 +359,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						fallthrough
 					case protoreflect.Int32Kind:
 						if field.Desc.IsList() {
-							g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)>0{")
+							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
 							g.P("req.", field.GoName, "=make([]int32,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseInt")), "(form,10,32);e!=nil{")
@@ -373,7 +372,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("}")
 							g.P("}")
 						} else {
-							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
@@ -407,7 +406,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						fallthrough
 					case protoreflect.Uint32Kind:
 						if field.Desc.IsList() {
-							g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)>0{")
+							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
 							g.P("req.", field.GoName, "=make([]uint32,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseUint")), "(form,10,32);e!=nil{")
@@ -420,7 +419,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("}")
 							g.P("}")
 						} else {
-							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
@@ -456,7 +455,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						fallthrough
 					case protoreflect.Sint64Kind:
 						if field.Desc.IsList() {
-							g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)>0{")
+							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
 							g.P("req.", field.GoName, "=make([]int64,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseInt")), "(form,10,64);e!=nil{")
@@ -469,7 +468,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("}")
 							g.P("}")
 						} else {
-							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
@@ -502,7 +501,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						fallthrough
 					case protoreflect.Uint64Kind:
 						if field.Desc.IsList() {
-							g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)>0{")
+							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
 							g.P("req.", field.GoName, "=make([]uint64,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseUint")), "(form,10,64);e!=nil{")
@@ -515,7 +514,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("}")
 							g.P("}")
 						} else {
-							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
@@ -546,7 +545,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						}
 					case protoreflect.FloatKind:
 						if field.Desc.IsList() {
-							g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)>0{")
+							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
 							g.P("req.", field.GoName, "=make([]float32,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseFloat")), "(form,32);e!=nil{")
@@ -559,7 +558,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("}")
 							g.P("}")
 						} else {
-							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
@@ -591,7 +590,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						}
 					case protoreflect.DoubleKind:
 						if field.Desc.IsList() {
-							g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)>0{")
+							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
 							g.P("req.", field.GoName, "=make([]float64,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseFloat")), "(form,64);e!=nil{")
@@ -604,7 +603,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("}")
 							g.P("}")
 						} else {
-							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
@@ -637,7 +636,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("//req.", field.GoName, "'s type in protobuf is bytes,value should be standard base64 encoded")
 						g.P("//https://developers.google.com/protocol-buffers/docs/proto3#json")
 						if field.Desc.IsList() {
-							g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)>0{")
+							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
 							g.P("req.", field.GoName, "=make([][]byte,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if str,e:=", base64Package.Ident("StdEncoding.DecodeString"), "(form);e!=nil{")
@@ -650,7 +649,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 							g.P("}")
 							g.P("}")
 						} else {
-							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
@@ -679,11 +678,11 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						}
 					case protoreflect.StringKind:
 						if field.Desc.IsList() {
-							g.P("if forms:=ctx.GetForms(", strconv.Quote(fname), ");len(forms)>0{")
+							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
 							g.P("req.", field.GoName, "=forms")
 							g.P("}")
 						} else {
-							g.P("if form:=ctx.GetForm(", strconv.Quote(fname), ");len(form)!=0{")
+							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
 							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 								g.P("if oneof", field.Oneof.GoName, "{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
@@ -732,12 +731,16 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("if resp == nil{")
 		g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 		g.P("}")
-		g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetAcceptType(),", strconv.Quote("application/x-protobuf"), "){")
+		g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetRequest().Header.Get(\"Accept\"),", strconv.Quote("application/x-protobuf"), "){")
+		g.P("ctx.SetResponseHeader(\"Content-Type\",\"application/x-protobuf\")")
 		g.P("respd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
-		g.P("ctx.Write(\"application/x-protobuf\",respd)")
+		g.P("ctx.Write(respd)")
+		g.P("ctx.Abort(nil)")
 		g.P("}else{")
+		g.P("ctx.SetResponseHeader(\"Content-Type\",\"application/json\")")
 		g.P("respd,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{AllowPartial: true,UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true}.Marshal(resp)")
-		g.P("ctx.Write(\"application/json\",respd)")
+		g.P("ctx.Write(respd)")
+		g.P("ctx.Abort(nil)")
 		g.P("}")
 		g.P("}")
 		g.P("}")
@@ -903,8 +906,7 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 		if need == "GET" || need == "DELETE" {
 			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-www-form-urlencoded"), ")")
 			g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("application/x-protobuf"), ")")
-			g.P("query :=", g.QualifiedGoIdent(poolPackage.Ident("Get")), "(256)")
-			g.P("defer ", g.QualifiedGoIdent(poolPackage.Ident("Put")), "(&query)")
+			g.P("query :=make([]byte,0,256)")
 			for _, field := range method.Input.Fields {
 				if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 					g.P("//req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ")")
@@ -916,14 +918,12 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 				case protoreflect.BoolKind:
 					if field.Desc.IsList() {
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+7)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendBool")), "(query,v)")
 						g.P("query=append(query,'&')")
 						g.P("}")
 					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+7)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendBool")), "(query,x.", field.GoName, ")")
 						g.P("query=append(query,'&')")
@@ -932,7 +932,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 						if field.Desc.HasOptionalKeyword() {
 							g.P("if req.", field.GoName, "!=nil{")
 						}
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+7)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendBool")), "(query,req.Get", field.GoName, "())")
 						g.P("query=append(query,'&')")
@@ -943,14 +942,12 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 				case protoreflect.EnumKind:
 					if field.Desc.IsList() {
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+11)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,int64(v),10)")
 						g.P("query=append(query,'&')")
 						g.P("}")
 					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+11)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,int64(x.", field.GoName, "),10)")
 						g.P("query=append(query,'&')")
@@ -959,7 +956,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 						if field.Desc.HasOptionalKeyword() {
 							g.P("if req.", field.GoName, "!=nil{")
 						}
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+11)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,int64(req.Get", field.GoName, "()),10)")
 						g.P("query=append(query,'&')")
@@ -974,14 +970,12 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 				case protoreflect.Int32Kind:
 					if field.Desc.IsList() {
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+12)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,int64(v),10)")
 						g.P("query=append(query,'&')")
 						g.P("}")
 					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+12)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,int64(x.", field.GoName, "),10)")
 						g.P("query=append(query,'&')")
@@ -990,7 +984,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 						if field.Desc.HasOptionalKeyword() {
 							g.P("if req.", field.GoName, "!=nil{")
 						}
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+12)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,int64(req.Get", field.GoName, "()),10)")
 						g.P("query=append(query,'&')")
@@ -1005,14 +998,12 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 				case protoreflect.Int64Kind:
 					if field.Desc.IsList() {
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+22)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,v,10)")
 						g.P("query=append(query,'&')")
 						g.P("}")
 					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+22)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,x.", field.GoName, ",10)")
 						g.P("query=append(query,'&')")
@@ -1021,7 +1012,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 						if field.Desc.HasOptionalKeyword() {
 							g.P("if req.", field.GoName, "!=nil{")
 						}
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+22)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,req.Get", field.GoName, "(),10)")
 						g.P("query=append(query,'&')")
@@ -1034,14 +1024,12 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 				case protoreflect.Uint32Kind:
 					if field.Desc.IsList() {
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+11)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendUint")), "(query,uint64(v),10)")
 						g.P("query=append(query,'&')")
 						g.P("}")
 					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+11)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendUint")), "(query,uint64(x.", field.GoName, "),10)")
 						g.P("query=append(query,'&')")
@@ -1050,7 +1038,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 						if field.Desc.HasOptionalKeyword() {
 							g.P("if req.", field.GoName, "!=nil{")
 						}
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+11)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendUint")), "(query,uint64(req.Get", field.GoName, "()),10)")
 						g.P("query=append(query,'&')")
@@ -1063,14 +1050,12 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 				case protoreflect.Uint64Kind:
 					if field.Desc.IsList() {
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+22)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendUint")), "(query,v,10)")
 						g.P("query=append(query,'&')")
 						g.P("}")
 					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+22)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendUint")), "(query,x.", field.GoName, ",10)")
 						g.P("query=append(query,'&')")
@@ -1079,7 +1064,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 						if field.Desc.HasOptionalKeyword() {
 							g.P("if req.", field.GoName, "!=nil{")
 						}
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+22)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendUint")), "(query,req.Get", field.GoName, "(),10)")
 						g.P("query=append(query,'&')")
@@ -1092,7 +1076,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("tmp:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(float64(v),'g',-1,32)")
 						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+len(ev)+2)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=append(query,ev...)")
 						g.P("query=append(query,'&')")
@@ -1101,7 +1084,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
 						g.P("tmp:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(float64(x.", field.GoName, "),'g',-1,32)")
 						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+len(ev)+2)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=append(query,ev...)")
 						g.P("query=append(query,'&')")
@@ -1114,7 +1096,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 						}
 						g.P("tmp:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(float64(req.Get", field.GoName, "()),'g',-1,32)")
 						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+len(ev)+2)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=append(query,ev...)")
 						g.P("query=append(query,'&')")
@@ -1125,7 +1106,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("tmp:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(v,'g',-1,64)")
 						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+len(ev)+2)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=append(query,ev...)")
 						g.P("query=append(query,'&')")
@@ -1134,7 +1114,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
 						g.P("tmp:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(x.", field.GoName, ",'g',-1,64)")
 						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+len(ev)+2)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=append(query,ev...)")
 						g.P("query=append(query,'&')")
@@ -1147,7 +1126,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 						}
 						g.P("tmp:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(req.Get", field.GoName, "(),'g',-1,64)")
 						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+len(ev)+2)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=append(query,ev...)")
 						g.P("query=append(query,'&')")
@@ -1157,7 +1135,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 					if field.Desc.IsList() {
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("ev := ", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(v)")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+len(ev)+2)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=append(query,ev...)")
 						g.P("query=append(query,'&')")
@@ -1165,7 +1142,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
 						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(x.", field.GoName, ")")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+len(ev)+2)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=append(query,ev...)")
 						g.P("query=append(query,'&')")
@@ -1177,7 +1153,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 							g.P("{")
 						}
 						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(req.Get", field.GoName, "())")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+len(ev)+2)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=append(query,ev...)")
 						g.P("query=append(query,'&')")
@@ -1189,7 +1164,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 					if field.Desc.IsList() {
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(", g.QualifiedGoIdent(base64Package.Ident("StdEncoding.EncodeToString")), "(v))")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+len(ev)+2)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=append(query,ev...)")
 						g.P("query=append(query,'&')")
@@ -1197,7 +1171,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
 						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
 						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(", g.QualifiedGoIdent(base64Package.Ident("StdEncoding.EncodeToString")), "(x.", field.GoName, "))")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+len(ev)+2)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=append(query,ev...)")
 						g.P("query=append(query,'&')")
@@ -1209,7 +1182,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 							g.P("{")
 						}
 						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(", g.QualifiedGoIdent(base64Package.Ident("StdEncoding.EncodeToString")), "(req.Get", field.GoName, "()))")
-						g.P("query=", g.QualifiedGoIdent(poolPackage.Ident("CheckCap")), "(&query,len(query)+", len(fname), "+len(ev)+2)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=append(query,ev...)")
 						g.P("query=append(query,'&')")

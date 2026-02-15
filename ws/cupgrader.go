@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
@@ -20,8 +19,7 @@ import (
 // reader := bufio.NewReader(conn)
 // Cupgrade(reader, conn)
 func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header http.Header, e error) {
-	buf := bpool.Get(150 + len(host) + len(path))
-	defer bpool.Put(&buf)
+	buf := make([]byte, 0, 150+len(host)+len(path))
 	buf = append(buf, "GET "...)
 	if path == "" {
 		buf = append(buf, "/ HTTP/1.1\r\n"...)

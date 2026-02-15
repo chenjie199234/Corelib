@@ -13,7 +13,6 @@ import (
 	"github.com/chenjie199234/Corelib/internal/resolver"
 	"github.com/chenjie199234/Corelib/internal/version"
 	cmetadata "github.com/chenjie199234/Corelib/metadata"
-	"github.com/chenjie199234/Corelib/pool/bpool"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
@@ -31,7 +30,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/keepalive"
 	gmetadata "google.golang.org/grpc/metadata"
 	gresolver "google.golang.org/grpc/resolver"
@@ -116,7 +114,6 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, serverproject, servergroup, 
 		stop:           graceful.New(),
 	}
 	opts := make([]grpc.DialOption, 0, 10)
-	opts = append(opts, experimental.WithBufferPool(bpool.GetGrpcPool()))
 	opts = append(opts, grpc.WithDisableRetry())
 	if tlsc == nil {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
