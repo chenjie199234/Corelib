@@ -59,7 +59,7 @@ func (c *ServerContext) Abort(e error) {
 		c.w.Write(common.STB(c.e.Json()))
 	}
 	if httpcode != 0 {
-		panic("[web.ServerContext.Abort] unknown http code: " + strconv.Itoa(httpcode))
+		panic("[web.ServerContext] unknown http code: " + strconv.Itoa(httpcode))
 	}
 }
 
@@ -75,13 +75,17 @@ func (c *ServerContext) AddResponseHeader(k, v string) {
 
 func (c *ServerContext) Write(msg []byte) (int, error) {
 	if atomic.LoadInt32(&c.finish) != 0 {
-		panic("[web.ServerContext] write on already finished Context")
+		panic("[web.ServerContext] write on finished context")
 	}
 	return c.w.Write(msg)
 }
 
 func (c *ServerContext) Flush() {
 	c.w.(http.Flusher).Flush()
+}
+
+func (c *ServerContext) Finished() bool {
+	return c.finish == 1
 }
 
 // ----------------------------------------------- for request------------------------------------------------------
@@ -147,7 +151,6 @@ type NoStreamServerContext interface {
 
 	//response
 	Redirect(code int, url string)
-	Abort(error)
 	SetResponseHeader(k, v string)
 	AddResponseHeader(k, v string)
 }
