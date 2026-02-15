@@ -29,35 +29,35 @@ func AllMids() map[string]web.OutsideHandler {
 func RegMid(name string, handler web.OutsideHandler) {
 	all[name] = handler
 }
-func rate(ctx *web.Context) {
-	switch ctx.GetMethod() {
+func rate(ctx *web.ServerContext) {
+	switch ctx.GetRequest().Method {
 	case http.MethodGet:
-		if pass := publicmids.HttpGetRate(ctx, ctx.GetPath()); !pass {
+		if pass := publicmids.HttpGetRate(ctx, ctx.GetRequest().URL.Path); !pass {
 			ctx.Abort(cerror.ErrBusy)
 		}
 	case http.MethodPost:
-		if pass := publicmids.HttpPostRate(ctx, ctx.GetPath()); !pass {
+		if pass := publicmids.HttpPostRate(ctx, ctx.GetRequest().URL.Path); !pass {
 			ctx.Abort(cerror.ErrBusy)
 		}
 	case http.MethodPut:
-		if pass := publicmids.HttpPutRate(ctx, ctx.GetPath()); !pass {
+		if pass := publicmids.HttpPutRate(ctx, ctx.GetRequest().URL.Path); !pass {
 			ctx.Abort(cerror.ErrBusy)
 		}
 	case http.MethodPatch:
-		if pass := publicmids.HttpPatchRate(ctx, ctx.GetPath()); !pass {
+		if pass := publicmids.HttpPatchRate(ctx, ctx.GetRequest().URL.Path); !pass {
 			ctx.Abort(cerror.ErrBusy)
 		}
 	case http.MethodDelete:
-		if pass := publicmids.HttpDelRate(ctx, ctx.GetPath()); !pass {
+		if pass := publicmids.HttpDelRate(ctx, ctx.GetRequest().URL.Path); !pass {
 			ctx.Abort(cerror.ErrBusy)
 		}
 	default:
 		ctx.Abort(cerror.ErrNotExist)
 	}
 }
-func token(ctx *web.Context) {
+func token(ctx *web.ServerContext) {
 	md := metadata.GetMetadata(ctx)
-	tokenstr := ctx.GetHeader("Token")
+	tokenstr := ctx.GetRequest().Header.Get("Token")
 	if tokenstr == "" {
 		tokenstr = md["Token"]
 	} else {
@@ -78,9 +78,9 @@ func token(ctx *web.Context) {
 	md["Token-User"] = t.UserID
 	md["Token-Data"] = t.Data
 }
-func session(ctx *web.Context) {
+func session(ctx *web.ServerContext) {
 	md := metadata.GetMetadata(ctx)
-	sessionstr := ctx.GetHeader("Session")
+	sessionstr := ctx.GetRequest().Header.Get("Session")
 	if sessionstr == "" {
 		sessionstr = md["Session"]
 	} else {
@@ -98,9 +98,9 @@ func session(ctx *web.Context) {
 	md["Session-User"] = userid
 	md["Session-Data"] = sessiondata
 }
-func accesskey(ctx *web.Context) {
+func accesskey(ctx *web.ServerContext) {
 	md := metadata.GetMetadata(ctx)
-	accesskey := ctx.GetHeader("Access-Key")
+	accesskey := ctx.GetRequest().Header.Get("Access-Key")
 	if accesskey == "" {
 		accesskey = md["Access-Key"]
 		delete(md, "Access-Key")
@@ -109,7 +109,7 @@ func accesskey(ctx *web.Context) {
 		ctx.Abort(cerror.ErrAccessKey)
 		return
 	}
-	if !publicmids.VerifyAccessKey(ctx, ctx.GetMethod(), ctx.GetPath(), accesskey) {
+	if !publicmids.VerifyAccessKey(ctx, ctx.GetRequest().Method, ctx.GetRequest().URL.Path, accesskey) {
 		ctx.Abort(cerror.ErrAccessKey)
 	}
 }
