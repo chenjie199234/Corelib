@@ -144,7 +144,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if !need {
 			continue
 		}
-		g.P(method.Comments.Leading,
+		g.P(method.Comments.Leading, "//Context is web.NoStreamServerContext\n",
 			method.GoName,
 			"(",
 			g.QualifiedGoIdent(contextPackage.Ident("Context")),

@@ -27,6 +27,10 @@ type ServerContext struct {
 	finish     int32
 }
 
+func (c *ServerContext) CGrpc() {
+	// this is placeholder for NoStreamServerContext interface
+}
+
 func (c *ServerContext) Abort(e error) {
 	if atomic.SwapInt32(&c.finish, 1) != 0 {
 		return
@@ -92,6 +96,7 @@ func (c *ServerContext) GetClientIp() string {
 // ----------------------------------------------- no stream context ---------------------------------------------
 type NoStreamServerContext interface {
 	context.Context
+	CGrpc()
 	GetPath() string
 	// get the direct peer's addr(maybe a proxy)
 	GetRemoteAddr() string

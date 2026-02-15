@@ -28,6 +28,10 @@ type ServerContext struct {
 	e      *cerror.Error
 }
 
+func (c *ServerContext) Crpc() {
+	//this is a placeholder for NoStreamServerContext interface
+}
+
 // means stop recv and send
 func (c *ServerContext) Abort(e error) {
 	if atomic.SwapInt32(&c.finish, 1) != 0 {
@@ -101,6 +105,7 @@ func (c *ServerContext) GetClientIp() string {
 // ----------------------------------------------- no stream context ---------------------------------------------
 type NoStreamServerContext interface {
 	context.Context
+	Crpc()
 	GetPath() string
 	// get the direct peer's addr(maybe a proxy)
 	GetRemoteAddr() string

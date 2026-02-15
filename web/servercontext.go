@@ -23,6 +23,10 @@ type ServerContext struct {
 	e       *cerror.Error
 }
 
+func (c *ServerContext) Web() {
+	//this is a placeholder for NoStreamServerContext interface
+}
+
 // ----------------------------------------------- for response------------------------------------------------------
 
 func (c *ServerContext) Redirect(code int, url string) {
@@ -133,6 +137,7 @@ func (c *ServerContext) GetBody() ([]byte, error) {
 // ----------------------------------------------- for protobuf ------------------------------------------------------
 
 type NoStreamServerContext interface {
+	Web()
 	//request
 	GetRequest() *http.Request
 	GetRemoteAddr() string
