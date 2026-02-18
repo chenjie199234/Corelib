@@ -75,8 +75,13 @@ func WriteMsg(conn net.Conn, data []byte, fin, firstpiece, mask bool) error {
 	if mask {
 		domask(buf[headlen:], maskkey)
 	}
-	if _, e := conn.Write(buf); e != nil {
-		return e
+	n := 0
+	for n < len(buf) {
+		nn, e := conn.Write(buf[n:])
+		if e != nil {
+			return e
+		}
+		n += nn
 	}
 	return nil
 }
@@ -94,8 +99,13 @@ func WritePing(conn net.Conn, data []byte, mask bool) error {
 	if mask {
 		domask(buf[headlen:], maskkey)
 	}
-	if _, e := conn.Write(buf); e != nil {
-		return e
+	n := 0
+	for n < len(buf) {
+		nn, e := conn.Write(buf[n:])
+		if e != nil {
+			return e
+		}
+		n += nn
 	}
 	return nil
 }
@@ -113,8 +123,13 @@ func WritePong(conn net.Conn, data []byte, mask bool) error {
 	if mask {
 		domask(buf[headlen:], maskkey)
 	}
-	if _, e := conn.Write(buf); e != nil {
-		return e
+	n := 0
+	for n < len(buf) {
+		nn, e := conn.Write(buf[n:])
+		if e != nil {
+			return e
+		}
+		n += nn
 	}
 	return nil
 }
