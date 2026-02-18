@@ -61,7 +61,7 @@ func main() {
 					if need == 0 {
 						continue
 					}
-					needfile[string(f.Desc.Path())] = true
+					needfile[f.Desc.Path()] = true
 					if need > 1 {
 						panic(fmt.Sprintf("method: %s in service: %s,only one http method can be setted", m.Desc.Name(), s.Desc.Name()))
 					}
@@ -98,7 +98,7 @@ func main() {
 		}
 		//gen file
 		for _, f := range gen.Files {
-			if status, ok := needfile[string(f.Desc.FullName())]; !ok || !status {
+			if status, ok := needfile[f.Desc.Path()]; !ok || !status {
 				continue
 			}
 			generateFile(gen, f)

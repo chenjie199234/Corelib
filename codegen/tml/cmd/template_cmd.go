@@ -89,27 +89,27 @@ update() {
 	cd $workdir
 }
 
-if !(type git >/dev/null 2>&1);then
+if ! command -v git >/dev/null 2>&1;then
 	echo "missing dependence: git"
 	exit 1
 fi
 
-if !(type go >/dev/null 2>&1);then
+if ! command -v go >/dev/null 2>&1;then
 	echo "missing dependence: golang"
 	exit 1
 fi
 
-if !(type protoc >/dev/null 2>&1);then
+if ! command -v protoc >/dev/null 2>&1;then
 	echo "missing dependence: protoc"
 	exit 1
 fi
 
-if !(type protoc-gen-go >/dev/null 2>&1);then
+if ! command -v protoc-gen-go >/dev/null 2>&1;then
 	echo "missing dependence: protoc-gen-go"
 	exit 1
 fi
 
-if !(type codegen >/dev/null 2>&1);then
+if ! command -v codegen >/dev/null 2>&1;then
 	echo "missing dependence: codegen"
 	exit 1
 fi
