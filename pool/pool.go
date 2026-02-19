@@ -27,7 +27,7 @@ type node[T any] struct {
 
 // if max == 0,means no limit
 // if timeout <= 0 or timeoutfunc == nil,means no timeout
-func NewCPool[T any](max uint32, new func() (T, error), timeout time.Duration, timeoutfunc func(t T)) *Pool[T] {
+func NewPool[T any](max uint32, new func() (T, error), timeout time.Duration, timeoutfunc func(t T)) *Pool[T] {
 	if new == nil {
 		panic("missing new func,can't create element in the pool")
 	}

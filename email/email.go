@@ -45,7 +45,7 @@ func NewEmail(c *Config) (*Client, error) {
 	}
 	return &Client{
 		c: c,
-		p: pool.NewCPool(uint32(c.MaxOpen), func() (*smtp.Client, error) {
+		p: pool.NewPool(uint32(c.MaxOpen), func() (*smtp.Client, error) {
 			client, e := smtp.Dial(c.Host + ":" + strconv.FormatUint(uint64(c.Port), 10))
 			if e != nil {
 				return nil, e
