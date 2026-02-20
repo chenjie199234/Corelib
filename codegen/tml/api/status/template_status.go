@@ -17,18 +17,18 @@ import "pbex/pbex.proto";
 //this is the proto file for status service
 service status{
 	//ping check server's health
-	rpc ping(pingreq)returns(pingresp){
+	rpc Ping(Pingreq)returns(Pingresp){
 		option (pbex.method)="get";
 		option (pbex.method)="crpc";
 		option (pbex.method)="grpc";
 	}
 }
 //req can be set with pbex extentions
-message pingreq{
+message Pingreq{
 	int64 timestamp=1[(pbex.int_gt)=0];
 }
 //resp's pbex extentions will be ignore
-message pingresp{
+message Pingresp{
 	int64 client_timestamp=1;
 	int64 server_timestamp=2;
 	string host=3;
