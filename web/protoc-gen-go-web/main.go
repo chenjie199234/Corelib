@@ -47,23 +47,23 @@ func main() {
 					if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 						continue
 					}
-					if m.Desc.IsStreamingClient() || m.Desc.IsStreamingServer() {
-						continue
-					}
 					emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
 					need := 0
 					for _, em := range emethod {
 						em = strings.ToUpper(em)
 						if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
 							need++
+							emethod[0] = em
 						}
 					}
 					if need == 0 {
 						continue
 					}
-					needfile[f.Desc.Path()] = true
 					if need > 1 {
 						panic(fmt.Sprintf("method: %s in service: %s,only one http method can be setted", m.Desc.Name(), s.Desc.Name()))
+					}
+					if m.Desc.IsStreamingClient() || (m.Desc.IsStreamingServer() && emethod[0] != "GET") {
+						panic(fmt.Sprintf("only server stream can be setted on web,and http method must be GET,method: %s in service: %s wrong", m.Desc.Name(), s.Desc.Name()))
 					}
 					if pbex.OneOfHasPBEX(m.Input) {
 						panic("oneof fields should not contain pbex")
@@ -71,14 +71,11 @@ func main() {
 					if pbex.OneOfHasPBEX(m.Output) {
 						panic("oneof fields should not contain pbex")
 					}
+					needfile[f.Desc.Path()] = true
 					//Get and Delete method can only contain simple fields
 					simple := false
-					for _, em := range emethod {
-						em = strings.ToUpper(em)
-						if em == "GET" || em == "DELETE" {
-							simple = true
-							break
-						}
+					if emethod[0] == "GET" || emethod[0] == "DELETE" {
+						simple = true
 					}
 					if !simple {
 						continue
@@ -87,7 +84,7 @@ func main() {
 						if f.Desc.Kind() != protoreflect.MessageKind {
 							continue
 						}
-						panic(fmt.Sprintf("method: %s in service: %s with http method: get/delete,it's request message can't contain nested message and map", m.Desc.Name(), s.Desc.Name()))
+						panic(fmt.Sprintf("method: %s in service: %s with http method: %s,it's request message can't contain nested message and map", m.Desc.Name(), s.Desc.Name(), emethod[0]))
 					}
 				}
 			}

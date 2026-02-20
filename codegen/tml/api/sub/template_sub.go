@@ -16,6 +16,8 @@ import "pbex/pbex.proto";
 
 //this is the proto file for {{.Sname}} service
 service {{.Sname}}{
+	//for web server the response's 'Content-Type' always be 'application/json' when response code is not 200
+	//for web server,you can set request's 'Accept' header to 'application/x-protobuf' to get the response data encoded by protobuf,and the response's 'Content-Type' will be setted to 'application/x-protobuf' otherwise it is setted to 'application/json'
 	//rpc example(examplereq)returns(exampleresp){
 	//	option (pbex.method)="get";
 	//	option (pbex.method)="crpc";
@@ -29,6 +31,29 @@ service {{.Sname}}{
 	//	option (pbex.cgrpc_midwares)="b";
 	//	option (pbex.cgrpc_midwares)="c";
 	//	option (pbex.cgrpc_midwares)="a";//this function on grpc protocol has 3 midwares,it's order is b,c,a
+	//}
+
+	//you can use the stream mode for both client and server on crpc and grpc
+	//rpc example_stream_crpc_grpc(stream examplereq)returns(stream exampleresp){
+	//	option (pbex.method)="crpc";
+	//	option (pbex.method)="grpc";//can be set to one of (get,delete,post,put,patch) or crpc or grpc
+	//	option (pbex.crpc_midwares)="b";
+	//	option (pbex.crpc_midwares)="c";
+	//	option (pbex.crpc_midwares)="a";//this function on crpc protocol has 3 midwares,it's order is b,c,a
+	//	option (pbex.cgrpc_midwares)="b";
+	//	option (pbex.cgrpc_midwares)="c";
+	//	option (pbex.cgrpc_midwares)="a";//this function on grpc protocol has 3 midwares,it's order is b,c,a
+	//}
+
+	//1.for web server,you can only use the stream mode on server and the method must be 'get'(Server Sent Events,SSE mode)
+	//2.unfortunate,javascript's 'EventSource' can't set header,so you need to use 'fetch' to simulate 'EventSource' if need to set header
+	//3.response's 'Content-Type' always be 'application/json' when code is not 200 and always be 'text/event-stream' when code is 200.
+	//4.the stream data is encoded by json(SSE can't support binary data)
+	//rpc example_stream_web(examplereq)returns(stream exampleresp){
+	//	option (pbex.method)="get";
+	//	option (pbex.web_midwares)="b";
+	//	option (pbex.web_midwares)="c";
+	//	option (pbex.web_midwares)="a";//this function on web protocol has 3 midwares,it's order is b,c,a
 	//}
 }
 //req can be set with pbex extentions

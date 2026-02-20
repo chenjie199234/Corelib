@@ -14,32 +14,16 @@ service test {
 		option (pbex.web_midwares)="user";
 		option (pbex.web_midwares)="limit";
 	}
-	rpc client_stream(stream client_stream_req)returns(client_stream_resp){
-		option (pbex.method)="get";
-	}
 	rpc server_stream(server_stream_req)returns(stream server_stream_resp){
 		option (pbex.method)="get";
+		option (pbex.web_midwares)="user";
 	}
-	rpc all_stream(stream all_stream_req)returns(stream all_stream_resp){
-		option (pbex.method)="get";
-	}
-}
-message client_stream_req{
-
-}
-message client_stream_resp{
-
 }
 message server_stream_req{
-
+  string a=1;
+  int64 b=2[(pbex.int_gt)=0];
 }
 message server_stream_resp{
-
-}
-message all_stream_req{
-
-}
-message all_stream_resp{
 
 }
 enum TestEnum {

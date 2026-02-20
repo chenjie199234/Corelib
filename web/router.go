@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -315,7 +314,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 		}()
 		for _, handler := range totalhandlers {
 			handler(workctx)
-			if atomic.LoadInt32(&workctx.finish) != 0 {
+			if workctx.responsed.Load() {
 				break
 			}
 		}

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -242,16 +243,22 @@ func WithForceAddr(ctx context.Context, forceaddr string) context.Context {
 	return context.WithValue(ctx, forceaddrkey{}, forceaddr)
 }
 
+// Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
+// Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
 // "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (resp *http.Response, e error) {
 	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil)
 }
 
+// Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
+// Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
 // "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (resp *http.Response, e error) {
 	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
 }
 
+// Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
+// Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
 // "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
 	if len(body) != 0 {
@@ -260,6 +267,8 @@ func (c *WebClient) Post(ctx context.Context, path, query string, header http.He
 	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil)
 }
 
+// Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
+// Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
 // "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
 	if len(body) != 0 {
@@ -268,6 +277,8 @@ func (c *WebClient) Put(ctx context.Context, path, query string, header http.Hea
 	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil)
 }
 
+// Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
+// Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
 // "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
 func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
 	if len(body) != 0 {
@@ -286,7 +297,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		}
 		return nil, cerror.ErrBusy
 	}
-	defer c.stop.DoneOne()
+	// defer c.stop.DoneOne()
 
 	if path != "" && path[0] != '/' {
 		path = "/" + path
@@ -319,11 +330,13 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		header.Set("Core-Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
 	for {
-		tctx, span := otel.Tracer("Corelib.web.client", trace.WithInstrumentationVersion(version.String())).Start(
+		tctx, span := otel.Tracer("Corelib.web.client",
+			trace.WithInstrumentationVersion(version.String())).Start(
 			ctx,
 			"call web",
 			trace.WithSpanKind(trace.SpanKindClient),
-			trace.WithAttributes(attribute.String("url.path", path), attribute.String("server.name", c.serverfullname)))
+			trace.WithAttributes(attribute.String("url.path", path),
+				attribute.String("server.name", c.serverfullname)))
 		otel.GetTextMapPropagator().Inject(tctx, propagation.HeaderCarrier(header))
 		//pick server
 		server, e := c.balancer.Pick(ctx)
@@ -333,6 +346,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
 				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
 			}
+			c.stop.DoneOne()
 			return nil, e
 		}
 		span.SetAttributes(attribute.String("server.addr", server.addr))
@@ -350,6 +364,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
 				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
 			}
+			c.stop.DoneOne()
 			return nil, e
 		}
 		req.Header = header
@@ -366,6 +381,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			if cotel.NeedMetric() {
 				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
+			c.stop.DoneOne()
 			return nil, e
 		}
 		if resp.StatusCode/100 != 2 {
@@ -400,6 +416,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			if cotel.NeedMetric() {
 				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
+			c.stop.DoneOne()
 			return nil, e
 		}
 		resp.Body = &wrappedbody{c: c, path: path, body: resp.Body, span: span}
@@ -408,41 +425,38 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 }
 
 type wrappedbody struct {
-	c    *WebClient
-	path string
-	span trace.Span
-	body io.ReadCloser
+	c       *WebClient
+	path    string
+	span    trace.Span
+	body    io.ReadCloser
+	cleaned atomic.Bool
 }
 
 func (b *wrappedbody) Read(p []byte) (n int, err error) {
 	n, e := b.body.Read(p)
 	if e != nil {
-		if e == io.EOF {
-			b.span.SetStatus(codes.Ok, "")
-			b.span.End()
-			if ros, ok := b.span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				b.c.recordmetric(b.path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, false)
-			}
-		} else {
-			e = cerror.Convert(e)
-			b.span.SetStatus(codes.Error, e.Error())
-			b.span.End()
-			if ros, ok := b.span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				b.c.recordmetric(b.path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
-			}
-		}
+		b.clean(e)
 	}
 	return n, e
 }
 func (b *wrappedbody) Close() error {
-	if b.span.IsRecording() {
-		b.span.SetStatus(codes.Ok, "")
+	b.clean(nil)
+	return b.body.Close()
+}
+func (b *wrappedbody) clean(e error) {
+	if !b.cleaned.Swap(true) {
+		b.c.stop.DoneOne()
+		if e == nil || e == io.EOF {
+			b.span.SetStatus(codes.Ok, "")
+		} else {
+			e = cerror.Convert(e)
+			b.span.SetStatus(codes.Error, e.Error())
+		}
 		b.span.End()
 		if ros, ok := b.span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
 			b.c.recordmetric(b.path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, false)
 		}
 	}
-	return b.body.Close()
 }
 
 func (c *WebClient) recordmetric(path string, usetimems float64, err bool) {

@@ -98,9 +98,6 @@ func genPath(file *protogen.File, service *protogen.Service, g *protogen.Generat
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
-		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
-			continue
-		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
 		need := false
 		for _, em := range emethod {
@@ -129,9 +126,6 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
-		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
-			continue
-		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
 		need := false
 		for _, em := range emethod {
@@ -144,16 +138,27 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if !need {
 			continue
 		}
-		g.P(method.Comments.Leading, "//Context is web.NoStreamServerContext\n",
-			method.GoName,
-			"(",
-			g.QualifiedGoIdent(contextPackage.Ident("Context")),
-			",*",
-			g.QualifiedGoIdent(method.Input.GoIdent),
-			")(*",
-			g.QualifiedGoIdent(method.Output.GoIdent),
-			",error)",
-			method.Comments.Trailing)
+		if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
+			g.P(method.Comments.Leading, "//Context is web.NoStreamServerContext\n",
+				method.GoName,
+				"(",
+				g.QualifiedGoIdent(contextPackage.Ident("Context")),
+				",*",
+				g.QualifiedGoIdent(method.Input.GoIdent),
+				")(*",
+				g.QualifiedGoIdent(method.Output.GoIdent),
+				",error)",
+				method.Comments.Trailing)
+		} else if !method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
+			g.P(method.Comments.Leading, "//Context is *web.ServerStreamServerContext["+method.Output.GoIdent.GoName+"]\n//Warning!Context will keep working when the server is graceful stopping and it will block the graceful stop until all Handler return\n",
+				method.GoName,
+				"(",
+				g.QualifiedGoIdent(contextPackage.Ident("Context")),
+				",*",
+				g.QualifiedGoIdent(method.Input.GoIdent),
+				")error",
+				method.Comments.Trailing)
+		}
 	}
 	g.P("}")
 	g.P()
@@ -161,9 +166,6 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	for _, method := range service.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
-			continue
-		}
-		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
 			continue
 		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
@@ -187,7 +189,12 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		}
 		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		fname := "func _" + service.GoName + "_" + method.GoName + "_" + "WebHandler"
-		p1 := "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
+		var p1 string
+		if method.Desc.IsStreamingServer() {
+			p1 = "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")error"
+		} else {
+			p1 = "handler func (" + g.QualifiedGoIdent(contextPackage.Ident("Context")) + ",*" + g.QualifiedGoIdent(method.Input.GoIdent) + ")(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
+		}
 		freturn := g.QualifiedGoIdent(webPackage.Ident("OutsideHandler"))
 		g.P(fname, "(", p1, ")", freturn, "{")
 		g.P("return func(ctx *", g.QualifiedGoIdent(webPackage.Ident("ServerContext")), "){")
@@ -712,7 +719,6 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				g.P("}")
 			}
 		}
-
 		//check
 		if pbex.NeedValidate(method.Input) {
 			g.P("if errstr := req.Validate(); errstr != \"\"{")
@@ -722,29 +728,38 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("}")
 		}
 
-		g.P("resp,e:=handler(ctx,req)")
-		g.P("ee := ", g.QualifiedGoIdent(cerrorPackage.Ident("Convert")), "(e)")
-		g.P("if ee!=nil{")
-		g.P("ctx.Abort(ee)")
-		g.P("return")
-		g.P("}")
-		g.P("if ctx.Finished() {")
-		g.P("return")
-		g.P("}")
-		g.P("if resp == nil{")
-		g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
-		g.P("}")
-		g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetRequest().Header.Get(\"Accept\"),", strconv.Quote("application/x-protobuf"), "){")
-		g.P("ctx.SetResponseHeader(\"Content-Type\",\"application/x-protobuf\")")
-		g.P("respd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
-		g.P("ctx.Write(respd)")
-		g.P("ctx.Abort(nil)")
-		g.P("}else{")
-		g.P("ctx.SetResponseHeader(\"Content-Type\",\"application/json\")")
-		g.P("respd,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{AllowPartial: true,UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true}.Marshal(resp)")
-		g.P("ctx.Write(respd)")
-		g.P("ctx.Abort(nil)")
-		g.P("}")
+		if method.Desc.IsStreamingServer() {
+			g.P("hctx := ", g.QualifiedGoIdent(webPackage.Ident("NewServerStreamServerContext")), "[", g.QualifiedGoIdent(method.Output.GoIdent), "](ctx)")
+			g.P("if e:=handler(hctx,req);e!=nil{")
+			g.P("hctx.StopSend(e)")
+			g.P("}else{")
+			g.P("hctx.StopSend(nil)")
+			g.P("}")
+		} else {
+			g.P("resp,e:=handler(ctx,req)")
+			g.P("ee := ", g.QualifiedGoIdent(cerrorPackage.Ident("Convert")), "(e)")
+			g.P("if ee!=nil{")
+			g.P("ctx.Abort(ee)")
+			g.P("return")
+			g.P("}")
+			g.P("if ctx.Responsed() {")
+			g.P("return")
+			g.P("}")
+			g.P("if resp == nil{")
+			g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
+			g.P("}")
+			g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetRequest().Header.Get(\"Accept\"),", strconv.Quote("application/x-protobuf"), "){")
+			g.P("ctx.SetResponseHeader(\"Content-Type\",\"application/x-protobuf\")")
+			g.P("respd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
+			g.P("ctx.Write(respd)")
+			g.P("ctx.Abort(nil)")
+			g.P("}else{")
+			g.P("ctx.SetResponseHeader(\"Content-Type\",\"application/json\")")
+			g.P("respd,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{AllowPartial: true,UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true}.Marshal(resp)")
+			g.P("ctx.Write(respd)")
+			g.P("ctx.Abort(nil)")
+			g.P("}")
+		}
 		g.P("}")
 		g.P("}")
 	}
@@ -756,9 +771,6 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	for _, method := range service.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
-			continue
-		}
-		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
 			continue
 		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
@@ -828,7 +840,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 	g.P("}")
 }
 
-func genClient(_ *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
+func genClient(file *protogen.File, service *protogen.Service, g *protogen.GeneratedFile) {
 	// Client interface.
 	clientName := service.GoName + "WebClient"
 	lowclientName := strings.ToLower(clientName[:1]) + clientName[1:]
@@ -837,9 +849,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 	for _, method := range service.Methods {
 		mop := method.Desc.Options().(*descriptorpb.MethodOptions)
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
-			continue
-		}
-		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
 			continue
 		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
@@ -857,10 +866,17 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 		p1 := g.QualifiedGoIdent(contextPackage.Ident("Context"))
 		p2 := g.QualifiedGoIdent(method.Input.GoIdent)
 		p3 := g.QualifiedGoIdent(httpPackage.Ident("Header"))
-		r := g.QualifiedGoIdent(method.Output.GoIdent)
-		g.P(method.Comments.Leading,
-			method.GoName, "(", p1, ",*", p2, ",", p3, ")(*", r, ",error)",
-			method.Comments.Trailing)
+		if method.Desc.IsStreamingServer() {
+			g.P(method.Comments.Leading, "//Warning!handler and Context param in handler will keep working when the client is graceful stopping and it will block the graceful stop until all Handler return\n",
+				method.GoName, "(", p1, ",*", p2, ",", p3,
+				",func(*", g.QualifiedGoIdent(webPackage.Ident("ServerStreamSSEContext")), "[", g.QualifiedGoIdent(method.Output.GoIdent), "])", "error)error",
+				method.Comments.Trailing)
+		} else {
+			r := g.QualifiedGoIdent(method.Output.GoIdent)
+			g.P(method.Comments.Leading,
+				method.GoName, "(", p1, ",*", p2, ",", p3, ")(*", r, ",error)",
+				method.Comments.Trailing)
+		}
 	}
 	g.P("}")
 	g.P()
@@ -877,9 +893,6 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 		if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 			continue
 		}
-		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
-			continue
-		}
 		emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
 		need := ""
 		for _, em := range emethod {
@@ -893,14 +906,37 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 			continue
 		}
 		pathname := "_WebPath" + service.GoName + method.GoName
-		p1 := "ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context"))
-		p2 := "req *" + g.QualifiedGoIdent(method.Input.GoIdent)
-		p3 := "header " + g.QualifiedGoIdent(httpPackage.Ident("Header"))
-		freturn := "(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
-		g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ",", p3, ")", freturn, "{")
+		if !method.Desc.IsStreamingServer() {
+			p1 := "ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context"))
+			p2 := "req *" + g.QualifiedGoIdent(method.Input.GoIdent)
+			p3 := "header " + g.QualifiedGoIdent(httpPackage.Ident("Header"))
+			freturn := "(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ",error)"
+			g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ",", p3, ")", freturn, "{")
+		} else {
+			p1 := "ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context"))
+			p2 := "req *" + g.QualifiedGoIdent(method.Input.GoIdent)
+			p3 := "header " + g.QualifiedGoIdent(httpPackage.Ident("Header"))
+			p4 := "handler func(*" + g.QualifiedGoIdent(webPackage.Ident("ServerStreamSSEContext")) + "[" + g.QualifiedGoIdent(method.Output.GoIdent) + "])error"
+			g.P("func (c *", lowclientName, ")", method.GoName, "(", p1, ",", p2, ",", p3, ",", p4, ")error{")
+		}
 		g.P("if req == nil {")
-		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
+		if method.Desc.IsStreamingServer() {
+			g.P("return ", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
+		} else {
+			g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
+		}
 		g.P("}")
+		if pbex.NeedValidate(method.Input) {
+			g.P("if errstr := req.Validate(); errstr != \"\"{")
+			pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
+			if method.Desc.IsStreamingServer() {
+				g.P("return ", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
+			} else {
+				g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
+			}
+			g.P("}")
+		}
 
 		g.P("if header == nil {")
 		g.P("header = make(", g.QualifiedGoIdent(httpPackage.Ident("Header")), ")")
@@ -908,7 +944,12 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 
 		if need == "GET" || need == "DELETE" {
 			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-www-form-urlencoded"), ")")
-			g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("application/x-protobuf"), ")")
+			if method.Desc.IsStreamingServer() {
+				g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("text/event-stream"), ")")
+				g.P("header.Set(", strconv.Quote("Cache-Control"), ",", strconv.Quote("no-cache"), ")")
+			} else {
+				g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("application/x-protobuf"), ")")
+			}
 			g.P("query :=make([]byte,0,256)")
 			for _, field := range method.Input.Fields {
 				if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
@@ -1217,25 +1258,35 @@ func genClient(_ *protogen.File, service *protogen.Service, g *protogen.Generate
 			}
 		}
 		g.P("if e != nil {")
-		g.P("return nil,e")
+		if method.Desc.IsStreamingServer() {
+			g.P("return e")
+		} else {
+			g.P("return nil,e")
+		}
 		g.P("}")
-		g.P("data,e:=", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(r.Body)")
-		g.P("r.Body.Close()")
-		g.P("if e!=nil {")
-		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("Convert")), "(e)")
-		g.P("}")
-		g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
-		g.P("if len(data)==0{")
-		g.P("return resp,nil")
-		g.P("}")
-		g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(r.Header.Get(\"Content-Type\"), \"application/x-protobuf\"){")
-		g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(data,resp);e!=nil{")
-		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrResp")))
-		g.P("}")
-		g.P("} else if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(data,resp);e!=nil{")
-		g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrResp")))
-		g.P("}")
-		g.P("return resp, nil")
+		if method.Desc.IsStreamingServer() {
+			g.P("e = handler(", g.QualifiedGoIdent(webPackage.Ident("NewServerStreamSSEContext")), "[", g.QualifiedGoIdent(method.Output.GoIdent), "](", g.QualifiedGoIdent(webPackage.Ident("NewSSEContext")), "(r)))")
+			g.P("r.Body.Close()")
+			g.P("return e")
+		} else {
+			g.P("data,e:=", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(r.Body)")
+			g.P("r.Body.Close()")
+			g.P("if e!=nil {")
+			g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("Convert")), "(e)")
+			g.P("}")
+			g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
+			g.P("if len(data)==0{")
+			g.P("return resp,nil")
+			g.P("}")
+			g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(r.Header.Get(\"Content-Type\"), \"application/x-protobuf\"){")
+			g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(data,resp);e!=nil{")
+			g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrResp")))
+			g.P("}")
+			g.P("} else if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(data,resp);e!=nil{")
+			g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrResp")))
+			g.P("}")
+			g.P("return resp, nil")
+		}
 		g.P("}")
 	}
 }

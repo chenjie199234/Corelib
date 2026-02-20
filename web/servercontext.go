@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"sync/atomic"
@@ -10,17 +11,19 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/util/common"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type ServerContext struct {
 	context.Context
-	w       http.ResponseWriter
-	r       *http.Request
-	peerip  string
-	finish  int32
-	body    []byte
-	bodyerr error
-	e       *cerror.Error
+	w         http.ResponseWriter
+	r         *http.Request
+	peerip    string
+	responsed atomic.Bool
+	body      []byte
+	bodyerr   error
+	e         *cerror.Error
 }
 
 func (c *ServerContext) Web() {
@@ -30,7 +33,7 @@ func (c *ServerContext) Web() {
 // ----------------------------------------------- for response------------------------------------------------------
 
 func (c *ServerContext) Redirect(code int, url string) {
-	if atomic.SwapInt32(&c.finish, 1) != 0 {
+	if c.responsed.Swap(true) {
 		return
 	}
 	if code != 301 && code != 302 && code != 303 && code != 307 && code != 308 {
@@ -41,7 +44,7 @@ func (c *ServerContext) Redirect(code int, url string) {
 
 // if e is not nil,it will be converted to cerror.Error and will set the response code to 4xx or 5xx,see the Httpcode in cerror.Error
 func (c *ServerContext) Abort(e error) {
-	if atomic.SwapInt32(&c.finish, 1) != 0 {
+	if c.responsed.Swap(true) {
 		return
 	}
 	httpcode := 0
@@ -74,18 +77,15 @@ func (c *ServerContext) AddResponseHeader(k, v string) {
 }
 
 func (c *ServerContext) Write(msg []byte) (int, error) {
-	if atomic.LoadInt32(&c.finish) != 0 {
-		panic("[web.ServerContext] write on finished context")
-	}
+	c.responsed.Store(true)
 	return c.w.Write(msg)
 }
-
 func (c *ServerContext) Flush() {
 	c.w.(http.Flusher).Flush()
 }
 
-func (c *ServerContext) Finished() bool {
-	return c.finish == 1
+func (c *ServerContext) Responsed() bool {
+	return c.responsed.Load()
 }
 
 // ----------------------------------------------- for request------------------------------------------------------
@@ -155,5 +155,100 @@ type NoStreamServerContext interface {
 	AddResponseHeader(k, v string)
 }
 
-type ServerStreamServerContext struct {
+func NewServerStreamServerContext[resptype any](ctx *ServerContext) *ServerStreamServerContext[resptype] {
+	cctx := &ServerStreamServerContext[resptype]{Context: ctx.Context, sctx: ctx}
+	ctx.w.Header().Set("Content-Type", "text/event-stream")
+	ctx.w.Header().Set("Cache-Control", "no-cache")
+	ctx.w.Header().Set("Connection", "keep-alive")
+	return cctx
+}
+
+type ServerStreamServerContext[resptype any] struct {
+	context.Context
+	sctx    *ServerContext
+	stopped atomic.Bool
+}
+
+// for Server Sent Events without retry and event support(use the default event:message)
+func (c *ServerStreamServerContext[resptype]) Send(id string, resp *resptype) error {
+	var tmp any = resp
+	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
+	if !ok {
+		//if use the protoc-go-web's generate code,this will not happen
+		slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] response struct's type is not proto's message")
+		return cerror.ErrSystem
+	}
+	select {
+	case <-c.Context.Done():
+		slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] send response failed", slog.String("error", cerror.ErrClosed.Error()))
+		return cerror.ErrClosed
+	default:
+	}
+	if c.stopped.Load() {
+		slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] send response failed", slog.String("error", cerror.ErrClosed.Error()))
+		return cerror.ErrClosed
+	}
+	d, _ := (protojson.MarshalOptions{AllowPartial: true, UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true}).Marshal(tmptmp)
+	var msg []byte
+	if len(id) > 0 {
+		msg = make([]byte, 0, len(id)+5+len(d)+8)
+		msg = append(msg, "id: "...)
+		msg = append(msg, id...)
+		msg = append(msg, '\n')
+	} else {
+		msg = make([]byte, 0, len(d)+8)
+	}
+	msg = append(msg, "data: "...)
+	msg = append(msg, d...)
+	msg = append(msg, "\n\n"...)
+	n := 0
+	for n < len(msg) {
+		nn, e := c.sctx.Write(msg[n:])
+		if e != nil {
+			slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] send response failed", slog.String("error", e.Error()))
+			return e
+		}
+		n += nn
+	}
+	c.sctx.Flush()
+	return nil
+}
+
+// for Server Sent Events,if e != nil,send event: error
+func (c *ServerStreamServerContext[resptype]) StopSend(e error) {
+	if c.stopped.Swap(true) {
+		return
+	}
+	ee := cerror.Convert(e)
+	if ee == nil {
+		return
+	}
+	d := ee.Json()
+	msg := make([]byte, 0, 21+len(d))
+	msg = append(msg, "event: error\ndata: "...)
+	msg = append(msg, d...)
+	msg = append(msg, "\n\n"...)
+	n := 0
+	for n < len(msg) {
+		nn, e := c.sctx.Write(msg[n:])
+		if e != nil {
+			return
+		}
+		n += nn
+	}
+	c.sctx.Flush()
+}
+
+// can get the Last-Event-ID from header
+func (c *ServerStreamServerContext[resptype]) GetRequest() *http.Request {
+	return c.sctx.GetRequest()
+}
+func (c *ServerStreamServerContext[resptype]) GetRemoteAddr() string {
+	return c.sctx.GetRemoteAddr()
+}
+func (c *ServerStreamServerContext[resptype]) GetRealPeerIp() string {
+	return c.sctx.GetRealPeerIp()
+}
+func (c *ServerStreamServerContext[resptype]) GetClientIp() string {
+	return c.sctx.GetClientIp()
 }
