@@ -48,7 +48,7 @@ service {{.Sname}}{
 	//1.for web server,you can only use the stream mode on server and the method must be 'get'(Server Sent Events,SSE mode)
 	//2.unfortunate,javascript's 'EventSource' can't set header,so you need to use 'fetch' to simulate 'EventSource' if need to set header
 	//3.response's 'Content-Type' always be 'application/json' when code is not 200 and always be 'text/event-stream' when code is 200.
-	//4.the stream data is encoded by json(SSE can't support binary data)
+	//4.only event:message(default) and event:error will be used,and event:error always be the last,after this,the connection will be closed
 	//rpc ExampleStreamWeb(ExampleReq)returns(stream ExampleResp){
 	//	option (pbex.method)="get";
 	//	option (pbex.web_midwares)="b";
