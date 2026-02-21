@@ -33,6 +33,7 @@ import (
 	"github.com/chenjie199234/Corelib/codegen/tml/service/sub"
 	"github.com/chenjie199234/Corelib/codegen/tml/util"
 	"github.com/chenjie199234/Corelib/internal/version"
+	"github.com/chenjie199234/Corelib/util/name"
 	cname "github.com/chenjie199234/Corelib/util/name"
 )
 
@@ -227,6 +228,9 @@ func createBaseProject() {
 }
 func createSubProject() {
 	fmt.Println("start create sub service.")
+	if e := name.SingleCheck(*gensub, false); e != nil {
+		panic(e)
+	}
 	_, e := os.Stat("./api/" + *gensub + ".proto")
 	if e == nil {
 		panic("./api/" + *gensub + ".proto already exist")

@@ -15,7 +15,7 @@ option go_package="{{.PackageName}}/api;api";
 import "pbex/pbex.proto";
 
 //this is the proto file for status service
-service status{
+service Status{
 	//ping check server's health
 	rpc Ping(Pingreq)returns(Pingresp){
 		option (pbex.method)="get";

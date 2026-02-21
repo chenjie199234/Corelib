@@ -75,7 +75,7 @@ func CreatePathAndFile(packagename, projectname, sname string) {
 	tmp := &data{
 		PackageName: packagename,
 		ProjectName: projectname,
-		Sname:       sname,
+		Sname:       string(sname[0]-32) + sname[1:],
 	}
 	if e := os.MkdirAll("./api/", 0755); e != nil {
 		panic("mkdir ./api/ error: " + e.Error())
