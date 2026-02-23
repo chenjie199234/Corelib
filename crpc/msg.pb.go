@@ -11,7 +11,6 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
-	sync "sync"
 	unsafe "unsafe"
 )
 
@@ -25,28 +24,28 @@ const (
 type MsgType int32
 
 const (
-	MsgType_Init          MsgType = 0
-	MsgType_Send          MsgType = 1
-	MsgType_CloseSend     MsgType = 2
-	MsgType_CloseRecv     MsgType = 3
-	MsgType_CloseRecvSend MsgType = 4
+	MsgType_INIT            MsgType = 0
+	MsgType_SEND            MsgType = 1
+	MsgType_CLOSE_SEND      MsgType = 2
+	MsgType_CLOSE_RECV      MsgType = 3
+	MsgType_CLOSE_RECV_SEND MsgType = 4
 )
 
 // Enum value maps for MsgType.
 var (
 	MsgType_name = map[int32]string{
-		0: "Init",
-		1: "Send",
-		2: "CloseSend",
-		3: "CloseRecv",
-		4: "CloseRecvSend",
+		0: "INIT",
+		1: "SEND",
+		2: "CLOSE_SEND",
+		3: "CLOSE_RECV",
+		4: "CLOSE_RECV_SEND",
 	}
 	MsgType_value = map[string]int32{
-		"Init":          0,
-		"Send":          1,
-		"CloseSend":     2,
-		"CloseRecv":     3,
-		"CloseRecvSend": 4,
+		"INIT":            0,
+		"SEND":            1,
+		"CLOSE_SEND":      2,
+		"CLOSE_RECV":      3,
+		"CLOSE_RECV_SEND": 4,
 	}
 )
 
@@ -72,30 +71,25 @@ func (x MsgType) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use MsgType.Descriptor instead.
-func (MsgType) EnumDescriptor() ([]byte, []int) {
-	return file_crpc_msg_proto_rawDescGZIP(), []int{0}
-}
-
 type Encoder int32
 
 const (
-	Encoder_Unknown  Encoder = 0
-	Encoder_Protobuf Encoder = 1
-	Encoder_Json     Encoder = 2
+	Encoder_UNKNOWN  Encoder = 0
+	Encoder_PROTOBUF Encoder = 1
+	Encoder_JSON     Encoder = 2
 )
 
 // Enum value maps for Encoder.
 var (
 	Encoder_name = map[int32]string{
-		0: "Unknown",
-		1: "Protobuf",
-		2: "Json",
+		0: "UNKNOWN",
+		1: "PROTOBUF",
+		2: "JSON",
 	}
 	Encoder_value = map[string]int32{
-		"Unknown":  0,
-		"Protobuf": 1,
-		"Json":     2,
+		"UNKNOWN":  0,
+		"PROTOBUF": 1,
+		"JSON":     2,
 	}
 )
 
@@ -121,18 +115,15 @@ func (x Encoder) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use Encoder.Descriptor instead.
-func (Encoder) EnumDescriptor() ([]byte, []int) {
-	return file_crpc_msg_proto_rawDescGZIP(), []int{1}
-}
-
 type Msg struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	H             *MsgHeader             `protobuf:"bytes,1,opt,name=h,proto3" json:"h,omitempty"`
-	B             *MsgBody               `protobuf:"bytes,2,opt,name=b,proto3" json:"b,omitempty"`
-	WithB         bool                   `protobuf:"varint,3,opt,name=with_b,json=withB,proto3" json:"with_b,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_H           *Msg_Header            `protobuf:"bytes,1,opt,name=h"`
+	xxx_hidden_B           *Msg_Body              `protobuf:"bytes,2,opt,name=b"`
+	xxx_hidden_WithB       bool                   `protobuf:"varint,3,opt,name=with_b,json=withB"`
+	XXX_raceDetectHookData protoimpl.RaceDetectHookData
+	XXX_presence           [1]uint32
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *Msg) Reset() {
@@ -160,58 +151,123 @@ func (x *Msg) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Msg.ProtoReflect.Descriptor instead.
-func (*Msg) Descriptor() ([]byte, []int) {
-	return file_crpc_msg_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *Msg) GetH() *MsgHeader {
+func (x *Msg) GetH() *Msg_Header {
 	if x != nil {
-		return x.H
+		return x.xxx_hidden_H
 	}
 	return nil
 }
 
-func (x *Msg) GetB() *MsgBody {
+func (x *Msg) GetB() *Msg_Body {
 	if x != nil {
-		return x.B
+		return x.xxx_hidden_B
 	}
 	return nil
 }
 
 func (x *Msg) GetWithB() bool {
 	if x != nil {
-		return x.WithB
+		return x.xxx_hidden_WithB
 	}
 	return false
 }
 
-type MsgHeader struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Callid        uint64                 `protobuf:"varint,1,opt,name=callid,proto3" json:"callid,omitempty"`
-	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
-	Type          MsgType                `protobuf:"varint,3,opt,name=type,proto3,enum=crpc.MsgType" json:"type,omitempty"`
-	Deadline      int64                  `protobuf:"varint,4,opt,name=deadline,proto3" json:"deadline,omitempty"`
-	Metadata      map[string]string      `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Tracedata     map[string]string      `protobuf:"bytes,6,rep,name=tracedata,proto3" json:"tracedata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+func (x *Msg) SetH(v *Msg_Header) {
+	x.xxx_hidden_H = v
 }
 
-func (x *MsgHeader) Reset() {
-	*x = MsgHeader{}
+func (x *Msg) SetB(v *Msg_Body) {
+	x.xxx_hidden_B = v
+}
+
+func (x *Msg) SetWithB(v bool) {
+	x.xxx_hidden_WithB = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 3)
+}
+
+func (x *Msg) HasH() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_H != nil
+}
+
+func (x *Msg) HasB() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_B != nil
+}
+
+func (x *Msg) HasWithB() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 2)
+}
+
+func (x *Msg) ClearH() {
+	x.xxx_hidden_H = nil
+}
+
+func (x *Msg) ClearB() {
+	x.xxx_hidden_B = nil
+}
+
+func (x *Msg) ClearWithB() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
+	x.xxx_hidden_WithB = false
+}
+
+type Msg_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	H     *Msg_Header
+	B     *Msg_Body
+	WithB *bool
+}
+
+func (b0 Msg_builder) Build() *Msg {
+	m0 := &Msg{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_H = b.H
+	x.xxx_hidden_B = b.B
+	if b.WithB != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 3)
+		x.xxx_hidden_WithB = *b.WithB
+	}
+	return m0
+}
+
+type Msg_Header struct {
+	state                  protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Callid      uint64                 `protobuf:"varint,1,opt,name=callid"`
+	xxx_hidden_Path        *string                `protobuf:"bytes,2,opt,name=path"`
+	xxx_hidden_Type        MsgType                `protobuf:"varint,3,opt,name=type,enum=crpc.MsgType"`
+	xxx_hidden_Deadline    int64                  `protobuf:"varint,4,opt,name=deadline"`
+	xxx_hidden_Metadata    map[string]string      `protobuf:"bytes,5,rep,name=metadata" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	xxx_hidden_Tracedata   map[string]string      `protobuf:"bytes,6,rep,name=tracedata" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	XXX_raceDetectHookData protoimpl.RaceDetectHookData
+	XXX_presence           [1]uint32
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *Msg_Header) Reset() {
+	*x = Msg_Header{}
 	mi := &file_crpc_msg_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MsgHeader) String() string {
+func (x *Msg_Header) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MsgHeader) ProtoMessage() {}
+func (*Msg_Header) ProtoMessage() {}
 
-func (x *MsgHeader) ProtoReflect() protoreflect.Message {
+func (x *Msg_Header) ProtoReflect() protoreflect.Message {
 	mi := &file_crpc_msg_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -223,76 +279,190 @@ func (x *MsgHeader) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MsgHeader.ProtoReflect.Descriptor instead.
-func (*MsgHeader) Descriptor() ([]byte, []int) {
-	return file_crpc_msg_proto_rawDescGZIP(), []int{0, 0}
-}
-
-func (x *MsgHeader) GetCallid() uint64 {
+func (x *Msg_Header) GetCallid() uint64 {
 	if x != nil {
-		return x.Callid
+		return x.xxx_hidden_Callid
 	}
 	return 0
 }
 
-func (x *MsgHeader) GetPath() string {
+func (x *Msg_Header) GetPath() string {
 	if x != nil {
-		return x.Path
+		if x.xxx_hidden_Path != nil {
+			return *x.xxx_hidden_Path
+		}
+		return ""
 	}
 	return ""
 }
 
-func (x *MsgHeader) GetType() MsgType {
+func (x *Msg_Header) GetType() MsgType {
 	if x != nil {
-		return x.Type
+		if protoimpl.X.Present(&(x.XXX_presence[0]), 2) {
+			return x.xxx_hidden_Type
+		}
 	}
-	return MsgType_Init
+	return MsgType_INIT
 }
 
-func (x *MsgHeader) GetDeadline() int64 {
+func (x *Msg_Header) GetDeadline() int64 {
 	if x != nil {
-		return x.Deadline
+		return x.xxx_hidden_Deadline
 	}
 	return 0
 }
 
-func (x *MsgHeader) GetMetadata() map[string]string {
+func (x *Msg_Header) GetMetadata() map[string]string {
 	if x != nil {
-		return x.Metadata
+		return x.xxx_hidden_Metadata
 	}
 	return nil
 }
 
-func (x *MsgHeader) GetTracedata() map[string]string {
+func (x *Msg_Header) GetTracedata() map[string]string {
 	if x != nil {
-		return x.Tracedata
+		return x.xxx_hidden_Tracedata
 	}
 	return nil
 }
 
-type MsgBody struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Body          []byte                 `protobuf:"bytes,1,opt,name=body,proto3" json:"body,omitempty"`
-	BodyEncoder   Encoder                `protobuf:"varint,2,opt,name=body_encoder,json=bodyEncoder,proto3,enum=crpc.Encoder" json:"body_encoder,omitempty"`
-	Error         *cerror.Error          `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"` //only from server to client
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+func (x *Msg_Header) SetCallid(v uint64) {
+	x.xxx_hidden_Callid = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 6)
 }
 
-func (x *MsgBody) Reset() {
-	*x = MsgBody{}
+func (x *Msg_Header) SetPath(v string) {
+	x.xxx_hidden_Path = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 6)
+}
+
+func (x *Msg_Header) SetType(v MsgType) {
+	x.xxx_hidden_Type = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 6)
+}
+
+func (x *Msg_Header) SetDeadline(v int64) {
+	x.xxx_hidden_Deadline = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 6)
+}
+
+func (x *Msg_Header) SetMetadata(v map[string]string) {
+	x.xxx_hidden_Metadata = v
+}
+
+func (x *Msg_Header) SetTracedata(v map[string]string) {
+	x.xxx_hidden_Tracedata = v
+}
+
+func (x *Msg_Header) HasCallid() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
+}
+
+func (x *Msg_Header) HasPath() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
+}
+
+func (x *Msg_Header) HasType() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 2)
+}
+
+func (x *Msg_Header) HasDeadline() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 3)
+}
+
+func (x *Msg_Header) ClearCallid() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
+	x.xxx_hidden_Callid = 0
+}
+
+func (x *Msg_Header) ClearPath() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 1)
+	x.xxx_hidden_Path = nil
+}
+
+func (x *Msg_Header) ClearType() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
+	x.xxx_hidden_Type = MsgType_INIT
+}
+
+func (x *Msg_Header) ClearDeadline() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 3)
+	x.xxx_hidden_Deadline = 0
+}
+
+type Msg_Header_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Callid    *uint64
+	Path      *string
+	Type      *MsgType
+	Deadline  *int64
+	Metadata  map[string]string
+	Tracedata map[string]string
+}
+
+func (b0 Msg_Header_builder) Build() *Msg_Header {
+	m0 := &Msg_Header{}
+	b, x := &b0, m0
+	_, _ = b, x
+	if b.Callid != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 6)
+		x.xxx_hidden_Callid = *b.Callid
+	}
+	if b.Path != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 6)
+		x.xxx_hidden_Path = b.Path
+	}
+	if b.Type != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 6)
+		x.xxx_hidden_Type = *b.Type
+	}
+	if b.Deadline != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 6)
+		x.xxx_hidden_Deadline = *b.Deadline
+	}
+	x.xxx_hidden_Metadata = b.Metadata
+	x.xxx_hidden_Tracedata = b.Tracedata
+	return m0
+}
+
+type Msg_Body struct {
+	state                  protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Body        []byte                 `protobuf:"bytes,1,opt,name=body"`
+	xxx_hidden_BodyEncoder Encoder                `protobuf:"varint,2,opt,name=body_encoder,json=bodyEncoder,enum=crpc.Encoder"`
+	xxx_hidden_Error       *cerror.Error          `protobuf:"bytes,3,opt,name=error"`
+	XXX_raceDetectHookData protoimpl.RaceDetectHookData
+	XXX_presence           [1]uint32
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *Msg_Body) Reset() {
+	*x = Msg_Body{}
 	mi := &file_crpc_msg_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MsgBody) String() string {
+func (x *Msg_Body) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MsgBody) ProtoMessage() {}
+func (*Msg_Body) ProtoMessage() {}
 
-func (x *MsgBody) ProtoReflect() protoreflect.Message {
+func (x *Msg_Body) ProtoReflect() protoreflect.Message {
 	mi := &file_crpc_msg_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -304,30 +474,103 @@ func (x *MsgBody) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MsgBody.ProtoReflect.Descriptor instead.
-func (*MsgBody) Descriptor() ([]byte, []int) {
-	return file_crpc_msg_proto_rawDescGZIP(), []int{0, 1}
-}
-
-func (x *MsgBody) GetBody() []byte {
+func (x *Msg_Body) GetBody() []byte {
 	if x != nil {
-		return x.Body
+		return x.xxx_hidden_Body
 	}
 	return nil
 }
 
-func (x *MsgBody) GetBodyEncoder() Encoder {
+func (x *Msg_Body) GetBodyEncoder() Encoder {
 	if x != nil {
-		return x.BodyEncoder
+		if protoimpl.X.Present(&(x.XXX_presence[0]), 1) {
+			return x.xxx_hidden_BodyEncoder
+		}
 	}
-	return Encoder_Unknown
+	return Encoder_UNKNOWN
 }
 
-func (x *MsgBody) GetError() *cerror.Error {
+func (x *Msg_Body) GetError() *cerror.Error {
 	if x != nil {
-		return x.Error
+		return x.xxx_hidden_Error
 	}
 	return nil
+}
+
+func (x *Msg_Body) SetBody(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Body = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 3)
+}
+
+func (x *Msg_Body) SetBodyEncoder(v Encoder) {
+	x.xxx_hidden_BodyEncoder = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 3)
+}
+
+func (x *Msg_Body) SetError(v *cerror.Error) {
+	x.xxx_hidden_Error = v
+}
+
+func (x *Msg_Body) HasBody() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
+}
+
+func (x *Msg_Body) HasBodyEncoder() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
+}
+
+func (x *Msg_Body) HasError() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Error != nil
+}
+
+func (x *Msg_Body) ClearBody() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
+	x.xxx_hidden_Body = nil
+}
+
+func (x *Msg_Body) ClearBodyEncoder() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 1)
+	x.xxx_hidden_BodyEncoder = Encoder_UNKNOWN
+}
+
+func (x *Msg_Body) ClearError() {
+	x.xxx_hidden_Error = nil
+}
+
+type Msg_Body_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Body        []byte
+	BodyEncoder *Encoder
+	Error       *cerror.Error
+}
+
+func (b0 Msg_Body_builder) Build() *Msg_Body {
+	m0 := &Msg_Body{}
+	b, x := &b0, m0
+	_, _ = b, x
+	if b.Body != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 3)
+		x.xxx_hidden_Body = b.Body
+	}
+	if b.BodyEncoder != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 3)
+		x.xxx_hidden_BodyEncoder = *b.BodyEncoder
+	}
+	x.xxx_hidden_Error = b.Error
+	return m0
 }
 
 var File_crpc_msg_proto protoreflect.FileDescriptor
@@ -335,70 +578,60 @@ var File_crpc_msg_proto protoreflect.FileDescriptor
 const file_crpc_msg_proto_rawDesc = "" +
 	"\n" +
 	"\x0ecrpc/msg.proto\x12\x04crpc\x1a\x13cerror/cerror.proto\"\xb9\x04\n" +
-	"\x03msg\x12\x1e\n" +
-	"\x01h\x18\x01 \x01(\v2\x10.crpc.msg.headerR\x01h\x12\x1c\n" +
-	"\x01b\x18\x02 \x01(\v2\x0e.crpc.msg.bodyR\x01b\x12\x15\n" +
+	"\x03Msg\x12\x1e\n" +
+	"\x01h\x18\x01 \x01(\v2\x10.crpc.Msg.HeaderR\x01h\x12\x1c\n" +
+	"\x01b\x18\x02 \x01(\v2\x0e.crpc.Msg.BodyR\x01b\x12\x15\n" +
 	"\x06with_b\x18\x03 \x01(\bR\x05withB\x1a\xe9\x02\n" +
-	"\x06header\x12\x16\n" +
+	"\x06Header\x12\x16\n" +
 	"\x06callid\x18\x01 \x01(\x04R\x06callid\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12!\n" +
 	"\x04type\x18\x03 \x01(\x0e2\r.crpc.MsgTypeR\x04type\x12\x1a\n" +
 	"\bdeadline\x18\x04 \x01(\x03R\bdeadline\x12:\n" +
-	"\bmetadata\x18\x05 \x03(\v2\x1e.crpc.msg.header.MetadataEntryR\bmetadata\x12=\n" +
-	"\ttracedata\x18\x06 \x03(\v2\x1f.crpc.msg.header.TracedataEntryR\ttracedata\x1a;\n" +
+	"\bmetadata\x18\x05 \x03(\v2\x1e.crpc.Msg.Header.MetadataEntryR\bmetadata\x12=\n" +
+	"\ttracedata\x18\x06 \x03(\v2\x1f.crpc.Msg.Header.TracedataEntryR\ttracedata\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a<\n" +
 	"\x0eTracedataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aq\n" +
-	"\x04body\x12\x12\n" +
+	"\x04Body\x12\x12\n" +
 	"\x04body\x18\x01 \x01(\fR\x04body\x120\n" +
 	"\fbody_encoder\x18\x02 \x01(\x0e2\r.crpc.EncoderR\vbodyEncoder\x12#\n" +
-	"\x05error\x18\x03 \x01(\v2\r.cerror.ErrorR\x05error*N\n" +
+	"\x05error\x18\x03 \x01(\v2\r.cerror.ErrorR\x05error*R\n" +
 	"\aMsgType\x12\b\n" +
-	"\x04Init\x10\x00\x12\b\n" +
-	"\x04Send\x10\x01\x12\r\n" +
-	"\tCloseSend\x10\x02\x12\r\n" +
-	"\tCloseRecv\x10\x03\x12\x11\n" +
-	"\rCloseRecvSend\x10\x04*.\n" +
+	"\x04INIT\x10\x00\x12\b\n" +
+	"\x04SEND\x10\x01\x12\x0e\n" +
+	"\n" +
+	"CLOSE_SEND\x10\x02\x12\x0e\n" +
+	"\n" +
+	"CLOSE_RECV\x10\x03\x12\x13\n" +
+	"\x0fCLOSE_RECV_SEND\x10\x04*.\n" +
 	"\aEncoder\x12\v\n" +
-	"\aUnknown\x10\x00\x12\f\n" +
-	"\bProtobuf\x10\x01\x12\b\n" +
-	"\x04Json\x10\x02B,Z*github.com/chenjie199234/Corelib/crpc;crpcb\x06proto3"
-
-var (
-	file_crpc_msg_proto_rawDescOnce sync.Once
-	file_crpc_msg_proto_rawDescData []byte
-)
-
-func file_crpc_msg_proto_rawDescGZIP() []byte {
-	file_crpc_msg_proto_rawDescOnce.Do(func() {
-		file_crpc_msg_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_crpc_msg_proto_rawDesc), len(file_crpc_msg_proto_rawDesc)))
-	})
-	return file_crpc_msg_proto_rawDescData
-}
+	"\aUNKNOWN\x10\x00\x12\f\n" +
+	"\bPROTOBUF\x10\x01\x12\b\n" +
+	"\x04JSON\x10\x02B,Z*github.com/chenjie199234/Corelib/crpc;crpcb\beditionsp\xe9\a"
 
 var file_crpc_msg_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_crpc_msg_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_crpc_msg_proto_goTypes = []any{
 	(MsgType)(0),         // 0: crpc.MsgType
 	(Encoder)(0),         // 1: crpc.Encoder
-	(*Msg)(nil),          // 2: crpc.msg
-	(*MsgHeader)(nil),    // 3: crpc.msg.header
-	(*MsgBody)(nil),      // 4: crpc.msg.body
-	nil,                  // 5: crpc.msg.header.MetadataEntry
-	nil,                  // 6: crpc.msg.header.TracedataEntry
+	(*Msg)(nil),          // 2: crpc.Msg
+	(*Msg_Header)(nil),   // 3: crpc.Msg.Header
+	(*Msg_Body)(nil),     // 4: crpc.Msg.Body
+	nil,                  // 5: crpc.Msg.Header.MetadataEntry
+	nil,                  // 6: crpc.Msg.Header.TracedataEntry
 	(*cerror.Error)(nil), // 7: cerror.Error
 }
 var file_crpc_msg_proto_depIdxs = []int32{
-	3, // 0: crpc.msg.h:type_name -> crpc.msg.header
-	4, // 1: crpc.msg.b:type_name -> crpc.msg.body
-	0, // 2: crpc.msg.header.type:type_name -> crpc.MsgType
-	5, // 3: crpc.msg.header.metadata:type_name -> crpc.msg.header.MetadataEntry
-	6, // 4: crpc.msg.header.tracedata:type_name -> crpc.msg.header.TracedataEntry
-	1, // 5: crpc.msg.body.body_encoder:type_name -> crpc.Encoder
-	7, // 6: crpc.msg.body.error:type_name -> cerror.Error
+	3, // 0: crpc.Msg.h:type_name -> crpc.Msg.Header
+	4, // 1: crpc.Msg.b:type_name -> crpc.Msg.Body
+	0, // 2: crpc.Msg.Header.type:type_name -> crpc.MsgType
+	5, // 3: crpc.Msg.Header.metadata:type_name -> crpc.Msg.Header.MetadataEntry
+	6, // 4: crpc.Msg.Header.tracedata:type_name -> crpc.Msg.Header.TracedataEntry
+	1, // 5: crpc.Msg.Body.body_encoder:type_name -> crpc.Encoder
+	7, // 6: crpc.Msg.Body.error:type_name -> cerror.Error
 	7, // [7:7] is the sub-list for method output_type
 	7, // [7:7] is the sub-list for method input_type
 	7, // [7:7] is the sub-list for extension type_name

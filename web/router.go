@@ -193,7 +193,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 		//target
 		if target := req.Header.Get("Core-Target"); target != "" && target != name.GetSelfFullName() {
 			resp.Header().Set("Content-Type", "application/json")
-			resp.WriteHeader(int(cerror.ErrTarget.Httpcode))
+			resp.WriteHeader(int(cerror.ErrTarget.GetHttpcode()))
 			resp.Write(common.STB(cerror.ErrTarget.Json()))
 			return
 		}
@@ -206,12 +206,12 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 			if e == graceful.ErrClosing {
 				//tell peer self closed
 				resp.Header().Set("Content-Type", "application/json")
-				resp.WriteHeader(int(cerror.ErrServerClosing.Httpcode))
+				resp.WriteHeader(int(cerror.ErrServerClosing.GetHttpcode()))
 				resp.Write(common.STB(cerror.ErrServerClosing.Json()))
 			} else {
 				//tell peer self busy
 				resp.Header().Set("Content-Type", "application/json")
-				resp.WriteHeader(int(cerror.ErrBusy.Httpcode))
+				resp.WriteHeader(int(cerror.ErrBusy.GetHttpcode()))
 				resp.Write(common.STB(cerror.ErrBusy.Json()))
 			}
 			return
@@ -242,7 +242,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 					slog.String("method", method),
 					slog.String("metadata", mdstr))
 				resp.Header().Set("Content-Type", "application/json")
-				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
+				resp.WriteHeader(int(cerror.ErrReq.GetHttpcode()))
 				resp.Write(common.STB(cerror.ErrReq.Json()))
 				span.SetStatus(codes.Error, cerror.ErrReq.Error())
 				span.End()
@@ -264,7 +264,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 					slog.String("method", method),
 					slog.String("deadline", temp))
 				resp.Header().Set("Content-Type", "application/json")
-				resp.WriteHeader(int(cerror.ErrReq.Httpcode))
+				resp.WriteHeader(int(cerror.ErrReq.GetHttpcode()))
 				resp.Write(common.STB(cerror.ErrReq.Json()))
 				span.SetStatus(codes.Error, cerror.ErrReq.Error())
 				span.End()
@@ -336,7 +336,7 @@ func (r *Router) srcFileHandler(resp http.ResponseWriter, req *http.Request) {
 	}
 	if file, e := r.srcroot.Open(path[1:]); e != nil {
 		resp.Header().Set("Content-Type", "application/json")
-		resp.WriteHeader(int(cerror.ErrSystem.Httpcode))
+		resp.WriteHeader(int(cerror.ErrSystem.GetHttpcode()))
 		resp.Write(common.STB(cerror.ErrSystem.Json()))
 		slog.Error("[web.server] open static src file failed",
 			slog.String("cip", realip(req)),
@@ -345,7 +345,7 @@ func (r *Router) srcFileHandler(resp http.ResponseWriter, req *http.Request) {
 			slog.String("error", e.Error()))
 	} else if fileinfo, e := file.Stat(); e != nil {
 		resp.Header().Set("Content-Type", "application/json")
-		resp.WriteHeader(int(cerror.ErrSystem.Httpcode))
+		resp.WriteHeader(int(cerror.ErrSystem.GetHttpcode()))
 		resp.Write(common.STB(cerror.ErrSystem.Json()))
 		slog.Error("[web.server] get static src file info failed",
 			slog.String("cip", realip(req)),
@@ -355,7 +355,7 @@ func (r *Router) srcFileHandler(resp http.ResponseWriter, req *http.Request) {
 		file.Close()
 	} else if !fileinfo.Mode().IsRegular() {
 		resp.Header().Set("Content-Type", "application/json")
-		resp.WriteHeader(int(cerror.ErrNotExist.Httpcode))
+		resp.WriteHeader(int(cerror.ErrNotExist.GetHttpcode()))
 		resp.Write(common.STB(cerror.ErrNotExist.Json()))
 		slog.Error("[web.server] static src file not exist",
 			slog.String("cip", realip(req)),
@@ -458,7 +458,7 @@ func (r *Router) corsNormal(resp http.ResponseWriter, req *http.Request) bool {
 	}
 	if resp.Header().Get("Access-Control-Allow-Origin") == "" {
 		resp.Header().Set("Content-Type", "application/json")
-		resp.WriteHeader(int(cerror.ErrCors.Httpcode))
+		resp.WriteHeader(int(cerror.ErrCors.GetHttpcode()))
 		resp.Write(common.STB(cerror.ErrCors.Json()))
 		slog.Error("[web.server] cors check failed",
 			slog.String("cip", realip(req)),

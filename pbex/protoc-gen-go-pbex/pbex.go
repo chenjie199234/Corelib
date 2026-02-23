@@ -122,62 +122,35 @@ func genMessage(g *protogen.GeneratedFile, m *protogen.Message) {
 		g.P("//return empty means pass")
 		g.P("func (m*", m.GoIdent.GoName, ")Validate() (errstr string){")
 		for _, field := range m.Fields {
-			fop := field.Desc.Options().(*descriptorpb.FieldOptions)
-			if field.Desc.IsMap() || field.Desc.IsList() {
-				elementnumcheck(field, fop, g)
+			if field.Oneof != nil {
+				continue
 			}
-			switch field.Desc.Kind() {
-			case protoreflect.BoolKind:
-				//bool or []bool
-				boolcheck(field, fop, g)
-			case protoreflect.EnumKind:
-				//enum or []enum
-				enumcheck(field, fop, g)
-			case protoreflect.Int32Kind:
-				fallthrough
-			case protoreflect.Sint32Kind:
-				fallthrough
-			case protoreflect.Sfixed32Kind:
-				fallthrough
-				//int32 or []int32
-			case protoreflect.Int64Kind:
-				fallthrough
-			case protoreflect.Sint64Kind:
-				fallthrough
-			case protoreflect.Sfixed64Kind:
-				//int64 or []int64
-				intcheck(field, fop, g)
-			case protoreflect.Uint32Kind:
-				fallthrough
-			case protoreflect.Fixed32Kind:
-				fallthrough
-				//uint32 or []uint32
-			case protoreflect.Uint64Kind:
-				fallthrough
-			case protoreflect.Fixed64Kind:
-				//uint64 or []uint64
-				uintcheck(field, fop, g)
-			case protoreflect.FloatKind:
-				//float32 or []float32
-				fallthrough
-			case protoreflect.DoubleKind:
-				//float64 or []float64
-				floatcheck(field, fop, g)
-			case protoreflect.BytesKind:
-				//[]bytes or [][]bytes
-				fallthrough
-			case protoreflect.StringKind:
-				//string or []string
-				strcheck(field, fop, g)
-			case protoreflect.MessageKind:
-				//message or []message or map
-				if field.Desc.IsMap() {
-					//map
-					mapcheck(field, fop, g)
-				} else {
-					//message or []message
-					messagecheck(field, fop, g)
+			genField(g, field)
+		}
+		for _, oneof := range m.Oneofs {
+			fields := make([]*protogen.Field, 0, len(oneof.Fields))
+			for _, v := range oneof.Fields {
+				field := v
+				if pbex.FieldHasPBEX(field) || field.Desc.Kind() == protoreflect.EnumKind {
+					fields = append(fields, field)
 				}
+			}
+			if len(fields) == 0 {
+				continue
+			} else if len(fields) == 1 {
+				field := fields[0]
+				g.P("if m.Has", oneof.GoName, "()&&m.Which", oneof.GoName, "()==", field.Parent.GoIdent.GoName, "_", field.GoName, "_case{")
+				genField(g, field)
+				g.P("}")
+			} else {
+				g.P("if m.Has", oneof.GoName, "(){")
+				g.P("switch m.Which", oneof.GoName, "(){")
+				for _, field := range fields {
+					g.P("case ", field.Parent.GoIdent.GoName, "_", field.GoName, "_case:")
+					genField(g, field)
+				}
+				g.P("}")
+				g.P("}")
 			}
 		}
 		g.P("return \"\"")
@@ -186,6 +159,65 @@ func genMessage(g *protogen.GeneratedFile, m *protogen.Message) {
 	for _, mm := range m.Messages {
 		if !mm.Desc.IsMapEntry() {
 			genMessage(g, mm)
+		}
+	}
+}
+func genField(g *protogen.GeneratedFile, field *protogen.Field) {
+	fop := field.Desc.Options().(*descriptorpb.FieldOptions)
+	if field.Desc.IsMap() || field.Desc.IsList() {
+		elementnumcheck(field, fop, g)
+	}
+	switch field.Desc.Kind() {
+	case protoreflect.BoolKind:
+		//bool or []bool
+		boolcheck(field, fop, g)
+	case protoreflect.EnumKind:
+		//enum or []enum
+		enumcheck(field, fop, g)
+	case protoreflect.Int32Kind:
+		fallthrough
+	case protoreflect.Sint32Kind:
+		fallthrough
+	case protoreflect.Sfixed32Kind:
+		fallthrough
+		//int32 or []int32
+	case protoreflect.Int64Kind:
+		fallthrough
+	case protoreflect.Sint64Kind:
+		fallthrough
+	case protoreflect.Sfixed64Kind:
+		//int64 or []int64
+		intcheck(field, fop, g)
+	case protoreflect.Uint32Kind:
+		fallthrough
+	case protoreflect.Fixed32Kind:
+		fallthrough
+		//uint32 or []uint32
+	case protoreflect.Uint64Kind:
+		fallthrough
+	case protoreflect.Fixed64Kind:
+		//uint64 or []uint64
+		uintcheck(field, fop, g)
+	case protoreflect.FloatKind:
+		//float32 or []float32
+		fallthrough
+	case protoreflect.DoubleKind:
+		//float64 or []float64
+		floatcheck(field, fop, g)
+	case protoreflect.BytesKind:
+		//[]bytes or [][]bytes
+		fallthrough
+	case protoreflect.StringKind:
+		//string or []string
+		strcheck(field, fop, g)
+	case protoreflect.MessageKind:
+		//message or []message or map
+		if field.Desc.IsMap() {
+			//map
+			mapcheck(field, fop, g)
+		} else {
+			//message or []message
+			messagecheck(field, fop, g)
 		}
 	}
 }
@@ -228,6 +260,9 @@ func elementnumcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *p
 	}
 }
 func boolcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+	// if field.Oneof != nil && pbex.FieldHasPBEX(field) {
+	// 	g.P("if m.Has", field.Oneof.GoName, "()&&m.Which", field.Oneof.GoName, "()==", field.Parent.GoIdent.GoName, "_", field.GoName, "_case{")
+	// }
 	if proto.HasExtension(fop, pbex.E_BoolEq) {
 		booleq := proto.GetExtension(fop, pbex.E_BoolEq).(bool)
 		if field.Desc.IsList() {
@@ -242,8 +277,14 @@ func boolcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 			g.P("}")
 		}
 	}
+	// if field.Oneof != nil && pbex.FieldHasPBEX(field) {
+	// 	g.P("}")
+	// }
 }
 func enumcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+	// if field.Oneof != nil {
+	// 	g.P("if m.Has", field.Oneof.GoName, "()&&m.Which", field.Oneof.GoName, "()==", field.Parent.GoIdent.GoName, "_", field.GoName, "_case{")
+	// }
 	if field.Desc.IsList() {
 		g.P("for _,v:=range m.Get", field.GoName, "(){")
 		g.P("if _,ok:=", g.QualifiedGoIdent(field.Enum.GoIdent), "_name[int32(v)];!ok{")
@@ -355,8 +396,14 @@ func enumcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 			g.P("}")
 		}
 	}
+	// if field.Oneof != nil {
+	// 	g.P("}")
+	// }
 }
 func intcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+	// if field.Oneof != nil && pbex.FieldHasPBEX(field) {
+	// 	g.P("if m.Has", field.Oneof.GoName, "()&&m.Which", field.Oneof.GoName, "()==", field.Parent.GoIdent.GoName, "_", field.GoName, "_case{")
+	// }
 	if proto.HasExtension(fop, pbex.E_IntIn) {
 		in := proto.GetExtension(fop, pbex.E_IntIn).([]int64)
 		if field.Desc.IsList() {
@@ -457,8 +504,14 @@ func intcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 			g.P("}")
 		}
 	}
+	// if field.Oneof != nil && pbex.FieldHasPBEX(field) {
+	// 	g.P("}")
+	// }
 }
 func uintcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+	// if field.Oneof != nil && pbex.FieldHasPBEX(field) {
+	// 	g.P("if m.Has", field.Oneof.GoName, "()&&m.Which", field.Oneof.GoName, "()==", field.Parent.GoIdent.GoName, "_", field.GoName, "_case{")
+	// }
 	if proto.HasExtension(fop, pbex.E_UintIn) {
 		in := proto.GetExtension(fop, pbex.E_UintIn).([]uint64)
 		if field.Desc.IsList() {
@@ -559,8 +612,14 @@ func uintcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protoge
 			g.P("}")
 		}
 	}
+	// if field.Oneof != nil && pbex.FieldHasPBEX(field) {
+	// 	g.P("}")
+	// }
 }
 func floatcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+	// if field.Oneof != nil && pbex.FieldHasPBEX(field) {
+	// 	g.P("if m.Has", field.Oneof.GoName, "()&&m.Which", field.Oneof.GoName, "()==", field.Parent.GoIdent.GoName, "_", field.GoName, "_case{")
+	// }
 	if proto.HasExtension(fop, pbex.E_FloatIn) {
 		in := proto.GetExtension(fop, pbex.E_FloatIn).([]float64)
 		if field.Desc.IsList() {
@@ -661,8 +720,14 @@ func floatcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protog
 			g.P("}")
 		}
 	}
+	// if field.Oneof != nil && pbex.FieldHasPBEX(field) {
+	// 	g.P("}")
+	// }
 }
 func strcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
+	// if field.Oneof != nil && pbex.FieldHasPBEX(field) {
+	// 	g.P("if m.Has", field.Oneof.GoName, "()&&m.Which", field.Oneof.GoName, "()==", field.Parent.GoIdent.GoName, "_", field.GoName, "_case{")
+	// }
 	if proto.HasExtension(fop, pbex.E_StringBytesLenEq) {
 		leneq := proto.GetExtension(fop, pbex.E_StringBytesLenEq).(uint64)
 		if field.Desc.IsList() {
@@ -867,6 +932,9 @@ func strcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen
 			g.P("}")
 		}
 	}
+	// if field.Oneof != nil && pbex.FieldHasPBEX(field) {
+	// 	g.P("}")
+	// }
 }
 func messagecheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	var notnil bool
@@ -878,6 +946,9 @@ func messagecheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *prot
 	if !notnil && !needcheck {
 		return
 	}
+	// if field.Oneof != nil && pbex.FieldHasPBEX(field) {
+	// 	g.P("if m.Has", field.Oneof.GoName, "()&&m.Which", field.Oneof.GoName, "()==", field.Parent.GoIdent.GoName, "_", field.GoName, "_case{")
+	// }
 	if field.Desc.IsList() {
 		g.P("for _,v:=range m.Get", field.GoName, "(){")
 		g.P("if v==nil{")
@@ -912,6 +983,9 @@ func messagecheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *prot
 			g.P("}")
 		}
 	}
+	// if field.Oneof != nil && pbex.FieldHasPBEX(field) {
+	// 	g.P("}")
+	// }
 }
 func mapcheck(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.GeneratedFile) {
 	key := field.Message.Fields[0]

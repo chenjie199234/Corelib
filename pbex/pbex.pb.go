@@ -1218,7 +1218,7 @@ const file_pbex_pbex_proto_rawDesc = "" +
 	"\x13map_value_float_gte\x12\x1d.google.protobuf.FieldOptions\x18\xe0\xe2\t \x01(\x01R\x10mapValueFloatGte:L\n" +
 	"\x12map_value_float_lt\x12\x1d.google.protobuf.FieldOptions\x18\xe1\xe2\t \x01(\x01R\x0fmapValueFloatLt:N\n" +
 	"\x13map_value_float_lte\x12\x1d.google.protobuf.FieldOptions\x18\xe2\xe2\t \x01(\x01R\x10mapValueFloatLte:Y\n" +
-	"\x19map_value_message_not_nil\x12\x1d.google.protobuf.FieldOptions\x18\xe3\xe2\t \x01(\bR\x15mapValueMessageNotNilB,Z*github.com/chenjie199234/Corelib/pbex;pbexb\x06proto3"
+	"\x19map_value_message_not_nil\x12\x1d.google.protobuf.FieldOptions\x18\xe3\xe2\t \x01(\bR\x15mapValueMessageNotNilB,Z*github.com/chenjie199234/Corelib/pbex;pbexb\beditionsp\xe9\a"
 
 var file_pbex_pbex_proto_goTypes = []any{
 	(*descriptorpb.MethodOptions)(nil), // 0: google.protobuf.MethodOptions

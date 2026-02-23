@@ -1,43 +1,43 @@
 //protoc -I ../../../pbex -I . --go-crpc_out=paths=source_relative:. *.proto
-syntax="proto3";
+edition = "2024";
 package test;
 option go_package="github.com/chenjie199234/Corelib/web/protoc-gen-go-crpc/test;test";
-import "pbex.proto";
-service test {
-	rpc call(callreq)returns(callresp){
+import option "pbex.proto";
+service Test {
+	rpc Call(Callreq)returns(Callresp){
 		option (pbex.method)="crpc";
 	}
-	rpc clientstream(stream clientstreamreq)returns(clientstreamresp){
+	rpc ClientStream(stream ClientStreamreq)returns(ClientStreamresp){
 		option (pbex.method)="crpc";
 	}
-	rpc serverstream(serverstreamreq)returns(stream serverstreamresp){
+	rpc ServerStream(ServerStreamreq)returns(stream ServerStreamresp){
 		option (pbex.method)="crpc";
 	}
-	rpc allstream(stream allstreamreq)returns(stream allstreamresp){
+	rpc AllStream(stream AllStreamreq)returns(stream AllStreamresp){
 		option (pbex.method)="crpc";
 	}
 }
-message callreq{
+message Callreq{
 	uint64 u64=1[(pbex.uint_gt)=10];
 }
-message callresp{
+message Callresp{
 	bool status=1;
 }
-message clientstreamreq{
+message ClientStreamreq{
 	uint64 u64=1[(pbex.uint_gt)=10];
 }
-message clientstreamresp{
+message ClientStreamresp{
 	bool status=1;
 }
-message serverstreamreq{
+message ServerStreamreq{
 	uint64 u64=1[(pbex.uint_gt)=10];
 }
-message serverstreamresp{
+message ServerStreamresp{
 	bool status=1;
 }
-message allstreamreq{
+message AllStreamreq{
 	uint64 u64=1[(pbex.uint_gt)=10];
 }
-message allstreamresp{
+message AllStreamresp{
 	bool status=1;
 }

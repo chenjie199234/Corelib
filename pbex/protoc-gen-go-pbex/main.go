@@ -21,6 +21,9 @@ func main() {
 		return
 	}
 	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
+		gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_SUPPORTS_EDITIONS)
+		gen.SupportedEditionsMinimum = descriptorpb.Edition_EDITION_2024
+		gen.SupportedEditionsMaximum = descriptorpb.Edition_EDITION_2024
 		//pre check
 		needfile := make(map[string]bool)
 		for _, f := range gen.Files {
@@ -31,13 +34,10 @@ func main() {
 			if f.Desc.Options().(*descriptorpb.FileOptions).GetDeprecated() {
 				continue
 			}
-			if *f.Proto.Syntax != "proto3" {
-				panic("plugin only support proto3 syntax!")
+			if f.Proto.Edition == nil || *f.Proto.Edition < descriptorpb.Edition_EDITION_2024 {
+				panic("plugin only support proto file's edition >= 2024")
 			}
 			for _, m := range f.Messages {
-				if pbex.OneOfHasPBEX(m) {
-					panic("oneof fields should not contain pbex")
-				}
 				if pbex.NeedValidate(m) {
 					needfile[f.Desc.Path()] = true
 				}
@@ -55,7 +55,6 @@ func main() {
 			}
 			generateFile(gen, f)
 		}
-		gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 		return nil
 	})
 }

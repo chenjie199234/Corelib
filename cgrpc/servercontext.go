@@ -37,9 +37,9 @@ func (c *ServerContext) Abort(e error) {
 	}
 	httpcode := 0
 	if ee := cerror.Convert(e); ee != nil {
-		if http.StatusText(int(ee.Httpcode)) == "" || ee.Httpcode < 400 {
+		if http.StatusText(int(ee.GetHttpcode())) == "" || ee.GetHttpcode() < 400 {
 			c.e = cerror.ErrPanic
-			httpcode = int(ee.Httpcode)
+			httpcode = int(ee.GetHttpcode())
 		} else {
 			c.e = ee
 		}

@@ -1,65 +1,55 @@
 //protoc -I ../../../pbex -I . --go-web_out=paths=source_relative:. *.proto
-syntax="proto3";
+edition = "2024";
 package test;
 option go_package="github.com/chenjie199234/Corelib/web/protoc-gen-go-web/test;test";
-import "pbex.proto";
-service test {
-	rpc hello(helloreq)returns(helloresp){
+import option "pbex.proto";
+service Test {
+	rpc Hello(Helloreq)returns(Helloresp){
 		option (pbex.method)="get";
 		option (pbex.web_midwares)="user";
 		option (pbex.web_midwares)="limit";
 	}
-	rpc world(worldreq)returns(worldresp){
+	rpc Wrld(Worldreq)returns(Worldresp){
 		option (pbex.method)="post";
 		option (pbex.web_midwares)="user";
 		option (pbex.web_midwares)="limit";
 	}
-	rpc server_stream(server_stream_req)returns(stream server_stream_resp){
+	rpc ServerStream(ServerStreamreq)returns(stream ServerStreamresp){
 		option (pbex.method)="get";
 		option (pbex.web_midwares)="user";
 	}
 }
-message server_stream_req{
+message ServerStreamreq{
   string a=1;
   int64 b=2[(pbex.int_gt)=0];
 }
-message server_stream_resp{
+message ServerStreamresp{
 
 }
 enum TestEnum {
 	ENUMA=0;
 	ENUMB=1;
 }
-message helloreq{
+message Helloreq{
 	bool bl = 1;
-	optional bool blo = 2;
 	repeated bool bls = 3;
 	int32 i32=4[(pbex.int_in)=1];
-	optional int32 i32o=5;
 	repeated int32 ri32=6[(pbex.int_not_in)=1];
 	uint32 ui32=7[(pbex.uint_in)=1];
-	optional uint32 ui32o=8;
 	repeated uint32 rui32=9[(pbex.map_repeated_len_gt)=2,(pbex.uint_not_in)=1];
 	int64 i64=10;
-	optional int64 i64o=11;
 	repeated int64 ri64=12;
 	uint64 ui64=13;
-	optional uint64 ui64o=14;
 	repeated uint64 rui64=15;
 	bytes bs=16;
-	optional bytes bso=17;
 	repeated bytes rbs=18;
 	string ss=19;
-	optional string sso=20;
 	repeated string rss=21[(pbex.string_bytes_reg_match)="abc*"];
 	float f=22;
-	optional float fo=23;
 	repeated float rf=24;
 	double d=25;
-	optional double do=26;
 	repeated double rd=27;
 	TestEnum e=28;
-	optional TestEnum eo=29;
 	repeated TestEnum re=30;
 	oneof o{
 		bool obl=31;
@@ -74,13 +64,12 @@ message helloreq{
 		TestEnum oe=40;
 	}
 }
-message helloresp{
+message Helloresp{
 
 }
-message worldreq{
-	helloreq m=1;
-	optional helloreq mo=2;
-	repeated helloreq rm=3;
+message Worldreq{
+	Helloreq m=1;
+	repeated Helloreq rm=3;
 
 	map<int32,int32> mi32_i32=4;
 	map<int32,uint32> mi32_ui32=5;
@@ -91,7 +80,7 @@ message worldreq{
 	map<int32,float> mi32_f=10;
 	map<int32,double> mi32_d=11;
 	map<int32,TestEnum> mi32_e=12;
-	map<int32,helloreq> mi32_m=13;
+	map<int32,Helloreq> mi32_m=13;
 
 	map<uint32,int32> mui32_i32=14;
 	map<uint32,uint32> mui32_ui32=15;
@@ -102,7 +91,7 @@ message worldreq{
 	map<uint32,float> mui32_f=20;
 	map<uint32,double> mui32_d=21;
 	map<uint32,TestEnum> mui32_e=22;
-	map<uint32,helloreq> mui32_m=23;
+	map<uint32,Helloreq> mui32_m=23;
 
 	map<int64,int32> mi64_i32=24;
 	map<int64,uint32> mi64_ui32=25;
@@ -113,7 +102,7 @@ message worldreq{
 	map<int64,float> mi64_f=30;
 	map<int64,double> mi64_d=31;
 	map<int64,TestEnum> mi64_e=32;
-	map<int64,helloreq> mi64_m=33;
+	map<int64,Helloreq> mi64_m=33;
 
 	map<uint64,int32> mui64_i32=34;
 	map<uint64,uint32> mui64_ui32=35;
@@ -124,7 +113,7 @@ message worldreq{
 	map<uint64,float> mui64_f=40;
 	map<uint64,double> mui64_d=41;
 	map<uint64,TestEnum> mui64_e=42;
-	map<uint64,helloreq> mui64_m=43;
+	map<uint64,Helloreq> mui64_m=43;
 
 	map<string,int32> mss_i32=44[(pbex.map_key_string_reg_match)="key*"];
 	map<string,uint32> mss_ui32=45;
@@ -135,7 +124,7 @@ message worldreq{
 	map<string,float> mss_f=50;
 	map<string,double> mss_d=51;
 	map<string,TestEnum> mss_e=52;
-	map<string,helloreq> mss_m=53;
+	map<string,Helloreq> mss_m=53;
 
 	oneof o{
 		bool obl=54;
@@ -150,19 +139,18 @@ message worldreq{
 		TestEnum oe=63;
 	}
 
-	selfnest s=64;
+	Selfnest s=64;
 }
-message worldresp{
-	worldreq result1=1;
-	selfnest result2=2;
+message Worldresp{
+	Worldreq result1=1;
+	Selfnest result2=2;
 }
-message selfnest{
-	selfnest self=1;
-	optional selfnest oself=2;
-	repeated selfnest rself=3;
-	map<int32,selfnest> mi32_self=4;
-	map<uint32,selfnest> mui32_self=5;
-	map<int64,selfnest> mi64_self=6;
-	map<uint64,selfnest> mui64_self=7;
-	map<string,selfnest> mss_self=8;
+message Selfnest{
+	Selfnest self=1;
+	repeated Selfnest rself=3;
+	map<int32,Selfnest> mi32_self=4;
+	map<uint32,Selfnest> mui32_self=5;
+	map<int64,Selfnest> mi64_self=6;
+	map<uint64,Selfnest> mui64_self=7;
+	map<string,Selfnest> mss_self=8;
 }

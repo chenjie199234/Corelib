@@ -1,22 +1,22 @@
-syntax="proto3";
+edition = "2024";
 package crpc;
 option go_package="github.com/chenjie199234/Corelib/crpc;crpc";
 import "cerror/cerror.proto";
 
 enum MsgType{
-	Init=0;
-	Send=1;
-	CloseSend=2;
-	CloseRecv=3;
-	CloseRecvSend=4;
+	INIT=0;
+	SEND=1;
+	CLOSE_SEND=2;
+	CLOSE_RECV=3;
+	CLOSE_RECV_SEND=4;
 }
 enum Encoder{
-	Unknown=0;
-	Protobuf=1;
-	Json=2;
+	UNKNOWN=0;
+	PROTOBUF=1;
+	JSON=2;
 }
-message msg {
-	message header {
+message Msg {
+	message Header {
 		uint64 callid=1;
 		string path=2;
 		MsgType type=3;
@@ -24,12 +24,12 @@ message msg {
 		map<string,string> metadata=5;
 		map<string,string> tracedata=6;
 	}
-	message body {
+	message Body {
 		bytes body=1;
 		Encoder body_encoder=2;
 		cerror.Error error=3;//only from server to client
 	}
-	header h=1;
-	body b=2;
+	Header h=1;
+	Body b=2;
 	bool with_b=3;
 }

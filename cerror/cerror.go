@@ -24,27 +24,38 @@ func MakeCError(code int32, httpcode int32, msg string) *Error {
 	if http.StatusText(int(httpcode)) == "" {
 		panic("error's http code unknown")
 	}
-	return &Error{
-		Code:     code,
-		Httpcode: httpcode,
-		Msg:      msg,
-	}
+	e := &Error{}
+	e.SetCode(code)
+	e.SetHttpcode(httpcode)
+	e.SetMsg(msg)
+	return e
 }
 func (this *Error) Error() string {
-	return "code=" + strconv.FormatInt(int64(this.Code), 10) + ",msg=" + this.Msg
+	if this == nil {
+		return ""
+	}
+	if len(this.GetCacheText()) == 0 {
+		str := "code=" + strconv.FormatInt(int64(this.GetCode()), 10) + ",msg=" + this.GetMsg()
+		this.SetCacheText(str)
+	}
+	return this.GetCacheText()
 }
 func (this *Error) Json() string {
-	d, _ := json.Marshal(this.Msg)
-	return "{\"code\":" + strconv.FormatInt(int64(this.Code), 10) + ",\"msg\":" + common.BTS(d) + "}"
+	if this == nil {
+		return ""
+	}
+	if len(this.GetCacheJson()) == 0 {
+		d, _ := json.Marshal(this.GetMsg())
+		str := "{\"code\":" + strconv.FormatInt(int64(this.GetCode()), 10) + ",\"msg\":" + common.BTS(d) + "}"
+		this.SetCacheJson(str)
+	}
+	return this.GetCacheJson()
 }
 func (this *Error) GRPCStatus() *status.Status {
-	return status.New(codes.Code(this.Httpcode), this.Error())
+	return status.New(codes.Code(this.GetHttpcode()), this.Error())
 }
 func (this *Error) SlogAttr() *slog.Attr {
-	return &slog.Attr{Key: "error", Value: slog.GroupValue(slog.Int64("code", int64(this.Code)), slog.String("msg", this.Msg))}
-}
-func (this *Error) SetHttpcode(httpcode int32) {
-	this.Httpcode = httpcode
+	return &slog.Attr{Key: "error", Value: slog.GroupValue(slog.Int64("code", int64(this.GetCode())), slog.String("msg", this.GetMsg()))}
 }
 func Equal(a, b error) bool {
 	aa := Convert(a)
@@ -54,7 +65,7 @@ func Equal(a, b error) bool {
 	} else if (aa == nil && bb != nil) || (aa != nil && bb == nil) {
 		return false
 	}
-	return aa.Code == bb.Code && aa.Msg == bb.Msg
+	return aa.GetCode() == bb.GetCode() && aa.GetMsg() == bb.GetMsg()
 }
 func Convert(e error) *Error {
 	if e == nil {
@@ -91,12 +102,12 @@ func Decode(estr string) *Error {
 		if e := (protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}).Unmarshal(common.STB(estr), tmp); e != nil {
 			return MakeCError(-1, 500, estr)
 		}
-		if tmp.Code == 0 {
-			tmp.Code = -1
-			tmp.Msg = estr
+		if tmp.GetCode() == 0 {
+			tmp.SetCode(-1)
+			tmp.SetMsg(estr)
 		}
-		if tmp.Httpcode == 0 {
-			tmp.Httpcode = 500
+		if tmp.GetHttpcode() == 0 {
+			tmp.SetHttpcode(500)
 		}
 		return tmp
 	}

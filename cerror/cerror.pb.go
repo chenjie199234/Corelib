@@ -10,7 +10,6 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
-	sync "sync"
 	unsafe "unsafe"
 )
 
@@ -22,12 +21,16 @@ const (
 )
 
 type Error struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
-	Httpcode      int32                  `protobuf:"varint,2,opt,name=httpcode,proto3" json:"httpcode,omitempty"`
-	Msg           string                 `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Code        int32                  `protobuf:"varint,1,opt,name=code"`
+	xxx_hidden_Httpcode    int32                  `protobuf:"varint,2,opt,name=httpcode"`
+	xxx_hidden_Msg         *string                `protobuf:"bytes,3,opt,name=msg"`
+	xxx_hidden_CacheText   *string                `protobuf:"bytes,4,opt,name=cache_text,json=cacheText"`
+	xxx_hidden_CacheJson   *string                `protobuf:"bytes,5,opt,name=cache_json,json=cacheJson"`
+	XXX_raceDetectHookData protoimpl.RaceDetectHookData
+	XXX_presence           [1]uint32
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *Error) Reset() {
@@ -55,53 +58,185 @@ func (x *Error) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Error.ProtoReflect.Descriptor instead.
-func (*Error) Descriptor() ([]byte, []int) {
-	return file_cerror_cerror_proto_rawDescGZIP(), []int{0}
-}
-
 func (x *Error) GetCode() int32 {
 	if x != nil {
-		return x.Code
+		return x.xxx_hidden_Code
 	}
 	return 0
 }
 
 func (x *Error) GetHttpcode() int32 {
 	if x != nil {
-		return x.Httpcode
+		return x.xxx_hidden_Httpcode
 	}
 	return 0
 }
 
 func (x *Error) GetMsg() string {
 	if x != nil {
-		return x.Msg
+		if x.xxx_hidden_Msg != nil {
+			return *x.xxx_hidden_Msg
+		}
+		return ""
 	}
 	return ""
+}
+
+func (x *Error) GetCacheText() string {
+	if x != nil {
+		if x.xxx_hidden_CacheText != nil {
+			return *x.xxx_hidden_CacheText
+		}
+		return ""
+	}
+	return ""
+}
+
+func (x *Error) GetCacheJson() string {
+	if x != nil {
+		if x.xxx_hidden_CacheJson != nil {
+			return *x.xxx_hidden_CacheJson
+		}
+		return ""
+	}
+	return ""
+}
+
+func (x *Error) SetCode(v int32) {
+	x.xxx_hidden_Code = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 5)
+}
+
+func (x *Error) SetHttpcode(v int32) {
+	x.xxx_hidden_Httpcode = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 5)
+}
+
+func (x *Error) SetMsg(v string) {
+	x.xxx_hidden_Msg = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 5)
+}
+
+func (x *Error) SetCacheText(v string) {
+	x.xxx_hidden_CacheText = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 5)
+}
+
+func (x *Error) SetCacheJson(v string) {
+	x.xxx_hidden_CacheJson = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 5)
+}
+
+func (x *Error) HasCode() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
+}
+
+func (x *Error) HasHttpcode() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
+}
+
+func (x *Error) HasMsg() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 2)
+}
+
+func (x *Error) HasCacheText() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 3)
+}
+
+func (x *Error) HasCacheJson() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 4)
+}
+
+func (x *Error) ClearCode() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
+	x.xxx_hidden_Code = 0
+}
+
+func (x *Error) ClearHttpcode() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 1)
+	x.xxx_hidden_Httpcode = 0
+}
+
+func (x *Error) ClearMsg() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
+	x.xxx_hidden_Msg = nil
+}
+
+func (x *Error) ClearCacheText() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 3)
+	x.xxx_hidden_CacheText = nil
+}
+
+func (x *Error) ClearCacheJson() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 4)
+	x.xxx_hidden_CacheJson = nil
+}
+
+type Error_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Code      *int32
+	Httpcode  *int32
+	Msg       *string
+	CacheText *string
+	CacheJson *string
+}
+
+func (b0 Error_builder) Build() *Error {
+	m0 := &Error{}
+	b, x := &b0, m0
+	_, _ = b, x
+	if b.Code != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 5)
+		x.xxx_hidden_Code = *b.Code
+	}
+	if b.Httpcode != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 5)
+		x.xxx_hidden_Httpcode = *b.Httpcode
+	}
+	if b.Msg != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 5)
+		x.xxx_hidden_Msg = b.Msg
+	}
+	if b.CacheText != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 5)
+		x.xxx_hidden_CacheText = b.CacheText
+	}
+	if b.CacheJson != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 5)
+		x.xxx_hidden_CacheJson = b.CacheJson
+	}
+	return m0
 }
 
 var File_cerror_cerror_proto protoreflect.FileDescriptor
 
 const file_cerror_cerror_proto_rawDesc = "" +
 	"\n" +
-	"\x13cerror/cerror.proto\x12\x06cerror\"I\n" +
+	"\x13cerror/cerror.proto\x12\x06cerror\"\x87\x01\n" +
 	"\x05Error\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x1a\n" +
 	"\bhttpcode\x18\x02 \x01(\x05R\bhttpcode\x12\x10\n" +
-	"\x03msg\x18\x03 \x01(\tR\x03msgB0Z.github.com/chenjie199234/Corelib/cerror;cerrorb\x06proto3"
-
-var (
-	file_cerror_cerror_proto_rawDescOnce sync.Once
-	file_cerror_cerror_proto_rawDescData []byte
-)
-
-func file_cerror_cerror_proto_rawDescGZIP() []byte {
-	file_cerror_cerror_proto_rawDescOnce.Do(func() {
-		file_cerror_cerror_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_cerror_cerror_proto_rawDesc), len(file_cerror_cerror_proto_rawDesc)))
-	})
-	return file_cerror_cerror_proto_rawDescData
-}
+	"\x03msg\x18\x03 \x01(\tR\x03msg\x12\x1d\n" +
+	"\n" +
+	"cache_text\x18\x04 \x01(\tR\tcacheText\x12\x1d\n" +
+	"\n" +
+	"cache_json\x18\x05 \x01(\tR\tcacheJsonB0Z.github.com/chenjie199234/Corelib/cerror;cerrorb\beditionsp\xe9\a"
 
 var file_cerror_cerror_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_cerror_cerror_proto_goTypes = []any{

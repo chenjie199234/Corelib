@@ -242,122 +242,85 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 				g.P("return")
 				g.P("}")
-				oneof := make(map[string]*struct{})
+				for _, oneof := range method.Input.Oneofs {
+					g.P("oneof", oneof.GoName, "Setted:=false")
+				}
 				for _, field := range method.Input.Fields {
-					if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-						if _, ok := oneof[field.Oneof.GoIdent.String()]; !ok {
-							oneof[field.Oneof.GoIdent.String()] = nil
-							g.P("//req.", field.Oneof.GoName)
-							g.P("oneof", field.Oneof.GoName, ":=false")
-						}
-						g.P("//req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ")")
-					} else {
-						g.P("//req.", field.GoName)
-					}
+					g.P("//req.Set", field.GoName, "()")
 					fname := string(field.Desc.Name())
 					switch field.Desc.Kind() {
 					case protoreflect.BoolKind:
 						if field.Desc.IsList() {
 							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
-							g.P("req.", field.GoName, "=make([]bool,0,len(forms))")
+							g.P("tmp:=make([]bool,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("switch form {")
 							g.P("case \"true\":")
-							g.P("req.", field.GoName, "= append(req.", field.GoName, ",true)")
+							g.P("tmp = append(tmp,true)")
 							g.P("case \"false\":")
-							g.P("req.", field.GoName, "= append(req.", field.GoName, ",false)")
+							g.P("tmp = append(tmp,false)")
 							g.P("default:")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}")
 							g.P("}")
+							g.P("req.Set", field.GoName, "(tmp)")
 							g.P("}")
 						} else {
 							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("if oneof", field.Oneof.GoName, "{")
+							if field.Oneof != nil {
+								g.P("if oneof", field.Oneof.GoName, "Setted{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
-								g.P("oneof", field.Oneof.GoName, "=true")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("if form!=", strconv.Quote("null"), "{")
+								g.P("oneof", field.Oneof.GoName, "Setted=true")
 							}
 							g.P("switch form {")
 							g.P("case \"true\":")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("req.", field.Oneof.GoName, "=&", g.QualifiedGoIdent(field.GoIdent), "{true}")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("tmp:=true")
-								g.P("req.", field.GoName, "=&tmp")
-							} else {
-								g.P("req.", field.GoName, "=true")
-							}
+							g.P("req.Set", field.GoName, "(true)")
 							g.P("case \"false\":")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("req.", field.Oneof.GoName, "=&", g.QualifiedGoIdent(field.GoIdent), "{false}")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("tmp:=false")
-								g.P("req.", field.GoName, "=&tmp")
-							} else {
-								g.P("req.", field.GoName, "=false")
-							}
+							g.P("req.Set", field.GoName, "(false)")
 							g.P("default:")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}")
-							if field.Desc.HasOptionalKeyword() {
-								g.P("}")
-							}
 							g.P("}")
 						}
 					case protoreflect.EnumKind:
 						if field.Desc.IsList() {
 							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
-							g.P("req.", field.GoName, "=make([]", g.QualifiedGoIdent(field.Enum.GoIdent), ",0,len(forms))")
+							g.P("tmp:=make([]", g.QualifiedGoIdent(field.Enum.GoIdent), ",0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseInt")), "(form,10,32);e!=nil || num < 0{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							g.P("req.", field.GoName, "=append(req.", field.GoName, ",", g.QualifiedGoIdent(field.Enum.GoIdent), "(num))")
+							g.P("tmp=append(tmp,", g.QualifiedGoIdent(field.Enum.GoIdent), "(num))")
 							g.P("}")
 							g.P("}")
+							g.P("req.Set", field.GoName, "(tmp)")
 							g.P("}")
 						} else {
 							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("if oneof", field.Oneof.GoName, "{")
+							if field.Oneof != nil {
+								g.P("if oneof", field.Oneof.GoName, "Setted{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
-								g.P("oneof", field.Oneof.GoName, "=true")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("if form != ", strconv.Quote("null"), "{")
+								g.P("oneof", field.Oneof.GoName, "Setted=true")
 							}
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseInt")), "(form,10,32);e!=nil || num < 0{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("tmp:=", g.QualifiedGoIdent(field.Enum.GoIdent), "(num)")
-								g.P("req.", field.Oneof.GoName, "=&", g.QualifiedGoIdent(field.GoIdent), "{tmp}")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("tmp:=", g.QualifiedGoIdent(field.Enum.GoIdent), "(num)")
-								g.P("req.", field.GoName, "=&tmp")
-							} else {
-								g.P("req.", field.GoName, "=", g.QualifiedGoIdent(field.Enum.GoIdent), "(num)")
-							}
+							g.P("req.Set", field.GoName, "(", g.QualifiedGoIdent(field.Enum.GoIdent), "(num))")
 							g.P("}")
-							if field.Desc.HasOptionalKeyword() {
-								g.P("}")
-							}
 							g.P("}")
 						}
 					case protoreflect.Sint32Kind:
@@ -367,46 +330,35 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					case protoreflect.Int32Kind:
 						if field.Desc.IsList() {
 							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
-							g.P("req.", field.GoName, "=make([]int32,0,len(forms))")
+							g.P("tmp:=make([]int32,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseInt")), "(form,10,32);e!=nil{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							g.P("req.", field.GoName, "=append(req.", field.GoName, ",int32(num))")
+							g.P("tmp=append(tmp,int32(num))")
 							g.P("}")
 							g.P("}")
+							g.P("req.Set", field.GoName, "(tmp)")
 							g.P("}")
 						} else {
 							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("if oneof", field.Oneof.GoName, "{")
+							if field.Oneof != nil {
+								g.P("if oneof", field.Oneof.GoName, "Setted{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
-								g.P("oneof", field.Oneof.GoName, "=true")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("if form != ", strconv.Quote("null"), "{")
+								g.P("oneof", field.Oneof.GoName, "Setted=true")
 							}
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseInt")), "(form,10,32);e!=nil{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("req.", field.Oneof.GoName, "=&", g.QualifiedGoIdent(field.GoIdent), "{int32(num)}")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("tmp:=int32(num)")
-								g.P("req.", field.GoName, "=&tmp")
-							} else {
-								g.P("req.", field.GoName, "=int32(num)")
-							}
+							g.P("req.Set", field.GoName, "(int32(num))")
 							g.P("}")
-							if field.Desc.HasOptionalKeyword() {
-								g.P("}")
-							}
 							g.P("}")
 						}
 					case protoreflect.Fixed32Kind:
@@ -414,46 +366,35 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					case protoreflect.Uint32Kind:
 						if field.Desc.IsList() {
 							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
-							g.P("req.", field.GoName, "=make([]uint32,0,len(forms))")
+							g.P("tmp:=make([]uint32,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseUint")), "(form,10,32);e!=nil{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							g.P("req.", field.GoName, "=append(req.", field.GoName, ",uint32(num))")
+							g.P("tmp=append(tmp,uint32(num))")
 							g.P("}")
 							g.P("}")
+							g.P("req.Set", field.GoName, "(tmp)")
 							g.P("}")
 						} else {
 							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("if oneof", field.Oneof.GoName, "{")
+							if field.Oneof != nil {
+								g.P("if oneof", field.Oneof.GoName, "Setted{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
-								g.P("oneof", field.Oneof.GoName, "=true")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("if form != ", strconv.Quote("null"), "{")
+								g.P("oneof", field.Oneof.GoName, "Setted=true")
 							}
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseUint")), "(form,10,32);e!=nil{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("req.", field.Oneof.GoName, "=&", g.QualifiedGoIdent(field.GoIdent), "{uint32(num)}")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("tmp:=uint32(num)")
-								g.P("req.", field.GoName, "=&tmp")
-							} else {
-								g.P("req.", field.GoName, "=uint32(num)")
-							}
+							g.P("req.Set", field.GoName, "(uint32(num))")
 							g.P("}")
-							if field.Desc.HasOptionalKeyword() {
-								g.P("}")
-							}
 							g.P("}")
 						}
 					case protoreflect.Sfixed64Kind:
@@ -463,45 +404,35 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					case protoreflect.Sint64Kind:
 						if field.Desc.IsList() {
 							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
-							g.P("req.", field.GoName, "=make([]int64,0,len(forms))")
+							g.P("tmp:=make([]int64,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseInt")), "(form,10,64);e!=nil{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							g.P("req.", field.GoName, "=append(req.", field.GoName, ",num)")
+							g.P("tmp=append(tmp,num)")
 							g.P("}")
 							g.P("}")
+							g.P("req.Set", field.GoName, "(tmp)")
 							g.P("}")
 						} else {
 							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("if oneof", field.Oneof.GoName, "{")
+							if field.Oneof != nil {
+								g.P("if oneof", field.Oneof.GoName, "Setted{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
-								g.P("oneof", field.Oneof.GoName, "=true")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("if form != ", strconv.Quote("null"), "{")
+								g.P("oneof", field.Oneof.GoName, "Setted=true")
 							}
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseInt")), "(form,10,64);e!=nil{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("req.", field.Oneof.GoName, "=&", g.QualifiedGoIdent(field.GoIdent), "{num}")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("req.", field.GoName, "=&num")
-							} else {
-								g.P("req.", field.GoName, "=num")
-							}
+							g.P("req.Set", field.GoName, "(num)")
 							g.P("}")
-							if field.Desc.HasOptionalKeyword() {
-								g.P("}")
-							}
 							g.P("}")
 						}
 					case protoreflect.Fixed64Kind:
@@ -509,134 +440,103 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					case protoreflect.Uint64Kind:
 						if field.Desc.IsList() {
 							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
-							g.P("req.", field.GoName, "=make([]uint64,0,len(forms))")
+							g.P("tmp:=make([]uint64,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseUint")), "(form,10,64);e!=nil{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							g.P("req.", field.GoName, "=append(req.", field.GoName, ",num)")
+							g.P("tmp=append(tmp,num)")
 							g.P("}")
 							g.P("}")
+							g.P("req.Set", field.GoName, "(tmp)")
 							g.P("}")
 						} else {
 							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("if oneof", field.Oneof.GoName, "{")
+							if field.Oneof != nil {
+								g.P("if oneof", field.Oneof.GoName, "Setted{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
-								g.P("oneof", field.Oneof.GoName, "=true")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("if form != ", strconv.Quote("null"), "{")
+								g.P("oneof", field.Oneof.GoName, "Setted=true")
 							}
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseUint")), "(form,10,64);e!=nil{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("req.", field.Oneof.GoName, "=&", g.QualifiedGoIdent(field.GoIdent), "{num}")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("req.", field.GoName, "=&num")
-							} else {
-								g.P("req.", field.GoName, "=num")
-							}
+							g.P("req.Set", field.GoName, "(num)")
 							g.P("}")
-							if field.Desc.HasOptionalKeyword() {
-								g.P("}")
-							}
 							g.P("}")
 						}
 					case protoreflect.FloatKind:
 						if field.Desc.IsList() {
 							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
-							g.P("req.", field.GoName, "=make([]float32,0,len(forms))")
+							g.P("tmp:=make([]float32,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseFloat")), "(form,32);e!=nil{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							g.P("req.", field.GoName, "=append(req.", field.GoName, ",float32(num))")
+							g.P("tmp=append(tmp,float32(num))")
 							g.P("}")
 							g.P("}")
+							g.P("req.Set", field.GoName, "(tmp)")
 							g.P("}")
 						} else {
 							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("if oneof", field.Oneof.GoName, "{")
+							if field.Oneof != nil {
+								g.P("if oneof", field.Oneof.GoName, "Setted{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
-								g.P("oneof", field.Oneof.GoName, "=true")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("if form != ", strconv.Quote("null"), "{")
+								g.P("oneof", field.Oneof.GoName, "Setted=true")
 							}
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseFloat")), "(form,32);e!=nil{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("req.", field.Oneof.GoName, "=&", g.QualifiedGoIdent(field.GoIdent), "{float32(num)}")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("tmp:=float32(num)")
-								g.P("req.", field.GoName, "=&tmp")
-							} else {
-								g.P("req.", field.GoName, "=float32(num)")
-							}
+							g.P("req.Set", field.GoName, "(float32(num))")
 							g.P("}")
-							if field.Desc.HasOptionalKeyword() {
-								g.P("}")
-							}
 							g.P("}")
 						}
 					case protoreflect.DoubleKind:
 						if field.Desc.IsList() {
 							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
-							g.P("req.", field.GoName, "=make([]float64,0,len(forms))")
+							g.P("tmp:=make([]float64,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseFloat")), "(form,64);e!=nil{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							g.P("req.", field.GoName, "=append(req.", field.GoName, ",num)")
+							g.P("tmp=append(tmp,num)")
 							g.P("}")
 							g.P("}")
+							g.P("req.Set", field.GoName, "(tmp)")
 							g.P("}")
 						} else {
 							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("if oneof", field.Oneof.GoName, "{")
+							if field.Oneof != nil {
+								g.P("if oneof", field.Oneof.GoName, "Setted{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
-								g.P("oneof", field.Oneof.GoName, "=true")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("if form != ", strconv.Quote("null"), "{")
+								g.P("oneof", field.Oneof.GoName, "Setted=true")
 							}
 							g.P("if num,e:=", g.QualifiedGoIdent(strconvPackage.Ident("ParseFloat")), "(form,64);e!=nil{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("req.", field.Oneof.GoName, "=&", g.QualifiedGoIdent(field.GoIdent), "{num}")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("req.", field.GoName, "=&num")
-							} else {
-								g.P("req.", field.GoName, "=num")
-							}
+							g.P("req.Set", field.GoName, "(num)")
 							g.P("}")
-							if field.Desc.HasOptionalKeyword() {
-								g.P("}")
-							}
 							g.P("}")
 						}
 					case protoreflect.BytesKind:
@@ -644,72 +544,53 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("//https://developers.google.com/protocol-buffers/docs/proto3#json")
 						if field.Desc.IsList() {
 							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
-							g.P("req.", field.GoName, "=make([][]byte,0,len(forms))")
+							g.P("tmp:=make([][]byte,0,len(forms))")
 							g.P("for _,form:=range forms{")
 							g.P("if str,e:=", base64Package.Ident("StdEncoding.DecodeString"), "(form);e!=nil{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							g.P("req.", field.GoName, "=append(req.", field.GoName, ",str)")
+							g.P("tmp=append(tmp,str)")
 							g.P("}")
 							g.P("}")
+							g.P("req.Set", field.GoName, "(tmp)")
 							g.P("}")
 						} else {
 							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("if oneof", field.Oneof.GoName, "{")
+							if field.Oneof != nil {
+								g.P("if oneof", field.Oneof.GoName, "Setted{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
-								g.P("oneof", field.Oneof.GoName, "=true")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("if form != ", strconv.Quote("null"), "{")
+								g.P("oneof", field.Oneof.GoName, "Setted=true")
 							}
 							g.P("if str,e:=", base64Package.Ident("StdEncoding.DecodeString"), "(form);e!=nil{")
 							g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] data format wrong\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(", strconv.Quote("field"), ",", strconv.Quote(fname), "))")
 							g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 							g.P("return")
 							g.P("}else{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("req.", field.Oneof.GoName, "=&", g.QualifiedGoIdent(field.GoIdent), "{str}")
-							} else {
-								g.P("req.", field.GoName, "=str")
-							}
+							g.P("req.Set", field.GoName, "(str)")
 							g.P("}")
-							if field.Desc.HasOptionalKeyword() {
-								g.P("}")
-							}
 							g.P("}")
 						}
 					case protoreflect.StringKind:
 						if field.Desc.IsList() {
 							g.P("if forms:=ctx.GetRequest().Form[", strconv.Quote(fname), "];len(forms)>0{")
-							g.P("req.", field.GoName, "=forms")
+							g.P("req.Set", field.GoName, "(forms)")
 							g.P("}")
 						} else {
 							g.P("if form:=ctx.GetRequest().Form.Get(", strconv.Quote(fname), ");len(form)!=0{")
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("if oneof", field.Oneof.GoName, "{")
+							if field.Oneof != nil {
+								g.P("if oneof", field.Oneof.GoName, "Setted{")
 								g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request's oneof field conflict\")")
 								g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 								g.P("return")
 								g.P("}")
-								g.P("oneof", field.Oneof.GoName, "=true")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("if form != ", strconv.Quote("null"), "{")
+								g.P("oneof", field.Oneof.GoName, "Setted=true")
 							}
-							if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-								g.P("req.", field.Oneof.GoName, "=&", g.QualifiedGoIdent(field.GoIdent), "{form}")
-							} else if field.Desc.HasOptionalKeyword() {
-								g.P("req.", field.GoName, "=&form")
-							} else {
-								g.P("req.", field.GoName, "=form")
-							}
-							if field.Desc.HasOptionalKeyword() {
-								g.P("}")
-							}
+							g.P("req.Set", field.GoName, "(form)")
 							g.P("}")
 						}
 					}
@@ -952,11 +833,11 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			}
 			g.P("query :=make([]byte,0,256)")
 			for _, field := range method.Input.Fields {
-				if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-					g.P("//req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ")")
-				} else {
-					g.P("//req.", field.GoName)
+				if field.Oneof != nil {
+					//skip all oneof fields,these fields will be generate in anorher for below
+					continue
 				}
+				g.P("//req.Get", field.GoName, "()")
 				fname := string(field.Desc.Name())
 				switch field.Desc.Kind() {
 				case protoreflect.BoolKind:
@@ -966,47 +847,13 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendBool")), "(query,v)")
 						g.P("query=append(query,'&')")
 						g.P("}")
-					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendBool")), "(query,x.", field.GoName, ")")
-						g.P("query=append(query,'&')")
-						g.P("}")
 					} else {
-						if field.Desc.HasOptionalKeyword() {
-							g.P("if req.", field.GoName, "!=nil{")
-						}
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendBool")), "(query,req.Get", field.GoName, "())")
 						g.P("query=append(query,'&')")
-						if field.Desc.HasOptionalKeyword() {
-							g.P("}")
-						}
 					}
 				case protoreflect.EnumKind:
-					if field.Desc.IsList() {
-						g.P("for _,v:=range req.Get", field.GoName, "(){")
-						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,int64(v),10)")
-						g.P("query=append(query,'&')")
-						g.P("}")
-					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,int64(x.", field.GoName, "),10)")
-						g.P("query=append(query,'&')")
-						g.P("}")
-					} else {
-						if field.Desc.HasOptionalKeyword() {
-							g.P("if req.", field.GoName, "!=nil{")
-						}
-						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,int64(req.Get", field.GoName, "()),10)")
-						g.P("query=append(query,'&')")
-						if field.Desc.HasOptionalKeyword() {
-							g.P("}")
-						}
-					}
+					fallthrough
 				case protoreflect.Sfixed32Kind:
 					fallthrough
 				case protoreflect.Sint32Kind:
@@ -1018,22 +865,10 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,int64(v),10)")
 						g.P("query=append(query,'&')")
 						g.P("}")
-					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,int64(x.", field.GoName, "),10)")
-						g.P("query=append(query,'&')")
-						g.P("}")
 					} else {
-						if field.Desc.HasOptionalKeyword() {
-							g.P("if req.", field.GoName, "!=nil{")
-						}
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,int64(req.Get", field.GoName, "()),10)")
 						g.P("query=append(query,'&')")
-						if field.Desc.HasOptionalKeyword() {
-							g.P("}")
-						}
 					}
 				case protoreflect.Sfixed64Kind:
 					fallthrough
@@ -1046,22 +881,10 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,v,10)")
 						g.P("query=append(query,'&')")
 						g.P("}")
-					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,x.", field.GoName, ",10)")
-						g.P("query=append(query,'&')")
-						g.P("}")
 					} else {
-						if field.Desc.HasOptionalKeyword() {
-							g.P("if req.", field.GoName, "!=nil{")
-						}
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,req.Get", field.GoName, "(),10)")
 						g.P("query=append(query,'&')")
-						if field.Desc.HasOptionalKeyword() {
-							g.P("}")
-						}
 					}
 				case protoreflect.Fixed32Kind:
 					fallthrough
@@ -1072,22 +895,10 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendUint")), "(query,uint64(v),10)")
 						g.P("query=append(query,'&')")
 						g.P("}")
-					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendUint")), "(query,uint64(x.", field.GoName, "),10)")
-						g.P("query=append(query,'&')")
-						g.P("}")
 					} else {
-						if field.Desc.HasOptionalKeyword() {
-							g.P("if req.", field.GoName, "!=nil{")
-						}
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendUint")), "(query,uint64(req.Get", field.GoName, "()),10)")
 						g.P("query=append(query,'&')")
-						if field.Desc.HasOptionalKeyword() {
-							g.P("}")
-						}
 					}
 				case protoreflect.Fixed64Kind:
 					fallthrough
@@ -1098,50 +909,26 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendUint")), "(query,v,10)")
 						g.P("query=append(query,'&')")
 						g.P("}")
-					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendUint")), "(query,x.", field.GoName, ",10)")
-						g.P("query=append(query,'&')")
-						g.P("}")
 					} else {
-						if field.Desc.HasOptionalKeyword() {
-							g.P("if req.", field.GoName, "!=nil{")
-						}
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
 						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendUint")), "(query,req.Get", field.GoName, "(),10)")
 						g.P("query=append(query,'&')")
-						if field.Desc.HasOptionalKeyword() {
-							g.P("}")
-						}
 					}
 				case protoreflect.FloatKind:
 					if field.Desc.IsList() {
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("tmp:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(float64(v),'g',-1,32)")
-						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
+						g.P("etmp:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=append(query,ev...)")
-						g.P("query=append(query,'&')")
-						g.P("}")
-					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("tmp:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(float64(x.", field.GoName, "),'g',-1,32)")
-						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
-						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=append(query,ev...)")
+						g.P("query=append(query,etmp...)")
 						g.P("query=append(query,'&')")
 						g.P("}")
 					} else {
-						if field.Desc.HasOptionalKeyword() {
-							g.P("if req.", field.GoName, "!=nil{")
-						} else {
-							g.P("{")
-						}
+						g.P("{")
 						g.P("tmp:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(float64(req.Get", field.GoName, "()),'g',-1,32)")
-						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
+						g.P("etmp:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=append(query,ev...)")
+						g.P("query=append(query,etmp...)")
 						g.P("query=append(query,'&')")
 						g.P("}")
 					}
@@ -1149,56 +936,33 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					if field.Desc.IsList() {
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
 						g.P("tmp:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(v,'g',-1,64)")
-						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
+						g.P("etmp:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=append(query,ev...)")
-						g.P("query=append(query,'&')")
-						g.P("}")
-					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("tmp:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(x.", field.GoName, ",'g',-1,64)")
-						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
-						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=append(query,ev...)")
+						g.P("query=append(query,etmp...)")
 						g.P("query=append(query,'&')")
 						g.P("}")
 					} else {
-						if field.Desc.HasOptionalKeyword() {
-							g.P("if req.", field.GoName, "!=nil{")
-						} else {
-							g.P("{")
-						}
+						g.P("{")
 						g.P("tmp:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(req.Get", field.GoName, "(),'g',-1,64)")
-						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
+						g.P("etmp:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=append(query,ev...)")
+						g.P("query=append(query,etmp...)")
 						g.P("query=append(query,'&')")
 						g.P("}")
 					}
 				case protoreflect.StringKind:
 					if field.Desc.IsList() {
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
-						g.P("ev := ", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(v)")
+						g.P("etmp := ", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(v)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=append(query,ev...)")
-						g.P("query=append(query,'&')")
-						g.P("}")
-					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(x.", field.GoName, ")")
-						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=append(query,ev...)")
+						g.P("query=append(query,etmp...)")
 						g.P("query=append(query,'&')")
 						g.P("}")
 					} else {
-						if field.Desc.HasOptionalKeyword() {
-							g.P("if req.", field.GoName, "!=nil{")
-						} else {
-							g.P("{")
-						}
-						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(req.Get", field.GoName, "())")
+						g.P("{")
+						g.P("etmp:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(req.Get", field.GoName, "())")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=append(query,ev...)")
+						g.P("query=append(query,etmp...)")
 						g.P("query=append(query,'&')")
 						g.P("}")
 					}
@@ -1207,31 +971,77 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 					g.P("//https://developers.google.com/protocol-buffers/docs/proto3#json")
 					if field.Desc.IsList() {
 						g.P("for _,v:=range req.Get", field.GoName, "(){")
-						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(", g.QualifiedGoIdent(base64Package.Ident("StdEncoding.EncodeToString")), "(v))")
+						g.P("etmp:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(", g.QualifiedGoIdent(base64Package.Ident("StdEncoding.EncodeToString")), "(v))")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=append(query,ev...)")
-						g.P("query=append(query,'&')")
-						g.P("}")
-					} else if field.Oneof != nil && !field.Desc.HasOptionalKeyword() {
-						g.P("if x,ok:=req.", field.Oneof.GoName, ".(*", g.QualifiedGoIdent(field.GoIdent), ");ok{")
-						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(", g.QualifiedGoIdent(base64Package.Ident("StdEncoding.EncodeToString")), "(x.", field.GoName, "))")
-						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=append(query,ev...)")
+						g.P("query=append(query,etmp...)")
 						g.P("query=append(query,'&')")
 						g.P("}")
 					} else {
-						if field.Desc.HasOptionalKeyword() {
-							g.P("if req.", field.GoName, "!=nil{")
-						} else {
-							g.P("{")
-						}
-						g.P("ev:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(", g.QualifiedGoIdent(base64Package.Ident("StdEncoding.EncodeToString")), "(req.Get", field.GoName, "()))")
+						g.P("{")
+						g.P("tmp:=", g.QualifiedGoIdent(base64Package.Ident("StdEncoding.EncodeToString")), "(req.Get", field.GoName, "())")
+						g.P("etmp:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
 						g.P("query=append(query,", strconv.Quote(fname+"="), "...)")
-						g.P("query=append(query,ev...)")
+						g.P("query=append(query,etmp...)")
 						g.P("query=append(query,'&')")
 						g.P("}")
 					}
 				}
+			}
+			for _, oneof := range method.Input.Oneofs {
+				g.P("//oneof: ", oneof.GoName)
+				g.P("if req.Has", oneof.GoName, "(){")
+				g.P("switch req.Which", oneof.GoName, "(){")
+				for _, field := range oneof.Fields {
+					g.P("case ", field.Parent.GoIdent.GoName, "_", field.GoName, "_case:")
+					g.P("//req.Get", field.GoName, "()")
+					g.P("query = append(query,\"", field.Desc.Name(), "=\"...)")
+					switch field.Desc.Kind() {
+					case protoreflect.BoolKind:
+						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendBool")), "(query,req.Get", field.GoName, "())")
+					case protoreflect.EnumKind:
+						fallthrough
+					case protoreflect.Sfixed32Kind:
+						fallthrough
+					case protoreflect.Sint32Kind:
+						fallthrough
+					case protoreflect.Int32Kind:
+						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,int64(req.Get", field.GoName, "()),10)")
+					case protoreflect.Sfixed64Kind:
+						fallthrough
+					case protoreflect.Sint64Kind:
+						fallthrough
+					case protoreflect.Int64Kind:
+						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendInt")), "(query,req.Get", field.GoName, "(),10)")
+					case protoreflect.Fixed32Kind:
+						fallthrough
+					case protoreflect.Uint32Kind:
+						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendUint")), "(query,uint64(req.Get", field.GoName, "()),10)")
+					case protoreflect.Fixed64Kind:
+						fallthrough
+					case protoreflect.Uint64Kind:
+						g.P("query=", g.QualifiedGoIdent(strconvPackage.Ident("AppendUint")), "(query,req.Get", field.GoName, "(),10)")
+					case protoreflect.FloatKind:
+						g.P("tmp:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(float64(req.Get", field.GoName, "()),'g',-1,32)")
+						g.P("etmp:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
+						g.P("query=append(query,etmp...)")
+					case protoreflect.DoubleKind:
+						g.P("tmp:=", g.QualifiedGoIdent(strconvPackage.Ident("FormatFloat")), "(req.Get", field.GoName, "(),'g',-1,64)")
+						g.P("etmp:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
+						g.P("query=append(query,etmp...)")
+					case protoreflect.StringKind:
+						g.P("etmp:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(req.Get", field.GoName, "())")
+						g.P("query=append(query,etmp...)")
+					case protoreflect.BytesKind:
+						g.P("//[]byte should be standard base64 encoded")
+						g.P("//https://developers.google.com/protocol-buffers/docs/proto3#json")
+						g.P("tmp:=", g.QualifiedGoIdent(base64Package.Ident("StdEncoding.EncodeToString")), "(req.Get", field.GoName, "())")
+						g.P("etmp:=", g.QualifiedGoIdent(urlPackage.Ident("QueryEscape")), "(tmp)")
+						g.P("query=append(query,etmp...)")
+					}
+					g.P("query=append(query,'&')")
+				}
+				g.P("}")
+				g.P("}")
 			}
 			g.P("if len(query)>0{")
 			g.P("//drop last &")

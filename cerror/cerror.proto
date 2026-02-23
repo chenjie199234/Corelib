@@ -1,8 +1,10 @@
-syntax="proto3";
+edition = "2024";
 package cerror;
 option go_package="github.com/chenjie199234/Corelib/cerror;cerror";
 message Error{
 	int32 code=1;
 	int32 httpcode=2;
 	string msg=3;
+	string cache_text=4;//cache the text format for reuse,don't set this field
+	string cache_json=5;//cache the json format for reuse,don't set this field
 }

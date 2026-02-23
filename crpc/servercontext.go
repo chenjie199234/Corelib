@@ -39,13 +39,17 @@ func (c *ServerContext) Abort(e error) {
 	}
 	httpcode := 0
 	if ee := cerror.Convert(e); ee != nil {
-		if http.StatusText(int(ee.Httpcode)) == "" || ee.Httpcode < 400 {
+		if http.StatusText(int(ee.GetHttpcode())) == "" || ee.GetHttpcode() < 400 {
 			c.e = cerror.ErrPanic
-			c.rw.send(&MsgBody{Error: c.e})
-			httpcode = int(ee.Httpcode)
+			mb := &Msg_Body{}
+			mb.SetError(c.e)
+			c.rw.send(mb)
+			httpcode = int(ee.GetHttpcode())
 		} else {
 			c.e = ee
-			c.rw.send(&MsgBody{Error: c.e})
+			mb := &Msg_Body{}
+			mb.SetError(c.e)
+			c.rw.send(mb)
 		}
 	}
 	c.rw.closerecvsend(c.e)
@@ -59,7 +63,10 @@ func (c *ServerContext) Abort(e error) {
 // return cerror.ErrClosed means connection between client and server is closed
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *ServerContext) Send(resp []byte, encoder Encoder) error {
-	return c.rw.send(&MsgBody{Body: resp, BodyEncoder: encoder})
+	mb := &Msg_Body{}
+	mb.SetBody(resp)
+	mb.SetBodyEncoder(encoder)
+	return c.rw.send(mb)
 }
 func (c *ServerContext) StopSend() {
 	c.rw.closesend()
@@ -147,12 +154,12 @@ func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 		return nil, e
 	}
 	switch encoder {
-	case Encoder_Protobuf:
+	case Encoder_PROTOBUF:
 		if e := proto.Unmarshal(data, m); e != nil {
 			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
 			return nil, e
 		}
-	case Encoder_Json:
+	case Encoder_JSON:
 		if e := (protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}).Unmarshal(data, m); e != nil {
 			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
 			return nil, e
@@ -197,7 +204,7 @@ func (c *ClientStreamServerContext[reqtype]) GetClientIp() string {
 
 // ------------------------ server stream context(this is for protobuf,so Send's encoder always be Encoder_Protobuf) -----------
 func NewServerStreamServerContext[resptype any](ctx *ServerContext, encoder Encoder) *ServerStreamServerContext[resptype] {
-	if encoder == Encoder_Unknown || encoder > Encoder_Json {
+	if encoder <= Encoder_UNKNOWN || encoder > Encoder_JSON {
 		return nil
 	}
 	return &ServerStreamServerContext[resptype]{Context: ctx.Context, sctx: ctx, encoder: encoder}
@@ -223,9 +230,9 @@ func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
 	}
 	var d []byte
 	switch c.encoder {
-	case Encoder_Protobuf:
+	case Encoder_PROTOBUF:
 		d, _ = proto.Marshal(tmptmp)
-	case Encoder_Json:
+	case Encoder_JSON:
 		d, _ = (protojson.MarshalOptions{AllowPartial: true, UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true}).Marshal(tmptmp)
 	}
 	e := c.sctx.Send(d, c.encoder)
@@ -288,12 +295,12 @@ func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 		return nil, e
 	}
 	switch encoder {
-	case Encoder_Protobuf:
+	case Encoder_PROTOBUF:
 		if e := proto.Unmarshal(data, m); e != nil {
 			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
 			return nil, e
 		}
-	case Encoder_Json:
+	case Encoder_JSON:
 		if e := (protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}).Unmarshal(data, m); e != nil {
 			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
 			return nil, e
@@ -329,7 +336,7 @@ func (c *AllStreamServerContext[reqtype, resptype]) Send(resp *resptype) error {
 		return cerror.ErrSystem
 	}
 	d, _ := proto.Marshal(tmptmp)
-	e := c.sctx.Send(d, Encoder_Protobuf)
+	e := c.sctx.Send(d, Encoder_PROTOBUF)
 	if e != nil && e != io.EOF {
 		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] send response failed", slog.String("error", e.Error()))
 	}

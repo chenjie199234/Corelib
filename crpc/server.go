@@ -136,10 +136,15 @@ func (s *CrpcServer) tellAllPeerSelfClosed() {
 			c.Lock()
 			c.stop = true
 			c.Unlock()
-			d, _ := proto.Marshal(&Msg{
-				H: &MsgHeader{Callid: 0, Type: MsgType_Send},
-				B: &MsgBody{Error: cerror.ErrServerClosing},
-			})
+			m := &Msg{}
+			mh := &Msg_Header{}
+			mh.SetCallid(0)
+			mh.SetType(MsgType_SEND)
+			mb := &Msg_Body{}
+			mb.SetError(cerror.ErrServerClosing)
+			m.SetH(mh)
+			m.SetB(mb)
+			d, _ := proto.Marshal(m)
 			p.SendMessage(context.Background(), d, nil, nil)
 		}
 	})
@@ -200,10 +205,15 @@ func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]b
 func (s *CrpcServer) onlinefunc(ctx context.Context, p *stream.Peer) bool {
 	if s.stop.Closing() {
 		//tel peer self closed
-		d, _ := proto.Marshal(&Msg{
-			H: &MsgHeader{Callid: 0, Type: MsgType_Send},
-			B: &MsgBody{Error: cerror.ErrServerClosing},
-		})
+		m := &Msg{}
+		mh := &Msg_Header{}
+		mh.SetCallid(0)
+		mh.SetType(MsgType_SEND)
+		mb := &Msg_Body{}
+		mb.SetError(cerror.ErrServerClosing)
+		m.SetH(mh)
+		m.SetB(mb)
+		d, _ := proto.Marshal(m)
 		p.SendMessage(context.Background(), d, nil, nil)
 	}
 	c := &client{
@@ -222,18 +232,18 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		return
 	}
 	c := (*client)(p.GetData())
-	switch msg.H.Type {
-	case MsgType_Init:
+	switch msg.GetH().GetType() {
+	case MsgType_INIT:
 		c.Lock()
 		if c.stop {
 			c.Unlock()
 			//tell peer self closed
-			msg.B.Body = nil
-			msg.B.Error = cerror.ErrServerClosing
-			msg.H.Metadata = nil
-			msg.H.Tracedata = nil
-			msg.H.Deadline = 0
-			msg.H.Type = MsgType_Send
+			msg.GetB().ClearBody()
+			msg.GetB().SetError(cerror.ErrServerClosing)
+			msg.GetH().SetMetadata(nil)
+			msg.GetH().SetTracedata(nil)
+			msg.GetH().ClearDeadline()
+			msg.GetH().SetType(MsgType_SEND)
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(context.Background(), d, nil, nil); e != nil {
 				switch e {
@@ -245,32 +255,33 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				}
 				slog.Error("[crpc.server] write response failed",
 					slog.String("cip", p.GetRealPeerIP()),
-					slog.String("path", msg.H.Path),
+					slog.String("path", msg.GetH().GetPath()),
 					slog.String("error", e.Error()))
 			}
 			return
 		}
-		if _, ok := c.ctxs[msg.H.Callid]; ok {
+		if _, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
 			//this is impossible
 			c.Unlock()
-			slog.Error("[crpc.server] duplicate init callid", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.H.Path))
+			slog.Error("[crpc.server] duplicate init callid",
+				slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.GetH().GetPath()))
 			p.Close(false)
 			return
 		}
 		if e := s.stop.Add(1); e != nil {
 			c.Unlock()
-			msg.B.Body = nil
+			msg.GetB().ClearBody()
 			if e == graceful.ErrClosing {
 				//tell peer self closed
-				msg.B.Error = cerror.ErrServerClosing
+				msg.GetB().SetError(cerror.ErrServerClosing)
 			} else {
 				//tell peer self busy
-				msg.B.Error = cerror.ErrBusy
+				msg.GetB().SetError(cerror.ErrBusy)
 			}
-			msg.H.Metadata = nil
-			msg.H.Tracedata = nil
-			msg.H.Deadline = 0
-			msg.H.Type = MsgType_Send
+			msg.GetH().SetMetadata(nil)
+			msg.GetH().SetTracedata(nil)
+			msg.GetH().ClearDeadline()
+			msg.GetH().SetType(MsgType_SEND)
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(context.Background(), d, nil, nil); e != nil {
 				switch e {
@@ -282,22 +293,23 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				}
 				slog.Error("[crpc.server] write response failed",
 					slog.String("cip", p.GetRealPeerIP()),
-					slog.String("path", msg.H.Path),
+					slog.String("path", msg.GetH().GetPath()),
 					slog.String("error", e.Error()))
 			}
 			return
 		}
 
-		handlers, ok := s.handler[msg.H.Path]
+		handlers, ok := s.handler[msg.GetH().GetPath()]
 		if !ok {
 			c.Unlock()
-			slog.Error("[crpc.server] path doesn't exist", slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.H.Path))
-			msg.B.Body = nil
-			msg.B.Error = cerror.ErrNoapi
-			msg.H.Metadata = nil
-			msg.H.Tracedata = nil
-			msg.H.Deadline = 0
-			msg.H.Type = MsgType_Send
+			slog.Error("[crpc.server] path doesn't exist",
+				slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.GetH().GetPath()))
+			msg.GetB().ClearBody()
+			msg.GetB().SetError(cerror.ErrNoapi)
+			msg.GetH().SetMetadata(nil)
+			msg.GetH().SetTracedata(nil)
+			msg.GetH().ClearDeadline()
+			msg.GetH().SetType(MsgType_SEND)
 			d, _ := proto.Marshal(msg)
 			if e := p.SendMessage(context.Background(), d, nil, nil); e != nil {
 				switch e {
@@ -309,38 +321,38 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				}
 				slog.Error("[crpc.server] write response failed",
 					slog.String("cip", p.GetRealPeerIP()),
-					slog.String("path", msg.H.Path),
+					slog.String("path", msg.GetH().GetPath()),
 					slog.String("error", e.Error()))
 			}
 			return
 		}
 		peerip := p.GetRealPeerIP()
 		//trace
-		clientname := msg.H.Tracedata["Core-Self"]
+		clientname := msg.GetH().GetTracedata()["Core-Self"]
 		if clientname == "" {
 			clientname = "unknown"
 		}
 		basectx, span := otel.Tracer("Corelib.crpc.server", trace.WithInstrumentationVersion(version.String())).Start(
-			otel.GetTextMapPropagator().Extract(p, propagation.MapCarrier(msg.H.Tracedata)),
+			otel.GetTextMapPropagator().Extract(p, propagation.MapCarrier(msg.GetH().GetTracedata())),
 			"handle crpc",
 			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(attribute.String("url.path", msg.H.Path), attribute.String("client.name", clientname), attribute.String("client.ip", peerip)))
+			trace.WithAttributes(attribute.String("url.path", msg.GetH().GetPath()), attribute.String("client.name", clientname), attribute.String("client.ip", peerip)))
 		//metadata
-		if msg.H.Metadata == nil {
-			msg.H.Metadata = map[string]string{"Client-IP": peerip}
-		} else if _, ok := msg.H.Metadata["Client-IP"]; !ok {
-			msg.H.Metadata["Client-IP"] = peerip
+		if msg.GetH().GetMetadata() == nil {
+			msg.GetH().SetMetadata(map[string]string{"Client-IP": peerip})
+		} else if _, ok := msg.GetH().GetMetadata()["Client-IP"]; !ok {
+			msg.GetH().GetMetadata()["Client-IP"] = peerip
 		}
-		basectx = metadata.SetMetadata(basectx, msg.H.Metadata)
+		basectx = metadata.SetMetadata(basectx, msg.GetH().GetMetadata())
 
 		//client timeout
 		var basecancel context.CancelFunc
-		if servertimeout := int64(s.getHandlerTimeout(msg.H.Path)); servertimeout > 0 {
+		if servertimeout := int64(s.getHandlerTimeout(msg.GetH().GetPath())); servertimeout > 0 {
 			serverdl := time.Now().UnixNano() + servertimeout
-			if msg.H.Deadline != 0 {
+			if msg.GetH().GetDeadline() != 0 {
 				//compare use the small one
-				if msg.H.Deadline < serverdl {
-					basectx, basecancel = context.WithDeadline(basectx, time.Unix(0, msg.H.Deadline))
+				if msg.GetH().GetDeadline() < serverdl {
+					basectx, basecancel = context.WithDeadline(basectx, time.Unix(0, msg.GetH().GetDeadline()))
 				} else {
 					basectx, basecancel = context.WithDeadline(basectx, time.Unix(0, serverdl))
 				}
@@ -348,16 +360,16 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				//use server timeout
 				basectx, basecancel = context.WithDeadline(basectx, time.Unix(0, serverdl))
 			}
-		} else if msg.H.Deadline != 0 {
+		} else if msg.GetH().GetDeadline() != 0 {
 			//use client timeout
-			basectx, basecancel = context.WithDeadline(basectx, time.Unix(0, msg.H.Deadline))
+			basectx, basecancel = context.WithDeadline(basectx, time.Unix(0, msg.GetH().GetDeadline()))
 		} else {
 			//no timeout
 			basectx, basecancel = context.WithCancel(basectx)
 		}
 
 		//make workctx
-		rw := newrw(msg.H.Callid, msg.H.Path, 0, nil, nil, func(ctx context.Context, m *Msg) error {
+		rw := newrw(msg.GetH().GetCallid(), msg.GetH().GetPath(), 0, nil, nil, func(ctx context.Context, m *Msg) error {
 			d, _ := proto.Marshal(m)
 			e := p.SendMessage(ctx, d, nil, nil)
 			switch e {
@@ -376,8 +388,8 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			}
 			return e
 		})
-		if msg.WithB {
-			rw.cache(msg.B)
+		if msg.GetWithB() {
+			rw.cache(msg.GetB())
 		}
 		workctx := &ServerContext{
 			Context: basectx,
@@ -386,7 +398,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			peer:    p,
 			peerip:  peerip,
 		}
-		c.ctxs[msg.H.Callid] = workctx
+		c.ctxs[msg.GetH().GetCallid()] = workctx
 		c.Unlock()
 		go func() {
 			defer func() {
@@ -395,14 +407,14 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 					n := runtime.Stack(stack, false)
 					slog.ErrorContext(workctx, "[crpc.server] panic",
 						slog.String("cip", peerip),
-						slog.String("path", msg.H.Path),
+						slog.String("path", msg.GetH().GetPath()),
 						slog.Any("panic", e),
 						slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
 					workctx.Abort(cerror.ErrPanic)
 				}
 				c.Lock()
 				workctx.cancel()
-				delete(c.ctxs, msg.H.Callid)
+				delete(c.ctxs, msg.GetH().GetCallid())
 				c.Unlock()
 
 				if workctx.e != nil {
@@ -412,13 +424,13 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				}
 				span.End()
 				if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-					mstatus, _ := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(msg.H.Path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+					mstatus, _ := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(msg.GetH().GetPath()+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
 					if workctx.e != nil {
 						mstatus.Record(context.Background(), 1)
 					} else {
 						mstatus.Record(context.Background(), 0)
 					}
-					mtime, _ := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(msg.H.Path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+					mtime, _ := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(msg.GetH().GetPath()+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
 					mtime.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0)
 				}
 				if workctx.finish == 0 {
@@ -433,32 +445,32 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				}
 			}
 		}()
-	case MsgType_Send:
+	case MsgType_SEND:
 		c.RLock()
-		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
-			ctx.rw.cache(msg.B)
+		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
+			ctx.rw.cache(msg.GetB())
 		}
 		c.RUnlock()
-	case MsgType_CloseRecv:
+	case MsgType_CLOSE_RECV:
 		c.RLock()
-		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
+		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
 			ctx.rw.status.And(0b0111)
 		}
 		c.RUnlock()
-	case MsgType_CloseSend:
+	case MsgType_CLOSE_SEND:
 		c.RLock()
-		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
+		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
 			ctx.rw.status.And(0b1011)
 			ctx.rw.reader.Close()
 		}
 		c.RUnlock()
-	case MsgType_CloseRecvSend:
+	case MsgType_CLOSE_RECV_SEND:
 		c.Lock()
-		if ctx, ok := c.ctxs[msg.H.Callid]; ok {
+		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
 			ctx.cancel()
 			ctx.rw.status.And(0b0011)
 			ctx.rw.reader.Close()
-			delete(c.ctxs, msg.H.Callid)
+			delete(c.ctxs, msg.GetH().GetCallid())
 		}
 		c.Unlock()
 	}

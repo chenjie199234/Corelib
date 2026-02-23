@@ -177,24 +177,24 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 		slog.Error("[crpc.client] userdata format wrong", slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
 		return
 	}
-	switch msg.H.Type {
-	case MsgType_CloseRecv:
-		if rw := server.getrw(msg.H.Callid); rw != nil {
+	switch msg.GetH().GetType() {
+	case MsgType_CLOSE_RECV:
+		if rw := server.getrw(msg.GetH().GetCallid()); rw != nil {
 			rw.status.And(0b0111)
 		}
-	case MsgType_CloseSend:
-		if rw := server.getrw(msg.H.Callid); rw != nil {
+	case MsgType_CLOSE_SEND:
+		if rw := server.getrw(msg.GetH().GetCallid()); rw != nil {
 			rw.status.And(0b1011)
 			rw.reader.Close()
 		}
-	case MsgType_CloseRecvSend:
-		if rw := server.getrw(msg.H.Callid); rw != nil {
+	case MsgType_CLOSE_RECV_SEND:
+		if rw := server.getrw(msg.GetH().GetCallid()); rw != nil {
 			rw.status.And(0b0011)
 			rw.reader.Close()
-			server.delrw(msg.H.Callid)
+			server.delrw(msg.GetH().GetCallid())
 		}
-	case MsgType_Send:
-		if msg.B.Error != nil && cerror.Equal(msg.B.Error, cerror.ErrServerClosing) {
+	case MsgType_SEND:
+		if msg.GetB().GetError() != nil && cerror.Equal(msg.GetB().GetError(), cerror.ErrServerClosing) {
 			if !server.closing.Swap(true) {
 				//set the lowest pick priority
 				server.Pickinfo.SetDiscoverServerOffline(0)
@@ -204,9 +204,9 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 				c.resolver.Now()
 			}
 		}
-		if msg.H.Callid != 0 {
-			if rw := server.getrw(msg.H.Callid); rw != nil {
-				rw.cache(msg.B)
+		if msg.GetH().GetCallid() != 0 {
+			if rw := server.getrw(msg.GetH().GetCallid()); rw != nil {
+				rw.cache(msg.GetB())
 			}
 		}
 	}
@@ -222,7 +222,7 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 }
 
 func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder Encoder, handler func(ctx *CallContext) error) error {
-	if encoder == Encoder_Unknown || encoder > Encoder_Json {
+	if encoder == Encoder_UNKNOWN || encoder > Encoder_JSON {
 		return cerror.ErrReq
 	}
 	if e := c.stop.Add(1); e != nil {
@@ -266,7 +266,10 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 		}
 		span.SetAttributes(attribute.String("server.addr", server.addr))
 		rw := server.createrw(path, deadline, md, td)
-		if e := rw.init(&MsgBody{Body: in, BodyEncoder: encoder}); e != nil {
+		mb := &Msg_Body{}
+		mb.SetBody(in)
+		mb.SetBodyEncoder(encoder)
+		if e := rw.init(mb); e != nil {
 			server.delrw(rw.callid)
 			slog.ErrorContext(ctx, "[crpc.client] send request failed",
 				slog.String("sname", c.serverfullname),

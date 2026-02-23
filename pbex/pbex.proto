@@ -1,4 +1,4 @@
-syntax="proto3";
+edition = "2024";
 package pbex;
 option go_package="github.com/chenjie199234/Corelib/pbex;pbex";
 import "google/protobuf/descriptor.proto";
