@@ -30,7 +30,6 @@ func main() {
 		//pre check
 		needfile := make(map[string]bool)
 		for _, f := range gen.Files {
-			needfile[f.Desc.Path()] = false
 			if !f.Generate {
 				continue
 			}
