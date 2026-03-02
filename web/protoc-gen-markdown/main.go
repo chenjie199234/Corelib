@@ -48,15 +48,13 @@ func main() {
 					if mop.GetDeprecated() || !proto.HasExtension(mop, pbex.E_Method) {
 						continue
 					}
-					if m.Desc.IsStreamingClient() || m.Desc.IsStreamingServer() {
-						continue
-					}
 					emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
 					need := 0
 					for _, em := range emethod {
 						em = strings.ToUpper(em)
 						if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
 							need++
+							emethod[0] = em
 						}
 					}
 					if need == 0 {
@@ -65,27 +63,19 @@ func main() {
 					if need > 1 {
 						panic(fmt.Sprintf("method: %s in service: %s,only one http method can be setted", m.Desc.Name(), s.Desc.Name()))
 					}
-					if m.Desc.IsStreamingClient() || (m.Desc.IsStreamingServer() && emethod[0] != "GET") {
-						panic(fmt.Sprintf("only server stream can be setted on web,and http method must be GET,method: %s in service: %s wrong", m.Desc.Name(), s.Desc.Name()))
+					if m.Desc.IsStreamingClient() {
+						panic(fmt.Sprintf("method: %s in service: %s,only server stream can be setted on web", m.Desc.Name(), s.Desc.Name()))
+					}
+					simple := emethod[0] == "GET" || emethod[0] == "DELETE"
+					if simple {
+						for _, f := range m.Input.Fields {
+							if f.Desc.Kind() != protoreflect.MessageKind {
+								continue
+							}
+							panic(fmt.Sprintf("method: %s in service: %s with http method: %s,it's request message can't contain nested message and map", m.Desc.Name(), s.Desc.Name(), emethod[0]))
+						}
 					}
 					needfile[f.Desc.Path()] = true
-					simple := false
-					for _, em := range emethod {
-						em = strings.ToUpper(em)
-						if em == "GET" || em == "DELETE" {
-							simple = true
-							break
-						}
-					}
-					if !simple {
-						continue
-					}
-					for _, f := range m.Input.Fields {
-						if f.Desc.Kind() != protoreflect.MessageKind {
-							continue
-						}
-						panic(fmt.Sprintf("method: %s in service: %s with http method: get/delete,it's request message can't contain nested message and map", m.Desc.Name(), s.Desc.Name()))
-					}
 				}
 			}
 			//delete old file

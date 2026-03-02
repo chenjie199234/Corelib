@@ -25,24 +25,24 @@ enum TestEnum {
     ENUMC=2;
 }
 message Helloreq{
-	bool bl = 1;
-	repeated bool bls = 2;
-	int32 i32=3[(pbex.int_in)=1];
-	repeated int32 ri32=4[(pbex.int_not_in)=1];
-	uint32 ui32=5[(pbex.uint_in)=1];
-	repeated uint32 rui32=6[(pbex.map_repeated_len_gt)=2,(pbex.uint_not_in)=1];
-	int64 i64=7;
+	bool bl = 1[(pbex.bool_eq)=true];
+	repeated bool bls = 2[(pbex.map_repeated_len_gt)=1,(pbex.map_repeated_len_lt)=4,(pbex.map_repeated_len_not_eq)=3];
+	int32 i32=3[(pbex.int_gt)=0,(pbex.int_lt)=5,(pbex.int_not_in)=2,(pbex.int_not_in)=3];
+	repeated int32 ri32=4[(pbex.int_lte)=-2147483648,(pbex.int_not_in)=1];
+	uint32 ui32=5[(pbex.uint_gt)=1,(pbex.uint_lt)=4294967294,(pbex.uint_not_in)=10];
+	repeated uint32 rui32=6[(pbex.map_repeated_len_gt)=2,(pbex.uint_lt)=1,(pbex.uint_not_in)=1];
+	int64 i64=7[(pbex.int_gt)=-9223372036854775808,(pbex.int_lte)=9223372036854775806,(pbex.int_not_in)=1];;
 	repeated int64 ri64=8;
 	uint64 ui64=9;
 	repeated uint64 rui64=10;
 	bytes bs=11;
 	repeated bytes rbs=12;
 	string ss=13;
-	repeated string rss=14[(pbex.string_bytes_reg_match)="abc*"];
-	float f=15;
+	repeated string rss=14[(pbex.string_bytes_reg_match)="^abc",(pbex.string_bytes_reg_not_match)="abc$"];
+	float f=15[(pbex.float_gte)=1,(pbex.float_lte)=2,(pbex.float_not_in)=1.5,(pbex.float_not_in)=1];
 	repeated float rf=16;
 	double d=17;
-	repeated double rd=18;
+	repeated double rd=18[(pbex.float_gte)=1,(pbex.float_lte)=2,(pbex.float_not_in)=2];
 	TestEnum e=19;
 	repeated TestEnum re=20;
 	oneof o1{
@@ -87,7 +87,7 @@ message Worldreq{
 	map<int32,string> mi32_ss=9;
 	map<int32,float> mi32_f=10;
 	map<int32,double> mi32_d=11;
-	map<int32,TestEnum> mi32_e=12;
+	map<int32,TestEnum> mi32_e=12[(pbex.map_value_enum_gt)=0];
 	map<int32,Helloreq> mi32_m=13;
 
 	map<uint32,int32> mui32_i32=14;
@@ -95,7 +95,7 @@ message Worldreq{
 	map<uint32,int64> mui32_i64=16;
 	map<uint32,uint64> mui32_ui64=17;
 	map<uint32,bytes> mui32_bs=18;
-	map<uint32,string> mui32_ss=19[(pbex.map_value_string_bytes_reg_match)="xyz*"];
+	map<uint32,string> mui32_ss=19[(pbex.map_value_string_bytes_reg_match)="^xyz"];
 	map<uint32,float> mui32_f=20;
 	map<uint32,double> mui32_d=21;
 	map<uint32,TestEnum> mui32_e=22;
@@ -123,12 +123,18 @@ message Worldreq{
 	map<uint64,TestEnum> mui64_e=42;
 	map<uint64,Helloreq> mui64_m=43;
 
-	map<string,int32> mss_i32=44[(pbex.map_key_string_reg_match)="key*"];
+	map<string,int32> mss_i32=44;
 	map<string,uint32> mss_ui32=45;
 	map<string,int64> mss_i64=46;
 	map<string,uint64> mss_ui64=47;
 	map<string,bytes> mss_bs=48;
-	map<string,string> mss_ss=49;
+	map<string,string> mss_ss=49[
+      (pbex.map_key_string_len_gt)=10,
+      (pbex.map_key_string_reg_match)="^key",
+      (pbex.map_key_string_reg_not_match)="xyz$",
+      (pbex.map_value_string_bytes_len_lt)=50,
+      (pbex.map_value_string_bytes_reg_match)="^value",
+      (pbex.map_value_string_bytes_reg_not_match)="abc$"];
 	map<string,float> mss_f=50;
 	map<string,double> mss_d=51;
 	map<string,TestEnum> mss_e=52;

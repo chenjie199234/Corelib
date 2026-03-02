@@ -240,7 +240,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("case ", g.QualifiedGoIdent(crpcPackage.Ident("Encoder_PROTOBUF")), ":")
 			g.P("respd,_=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
 			g.P("case ", g.QualifiedGoIdent(crpcPackage.Ident("Encoder_JSON")), ":")
-			g.P("respd,_=", g.QualifiedGoIdent(protojsonPackage.Ident("Marshal")), "(resp)")
+			g.P("respd,_=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{UseProtoNames: true, UseEnumNumbers: true}.Marshal(resp)")
 			g.P("}")
 			g.P("if e:=ctx.Send(respd,encoder);e!=nil{")
 			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] send response failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")

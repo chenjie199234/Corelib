@@ -1,0 +1,7 @@
+edition = "2024";
+package testb;
+option go_package="github.com/chenjie199234/Corelib/web/protoc-gen-go-web/testb;testb";
+import option "pbex.proto";
+
+message HaHaHa{
+}

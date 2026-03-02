@@ -51,12 +51,27 @@ func (c *SSEContext) Recv() (id, event string, data []byte, err error) {
 			return
 		}
 		switch {
-		case strings.HasPrefix(common.BTS(line), "event: "):
-			event = common.BTS(bytes.TrimSpace(line[7:]))
-		case strings.HasPrefix(common.BTS(line), "id: "):
-			id = common.BTS(bytes.TrimSpace(line[4:]))
-		case strings.HasPrefix(common.BTS(line), "retry: "):
-			str := common.BTS(bytes.TrimSpace(line[7:]))
+		case strings.HasPrefix(common.BTS(line), "event:"):
+			//only the first space is meaningless,it can exist or not
+			tmp := line[6:]
+			if len(tmp) > 0 && tmp[0] == ' ' {
+				tmp = tmp[1:]
+			}
+			event = common.BTS(tmp)
+		case strings.HasPrefix(common.BTS(line), "id:"):
+			//only the first space is meaningless,it can exist or not
+			tmp := line[3:]
+			if len(tmp) > 0 && tmp[0] == ' ' {
+				tmp = tmp[1:]
+			}
+			id = common.BTS(tmp)
+		case strings.HasPrefix(common.BTS(line), "retry:"):
+			//only the first space is meaningless,it can exist or not
+			tmp := line[6:]
+			if len(tmp) > 0 && tmp[0] == ' ' {
+				tmp = tmp[1:]
+			}
+			str := common.BTS(tmp)
 			if c.retry, e = strconv.ParseInt(str, 10, 64); e != nil {
 				slog.ErrorContext(c.Context, "["+c.resp.Request.URL.Path+"] SSE data broken for retry field", slog.String("retry", str))
 				err = cerror.ErrDataBroken
@@ -66,11 +81,15 @@ func (c *SSEContext) Recv() (id, event string, data []byte, err error) {
 				c.retry = 0
 			}
 		case strings.HasPrefix(common.BTS(line), "data: "):
+			tmp := line[5:]
+			if len(tmp) > 0 && tmp[0] == ' ' {
+				tmp = tmp[1:]
+			}
 			if len(buf) > 0 {
 				//multi data field use \n to connect
 				buf = append(buf, '\n')
 			}
-			buf = append(buf, line[6:]...)
+			buf = append(buf, tmp...)
 		default:
 			//ignore all other line
 		}
@@ -110,7 +129,7 @@ func (c *ServerStreamSSEContext[resptype]) Recv() (string, string, *resptype, er
 	if event == "error" && len(data) > 0 {
 		return "", "", nil, cerror.Decode(common.BTS(data))
 	}
-	if e := (protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}).Unmarshal(data, m); e != nil {
+	if e := protojson.Unmarshal(data, m); e != nil {
 		slog.ErrorContext(c.Context, "["+c.cctx.resp.Request.URL.Path+"] response decode failed", slog.String("error", e.Error()))
 		return "", "", nil, e
 	}

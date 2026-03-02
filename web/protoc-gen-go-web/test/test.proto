@@ -9,7 +9,7 @@ service Test {
 		option (pbex.web_midwares)="user";
 		option (pbex.web_midwares)="limit";
 	}
-	rpc Wrld(Worldreq)returns(Worldresp){
+	rpc World(Worldreq)returns(Worldresp){
 		option (pbex.method)="post";
 		option (pbex.web_midwares)="user";
 		option (pbex.web_midwares)="limit";

@@ -160,7 +160,7 @@ func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 			return nil, e
 		}
 	case Encoder_JSON:
-		if e := (protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}).Unmarshal(data, m); e != nil {
+		if e := protojson.Unmarshal(data, m); e != nil {
 			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
 			return nil, e
 		}
@@ -233,7 +233,7 @@ func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
 	case Encoder_PROTOBUF:
 		d, _ = proto.Marshal(tmptmp)
 	case Encoder_JSON:
-		d, _ = (protojson.MarshalOptions{AllowPartial: true, UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true}).Marshal(tmptmp)
+		d, _ = (protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}).Marshal(tmptmp)
 	}
 	e := c.sctx.Send(d, c.encoder)
 	if e != nil && e != io.EOF {
@@ -301,7 +301,7 @@ func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 			return nil, e
 		}
 	case Encoder_JSON:
-		if e := (protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}).Unmarshal(data, m); e != nil {
+		if e := protojson.Unmarshal(data, m); e != nil {
 			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
 			return nil, e
 		}

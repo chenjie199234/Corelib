@@ -188,7 +188,7 @@ func (c *ServerStreamServerContext[resptype]) Send(id string, resp *resptype) er
 		slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] send response failed", slog.String("error", cerror.ErrClosed.Error()))
 		return cerror.ErrClosed
 	}
-	d, _ := (protojson.MarshalOptions{AllowPartial: true, UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true}).Marshal(tmptmp)
+	d, _ := (protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}).Marshal(tmptmp)
 	var msg []byte
 	if len(id) > 0 {
 		msg = make([]byte, 0, len(id)+5+len(d)+8)

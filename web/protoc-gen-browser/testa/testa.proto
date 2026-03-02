@@ -1,0 +1,132 @@
+//protoc -I ../../../pbex -I . -I .. --browser_out=paths=source_relative:. *.proto
+edition = "2024";
+package testa;
+option go_package="github.com/chenjie199234/Corelib/web/protoc-gen-go-web/testa;testa";
+import "testb/testb.proto";
+import option "pbex.proto";
+service TestA {
+	rpc Hello(Helloreq)returns(Helloresp){
+		option (pbex.method)="get";
+		option (pbex.web_midwares)="user";
+		option (pbex.web_midwares)="limit";
+	}
+	rpc World(Worldreq)returns(Worldresp){
+		option (pbex.method)="post";
+		option (pbex.web_midwares)="user";
+		option (pbex.web_midwares)="limit";
+	}
+	rpc ServerStream(ServerStreamreq)returns(stream ServerStreamresp){
+		option (pbex.method)="get";
+		option (pbex.web_midwares)="user";
+	}
+}
+message ServerStreamreq{
+  string a=1;
+  int64 b=2[(pbex.int_gt)=0];
+}
+message ServerStreamresp{
+
+}
+enum TestEnum {
+	ENUMA=0;
+	ENUMB=1;
+	ENUMC=2;
+}
+message Helloreq{
+	bool bl = 1;
+	repeated bool bls = 2;
+	int32 i32=3[(pbex.int_in)=1];
+	repeated int32 ri32=4[(pbex.int_not_in)=1];
+	uint32 ui32=5[(pbex.uint_in)=1];
+	repeated uint32 rui32=6[(pbex.map_repeated_len_gt)=2,(pbex.uint_not_in)=1];
+	int64 i64=7;
+	repeated int64 ri64=8;
+	uint64 ui64=9;
+	repeated uint64 rui64=10;
+	bytes bs=11;
+	repeated bytes rbs=12;
+	string ss=13;
+	repeated string rss=14[(pbex.string_bytes_reg_match)="abc*"];
+	float f=15;
+	repeated float rf=16;
+	double d=17;
+	repeated double rd=18;
+	TestEnum e=19;
+	repeated TestEnum re=20;
+	oneof o{
+		bool obl=21;
+		int32 oi32=22[(pbex.int_gt)=10];
+		uint32 oui32=23;
+		int64 oi64=24;
+		uint64 oui64=25;
+		bytes obs=26;
+		string oss=27;
+		float of=28;
+		double od=29;
+		TestEnum oe=30;
+	}
+}
+message Helloresp{
+  testb.HaHaHa ha=1;
+}
+message Worldreq{
+	bool bl = 1;
+	repeated bool bls = 2;
+	int32 i32=3[(pbex.int_in)=1];
+	repeated int32 ri32=4[(pbex.int_not_in)=1];
+	uint32 ui32=5[(pbex.uint_in)=1];
+	repeated uint32 rui32=6[(pbex.map_repeated_len_gt)=2,(pbex.uint_not_in)=1];
+	int64 i64=7;
+	repeated int64 ri64=8;
+	uint64 ui64=9;
+	repeated uint64 rui64=10;
+	bytes bs=11;
+	repeated bytes rbs=12;
+	string ss=13;
+	repeated string rss=14[(pbex.string_bytes_reg_match)="abc*"];
+	float f=15;
+	repeated float rf=16;
+	double d=17;
+	repeated double rd=18;
+	TestEnum e=19;
+	repeated TestEnum re=20;
+	testb.HaHaHa ha=21;
+	repeated testb.HaHaHa rha=22;
+	map<int64,testb.HaHaHa> mi64_ha=23;
+	map<string,testb.HaHaHa> mstr_ha=24;
+	map<int32,testb.HaHaHa> mi32_ha=25;
+	map<int64,int64> mi64_i64=26;
+	map<int64,int32> mi64_i32=27;
+	map<int64,bytes> mi64_bytes=28;
+	map<int64,string> mi64_str=29;
+	map<int64,TestEnum> mi64_enum=30;
+	oneof o{
+		bool obl=31;
+		int32 oi32=32[(pbex.int_gt)=10];
+		uint32 oui32=33;
+		int64 oi64=34;
+		uint64 oui64=35;
+		bytes obs=36;
+		string oss=37;
+		float of=38;
+		double od=39;
+		TestEnum oe=40;
+		testb.HaHaHa oha=41[(pbex.message_not_nil)=true];
+	}
+	oneof oo{
+		testb.HaHaHa ooha=42;
+		Selfnest oos =43;
+	}
+}
+message Worldresp{
+  Worldreq result1=1;
+}
+message Selfnest{
+	Selfnest self=1;
+	repeated Selfnest rself=2;
+	map<int32,Selfnest> mi32_self=3;
+	map<uint32,Selfnest> mui32_self=4;
+	map<int64,Selfnest> mi64_self=5;
+	map<uint64,Selfnest> mui64_self=6;
+	map<string,Selfnest> mss_self=7;
+}

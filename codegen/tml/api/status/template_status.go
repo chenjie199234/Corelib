@@ -11,6 +11,8 @@ const txt = `edition = "2024";
 package {{.ProjectName}};
 //this is the golang's package name,all proto in this project must use this name as the golang's package name
 option go_package="{{.PackageName}}/api;api";
+//all other imports should put before this line
+//all pbex options on response will not be checked automatically
 //https://github.com/chenjie199234/Corelib/blob/main/pbex/pbex.proto
 import option "pbex/pbex.proto";
 

@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/chenjie199234/Corelib/internal/version"
@@ -23,13 +22,17 @@ func main() {
 		fmt.Println(version.String())
 		return
 	}
-	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
+	var flags flag.FlagSet
+	var outdir = flags.String("outdir", "./", "")
+	protogen.Options{ParamFunc: flags.Set}.Run(func(plugin *protogen.Plugin) error {
 		//pre check
-		needfile := make(map[string]bool)
-		for _, f := range gen.Files {
-			gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_SUPPORTS_EDITIONS)
-			gen.SupportedEditionsMinimum = descriptorpb.Edition_EDITION_2024
-			gen.SupportedEditionsMaximum = descriptorpb.Edition_EDITION_2024
+		services := make(map[*protogen.Service]map[*protogen.Method]*struct{})
+		enums := make(map[*protogen.Enum]*struct{})
+		msgs := make(map[*protogen.Message][]bool) //first element:toFORM,second element:toJSON,third element:fromJSON
+		for _, f := range plugin.Files {
+			plugin.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_SUPPORTS_EDITIONS)
+			plugin.SupportedEditionsMinimum = descriptorpb.Edition_EDITION_2024
+			plugin.SupportedEditionsMaximum = descriptorpb.Edition_EDITION_2024
 			if !f.Generate {
 				continue
 			}
@@ -54,6 +57,7 @@ func main() {
 						em = strings.ToUpper(em)
 						if em == "GET" || em == "POST" || em == "PUT" || em == "PATCH" || em == "DELETE" {
 							need++
+							emethod[0] = em
 						}
 					}
 					if need == 0 {
@@ -62,43 +66,100 @@ func main() {
 					if need > 1 {
 						panic(fmt.Sprintf("method: %s in service: %s,only one http method can be setted", m.Desc.Name(), s.Desc.Name()))
 					}
-					if m.Desc.IsStreamingClient() || (m.Desc.IsStreamingServer() && emethod[0] != "GET") {
-						panic(fmt.Sprintf("only server stream can be setted on web,and http method must be GET,method: %s in service: %s wrong", m.Desc.Name(), s.Desc.Name()))
+					if m.Desc.IsStreamingClient() {
+						panic(fmt.Sprintf("method: %s in service: %s only server stream can be setted on web", m.Desc.Name(), s.Desc.Name()))
 					}
-					needfile[f.Desc.Path()] = true
 					//Get and Delete method can only contain simple fields
-					simple := false
-					for _, em := range emethod {
-						em = strings.ToUpper(em)
-						if em == "GET" || em == "DELETE" {
-							simple = true
-							break
+					simple := emethod[0] == "GET" || emethod[0] == "DELETE"
+					if simple {
+						for _, f := range m.Input.Fields {
+							if f.Desc.Kind() != protoreflect.MessageKind {
+								continue
+							}
+							panic(fmt.Sprintf("method: %s in service: %s with http method: %s,it's request message can't contain nested message and map", m.Desc.Name(), s.Desc.Name(), emethod[0]))
 						}
 					}
-					if !simple {
-						continue
+					if _, ok := services[s]; !ok {
+						services[s] = make(map[*protogen.Method]*struct{})
 					}
-					for _, f := range m.Input.Fields {
-						if f.Desc.Kind() != protoreflect.MessageKind {
-							continue
-						}
-						panic(fmt.Sprintf("method: %s in service: %s with http method: get/delete,it's request message can't contain nested message and map", m.Desc.Name(), s.Desc.Name()))
-					}
+					services[s][m] = nil
+					prepare_input(simple, m.Input, msgs, enums)
+					prepare_output(m.Output, msgs, enums)
 				}
 			}
-			//delete old file
-			oldtocfile := f.GeneratedFilenamePrefix + "_browser.ts"
-			if e := os.RemoveAll(oldtocfile); e != nil {
-				panic("remove old file " + oldtocfile + " error:" + e.Error())
-			}
 		}
-		//gen file
-		for _, f := range gen.Files {
-			if status, ok := needfile[f.Desc.Path()]; !ok || !status {
-				continue
+		for enum := range enums {
+			genEnum(plugin, enum, *outdir)
+		}
+		for message, status := range msgs {
+			genMessage(plugin, message, status, *outdir)
+		}
+		for service, methods := range services {
+			for method := range methods {
+				genServiceMethod(plugin, service, method, *outdir)
 			}
-			generateFile(gen, f)
 		}
 		return nil
 	})
+}
+func prepare_input(simple bool, m *protogen.Message, msgs map[*protogen.Message][]bool, enums map[*protogen.Enum]*struct{}) {
+	status, ok := msgs[m]
+	if !ok {
+		status = []bool{false, false, false}
+		msgs[m] = status
+	}
+	if simple {
+		status[0] = true //toFORM
+	} else {
+		status[1] = true //toJSON
+	}
+	if ok {
+		return
+	}
+	for _, f := range m.Fields {
+		switch f.Desc.Kind() {
+		case protoreflect.EnumKind:
+			enums[f.Enum] = nil
+		case protoreflect.MessageKind:
+			if f.Desc.IsMap() {
+				switch f.Message.Fields[1].Desc.Kind() {
+				case protoreflect.MessageKind:
+					prepare_input(simple, f.Message.Fields[1].Message, msgs, enums)
+				case protoreflect.EnumKind:
+					enums[f.Message.Fields[1].Enum] = nil
+				}
+			} else {
+				prepare_input(simple, f.Message, msgs, enums)
+			}
+		}
+	}
+}
+func prepare_output(m *protogen.Message, msgs map[*protogen.Message][]bool, enums map[*protogen.Enum]*struct{}) {
+	status, ok := msgs[m]
+	if !ok {
+		status = []bool{false, false, true}
+		msgs[m] = status
+	} else {
+		status[2] = true
+	}
+	if ok {
+		return
+	}
+	for _, f := range m.Fields {
+		switch f.Desc.Kind() {
+		case protoreflect.EnumKind:
+			enums[f.Enum] = nil
+		case protoreflect.MessageKind:
+			if f.Desc.IsMap() {
+				switch f.Message.Fields[1].Desc.Kind() {
+				case protoreflect.MessageKind:
+					prepare_output(f.Message.Fields[1].Message, msgs, enums)
+				case protoreflect.EnumKind:
+					enums[f.Message.Fields[1].Enum] = nil
+				}
+			} else {
+				prepare_output(f.Message, msgs, enums)
+			}
+		}
+	}
 }

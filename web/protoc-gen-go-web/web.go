@@ -209,7 +209,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				g.P("return")
 				g.P("}")
 				g.P("if len(data)>0{")
-				g.P("if e := (", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(data,req);e!=nil{")
+				g.P("if e := ", g.QualifiedGoIdent(protojsonPackage.Ident("Unmarshal")), "(data,req);e!=nil{")
 				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] unmarshal json body failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
 				g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 				g.P("return")
@@ -636,7 +636,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("ctx.Abort(nil)")
 			g.P("}else{")
 			g.P("ctx.SetResponseHeader(\"Content-Type\",\"application/json\")")
-			g.P("respd,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{AllowPartial: true,UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true}.Marshal(resp)")
+			g.P("respd,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{UseProtoNames: true, UseEnumNumbers: true}.Marshal(resp)")
 			g.P("ctx.Write(respd)")
 			g.P("ctx.Abort(nil)")
 			g.P("}")
@@ -824,7 +824,6 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("}")
 
 		if need == "GET" || need == "DELETE" {
-			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-www-form-urlencoded"), ")")
 			if method.Desc.IsStreamingServer() {
 				g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("text/event-stream"), ")")
 				g.P("header.Set(", strconv.Quote("Cache-Control"), ",", strconv.Quote("no-cache"), ")")
@@ -1055,8 +1054,14 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				g.P("r,e:=c.cc.Delete(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
 			}
 		} else {
-			g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")
-			g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("application/x-protobuf"), ")")
+			if method.Desc.IsStreamingServer() {
+				g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")
+				g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("text/event-stream"), ")")
+				g.P("header.Set(", strconv.Quote("Cache-Control"), ",", strconv.Quote("no-cache"), ")")
+			} else {
+				g.P("header.Set(", strconv.Quote("Content-Type"), ",", strconv.Quote("application/x-protobuf"), ")")
+				g.P("header.Set(", strconv.Quote("Accept"), ",", strconv.Quote("application/x-protobuf"), ")")
+			}
 			g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
 			switch need {
 			case "POST":
@@ -1092,7 +1097,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(data,resp);e!=nil{")
 			g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrResp")))
 			g.P("}")
-			g.P("} else if e:=(", g.QualifiedGoIdent(protojsonPackage.Ident("UnmarshalOptions")), "{AllowPartial: true,DiscardUnknown: true}).Unmarshal(data,resp);e!=nil{")
+			g.P("} else if e:=", g.QualifiedGoIdent(protojsonPackage.Ident("Unmarshal")), "(data,resp);e!=nil{")
 			g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrResp")))
 			g.P("}")
 			g.P("return resp, nil")
