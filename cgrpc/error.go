@@ -12,10 +12,7 @@ import (
 )
 
 // Warning!this function is only used for generated code,don't use it in any other place
-// clientorserver:
-// -- client true
-// -- server false
-func transGrpcError(e error, clientorserver bool) error {
+func transGrpcError(e error, client bool) error {
 	if e == io.EOF {
 		return e
 	}
@@ -48,12 +45,12 @@ func transGrpcError(e error, clientorserver bool) error {
 		return cerror.ErrPermission
 	case codes.ResourceExhausted:
 		if strings.Contains(s.Message(), "received message") && strings.Contains(s.Message(), "larger") {
-			if clientorserver {
+			if client {
 				return cerror.ErrRespmsgLen
 			}
 			return cerror.ErrReqmsgLen
 		} else if (strings.Contains(s.Message(), "send message") && strings.Contains(s.Message(), "larger")) || strings.Contains(s.Message(), "message too large") {
-			if clientorserver {
+			if client {
 				return cerror.ErrReqmsgLen
 			}
 			return cerror.ErrRespmsgLen

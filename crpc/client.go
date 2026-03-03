@@ -3,10 +3,8 @@ package crpc
 import (
 	"context"
 	"crypto/tls"
-	"encoding/base64"
 	"errors"
 	"log/slog"
-	"runtime"
 	"sync"
 	"time"
 	"unsafe"
@@ -300,7 +298,6 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			case <-ctx.Done():
 				rw.closerecvsend(cerror.Convert(ctx.Err()))
 			case e := <-stop:
-				close(stop)
 				if e == nil {
 					//fix the interface not nil problem
 					rw.closerecvsend(nil)
@@ -308,24 +305,9 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 					rw.closerecvsend(e)
 				}
 			}
+			close(stop)
 		}()
-		ee := func() (ee *cerror.Error) {
-			defer func() {
-				if e := recover(); e != nil {
-					stack := make([]byte, 1024)
-					n := runtime.Stack(stack, false)
-					slog.ErrorContext(workctx, "[crpc.client] panic",
-						slog.String("sname", c.serverfullname),
-						slog.String("sip", server.addr),
-						slog.String("path", path),
-						slog.Any("panic", e),
-						slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
-					ee = cerror.ErrPanic
-				}
-			}()
-			ee = cerror.Convert(handler(workctx))
-			return
-		}()
+		ee := cerror.Convert(handler(workctx))
 		stop <- ee
 		if ee != nil {
 			span.SetStatus(codes.Error, ee.Error())
@@ -429,22 +411,9 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 					rw.closerecvsend(e)
 				}
 			}
+			close(stop)
 		}()
-		ee := func() (ee *cerror.Error) {
-			if e := recover(); e != nil {
-				stack := make([]byte, 1024)
-				n := runtime.Stack(stack, false)
-				slog.ErrorContext(workctx, "[crpc.client] panic",
-					slog.String("sname", c.serverfullname),
-					slog.String("sip", server.addr),
-					slog.String("path", path),
-					slog.Any("panic", e),
-					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
-				ee = cerror.ErrPanic
-			}
-			ee = cerror.Convert(handler(workctx))
-			return
-		}()
+		ee := cerror.Convert(handler(workctx))
 		stop <- ee
 		if ee != nil {
 			span.SetStatus(codes.Error, ee.Error())
