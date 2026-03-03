@@ -7,8 +7,7 @@ import (
 
 const txt = `edition = "2024";
 
-//this is the app's name,all proto in this app must use this name as the proto package name
-package {{.ProjectName}};
+package {{.ProjectName}};//this is the app's name,all proto in this app must use this name as the proto package name
 //this is the golang's package name,all proto in this project must use this name as the golang's package name
 option go_package="{{.PackageName}}/api;api";
 //all other imports should put before this line
