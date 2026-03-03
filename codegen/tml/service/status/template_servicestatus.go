@@ -53,6 +53,7 @@ func (s *Service) Ping(ctx context.Context, in *api.Pingreq) (*api.Pingresp, err
 	//if _, ok := ctx.(web.NoStreamServerContext); ok {
 	//        slog.InfoContext(ctx, "this is a web call")
 	//}
+	cpu, cpuu, cput, mem, memu, memt := cotel.GetCpuMemUsage()
 	resp := &api.Pingresp{}
 	resp.SetClientTimestamp(in.GetTimestamp())
 	resp.SetServerTimestamp(time.Now().UnixNano())
