@@ -476,7 +476,6 @@ func (r *Router) corsNormal(resp http.ResponseWriter, req *http.Request) bool {
 	}
 	return true
 }
-
 func (r *Router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	if req.Method == http.MethodOptions {
 		realmethod := strings.ToUpper(req.Header.Get("Access-Control-Request-Method"))

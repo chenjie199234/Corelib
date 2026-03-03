@@ -48,7 +48,6 @@ func newconnmng(groupnum uint16, heartprobe, sendidletimeout, recvidletimeout ti
 	for i := range groupnum {
 		mng.groups[i] = &group{peers: make(map[string]*Peer)}
 	}
-	mng.closewait.Add(1)
 	mng.closewait.Go(func() {
 		for {
 			<-mng.delpeerch
