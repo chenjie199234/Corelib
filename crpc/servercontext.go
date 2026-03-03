@@ -178,9 +178,6 @@ func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 	}
 	return req.(*reqtype), nil
 }
-func (c *ClientStreamServerContext[reqtype]) StopRecv() {
-	c.StopRecv()
-}
 func (c *ClientStreamServerContext[reqtype]) GetPath() string {
 	return c.sctx.GetPath()
 }
@@ -240,9 +237,6 @@ func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
 		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] send response failed", slog.String("error", e.Error()))
 	}
 	return e
-}
-func (c *ServerStreamServerContext[resptype]) StopSend() {
-	c.sctx.StopSend()
 }
 func (c *ServerStreamServerContext[resptype]) GetPath() string {
 	return c.sctx.GetPath()
@@ -319,9 +313,6 @@ func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 	}
 	return req.(*reqtype), nil
 }
-func (c *AllStreamServerContext[reqtype, resptype]) StopRecv() {
-	c.sctx.StopRecv()
-}
 
 // return io.EOF means client stop recv
 // return cerror.ErrCanceled means self stop send anymore in this Context
@@ -341,9 +332,6 @@ func (c *AllStreamServerContext[reqtype, resptype]) Send(resp *resptype) error {
 		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] send response failed", slog.String("error", e.Error()))
 	}
 	return e
-}
-func (c *AllStreamServerContext[reqtype, resptype]) StopSend() {
-	c.sctx.StopSend()
 }
 func (c *AllStreamServerContext[reqtype, resptype]) GetPath() string {
 	return c.sctx.GetPath()

@@ -3,8 +3,10 @@ package crpc
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"log/slog"
+	"runtime"
 	"sync"
 	"time"
 	"unsafe"
@@ -292,23 +294,39 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			rw:      rw,
 			s:       server,
 		}
-		stop := make(chan *struct{})
+		stop := make(chan *cerror.Error, 1)
 		go func() {
 			select {
 			case <-ctx.Done():
-				if ctx.Err() == context.Canceled {
-					rw.closerecvsend(cerror.ErrCanceled)
-				} else if ctx.Err() == context.DeadlineExceeded {
-					rw.closerecvsend(cerror.ErrDeadlineExceeded)
+				rw.closerecvsend(cerror.Convert(ctx.Err()))
+			case e := <-stop:
+				close(stop)
+				if e == nil {
+					//fix the interface not nil problem
+					rw.closerecvsend(nil)
 				} else {
-					rw.closerecvsend(cerror.Convert(ctx.Err()))
+					rw.closerecvsend(e)
 				}
-			case <-stop:
-				rw.closerecvsend(nil)
 			}
 		}()
-		ee := cerror.Convert(handler(workctx))
-		close(stop)
+		ee := func() (ee *cerror.Error) {
+			defer func() {
+				if e := recover(); e != nil {
+					stack := make([]byte, 1024)
+					n := runtime.Stack(stack, false)
+					slog.ErrorContext(workctx, "[crpc.client] panic",
+						slog.String("sname", c.serverfullname),
+						slog.String("sip", server.addr),
+						slog.String("path", path),
+						slog.Any("panic", e),
+						slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
+					ee = cerror.ErrPanic
+				}
+			}()
+			ee = cerror.Convert(handler(workctx))
+			return
+		}()
+		stop <- ee
 		if ee != nil {
 			span.SetStatus(codes.Error, ee.Error())
 		} else {
@@ -398,23 +416,36 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 			rw:      rw,
 			s:       server,
 		}
-		stop := make(chan *struct{})
+		stop := make(chan *cerror.Error, 1)
 		go func() {
 			select {
 			case <-ctx.Done():
-				if ctx.Err() == context.Canceled {
-					rw.closerecvsend(cerror.ErrCanceled)
-				} else if ctx.Err() == context.DeadlineExceeded {
-					rw.closerecvsend(cerror.ErrDeadlineExceeded)
+				rw.closerecvsend(cerror.Convert(ctx.Err()))
+			case e := <-stop:
+				if e == nil {
+					//fix interface not nil problem
+					rw.closerecvsend(nil)
 				} else {
-					rw.closerecvsend(cerror.Convert(ctx.Err()))
+					rw.closerecvsend(e)
 				}
-			case <-stop:
-				rw.closerecvsend(nil)
 			}
 		}()
-		ee := cerror.Convert(handler(workctx))
-		close(stop)
+		ee := func() (ee *cerror.Error) {
+			if e := recover(); e != nil {
+				stack := make([]byte, 1024)
+				n := runtime.Stack(stack, false)
+				slog.ErrorContext(workctx, "[crpc.client] panic",
+					slog.String("sname", c.serverfullname),
+					slog.String("sip", server.addr),
+					slog.String("path", path),
+					slog.Any("panic", e),
+					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
+				ee = cerror.ErrPanic
+			}
+			ee = cerror.Convert(handler(workctx))
+			return
+		}()
+		stop <- ee
 		if ee != nil {
 			span.SetStatus(codes.Error, ee.Error())
 		} else {

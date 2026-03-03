@@ -24,7 +24,7 @@ func (c *CallContext) GetPath() string {
 }
 
 // return io.EOF means server stop send
-// return cerror.ErrCanceled means self stop recv anymore in this Context
+// return cerror.ErrCanceled means self stop recv anymore in this Context,cerror.Equal(cerror.ErrCanceled,context.ErrCanceled) is true
 // return cerror.ErrClosed means connection between client and server is closed
 func (c *CallContext) Recv() ([]byte, Encoder, error) {
 	return c.rw.recv()
@@ -47,7 +47,7 @@ func (c *StreamContext) GetPath() string {
 }
 
 // return io.EOF means server stop recv
-// return cerror.ErrCanceled means self stop send anymore in this Context
+// return cerror.ErrCanceled means self stop send anymore in this Context,cerror.Equal(cerror.ErrCanceled,context.ErrCanceled) is true
 // return cerror.ErrClosed means connection between client and server is closed
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *StreamContext) Send(req []byte, encoder Encoder) error {
@@ -64,7 +64,7 @@ func (c *StreamContext) StopSend() {
 }
 
 // return io.EOF means server stop send
-// return cerror.ErrCanceled means self stop recv anymore in this Context
+// return cerror.ErrCanceled means self stop recv anymore in this Context,cerror.Equal(cerror.ErrCanceled,context.ErrCanceled) is true
 // return cerror.ErrClosed means connection between client and server is closed
 func (c *StreamContext) Recv() ([]byte, Encoder, error) {
 	return c.rw.recv()
@@ -116,9 +116,6 @@ func (c *ClientStreamClientContext[reqtype]) Send(req *reqtype) error {
 	}
 	return e
 }
-func (c *ClientStreamClientContext[reqtype]) StopSend() {
-	c.cctx.StopSend()
-}
 func (c *ClientStreamClientContext[reqtype]) GetServerAddr() string {
 	return c.cctx.GetServerAddr()
 }
@@ -168,9 +165,6 @@ func (c *ServerStreamClientContext[resptype]) Recv() (*resptype, error) {
 	}
 	return resp.(*resptype), nil
 }
-func (c *ServerStreamClientContext[resptype]) StopRecv() {
-	c.cctx.StopRecv()
-}
 func (c *ServerStreamClientContext[resptype]) GetServerAddr() string {
 	return c.cctx.GetServerAddr()
 }
@@ -213,9 +207,6 @@ func (c *AllStreamClientContext[reqtype, resptype]) Send(req *reqtype) error {
 	}
 	return e
 }
-func (c *AllStreamClientContext[reqtype, resptype]) StopSend() {
-	c.cctx.StopSend()
-}
 
 // return io.EOF means server stop send
 // return cerror.ErrCanceled means self stop recv anymore in this Context
@@ -251,9 +242,6 @@ func (c *AllStreamClientContext[reqtype, resptype]) Recv() (*resptype, error) {
 		return nil, cerror.ErrResp
 	}
 	return resp.(*resptype), nil
-}
-func (c *AllStreamClientContext[reqtype, resptype]) StopRecv() {
-	c.cctx.StopRecv()
 }
 func (c *AllStreamClientContext[reqtype, resptype]) GetServerAddr() string {
 	return c.cctx.GetServerAddr()

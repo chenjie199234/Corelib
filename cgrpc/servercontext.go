@@ -50,7 +50,7 @@ func (c *ServerContext) Abort(e error) {
 }
 
 // Warning!this function is only used for generated code,don't use it in any other place
-func (c *ServerContext) Read(req any) error {
+func (c *ServerContext) Recv(req any) error {
 	if c.stream != nil {
 		return transGrpcError(c.stream.RecvMsg(req), false)
 	}
@@ -58,7 +58,7 @@ func (c *ServerContext) Read(req any) error {
 }
 
 // Warning!this function is only used for generated code,don't use it in any other place
-func (c *ServerContext) Write(resp any) error {
+func (c *ServerContext) Send(resp any) error {
 	if c.stream != nil {
 		return transGrpcError(c.stream.SendMsg(resp), false)
 	}

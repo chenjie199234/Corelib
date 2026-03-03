@@ -390,6 +390,10 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		})
 		if msg.GetWithB() {
 			rw.cache(msg.GetB())
+			//only the client's Call will init with body
+			//client's Call will not send more data
+			rw.status.And(0b1011)
+			rw.reader.Close()
 		}
 		workctx := &ServerContext{
 			Context: basectx,
