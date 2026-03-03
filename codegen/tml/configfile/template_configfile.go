@@ -131,7 +131,7 @@ const source = `{
 }`
 const app = `{
 	"handler_timeout":{
-		"/{{.}}.status/ping":{
+		"/{{.}}.Status/Ping":{
 			"GET":"200ms",
 			"CRPC":"200ms",
 			"GRPC":"200ms"
