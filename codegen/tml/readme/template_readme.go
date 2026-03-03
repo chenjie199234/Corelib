@@ -32,8 +32,7 @@ PROJECT                                 该项目所属的项目,[a-z][0-9],第�
 GROUP                                   该项目所属的项目下的小组,[a-z][0-9],第一个字符必须是[a-z]
 RUN_ENV                                 当前运行环境,如:test,pre,prod
 DEPLOY_ENV                              部署环境,如:ali-kube-shanghai-1,ali-host-hangzhou-1
-TRACE                                   是否开启链路追踪,空-不启用,不空-trace输出方式,[log,otlphttp,otlpgrpc,zipkin]
-ZIPKIN_URL                              当TRACE为zipkin时,该变量为zipkin服务器的推送url
+TRACE                                   是否开启链路追踪,空-不启用,不空-trace输出方式,[log,otlphttp,otlpgrpc]
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT      当TRACE为otlphttp或otlpgrpc时,该变量为otlp服务器的推送url
 METRIC                                  是否开启系统监控采集,空-不启用,不空-metric输出方式,[log,otlphttp,otlpgrpc,prometheus]
 OTEL_EXPORTER_OTLP_METRICS_ENDPOINT     当METRIC为otlphttp或otlpgrpc时,该变量为otlp服务器的推送url

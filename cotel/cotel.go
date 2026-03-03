@@ -25,7 +25,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	oprometheus "go.opentelemetry.io/otel/exporters/prometheus"
-	"go.opentelemetry.io/otel/exporters/zipkin"
 	ometric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -46,8 +45,8 @@ func Init() error {
 		return e
 	}
 	traceenv := strings.TrimSpace(strings.ToLower(os.Getenv("TRACE")))
-	if traceenv != "" && traceenv != "<TRACE>" && traceenv != "log" && traceenv != "otlp" && traceenv != "zipkin" {
-		panic("[cotel] os env TRACE error,must in [\"\",\"log\",\"otlphttp\",\"otlpgrpc\",\"zipkin\"]")
+	if traceenv != "" && traceenv != "<TRACE>" && traceenv != "log" && traceenv != "otlp" {
+		panic("[cotel] os env TRACE error,must in [\"\",\"log\",\"otlphttp\",\"otlpgrpc\"]")
 	}
 	metricenv := strings.TrimSpace(strings.ToLower(os.Getenv("METRIC")))
 	if metricenv != "" && metricenv != "<METRIC>" && metricenv != "log" && metricenv != "otlp" && metricenv != "prometheus" {
@@ -93,17 +92,6 @@ func Init() error {
 		exporter, e := otlptrace.New(context.Background(), otlptracegrpc.NewClient())
 		if e != nil {
 			panic("[cotel] os env OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT error,when os env TRACE is otlp...")
-		}
-		topts = append(topts, trace.WithBatcher(exporter))
-		needtrace = true
-	case "zipkin":
-		str := strings.TrimSpace(strings.ToLower(os.Getenv("ZIPKIN_URL")))
-		if str == "" || str == "<ZIPKIN_URL>" {
-			panic("[cotel] os env ZIPKIN_URL missing,when os env TRACE is zipkin")
-		}
-		exporter, e := zipkin.New(str, zipkin.WithLogger(slog.NewLogLogger(slog.Default().Handler(), slog.LevelInfo)))
-		if e != nil {
-			panic("[cotel] os env ZIPKIN_URL error,when os env TRACE is zipkin")
 		}
 		topts = append(topts, trace.WithBatcher(exporter))
 		needtrace = true

@@ -92,8 +92,6 @@ spec:
               value: <PROJECT>
             - name: TRACE
               value: <TRACE>
-            - name: ZIPKIN_URL
-              value: <ZIPKIN_URL>
             - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
               value: <OTEL_EXPORTER_OTLP_TRACES_ENDPOINT>
             - name: METRIC
