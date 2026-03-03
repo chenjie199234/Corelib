@@ -112,12 +112,10 @@ func Decode(estr string) *Error {
 		return tmp
 	}
 	//text format
-	index := strings.Index(estr, ",")
-	if index == -1 {
+	p1, p2, ok := strings.Cut(estr, ",")
+	if !ok {
 		return MakeCError(-1, 500, estr)
 	}
-	p1 := estr[:index]
-	p2 := estr[index+1:]
 	if !strings.HasPrefix(p1, "code=") || !strings.HasPrefix(p2, "msg=") {
 		return MakeCError(-1, 500, estr)
 	}

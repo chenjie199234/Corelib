@@ -45,19 +45,18 @@ func newconnmng(groupnum uint16, heartprobe, sendidletimeout, recvidletimeout ti
 		delpeerch:       make(chan *struct{}, 1),
 		closewait:       &sync.WaitGroup{},
 	}
-	for i := uint16(0); i < groupnum; i++ {
+	for i := range groupnum {
 		mng.groups[i] = &group{peers: make(map[string]*Peer)}
 	}
 	mng.closewait.Add(1)
-	go func() {
-		defer mng.closewait.Done()
+	mng.closewait.Go(func() {
 		for {
 			<-mng.delpeerch
 			if mng.Finished() {
 				return
 			}
 		}
-	}()
+	})
 	go func() {
 		timepiece := int64(mng.heartprobe) / int64(groupnum)
 		tker := time.NewTicker(time.Duration(timepiece))
