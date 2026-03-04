@@ -60,10 +60,23 @@ func (c *ServerContext) Abort(e error) {
 		c.w.Header().Set("Content-Type", "application/json")
 		c.w.WriteHeader(int(c.e.GetHttpcode()))
 		c.w.Write(common.STB(c.e.Json()))
+		c.w.(http.Flusher).Flush()
 	}
 	if httpcode != 0 {
 		panic("[web.ServerContext] unknown http code: " + strconv.Itoa(httpcode))
 	}
+}
+func (c *ServerContext) AbortSSE(e error) {
+	if e == nil {
+		return
+	}
+	ee := cerror.Convert(e)
+	d := ee.Json()
+	msg := make([]byte, 0, 21+len(d))
+	msg = append(msg, "event: error\ndata: "...)
+	msg = append(msg, d...)
+	msg = append(msg, "\n\n"...)
+	c.Write(msg)
 }
 
 // after Write,this will be useless
@@ -76,9 +89,18 @@ func (c *ServerContext) AddResponseHeader(k, v string) {
 	c.w.Header().Add(k, v)
 }
 
+// Write all the data or return error
 func (c *ServerContext) Write(msg []byte) (int, error) {
 	c.responsed.Store(true)
-	return c.w.Write(msg)
+	n := 0
+	for n < len(msg) {
+		nn, e := c.w.Write(msg[n:])
+		if e != nil {
+			return n + nn, e
+		}
+		n += nn
+	}
+	return n, nil
 }
 func (c *ServerContext) Flush() {
 	c.w.(http.Flusher).Flush()
@@ -140,6 +162,7 @@ func (c *ServerContext) GetBody() ([]byte, error) {
 
 // ----------------------------------------------- for protobuf ------------------------------------------------------
 
+// ----------------------------------------------- no stream context ---------------------------------------------
 type NoStreamServerContext interface {
 	Web()
 	//request
@@ -155,6 +178,7 @@ type NoStreamServerContext interface {
 	AddResponseHeader(k, v string)
 }
 
+// --------------------------------------------- server stream context ------------------------------------------
 func NewServerStreamServerContext[resptype any](ctx *ServerContext) *ServerStreamServerContext[resptype] {
 	cctx := &ServerStreamServerContext[resptype]{Context: ctx.Context, sctx: ctx}
 	ctx.w.Header().Set("Content-Type", "text/event-stream")
@@ -165,11 +189,12 @@ func NewServerStreamServerContext[resptype any](ctx *ServerContext) *ServerStrea
 
 type ServerStreamServerContext[resptype any] struct {
 	context.Context
-	sctx    *ServerContext
-	stopped atomic.Bool
+	sctx *ServerContext
 }
 
 // for Server Sent Events without retry and event support(use the default event:message)
+// return cerror.ErrClosed means connection closed
+// return cerror.ErrDeadlineExceeded means timeout
 func (c *ServerStreamServerContext[resptype]) Send(id string, resp *resptype) error {
 	var tmp any = resp
 	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
@@ -180,13 +205,14 @@ func (c *ServerStreamServerContext[resptype]) Send(id string, resp *resptype) er
 	}
 	select {
 	case <-c.Context.Done():
-		slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] send response failed", slog.String("error", cerror.ErrClosed.Error()))
-		return cerror.ErrClosed
+		switch c.Context.Err() {
+		case context.Canceled:
+			//only when the client gone will cause the context cancel
+			return cerror.ErrClosed
+		case context.DeadlineExceeded:
+			return cerror.ErrDeadlineExceeded
+		}
 	default:
-	}
-	if c.stopped.Load() {
-		slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] send response failed", slog.String("error", cerror.ErrClosed.Error()))
-		return cerror.ErrClosed
 	}
 	d, _ := (protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}).Marshal(tmptmp)
 	var msg []byte
@@ -201,42 +227,12 @@ func (c *ServerStreamServerContext[resptype]) Send(id string, resp *resptype) er
 	msg = append(msg, "data: "...)
 	msg = append(msg, d...)
 	msg = append(msg, "\n\n"...)
-	n := 0
-	for n < len(msg) {
-		nn, e := c.sctx.Write(msg[n:])
-		if e != nil {
-			slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] send response failed", slog.String("error", e.Error()))
-			return e
-		}
-		n += nn
+	if _, e := c.sctx.Write(msg); e != nil {
+		slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] send response failed", slog.String("error", e.Error()))
+		return cerror.ErrClosed
 	}
 	c.sctx.Flush()
 	return nil
-}
-
-// for Server Sent Events,if e != nil,send event: error
-func (c *ServerStreamServerContext[resptype]) StopSend(e error) {
-	if c.stopped.Swap(true) {
-		return
-	}
-	ee := cerror.Convert(e)
-	if ee == nil {
-		return
-	}
-	d := ee.Json()
-	msg := make([]byte, 0, 21+len(d))
-	msg = append(msg, "event: error\ndata: "...)
-	msg = append(msg, d...)
-	msg = append(msg, "\n\n"...)
-	n := 0
-	for n < len(msg) {
-		nn, e := c.sctx.Write(msg[n:])
-		if e != nil {
-			return
-		}
-		n += nn
-	}
-	c.sctx.Flush()
 }
 
 // can get the Last-Event-ID from header

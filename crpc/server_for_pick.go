@@ -94,10 +94,12 @@ func (s *ServerForPick) delrw(callid uint64) {
 }
 func (s *ServerForPick) cleanrw() {
 	s.lker.Lock()
-	for callid, rw := range s.rws {
+	for _, rw := range s.rws {
+		rw.e = cerror.ErrClosed
+		rw.status.Add(0b0011)
 		rw.reader.Close()
-		delete(s.rws, callid)
 	}
+	s.rws = nil
 	s.lker.Unlock()
 }
 func (s *ServerForPick) sendmessage(ctx context.Context, m *Msg) (e error) {

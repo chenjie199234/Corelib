@@ -24,11 +24,14 @@ func (c *CallContext) GetPath() string {
 }
 
 // return io.EOF means server stop send
-// return cerror.ErrCanceled means self stop recv anymore in this Context,cerror.Equal(cerror.ErrCanceled,context.ErrCanceled) is true
-// return cerror.ErrClosed means connection between client and server is closed
+// return cerror.ErrCanceled means self stop recv
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
 func (c *CallContext) Recv() ([]byte, Encoder, error) {
-	return c.rw.recv()
+	return c.rw.recv(c.Context)
 }
+
+// this can be used to wake up the block on Recv
 func (c *CallContext) StopRecv() {
 	c.rw.closerecv()
 }
@@ -47,8 +50,10 @@ func (c *StreamContext) GetPath() string {
 }
 
 // return io.EOF means server stop recv
-// return cerror.ErrCanceled means self stop send anymore in this Context,cerror.Equal(cerror.ErrCanceled,context.ErrCanceled) is true
-// return cerror.ErrClosed means connection between client and server is closed
+// return cerror.ErrCanceled means self stop send
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
+// return cerror.ErrReqmsgLen means req too large
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *StreamContext) Send(req []byte, encoder Encoder) error {
 	if encoder <= Encoder_UNKNOWN || encoder > Encoder_JSON {
@@ -57,18 +62,21 @@ func (c *StreamContext) Send(req []byte, encoder Encoder) error {
 	mb := &Msg_Body{}
 	mb.SetBody(req)
 	mb.SetBodyEncoder(encoder)
-	return c.rw.send(mb)
+	return c.rw.send(c.Context, mb)
 }
 func (c *StreamContext) StopSend() {
 	c.rw.closesend()
 }
 
 // return io.EOF means server stop send
-// return cerror.ErrCanceled means self stop recv anymore in this Context,cerror.Equal(cerror.ErrCanceled,context.ErrCanceled) is true
-// return cerror.ErrClosed means connection between client and server is closed
+// return cerror.ErrCanceled means self stop recv
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
 func (c *StreamContext) Recv() ([]byte, Encoder, error) {
-	return c.rw.recv()
+	return c.rw.recv(c.Context)
 }
+
+// this can be used to wake up the block on Recv
 func (c *StreamContext) StopRecv() {
 	c.rw.closerecv()
 }
@@ -90,8 +98,10 @@ type ClientStreamClientContext[reqtype any] struct {
 }
 
 // return io.EOF means server stop recv
-// return cerror.ErrCanceled means self stop send anymore in this Context
-// return cerror.ErrClosed means connection between client and server is closed
+// return cerror.ErrCanceled means self stop send
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
+// return cerror.ErrReqmsgLen means req too large
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *ClientStreamClientContext[reqtype]) Send(req *reqtype) error {
 	var tmp any = req
@@ -116,6 +126,9 @@ func (c *ClientStreamClientContext[reqtype]) Send(req *reqtype) error {
 	}
 	return e
 }
+func (c *ClientStreamClientContext[reqtype]) StopSend() {
+	c.cctx.StopSend()
+}
 func (c *ClientStreamClientContext[reqtype]) GetServerAddr() string {
 	return c.cctx.GetServerAddr()
 }
@@ -131,8 +144,9 @@ type ServerStreamClientContext[resptype any] struct {
 }
 
 // return io.EOF means server stop send
-// return cerror.ErrCanceled means self stop recv anymore in this Context
-// return cerror.ErrClosed means connection between client and server is closed
+// return cerror.ErrCanceled means self stop recv
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
 func (c *ServerStreamClientContext[resptype]) Recv() (*resptype, error) {
 	var resp any = new(resptype)
 	m, ok := resp.(protoreflect.ProtoMessage)
@@ -165,6 +179,11 @@ func (c *ServerStreamClientContext[resptype]) Recv() (*resptype, error) {
 	}
 	return resp.(*resptype), nil
 }
+
+// this can be used to wake up the block on Recv
+func (c *ServerStreamClientContext[resptype]) StopRecv() {
+	c.cctx.StopRecv()
+}
 func (c *ServerStreamClientContext[resptype]) GetServerAddr() string {
 	return c.cctx.GetServerAddr()
 }
@@ -181,8 +200,10 @@ type AllStreamClientContext[reqtype, resptype any] struct {
 }
 
 // return io.EOF means server stop recv
-// return cerror.ErrCanceled means self stop send anymore in this Context
-// return cerror.ErrClosed means connection between client and server is closed
+// return cerror.ErrCanceled means self stop send
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
+// return cerror.ErrReqmsgLen means req too large
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *AllStreamClientContext[reqtype, resptype]) Send(req *reqtype) error {
 	var tmp any = req
@@ -207,10 +228,14 @@ func (c *AllStreamClientContext[reqtype, resptype]) Send(req *reqtype) error {
 	}
 	return e
 }
+func (c *AllStreamClientContext[reqtype, resptype]) StopSend() {
+	c.cctx.StopSend()
+}
 
 // return io.EOF means server stop send
-// return cerror.ErrCanceled means self stop recv anymore in this Context
-// return cerror.ErrClosed means connection between client and server is closed
+// return cerror.ErrCanceled means self stop recv
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
 func (c *AllStreamClientContext[reqtype, resptype]) Recv() (*resptype, error) {
 	var resp any = new(resptype)
 	m, ok := resp.(protoreflect.ProtoMessage)
@@ -242,6 +267,11 @@ func (c *AllStreamClientContext[reqtype, resptype]) Recv() (*resptype, error) {
 		return nil, cerror.ErrResp
 	}
 	return resp.(*resptype), nil
+}
+
+// this can be used to wake up the block on Recv
+func (c *AllStreamClientContext[reqtype, resptype]) StopRecv() {
+	c.cctx.StopRecv()
 }
 func (c *AllStreamClientContext[reqtype, resptype]) GetServerAddr() string {
 	return c.cctx.GetServerAddr()

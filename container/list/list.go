@@ -25,7 +25,6 @@ func NewList[T any]() *List[T] {
 		tail: tempnode,
 	}
 }
-
 func (l *List[T]) Push(data T) {
 	n := &node[T]{
 		value: data,

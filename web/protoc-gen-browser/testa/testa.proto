@@ -16,7 +16,7 @@ service TestA {
 		option (pbex.web_midwares)="limit";
 	}
 	rpc ServerStream(ServerStreamreq)returns(stream ServerStreamresp){
-		option (pbex.method)="get";
+		option (pbex.method)="post";
 		option (pbex.web_midwares)="user";
 	}
 }

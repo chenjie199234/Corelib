@@ -121,6 +121,9 @@ func (p *Peer) getDispatcher(ctx context.Context) error {
 	if p.status.Load() != 1 {
 		return ErrConnClosed
 	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	select {
 	case _, ok := <-p.dispatcher:
 		if !ok {

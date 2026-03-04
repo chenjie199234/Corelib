@@ -32,13 +32,19 @@ func NewSSEContext(resp *http.Response) *SSEContext {
 	}
 }
 
-// don't forget to StopRecv when you don't want to get new data
+// return io.EOF means server stop send
+// return cerror.ErrClosed means connection closed
 func (c *SSEContext) Recv() (id, event string, data []byte, err error) {
 	var buf []byte
 	for {
 		line, e := c.rd.ReadBytes('\n')
 		if e != nil {
-			err = e
+			if e != io.EOF {
+				// slog.ErrorContext(c.Context, "["+c.resp.Request.URL.Path+"] read SSE data field", slog.String("error", e.Error()))
+				err = cerror.ErrClosed
+			} else {
+				err = e
+			}
 			return
 		}
 		line = bytes.TrimRight(line, "\r\n")
@@ -74,8 +80,6 @@ func (c *SSEContext) Recv() (id, event string, data []byte, err error) {
 			str := common.BTS(tmp)
 			if c.retry, e = strconv.ParseInt(str, 10, 64); e != nil {
 				slog.ErrorContext(c.Context, "["+c.resp.Request.URL.Path+"] SSE data broken for retry field", slog.String("retry", str))
-				err = cerror.ErrDataBroken
-				return
 			}
 			if c.retry < 0 {
 				c.retry = 0
@@ -95,6 +99,11 @@ func (c *SSEContext) Recv() (id, event string, data []byte, err error) {
 		}
 	}
 }
+
+// this can be used to wake up the block on Recv
+func (c *SSEContext) StopRecv() {
+	c.resp.Body.Close()
+}
 func (c *SSEContext) GetRetryMS() int64 {
 	return c.retry
 }
@@ -110,6 +119,8 @@ type ServerStreamSSEContext[resptype any] struct {
 	cctx *SSEContext
 }
 
+// return io.EOF means server stop send
+// return cerror.ErrClosed means connection closed
 func (c *ServerStreamSSEContext[resptype]) Recv() (string, string, *resptype, error) {
 	var resp any = new(resptype)
 	m, ok := resp.(protoreflect.ProtoMessage)
@@ -121,9 +132,6 @@ func (c *ServerStreamSSEContext[resptype]) Recv() (string, string, *resptype, er
 	var data []byte
 	id, event, data, e := c.cctx.Recv()
 	if e != nil {
-		if e != io.EOF {
-			slog.ErrorContext(c.Context, "["+c.cctx.resp.Request.URL.Path+"] read response failed", slog.String("error", e.Error()))
-		}
 		return "", "", nil, e
 	}
 	if event == "error" && len(data) > 0 {
@@ -134,6 +142,9 @@ func (c *ServerStreamSSEContext[resptype]) Recv() (string, string, *resptype, er
 		return "", "", nil, e
 	}
 	return id, event, resp.(*resptype), nil
+}
+func (c *ServerStreamSSEContext[resptype]) StopRecv() {
+	c.cctx.StopRecv()
 }
 func (c *ServerStreamSSEContext[resptype]) GetRetryMS() int64 {
 	return c.cctx.GetRetryMS()

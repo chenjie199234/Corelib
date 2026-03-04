@@ -43,6 +43,23 @@ func (g *Graceful) DoneOne() {
 		close(g.stop)
 	}
 }
+func (g *Graceful) ForceClose(cleanOnce func()) {
+	for {
+		old := atomic.LoadInt64(&g.progress)
+		if old < 0 {
+			break
+		}
+		if atomic.CompareAndSwapInt64(&g.progress, old, old+math.MinInt64) {
+			if cleanOnce != nil {
+				cleanOnce()
+			}
+			if old == 0 {
+				close(g.stop)
+			}
+			break
+		}
+	}
+}
 func (g *Graceful) Close(cleanOnceNow func(), cleanOnceAfter func()) {
 	first := false
 	for {

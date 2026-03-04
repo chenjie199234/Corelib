@@ -32,7 +32,7 @@ func (c *ServerContext) Crpc() {
 	//this is a placeholder for NoStreamServerContext interface
 }
 
-// means stop recv and send
+// stop recv and send
 func (c *ServerContext) Abort(e error) {
 	if atomic.SwapInt32(&c.finish, 1) != 0 {
 		return
@@ -41,43 +41,52 @@ func (c *ServerContext) Abort(e error) {
 	if ee := cerror.Convert(e); ee != nil {
 		if http.StatusText(int(ee.GetHttpcode())) == "" || ee.GetHttpcode() < 400 {
 			c.e = cerror.ErrPanic
-			mb := &Msg_Body{}
-			mb.SetError(c.e)
-			c.rw.send(mb)
 			httpcode = int(ee.GetHttpcode())
 		} else {
 			c.e = ee
-			mb := &Msg_Body{}
-			mb.SetError(c.e)
-			c.rw.send(mb)
 		}
 	}
-	c.rw.closerecvsend(c.e)
+	if c.e != nil {
+		mb := &Msg_Body{}
+		mb.SetError(c.e)
+		//the error response shouldn't send failed due to the Context's error
+		//the error response can only send failed when the connection closed
+		c.rw.send(context.Background(), mb)
+	}
+	c.rw.closerecvsend()
 	if httpcode != 0 {
 		panic("[crpc.context.Abort] unknown http code: " + strconv.Itoa(httpcode))
 	}
 }
 
 // return io.EOF means client stop recv
-// return cerror.ErrCanceled means self stop send anymore in this Context
-// return cerror.ErrClosed means connection between client and server is closed
+// return cerror.ErrCanceled means self stop send
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
+// return cerror.ErrRespmsgLen means resp too large
+// return cerror.ErrServerClosing
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *ServerContext) Send(resp []byte, encoder Encoder) error {
 	mb := &Msg_Body{}
 	mb.SetBody(resp)
 	mb.SetBodyEncoder(encoder)
-	return c.rw.send(mb)
+	return c.rw.send(c.Context, mb)
 }
+
 func (c *ServerContext) StopSend() {
 	c.rw.closesend()
 }
 
 // return io.EOF means client stop send
-// return cerror.ErrCanceled means self stop recv anymore in this Context
-// return cerror.ErrClosed means connection between client and server is closed
+// return cerror.ErrCanceled means self stop recv
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
+// return cerror.ErrServerClosing
 func (c *ServerContext) Recv() ([]byte, Encoder, error) {
-	return c.rw.recv()
+	return c.rw.recv(c.Context)
 }
+
+// this can used to wake up the block on Recv
 func (c *ServerContext) StopRecv() {
 	c.rw.closerecv()
 }
@@ -136,8 +145,10 @@ type ClientStreamServerContext[reqtype any] struct {
 }
 
 // return io.EOF means client stop send
-// return cerror.ErrCanceled means self stop recv anymore in this Context
-// return cerror.ErrClosed means connection between client and server is closed
+// return cerror.ErrCanceled means self stop recv
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
+// return cerror.ErrServerClosing
 func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 	var req any = new(reqtype)
 	m, ok := req.(protoreflect.ProtoMessage)
@@ -178,6 +189,11 @@ func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 	}
 	return req.(*reqtype), nil
 }
+
+// this can used to wake up the block on Recv
+func (c *ClientStreamServerContext[reqtype]) StopRecv() {
+	c.sctx.StopRecv()
+}
 func (c *ClientStreamServerContext[reqtype]) GetPath() string {
 	return c.sctx.GetPath()
 }
@@ -214,8 +230,12 @@ type ServerStreamServerContext[resptype any] struct {
 }
 
 // return io.EOF means client stop recv
-// return cerror.ErrCanceled means self stop send anymore in this Context
-// return cerror.ErrClosed means connection between client and server is closed
+// return cerror.ErrCanceled means self stop send(this is impossible when this is used in the protoc-go-crpc's generated code)
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
+// return cerror.ErrRespmsgLen means resp too large
+// return cerror.ErrClosed means connection closed
+// return cerror.ErrServerClosing
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
 	var tmp any = resp
@@ -271,8 +291,10 @@ type AllStreamServerContext[reqtype, resptype any] struct {
 }
 
 // return io.EOF means client stop send
-// return cerror.ErrCanceled means self stop recv anymore in this Context
-// return cerror.ErrClosed means connection between client and server is closed
+// return cerror.ErrCanceled means self stop recv
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
+// return cerror.ErrServerClosing
 func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 	var req any = new(reqtype)
 	m, ok := req.(protoreflect.ProtoMessage)
@@ -314,9 +336,18 @@ func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 	return req.(*reqtype), nil
 }
 
+// this can used to wake up the block on Recv
+func (c *AllStreamServerContext[reqtype, resptype]) StopRecv() {
+	c.sctx.StopRecv()
+}
+
 // return io.EOF means client stop recv
-// return cerror.ErrCanceled means self stop send anymore in this Context
-// return cerror.ErrClosed means connection between client and server is closed
+// return cerror.ErrCanceled means self stop send(this is impossible when this is used in the protoc-go-crpc's generated code)
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
+// return cerror.ErrRespmsgLen means resp too large
+// return cerror.ErrClosed means connection closed
+// return cerror.ErrServerClosing
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *AllStreamServerContext[reqtype, resptype]) Send(resp *resptype) error {
 	var tmp any = resp

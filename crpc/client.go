@@ -5,11 +5,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"log/slog"
-	"sync"
 	"time"
 	"unsafe"
 
 	"github.com/chenjie199234/Corelib/cerror"
+	"github.com/chenjie199234/Corelib/container/list"
 	"github.com/chenjie199234/Corelib/cotel"
 	"github.com/chenjie199234/Corelib/discover"
 	"github.com/chenjie199234/Corelib/internal/resolver"
@@ -58,8 +58,7 @@ type CrpcClient struct {
 	balancer *corelibBalancer
 	discover discover.DI
 
-	stop    *graceful.Graceful
-	reqpool *sync.Pool
+	stop *graceful.Graceful
 }
 
 // if tlsc is not nil,the tls will be actived
@@ -90,8 +89,7 @@ func NewCrpcClient(c *ClientConfig, d discover.DI, serverproject, servergroup, s
 
 		discover: d,
 
-		reqpool: &sync.Pool{},
-		stop:    graceful.New(),
+		stop: graceful.New(),
 	}
 	instancec := &stream.InstanceConfig{
 		RecvIdleTimeout:    c.IdleTimeout.StdDuration(),
@@ -133,8 +131,10 @@ func (c *CrpcClient) GetServerIps() (ips []string, version any, lasterror error)
 // force - false graceful,wait all requests finish,true - not graceful,close all connections immediately
 func (c *CrpcClient) Close(force bool) {
 	if force {
-		c.resolver.Close()
-		c.instance.Stop()
+		c.stop.ForceClose(func() {
+			c.resolver.Close()
+			c.instance.Stop()
+		})
 	} else {
 		c.stop.Close(c.resolver.Close, c.instance.Stop)
 	}
@@ -204,10 +204,18 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 				c.resolver.Now()
 			}
 		}
-		if msg.GetH().GetCallid() != 0 {
-			if rw := server.getrw(msg.GetH().GetCallid()); rw != nil {
-				rw.cache(msg.GetB())
-			}
+		if msg.GetH().GetCallid() == 0 {
+			return
+		}
+		rw := server.getrw(msg.GetH().GetCallid())
+		if rw == nil {
+			return
+		}
+		if rw.status.Load()&0b0100 != 0 {
+			rw.cache(msg.GetB())
+		} else {
+			slog.Error("[crpc.client] get server send data after server's close send message,this shouldn't happen and the message will be ignored,please report this bug",
+				slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
 		}
 	}
 }
@@ -280,6 +288,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			span.End()
 			server.GetServerPickInfo().Done(false, 0)
 			if cerror.Equal(e, cerror.ErrClosed) {
+				//send failed,the server will not get the full init message,we can retry this request
 				continue
 			}
 			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
@@ -287,28 +296,39 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			}
 			return e
 		}
+		//check the first msg returned from server
+		mb, e = rw.reader.Peek(ctx)
+		switch e {
+		case context.Canceled:
+			rw.closerecvsend()
+			return cerror.ErrCanceled
+		case context.DeadlineExceeded:
+			rw.closerecvsend()
+			return cerror.ErrDeadlineExceeded
+		case list.ErrClosed:
+			//the reader is closed,only the following 2 case will cause this
+			//1.server stop send message to client
+			//2.the connection is closed unexpected,the offlinefunc is called
+			//a.we should let business code to deside what to do for case 1
+			//b.we should return the error in case 2(because we don't known whether server finished the init or not)
+			if rw.e != nil {
+				//case 2
+				return e
+			}
+		default:
+			//we only care about the cerror.ErrServerClosing
+			if mb.GetError() != nil && cerror.Equal(mb.GetError(), cerror.ErrServerClosing) {
+				//we are sure the server is closing and the init is ignored by the server,we can retry this request
+				continue
+			}
+		}
 		workctx := &CallContext{
 			Context: ctx,
 			rw:      rw,
 			s:       server,
 		}
-		stop := make(chan *cerror.Error, 1)
-		go func() {
-			select {
-			case <-ctx.Done():
-				rw.closerecvsend(cerror.Convert(ctx.Err()))
-			case e := <-stop:
-				if e == nil {
-					//fix the interface not nil problem
-					rw.closerecvsend(nil)
-				} else {
-					rw.closerecvsend(e)
-				}
-			}
-			close(stop)
-		}()
 		ee := cerror.Convert(handler(workctx))
-		stop <- ee
+		rw.closerecvsend()
 		if ee != nil {
 			span.SetStatus(codes.Error, ee.Error())
 		} else {
@@ -319,9 +339,6 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 		etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
 		stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
 		server.GetServerPickInfo().Done(ee == nil, uint64(etime-stime))
-		if cerror.Equal(ee, cerror.ErrServerClosing) {
-			continue
-		}
 		if cotel.NeedMetric() {
 			c.recordmetric(path, float64(etime-stime)/1000000.0, ee != nil)
 		}
@@ -386,6 +403,7 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 			span.End()
 			server.GetServerPickInfo().Done(false, 0)
 			if cerror.Equal(e, cerror.ErrClosed) {
+				//send failed,the server will not get the full init message,we can retry this request
 				continue
 			}
 			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
@@ -393,28 +411,39 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 			}
 			return e
 		}
+		//check the first msg returned from server
+		mb, e := rw.reader.Peek(ctx)
+		switch e {
+		case context.Canceled:
+			rw.closerecvsend()
+			return cerror.ErrCanceled
+		case context.DeadlineExceeded:
+			rw.closerecvsend()
+			return cerror.ErrDeadlineExceeded
+		case list.ErrClosed:
+			//the reader is closed,only the following 2 case will cause this
+			//1.server stop send message to client
+			//2.the connection is closed unexpected,the offlinefunc is called
+			//a.we should let business code to deside what to do for case 1
+			//b.we should return the error in case 2(because we don't known whether server finished the init or not)
+			if rw.e != nil {
+				//case 2
+				return e
+			}
+		default:
+			//we only care about the cerror.ErrServerClosing
+			if mb.GetError() != nil && cerror.Equal(mb.GetError(), cerror.ErrServerClosing) {
+				//we are sure the server is closing and the init is ignored by the server,we can retry this request
+				continue
+			}
+		}
 		workctx := &StreamContext{
 			Context: ctx,
 			rw:      rw,
 			s:       server,
 		}
-		stop := make(chan *cerror.Error, 1)
-		go func() {
-			select {
-			case <-ctx.Done():
-				rw.closerecvsend(cerror.Convert(ctx.Err()))
-			case e := <-stop:
-				if e == nil {
-					//fix interface not nil problem
-					rw.closerecvsend(nil)
-				} else {
-					rw.closerecvsend(e)
-				}
-			}
-			close(stop)
-		}()
 		ee := cerror.Convert(handler(workctx))
-		stop <- ee
+		rw.closerecvsend()
 		if ee != nil {
 			span.SetStatus(codes.Error, ee.Error())
 		} else {
@@ -425,9 +454,6 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 		etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
 		stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
 		server.GetServerPickInfo().Done(ee == nil, uint64(etime-stime))
-		if cerror.Equal(ee, cerror.ErrServerClosing) {
-			continue
-		}
 		if cotel.NeedMetric() {
 			c.recordmetric(path, float64(etime-stime)/1000000.0, ee != nil)
 		}

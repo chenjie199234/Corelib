@@ -48,11 +48,19 @@ func (this *rw) init(mb *Msg_Body) error {
 	m.SetWithB(mb != nil)
 	return this.sender(context.Background(), m)
 }
-func (this *rw) send(mb *Msg_Body) error {
+
+// return io.EOF means peer stop recv
+// return cerror.ErrCanceled means self stop send
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
+// return cerror.ErrServerClosing
+// return cerror.ErrRespmsgLen/cerror.ErrReqmsgLen
+// Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
+func (this *rw) send(ctx context.Context, mb *Msg_Body) error {
+	if this.e != nil {
+		return this.e
+	}
 	if this.status.Load()&0b0001 == 0 {
-		if this.e != nil {
-			return this.e
-		}
 		return cerror.ErrCanceled
 	}
 	if this.status.Load()&0b1000 == 0 {
@@ -66,7 +74,7 @@ func (this *rw) send(mb *Msg_Body) error {
 	m.SetH(mh)
 	m.SetB(mb)
 	m.SetWithB(mb != nil)
-	if e := this.sender(context.Background(), m); e != nil {
+	if e := this.sender(ctx, m); e != nil {
 		return e
 	}
 	if mb.GetError() != nil {
@@ -75,6 +83,7 @@ func (this *rw) send(mb *Msg_Body) error {
 	}
 	return nil
 }
+
 func (this *rw) closesend() error {
 	if old := this.status.And(0b1110); old&0b0001 == 0 {
 		return nil
@@ -100,11 +109,8 @@ func (this *rw) closerecv() error {
 	m.SetH(mh)
 	return this.sender(context.Background(), m)
 }
-func (this *rw) closerecvsend(err error) error {
-	if old := this.status.And(0b1100); old&0b0011 == 0 {
-		return nil
-	}
-	this.e = err
+func (this *rw) closerecvsend() error {
+	this.status.And(0b1100)
 	this.reader.Close()
 	m := &Msg{}
 	mh := &Msg_Header{}
@@ -114,14 +120,20 @@ func (this *rw) closerecvsend(err error) error {
 	m.SetH(mh)
 	return this.sender(context.Background(), m)
 }
-func (this *rw) recv() ([]byte, Encoder, error) {
+
+// return io.EOF means peer stop send
+// return cerror.ErrCanceled means self stop recv
+// return cerror.DeadlineExceeded means timeout
+// return cerror.ErrClosed means connection closed
+// return cerror.ErrServerClosing
+func (this *rw) recv(ctx context.Context) ([]byte, Encoder, error) {
 	if this.status.Load()&0b0010 == 0 {
 		if this.e != nil {
 			return nil, Encoder_UNKNOWN, this.e
 		}
 		return nil, Encoder_UNKNOWN, cerror.ErrCanceled
 	}
-	m, e := this.reader.Pop(context.Background())
+	m, e := this.reader.Pop(ctx)
 	if e != nil {
 		if e == list.ErrClosed {
 			if this.e != nil {
@@ -133,9 +145,10 @@ func (this *rw) recv() ([]byte, Encoder, error) {
 			if this.status.Load()&0b0010 == 0 {
 				return nil, Encoder_UNKNOWN, cerror.ErrCanceled
 			}
+			//this is impossible
 			return nil, Encoder_UNKNOWN, cerror.ErrClosed
 		} else {
-			//this is impossible
+			//context.Canceled or context.DeadlineExceeded
 			return nil, Encoder_UNKNOWN, cerror.Convert(e)
 		}
 	}

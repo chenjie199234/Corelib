@@ -61,7 +61,6 @@ type CrpcServer struct {
 }
 type client struct {
 	sync.RWMutex
-	stop bool
 	ctxs map[uint64]*ServerContext
 }
 
@@ -123,19 +122,26 @@ func (s *CrpcServer) GetReqNum() int64 {
 func (s *CrpcServer) StopCrpcServer(force bool) {
 	s.instance.PreStop()
 	if force {
-		s.tellAllPeerSelfClosed()
-		s.instance.Stop()
+		s.stop.ForceClose(func() {
+			s.tellAllPeerSelfClosed()
+			s.instance.Stop()
+		})
 	} else {
-		s.stop.Close(s.tellAllPeerSelfClosed, s.instance.Stop)
+		s.stop.Close(func() {
+			s.instance.PreStop()
+			s.tellAllPeerSelfClosed()
+		}, s.instance.Stop)
 	}
 }
 func (s *CrpcServer) tellAllPeerSelfClosed() {
 	s.instance.RangePeers(true, func(p *stream.Peer) {
-		if tmpdata := p.GetData(); tmpdata != nil {
-			c := (*client)(tmpdata)
-			c.Lock()
-			c.stop = true
-			c.Unlock()
+		if tmp := p.GetData(); tmp != nil {
+			client := (*client)(tmp)
+			for _, ctx := range client.ctxs {
+				ctx.rw.e = cerror.ErrServerClosing
+				ctx.rw.status.And(0b1100)
+				ctx.rw.reader.Close()
+			}
 			m := &Msg{}
 			mh := &Msg_Header{}
 			mh.SetCallid(0)
@@ -217,7 +223,6 @@ func (s *CrpcServer) onlinefunc(ctx context.Context, p *stream.Peer) bool {
 		p.SendMessage(context.Background(), d, nil, nil)
 	}
 	c := &client{
-		stop: false,
 		ctxs: make(map[uint64]*ServerContext),
 	}
 	p.SetData(unsafe.Pointer(c))
@@ -235,31 +240,6 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	switch msg.GetH().GetType() {
 	case MsgType_INIT:
 		c.Lock()
-		if c.stop {
-			c.Unlock()
-			//tell peer self closed
-			msg.GetB().ClearBody()
-			msg.GetB().SetError(cerror.ErrServerClosing)
-			msg.GetH().SetMetadata(nil)
-			msg.GetH().SetTracedata(nil)
-			msg.GetH().ClearDeadline()
-			msg.GetH().SetType(MsgType_SEND)
-			d, _ := proto.Marshal(msg)
-			if e := p.SendMessage(context.Background(), d, nil, nil); e != nil {
-				switch e {
-				case stream.ErrConnClosed:
-					e = cerror.ErrClosed
-				case stream.ErrMsgLarge:
-					//this is impossible
-					e = cerror.ErrRespmsgLen
-				}
-				slog.Error("[crpc.server] write response failed",
-					slog.String("cip", p.GetRealPeerIP()),
-					slog.String("path", msg.GetH().GetPath()),
-					slog.String("error", e.Error()))
-			}
-			return
-		}
 		if _, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
 			//this is impossible
 			c.Unlock()
@@ -275,7 +255,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				//tell peer self closed
 				msg.GetB().SetError(cerror.ErrServerClosing)
 			} else {
-				//tell peer self busy
+				//tell peer self busy,this is impossible
 				msg.GetB().SetError(cerror.ErrBusy)
 			}
 			msg.GetH().SetMetadata(nil)
@@ -438,7 +418,8 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 					mtime.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0)
 				}
 				if workctx.finish == 0 {
-					rw.closerecvsend(nil)
+					//Abort() in ServerContext didn't called
+					rw.closerecvsend()
 				}
 				s.stop.DoneOne()
 			}()
@@ -452,7 +433,14 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	case MsgType_SEND:
 		c.RLock()
 		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
-			ctx.rw.cache(msg.GetB())
+			if ctx.rw.status.Load()&0b0100 != 0 {
+				ctx.rw.cache(msg.GetB())
+			} else {
+				//peer already saild stop send
+				//but we get a new send now
+				slog.Error("[crpc.server] get client send data mesage after server's close send message,this shouldn't happen and this connection will be closed.please report this bug", slog.String("cip", p.GetRealPeerIP()))
+				p.Close(false)
+			}
 		}
 		c.RUnlock()
 	case MsgType_CLOSE_RECV:
@@ -471,14 +459,24 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	case MsgType_CLOSE_RECV_SEND:
 		c.Lock()
 		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
-			ctx.cancel()
 			ctx.rw.status.And(0b0011)
 			ctx.rw.reader.Close()
+			ctx.cancel()
 			delete(c.ctxs, msg.GetH().GetCallid())
 		}
 		c.Unlock()
 	}
 }
 func (s *CrpcServer) offlinefunc(p *stream.Peer) {
+	c := (*client)(p.GetData())
+	c.Lock()
+	for _, ctx := range c.ctxs {
+		ctx.rw.e = cerror.ErrClosed
+		ctx.rw.status.Add(0b0011)
+		ctx.rw.reader.Close()
+		ctx.cancel()
+	}
+	c.ctxs = nil
+	c.Unlock()
 	slog.Info("[crpc.server] offline", slog.String("cip", p.GetRealPeerIP()))
 }

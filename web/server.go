@@ -139,10 +139,11 @@ func (c *ServerConfig) validate() {
 }
 
 type WebServer struct {
-	c              *ServerConfig
-	tlsc           *tls.Config
-	clientnum      int32 //without hijacked
-	stop           *graceful.Graceful
+	c         *ServerConfig
+	tlsc      *tls.Config
+	clientnum int32 //without hijacked
+	stop      *graceful.Graceful
+	//this is used to wait the register remove this instance
 	closetimer     *time.Timer
 	s              *http.Server
 	handlerTimeout map[string]map[string]time.Duration //first key method,second key path,value timeout,<=0 means no timeout

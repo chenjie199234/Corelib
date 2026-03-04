@@ -131,7 +131,7 @@ func (m *connmng) PreStop() {
 		if old < 0 {
 			return
 		}
-		if m.peernum.CompareAndSwap(old, old-math.MaxInt32) {
+		if m.peernum.CompareAndSwap(old, old+math.MinInt32) {
 			return
 		}
 	}
@@ -142,11 +142,11 @@ func (m *connmng) PreStop() {
 func (m *connmng) Stop() {
 	defer m.closewait.Wait()
 	for {
-		if old := m.peernum.Load(); old >= 0 {
-			if m.peernum.CompareAndSwap(old, old-math.MaxInt32) {
-				break
-			}
-		} else {
+		old := m.peernum.Load()
+		if old < 0 {
+			break
+		}
+		if m.peernum.CompareAndSwap(old, old+math.MinInt32) {
 			break
 		}
 	}
@@ -168,14 +168,14 @@ func (m *connmng) GetPeerNum() int32 {
 	if peernum >= 0 {
 		return peernum
 	} else {
-		return peernum + math.MaxInt32
+		return peernum - math.MinInt32
 	}
 }
 func (m *connmng) Finishing() bool {
 	return m.peernum.Load() < 0
 }
 func (m *connmng) Finished() bool {
-	return m.peernum.Load() == -math.MaxInt32
+	return m.peernum.Load() == math.MinInt32
 }
 func (m *connmng) RangePeers(block bool, handler func(p *Peer)) {
 	if block {

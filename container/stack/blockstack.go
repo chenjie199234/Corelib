@@ -43,6 +43,31 @@ func (bs *BlockStack[T]) Push(data T) (int64, error) {
 	}
 	return oldcount + 1, nil
 }
+func (bs *BlockStack[T]) Peek(ctx context.Context) (T, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for {
+		if ctx.Err() != nil {
+			var empty T
+			return empty, ctx.Err()
+		}
+		data, e := bs.stack.Pop(func(_ T) bool { return false })
+		if e == ErrPopCheckFailed {
+			return data, nil
+		}
+		if atomic.LoadInt64(&bs.count) < 0 {
+			var empty T
+			return empty, ErrClosed
+		}
+		select {
+		case <-bs.block:
+		case <-ctx.Done():
+			var empty T
+			return empty, ctx.Err()
+		}
+	}
+}
 func (bs *BlockStack[T]) Pop(ctx context.Context) (T, error) {
 	if ctx == nil {
 		ctx = context.Background()

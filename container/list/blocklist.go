@@ -43,6 +43,32 @@ func (bl *BlockList[T]) Push(data T) (int64, error) {
 	}
 	return oldcount + 1, nil
 }
+
+func (bl *BlockList[T]) Peek(ctx context.Context) (T, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for {
+		if ctx.Err() != nil {
+			var empty T
+			return empty, ctx.Err()
+		}
+		data, e := bl.list.Pop(func(_ T) bool { return false })
+		if e == ErrPopCheckFailed {
+			return data, nil
+		}
+		if atomic.LoadInt64(&bl.count) < 0 {
+			var empty T
+			return empty, ErrClosed
+		}
+		select {
+		case <-bl.block:
+		case <-ctx.Done():
+			var empty T
+			return empty, ctx.Err()
+		}
+	}
+}
 func (bl *BlockList[T]) Pop(ctx context.Context) (T, error) {
 	if ctx == nil {
 		ctx = context.Background()

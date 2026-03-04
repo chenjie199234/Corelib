@@ -610,11 +610,8 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		}
 
 		if method.Desc.IsStreamingServer() {
-			g.P("hctx := ", g.QualifiedGoIdent(webPackage.Ident("NewServerStreamServerContext")), "[", g.QualifiedGoIdent(method.Output.GoIdent), "](ctx)")
-			g.P("if e:=handler(hctx,req);e!=nil{")
-			g.P("hctx.StopSend(e)")
-			g.P("}else{")
-			g.P("hctx.StopSend(nil)")
+			g.P("if e:=handler(", g.QualifiedGoIdent(webPackage.Ident("NewServerStreamServerContext")), "[", g.QualifiedGoIdent(method.Output.GoIdent), "](ctx)", ",req);e!=nil{")
+			g.P("ctx.AbortSSE(e)")
 			g.P("}")
 		} else {
 			g.P("resp,e:=handler(ctx,req)")
