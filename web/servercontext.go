@@ -42,7 +42,6 @@ func (c *ServerContext) Redirect(code int, url string) {
 	http.Redirect(c.w, c.r, url, code)
 }
 
-// if e is not nil,it will be converted to cerror.Error and will set the response code to 4xx or 5xx,see the Httpcode in cerror.Error
 func (c *ServerContext) Abort(e error) {
 	if c.responsed.Swap(true) {
 		return

@@ -322,13 +322,33 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 				continue
 			}
 		}
-		workctx := &CallContext{
+		ctxch := ctx.Done()
+		var stopch chan *struct{}
+		if ctxch != nil {
+			stopch = make(chan *struct{})
+			go func() {
+				select {
+				case <-ctxch:
+					if ctx.Err() == context.DeadlineExceeded {
+						//ignore this,if client's context deadline,server's context deadline too
+						return
+					}
+					//context.Canceled,we need to cancel the server's context
+				case <-stopch:
+				}
+				rw.closerecvsend()
+			}()
+		}
+		ee := cerror.Convert(handler(&CallContext{
 			Context: ctx,
 			rw:      rw,
 			s:       server,
+		}))
+		if ctxch == nil {
+			rw.closerecvsend()
+		} else {
+			close(stopch)
 		}
-		ee := cerror.Convert(handler(workctx))
-		rw.closerecvsend()
 		if ee != nil {
 			span.SetStatus(codes.Error, ee.Error())
 		} else {
@@ -437,13 +457,33 @@ func (c *CrpcClient) Stream(ctx context.Context, path string, handler func(ctx *
 				continue
 			}
 		}
-		workctx := &StreamContext{
+		ctxch := ctx.Done()
+		var stopch chan *struct{}
+		if ctxch != nil {
+			stopch = make(chan *struct{})
+			go func() {
+				select {
+				case <-ctxch:
+					if ctx.Err() == context.DeadlineExceeded {
+						//ignore this,if client's context deadline,server's context deadline too
+						return
+					}
+					//context.Canceled,we need to cancel the server's context
+				case <-stopch:
+				}
+				rw.closerecvsend()
+			}()
+		}
+		ee := cerror.Convert(handler(&StreamContext{
 			Context: ctx,
 			rw:      rw,
 			s:       server,
+		}))
+		if ctxch == nil {
+			rw.closerecvsend()
+		} else {
+			close(stopch)
 		}
-		ee := cerror.Convert(handler(workctx))
-		rw.closerecvsend()
 		if ee != nil {
 			span.SetStatus(codes.Error, ee.Error())
 		} else {
