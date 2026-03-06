@@ -99,10 +99,13 @@ func Decode(estr string) *Error {
 		//json format
 		tmp := &Error{}
 		//protojson can support "number string" or "number" for field:code
-		if e := (protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}).Unmarshal(common.STB(estr), tmp); e != nil {
+		if e := protojson.Unmarshal(common.STB(estr), tmp); e != nil {
 			return MakeCError(-1, 500, estr)
 		}
-		if tmp.GetCode() == 0 {
+		if tmp.GetCode() == 0 ||
+			(tmp.HasHttpcode() &&
+				(tmp.GetHttpcode() < 400 ||
+					http.StatusText(int(tmp.GetHttpcode())) == "")) {
 			tmp.SetCode(-1)
 			tmp.SetMsg(estr)
 		}
@@ -124,5 +127,14 @@ func Decode(estr string) *Error {
 		return MakeCError(-1, 500, estr)
 	}
 	msg := p2[4:]
-	return MakeCError(int32(code), 500, msg)
+	tmp := &Error{}
+	if code == 0 {
+		tmp.SetCode(-1)
+		tmp.SetMsg(msg)
+	} else {
+		tmp.SetCode(int32(code))
+		tmp.SetMsg(msg)
+	}
+	tmp.SetHttpcode(500)
+	return tmp
 }

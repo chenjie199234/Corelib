@@ -34,6 +34,9 @@ func transGrpcError(e error, client bool) error {
 	case codes.DeadlineExceeded:
 		return cerror.ErrDeadlineExceeded
 	case codes.Unknown:
+		if s.Message() == "EOF" {
+			return io.EOF
+		}
 		return cerror.Decode(s.Message())
 	case codes.InvalidArgument:
 		return cerror.ErrReq
