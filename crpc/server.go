@@ -137,10 +137,12 @@ func (s *CrpcServer) tellAllPeerSelfClosed() {
 	s.instance.RangePeers(true, func(p *stream.Peer) {
 		if tmp := p.GetData(); tmp != nil {
 			client := (*client)(tmp)
+			wg := sync.WaitGroup{}
 			for _, ctx := range client.ctxs {
 				ctx.rw.e = cerror.ErrServerClosing
-				ctx.rw.status.And(0b1100)
-				ctx.rw.reader.Close()
+				wg.Go(func() {
+					ctx.rw.closerecv()
+				})
 			}
 			m := &Msg{}
 			mh := &Msg_Header{}
@@ -151,7 +153,10 @@ func (s *CrpcServer) tellAllPeerSelfClosed() {
 			m.SetH(mh)
 			m.SetB(mb)
 			d, _ := proto.Marshal(m)
-			p.SendMessage(context.Background(), d, nil, nil)
+			wg.Go(func() {
+				p.SendMessage(context.Background(), d, nil, nil)
+			})
+			wg.Wait()
 		}
 	})
 }
