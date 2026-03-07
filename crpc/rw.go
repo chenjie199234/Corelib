@@ -149,6 +149,9 @@ func (this *rw) recv(ctx context.Context) ([]byte, Encoder, error) {
 			return nil, Encoder_UNKNOWN, cerror.ErrClosed
 		} else {
 			//context.Canceled or context.DeadlineExceeded
+			if this.e != nil {
+				return nil, Encoder_UNKNOWN, this.e
+			}
 			return nil, Encoder_UNKNOWN, cerror.Convert(e)
 		}
 	}
