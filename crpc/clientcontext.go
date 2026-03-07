@@ -15,8 +15,9 @@ import (
 
 type CallContext struct {
 	context.Context
-	rw *rw
-	s  *ServerForPick
+	rw   *rw
+	s    *ServerForPick
+	send bool
 }
 
 func (c *CallContext) GetPath() string {
@@ -35,19 +36,6 @@ func (c *CallContext) Recv() ([]byte, Encoder, error) {
 func (c *CallContext) StopRecv() {
 	c.rw.closerecv()
 }
-func (c *CallContext) GetServerAddr() string {
-	return c.s.GetServerAddr()
-}
-
-type StreamContext struct {
-	context.Context
-	rw *rw
-	s  *ServerForPick
-}
-
-func (c *StreamContext) GetPath() string {
-	return c.rw.path
-}
 
 // return io.EOF means server stop recv
 // return cerror.ErrCanceled means self stop send
@@ -55,7 +43,7 @@ func (c *StreamContext) GetPath() string {
 // return cerror.ErrClosed means connection closed
 // return cerror.ErrReqmsgLen means req too large
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
-func (c *StreamContext) Send(req []byte, encoder Encoder) error {
+func (c *CallContext) Send(req []byte, encoder Encoder) error {
 	if encoder <= Encoder_UNKNOWN || encoder > Encoder_JSON {
 		return cerror.ErrReq
 	}
@@ -64,37 +52,24 @@ func (c *StreamContext) Send(req []byte, encoder Encoder) error {
 	mb.SetBodyEncoder(encoder)
 	return c.rw.send(c.Context, mb)
 }
-func (c *StreamContext) StopSend() {
+func (c *CallContext) StopSend() {
 	c.rw.closesend()
 }
-
-// return io.EOF means server stop send
-// return cerror.ErrCanceled means self stop recv
-// return cerror.DeadlineExceeded means timeout
-// return cerror.ErrClosed means connection closed
-func (c *StreamContext) Recv() ([]byte, Encoder, error) {
-	return c.rw.recv(c.Context)
-}
-
-// this can be used to wake up the block on Recv
-func (c *StreamContext) StopRecv() {
-	c.rw.closerecv()
-}
-func (c *StreamContext) GetServerAddr() string {
+func (c *CallContext) GetServerAddr() string {
 	return c.s.GetServerAddr()
 }
 
 // ----------------------------------------------- for protobuf ------------------------------------------------------
 
 // ------------------------ client stream context(this is for protobuf,so Send's encoder always be Encoder_Protobuf) -----------
-func NewClientStreamClientContext[reqtype any](ctx *StreamContext, validatereq bool) *ClientStreamClientContext[reqtype] {
+func NewClientStreamClientContext[reqtype any](ctx *CallContext, validatereq bool) *ClientStreamClientContext[reqtype] {
 	return &ClientStreamClientContext[reqtype]{Context: ctx.Context, cctx: ctx, validatereq: validatereq}
 }
 
 type ClientStreamClientContext[reqtype any] struct {
 	validatereq bool
 	context.Context
-	cctx *StreamContext
+	cctx *CallContext
 }
 
 // return io.EOF means server stop recv
@@ -189,14 +164,14 @@ func (c *ServerStreamClientContext[resptype]) GetServerAddr() string {
 }
 
 // ------------------------ all stream context(this is for protobuf,so Send's encoder always be Encoder_Protobuf) -----------
-func NewAllStreamClientContext[reqtype, resptype any](ctx *StreamContext, validatereq bool) *AllStreamClientContext[reqtype, resptype] {
+func NewAllStreamClientContext[reqtype, resptype any](ctx *CallContext, validatereq bool) *AllStreamClientContext[reqtype, resptype] {
 	return &AllStreamClientContext[reqtype, resptype]{Context: ctx.Context, cctx: ctx, validatereq: validatereq}
 }
 
 type AllStreamClientContext[reqtype, resptype any] struct {
 	validatereq bool
 	context.Context
-	cctx *StreamContext
+	cctx *CallContext
 }
 
 // return io.EOF means server stop recv

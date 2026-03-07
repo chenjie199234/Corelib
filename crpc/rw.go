@@ -45,7 +45,6 @@ func (this *rw) init(mb *Msg_Body) error {
 	mh.SetTracedata(this.traceddata)
 	m.SetH(mh)
 	m.SetB(mb)
-	m.SetWithB(mb != nil)
 	return this.sender(context.Background(), m)
 }
 
@@ -73,7 +72,6 @@ func (this *rw) send(ctx context.Context, mb *Msg_Body) error {
 	mh.SetType(MsgType_SEND)
 	m.SetH(mh)
 	m.SetB(mb)
-	m.SetWithB(mb != nil)
 	if e := this.sender(ctx, m); e != nil {
 		return e
 	}

@@ -283,7 +283,6 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			}
 			return
 		}
-
 		handlers, ok := s.handler[msg.GetH().GetPath()]
 		if !ok {
 			c.Unlock()
@@ -309,6 +308,27 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 					slog.String("path", msg.GetH().GetPath()),
 					slog.String("error", e.Error()))
 			}
+			return
+		}
+		//response init success
+		r := &Msg{}
+		rh := &Msg_Header{}
+		rh.SetCallid(msg.GetH().GetCallid())
+		rh.SetType(MsgType_INIT_SUCCESS)
+		r.SetH(rh)
+		rd, _ := proto.Marshal(r)
+		if e := p.SendMessage(context.Background(), rd, nil, nil); e != nil {
+			switch e {
+			case stream.ErrConnClosed:
+				e = cerror.ErrClosed
+			case stream.ErrMsgLarge:
+				//this is impossible
+				e = cerror.ErrRespmsgLen
+			}
+			slog.Error("[crpc.server] write response failed",
+				slog.String("cip", p.GetRealPeerIP()),
+				slog.String("path", msg.GetH().GetPath()),
+				slog.String("error", e.Error()))
 			return
 		}
 		peerip := p.GetRealPeerIP()
@@ -373,7 +393,8 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			}
 			return e
 		})
-		if msg.GetWithB() {
+		if msg.HasB() {
+			//for Echo Call and ServerStream Call
 			rw.cache(msg.GetB())
 			//only the client's Call will init with body
 			//client's Call will not send more data

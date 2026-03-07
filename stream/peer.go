@@ -150,13 +150,10 @@ type BeforeSend func(*Peer)
 type AfterSend func(*Peer, error)
 
 // SendMessage will return ErrMsgLarge/ErrConnClosed/context.Canceled/context.DeadlineExceeded
-// there may be lots of goroutines calling this function at the same time,but only one goroutine can be actived once,others need to be block and wait
-// the bs(before send) will be called before the caller is really ready to send the data(it is not block now)
-// the as(after send) will be called after the caller finishs the send
+// there may be lots of goroutines calling this function at the same time,but only one goroutine can be actived once,other needs to be block and wait
+// the bs(before send) will be called before the caller is ready to send the data(it is not block now)
+// the as(after send) will be called after finish the send
 func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, as AfterSend) error {
-	if len(userdata) == 0 {
-		return nil
-	}
 	if uint64(len(userdata)) > uint64(p.peerMaxMsgLen.Load()) {
 		return ErrMsgLarge
 	}
@@ -170,21 +167,14 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 	if bs != nil {
 		bs(p)
 	}
-	first := true
-	for len(userdata) > 0 {
-		var data []byte
-		if len(userdata) > maxPieceLen {
-			data = userdata[:maxPieceLen]
-			userdata = userdata[maxPieceLen:]
-		} else {
-			data = userdata
-			userdata = nil
-		}
-		if e := ws.WriteMsg(p.c, data, userdata == nil, first, false); e != nil {
+	if len(userdata) <= maxPieceLen {
+		if e := ws.WriteMsg(p.c, userdata, true, true, false); e != nil {
 			if p.peertype == _PEER_CLIENT {
-				slog.ErrorContext(ctx, "[Stream.SendMessage] write to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+				slog.ErrorContext(ctx, "[Stream.SendMessage] write to client failed",
+					slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 			} else {
-				slog.ErrorContext(ctx, "[Stream.SendMessage] write to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+				slog.ErrorContext(ctx, "[Stream.SendMessage] write to server failed",
+					slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 			}
 			p.c.Close()
 			if as != nil {
@@ -193,7 +183,30 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 			return ErrConnClosed
 		}
 		p.sendidlestart.Store(time.Now().UnixNano())
-		first = false
+	} else {
+		for i := 0; i < len(userdata); i += maxPieceLen {
+			var data []byte
+			if i+maxPieceLen < len(userdata) {
+				data = userdata[i : i+maxPieceLen]
+			} else {
+				data = userdata[i:]
+			}
+			if e := ws.WriteMsg(p.c, data, i+maxPieceLen >= len(userdata), i == 0, false); e != nil {
+				if p.peertype == _PEER_CLIENT {
+					slog.ErrorContext(ctx, "[Stream.SendMessage] write to client failed",
+						slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+				} else {
+					slog.ErrorContext(ctx, "[Stream.SendMessage] write to server failed",
+						slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+				}
+				p.c.Close()
+				if as != nil {
+					as(p, e)
+				}
+				return ErrConnClosed
+			}
+			p.sendidlestart.Store(time.Now().UnixNano())
+		}
 	}
 	if as != nil {
 		as(p, nil)

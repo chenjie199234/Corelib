@@ -25,27 +25,30 @@ type MsgType int32
 
 const (
 	MsgType_INIT            MsgType = 0
-	MsgType_SEND            MsgType = 1
-	MsgType_CLOSE_SEND      MsgType = 2
-	MsgType_CLOSE_RECV      MsgType = 3
-	MsgType_CLOSE_RECV_SEND MsgType = 4
+	MsgType_INIT_SUCCESS    MsgType = 1
+	MsgType_SEND            MsgType = 2
+	MsgType_CLOSE_SEND      MsgType = 3
+	MsgType_CLOSE_RECV      MsgType = 4
+	MsgType_CLOSE_RECV_SEND MsgType = 5
 )
 
 // Enum value maps for MsgType.
 var (
 	MsgType_name = map[int32]string{
 		0: "INIT",
-		1: "SEND",
-		2: "CLOSE_SEND",
-		3: "CLOSE_RECV",
-		4: "CLOSE_RECV_SEND",
+		1: "INIT_SUCCESS",
+		2: "SEND",
+		3: "CLOSE_SEND",
+		4: "CLOSE_RECV",
+		5: "CLOSE_RECV_SEND",
 	}
 	MsgType_value = map[string]int32{
 		"INIT":            0,
-		"SEND":            1,
-		"CLOSE_SEND":      2,
-		"CLOSE_RECV":      3,
-		"CLOSE_RECV_SEND": 4,
+		"INIT_SUCCESS":    1,
+		"SEND":            2,
+		"CLOSE_SEND":      3,
+		"CLOSE_RECV":      4,
+		"CLOSE_RECV_SEND": 5,
 	}
 )
 
@@ -116,14 +119,11 @@ func (x Encoder) Number() protoreflect.EnumNumber {
 }
 
 type Msg struct {
-	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_H           *Msg_Header            `protobuf:"bytes,1,opt,name=h"`
-	xxx_hidden_B           *Msg_Body              `protobuf:"bytes,2,opt,name=b"`
-	xxx_hidden_WithB       bool                   `protobuf:"varint,3,opt,name=with_b,json=withB"`
-	XXX_raceDetectHookData protoimpl.RaceDetectHookData
-	XXX_presence           [1]uint32
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_H  *Msg_Header            `protobuf:"bytes,1,opt,name=h"`
+	xxx_hidden_B  *Msg_Body              `protobuf:"bytes,2,opt,name=b"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Msg) Reset() {
@@ -165,24 +165,12 @@ func (x *Msg) GetB() *Msg_Body {
 	return nil
 }
 
-func (x *Msg) GetWithB() bool {
-	if x != nil {
-		return x.xxx_hidden_WithB
-	}
-	return false
-}
-
 func (x *Msg) SetH(v *Msg_Header) {
 	x.xxx_hidden_H = v
 }
 
 func (x *Msg) SetB(v *Msg_Body) {
 	x.xxx_hidden_B = v
-}
-
-func (x *Msg) SetWithB(v bool) {
-	x.xxx_hidden_WithB = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 3)
 }
 
 func (x *Msg) HasH() bool {
@@ -199,13 +187,6 @@ func (x *Msg) HasB() bool {
 	return x.xxx_hidden_B != nil
 }
 
-func (x *Msg) HasWithB() bool {
-	if x == nil {
-		return false
-	}
-	return protoimpl.X.Present(&(x.XXX_presence[0]), 2)
-}
-
 func (x *Msg) ClearH() {
 	x.xxx_hidden_H = nil
 }
@@ -214,17 +195,11 @@ func (x *Msg) ClearB() {
 	x.xxx_hidden_B = nil
 }
 
-func (x *Msg) ClearWithB() {
-	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
-	x.xxx_hidden_WithB = false
-}
-
 type Msg_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	H     *Msg_Header
-	B     *Msg_Body
-	WithB *bool
+	H *Msg_Header
+	B *Msg_Body
 }
 
 func (b0 Msg_builder) Build() *Msg {
@@ -233,10 +208,6 @@ func (b0 Msg_builder) Build() *Msg {
 	_, _ = b, x
 	x.xxx_hidden_H = b.H
 	x.xxx_hidden_B = b.B
-	if b.WithB != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 3)
-		x.xxx_hidden_WithB = *b.WithB
-	}
 	return m0
 }
 
@@ -577,11 +548,10 @@ var File_crpc_msg_proto protoreflect.FileDescriptor
 
 const file_crpc_msg_proto_rawDesc = "" +
 	"\n" +
-	"\x0ecrpc/msg.proto\x12\x04crpc\x1a\x13cerror/cerror.proto\"\xb9\x04\n" +
+	"\x0ecrpc/msg.proto\x12\x04crpc\x1a\x13cerror/cerror.proto\"\xa2\x04\n" +
 	"\x03Msg\x12\x1e\n" +
 	"\x01h\x18\x01 \x01(\v2\x10.crpc.Msg.HeaderR\x01h\x12\x1c\n" +
-	"\x01b\x18\x02 \x01(\v2\x0e.crpc.Msg.BodyR\x01b\x12\x15\n" +
-	"\x06with_b\x18\x03 \x01(\bR\x05withB\x1a\xe9\x02\n" +
+	"\x01b\x18\x02 \x01(\v2\x0e.crpc.Msg.BodyR\x01b\x1a\xe9\x02\n" +
 	"\x06Header\x12\x16\n" +
 	"\x06callid\x18\x01 \x01(\x04R\x06callid\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12!\n" +
@@ -598,15 +568,16 @@ const file_crpc_msg_proto_rawDesc = "" +
 	"\x04Body\x12\x12\n" +
 	"\x04body\x18\x01 \x01(\fR\x04body\x120\n" +
 	"\fbody_encoder\x18\x02 \x01(\x0e2\r.crpc.EncoderR\vbodyEncoder\x12#\n" +
-	"\x05error\x18\x03 \x01(\v2\r.cerror.ErrorR\x05error*R\n" +
+	"\x05error\x18\x03 \x01(\v2\r.cerror.ErrorR\x05error*d\n" +
 	"\aMsgType\x12\b\n" +
-	"\x04INIT\x10\x00\x12\b\n" +
-	"\x04SEND\x10\x01\x12\x0e\n" +
+	"\x04INIT\x10\x00\x12\x10\n" +
+	"\fINIT_SUCCESS\x10\x01\x12\b\n" +
+	"\x04SEND\x10\x02\x12\x0e\n" +
 	"\n" +
-	"CLOSE_SEND\x10\x02\x12\x0e\n" +
+	"CLOSE_SEND\x10\x03\x12\x0e\n" +
 	"\n" +
-	"CLOSE_RECV\x10\x03\x12\x13\n" +
-	"\x0fCLOSE_RECV_SEND\x10\x04*.\n" +
+	"CLOSE_RECV\x10\x04\x12\x13\n" +
+	"\x0fCLOSE_RECV_SEND\x10\x05*.\n" +
 	"\aEncoder\x12\v\n" +
 	"\aUNKNOWN\x10\x00\x12\f\n" +
 	"\bPROTOBUF\x10\x01\x12\b\n" +

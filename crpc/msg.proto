@@ -4,11 +4,12 @@ option go_package="github.com/chenjie199234/Corelib/crpc;crpc";
 import "cerror/cerror.proto";
 
 enum MsgType{
-	INIT=0;
-	SEND=1;
-	CLOSE_SEND=2;
-	CLOSE_RECV=3;
-	CLOSE_RECV_SEND=4;
+	INIT=0;//only from client to server
+	INIT_SUCCESS=1;//only from server to client
+	SEND=2;
+	CLOSE_SEND=3;
+	CLOSE_RECV=4;
+	CLOSE_RECV_SEND=5;
 }
 enum Encoder{
 	UNKNOWN=0;
@@ -31,5 +32,4 @@ message Msg {
 	}
 	Header h=1;
 	Body b=2;
-	bool with_b=3;
 }
