@@ -47,6 +47,9 @@ func (c *ClientStreamClientContext[reqtype]) Send(req *reqtype) error {
 	}
 	return e
 }
+func (c *ClientStreamClientContext[reqtype]) StopSend() {
+	c.stream.CloseSend()
+}
 func (c *ClientStreamClientContext[reqtype]) GetServerAddr() string {
 	p, ok := peer.FromContext(c.stream.Context())
 	if !ok {
@@ -57,10 +60,11 @@ func (c *ClientStreamClientContext[reqtype]) GetServerAddr() string {
 
 // ----------------------------------------------- server stream context ---------------------------------------------
 func NewServerStreamClientContext[resptype any](path string, stream grpc.ClientStream) *ServerStreamClientContext[resptype] {
-	return &ServerStreamClientContext[resptype]{
+	s := &ServerStreamClientContext[resptype]{
 		path:   path,
 		stream: stream,
 	}
+	return s
 }
 
 type ServerStreamClientContext[resptype any] struct {
@@ -136,6 +140,9 @@ func (c *AllStreamClientContext[reqtype, resptype]) Send(req *reqtype) error {
 		slog.ErrorContext(c.stream.Context(), "["+c.path+"] send request failed", slog.String("error", e.Error()))
 	}
 	return e
+}
+func (c *AllStreamClientContext[reqtype, resptype]) StopSend() {
+	c.stream.CloseSend()
 }
 func (c *AllStreamClientContext[reqtype, resptype]) GetServerAddr() string {
 	p, ok := peer.FromContext(c.stream.Context())

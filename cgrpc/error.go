@@ -68,6 +68,9 @@ func transGrpcError(e error, client bool) error {
 	case codes.Unimplemented:
 		return cerror.ErrNoapi
 	case codes.Internal:
+		if strings.Contains(s.Message(), "SendMsg called after CloseSend") {
+			return cerror.ErrCanceled
+		}
 		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
 	case codes.Unavailable:
 		if strings.Contains(s.Message(), "EOF") {
