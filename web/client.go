@@ -124,7 +124,9 @@ func NewWebClient(c *ClientConfig, d discover.DI, serverproject, servergroup, se
 			IdleConnTimeout:        c.IdleTimeout.StdDuration(),
 			MaxResponseHeaderBytes: int64(c.MaxResponseHeader),
 		},
-		Timeout: c.GlobalTimeout.StdDuration(),
+	}
+	if c.GlobalTimeout > 0 {
+		client.client.Timeout = c.GlobalTimeout.StdDuration()
 	}
 	client.balancer = newCorelibBalancer(client)
 	client.resolver = resolver.NewCorelibResolver(client.balancer, client.discover, discover.Web)
