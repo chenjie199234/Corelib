@@ -13,7 +13,7 @@ import (
 	"github.com/chenjie199234/Corelib/pbex"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/stats"
+	"google.golang.org/grpc/peer"
 )
 
 type ServerContext struct {
@@ -74,8 +74,8 @@ func (c *ServerContext) GetPath() string {
 
 // get the direct peer's addr(maybe a proxy)
 func (c *ServerContext) GetRemoteAddr() string {
-	conninfo := c.Context.Value(serverconnkey{}).(*stats.ConnTagInfo)
-	return conninfo.RemoteAddr.String()
+	peer, _ := peer.FromContext(c.Context)
+	return peer.Addr.String()
 }
 
 // get the real peer's ip which will not be confused by proxy
