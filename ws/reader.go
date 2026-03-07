@@ -129,6 +129,8 @@ func Read(reader *bufio.Reader, maxmsglen uint32, mustmask bool, handler func(OP
 				tmp := make([]byte, len(buf)+int(payloadlen), cap(buf)*factor)
 				copy(tmp, buf)
 				buf = tmp
+			} else {
+				buf = buf[:len(buf)+int(payloadlen)]
 			}
 			if _, e := io.ReadFull(reader, buf[len(buf)-int(payloadlen):]); e != nil {
 				return e
