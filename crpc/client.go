@@ -282,7 +282,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 		rw := server.createrw(path, deadline, md, td)
 		var mb *Msg_Body
 		if _, ok := Encoder_name[int32(encoder)]; ok && encoder != Encoder_UNKNOWN {
-			mb := &Msg_Body{}
+			mb = &Msg_Body{}
 			mb.SetBody(in)
 			mb.SetBodyEncoder(encoder)
 			//Call with Body,means,this call will only send data once and the data is sended by init
