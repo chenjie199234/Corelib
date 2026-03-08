@@ -286,7 +286,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			mb.SetBody(in)
 			mb.SetBodyEncoder(encoder)
 			//Call with Body,means,this call will only send data once and the data is sended by init
-			rw.status.Add(0b1110)
+			rw.status.And(0b1110)
 		}
 		if e := rw.init(mb); e != nil {
 			server.delrw(rw.callid)

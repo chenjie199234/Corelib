@@ -498,7 +498,7 @@ func (s *CrpcServer) offlinefunc(p *stream.Peer) {
 	c.Lock()
 	for _, ctx := range c.ctxs {
 		ctx.rw.e = cerror.ErrClosed
-		ctx.rw.status.Add(0b0011)
+		ctx.rw.status.And(0b0011)
 		ctx.rw.reader.Close()
 		ctx.cancel()
 	}

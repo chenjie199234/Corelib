@@ -96,7 +96,7 @@ func (s *ServerForPick) cleanrw() {
 	s.lker.Lock()
 	for _, rw := range s.rws {
 		rw.e = cerror.ErrClosed
-		rw.status.Add(0b0011)
+		rw.status.And(0b0011)
 		rw.reader.Close()
 	}
 	s.rws = nil
