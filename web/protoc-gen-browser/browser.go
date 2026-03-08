@@ -107,12 +107,6 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 		}
 	}
 	f.P()
-	if status[2] {
-		f.P("type JsonValue = number | string | boolean | null | JsonObject | JsonArray")
-		f.P("type JsonObject = Record<string,JsonValue>")
-		f.P("type JsonArray = Array<JsonValue>")
-		f.P()
-	}
 	//class comment
 	if status[1] {
 		f.P("//must use the replacer in JSON.stringify() below:")
@@ -404,9 +398,9 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 	if status[2] {
 		f.P()
 		if len(m.Fields) == 0 {
-			f.P("\tfromJSON(_obj:JsonObject){")
+			f.P("\tfromJSON(_obj: Record<string,any>){")
 		} else {
-			f.P("\tfromJSON(obj:JsonObject){")
+			f.P("\tfromJSON(obj: Record<string,any>){")
 		}
 		for _, field := range m.Fields {
 			if field.Oneof != nil {
@@ -492,7 +486,7 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 						f.P("\t\t\t\t\tthrow \"response parse failed\"")
 						f.P("\t\t\t\t}")
 						f.P("\t\t\t\tlet mvalue")
-						f.P("\t\t\t\ttry{mvalue=BigInt(value)}catch(){throw \"response parse failed\"}")
+						f.P("\t\t\t\ttry{mvalue=BigInt(value)}catch{throw \"response parse failed\"}")
 						f.P("\t\t\t\tthis.", field.Desc.Name(), ".set(mkey,mvalue)")
 					case "number":
 						f.P("\t\t\t\tlet mkey = Number(key)")
@@ -519,7 +513,7 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 						f.P("\t\t\t\t}")
 						f.P("\t\t\t\tif(value!=undefined&&value!=null){")
 						f.P("\t\t\t\t\tlet rawstr")
-						f.P("\t\t\t\t\ttry{rawstr=window.atob(value)}catch(){throw \"response parse failed\"}")
+						f.P("\t\t\t\t\ttry{rawstr=window.atob(value)}catch{throw \"response parse failed\"}")
 						f.P("\t\t\t\t\tlet mvalue = new Uint8Array(rawstr.length)")
 						f.P("\t\t\t\t\tfor(let i=0;i<rawstr.length;i++){")
 						f.P("\t\t\t\t\t\tmvalue[i]=rawstr.charCodeAt(i)")
@@ -565,38 +559,38 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 					case "bigint":
 						f.P("\t\t\t\tlet mkey")
 						f.P("\t\t\t\tlet mvalue")
-						f.P("\t\t\t\ttry{mkey=BigInt(key);mvalue=BigInt(value)}catch(){throw \"response parse failed\"}")
+						f.P("\t\t\t\ttry{mkey=BigInt(key);mvalue=BigInt(value)}catch{throw \"response parse failed\"}")
 						f.P("\t\t\t\tthis.", field.Desc.Name(), ".set(mkey,mvalue)")
 					case "number":
 						f.P("\t\t\t\tlet mkey")
-						f.P("\t\t\t\ttry{mkey=BigInt(key)}catch(){throw \"response parse failed\"}")
+						f.P("\t\t\t\ttry{mkey=BigInt(key)}catch{throw \"response parse failed\"}")
 						f.P("\t\t\t\tif(typeof value != 'number'){")
 						f.P("\t\t\t\t\tthrow \"response parse failed\"")
 						f.P("\t\t\t\t}")
 						f.P("\t\t\t\tthis.", field.Desc.Name(), ".set(mkey,value)")
 					case "boolean":
 						f.P("\t\t\t\tlet mkey")
-						f.P("\t\t\t\ttry{mkey=BigInt(key)}catch(){throw \"response parse failed\"}")
+						f.P("\t\t\t\ttry{mkey=BigInt(key)}catch{throw \"response parse failed\"}")
 						f.P("\t\t\t\tif(typeof value != 'boolean'){")
 						f.P("\t\t\t\t\tthrow \"response parse failed\"")
 						f.P("\t\t\t\t}")
 						f.P("\t\t\t\tthis.", field.Desc.Name(), ".set(mkey,value)")
 					case "string":
 						f.P("\t\t\t\tlet mkey")
-						f.P("\t\t\t\ttry{mkey=BigInt(key)}catch(){throw \"response parse failed\"}")
+						f.P("\t\t\t\ttry{mkey=BigInt(key)}catch{throw \"response parse failed\"}")
 						f.P("\t\t\t\tif(typeof value != 'string'){")
 						f.P("\t\t\t\t\tthrow \"response parse failed\"")
 						f.P("\t\t\t\t}")
 						f.P("\t\t\t\tthis.", field.Desc.Name(), ".set(mkey,value)")
 					case "Uint8Array|null":
 						f.P("\t\t\t\tlet mkey")
-						f.P("\t\t\t\ttry{mkey=BigInt(key)}catch(){throw \"response parse failed\"}")
+						f.P("\t\t\t\ttry{mkey=BigInt(key)}catch{throw \"response parse failed\"}")
 						f.P("\t\t\t\tif(value!=undefined&&value!=null&&typeof value!='string'){")
 						f.P("\t\t\t\t\tthrow \"response parse failed\"")
 						f.P("\t\t\t\t}")
 						f.P("\t\t\t\tif(value!=undefined&&value!=null){")
 						f.P("\t\t\t\t\tlet rawstr")
-						f.P("\t\t\t\t\ttry{rawstr = window.atob(value)}catch(){throw \"response parse failed\"}")
+						f.P("\t\t\t\t\ttry{rawstr = window.atob(value)}catch{throw \"response parse failed\"}")
 						f.P("\t\t\t\t\tlet mvalue = new Uint8Array(rawstr.length)")
 						f.P("\t\t\t\t\tfor(let i=0;i<rawstr.length;i++){")
 						f.P("\t\t\t\t\t\tmvalue[i]=rawstr.charCodeAt(i)")
@@ -613,7 +607,7 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 							}
 							valuesstr, _ := json.Marshal(values)
 							f.P("\t\t\t\tlet mkey")
-							f.P("\t\t\t\ttry{mkey=BigInt(key)}catch(){throw \"response parse failed\"}")
+							f.P("\t\t\t\ttry{mkey=BigInt(key)}catch{throw \"response parse failed\"}")
 							f.P("\t\t\t\tif(typeof value != 'number'){")
 							f.P("\t\t\t\t\tthrow \"response parse failed\"")
 							f.P("\t\t\t\t}")
@@ -623,7 +617,7 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 							f.P("\t\t\t\tthis.", field.Desc.Name(), ".set(mkey,value)")
 						} else {
 							f.P("\t\t\t\tlet mkey")
-							f.P("\t\t\t\ttry{mkey=BigInt(key)}catch(){throw \"response parse failed\"}")
+							f.P("\t\t\t\ttry{mkey=BigInt(key)}catch{throw \"response parse failed\"}")
 							f.P("\t\t\t\tif(value!=undefined&&value!=null&&Object.prototype.toString.call(value)!='[object Object]'){")
 							f.P("\t\t\t\t\tthrow \"response parse failed\"")
 							f.P("\t\t\t\t}")
@@ -640,7 +634,7 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 					switch valuetype {
 					case "bigint":
 						f.P("\t\t\t\tlet mvalue")
-						f.P("\t\t\t\ttry{mvalue=BigInt(value)}catch(){throw \"response parse failed\"}")
+						f.P("\t\t\t\ttry{mvalue=BigInt(value)}catch{throw \"response parse failed\"}")
 						f.P("\t\t\t\tthis.", field.Desc.Name(), ".set(key,mvalue)")
 					case "number":
 						f.P("\t\t\t\tif(typeof value != 'number'){")
@@ -663,7 +657,7 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 						f.P("\t\t\t\t}")
 						f.P("\t\t\t\tif(value!=undefined&&value!=null){")
 						f.P("\t\t\t\t\tlet rawstr")
-						f.P("\t\t\t\t\ttry{rawstr = window.atob(value)}catch(){throw \"response parse failed\"}")
+						f.P("\t\t\t\t\ttry{rawstr = window.atob(value)}catch{throw \"response parse failed\"}")
 						f.P("\t\t\t\t\tlet mvalue = new Uint8Array(rawstr.length)")
 						f.P("\t\t\t\t\tfor(let i=0;i<rawstr.length;i++){")
 						f.P("\t\t\t\t\t\tmvalue[i]=rawstr.charCodeAt(i)")
@@ -811,7 +805,7 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 						f.P("\t\t\t\tif(typeof v != 'string'){")
 						f.P("\t\t\t\t\tthrow \"response parse failed\"")
 						f.P("\t\t\t\t}")
-						f.P("\t\t\t\ttry{tmp.push(BigInt(v))}catch(){throw \"response parse failed\"}")
+						f.P("\t\t\t\ttry{tmp.push(BigInt(v))}catch{throw \"response parse failed\"}")
 						f.P("\t\t\t}")
 						f.P("\t\t\tthis.", field.Desc.Name(), "=tmp")
 						f.P("\t\t}")
@@ -821,7 +815,7 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 						f.P("\t\t\t\tthrow \"response parse failed\"")
 						f.P("\t\t\t}")
 						f.P("\t\t\tlet tmp")
-						f.P("\t\t\ttry{tmp=BigInt(obj[\"", field.Desc.Name(), "\"])}catch(){throw \"response parse failed\"}")
+						f.P("\t\t\ttry{tmp=BigInt(obj[\"", field.Desc.Name(), "\"])}catch{throw \"response parse failed\"}")
 						f.P("\t\t\tthis.", field.Desc.Name(), "=tmp")
 						f.P("\t\t}")
 					}
@@ -843,7 +837,7 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 						f.P("\t\t\t\t\tthrow \"response parse failed\"")
 						f.P("\t\t\t\t}")
 						f.P("\t\t\t\tlet rawstr")
-						f.P("\t\t\t\ttry{rawstr=window.atob(v)}catch(){throw \"response parse failed\"}")
+						f.P("\t\t\t\ttry{rawstr=window.atob(v)}catch{throw \"response parse failed\"}")
 						f.P("\t\t\t\tlet vv=new Uint8Array(rawstr.length)")
 						f.P("\t\t\t\tfor(let i=0;i<rawstr.length;i++){")
 						f.P("\t\t\t\t\tvv[i]=rawstr.charCodeAt(i)")
@@ -860,7 +854,7 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 						f.P("\t\t\t\tthrow \"response parse failed\"")
 						f.P("\t\t\t}")
 						f.P("\t\t\tlet rawstr")
-						f.P("\t\t\ttry{rawstr=window.atob(obj[\"", field.Desc.Name(), "\"])}catch(){throw \"response parse failed\"}")
+						f.P("\t\t\ttry{rawstr=window.atob(obj[\"", field.Desc.Name(), "\"])}catch{throw \"response parse failed\"}")
 						f.P("\t\t\tlet tmp=new Uint8Array(rawstr.length)")
 						f.P("\t\t\tfor(let i=0;i<rawstr.length;i++){")
 						f.P("\t\t\t\ttmp[i]=rawstr.charCodeAt(i)")
@@ -999,7 +993,7 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 				f.P("\t\t\t\t\tthrow \"response parse failed\"")
 				f.P("\t\t\t\t}")
 				f.P("\t\t\t\tlet tmp")
-				f.P("\t\t\t\ttry{tmp=BigInt(obj[keys[0]])}catch(){throw \"response parse failed\"}")
+				f.P("\t\t\t\ttry{tmp=BigInt(obj[keys[0]])}catch{throw \"response parse failed\"}")
 				f.P("\t\t\t\tthis.", oneof.Desc.Name(), "={$oneofKey:keys[0],$oneofValue:tmp}")
 				f.P("\t\t\t}")
 			}
@@ -1021,7 +1015,7 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 				f.P("\t\t\t\t//bytes type in protobuf should be standard base64 encoded")
 				f.P("\t\t\t\t//https://developers.google.com/protocol-buffers/docs/proto3#json")
 				f.P("\t\t\t\tlet rawstr")
-				f.P("\t\t\t\ttry{rawstr=window.atob(obj[keys[0]])}catch(){throw \"response parse failed\"}")
+				f.P("\t\t\t\ttry{rawstr=window.atob(obj[keys[0]])}catch{throw \"response parse failed\"}")
 				f.P("\t\t\t\tlet tmp=new Uint8Array(rawstr.length)")
 				f.P("\t\t\t\tfor(let i=0;i<rawstr.length;i++){")
 				f.P("\t\t\t\t\ttmp[i]=rawstr.charCodeAt(i)")
@@ -1274,7 +1268,7 @@ func genServiceMethod(plugin *protogen.Plugin, s *protogen.Service, m *protogen.
 		f.P("\t\t}")
 		f.P("\t\tif(!r.ok){")
 		f.P("\t\t\tlet e: ResponseError|null = null")
-		f.P("\t\t\ttry{e=JSON.parse(respbody)}catch(){e=null}")
+		f.P("\t\t\ttry{e=JSON.parse(respbody)}catch{e=null}")
 		f.P("\t\t\tif(e && typeof e === 'object' && 'code' in e && typeof e.code === 'number' && 'msg' in e && typeof e.msg === 'string'){")
 		f.P("\t\t\t\tif(e.code === 1000 && e.msg === 'server is closing'){")
 		f.P("\t\t\t\t\tawait sleep(100)")
@@ -1346,7 +1340,7 @@ func genServiceMethod(plugin *protogen.Plugin, s *protogen.Service, m *protogen.
 		f.P("\t\t\tlet respbody: string")
 		f.P("\t\t\ttry{respbody=await r.text()}catch(err){return {code:-2,msg:err instanceof Error?err.message:String(err)}}")
 		f.P("\t\t\tlet e: ResponseError|null")
-		f.P("\t\t\ttry{e = JSON.parse(respbody)}catch(){e=null}")
+		f.P("\t\t\ttry{e = JSON.parse(respbody)}catch{e=null}")
 		f.P("\t\t\tif(e && typeof e === 'object' && 'code' in e && typeof e.code === 'number' && 'msg' in e && typeof e.msg === 'string'){")
 		f.P("\t\t\t\tif(e.code===1000 && e.msg==='server is closing'){")
 		f.P("\t\t\t\t\tawait sleep(100)")
@@ -1383,7 +1377,7 @@ func genServiceMethod(plugin *protogen.Plugin, s *protogen.Service, m *protogen.
 		f.P("\t\t\tif(line===''){")
 		f.P("\t\t\t\t//finish this event,call the handler")
 		f.P("\t\t\t\tif(event==='error'){")
-		f.P("\t\t\t\t\ttry{e=JSON.parse(data)}catch(){e=null}")
+		f.P("\t\t\t\t\ttry{e=JSON.parse(data)}catch{e=null}")
 		f.P("\t\t\t\t\tif(!e||typeof e!=='object' || !('code' in e)||typeof e.code!=='number'||!('msg' in e)||typeof e.msg!=='string'){")
 		f.P("\t\t\t\t\t\te = {code:-1,msg:data}")
 		f.P("\t\t\t\t\t}")
