@@ -1118,11 +1118,8 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 			if len(normal) > 0 {
 				f.P("\t\t\tif(", strings.Join(normal, "||"), "){")
 				f.P("\t\t\t\tif(this[key]!=undefined && this[key]!=null){")
-				f.P("\t\t\t\t\tif(typeof this[key] === 'bigint'){")
-				f.P("\t\t\t\t\t\tquery.push(key+\"=\"+encodeURIComponent(this[key].toString()))")
-				f.P("\t\t\t\t\t}else{")
-				f.P("\t\t\t\t\t\tquery.push(key+\"=\"+encodeURIComponent(this[key]))")
-				f.P("\t\t\t\t\t}")
+				f.P("\t\t\t\t\t// @ts-ignore")
+				f.P("\t\t\t\t\tquery.push(key+\"=\"+encodeURIComponent(this[key]))")
 				f.P("\t\t\t\t}")
 				f.P("\t\t\t}")
 			}
@@ -1130,11 +1127,8 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 				f.P("\t\t\tif(", strings.Join(normals, "||"), "){")
 				f.P("\t\t\t\tif(this[key] && this[key].length>0){")
 				f.P("\t\t\t\t\tfor(let v of this[key]){")
-				f.P("\t\t\t\t\t\tif(typeof v === 'bigint'){")
-				f.P("\t\t\t\t\t\t\tquery.push(key+\"=\"+encodeURIComponent(v.toString()))")
-				f.P("\t\t\t\t\t\t}else{")
-				f.P("\t\t\t\t\t\t\tquery.push(key+\"=\"+encodeURIComponent(v))")
-				f.P("\t\t\t\t\t\t}")
+				f.P("\t\t\t\t\t\t// @ts-ignore")
+				f.P("\t\t\t\t\t\tquery.push(key+\"=\"+encodeURIComponent(v))")
 				f.P("\t\t\t\t\t}")
 				f.P("\t\t\t\t}")
 				f.P("\t\t\t}")
@@ -1180,11 +1174,8 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 			f.P("\t\tif(this.", oneof.Desc.Name(), "){")
 			if len(normal) > 0 {
 				f.P("\t\t\tif(", strings.Join(normal, "||"), "){")
-				f.P("\t\t\t\tif(typeof this.", oneof.Desc.Name(), ".$oneofValue === 'bigint'){")
-				f.P("\t\t\t\t\tquery.push(this.", oneof.Desc.Name(), ".$oneofKey+\"=\"+encodeURIComponent(this.", oneof.Desc.Name(), ".$oneofValue.toString()))")
-				f.P("\t\t\t\t}else{")
-				f.P("\t\t\t\t\tquery.push(this.", oneof.Desc.Name(), ".$oneofKey+\"=\"+encodeURIComponent(this.", oneof.Desc.Name(), ".$oneofValue))")
-				f.P("\t\t\t\t}")
+				f.P("\t\t\t\t// @ts-ignore")
+				f.P("\t\t\t\tquery.push(this.", oneof.Desc.Name(), ".$oneofKey+\"=\"+encodeURIComponent(this.", oneof.Desc.Name(), ".$oneofValue))")
 				f.P("\t\t\t}")
 			}
 			if len(bytes) > 0 {
