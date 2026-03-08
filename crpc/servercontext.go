@@ -168,16 +168,16 @@ func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 	switch encoder {
 	case Encoder_PROTOBUF:
 		if e := proto.Unmarshal(data, m); e != nil {
-			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
+			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] decode request failed", slog.String("error", e.Error()))
 			return nil, e
 		}
 	case Encoder_JSON:
 		if e := protojson.Unmarshal(data, m); e != nil {
-			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
+			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] decode request failed", slog.String("error", e.Error()))
 			return nil, e
 		}
 	default:
-		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request encoder unknown")
+		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] unknown request encoder")
 		return nil, cerror.ErrReq
 	}
 	if c.validatereq {
@@ -316,16 +316,16 @@ func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 	switch encoder {
 	case Encoder_PROTOBUF:
 		if e := proto.Unmarshal(data, m); e != nil {
-			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
+			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] decode request failed", slog.String("error", e.Error()))
 			return nil, e
 		}
 	case Encoder_JSON:
 		if e := protojson.Unmarshal(data, m); e != nil {
-			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request decode failed", slog.String("error", e.Error()))
+			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] decode request failed", slog.String("error", e.Error()))
 			return nil, e
 		}
 	default:
-		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] request encoder unknown")
+		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] unknown request encoder")
 		return nil, cerror.ErrReq
 	}
 	if c.validatereq {
