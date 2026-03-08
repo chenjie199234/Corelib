@@ -125,12 +125,12 @@ func (this *rw) closerecvsend() error {
 // return cerror.ErrClosed means connection closed
 // return cerror.ErrServerClosing
 func (this *rw) recv(ctx context.Context) ([]byte, Encoder, error) {
-	if this.status.Load()&0b0010 == 0 {
-		if this.e != nil {
-			return nil, Encoder_UNKNOWN, this.e
-		}
-		return nil, Encoder_UNKNOWN, cerror.ErrCanceled
-	}
+	// if this.status.Load()&0b0010 == 0 {
+	// 	if this.e != nil {
+	// 		return nil, Encoder_UNKNOWN, this.e
+	// 	}
+	// 	return nil, Encoder_UNKNOWN, cerror.ErrCanceled
+	// }
 	m, e := this.reader.Pop(ctx)
 	if e != nil {
 		if e == list.ErrClosed {
