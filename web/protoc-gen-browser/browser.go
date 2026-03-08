@@ -1311,7 +1311,7 @@ func genServiceMethod(plugin *protogen.Plugin, s *protogen.Service, m *protogen.
 		f.P("}")
 	} else {
 		f.P("//the resp in handler === null means we get an empty message from server")
-		f.P("export async function ", m.GoName, "(baseurl:string,req: ", m.Input.GoIdent.GoName, ",handler: (id: string,resp: ", m.Output.GoIdent.GoName, "|null)=>void,h: Record<string, string>={},controller: AbortController|null=null):Promise<ResponseError|null>{")
+		f.P("export async function ", m.GoName, "(baseurl: string,req: ", m.Input.GoIdent.GoName, ",handler: (id: string,resp: ", m.Output.GoIdent.GoName, "|null)=>void,h: Record<string, string>={},controller: AbortController|null=null):Promise<ResponseError|null>{")
 		if httpmethod == "POST" || httpmethod == "PUT" || httpmethod == "PATCH" {
 			f.P("\th = {...h,'Accept': 'text/event-stream', 'Cache-Control': 'no-cache', 'Content-Type': 'application/json'}")
 		} else {
