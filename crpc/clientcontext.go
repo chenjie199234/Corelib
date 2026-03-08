@@ -72,6 +72,7 @@ type ClientStreamClientContext[reqtype any] struct {
 	cctx *CallContext
 }
 
+// already log in this function when error occur,don't need to log again when return error
 // return io.EOF means server stop recv
 // return cerror.ErrCanceled means self stop send
 // return cerror.DeadlineExceeded means timeout
@@ -118,6 +119,7 @@ type ServerStreamClientContext[resptype any] struct {
 	cctx *CallContext
 }
 
+// already log in this function when error occur,don't need to log again when return error
 // return io.EOF means server stop send
 // return cerror.ErrCanceled means self stop recv
 // return cerror.DeadlineExceeded means timeout
@@ -174,6 +176,7 @@ type AllStreamClientContext[reqtype, resptype any] struct {
 	cctx *CallContext
 }
 
+// already log in this function when error occur,don't need to log again when return error
 // return io.EOF means server stop recv
 // return cerror.ErrCanceled means self stop send
 // return cerror.DeadlineExceeded means timeout
@@ -207,6 +210,7 @@ func (c *AllStreamClientContext[reqtype, resptype]) StopSend() {
 	c.cctx.StopSend()
 }
 
+// already log in this function when error occur,don't need to log again when return error
 // return io.EOF means server stop send
 // return cerror.ErrCanceled means self stop recv
 // return cerror.DeadlineExceeded means timeout

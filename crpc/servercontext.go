@@ -144,6 +144,7 @@ type ClientStreamServerContext[reqtype any] struct {
 	sctx *ServerContext
 }
 
+// already log in this function when error occur,don't need to log again when return error
 // return io.EOF means client stop send
 // return cerror.ErrCanceled means self stop recv
 // return cerror.DeadlineExceeded means timeout
@@ -229,6 +230,7 @@ type ServerStreamServerContext[resptype any] struct {
 	encoder Encoder
 }
 
+// already log in this function when error occur,don't need to log again when return error
 // return io.EOF means client stop recv
 // return cerror.ErrCanceled means self stop send(this is impossible when this is used in the protoc-go-crpc's generated code)
 // return cerror.DeadlineExceeded means timeout
@@ -290,6 +292,7 @@ type AllStreamServerContext[reqtype, resptype any] struct {
 	sctx *ServerContext
 }
 
+// already log in this function when error occur,don't need to log again when return error
 // return io.EOF means client stop send
 // return cerror.ErrCanceled means self stop recv
 // return cerror.DeadlineExceeded means timeout
@@ -341,6 +344,7 @@ func (c *AllStreamServerContext[reqtype, resptype]) StopRecv() {
 	c.sctx.StopRecv()
 }
 
+// already log in this function when error occur,don't need to log again when return error
 // return io.EOF means client stop recv
 // return cerror.ErrCanceled means self stop send(this is impossible when this is used in the protoc-go-crpc's generated code)
 // return cerror.DeadlineExceeded means timeout
