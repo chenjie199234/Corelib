@@ -207,8 +207,12 @@ func (c *ServerStreamServerContext[resptype]) Send(id string, resp *resptype) er
 		switch c.Context.Err() {
 		case context.Canceled:
 			//only when the client gone will cause the context cancel
+			slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] send response failed",
+				slog.String("error", cerror.ErrClosed.Error()))
 			return cerror.ErrClosed
 		case context.DeadlineExceeded:
+			slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] send response failed",
+				slog.String("error", cerror.ErrDeadlineExceeded.Error()))
 			return cerror.ErrDeadlineExceeded
 		}
 	default:

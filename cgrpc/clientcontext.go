@@ -1,6 +1,7 @@
 package cgrpc
 
 import (
+	"context"
 	"io"
 	"log/slog"
 
@@ -14,6 +15,7 @@ import (
 // ----------------------------------------------- client stream context ---------------------------------------------
 func NewClientStreamClientContext[reqtype any](path string, stream grpc.ClientStream, validatereq bool) *ClientStreamClientContext[reqtype] {
 	return &ClientStreamClientContext[reqtype]{
+		Context:     stream.Context(),
 		validatereq: validatereq,
 		path:        path,
 		stream:      stream,
@@ -21,6 +23,7 @@ func NewClientStreamClientContext[reqtype any](path string, stream grpc.ClientSt
 }
 
 type ClientStreamClientContext[reqtype any] struct {
+	context.Context
 	validatereq bool
 	path        string
 	stream      grpc.ClientStream
@@ -61,13 +64,15 @@ func (c *ClientStreamClientContext[reqtype]) GetServerAddr() string {
 // ----------------------------------------------- server stream context ---------------------------------------------
 func NewServerStreamClientContext[resptype any](path string, stream grpc.ClientStream) *ServerStreamClientContext[resptype] {
 	s := &ServerStreamClientContext[resptype]{
-		path:   path,
-		stream: stream,
+		Context: stream.Context(),
+		path:    path,
+		stream:  stream,
 	}
 	return s
 }
 
 type ServerStreamClientContext[resptype any] struct {
+	context.Context
 	path   string
 	stream grpc.ClientStream
 }
@@ -97,6 +102,7 @@ func (c *ServerStreamClientContext[resptype]) GetServerAddr() string {
 // ----------------------------------------------- all stream context ---------------------------------------------
 func NewAllStreamClientContext[reqtype, resptype any](path string, stream grpc.ClientStream, validatereq bool) *AllStreamClientContext[reqtype, resptype] {
 	return &AllStreamClientContext[reqtype, resptype]{
+		Context:     stream.Context(),
 		path:        path,
 		validatereq: validatereq,
 		stream:      stream,
@@ -104,6 +110,7 @@ func NewAllStreamClientContext[reqtype, resptype any](path string, stream grpc.C
 }
 
 type AllStreamClientContext[reqtype, resptype any] struct {
+	context.Context
 	path        string
 	validatereq bool
 	stream      grpc.ClientStream

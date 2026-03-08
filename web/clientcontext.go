@@ -132,13 +132,14 @@ func (c *ServerStreamSSEContext[resptype]) Recv() (string, string, *resptype, er
 	var data []byte
 	id, event, data, e := c.cctx.Recv()
 	if e != nil {
+		slog.ErrorContext(c.Context, "["+c.cctx.resp.Request.URL.Path+"] read response failed", slog.String("error", e.Error()))
 		return "", "", nil, e
 	}
 	if event == "error" && len(data) > 0 {
 		return "", "", nil, cerror.Decode(common.BTS(data))
 	}
 	if e := protojson.Unmarshal(data, m); e != nil {
-		slog.ErrorContext(c.Context, "["+c.cctx.resp.Request.URL.Path+"] response decode failed", slog.String("error", e.Error()))
+		slog.ErrorContext(c.Context, "["+c.cctx.resp.Request.URL.Path+"] decode response failed", slog.String("error", e.Error()))
 		return "", "", nil, e
 	}
 	return id, event, resp.(*resptype), nil
