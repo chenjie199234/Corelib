@@ -77,7 +77,7 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 			if _, ok := dup[field.Enum.GoIdent.GoName]; !ok {
 				dup[field.Enum.GoIdent.GoName] = nil
 				filename := "browser_enum_" + string(field.Enum.Desc.ParentFile().Package()) + "_" + field.Enum.GoIdent.GoName
-				f.P("import {", field.Enum.GoIdent.GoName, "} from '", filename, "'")
+				f.P("import {", field.Enum.GoIdent.GoName, "} from './", filename, "'")
 			}
 		case protoreflect.MessageKind:
 			if field.Desc.IsMap() {
@@ -87,21 +87,21 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 					if _, ok := dup[enum.GoIdent.GoName]; !ok {
 						dup[enum.GoIdent.GoName] = nil
 						filename := "browser_enum_" + string(enum.Desc.ParentFile().Package()) + "_" + enum.GoIdent.GoName
-						f.P("import {", enum.GoIdent.GoName, "} from '", filename, "'")
+						f.P("import {", enum.GoIdent.GoName, "} from './", filename, "'")
 					}
 				case protoreflect.MessageKind:
 					message := field.Message.Fields[1].Message
 					if _, ok := dup[message.GoIdent.GoName]; !ok {
 						dup[message.GoIdent.GoName] = nil
 						filename := "browser_message_" + string(message.Desc.ParentFile().Package()) + "_" + message.GoIdent.GoName
-						f.P("import {", message.GoIdent.GoName, "} from '", filename, "'")
+						f.P("import {", message.GoIdent.GoName, "} from './", filename, "'")
 					}
 				}
 			} else {
 				if _, ok := dup[field.Message.GoIdent.GoName]; !ok {
 					dup[field.Message.GoIdent.GoName] = nil
 					filename := "browser_message_" + string(field.Message.Desc.ParentFile().Package()) + "_" + field.Message.GoIdent.GoName
-					f.P("import {", field.Message.GoIdent.GoName, "} from '", filename, "'")
+					f.P("import {", field.Message.GoIdent.GoName, "} from './", filename, "'")
 				}
 			}
 		}
@@ -1118,7 +1118,11 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 			if len(normal) > 0 {
 				f.P("\t\t\tif(", strings.Join(normal, "||"), "){")
 				f.P("\t\t\t\tif(this[key]!=undefined && this[key]!=null){")
-				f.P("\t\t\t\t\tquery.push(key+\"=\"+encodeURIComponent(this[key]))")
+				f.P("\t\t\t\t\tif(typeof this[key] === 'bigint'){")
+				f.P("\t\t\t\t\t\tquery.push(key+\"=\"+encodeURIComponent(this[key].toString()))")
+				f.P("\t\t\t\t\t}else{")
+				f.P("\t\t\t\t\t\tquery.push(key+\"=\"+encodeURIComponent(this[key]))")
+				f.P("\t\t\t\t\t}")
 				f.P("\t\t\t\t}")
 				f.P("\t\t\t}")
 			}
@@ -1126,7 +1130,11 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 				f.P("\t\t\tif(", strings.Join(normals, "||"), "){")
 				f.P("\t\t\t\tif(this[key] && this[key].length>0){")
 				f.P("\t\t\t\t\tfor(let v of this[key]){")
-				f.P("\t\t\t\t\t\tquery.push(key+\"=\"+encodeURIComponent(v))")
+				f.P("\t\t\t\t\t\tif(typeof v === 'bigint'){")
+				f.P("\t\t\t\t\t\t\tquery.push(key+\"=\"+encodeURIComponent(v.toString()))")
+				f.P("\t\t\t\t\t\t}else{")
+				f.P("\t\t\t\t\t\t\tquery.push(key+\"=\"+encodeURIComponent(v))")
+				f.P("\t\t\t\t\t\t}")
 				f.P("\t\t\t\t\t}")
 				f.P("\t\t\t\t}")
 				f.P("\t\t\t}")
@@ -1172,7 +1180,11 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 			f.P("\t\tif(this.", oneof.Desc.Name(), "){")
 			if len(normal) > 0 {
 				f.P("\t\t\tif(", strings.Join(normal, "||"), "){")
-				f.P("\t\t\t\tquery.push(this.", oneof.Desc.Name(), ".$oneofKey+\"=\"+encodeURIComponent(this.", oneof.Desc.Name(), ".$oneofValue))")
+				f.P("\t\t\t\tif(typeof this.", oneof.Desc.Name(), ".$oneofValue === 'bigint'){")
+				f.P("\t\t\t\t\tquery.push(this.", oneof.Desc.Name(), ".$oneofKey+\"=\"+encodeURIComponent(this.", oneof.Desc.Name(), ".$oneofValue.toString()))")
+				f.P("\t\t\t\t}else{")
+				f.P("\t\t\t\t\tquery.push(this.", oneof.Desc.Name(), ".$oneofKey+\"=\"+encodeURIComponent(this.", oneof.Desc.Name(), ".$oneofValue))")
+				f.P("\t\t\t\t}")
 				f.P("\t\t\t}")
 			}
 			if len(bytes) > 0 {
@@ -1200,10 +1212,10 @@ func genServiceMethod(plugin *protogen.Plugin, s *protogen.Service, m *protogen.
 	genFileComment(plugin, f, s.Desc.ParentFile().Path())
 	//import
 	filename := "browser_message_" + string(m.Input.Desc.ParentFile().Package()) + "_" + string(m.Input.GoIdent.GoName)
-	f.P("import {", m.Input.GoIdent.GoName, "} from '", filename, "'")
+	f.P("import {", m.Input.GoIdent.GoName, "} from './", filename, "'")
 	if m.Input != m.Output {
 		filename = "browser_message_" + string(m.Output.Desc.ParentFile().Package()) + "_" + string(m.Output.GoIdent.GoName)
-		f.P("import {", m.Output.GoIdent.GoName, "} from '", filename, "'")
+		f.P("import {", m.Output.GoIdent.GoName, "} from './", filename, "'")
 	}
 	f.P()
 	f.P("export interface ResponseError{")
