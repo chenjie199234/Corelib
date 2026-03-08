@@ -1233,7 +1233,7 @@ func genServiceMethod(plugin *protogen.Plugin, s *protogen.Service, m *protogen.
 	//function
 	if !m.Desc.IsStreamingServer() {
 		f.P("//timeout's unit is ms,it will be used when > 0")
-		f.P("export async function ", m.GoName, "(req: ", m.Input.GoIdent.GoName, ",h: Record<string, string>={},timeout: number=0):Promise<ResponseError|", m.Output.GoIdent.GoName, ">{")
+		f.P("export async function ", m.GoName, "(baseurl: string,req: ", m.Input.GoIdent.GoName, ",h: Record<string, string>={},timeout: number=0):Promise<ResponseError|", m.Output.GoIdent.GoName, ">{")
 		if httpmethod == "POST" || httpmethod == "PUT" || httpmethod == "PATCH" {
 			f.P("\th = {...h,'Content-Type':'application/json'}")
 		}
@@ -1267,9 +1267,9 @@ func genServiceMethod(plugin *protogen.Plugin, s *protogen.Service, m *protogen.
 		f.P("\t\tlet respbody: string")
 		f.P("\t\ttry{")
 		if httpmethod == "POST" || httpmethod == "PUT" || httpmethod == "PATCH" {
-			f.P("\t\t\tr = await fetch(", pathname, ",opts)")
+			f.P("\t\t\tr = await fetch(baseurl+", pathname, ",opts)")
 		} else {
-			f.P("\t\t\tr = await fetch(", pathname, "+\"?\"+req.toFORM(),opts)")
+			f.P("\t\t\tr = await fetch(baseurl+", pathname, "+\"?\"+req.toFORM(),opts)")
 		}
 		f.P("\t\t\trespbody = await r.text()")
 		f.P("\t\t}catch(err){")
@@ -1311,7 +1311,7 @@ func genServiceMethod(plugin *protogen.Plugin, s *protogen.Service, m *protogen.
 		f.P("}")
 	} else {
 		f.P("//the resp in handler === null means we get an empty message from server")
-		f.P("export async function ", m.GoName, "(req: ", m.Input.GoIdent.GoName, ",handler: (id: string,resp: ", m.Output.GoIdent.GoName, "|null)=>void,h: Record<string, string>={},controller: AbortController|null=null):Promise<ResponseError|null>{")
+		f.P("export async function ", m.GoName, "(baseurl:string,req: ", m.Input.GoIdent.GoName, ",handler: (id: string,resp: ", m.Output.GoIdent.GoName, "|null)=>void,h: Record<string, string>={},controller: AbortController|null=null):Promise<ResponseError|null>{")
 		if httpmethod == "POST" || httpmethod == "PUT" || httpmethod == "PATCH" {
 			f.P("\th = {...h,'Accept': 'text/event-stream', 'Cache-Control': 'no-cache', 'Content-Type': 'application/json'}")
 		} else {
@@ -1341,9 +1341,9 @@ func genServiceMethod(plugin *protogen.Plugin, s *protogen.Service, m *protogen.
 		f.P("\twhile(true){")
 		f.P("\t\ttry{")
 		if httpmethod == "GET" || httpmethod == "DELETE" {
-			f.P("\t\t\tr = await fetch(", pathname, "+\"?\"+req.toFORM(),opts)")
+			f.P("\t\t\tr = await fetch(baseurl+", pathname, "+\"?\"+req.toFORM(),opts)")
 		} else {
-			f.P("\t\t\tr = await fetch(", pathname, ",opts)")
+			f.P("\t\t\tr = await fetch(baseurl+", pathname, ",opts)")
 		}
 		f.P("\t\t}catch(err){")
 		f.P("\t\t\treturn {code:-2,msg:err instanceof Error?err.message:String(err)}")
