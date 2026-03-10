@@ -120,6 +120,9 @@ func (c *ServerContext) Write(msg []byte) (int, error) {
 func (c *ServerContext) Flush() {
 	c.w.(http.Flusher).Flush()
 }
+func (c *ServerContext) Responsed() bool {
+	return c.responsed.Load()
+}
 
 // ----------------------------------------------- for request------------------------------------------------------
 
