@@ -202,7 +202,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if len(method.Input.Fields) > 0 {
 			if need == "POST" || need == "PUT" || need == "PATCH" {
 				g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetRequest().Header.Get(\"Content-Type\"),", strconv.Quote("application/json"), "){")
-				g.P("data, e := ctx.GetBody()")
+				g.P("data, e := ", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(ctx.GetRequest())")
 				g.P("if e!=nil{")
 				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] get body failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
 				g.P("ctx.Abort(e)")
@@ -216,7 +216,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				g.P("}")
 				g.P("}")
 				g.P("}else if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetRequest().Header.Get(\"Content-Type\"),", strconv.Quote("application/x-protobuf"), "){")
-				g.P("data, e := ctx.GetBody()")
+				g.P("data, e := ", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(ctx.GetRequest())")
 				g.P("if e!=nil{")
 				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] get body failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
 				g.P("ctx.Abort(e)")
@@ -611,7 +611,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 
 		if method.Desc.IsStreamingServer() {
 			g.P("if e:=handler(", g.QualifiedGoIdent(webPackage.Ident("NewServerStreamServerContext")), "[", g.QualifiedGoIdent(method.Output.GoIdent), "](ctx)", ",req);e!=nil{")
-			g.P("ctx.AbortSSE(e)")
+			g.P("ctx.Abort(e)")
 			g.P("}")
 		} else {
 			g.P("resp,e:=handler(ctx,req)")
@@ -689,15 +689,35 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("mids = append(mids,", fname, ")")
 			switch need {
 			case "GET":
-				g.P("router.Get(", pathname, ",mids...)")
+				if method.Desc.IsStreamingServer() {
+					g.P("router.Get(", pathname, ",true,mids...)")
+				} else {
+					g.P("router.Get(", pathname, ",false,mids...)")
+				}
 			case "DELETE":
-				g.P("router.Delete(", pathname, ",mids...)")
+				if method.Desc.IsStreamingServer() {
+					g.P("router.Delete(", pathname, ",true,mids...)")
+				} else {
+					g.P("router.Delete(", pathname, ",false,mids...)")
+				}
 			case "POST":
-				g.P("router.Post(", pathname, ",mids...)")
+				if method.Desc.IsStreamingServer() {
+					g.P("router.Post(", pathname, ",true,mids...)")
+				} else {
+					g.P("router.Post(", pathname, ",false,mids...)")
+				}
 			case "PUT":
-				g.P("router.Put(", pathname, ",mids...)")
+				if method.Desc.IsStreamingServer() {
+					g.P("router.Put(", pathname, ",true,mids...)")
+				} else {
+					g.P("router.Put(", pathname, ",false,mids...)")
+				}
 			case "PATCH":
-				g.P("router.Patch(", pathname, ",mids...)")
+				if method.Desc.IsStreamingServer() {
+					g.P("router.Patch(", pathname, ",true,mids...)")
+				} else {
+					g.P("router.Patch(", pathname, ",false,mids...)")
+				}
 			}
 			g.P("}")
 		} else {

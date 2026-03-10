@@ -157,35 +157,35 @@ func (r *Router) Use(globalMids ...OutsideHandler) {
 }
 
 // thread unsafe
-func (r *Router) Get(path string, handlers ...OutsideHandler) {
+func (r *Router) Get(path string, ServerSentEvent bool, handlers ...OutsideHandler) {
 	path = cleanPath(path)
-	r.getTree.Set(path, r.insideHandler("GET", path, handlers))
+	r.getTree.Set(path, r.insideHandler("GET", path, handlers, ServerSentEvent))
 }
 
 // thread unsafe
-func (r *Router) Post(path string, handlers ...OutsideHandler) {
+func (r *Router) Post(path string, ServerSentEvent bool, handlers ...OutsideHandler) {
 	path = cleanPath(path)
-	r.postTree.Set(path, r.insideHandler("POST", path, handlers))
+	r.postTree.Set(path, r.insideHandler("POST", path, handlers, ServerSentEvent))
 }
 
 // thread unsafe
-func (r *Router) Patch(path string, handlers ...OutsideHandler) {
+func (r *Router) Patch(path string, ServerSentEvent bool, handlers ...OutsideHandler) {
 	path = cleanPath(path)
-	r.patchTree.Set(path, r.insideHandler("PATCH", path, handlers))
+	r.patchTree.Set(path, r.insideHandler("PATCH", path, handlers, ServerSentEvent))
 }
 
 // thread unsafe
-func (r *Router) Put(path string, handlers ...OutsideHandler) {
+func (r *Router) Put(path string, ServerSentEvent bool, handlers ...OutsideHandler) {
 	path = cleanPath(path)
-	r.putTree.Set(path, r.insideHandler("PUT", path, handlers))
+	r.putTree.Set(path, r.insideHandler("PUT", path, handlers, ServerSentEvent))
 }
 
 // thread unsafe
-func (r *Router) Delete(path string, handlers ...OutsideHandler) {
+func (r *Router) Delete(path string, ServerSentEvent bool, handlers ...OutsideHandler) {
 	path = cleanPath(path)
-	r.putTree.Set(path, r.insideHandler("DELETE", path, handlers))
+	r.putTree.Set(path, r.insideHandler("DELETE", path, handlers, ServerSentEvent))
 }
-func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) http.HandlerFunc {
+func (r *Router) insideHandler(method, path string, handlers []OutsideHandler, sse bool) http.HandlerFunc {
 	totalhandlers := make([]OutsideHandler, len(r.globalmids)+len(handlers))
 	copy(totalhandlers, r.globalmids)
 	copy(totalhandlers[len(r.globalmids):], handlers)
@@ -216,7 +216,6 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 			}
 			return
 		}
-		defer r.s.stop.DoneOne()
 
 		peerip := realip(req)
 
@@ -229,14 +228,19 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 			otel.GetTextMapPropagator().Extract(req.Context(), propagation.HeaderCarrier(req.Header)),
 			"handle web",
 			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(attribute.String("url.path", path), attribute.String("client.name", clientname), attribute.String("client.ip", peerip)))
+			trace.WithAttributes(
+				attribute.String("url.path", path),
+				attribute.String("client.name", clientname),
+				attribute.String("client.ip", peerip),
+			),
+		)
 
 		//metadata
 		var md map[string]string
 		if mdstr := req.Header.Get("Core-Metadata"); mdstr != "" {
 			md = make(map[string]string)
 			if e := json.Unmarshal(common.STB(mdstr), &md); e != nil {
-				slog.ErrorContext(ctx, "[web.server] meta data format wrong",
+				slog.ErrorContext(ctx, "[web.server] metadata format wrong",
 					slog.String("cip", peerip),
 					slog.String("path", path),
 					slog.String("method", method),
@@ -246,6 +250,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 				resp.Write(common.STB(cerror.ErrReq.Json()))
 				span.SetStatus(codes.Error, cerror.ErrReq.Error())
 				span.End()
+				r.s.stop.DoneOne()
 				return
 			}
 		}
@@ -254,11 +259,14 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 		} else if _, ok := md["Client-IP"]; !ok {
 			md["Client-IP"] = peerip
 		}
-		//client timeout
+
+		//deadline
+		var cdl int64
 		if temp := req.Header.Get("Core-Deadline"); temp != "" {
-			clientdl, e := strconv.ParseInt(temp, 10, 64)
+			var e error
+			cdl, e = strconv.ParseInt(temp, 10, 64)
 			if e != nil {
-				slog.ErrorContext(ctx, "[web.server] deadline format wrong",
+				slog.Error("[web.server] deadline format wrong",
 					slog.String("cip", peerip),
 					slog.String("path", path),
 					slog.String("method", method),
@@ -268,55 +276,113 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler) h
 				resp.Write(common.STB(cerror.ErrReq.Json()))
 				span.SetStatus(codes.Error, cerror.ErrReq.Error())
 				span.End()
+				r.s.stop.DoneOne()
 				return
 			}
-			if clientdl != 0 {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithDeadline(ctx, time.Unix(0, clientdl))
-				defer cancel()
-			}
 		}
+		var dl time.Time
+		if sto := r.s.getHandlerTimeout(req.URL.Path, req.Method); sto > 0 {
+			//use server deadline
+			dl = time.Now().Add(sto)
+			if cdl > 0 && cdl < dl.UnixNano() {
+				//use client deadline
+				dl = time.Unix(0, cdl)
+			}
+		} else if cdl > 0 {
+			//use client deadline
+			dl = time.Unix(0, cdl)
+		}
+		if !dl.IsZero() {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithDeadline(ctx, dl)
+			defer cancel()
+		}
+
 		//logic
 		workctx := &ServerContext{
 			Context: metadata.SetMetadata(ctx, md),
+			sse:     sse,
 			w:       resp,
 			r:       req,
 			peerip:  peerip,
 		}
-		defer func() {
-			if e := recover(); e != nil {
-				stack := make([]byte, 1024)
-				n := runtime.Stack(stack, false)
-				slog.ErrorContext(workctx, "[web.server] panic",
+		done := make(chan *struct{})
+		go func() {
+			defer func() {
+				if e := recover(); e != nil {
+					stack := make([]byte, 1024)
+					n := runtime.Stack(stack, false)
+					slog.ErrorContext(workctx, "[web.server] panic",
+						slog.String("cip", peerip),
+						slog.String("path", path),
+						slog.String("method", method),
+						slog.Any("panic", e),
+						slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
+					workctx.Abort(cerror.ErrPanic)
+				}
+				close(done)
+				if workctx.e != nil {
+					span.SetStatus(codes.Error, workctx.e.Error())
+				} else {
+					span.SetStatus(codes.Ok, "")
+				}
+				span.End()
+				if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+					mstatus, _ := otel.Meter("Corelib.web.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+					if workctx.e != nil {
+						mstatus.Record(context.Background(), 1)
+					} else {
+						mstatus.Record(context.Background(), 0)
+					}
+					mtime, _ := otel.Meter("Corelib.web.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+					mtime.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0)
+				}
+				r.s.stop.DoneOne()
+			}()
+			for _, handler := range totalhandlers {
+				handler(workctx)
+				if workctx.responsed.Load() {
+					break
+				}
+			}
+			workctx.Abort(nil)
+		}()
+		select {
+		case <-ctx.Done():
+			switch ctx.Err() {
+			case context.DeadlineExceeded:
+				if !workctx.closed.Swap(true) {
+					//not aborted
+					if !workctx.responsed.Swap(true) {
+						//not responsed
+						resp.Header().Set("Content-Type", "application/json")
+						resp.WriteHeader(int(cerror.ErrDeadlineExceeded.GetHttpcode()))
+						resp.Write(common.STB(cerror.ErrDeadlineExceeded.Json()))
+					} else if workctx.sse {
+						//already responsed in ServerSentEvent mode
+						d := cerror.ErrDeadlineExceeded.Json()
+						msg := make([]byte, 0, 21+len(d))
+						msg = append(msg, "event: error\ndata: "...)
+						msg = append(msg, d...)
+						msg = append(msg, "\n\n"...)
+						resp.Write(msg)
+					} else {
+						//already responsed in normal mode
+						//we don't known how to handle this
+					}
+				}
+				slog.ErrorContext(ctx, "[web.server] deadline",
 					slog.String("cip", peerip),
 					slog.String("path", path),
-					slog.String("method", method),
-					slog.Any("panic", e),
-					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
-				workctx.Abort(cerror.ErrPanic)
+					slog.String("method", method))
+			case context.Canceled:
+				//only when the connection close will trigger context.Canceled,we can ignore it
+				slog.ErrorContext(ctx, "[web.server] client leave early",
+					slog.String("cip", peerip),
+					slog.String("path", path),
+					slog.String("method", method))
 			}
-			if workctx.e != nil {
-				span.SetStatus(codes.Error, workctx.e.Error())
-			} else {
-				span.SetStatus(codes.Ok, "")
-			}
-			span.End()
-			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				mstatus, _ := otel.Meter("Corelib.web.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
-				if workctx.e != nil {
-					mstatus.Record(context.Background(), 1)
-				} else {
-					mstatus.Record(context.Background(), 0)
-				}
-				mtime, _ := otel.Meter("Corelib.web.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-				mtime.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0)
-			}
-		}()
-		for _, handler := range totalhandlers {
-			handler(workctx)
-			if workctx.responsed.Load() {
-				break
-			}
+		case <-done:
 		}
 	}
 }
@@ -527,12 +593,7 @@ func (r *Router) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		//handler static source file
 		handler = r.srcFileHandler
 	}
-	timeout := r.s.getHandlerTimeout(req.URL.Path, req.Method)
-	if timeout > 0 {
-		http.TimeoutHandler(handler, timeout, cerror.ErrDeadlineExceeded.Error()).ServeHTTP(resp, req)
-	} else {
-		handler(resp, req)
-	}
+	handler(resp, req)
 }
 func (r *Router) printPath() {
 	rewrite := r.s.handlerRewrite

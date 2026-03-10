@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -19,10 +18,10 @@ type ServerContext struct {
 	context.Context
 	w         http.ResponseWriter
 	r         *http.Request
+	sse       bool
 	peerip    string
 	responsed atomic.Bool
-	body      []byte
-	bodyerr   error
+	closed    atomic.Bool
 	e         *cerror.Error
 }
 
@@ -33,7 +32,7 @@ func (c *ServerContext) Web() {
 // ----------------------------------------------- for response------------------------------------------------------
 
 func (c *ServerContext) Redirect(code int, url string) {
-	if c.responsed.Swap(true) {
+	if c.responsed.Swap(true) || c.closed.Swap(true) {
 		return
 	}
 	if code != 301 && code != 302 && code != 303 && code != 307 && code != 308 {
@@ -43,9 +42,16 @@ func (c *ServerContext) Redirect(code int, url string) {
 }
 
 func (c *ServerContext) Abort(e error) {
-	if c.responsed.Swap(true) {
+	if c.closed.Swap(true) {
+		//when the DeadlineExceeded happened
+		//http's handler will return before the business handler and the closed will be setted to true
+		//we should always record the business error for the trace system
+		if ee := cerror.Convert(e); ee != nil {
+			c.e = ee
+		}
 		return
 	}
+	responsed := c.responsed.Swap(true)
 	httpcode := 0
 	if ee := cerror.Convert(e); ee != nil {
 		if http.StatusText(int(ee.GetHttpcode())) == "" || ee.GetHttpcode() < 400 {
@@ -56,26 +62,30 @@ func (c *ServerContext) Abort(e error) {
 		}
 	}
 	if c.e != nil {
-		c.w.Header().Set("Content-Type", "application/json")
-		c.w.WriteHeader(int(c.e.GetHttpcode()))
-		c.w.Write(common.STB(c.e.Json()))
-		c.w.(http.Flusher).Flush()
+		if !responsed {
+			//not responsed before,return in normal http mode
+			c.w.Header().Set("Content-Type", "application/json")
+			c.w.WriteHeader(int(c.e.GetHttpcode()))
+			c.w.Write(common.STB(c.e.Json()))
+			c.w.(http.Flusher).Flush()
+		} else if c.sse {
+			//already responsed before in ServerSentEvent mode
+			//return error in error event
+			d := c.e.Json()
+			msg := make([]byte, 0, 21+len(d))
+			msg = append(msg, "event: error\ndata: "...)
+			msg = append(msg, d...)
+			msg = append(msg, "\n\n"...)
+			c.w.Write(msg)
+			c.w.(http.Flusher).Flush()
+		} else {
+			//already responsed before in normal http mode
+			//we don't known how to handle this
+		}
 	}
 	if httpcode != 0 {
 		panic("[web.ServerContext] unknown http code: " + strconv.Itoa(httpcode))
 	}
-}
-func (c *ServerContext) AbortSSE(e error) {
-	if e == nil {
-		return
-	}
-	ee := cerror.Convert(e)
-	d := ee.Json()
-	msg := make([]byte, 0, 21+len(d))
-	msg = append(msg, "event: error\ndata: "...)
-	msg = append(msg, d...)
-	msg = append(msg, "\n\n"...)
-	c.Write(msg)
 }
 
 // after Write,this will be useless
@@ -90,23 +100,25 @@ func (c *ServerContext) AddResponseHeader(k, v string) {
 
 // Write all the data or return error
 func (c *ServerContext) Write(msg []byte) (int, error) {
+	if c.closed.Load() {
+		return 0, cerror.ErrClosed
+	}
+	switch c.Context.Err() {
+	case context.DeadlineExceeded:
+		return 0, cerror.ErrDeadlineExceeded
+	case context.Canceled:
+		return 0, cerror.ErrClosed
+	default:
+	}
 	c.responsed.Store(true)
-	n := 0
-	for n < len(msg) {
-		nn, e := c.w.Write(msg[n:])
-		if e != nil {
-			return n + nn, e
-		}
-		n += nn
+	n, e := c.w.Write(msg)
+	if e != nil {
+		return n, cerror.ErrClosed
 	}
 	return n, nil
 }
 func (c *ServerContext) Flush() {
 	c.w.(http.Flusher).Flush()
-}
-
-func (c *ServerContext) Responsed() bool {
-	return c.responsed.Load()
 }
 
 // ----------------------------------------------- for request------------------------------------------------------
@@ -133,32 +145,6 @@ func (c *ServerContext) GetClientIp() string {
 	return md["Client-IP"]
 }
 
-func (c *ServerContext) GetBody() ([]byte, error) {
-	if c.body != nil || c.bodyerr != nil {
-		return c.body, c.bodyerr
-	}
-	b := make([]byte, 0, c.r.ContentLength)
-	for {
-		n, e := c.r.Body.Read(b[len(b):cap(b)])
-		b = b[:len(b)+n]
-		if e != nil {
-			if e != io.EOF {
-				c.bodyerr = e
-			}
-			break
-		}
-		if len(b) == cap(b) {
-			//aready read at least Content-Length body,still not EOF
-			c.bodyerr = cerror.ErrReq
-			break
-		}
-	}
-	if c.bodyerr == nil {
-		c.body = b
-	}
-	return c.body, c.bodyerr
-}
-
 // ----------------------------------------------- for protobuf ------------------------------------------------------
 
 // ----------------------------------------------- no stream context ---------------------------------------------
@@ -169,7 +155,6 @@ type NoStreamServerContext interface {
 	GetRemoteAddr() string
 	GetRealPeerIp() string
 	GetClientIp() string
-	GetBody() ([]byte, error)
 
 	//response
 	Redirect(code int, url string)
@@ -180,9 +165,12 @@ type NoStreamServerContext interface {
 // --------------------------------------------- server stream context ------------------------------------------
 func NewServerStreamServerContext[resptype any](ctx *ServerContext) *ServerStreamServerContext[resptype] {
 	cctx := &ServerStreamServerContext[resptype]{Context: ctx.Context, sctx: ctx}
+	ctx.responsed.Store(true)
 	ctx.w.Header().Set("Content-Type", "text/event-stream")
 	ctx.w.Header().Set("Cache-Control", "no-cache")
 	ctx.w.Header().Set("Connection", "keep-alive")
+	ctx.w.WriteHeader(200)
+	ctx.w.(http.Flusher).Flush()
 	return cctx
 }
 
@@ -202,21 +190,6 @@ func (c *ServerStreamServerContext[resptype]) Send(id string, resp *resptype) er
 		slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] response struct's type is not proto's message")
 		return cerror.ErrSystem
 	}
-	select {
-	case <-c.Context.Done():
-		switch c.Context.Err() {
-		case context.Canceled:
-			//only when the client gone will cause the context cancel
-			slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] send response failed",
-				slog.String("error", cerror.ErrClosed.Error()))
-			return cerror.ErrClosed
-		case context.DeadlineExceeded:
-			slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] send response failed",
-				slog.String("error", cerror.ErrDeadlineExceeded.Error()))
-			return cerror.ErrDeadlineExceeded
-		}
-	default:
-	}
 	d, _ := (protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}).Marshal(tmptmp)
 	var msg []byte
 	if len(id) > 0 {
@@ -232,7 +205,7 @@ func (c *ServerStreamServerContext[resptype]) Send(id string, resp *resptype) er
 	msg = append(msg, "\n\n"...)
 	if _, e := c.sctx.Write(msg); e != nil {
 		slog.ErrorContext(c.Context, "["+c.sctx.GetRequest().URL.Path+"] send response failed", slog.String("error", e.Error()))
-		return cerror.ErrClosed
+		return e
 	}
 	c.sctx.Flush()
 	return nil
