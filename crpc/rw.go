@@ -108,7 +108,9 @@ func (this *rw) closerecv() error {
 	return this.sender(context.Background(), m)
 }
 func (this *rw) closerecvsend() error {
-	this.status.And(0b1100)
+	if old := this.status.And(0b1100); old&0b0011 == 0 {
+		return nil
+	}
 	this.reader.Close()
 	m := &Msg{}
 	mh := &Msg_Header{}

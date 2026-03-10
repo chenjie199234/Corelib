@@ -376,6 +376,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler, s
 					slog.String("path", path),
 					slog.String("method", method))
 			case context.Canceled:
+				workctx.closed.Store(true)
 				//only when the connection close will trigger context.Canceled,we can ignore it
 				slog.ErrorContext(ctx, "[web.server] client leave early",
 					slog.String("cip", peerip),

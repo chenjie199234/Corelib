@@ -472,14 +472,24 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	case MsgType_CLOSE_RECV:
 		c.RLock()
 		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
-			ctx.rw.status.And(0b0111)
+			old := ctx.rw.status.And(0b0111)
+			if (old&0b0111)&0b1100 == 0 {
+				//same as MsgType_CLOSE_RECV_SEND
+				ctx.cancel()
+				delete(c.ctxs, msg.GetH().GetCallid())
+			}
 		}
 		c.RUnlock()
 	case MsgType_CLOSE_SEND:
 		c.RLock()
 		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
-			ctx.rw.status.And(0b1011)
+			old := ctx.rw.status.And(0b1011)
 			ctx.rw.reader.Close()
+			if (old&0b1011)&0b1100 == 0 {
+				//same as MsgType_CLOSE_RECV_SEND
+				ctx.cancel()
+				delete(c.ctxs, msg.GetH().GetCallid())
+			}
 		}
 		c.RUnlock()
 	case MsgType_CLOSE_RECV_SEND:

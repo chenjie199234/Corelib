@@ -184,12 +184,20 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 		}
 	case MsgType_CLOSE_RECV:
 		if rw := server.getrw(msg.GetH().GetCallid()); rw != nil {
-			rw.status.And(0b0111)
+			old := rw.status.And(0b0111)
+			if (old&0b0111)&0b1100 == 0 {
+				//same as MsgType_CLOSE_RECV_SEND
+				server.delrw(msg.GetH().GetCallid())
+			}
 		}
 	case MsgType_CLOSE_SEND:
 		if rw := server.getrw(msg.GetH().GetCallid()); rw != nil {
-			rw.status.And(0b1011)
+			old := rw.status.And(0b1011)
 			rw.reader.Close()
+			if (old&0b1011)&0b1100 == 0 {
+				//same as MsgType_CLOSE_RECV_SEND
+				server.delrw(msg.GetH().GetCallid())
+			}
 		}
 	case MsgType_CLOSE_RECV_SEND:
 		if rw := server.getrw(msg.GetH().GetCallid()); rw != nil {
@@ -233,8 +241,8 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	go c.start(server, true)
 }
 
-// 'in' and 'encode' are a pair.the 'encoder' describes how the 'in' data be encoded
-// if 'encoder' is not Encoder_UNKNOWN,means,this call will only send data once and all the Send in handler will failed
+// 'in' and 'encoder' are a pair.the 'encoder' describes how the 'in' data be encoded
+// if 'encoder' is not Encoder_UNKNOWN,means,this call will only send data once and all the Send in handler will fail
 func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder Encoder, handler func(ctx *CallContext) error) error {
 	if _, ok := Encoder_name[int32(encoder)]; !ok {
 		return cerror.ErrReq
@@ -246,6 +254,9 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 		return cerror.ErrBusy
 	}
 	defer c.stop.DoneOne()
+
+	cancelOutSide := ctx.Done() != nil
+
 	if c.c.GlobalTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
@@ -346,32 +357,37 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			}
 			//first msg returned from server is INIT_SUCCESS
 		}
-		ctxch := ctx.Done()
 		var stopch chan *struct{}
-		if ctxch != nil {
+		var tmer *time.Timer
+		if cancelOutSide {
+			//the context can be canceled outside,we need to catch the cancel in goroutine
 			stopch = make(chan *struct{})
 			go func() {
 				select {
-				case <-ctxch:
-					if ctx.Err() == context.DeadlineExceeded {
-						//ignore this,if client's context deadline,server's context deadline too
-						return
-					}
-					//context.Canceled,we need to cancel the server's context
+				case <-ctx.Done():
+					//deadline or canceled
 				case <-stopch:
 				}
 				rw.closerecvsend()
 			}()
+		} else if deadline > 0 {
+			//the context can't be canceled outside,but it has a deadline,we can catch it in timer
+			//timer's goroutine is created when deadline arrived,and the timer can be stopped
+			//we can save some computer resource by using timer
+			tmer = time.AfterFunc(time.Until(time.Unix(0, deadline)), func() {
+				rw.closerecvsend()
+			})
 		}
 		ee := cerror.Convert(handler(&CallContext{
 			Context: ctx,
 			rw:      rw,
 			s:       server,
 		}))
-		if ctxch == nil {
-			rw.closerecvsend()
-		} else {
+		if cancelOutSide {
 			close(stopch)
+		} else if deadline > 0 {
+			tmer.Stop()
+			rw.closerecvsend()
 		}
 		if ee != nil {
 			span.SetStatus(codes.Error, ee.Error())
