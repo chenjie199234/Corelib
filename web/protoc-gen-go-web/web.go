@@ -723,15 +723,35 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		} else {
 			switch need {
 			case "GET":
-				g.P("router.Get(", pathname, ",", fname, ")")
+				if method.Desc.IsStreamingServer() {
+					g.P("router.Get(", pathname, ",true,", fname, ")")
+				} else {
+					g.P("router.Get(", pathname, ",false,", fname, ")")
+				}
 			case "DELETE":
-				g.P("router.Delete(", pathname, ",", fname, ")")
+				if method.Desc.IsStreamingServer() {
+					g.P("router.Delete(", pathname, ",true,", fname, ")")
+				} else {
+					g.P("router.Delete(", pathname, ",false,", fname, ")")
+				}
 			case "POST":
-				g.P("router.Post(", pathname, ",", fname, ")")
+				if method.Desc.IsStreamingServer() {
+					g.P("router.Post(", pathname, ",true,", fname, ")")
+				} else {
+					g.P("router.Post(", pathname, ",false,", fname, ")")
+				}
 			case "PUT":
-				g.P("router.Put(", pathname, ",", fname, ")")
+				if method.Desc.IsStreamingServer() {
+					g.P("router.Put(", pathname, ",true,", fname, ")")
+				} else {
+					g.P("router.Put(", pathname, ",false,", fname, ")")
+				}
 			case "PATCH":
-				g.P("router.Patch(", pathname, ",", fname, ")")
+				if method.Desc.IsStreamingServer() {
+					g.P("router.Patch(", pathname, ",true,", fname, ")")
+				} else {
+					g.P("router.Patch(", pathname, ",false,", fname, ")")
+				}
 			}
 		}
 	}
