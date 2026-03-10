@@ -67,7 +67,6 @@ func (c *ServerContext) Abort(e error) {
 			c.w.Header().Set("Content-Type", "application/json")
 			c.w.WriteHeader(int(c.e.GetHttpcode()))
 			c.w.Write(common.STB(c.e.Json()))
-			c.w.(http.Flusher).Flush()
 		} else if c.sse {
 			//already responsed before in ServerSentEvent mode
 			//return error in error event
@@ -77,7 +76,6 @@ func (c *ServerContext) Abort(e error) {
 			msg = append(msg, d...)
 			msg = append(msg, "\n\n"...)
 			c.w.Write(msg)
-			c.w.(http.Flusher).Flush()
 		} else {
 			//already responsed before in normal http mode
 			//we don't known how to handle this
