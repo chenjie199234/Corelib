@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"sync"
 	"sync/atomic"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -23,6 +24,11 @@ type ServerContext struct {
 	responsed atomic.Bool
 	closed    atomic.Bool
 	e         *cerror.Error
+	//w shouldn't be used after ServerHTTP returned,it will panic if the w's Flush() called after ServerHTTP returned
+	//we run handler in goroutine to make the timeout work,this is async
+	//we need to gurantee the w's Write and Flush not be called after ServeHTTP returned,the atomic can't gurantee this
+	//the atomic is used for no timeout mode,when the handler is called in sync mode
+	lker *sync.Mutex
 }
 
 func (c *ServerContext) Web() {
@@ -42,10 +48,14 @@ func (c *ServerContext) Redirect(code int, url string) {
 }
 
 func (c *ServerContext) Abort(e error) {
+	if c.lker != nil {
+		c.lker.Lock()
+		defer c.lker.Unlock()
+	}
 	if c.closed.Swap(true) {
 		//when the DeadlineExceeded happened
-		//http's handler will return before the business handler and the closed will be setted to true
-		//we should always record the business error for the trace system
+		//http's handler will return before the user's handler and the closed will be setted to true
+		//we should always record the user's error for the trace system
 		if ee := cerror.Convert(e); ee != nil {
 			c.e = ee
 		}
@@ -67,6 +77,7 @@ func (c *ServerContext) Abort(e error) {
 			c.w.Header().Set("Content-Type", "application/json")
 			c.w.WriteHeader(int(c.e.GetHttpcode()))
 			c.w.Write(common.STB(c.e.Json()))
+			c.w.(http.Flusher).Flush()
 		} else if c.sse {
 			//already responsed before in ServerSentEvent mode
 			//return error in error event
@@ -76,6 +87,7 @@ func (c *ServerContext) Abort(e error) {
 			msg = append(msg, d...)
 			msg = append(msg, "\n\n"...)
 			c.w.Write(msg)
+			c.w.(http.Flusher).Flush()
 		} else {
 			//already responsed before in normal http mode
 			//we don't known how to handle this
@@ -98,6 +110,10 @@ func (c *ServerContext) AddResponseHeader(k, v string) {
 
 // Write all the data or return error
 func (c *ServerContext) Write(msg []byte) (int, error) {
+	if c.lker != nil {
+		c.lker.Lock()
+		defer c.lker.Unlock()
+	}
 	if c.closed.Load() {
 		return 0, cerror.ErrClosed
 	}
@@ -116,6 +132,13 @@ func (c *ServerContext) Write(msg []byte) (int, error) {
 	return n, nil
 }
 func (c *ServerContext) Flush() {
+	if c.lker != nil {
+		c.lker.Lock()
+		defer c.lker.Unlock()
+	}
+	if c.closed.Load() {
+		return
+	}
 	c.w.(http.Flusher).Flush()
 }
 func (c *ServerContext) Responsed() bool {
@@ -167,11 +190,10 @@ type NoStreamServerContext interface {
 func NewServerStreamServerContext[resptype any](ctx *ServerContext) *ServerStreamServerContext[resptype] {
 	cctx := &ServerStreamServerContext[resptype]{Context: ctx.Context, sctx: ctx}
 	ctx.responsed.Store(true)
-	ctx.w.Header().Set("Content-Type", "text/event-stream")
-	ctx.w.Header().Set("Cache-Control", "no-cache")
-	ctx.w.Header().Set("Connection", "keep-alive")
-	ctx.w.WriteHeader(200)
-	ctx.w.(http.Flusher).Flush()
+	ctx.SetResponseHeader("Content-Type", "text/event-stream")
+	ctx.SetResponseHeader("Cache-Control", "no-cache")
+	ctx.SetResponseHeader("Connection", "keep-alive")
+	ctx.Flush()
 	return cctx
 }
 

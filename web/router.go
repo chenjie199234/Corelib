@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -299,37 +300,35 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler, s
 		}
 
 		//logic
-		workctx := &ServerContext{
+		wctx := &ServerContext{
 			Context: metadata.SetMetadata(ctx, md),
 			sse:     sse,
 			w:       resp,
 			r:       req,
 			peerip:  peerip,
 		}
-		done := make(chan *struct{})
-		go func() {
+		internalhandler := func() {
 			defer func() {
 				if e := recover(); e != nil {
 					stack := make([]byte, 1024)
 					n := runtime.Stack(stack, false)
-					slog.ErrorContext(workctx, "[web.server] panic",
+					slog.ErrorContext(wctx, "[web.server] panic",
 						slog.String("cip", peerip),
 						slog.String("path", path),
 						slog.String("method", method),
 						slog.Any("panic", e),
 						slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
-					workctx.Abort(cerror.ErrPanic)
+					wctx.Abort(cerror.ErrPanic)
 				}
-				close(done)
-				if workctx.e != nil {
-					span.SetStatus(codes.Error, workctx.e.Error())
+				if wctx.e != nil {
+					span.SetStatus(codes.Error, wctx.e.Error())
 				} else {
 					span.SetStatus(codes.Ok, "")
 				}
 				span.End()
 				if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
 					mstatus, _ := otel.Meter("Corelib.web.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
-					if workctx.e != nil {
+					if wctx.e != nil {
 						mstatus.Record(context.Background(), 1)
 					} else {
 						mstatus.Record(context.Background(), 0)
@@ -340,50 +339,59 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler, s
 				r.s.stop.DoneOne()
 			}()
 			for _, handler := range totalhandlers {
-				handler(workctx)
-				if workctx.responsed.Load() {
+				handler(wctx)
+				if wctx.closed.Load() {
 					break
 				}
 			}
-			workctx.Abort(nil)
-		}()
-		select {
-		case <-ctx.Done():
-			switch ctx.Err() {
-			case context.DeadlineExceeded:
-				if !workctx.closed.Swap(true) {
-					//not aborted
-					if !workctx.responsed.Swap(true) {
-						//not responsed
-						resp.Header().Set("Content-Type", "application/json")
-						resp.WriteHeader(int(cerror.ErrDeadlineExceeded.GetHttpcode()))
-						resp.Write(common.STB(cerror.ErrDeadlineExceeded.Json()))
-					} else if workctx.sse {
-						//already responsed in ServerSentEvent mode
-						d := cerror.ErrDeadlineExceeded.Json()
-						msg := make([]byte, 0, 21+len(d))
-						msg = append(msg, "event: error\ndata: "...)
-						msg = append(msg, d...)
-						msg = append(msg, "\n\n"...)
-						resp.Write(msg)
+			wctx.Abort(nil)
+		}
+		if dl.IsZero() {
+			//run in sync mode
+			internalhandler()
+		} else {
+			//run in async mode
+			wctx.lker = &sync.Mutex{}
+			done := make(chan *struct{})
+			go func() {
+				internalhandler()
+				close(done)
+			}()
+			select {
+			case <-ctx.Done():
+				switch ctx.Err() {
+				case context.DeadlineExceeded:
+					wctx.lker.Lock()
+					if !wctx.closed.Swap(true) {
+						wctx.lker.Unlock()
+						//not aborted
+						if !wctx.responsed.Swap(true) {
+							//not responsed
+							resp.Header().Set("Content-Type", "application/json")
+							resp.WriteHeader(int(cerror.ErrDeadlineExceeded.GetHttpcode()))
+							resp.Write(common.STB(cerror.ErrDeadlineExceeded.Json()))
+						} else if wctx.sse {
+							//already responsed in ServerSentEvent mode
+							d := cerror.ErrDeadlineExceeded.Json()
+							msg := make([]byte, 0, 21+len(d))
+							msg = append(msg, "event: error\ndata: "...)
+							msg = append(msg, d...)
+							msg = append(msg, "\n\n"...)
+							resp.Write(msg)
+						} else {
+							//already responsed in normal mode
+							//we don't known how to handle this
+						}
 					} else {
-						//already responsed in normal mode
-						//we don't known how to handle this
+						wctx.lker.Unlock()
 					}
+				case context.Canceled:
+					//only when the client leave,the connection close will enter this
+					//the client already gone,we don't need to return early,wait the handler return here
+					<-done
 				}
-				slog.ErrorContext(ctx, "[web.server] deadline",
-					slog.String("cip", peerip),
-					slog.String("path", path),
-					slog.String("method", method))
-			case context.Canceled:
-				workctx.closed.Store(true)
-				//only when the connection close will trigger context.Canceled,we can ignore it
-				slog.ErrorContext(ctx, "[web.server] client leave early",
-					slog.String("cip", peerip),
-					slog.String("path", path),
-					slog.String("method", method))
+			case <-done:
 			}
-		case <-done:
 		}
 	}
 }
