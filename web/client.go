@@ -299,7 +299,6 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		}
 		return nil, cerror.ErrBusy
 	}
-	// defer c.stop.DoneOne()
 
 	if path != "" && path[0] != '/' {
 		path = "/" + path
