@@ -114,15 +114,15 @@ func (c *ServerContext) Write(msg []byte) (int, error) {
 		c.lker.Lock()
 		defer c.lker.Unlock()
 	}
-	if c.closed.Load() {
-		return 0, cerror.ErrClosed
-	}
 	switch c.Context.Err() {
 	case context.DeadlineExceeded:
 		return 0, cerror.ErrDeadlineExceeded
 	case context.Canceled:
 		return 0, cerror.ErrClosed
 	default:
+	}
+	if c.closed.Load() {
+		return 0, cerror.ErrClosed
 	}
 	c.responsed.Store(true)
 	n, e := c.w.Write(msg)
