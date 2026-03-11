@@ -2,7 +2,6 @@ package crpc
 
 import (
 	"context"
-	"io"
 	"log/slog"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -97,7 +96,7 @@ func (c *ClientStreamClientContext[reqtype]) Send(req *reqtype) error {
 	}
 	d, _ := proto.Marshal(tmptmp)
 	e := c.cctx.Send(d, Encoder_PROTOBUF)
-	if e != nil && e != io.EOF {
+	if e != nil {
 		slog.ErrorContext(c.Context, "["+c.cctx.GetPath()+"] send request failed", slog.String("error", e.Error()))
 	}
 	return e
@@ -134,9 +133,7 @@ func (c *ServerStreamClientContext[resptype]) Recv() (*resptype, error) {
 	}
 	data, encoder, e := c.cctx.Recv()
 	if e != nil {
-		if e != io.EOF {
-			slog.ErrorContext(c.Context, "["+c.cctx.GetPath()+"] read response failed", slog.String("error", e.Error()))
-		}
+		slog.ErrorContext(c.Context, "["+c.cctx.GetPath()+"] read response failed", slog.String("error", e.Error()))
 		return nil, e
 	}
 	switch encoder {
@@ -201,7 +198,7 @@ func (c *AllStreamClientContext[reqtype, resptype]) Send(req *reqtype) error {
 	}
 	d, _ := proto.Marshal(tmptmp)
 	e := c.cctx.Send(d, Encoder_PROTOBUF)
-	if e != nil && e != io.EOF {
+	if e != nil {
 		slog.ErrorContext(c.Context, "["+c.cctx.GetPath()+"] send request failed", slog.String("error", e.Error()))
 	}
 	return e
@@ -225,9 +222,7 @@ func (c *AllStreamClientContext[reqtype, resptype]) Recv() (*resptype, error) {
 	}
 	data, encoder, e := c.cctx.Recv()
 	if e != nil {
-		if e != io.EOF {
-			slog.ErrorContext(c.Context, "["+c.cctx.GetPath()+"] read response failed", slog.String("error", e.Error()))
-		}
+		slog.ErrorContext(c.Context, "["+c.cctx.GetPath()+"] read response failed", slog.String("error", e.Error()))
 		return nil, e
 	}
 	switch encoder {

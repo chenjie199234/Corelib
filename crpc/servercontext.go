@@ -2,7 +2,6 @@ package crpc
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -166,9 +165,7 @@ func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 	}
 	data, encoder, e := c.sctx.Recv()
 	if e != nil {
-		if e != io.EOF {
-			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] read request failed", slog.String("error", e.Error()))
-		}
+		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] read request failed", slog.String("error", e.Error()))
 		return nil, e
 	}
 	switch encoder {
@@ -314,9 +311,7 @@ func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 	}
 	data, encoder, e := c.sctx.Recv()
 	if e != nil {
-		if e != io.EOF {
-			slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] read request failed", slog.String("error", e.Error()))
-		}
+		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] read request failed", slog.String("error", e.Error()))
 		return nil, e
 	}
 	switch encoder {
