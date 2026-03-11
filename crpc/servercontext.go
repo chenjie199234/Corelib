@@ -261,7 +261,7 @@ func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
 		d, _ = (protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}).Marshal(tmptmp)
 	}
 	e := c.sctx.Send(d, c.encoder)
-	if e != nil && e != io.EOF {
+	if e != nil {
 		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] send response failed", slog.String("error", e.Error()))
 	}
 	return e
@@ -369,7 +369,7 @@ func (c *AllStreamServerContext[reqtype, resptype]) Send(resp *resptype) error {
 	}
 	d, _ := proto.Marshal(tmptmp)
 	e := c.sctx.Send(d, Encoder_PROTOBUF)
-	if e != nil && e != io.EOF {
+	if e != nil {
 		slog.ErrorContext(c.Context, "["+c.sctx.GetPath()+"] send response failed", slog.String("error", e.Error()))
 	}
 	return e

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	ioPackage        = protogen.GoImportPath("io")
+	// ioPackage        = protogen.GoImportPath("io")
 	contextPackage   = protogen.GoImportPath("context")
 	slogPackage      = protogen.GoImportPath("log/slog")
 	protoPackage     = protogen.GoImportPath("google.golang.org/protobuf/proto")
@@ -243,7 +243,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("case ", g.QualifiedGoIdent(crpcPackage.Ident("Encoder_JSON")), ":")
 			g.P("respd,_=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{UseProtoNames: true, UseEnumNumbers: true}.Marshal(resp)")
 			g.P("}")
-			g.P("if e:=ctx.Send(respd,encoder);e!=nil&&e!=", g.QualifiedGoIdent(ioPackage.Ident("EOF")), "{")
+			g.P("if e:=ctx.Send(respd,encoder);e!=nil{")
 			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] send response failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
 			g.P("}")
 			g.P("}")
@@ -308,7 +308,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 			g.P("}")
 			g.P("respd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
-			g.P("if e:=ctx.Send(respd,", g.QualifiedGoIdent(crpcPackage.Ident("Encoder_PROTOBUF")), ");e!=nil&&e!=", g.QualifiedGoIdent(ioPackage.Ident("EOF")), "{")
+			g.P("if e:=ctx.Send(respd,", g.QualifiedGoIdent(crpcPackage.Ident("Encoder_PROTOBUF")), ");e!=nil{")
 			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] send response failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
 			g.P("}")
 			g.P("}")
