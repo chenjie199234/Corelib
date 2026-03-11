@@ -72,14 +72,7 @@ func (this *rw) send(ctx context.Context, mb *Msg_Body) error {
 	mh.SetType(MsgType_SEND)
 	m.SetH(mh)
 	m.SetB(mb)
-	if e := this.sender(ctx, m); e != nil {
-		return e
-	}
-	if mb.GetError() != nil {
-		//if we send error to peer,means we stop send
-		this.status.And(0b1110)
-	}
-	return nil
+	return this.sender(ctx, m)
 }
 
 func (this *rw) closesend() error {
