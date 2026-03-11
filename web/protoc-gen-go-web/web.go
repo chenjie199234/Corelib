@@ -629,11 +629,15 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetRequest().Header.Get(\"Accept\"),", strconv.Quote("application/x-protobuf"), "){")
 			g.P("ctx.SetResponseHeader(\"Content-Type\",\"application/x-protobuf\")")
 			g.P("respd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(resp)")
-			g.P("ctx.Write(respd)")
+			g.P("if _,e:=ctx.Write(respd);e!=nil{")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] send response failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
+			g.P("}")
 			g.P("}else{")
 			g.P("ctx.SetResponseHeader(\"Content-Type\",\"application/json\")")
 			g.P("respd,_:=", g.QualifiedGoIdent(protojsonPackage.Ident("MarshalOptions")), "{UseProtoNames: true, UseEnumNumbers: true}.Marshal(resp)")
-			g.P("ctx.Write(respd)")
+			g.P("if _,e:=ctx.Write(respd);e!=nil{")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] send response failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
+			g.P("}")
 			g.P("}")
 		}
 		g.P("}")
@@ -822,6 +826,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			continue
 		}
 		pathname := "_WebPath" + service.GoName + method.GoName
+		pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 		if !method.Desc.IsStreamingServer() {
 			p1 := "ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context"))
 			p2 := "req *" + g.QualifiedGoIdent(method.Input.GoIdent)
@@ -844,7 +849,6 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		g.P("}")
 		if pbex.NeedValidate(method.Input) {
 			g.P("if errstr := req.Validate(); errstr != \"\"{")
-			pathurl := "/" + *file.Proto.Package + "." + string(service.Desc.Name()) + "/" + string(method.Desc.Name())
 			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
 			if method.Desc.IsStreamingServer() {
 				g.P("return ", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
@@ -1108,6 +1112,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			}
 		}
 		g.P("if e != nil {")
+		g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] send request failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
 		if method.Desc.IsStreamingServer() {
 			g.P("return e")
 		} else {
@@ -1122,6 +1127,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("data,e:=", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(r.Body)")
 			g.P("r.Body.Close()")
 			g.P("if e!=nil {")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] read response failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
 			g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("Convert")), "(e)")
 			g.P("}")
 			g.P("resp := new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
@@ -1130,9 +1136,11 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("}")
 			g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(r.Header.Get(\"Content-Type\"), \"application/x-protobuf\"){")
 			g.P("if e:=", g.QualifiedGoIdent(protoPackage.Ident("Unmarshal")), "(data,resp);e!=nil{")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] decode response failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
 			g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrResp")))
 			g.P("}")
 			g.P("} else if e:=", g.QualifiedGoIdent(protojsonPackage.Ident("Unmarshal")), "(data,resp);e!=nil{")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] decode response failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
 			g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrResp")))
 			g.P("}")
 			g.P("return resp, nil")
