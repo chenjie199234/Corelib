@@ -179,65 +179,29 @@ if %errorlevel% == 1 (
 if "%1" == "" (
 	goto :help
 )
-if %1 == "" (
-	goto :help
-)
-if %1 == "h" (
-	goto :help
-)
 if "%1" == "h" (
-	goto :help
-)
-if %1 == "-h" (
 	goto :help
 )
 if "%1" == "-h" (
 	goto :help
 )
-if %1 == "help" (
-	goto :help
-)
 if "%1" == "help" (
-	goto :help
-)
-if %1 == "-help" (
 	goto :help
 )
 if "%1" == "-help" (
 	goto :help
 )
-if %1 == "pb" (
-	goto :pb
-)
 if "%1" == "pb" (
 	goto :pb
 )
-if %1 == "kube" (
+if "%1" == "kube" (
 	goto :kube
 )
-if "%1" ==  "kube" (
-	goto :kube
-)
-if %1 == "html" (
+if "%1" == "html" (
 	goto :html
-)
-if "%1" ==  "html" (
-	goto :html
-)
-if %1 == "sub" (
-	if "%2" == "" (
-		goto :help
-	)
-	if %2 == "" (
-		goto :help
-	)
-	goto :sub
 )
 if "%1" == "sub" (
 	if "%2" == "" (
-		goto :help
-	)
-	if %2 == "" (
 		goto :help
 	)
 	goto :sub
