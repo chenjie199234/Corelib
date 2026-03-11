@@ -355,7 +355,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		var basecancel context.CancelFunc
 		if sto := s.getHandlerTimeout(msg.GetH().GetPath()); sto > 0 {
 			//use server timeout
-			dl := time.Now().Add(sto)
+			dl = time.Now().Add(sto)
 			if msg.GetH().GetDeadline() != 0 && msg.GetH().GetDeadline() < dl.UnixNano() {
 				//use client deadline
 				dl = time.Unix(0, msg.GetH().GetDeadline())
