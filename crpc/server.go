@@ -350,27 +350,25 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		}
 		basectx = metadata.SetMetadata(basectx, msg.GetH().GetMetadata())
 
-		//client timeout
+		//deadline
+		var dl time.Time
 		var basecancel context.CancelFunc
-		if servertimeout := int64(s.getHandlerTimeout(msg.GetH().GetPath())); servertimeout > 0 {
-			serverdl := time.Now().UnixNano() + servertimeout
-			if msg.GetH().GetDeadline() != 0 {
-				//compare use the small one
-				if msg.GetH().GetDeadline() < serverdl {
-					basectx, basecancel = context.WithDeadline(basectx, time.Unix(0, msg.GetH().GetDeadline()))
-				} else {
-					basectx, basecancel = context.WithDeadline(basectx, time.Unix(0, serverdl))
-				}
-			} else {
-				//use server timeout
-				basectx, basecancel = context.WithDeadline(basectx, time.Unix(0, serverdl))
+		if sto := s.getHandlerTimeout(msg.GetH().GetPath()); sto > 0 {
+			//use server timeout
+			dl := time.Now().Add(sto)
+			if msg.GetH().GetDeadline() != 0 && msg.GetH().GetDeadline() < dl.UnixNano() {
+				//use client deadline
+				dl = time.Unix(0, msg.GetH().GetDeadline())
 			}
 		} else if msg.GetH().GetDeadline() != 0 {
-			//use client timeout
-			basectx, basecancel = context.WithDeadline(basectx, time.Unix(0, msg.GetH().GetDeadline()))
-		} else {
+			//use client deadline
+			dl = time.Unix(0, msg.GetH().GetDeadline())
+		}
+		if dl.IsZero() {
 			//no timeout
 			basectx, basecancel = context.WithCancel(basectx)
+		} else {
+			basectx, basecancel = context.WithDeadline(basectx, dl)
 		}
 
 		//make workctx
@@ -410,6 +408,20 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		}
 		c.ctxs[msg.GetH().GetCallid()] = workctx
 		c.Unlock()
+
+		var tmer *time.Timer
+		if !dl.IsZero() {
+			tmer = time.AfterFunc(time.Until(dl), func() {
+				//neet to check early return
+				if !workctx.closed.Swap(true) {
+					mb := &Msg_Body{}
+					mb.SetError(cerror.ErrDeadlineExceeded)
+					//the error response shouldn't send failed due to the Context's error
+					//the error response can only send failed when the connection closed
+					workctx.rw.send(context.Background(), mb)
+				}
+			})
+		}
 		go func() {
 			defer func() {
 				if e := recover(); e != nil {
@@ -421,6 +433,10 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 						slog.Any("panic", e),
 						slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
 					workctx.Abort(cerror.ErrPanic)
+				}
+
+				if tmer != nil {
+					tmer.Stop()
 				}
 				c.Lock()
 				workctx.cancel()
@@ -443,17 +459,16 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 					mtime, _ := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(msg.GetH().GetPath()+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
 					mtime.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0)
 				}
-				if workctx.finish == 0 {
-					//Abort() in ServerContext didn't called
-					rw.closerecvsend()
-				}
 				s.stop.DoneOne()
 			}()
 			for _, handler := range handlers {
 				handler(workctx)
-				if workctx.finish == 1 {
+				if workctx.closed.Load() {
 					break
 				}
+			}
+			if !workctx.closed.Swap(true) {
+				rw.closerecvsend()
 			}
 		}()
 	case MsgType_SEND:

@@ -24,7 +24,7 @@ type ServerContext struct {
 	rw     *rw
 	peer   *stream.Peer
 	peerip string
-	finish int32
+	closed atomic.Bool
 	e      *cerror.Error
 }
 
@@ -34,7 +34,13 @@ func (c *ServerContext) Crpc() {
 
 // stop recv and send
 func (c *ServerContext) Abort(e error) {
-	if atomic.SwapInt32(&c.finish, 1) != 0 {
+	if c.closed.Swap(true) {
+		//when the DeadlineExceeded happened
+		//http's handler will return before the user's handler and the closed will be setted to true
+		//we should always record the user's error for the trace system
+		if ee := cerror.Convert(e); ee != nil {
+			c.e = ee
+		}
 		return
 	}
 	httpcode := 0

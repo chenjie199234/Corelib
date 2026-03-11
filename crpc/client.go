@@ -386,7 +386,10 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 		if cancelOutSide {
 			close(stopch)
 		} else if deadline > 0 {
-			tmer.Stop()
+			if tmer.Stop() {
+				rw.closerecvsend()
+			}
+		} else {
 			rw.closerecvsend()
 		}
 		if ee != nil {

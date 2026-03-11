@@ -344,7 +344,9 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler, s
 					break
 				}
 			}
-			wctx.Abort(nil)
+			if !wctx.closed.Load() {
+				wctx.Abort(nil)
+			}
 		}
 		if dl.IsZero() {
 			//run in sync mode
@@ -361,6 +363,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler, s
 			case <-ctx.Done():
 				switch ctx.Err() {
 				case context.DeadlineExceeded:
+					//need to check the early return
 					wctx.lker.Lock()
 					if !wctx.closed.Swap(true) {
 						wctx.lker.Unlock()
