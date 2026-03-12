@@ -27,6 +27,7 @@ func (c *CallContext) GetPath() string {
 // return cerror.ErrCanceled means self stop recv
 // return cerror.DeadlineExceeded means timeout
 // return cerror.ErrClosed means connection closed
+// other errors are user's errors
 func (c *CallContext) Recv() ([]byte, Encoder, error) {
 	return c.rw.recv(c.Context)
 }
@@ -123,6 +124,7 @@ type ServerStreamClientContext[resptype any] struct {
 // return cerror.ErrCanceled means self stop recv
 // return cerror.DeadlineExceeded means timeout
 // return cerror.ErrClosed means connection closed
+// other errors are user's errors
 func (c *ServerStreamClientContext[resptype]) Recv() (*resptype, error) {
 	var resp any = new(resptype)
 	m, ok := resp.(protoreflect.ProtoMessage)
@@ -212,6 +214,7 @@ func (c *AllStreamClientContext[reqtype, resptype]) StopSend() {
 // return cerror.ErrCanceled means self stop recv
 // return cerror.DeadlineExceeded means timeout
 // return cerror.ErrClosed means connection closed
+// other errors are user's errors
 func (c *AllStreamClientContext[reqtype, resptype]) Recv() (*resptype, error) {
 	var resp any = new(resptype)
 	m, ok := resp.(protoreflect.ProtoMessage)

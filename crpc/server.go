@@ -412,14 +412,13 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		var tmer *time.Timer
 		if !dl.IsZero() {
 			tmer = time.AfterFunc(time.Until(dl), func() {
-				//neet to check early return
-				if !workctx.closed.Swap(true) {
-					mb := &Msg_Body{}
-					mb.SetError(cerror.ErrDeadlineExceeded)
-					//the error response shouldn't send failed due to the Context's error
-					//the error response can only send failed when the connection closed
-					workctx.rw.send(context.Background(), mb)
-				}
+				workctx.closed.Store(true)
+				mb := &Msg_Body{}
+				mb.SetError(cerror.ErrDeadlineExceeded)
+				//the error response shouldn't send failed due to the Context's error
+				//the error response can only send failed when the connection closed
+				workctx.rw.send(context.Background(), mb)
+				workctx.rw.closerecv()
 			})
 		}
 		go func() {
@@ -476,11 +475,13 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
 			if ctx.rw.status.Load()&0b0100 != 0 {
 				ctx.rw.cache(msg.GetB())
+				if ctx.rw.status.Load()&0b1100 == 0 {
+					//same as MsgType_CLOSE_RECV_SEND
+					ctx.cancel()
+					delete(c.ctxs, msg.GetH().GetCallid())
+				}
 			} else {
-				//peer already saild stop send
-				//but we get a new send now
-				slog.Error("[crpc.server] get client send data mesage after server's close send message,this shouldn't happen and this connection will be closed.please report this bug", slog.String("cip", p.GetRealPeerIP()))
-				p.Close(false)
+				//ignore the message after peer stopsend
 			}
 		}
 		c.RUnlock()

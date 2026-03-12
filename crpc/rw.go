@@ -55,6 +55,7 @@ func (this *rw) init(mb *Msg_Body) error {
 // return cerror.ErrServerClosing
 // return cerror.ErrRespmsgLen/cerror.ErrReqmsgLen
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
+// if mb.GetError() != nil,it is same as closesend
 func (this *rw) send(ctx context.Context, mb *Msg_Body) error {
 	if this.e != nil {
 		return this.e
@@ -119,6 +120,7 @@ func (this *rw) closerecvsend() error {
 // return cerror.DeadlineExceeded means timeout
 // return cerror.ErrClosed means connection closed
 // return cerror.ErrServerClosing
+// other errors are user's errors
 func (this *rw) recv(ctx context.Context) ([]byte, Encoder, error) {
 	m, e := this.reader.Pop(ctx)
 	if e != nil {
@@ -145,15 +147,17 @@ func (this *rw) recv(ctx context.Context) ([]byte, Encoder, error) {
 	if m.GetError() == nil || m.GetError().GetCode() == 0 {
 		return m.GetBody(), m.GetBodyEncoder(), nil
 	}
-	//if we read error from peer,means peer stop send
-	this.status.And(0b1011)
-	this.reader.Close()
 	return nil, Encoder_UNKNOWN, m.GetError()
 }
 func (this *rw) cache(mb *Msg_Body) error {
 	_, e := this.reader.Push(mb)
 	if e == list.ErrClosed {
 		e = cerror.ErrClosed
+	}
+	//if we get an error from peer,means peer stop send
+	if mb.GetError() != nil {
+		this.status.And(0b1011)
+		this.reader.Close()
 	}
 	return e
 }

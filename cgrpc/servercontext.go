@@ -17,13 +17,17 @@ import (
 
 type ServerContext struct {
 	context.Context
+	cancel context.CancelFunc
+
 	decodefunc func(any) error
-	stream     grpc.ServerStream
-	path       string
-	peerip     string
 	resp       any
 	e          *cerror.Error
-	finish     int32
+
+	stream grpc.ServerStream
+
+	path   string
+	peerip string
+	closed atomic.Bool
 }
 
 func (c *ServerContext) CGrpc() {
@@ -31,7 +35,13 @@ func (c *ServerContext) CGrpc() {
 }
 
 func (c *ServerContext) Abort(e error) {
-	if atomic.SwapInt32(&c.finish, 1) != 0 {
+	if c.closed.Swap(true) {
+		//when the DeadlineExceeded happened
+		//http's handler will return before the user's handler and the closed will be setted to true
+		//we should always record the user's error for the trace system
+		if ee := cerror.Convert(e); ee != nil {
+			c.e = ee
+		}
 		return
 	}
 	httpcode := 0

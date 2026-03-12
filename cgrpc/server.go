@@ -240,116 +240,166 @@ func (md wrapmetadata) Keys() []string {
 	}
 	return keys
 }
+
+func createwctx(basectx context.Context, path string, sto time.Duration) (*ServerContext, trace.Span, bool, error) {
+	gmd, ok := gmetadata.FromIncomingContext(basectx)
+	if ok {
+		if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != name.GetSelfFullName() {
+			return nil, nil, false, cerror.ErrTarget
+		}
+	}
+
+	peerip := peerip(basectx)
+
+	//trace
+	clientname := "unknown"
+	tracedata := make(map[string]string)
+	if ok {
+		if data := gmd.Get("Core-Self"); len(data) != 0 && len(data[0]) != 0 {
+			clientname = data[0]
+		}
+		if data := gmd.Get("Traceparent"); len(data) != 0 && len(data[0]) != 0 {
+			tracedata["Traceparent"] = data[0]
+		}
+		if data := gmd.Get("Tracestate"); len(data) != 0 && len(data[0]) != 0 {
+			tracedata["Tracestate"] = data[0]
+		}
+	}
+	basectx, span := otel.Tracer("Corelib.cgrpc.server", trace.WithInstrumentationVersion(version.String())).Start(
+		otel.GetTextMapPropagator().Extract(basectx, wrapmetadata(gmd)),
+		"handle grpc",
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(attribute.String("url.path", path), attribute.String("client.name", clientname), attribute.String("client.ip", peerip)))
+
+	//metadata
+	var md map[string]string
+	if ok {
+		data := gmd.Get("Core-Metadata")
+		if len(data) != 0 {
+			md = make(map[string]string)
+			if e := json.Unmarshal(common.STB(data[0]), &md); e != nil {
+				slog.ErrorContext(basectx, "[cgrpc.server] metadata format wrong",
+					slog.String("cip", peerip),
+					slog.String("path", path),
+					slog.String("metadata", data[0]))
+				return nil, nil, false, cerror.ErrReq
+			}
+		}
+	}
+	if md == nil {
+		md = map[string]string{"Client-IP": peerip}
+	} else if _, ok := md["Client-IP"]; !ok {
+		md["Client-IP"] = peerip
+	}
+	basectx = cmetadata.SetMetadata(basectx, md)
+
+	//only when the server's deadline < client's deadline
+	earlyreturn := false
+
+	//timeout
+	var basecancel context.CancelFunc
+	if sto > 0 {
+		cdl, cok := basectx.Deadline()
+		basectx, basecancel = context.WithDeadline(basectx, time.Now().Add(sto))
+		dl, _ := basectx.Deadline()
+		earlyreturn = !cok || dl.Before(cdl)
+	}
+	return &ServerContext{
+		Context: basectx,
+		cancel:  basecancel,
+		path:    path,
+		peerip:  peerip,
+	}, span, earlyreturn, nil
+}
+func handler(wctx *ServerContext, span trace.Span, totalhandlers []OutsideHandler) {
+	defer func() {
+		if e := recover(); e != nil {
+			stack := make([]byte, 1024)
+			n := runtime.Stack(stack, false)
+			slog.ErrorContext(wctx, "[cgrpc.server] panic",
+				slog.String("cip", wctx.peerip),
+				slog.String("path", wctx.path),
+				slog.Any("panic", e),
+				slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
+			wctx.Abort(cerror.ErrPanic)
+		}
+		if wctx.e != nil {
+			span.SetStatus(codes.Error, wctx.e.Error())
+		} else {
+			span.SetStatus(codes.Ok, "")
+		}
+		span.End()
+		if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+			mstatus, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(wctx.path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+			if wctx.e != nil {
+				mstatus.Record(context.Background(), 1)
+			} else {
+				mstatus.Record(context.Background(), 0)
+			}
+			mtime, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(wctx.path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+			mtime.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0)
+		}
+	}()
+	for _, handler := range totalhandlers {
+		handler(wctx)
+		if wctx.closed.Load() {
+			break
+		}
+	}
+	if !wctx.closed.Load() {
+		wctx.Abort(nil)
+	}
+}
+func deadlinehandler(wctx *ServerContext, span trace.Span, totalhandlers []OutsideHandler) (earlyreturn bool) {
+	done := make(chan *struct{})
+	go func() {
+		handler(wctx, span, totalhandlers)
+		close(done)
+	}()
+	select {
+	case <-wctx.Context.Done():
+		switch wctx.Context.Err() {
+		case context.DeadlineExceeded:
+			//need to early return
+			wctx.closed.Swap(true)
+			return true
+		case context.Canceled:
+			//only when the client leave,the connection close will enter this
+			//the client already gone,we don't need to return early,wait the handler return here
+			<-done
+		}
+	case <-done:
+	}
+	return false
+}
 func (s *CGrpcServer) echohandler(sname, mname string, handlers ...OutsideHandler) func(any, context.Context, func(any) error, grpc.UnaryServerInterceptor) (any, error) {
 	path := "/" + sname + "/" + mname
 	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
 	copy(totalhandlers, s.global)
 	copy(totalhandlers[len(s.global):], handlers)
-	return func(_ any, basectx context.Context, decode func(any) error, _ grpc.UnaryServerInterceptor) (resp any, err error) {
-		gmd, ok := gmetadata.FromIncomingContext(basectx)
-		if ok {
-			if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != name.GetSelfFullName() {
-				return nil, cerror.ErrTarget
+	return func(_ any, ctx context.Context, decode func(any) error, _ grpc.UnaryServerInterceptor) (any, error) {
+		wctx, span, earlyreturn, e := createwctx(ctx, path, s.getHandlerTimeout(path))
+		if e != nil {
+			return nil, e
+		}
+		if wctx.cancel != nil {
+			defer wctx.cancel()
+		}
+		wctx.decodefunc = decode
+		if !earlyreturn {
+			//run in sync mode
+			handler(wctx, span, totalhandlers)
+		} else {
+			//run in async mode
+			if deadlinehandler(wctx, span, totalhandlers) {
+				return nil, cerror.ErrDeadlineExceeded
 			}
 		}
-
-		peerip := peerip(basectx)
-
-		//trace
-		clientname := "unknown"
-		tracedata := make(map[string]string)
-		if ok {
-			if data := gmd.Get("Core-Self"); len(data) != 0 && len(data[0]) != 0 {
-				clientname = data[0]
-			}
-			if data := gmd.Get("Traceparent"); len(data) != 0 && len(data[0]) != 0 {
-				tracedata["Traceparent"] = data[0]
-			}
-			if data := gmd.Get("Tracestate"); len(data) != 0 && len(data[0]) != 0 {
-				tracedata["Tracestate"] = data[0]
-			}
+		//fix the interface nil problem
+		if wctx.e != nil {
+			return nil, wctx.e
 		}
-		basectx, span := otel.Tracer("Corelib.cgrpc.server", trace.WithInstrumentationVersion(version.String())).Start(
-			otel.GetTextMapPropagator().Extract(basectx, wrapmetadata(gmd)),
-			"handle grpc",
-			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(attribute.String("url.path", path), attribute.String("client.name", clientname), attribute.String("client.ip", peerip)))
-
-		//metadata
-		var md map[string]string
-		if ok {
-			data := gmd.Get("Core-Metadata")
-			if len(data) != 0 {
-				md = make(map[string]string)
-				if e := json.Unmarshal(common.STB(data[0]), &md); e != nil {
-					slog.ErrorContext(basectx, "[cgrpc.server] metadata format wrong",
-						slog.String("cip", peerip),
-						slog.String("path", path),
-						slog.String("metadata", data[0]))
-					return nil, cerror.ErrReq
-				}
-			}
-		}
-		if md == nil {
-			md = map[string]string{"Client-IP": peerip}
-		} else if _, ok := md["Client-IP"]; !ok {
-			md["Client-IP"] = peerip
-		}
-		basectx = cmetadata.SetMetadata(basectx, md)
-
-		//timeout
-		servertimeout := s.getHandlerTimeout(path)
-		if servertimeout > 0 {
-			var cancel context.CancelFunc
-			basectx, cancel = context.WithDeadline(basectx, time.Now().Add(servertimeout))
-			defer cancel()
-		}
-		workctx := &ServerContext{
-			Context:    basectx,
-			decodefunc: decode,
-			path:       path,
-			peerip:     peerip,
-		}
-		defer func() {
-			if e := recover(); e != nil {
-				stack := make([]byte, 1024)
-				n := runtime.Stack(stack, false)
-				slog.ErrorContext(workctx, "[cgrpc.server] panic",
-					slog.String("cip", peerip),
-					slog.String("path", path),
-					slog.Any("panic", e),
-					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
-				workctx.Abort(cerror.ErrPanic)
-			}
-			//fix the interface nil problem
-			if workctx.e != nil {
-				span.SetStatus(codes.Error, workctx.e.Error())
-				resp = nil
-				err = workctx.e
-			} else {
-				span.SetStatus(codes.Ok, "")
-				resp = workctx.resp
-				err = nil
-			}
-			span.End()
-			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				mstatus, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
-				if workctx.e != nil {
-					mstatus.Record(context.Background(), 1)
-				} else {
-					mstatus.Record(context.Background(), 0)
-				}
-				mtime, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-				mtime.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0)
-			}
-		}()
-		for _, handler := range totalhandlers {
-			handler(workctx)
-			if workctx.finish == 1 {
-				break
-			}
-		}
-		return
+		return wctx.resp, nil
 	}
 }
 func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHandler) func(srv any, stream grpc.ServerStream) error {
@@ -358,102 +408,24 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 	copy(totalhandlers, s.global)
 	copy(totalhandlers[len(s.global):], handlers)
 	return func(_ any, stream grpc.ServerStream) (err error) {
-		basectx := stream.Context()
-		gmd, ok := gmetadata.FromIncomingContext(basectx)
-		if ok {
-			if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != name.GetSelfFullName() {
-				return cerror.ErrTarget
+		wctx, span, earlyreturn, e := createwctx(stream.Context(), path, s.getHandlerTimeout(path))
+		if e != nil {
+			return e
+		}
+		if wctx.cancel != nil {
+			defer wctx.cancel()
+		}
+		wctx.stream = stream
+		if !earlyreturn {
+			//run in sync mode
+			handler(wctx, span, totalhandlers)
+		} else {
+			//run in async mode
+			if deadlinehandler(wctx, span, totalhandlers) {
+				return cerror.ErrDeadlineExceeded
 			}
 		}
-
-		peerip := peerip(basectx)
-
-		//trace
-		clientname := "unknown"
-		if ok {
-			if data := gmd.Get("Core-Self"); len(data) != 0 && len(data[0]) != 0 {
-				clientname = data[0]
-			}
-		}
-		basectx, span := otel.Tracer("Corelib.cgrpc.server", trace.WithInstrumentationVersion(version.String())).Start(
-			otel.GetTextMapPropagator().Extract(basectx, wrapmetadata(gmd)),
-			"handle grpc",
-			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(attribute.String("url.path", path), attribute.String("client.name", clientname), attribute.String("client.ip", peerip)))
-
-		//deal metadata
-		var md map[string]string
-		if ok {
-			data := gmd.Get("Core-Metadata")
-			if len(data) != 0 {
-				md = make(map[string]string)
-				if e := json.Unmarshal(common.STB(data[0]), &md); e != nil {
-					slog.ErrorContext(basectx, "[cgrpc.server] metadata format wrong",
-						slog.String("cip", peerip),
-						slog.String("path", path),
-						slog.String("metadata", data[0]))
-					return cerror.ErrReq
-				}
-			}
-		}
-		if md == nil {
-			md = map[string]string{"Client-IP": peerip}
-		} else if _, ok := md["Client-IP"]; !ok {
-			md["Client-IP"] = peerip
-		}
-		basectx = cmetadata.SetMetadata(basectx, md)
-
-		//timeout
-		servertimeout := s.getHandlerTimeout(path)
-		if servertimeout > 0 {
-			var cancel context.CancelFunc
-			basectx, cancel = context.WithDeadline(basectx, time.Now().Add(servertimeout))
-			defer cancel()
-		}
-		workctx := &ServerContext{
-			Context: basectx,
-			stream:  stream,
-			path:    path,
-			peerip:  peerip,
-		}
-		defer func() {
-			if e := recover(); e != nil {
-				stack := make([]byte, 1024)
-				n := runtime.Stack(stack, false)
-				slog.ErrorContext(workctx, "[cgrpc.server] panic",
-					slog.String("cip", peerip),
-					slog.String("path", path),
-					slog.Any("panic", e),
-					slog.String("stack", base64.StdEncoding.EncodeToString(stack[:n])))
-				workctx.Abort(cerror.ErrPanic)
-			}
-			//fix the interface nil problem
-			if workctx.e != nil {
-				span.SetStatus(codes.Error, workctx.e.Error())
-				err = workctx.e
-			} else {
-				span.SetStatus(codes.Ok, "")
-				err = nil
-			}
-			span.End()
-			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				mstatus, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
-				if workctx.e != nil {
-					mstatus.Record(context.Background(), 1)
-				} else {
-					mstatus.Record(context.Background(), 0)
-				}
-				mtime, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-				mtime.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0)
-			}
-		}()
-		for _, handler := range totalhandlers {
-			handler(workctx)
-			if workctx.finish == 1 {
-				break
-			}
-		}
-		return
+		return wctx.e
 	}
 }
 func peerip(ctx context.Context) string {

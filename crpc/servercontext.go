@@ -87,6 +87,7 @@ func (c *ServerContext) StopSend() {
 // return cerror.DeadlineExceeded means timeout
 // return cerror.ErrClosed means connection closed
 // return cerror.ErrServerClosing
+// other errors are user's errors
 func (c *ServerContext) Recv() ([]byte, Encoder, error) {
 	return c.rw.recv(c.Context)
 }
@@ -155,6 +156,7 @@ type ClientStreamServerContext[reqtype any] struct {
 // return cerror.DeadlineExceeded means timeout
 // return cerror.ErrClosed means connection closed
 // return cerror.ErrServerClosing
+// other errors are user's errors
 func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 	var req any = new(reqtype)
 	m, ok := req.(protoreflect.ProtoMessage)
@@ -301,6 +303,7 @@ type AllStreamServerContext[reqtype, resptype any] struct {
 // return cerror.DeadlineExceeded means timeout
 // return cerror.ErrClosed means connection closed
 // return cerror.ErrServerClosing
+// other errors are user's errors
 func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 	var req any = new(reqtype)
 	m, ok := req.(protoreflect.ProtoMessage)

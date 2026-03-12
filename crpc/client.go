@@ -225,9 +225,12 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 		}
 		if rw.status.Load()&0b0100 != 0 {
 			rw.cache(msg.GetB())
+			if rw.status.Load()&0b1100 == 0 {
+				//same as MsgType_CLOSE_RECV_SEND
+				server.delrw(rw.callid)
+			}
 		} else {
-			slog.Error("[crpc.client] get server send data after server's close send message,this shouldn't happen and the message will be ignored,please report this bug",
-				slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
+			//ignore the message after peer stopsend
 		}
 	}
 }
