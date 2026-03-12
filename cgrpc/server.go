@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 	gmetadata "google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 )
 
@@ -108,7 +109,7 @@ func NewCGrpcServer(c *ServerConfig, tlsc *tls.Config) (*CGrpcServer, error) {
 	opts = append(opts, grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
 		ctx := stream.Context()
 		rpcinfo := ctx.Value(serverrpckey{}).(*stats.RPCTagInfo)
-		peerip := ctx.Value(serverconnkey{}).(string)
+		peerip := peerip(ctx)
 		slog.Error("[cgrpc.server] path doesn't exist", slog.String("cip", peerip), slog.String("path", rpcinfo.FullMethodName))
 		return cerror.ErrNoapi
 	}))
@@ -252,7 +253,7 @@ func (s *CGrpcServer) echohandler(sname, mname string, handlers ...OutsideHandle
 			}
 		}
 
-		peerip := basectx.Value(serverconnkey{}).(string)
+		peerip := peerip(basectx)
 
 		//trace
 		clientname := "unknown"
@@ -365,7 +366,7 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 			}
 		}
 
-		peerip := basectx.Value(serverconnkey{}).(string)
+		peerip := peerip(basectx)
 
 		//trace
 		clientname := "unknown"
@@ -455,6 +456,29 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 		return
 	}
 }
+func peerip(ctx context.Context) string {
+	gmd, ok := gmetadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	peerip := ""
+	if ok {
+		if forward := gmd.Get("X-Forwarded-For"); len(forward) > 0 && len(forward[0]) > 0 {
+			peerip = strings.TrimSpace(strings.Split(forward[0], ",")[0])
+		} else if realip := gmd.Get("X-Real-Ip"); len(realip) > 0 && len(realip[0]) > 0 {
+			peerip = strings.TrimSpace(realip[0])
+		}
+	}
+	if peerip == "" {
+		p, ok := peer.FromContext(ctx)
+		if !ok {
+			return ""
+		}
+		remoteaddr := p.Addr.String()
+		peerip = remoteaddr[:strings.LastIndex(remoteaddr, ":")]
+	}
+	return peerip
+}
 
 type sStatsHandler struct {
 	clientnum atomic.Int32
@@ -474,26 +498,11 @@ func (s *sStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	}
 }
 
-type serverconnkey struct{}
-
-func (s *sStatsHandler) TagConn(ctx context.Context, info *stats.ConnTagInfo) context.Context {
-	gmd, ok := gmetadata.FromIncomingContext(ctx)
-	peerip := ""
-	if ok {
-		if forward := gmd.Get("X-Forwarded-For"); len(forward) > 0 && len(forward[0]) > 0 {
-			peerip = strings.TrimSpace(strings.Split(forward[0], ",")[0])
-		} else if realip := gmd.Get("X-Real-Ip"); len(realip) > 0 && len(realip[0]) > 0 {
-			peerip = strings.TrimSpace(realip[0])
-		}
-	}
-	if peerip == "" {
-		remoteaddr := info.RemoteAddr.String()
-		peerip = remoteaddr[:strings.LastIndex(remoteaddr, ":")]
-	}
-	return context.WithValue(ctx, serverconnkey{}, peerip)
+func (s *sStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
 }
 func (s *sStatsHandler) HandleConn(ctx context.Context, stat stats.ConnStats) {
-	peerip := ctx.Value(serverconnkey{}).(string)
+	peerip := peerip(ctx)
 	switch stat.(type) {
 	case *stats.ConnBegin:
 		s.clientnum.Add(1)
