@@ -2,7 +2,6 @@ package cgrpc
 
 import (
 	"context"
-	"io"
 	"log/slog"
 
 	"github.com/chenjie199234/Corelib/cerror"
@@ -45,7 +44,7 @@ func (c *ClientStreamClientContext[reqtype]) Send(req *reqtype) error {
 		}
 	}
 	e := c.stream.SendMsg(req)
-	if e != nil && e != io.EOF {
+	if e != nil {
 		slog.ErrorContext(c.stream.Context(), "["+c.path+"] send request failed", slog.String("error", e.Error()))
 	}
 	return e
@@ -84,9 +83,7 @@ func (c *ServerStreamClientContext[resptype]) GetPath() string {
 func (c *ServerStreamClientContext[resptype]) Recv() (*resptype, error) {
 	resp := new(resptype)
 	if e := c.stream.RecvMsg(resp); e != nil {
-		if e != io.EOF {
-			slog.ErrorContext(c.stream.Context(), "["+c.path+"] read response failed", slog.String("error", e.Error()))
-		}
+		slog.ErrorContext(c.stream.Context(), "["+c.path+"] read response failed", slog.String("error", e.Error()))
 		return nil, e
 	}
 	return resp, nil
@@ -123,9 +120,7 @@ func (c *AllStreamClientContext[reqtype, resptype]) GetPath() string {
 func (c *AllStreamClientContext[reqtype, resptype]) Recv() (*resptype, error) {
 	resp := new(resptype)
 	if e := c.stream.RecvMsg(resp); e != nil {
-		if e != io.EOF {
-			slog.ErrorContext(c.stream.Context(), "["+c.path+"] read response failed", slog.String("error", e.Error()))
-		}
+		slog.ErrorContext(c.stream.Context(), "["+c.path+"] read response failed", slog.String("error", e.Error()))
 		return nil, e
 	}
 	return resp, nil
@@ -143,7 +138,7 @@ func (c *AllStreamClientContext[reqtype, resptype]) Send(req *reqtype) error {
 		}
 	}
 	e := c.stream.SendMsg(req)
-	if e != nil && e != io.EOF {
+	if e != nil {
 		slog.ErrorContext(c.stream.Context(), "["+c.path+"] send request failed", slog.String("error", e.Error()))
 	}
 	return e

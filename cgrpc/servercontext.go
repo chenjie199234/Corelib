@@ -2,7 +2,6 @@ package cgrpc
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -129,9 +128,7 @@ type ClientStreamServerContext[reqtype any] struct {
 func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 	var req any = new(reqtype)
 	if e := transGrpcError(c.sctx.stream.RecvMsg(req), false); e != nil {
-		if e != io.EOF {
-			slog.ErrorContext(c.Context, "["+c.sctx.path+"] read request failed", slog.String("error", e.Error()))
-		}
+		slog.ErrorContext(c.Context, "["+c.sctx.path+"] read request failed", slog.String("error", e.Error()))
 		return nil, e
 	}
 	if c.validatereq {
@@ -184,7 +181,7 @@ type ServerStreamServerContext[resptype any] struct {
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
 	e := transGrpcError(c.sctx.stream.SendMsg(resp), false)
-	if e != nil && e != io.EOF {
+	if e != nil {
 		slog.ErrorContext(c.Context, "["+c.sctx.path+"] send response failed", slog.String("error", e.Error()))
 	}
 	return e
@@ -231,9 +228,7 @@ type AllStreamServerContext[reqtype, resptype any] struct {
 func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 	var req any = new(reqtype)
 	if e := transGrpcError(c.sctx.stream.RecvMsg(req), false); e != nil {
-		if e != io.EOF {
-			slog.ErrorContext(c.Context, "["+c.sctx.path+"] read request failed", slog.String("error", e.Error()))
-		}
+		slog.ErrorContext(c.Context, "["+c.sctx.path+"] read request failed", slog.String("error", e.Error()))
 		return nil, e
 	}
 	if c.validatereq {
@@ -250,7 +245,7 @@ func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *AllStreamServerContext[reqtype, resptype]) Send(resp *resptype) error {
 	e := transGrpcError(c.sctx.stream.SendMsg(resp), false)
-	if e != nil && e != io.EOF {
+	if e != nil {
 		slog.ErrorContext(c.Context, "["+c.sctx.path+"] send response failed", slog.String("error", e.Error()))
 	}
 	return e
