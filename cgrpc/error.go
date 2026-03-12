@@ -36,6 +36,18 @@ func transGrpcError(e error, client bool) error {
 	case codes.Unknown:
 		if s.Message() == "EOF" {
 			return io.EOF
+		} else if strings.Contains(s.Message(), "failed to marshal") {
+			if client {
+				return cerror.ErrReq
+			} else {
+				return cerror.ErrResp
+			}
+		} else if strings.Contains(s.Message(), "failed to unmarshal") {
+			if client {
+				return cerror.ErrResp
+			} else {
+				return cerror.ErrReq
+			}
 		}
 		return cerror.Decode(s.Message())
 	case codes.InvalidArgument:
