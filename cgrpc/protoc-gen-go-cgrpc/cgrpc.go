@@ -201,7 +201,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 
 			if pbex.NeedValidate(method.Input) {
 				g.P("if errstr := req.Validate(); errstr != \"\" {")
-				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
+				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
 				g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 				g.P("return")
 				g.P("}")
@@ -215,7 +215,9 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("if resp == nil{")
 			g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 			g.P("}")
-			g.P("ctx.Send(resp)")
+			g.P("if e:=ctx.Send(resp);e!=nil{")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] send response failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
+			g.P("}")
 			g.P("}")
 			g.P("}")
 		}
@@ -232,7 +234,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("}")
 			if pbex.NeedValidate(method.Input) {
 				g.P("if errstr := req.Validate(); errstr != \"\" {")
-				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
+				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
 				g.P("ctx.Abort(", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")), ")")
 				g.P("return")
 				g.P("}")
@@ -256,7 +258,9 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("if resp == nil{")
 			g.P("resp = new(", g.QualifiedGoIdent(method.Output.GoIdent), ")")
 			g.P("}")
-			g.P("ctx.Send(resp)")
+			g.P("if e:=ctx.Send(resp);e!=nil{")
+			g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] send response failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
+			g.P("}")
 			g.P("}")
 			g.P("}")
 		}
@@ -426,7 +430,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 
 			if pbex.NeedValidate(method.Input) {
 				g.P("if errstr := req.Validate(); errstr != \"\" {")
-				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
+				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
 				g.P("return nil,", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
 				g.P("}")
 			}
@@ -448,7 +452,7 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("}")
 			if pbex.NeedValidate(method.Input) {
 				g.P("if errstr := req.Validate(); errstr != \"\" {")
-				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
+				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] request validate failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",errstr))")
 				g.P("return ", g.QualifiedGoIdent(cerrorPackage.Ident("ErrReq")))
 				g.P("}")
 			}
