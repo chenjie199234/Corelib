@@ -136,14 +136,7 @@ func (s *CrpcServer) StopCrpcServer(force bool) {
 func (s *CrpcServer) tellAllPeerSelfClosed() {
 	s.instance.RangePeers(true, func(p *stream.Peer) {
 		if tmp := p.GetData(); tmp != nil {
-			client := (*client)(tmp)
 			wg := sync.WaitGroup{}
-			for _, ctx := range client.ctxs {
-				ctx.rw.e = cerror.ErrServerClosing
-				wg.Go(func() {
-					ctx.rw.closerecv()
-				})
-			}
 			m := &Msg{}
 			mh := &Msg_Header{}
 			mh.SetCallid(0)
@@ -396,7 +389,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			rw.cache(msg.GetB())
 			//only the client's Call will init with body
 			//client's Call will not send more data
-			rw.status.And(0b1011)
+			rw.status.And(0b11011)
 			rw.reader.Close()
 		}
 		workctx := &ServerContext{
@@ -473,9 +466,9 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	case MsgType_SEND:
 		c.RLock()
 		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
-			if ctx.rw.status.Load()&0b0100 != 0 {
+			if ctx.rw.status.Load()&0b00100 != 0 {
 				ctx.rw.cache(msg.GetB())
-				if ctx.rw.status.Load()&0b1100 == 0 {
+				if ctx.rw.status.Load()&0b01100 == 0 {
 					//same as MsgType_CLOSE_RECV_SEND
 					ctx.cancel()
 					delete(c.ctxs, msg.GetH().GetCallid())
@@ -488,8 +481,8 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	case MsgType_CLOSE_RECV:
 		c.RLock()
 		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
-			old := ctx.rw.status.And(0b0111)
-			if (old&0b0111)&0b1100 == 0 {
+			old := ctx.rw.status.And(0b10111)
+			if (old&0b10111)&0b01100 == 0 {
 				//same as MsgType_CLOSE_RECV_SEND
 				ctx.cancel()
 				delete(c.ctxs, msg.GetH().GetCallid())
@@ -499,9 +492,9 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	case MsgType_CLOSE_SEND:
 		c.RLock()
 		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
-			old := ctx.rw.status.And(0b1011)
+			old := ctx.rw.status.And(0b11011)
 			ctx.rw.reader.Close()
-			if (old&0b1011)&0b1100 == 0 {
+			if (old&0b11011)&0b01100 == 0 {
 				//same as MsgType_CLOSE_RECV_SEND
 				ctx.cancel()
 				delete(c.ctxs, msg.GetH().GetCallid())
@@ -511,7 +504,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	case MsgType_CLOSE_RECV_SEND:
 		c.Lock()
 		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
-			ctx.rw.status.And(0b0011)
+			ctx.rw.status.And(0b10011)
 			ctx.rw.reader.Close()
 			ctx.cancel()
 			delete(c.ctxs, msg.GetH().GetCallid())
@@ -523,8 +516,7 @@ func (s *CrpcServer) offlinefunc(p *stream.Peer) {
 	c := (*client)(p.GetData())
 	c.Lock()
 	for _, ctx := range c.ctxs {
-		ctx.rw.e = cerror.ErrClosed
-		ctx.rw.status.And(0b0011)
+		ctx.rw.status.And(0b00011)
 		ctx.rw.reader.Close()
 		ctx.cancel()
 	}

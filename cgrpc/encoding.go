@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"google.golang.org/grpc/encoding"
-	_ "google.golang.org/grpc/encoding/proto" //this is used to register proto codec
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )

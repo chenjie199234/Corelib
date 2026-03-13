@@ -58,4 +58,5 @@ var (
 var (
 	ErrDeadlineExceeded = MakeCError(-1, http.StatusGatewayTimeout, context.DeadlineExceeded.Error())
 	ErrCanceled         = MakeCError(-1, http.StatusRequestTimeout, context.Canceled.Error())
+	ErrEOF              = MakeCError(-1, http.StatusGone, "EOF")
 )

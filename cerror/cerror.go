@@ -58,6 +58,9 @@ func (this *Error) SlogAttr() *slog.Attr {
 	return &slog.Attr{Key: "error", Value: slog.GroupValue(slog.Int64("code", int64(this.GetCode())), slog.String("msg", this.GetMsg()))}
 }
 func Equal(a, b error) bool {
+	if a == b {
+		return true
+	}
 	aa := Convert(a)
 	bb := Convert(b)
 	if aa == nil && bb == nil {

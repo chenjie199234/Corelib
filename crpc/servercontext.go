@@ -69,7 +69,6 @@ func (c *ServerContext) Abort(e error) {
 // return cerror.DeadlineExceeded means timeout
 // return cerror.ErrClosed means connection closed
 // return cerror.ErrRespmsgLen means resp too large
-// return cerror.ErrServerClosing
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *ServerContext) Send(resp []byte, encoder Encoder) error {
 	mb := &Msg_Body{}
@@ -86,7 +85,6 @@ func (c *ServerContext) StopSend() {
 // return cerror.ErrCanceled means self stop recv
 // return cerror.DeadlineExceeded means timeout
 // return cerror.ErrClosed means connection closed
-// return cerror.ErrServerClosing
 // other errors are user's errors
 func (c *ServerContext) Recv() ([]byte, Encoder, error) {
 	return c.rw.recv(c.Context)
@@ -155,7 +153,6 @@ type ClientStreamServerContext[reqtype any] struct {
 // return cerror.ErrCanceled means self stop recv
 // return cerror.DeadlineExceeded means timeout
 // return cerror.ErrClosed means connection closed
-// return cerror.ErrServerClosing
 // other errors are user's errors
 func (c *ClientStreamServerContext[reqtype]) Recv() (*reqtype, error) {
 	var req any = new(reqtype)
@@ -242,7 +239,6 @@ type ServerStreamServerContext[resptype any] struct {
 // return cerror.ErrClosed means connection closed
 // return cerror.ErrRespmsgLen means resp too large
 // return cerror.ErrClosed means connection closed
-// return cerror.ErrServerClosing
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *ServerStreamServerContext[resptype]) Send(resp *resptype) error {
 	var tmp any = resp
@@ -302,7 +298,6 @@ type AllStreamServerContext[reqtype, resptype any] struct {
 // return cerror.ErrCanceled means self stop recv
 // return cerror.DeadlineExceeded means timeout
 // return cerror.ErrClosed means connection closed
-// return cerror.ErrServerClosing
 // other errors are user's errors
 func (c *AllStreamServerContext[reqtype, resptype]) Recv() (*reqtype, error) {
 	var req any = new(reqtype)
@@ -355,7 +350,6 @@ func (c *AllStreamServerContext[reqtype, resptype]) StopRecv() {
 // return cerror.ErrClosed means connection closed
 // return cerror.ErrRespmsgLen means resp too large
 // return cerror.ErrClosed means connection closed
-// return cerror.ErrServerClosing
 // Send will not wait peer to confirm accept the message,so there may be data lost if peer closed and self send at the same time
 func (c *AllStreamServerContext[reqtype, resptype]) Send(resp *resptype) error {
 	var tmp any = resp
