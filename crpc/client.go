@@ -333,6 +333,8 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			e = cerror.ErrDeadlineExceeded
 		case list.ErrClosed:
 			//the reader is closed,only happened when the connection is closed and the offlinefunc is called
+			//we don't known the server's init status,maybe the server already send the INIT_SUCCESS
+			//so,this should not be retry
 			e = cerror.ErrClosed
 		default:
 			if mb != nil {
@@ -351,7 +353,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			if cotel.NeedMetric() {
 				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
-			if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrClosed) {
+			if cerror.Equal(e, cerror.ErrServerClosing) {
 				//the server is closing or already closed,our init request was ignored,we can retry safely
 				continue
 			}

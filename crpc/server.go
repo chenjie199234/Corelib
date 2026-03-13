@@ -237,17 +237,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	c := (*client)(p.GetData())
 	switch msg.GetH().GetType() {
 	case MsgType_INIT:
-		c.Lock()
-		if _, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
-			//this is impossible
-			c.Unlock()
-			slog.Error("[crpc.server] duplicate init callid",
-				slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.GetH().GetPath()))
-			p.Close(false)
-			return
-		}
 		if e := s.stop.Add(1); e != nil {
-			c.Unlock()
 			msg.GetB().ClearBody()
 			if e == graceful.ErrClosing {
 				//tell peer self closed
@@ -278,7 +268,6 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		}
 		handlers, ok := s.handler[msg.GetH().GetPath()]
 		if !ok {
-			c.Unlock()
 			slog.Error("[crpc.server] path doesn't exist",
 				slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.GetH().GetPath()))
 			msg.GetB().ClearBody()
@@ -399,6 +388,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			peer:    p,
 			peerip:  peerip,
 		}
+		c.Lock()
 		c.ctxs[msg.GetH().GetCallid()] = workctx
 		c.Unlock()
 
@@ -427,11 +417,13 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 					workctx.Abort(cerror.ErrPanic)
 				}
 
+				workctx.cancel()
+
 				if tmer != nil {
 					tmer.Stop()
 				}
+
 				c.Lock()
-				workctx.cancel()
 				delete(c.ctxs, msg.GetH().GetCallid())
 				c.Unlock()
 
@@ -465,51 +457,63 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		}()
 	case MsgType_SEND:
 		c.RLock()
-		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
+		ctx, ok := c.ctxs[msg.GetH().GetCallid()]
+		c.RUnlock()
+		if ok {
 			if ctx.rw.status.Load()&0b00100 != 0 {
 				ctx.rw.cache(msg.GetB())
 				if ctx.rw.status.Load()&0b01100 == 0 {
 					//same as MsgType_CLOSE_RECV_SEND
 					ctx.cancel()
+					c.Lock()
 					delete(c.ctxs, msg.GetH().GetCallid())
+					c.Unlock()
 				}
 			} else {
 				//ignore the message after peer stopsend
 			}
 		}
-		c.RUnlock()
 	case MsgType_CLOSE_RECV:
 		c.RLock()
-		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
+		ctx, ok := c.ctxs[msg.GetH().GetCallid()]
+		c.RUnlock()
+		if ok {
 			old := ctx.rw.status.And(0b10111)
 			if (old&0b10111)&0b01100 == 0 {
 				//same as MsgType_CLOSE_RECV_SEND
 				ctx.cancel()
+				c.Lock()
 				delete(c.ctxs, msg.GetH().GetCallid())
+				c.Unlock()
 			}
 		}
-		c.RUnlock()
 	case MsgType_CLOSE_SEND:
 		c.RLock()
-		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
+		ctx, ok := c.ctxs[msg.GetH().GetCallid()]
+		c.RUnlock()
+		if ok {
 			old := ctx.rw.status.And(0b11011)
 			ctx.rw.reader.Close()
 			if (old&0b11011)&0b01100 == 0 {
 				//same as MsgType_CLOSE_RECV_SEND
 				ctx.cancel()
+				c.Lock()
 				delete(c.ctxs, msg.GetH().GetCallid())
+				c.Unlock()
 			}
 		}
-		c.RUnlock()
 	case MsgType_CLOSE_RECV_SEND:
-		c.Lock()
-		if ctx, ok := c.ctxs[msg.GetH().GetCallid()]; ok {
+		c.RLock()
+		ctx, ok := c.ctxs[msg.GetH().GetCallid()]
+		c.RUnlock()
+		if ok {
 			ctx.rw.status.And(0b10011)
 			ctx.rw.reader.Close()
 			ctx.cancel()
+			c.Lock()
 			delete(c.ctxs, msg.GetH().GetCallid())
+			c.Unlock()
 		}
-		c.Unlock()
 	}
 }
 func (s *CrpcServer) offlinefunc(p *stream.Peer) {
