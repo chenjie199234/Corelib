@@ -36,7 +36,7 @@ func newrw(callid uint64, path string, deadline int64, md, td map[string]string,
 	tmp.status.Store(0b11111)
 	return tmp
 }
-func (this *rw) init(mb *Msg_Body) error {
+func (this *rw) init(ctx context.Context, mb *Msg_Body) error {
 	m := &Msg{}
 	mh := &Msg_Header{}
 	mh.SetCallid(this.callid)
@@ -47,7 +47,7 @@ func (this *rw) init(mb *Msg_Body) error {
 	mh.SetTracedata(this.traceddata)
 	m.SetH(mh)
 	m.SetB(mb)
-	return this.sender(context.Background(), m)
+	return this.sender(ctx, m)
 }
 
 // return io.EOF means peer stop recv

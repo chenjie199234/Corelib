@@ -245,7 +245,7 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 }
 
 // 'in' and 'encoder' are a pair.the 'encoder' describes how the 'in' data be encoded
-// if 'encoder' is not Encoder_UNKNOWN,means,this call will only send data once and all the Send in handler will fail
+// if 'encoder' is not Encoder_UNKNOWN,means,this call will only send once with the data 'in' and all the Send in handler will fail
 func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder Encoder, handler func(ctx *CallContext) error) error {
 	if _, ok := Encoder_name[int32(encoder)]; !ok {
 		return cerror.ErrReq
@@ -294,17 +294,9 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 		}
 		span.SetAttributes(attribute.String("server.addr", server.addr))
 		rw := server.createrw(path, deadline, md, td)
-		var mb *Msg_Body
-		if _, ok := Encoder_name[int32(encoder)]; ok && encoder != Encoder_UNKNOWN {
-			mb = &Msg_Body{}
-			mb.SetBody(in)
-			mb.SetBodyEncoder(encoder)
-			//Call with Body,means,this call will only send data once and the data is sended by init
-			rw.status.And(0b11110)
-		}
-		if e := rw.init(mb); e != nil {
+		if e := rw.init(ctx, nil); e != nil {
 			server.delrw(rw.callid)
-			slog.ErrorContext(ctx, "[crpc.client] send init failed",
+			slog.ErrorContext(ctx, "[crpc.client] send init header failed",
 				slog.String("sname", c.serverfullname),
 				slog.String("sip", server.addr),
 				slog.String("path", path),
@@ -313,17 +305,19 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			span.End()
 			server.GetServerPickInfo().Done(false, 0)
 			if cerror.Equal(e, cerror.ErrClosed) {
-				//send failed,the server will not get the full init message,we can retry this request
+				//send failed,the server will not get the init header,we can retry this request
 				continue
 			}
-			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+			stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+			if cotel.NeedMetric() {
+				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
 			return e
 		}
 		//check the first msg returned from server
 		//it should be INIT_SUCCESS or error
-		mb, e = rw.reader.Pop(ctx)
+		mb, e := rw.reader.Pop(ctx)
 		switch e {
 		case context.Canceled:
 			rw.closerecvsend()
@@ -333,8 +327,6 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			e = cerror.ErrDeadlineExceeded
 		case list.ErrClosed:
 			//the reader is closed,only happened when the connection is closed and the offlinefunc is called
-			//we don't known the server's init status,maybe the server already send the INIT_SUCCESS
-			//so,this should not be retry
 			e = cerror.ErrClosed
 		default:
 			if mb != nil {
@@ -347,17 +339,45 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			server.delrw(rw.callid)
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
-			etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
-			stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
-			server.GetServerPickInfo().Done(false, uint64(etime-stime))
-			if cotel.NeedMetric() {
-				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
-			}
-			if cerror.Equal(e, cerror.ErrServerClosing) {
+			server.GetServerPickInfo().Done(false, 0)
+			if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrClosed) {
 				//the server is closing or already closed,our init request was ignored,we can retry safely
 				continue
 			}
+			etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+			stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+			if cotel.NeedMetric() {
+				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
+			}
 			return e
+		}
+		if _, ok := Encoder_name[int32(encoder)]; ok && encoder != Encoder_UNKNOWN {
+			mb := &Msg_Body{}
+			mb.SetBody(in)
+			mb.SetBodyEncoder(encoder)
+			if e := rw.send(ctx, mb); e != nil {
+				server.delrw(rw.callid)
+				slog.ErrorContext(ctx, "[crpc.client] send init body failed",
+					slog.String("sname", c.serverfullname),
+					slog.String("sip", server.addr),
+					slog.String("path", path),
+					slog.String("error", e.Error()))
+				span.SetStatus(codes.Error, e.Error())
+				span.End()
+				server.GetServerPickInfo().Done(false, 0)
+				if cerror.Equal(e, cerror.ErrClosed) {
+					//send failed,the server will not get the init body,we can retry this request
+					continue
+				}
+				etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+				stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+				if cotel.NeedMetric() {
+					c.recordmetric(path, float64(etime-stime)/1000000.0, true)
+				}
+				return e
+			}
+			//Call with Body,means,this call will only send data once and the data is sended by init
+			rw.closesend()
 		}
 		var stopch chan *struct{}
 		var tmer *time.Timer

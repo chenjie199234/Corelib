@@ -237,6 +237,16 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 	c := (*client)(p.GetData())
 	switch msg.GetH().GetType() {
 	case MsgType_INIT:
+		c.RLock()
+		_, ok := c.ctxs[msg.GetH().GetCallid()]
+		c.RUnlock()
+		if ok {
+			p.Close(false)
+			slog.Error("[crpc.server] duplicate init callid",
+				slog.String("cip", p.GetRealPeerIP()),
+				slog.String("path", msg.GetH().GetPath()))
+			return
+		}
 		if e := s.stop.Add(1); e != nil {
 			msg.GetB().ClearBody()
 			if e == graceful.ErrClosing {
@@ -373,14 +383,6 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			}
 			return e
 		})
-		if msg.HasB() {
-			//for Echo Call and ServerStream Call
-			rw.cache(msg.GetB())
-			//only the client's Call will init with body
-			//client's Call will not send more data
-			rw.status.And(0b11011)
-			rw.reader.Close()
-		}
 		workctx := &ServerContext{
 			Context: basectx,
 			cancel:  basecancel,
