@@ -83,7 +83,7 @@ type CGrpcServer struct {
 
 // if tlsc is not nil,the tls will be actived
 func NewCGrpcServer(c *ServerConfig, tlsc *tls.Config) (*CGrpcServer, error) {
-	if e := name.HasSelfFullName(); e != nil {
+	if e := cotel.Init(); e != nil {
 		return nil, e
 	}
 	if tlsc != nil {
@@ -119,7 +119,7 @@ func NewCGrpcServer(c *ServerConfig, tlsc *tls.Config) (*CGrpcServer, error) {
 		Time:              c.HeartProbe.StdDuration(),
 		Timeout:           c.HeartProbe.StdDuration() * 3,
 	}))
-	opts = append(opts, grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: time.Millisecond * 999, PermitWithoutStream: true}))
+	opts = append(opts, grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: time.Minute, PermitWithoutStream: true}))
 	if tlsc != nil {
 		opts = append(opts, grpc.Creds(credentials.NewTLS(tlsc)))
 	}

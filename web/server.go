@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/chenjie199234/Corelib/container/trie"
+	"github.com/chenjie199234/Corelib/cotel"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
-	"github.com/chenjie199234/Corelib/util/name"
 )
 
 type OutsideHandler func(*ServerContext)
@@ -154,7 +154,7 @@ type localport struct{}
 
 // if tlsc is not nil,the tls will be actived
 func NewWebServer(c *ServerConfig, tlsc *tls.Config) (*WebServer, error) {
-	if e := name.HasSelfFullName(); e != nil {
+	if e := cotel.Init(); e != nil {
 		return nil, e
 	}
 	if tlsc != nil {

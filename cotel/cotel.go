@@ -35,6 +35,7 @@ import (
 	otrace "go.opentelemetry.io/otel/trace"
 )
 
+var status atomic.Bool
 var tp *trace.TracerProvider
 var mp *metric.MeterProvider
 var needtrace, needmetric bool
@@ -43,6 +44,9 @@ var promRegister *prometheus.Registry
 func Init() error {
 	if e := name.HasSelfFullName(); e != nil {
 		return e
+	}
+	if status.Swap(true) {
+		return nil
 	}
 	traceenv := strings.TrimSpace(strings.ToLower(os.Getenv("TRACE")))
 	if traceenv != "" && traceenv != "<TRACE>" && traceenv != "log" && traceenv != "otlp" {

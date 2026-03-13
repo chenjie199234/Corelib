@@ -63,11 +63,11 @@ type CrpcClient struct {
 
 // if tlsc is not nil,the tls will be actived
 func NewCrpcClient(c *ClientConfig, d discover.DI, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*CrpcClient, error) {
+	if e := cotel.Init(); e != nil {
+		return nil, e
+	}
 	if tlsc != nil {
 		tlsc = tlsc.Clone()
-	}
-	if e := name.HasSelfFullName(); e != nil {
-		return nil, e
 	}
 	serverfullname, e := name.MakeFullName(serverproject, servergroup, serverapp)
 	if e != nil {
@@ -308,10 +308,8 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 				//send failed,the server will not get the init header,we can retry this request
 				continue
 			}
-			etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
-			stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
-			if cotel.NeedMetric() {
-				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
+			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
 			}
 			return e
 		}
@@ -344,10 +342,8 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 				//the server is closing or already closed,our init request was ignored,we can retry safely
 				continue
 			}
-			etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
-			stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
-			if cotel.NeedMetric() {
-				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
+			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
 			}
 			return e
 		}
@@ -369,10 +365,8 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 					//send failed,the server will not get the init body,we can retry this request
 					continue
 				}
-				etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
-				stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
-				if cotel.NeedMetric() {
-					c.recordmetric(path, float64(etime-stime)/1000000.0, true)
+				if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+					c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
 				}
 				return e
 			}

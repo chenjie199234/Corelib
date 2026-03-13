@@ -86,11 +86,11 @@ type CGrpcClient struct {
 
 // if tlsc is not nil,the tls will be actived
 func NewCGrpcClient(c *ClientConfig, d discover.DI, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*CGrpcClient, error) {
+	if e := cotel.Init(); e != nil {
+		return nil, e
+	}
 	if tlsc != nil {
 		tlsc = tlsc.Clone()
-	}
-	if e := name.HasSelfFullName(); e != nil {
-		return nil, e
 	}
 	serverfullname, e := name.MakeFullName(serverproject, servergroup, serverapp)
 	if e != nil {

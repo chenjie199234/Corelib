@@ -79,11 +79,11 @@ type WebClient struct {
 
 // if tlsc is not nil,the tls will be actived
 func NewWebClient(c *ClientConfig, d discover.DI, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*WebClient, error) {
+	if e := cotel.Init(); e != nil {
+		return nil, e
+	}
 	if tlsc != nil {
 		tlsc = tlsc.Clone()
-	}
-	if e := name.HasSelfFullName(); e != nil {
-		return nil, e
 	}
 	serverfullname, e := name.MakeFullName(serverproject, servergroup, serverapp)
 	if e != nil {
@@ -376,11 +376,9 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			e = cerror.Convert(e.(*url.Error).Unwrap())
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
-			etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
-			stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
-			server.GetServerPickInfo().Done(false, uint64(etime-stime))
-			if cotel.NeedMetric() {
-				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
+			server.GetServerPickInfo().Done(false, 0)
+			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
 			}
 			c.stop.DoneOne()
 			return nil, e
