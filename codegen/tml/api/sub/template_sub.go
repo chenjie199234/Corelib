@@ -57,6 +57,7 @@ service {{.Sname}}{
 	//	option (pbex.web_midwares)="a";//this function on web protocol has 3 midwares,it's order is b,c,a
 	//}
 }
+
 //req can be set with pbex extentions
 //message ExampleReq{
 	//int64 example_for_extentions=1[(pbex.int_gt)=1,(pbex.int_lt)=100];
