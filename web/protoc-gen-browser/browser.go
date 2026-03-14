@@ -1412,14 +1412,17 @@ func genServiceMethod(plugin *protogen.Plugin, s *protogen.Service, m *protogen.
 		f.P("\t}")
 		if emethod[0] == "POST" || emethod[0] == "PUT" || emethod[0] == "PATCH" {
 			f.P("\topts.body=JSON.stringify(req,jsonreplacer)")
-			f.P("\tlet r = normal_fetch(baseurl,", pathname, ",'',opts,", m.Output.GoIdent.GoName, ")")
+			f.P("\ttry{")
+			f.P("\t\treturn await normal_fetch(baseurl,", pathname, ",'',opts,", m.Output.GoIdent.GoName, ")")
 		} else {
-			f.P("\tlet r = normal_fetch(baseurl,", pathname, ",req.toFORM(),opts,", m.Output.GoIdent.GoName, ")")
+			f.P("\ttry{")
+			f.P("\t\treturn await normal_fetch(baseurl,", pathname, ",req.toFORM(),opts,", m.Output.GoIdent.GoName, ")")
 		}
-		f.P("\tif(tid!=undefined){")
-		f.P("\t\tclearTimeout(tid)")
+		f.P("\t}finally{")
+		f.P("\t\tif(tid!=undefined){")
+		f.P("\t\t\tclearTimeout(tid)")
+		f.P("\t\t}")
 		f.P("\t}")
-		f.P("\treturn r")
 		f.P("}")
 	} else {
 		f.P("//the resp in handler === null means we get an empty message from server")
