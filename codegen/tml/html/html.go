@@ -39,7 +39,6 @@ const pkg = `{
     "preview": "vite preview"
   },
   "devDependencies": {
-    "vite-tsconfig-paths": "latest",
     "typescript": "latest",
     "vite": "latest"
   }
@@ -80,11 +79,15 @@ const tsc = `{
   "include": ["src"]
 }`
 const vitec = `import { defineConfig } from "vite"
-import tsconfigPaths from "vite-tsconfig-paths"
+import path from "path"
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [tsconfigPaths()],
+  resolve: {
+    alias: {
+      '@api': path.resolve(__dirname, '../api')
+    }
+  }
 })`
 
 const js = `document.querySelector<HTMLDivElement>('#app')!.innerHTML="hello world"`
