@@ -43,7 +43,7 @@ func genUtil(plugin *protogen.Plugin, dir string, jsonreplacer bool, normal bool
 	f := plugin.NewGeneratedFile(dir+"/browser_method_util.ts", "")
 	genFileComment(plugin, f, "")
 	if jsonreplacer {
-		f.P("export function jsonreplacer(key: any, value: any): any {")
+		f.P("export function jsonreplacer(_key: any, value: any): any {")
 		f.P("\tif(typeof value === 'bigint'){")
 		f.P("\t\treturn value.toString();")
 		f.P("\t}else if(value instanceof Map){")
@@ -53,7 +53,7 @@ func genUtil(plugin *protogen.Plugin, dir string, jsonreplacer bool, normal bool
 		f.P("\t\tconst chunkSize = 1024;")
 		f.P("\t\tfor(let i = 0; i < value.length; i += chunkSize){")
 		f.P("\t\t\tlet chunk = value.subarray(i, i + chunkSize);")
-		f.P("\t\t\tbinary += String.fromCharCode.apply(null, chunk);")
+		f.P("\t\t\tbinary += String.fromCharCode(...chunk);")
 		f.P("\t\t}")
 		f.P("\t\treturn window.btoa(binary);")
 		f.P("\t}")
