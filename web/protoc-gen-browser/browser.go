@@ -1374,16 +1374,17 @@ func genServiceMethod(plugin *protogen.Plugin, s *protogen.Service, m *protogen.
 	genFileComment(plugin, f, s.Desc.ParentFile().Path())
 	//import
 	filename := "browser_message_" + string(m.Input.Desc.ParentFile().Package()) + "_" + string(m.Input.GoIdent.GoName)
+	f.P("import type {ResponseError} from './browser_method_util'")
 	if emethod[0] == "POST" || emethod[0] == "PATCH" || emethod[0] == "PUT" {
 		if m.Desc.IsStreamingServer() {
-			f.P("import {ResponseError,jsonreplacer,sse_fetch} from './browser_method_util'")
+			f.P("import {jsonreplacer,sse_fetch} from './browser_method_util'")
 		} else {
-			f.P("import {ResponseError,jsonreplacer,normal_fetch} from './browser_method_util'")
+			f.P("import {jsonreplacer,normal_fetch} from './browser_method_util'")
 		}
 	} else if m.Desc.IsStreamingServer() {
-		f.P("import {ResponseError,sse_fetch} from './browser_method_util'")
+		f.P("import {sse_fetch} from './browser_method_util'")
 	} else {
-		f.P("import {ResponseError,normal_fetch} from './browser_method_util'")
+		f.P("import {normal_fetch} from './browser_method_util'")
 	}
 	f.P("import {", m.Input.GoIdent.GoName, "} from './", filename, "'")
 	if m.Input != m.Output {
