@@ -202,7 +202,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 		if len(method.Input.Fields) > 0 {
 			if need == "POST" || need == "PUT" || need == "PATCH" {
 				g.P("if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetRequest().Header.Get(\"Content-Type\"),", strconv.Quote("application/json"), "){")
-				g.P("data, e := ", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(ctx.GetRequest())")
+				g.P("data, e := ", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(ctx.GetRequest().Body)")
 				g.P("if e!=nil{")
 				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] get body failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
 				g.P("ctx.Abort(e)")
@@ -216,7 +216,7 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 				g.P("}")
 				g.P("}")
 				g.P("}else if ", g.QualifiedGoIdent(stringsPackage.Ident("HasPrefix")), "(ctx.GetRequest().Header.Get(\"Content-Type\"),", strconv.Quote("application/x-protobuf"), "){")
-				g.P("data, e := ", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(ctx.GetRequest())")
+				g.P("data, e := ", g.QualifiedGoIdent(ioPackage.Ident("ReadAll")), "(ctx.GetRequest().Body)")
 				g.P("if e!=nil{")
 				g.P(g.QualifiedGoIdent(slogPackage.Ident("ErrorContext")), "(ctx,\"[", pathurl, "] get body failed\",", g.QualifiedGoIdent(slogPackage.Ident("String")), "(\"error\",e.Error()))")
 				g.P("ctx.Abort(e)")
