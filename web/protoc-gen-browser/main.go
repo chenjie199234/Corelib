@@ -94,10 +94,31 @@ func main() {
 		for message, status := range msgs {
 			genMessage(plugin, message, status, *outdir)
 		}
+		jsonreplacer := false
+		normal := false
+		sse := false
 		for service, methods := range services {
 			for method := range methods {
+				if !sse {
+					sse = method.Desc.IsStreamingServer()
+				}
+				if !normal {
+					normal = !method.Desc.IsStreamingServer()
+				}
+				mop := method.Desc.Options().(*descriptorpb.MethodOptions)
+				emethod := proto.GetExtension(mop, pbex.E_Method).([]string)
+				for _, em := range emethod {
+					em = strings.ToUpper(em)
+					if em == "POST" || em == "PUT" || em == "PATCH" {
+						jsonreplacer = true
+						break
+					}
+				}
 				genServiceMethod(plugin, service, method, *outdir)
 			}
+		}
+		if len(services) > 0 {
+			genUtil(plugin, *outdir, jsonreplacer, normal, sse)
 		}
 		return nil
 	})
