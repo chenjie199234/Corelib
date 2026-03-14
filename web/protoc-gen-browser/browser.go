@@ -253,14 +253,14 @@ func genMessage(plugin *protogen.Plugin, m *protogen.Message, status []bool, dir
 					}
 				case protoreflect.MessageKind:
 					message := field.Message.Fields[1].Message
-					if _, ok := dup[message.GoIdent.GoName]; !ok {
+					if _, ok := dup[message.GoIdent.GoName]; !ok && message != m {
 						dup[message.GoIdent.GoName] = nil
 						filename := "browser_message_" + string(message.Desc.ParentFile().Package()) + "_" + message.GoIdent.GoName
 						f.P("import {", message.GoIdent.GoName, "} from './", filename, "'")
 					}
 				}
 			} else {
-				if _, ok := dup[field.Message.GoIdent.GoName]; !ok {
+				if _, ok := dup[field.Message.GoIdent.GoName]; !ok && field.Message != m {
 					dup[field.Message.GoIdent.GoName] = nil
 					filename := "browser_message_" + string(field.Message.Desc.ParentFile().Package()) + "_" + field.Message.GoIdent.GoName
 					f.P("import {", field.Message.GoIdent.GoName, "} from './", filename, "'")
