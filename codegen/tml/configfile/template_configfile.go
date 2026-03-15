@@ -156,10 +156,11 @@ const app = `{
 	},
 	"accesses":{
 		"/{{.}}.exampleservice/examplemethod":[{
-			"methods":["GET","GRPC","CRPC"],
-			"accesses":{
-				"accessid":"accesskey"
-			}
+			"methods":["GET"],
+			"accesses":["accesskey1","accesskey2"]
+		},{
+			"methods":["GRPC","CRPC"],
+			"accesses":["accesskey3","accesskey4"]
 		}]
 	},
 	"token_secret":"test",

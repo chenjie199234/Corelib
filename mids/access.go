@@ -2,47 +2,35 @@ package mids
 
 import (
 	"context"
-	"log/slog"
-	"maps"
+	"slices"
 	"strings"
-	"sync/atomic"
-	"unsafe"
-
-	"github.com/chenjie199234/Corelib/redis"
 )
 
-type access struct {
-	c     *redis.Client
-	grpc  map[string]map[string]string //first key path,second key accessid,value accesskey
-	crpc  map[string]map[string]string
-	get   map[string]map[string]string
-	post  map[string]map[string]string
-	put   map[string]map[string]string
-	patch map[string]map[string]string
-	del   map[string]map[string]string
-}
+// key path,value accesskey
+var grpcAccess map[string][]string
+var crpcAccess map[string][]string
+var getAccess map[string][]string
+var postAccess map[string][]string
+var putAccess map[string][]string
+var patchAccess map[string][]string
+var delAccess map[string][]string
+
 type MultiPathAccessConfigs map[string]SinglePathAccessConfig //map's key:path
 type SinglePathAccessConfig []*PathAccessRule                 //one path can have multi access rule
 type PathAccessRule struct {
-	Methods  []string          `json:"methods"`  //GRPC,CRPC,GET,POST,PUT,PATCH,DELETE
-	Accesses map[string]string `json:"accesses"` //key accessid,value accesskey,all method above share these accesses
-}
-
-var accessInstance *access
-
-func init() {
-	accessInstance = &access{}
+	Methods  []string `json:"methods"`  //GRPC,CRPC,GET,POST,PUT,PATCH,DELETE
+	Accesses []string `json:"accesses"` //value accesskey,all method above share these accesses
 }
 
 // key path
 func UpdateAccessConfig(c MultiPathAccessConfigs) {
-	grpc := make(map[string]map[string]string)
-	crpc := make(map[string]map[string]string)
-	get := make(map[string]map[string]string)
-	post := make(map[string]map[string]string)
-	put := make(map[string]map[string]string)
-	patch := make(map[string]map[string]string)
-	del := make(map[string]map[string]string)
+	tmpgrpc := make(map[string][]string)
+	tmpcrpc := make(map[string][]string)
+	tmpget := make(map[string][]string)
+	tmppost := make(map[string][]string)
+	tmpput := make(map[string][]string)
+	tmppatch := make(map[string][]string)
+	tmpdel := make(map[string][]string)
 	for path, pathaccessrules := range c {
 		if path == "" {
 			path = "/"
@@ -51,96 +39,80 @@ func UpdateAccessConfig(c MultiPathAccessConfigs) {
 		}
 		for _, pathaccessrule := range pathaccessrules {
 			for _, method := range pathaccessrule.Methods {
-				switch strings.ToUpper(method) {
+				switch strings.ToUpper(strings.TrimSpace(method)) {
 				case "GRPC":
-					if _, ok := grpc[path]; !ok {
-						grpc[path] = make(map[string]string)
+					if _, ok := tmpgrpc[path]; !ok {
+						tmpgrpc[path] = make([]string, 0, 3)
 					}
-					maps.Copy(grpc[path], pathaccessrule.Accesses)
+					tmpgrpc[path] = append(tmpgrpc[path], pathaccessrule.Accesses...)
 				case "CRPC":
-					if _, ok := crpc[path]; !ok {
-						crpc[path] = make(map[string]string)
+					if _, ok := tmpcrpc[path]; !ok {
+						tmpcrpc[path] = make([]string, 0, 3)
 					}
-					maps.Copy(crpc[path], pathaccessrule.Accesses)
+					tmpcrpc[path] = append(tmpcrpc[path], pathaccessrule.Accesses...)
 				case "GET":
-					if _, ok := get[path]; !ok {
-						get[path] = make(map[string]string)
+					if _, ok := tmpget[path]; !ok {
+						tmpget[path] = make([]string, 0, 3)
 					}
-					maps.Copy(get[path], pathaccessrule.Accesses)
+					tmpget[path] = append(tmpget[path], pathaccessrule.Accesses...)
 				case "POST":
-					if _, ok := post[path]; !ok {
-						post[path] = make(map[string]string)
+					if _, ok := tmppost[path]; !ok {
+						tmppost[path] = make([]string, 0, 3)
 					}
-					maps.Copy(post[path], pathaccessrule.Accesses)
+					tmppost[path] = append(tmppost[path], pathaccessrule.Accesses...)
 				case "PUT":
-					if _, ok := put[path]; !ok {
-						put[path] = make(map[string]string)
+					if _, ok := tmpput[path]; !ok {
+						tmpput[path] = make([]string, 0, 3)
 					}
-					maps.Copy(put[path], pathaccessrule.Accesses)
+					tmpput[path] = append(tmpput[path], pathaccessrule.Accesses...)
 				case "PATCH":
-					if _, ok := patch[path]; !ok {
-						patch[path] = make(map[string]string)
+					if _, ok := tmppatch[path]; !ok {
+						tmppatch[path] = make([]string, 0, 3)
 					}
-					maps.Copy(patch[path], pathaccessrule.Accesses)
+					tmppatch[path] = append(tmppatch[path], pathaccessrule.Accesses...)
 				case "DELETE":
-					if _, ok := del[path]; !ok {
-						del[path] = make(map[string]string)
+					if _, ok := tmpdel[path]; !ok {
+						tmpdel[path] = make([]string, 0, 3)
 					}
-					maps.Copy(del[path], pathaccessrule.Accesses)
+					tmpdel[path] = append(tmpdel[path], pathaccessrule.Accesses...)
 				}
 			}
 		}
 	}
-	accessInstance.grpc = grpc
-	accessInstance.crpc = crpc
-	accessInstance.get = get
-	accessInstance.post = post
-	accessInstance.put = put
-	accessInstance.patch = patch
-	accessInstance.del = del
+	grpcAccess = tmpgrpc
+	crpcAccess = tmpcrpc
+	getAccess = tmpget
+	postAccess = tmppost
+	putAccess = tmpput
+	patchAccess = tmppatch
+	delAccess = tmpdel
 }
-func UpdateReplayDefendRedisInstance(c *redis.Client) {
-	if c == nil {
-		slog.Warn("[access.sign] redis missing,replay attack may happened")
-	}
-	oldp := (*redis.Client)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&accessInstance.c)), unsafe.Pointer(c)))
-	if oldp != nil {
-		oldp.Close()
-	}
-}
-
 func VerifyAccessKey(ctx context.Context, method, path, accesskey string) bool {
-	var tmp map[string]map[string]string
+	var tmp map[string][]string
 	switch strings.ToUpper(method) {
 	case "GRPC":
-		tmp = accessInstance.grpc
+		tmp = grpcAccess
 	case "CRPC":
-		tmp = accessInstance.crpc
+		tmp = crpcAccess
 	case "GET":
-		tmp = accessInstance.get
+		tmp = getAccess
 	case "POST":
-		tmp = accessInstance.post
+		tmp = postAccess
 	case "PUT":
-		tmp = accessInstance.put
+		tmp = putAccess
 	case "PATCH":
-		tmp = accessInstance.patch
+		tmp = patchAccess
 	case "DELETE":
-		tmp = accessInstance.del
+		tmp = delAccess
 	default:
 		return false
 	}
 	if tmp == nil {
-		slog.ErrorContext(ctx, "[access.key] missing init,please use UpdateAccessConfig first")
 		return false
 	}
 	accesses, ok := tmp[path]
 	if !ok {
 		return false
 	}
-	for _, v := range accesses {
-		if accesskey == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(accesses, accesskey)
 }
