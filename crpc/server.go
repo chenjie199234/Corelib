@@ -304,6 +304,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 					slog.String("path", msg.GetH().GetPath()),
 					slog.String("error", e.Error()))
 			}
+			s.stop.DoneOne()
 			return
 		}
 		//response init success
@@ -325,6 +326,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				slog.String("cip", p.GetRealPeerIP()),
 				slog.String("path", msg.GetH().GetPath()),
 				slog.String("error", e.Error()))
+			s.stop.DoneOne()
 			return
 		}
 		peerip := p.GetRealPeerIP()
