@@ -565,7 +565,7 @@ func initredis(){
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
 							slog.Error("[config.initredis] specific cert load failed",
-								slog.String("redis", redisc.RedisName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
+								slog.String("redis", redisc.RedisName), slog.String("cert_path", certpath))
 							os.Exit(1)
 						}
 					}
@@ -623,7 +623,7 @@ func initmongo(){
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
 							slog.Error("[config.initmongo] specific cert load failed",
-								slog.String("mongo", mongoc.MongoName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
+								slog.String("mongo", mongoc.MongoName), slog.String("cert_path", certpath))
 							os.Exit(1)
 						}
 					}
@@ -677,7 +677,7 @@ func initmysql(){
 						}
 						if ok := tlsc.RootCAs.AppendCertsFromPEM(cert); !ok {
 							slog.Error("[config.initmysql] specific cert load failed",
-								slog.String("mysql", mysqlc.MysqlName), slog.String("cert_path", certpath), slog.String("error",e.Error()))
+								slog.String("mysql", mysqlc.MysqlName), slog.String("cert_path", certpath))
 							os.Exit(1)
 						}
 					}

@@ -75,7 +75,7 @@ const source = `{
 			"replica_set":"",
 			"max_open":256,
 			"max_conn_idletime":"5m",
-			"io_timeout":"500ms",
+			"io_timeout":"10s",
 			"dial_timeout":"250ms"
 		}
 	},
@@ -95,7 +95,7 @@ const source = `{
 			},
 			"max_open":256,
 			"max_conn_idletime":"5m",
-			"io_timeout":"500ms",
+			"io_timeout":"10s",
 			"dial_timeout":"250ms",
 			"charset":"",
 			"collation":"",
@@ -114,7 +114,7 @@ const source = `{
 			"read_write_split":true,
 			"max_open":256,
 			"max_conn_idletime":"5m",
-			"io_timeout":"500ms",
+			"io_timeout":"3s",
 			"dial_timeout":"250ms"
 		}
 	},
