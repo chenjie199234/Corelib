@@ -248,13 +248,16 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			return
 		}
 		if e := s.stop.Add(1); e != nil {
-			msg.GetB().ClearBody()
 			if e == graceful.ErrClosing {
 				//tell peer self closed
-				msg.GetB().SetError(cerror.ErrServerClosing)
+				mb := &Msg_Body{}
+				mb.SetError(cerror.ErrServerClosing)
+				msg.SetB(mb)
 			} else {
 				//tell peer self busy,this is impossible
-				msg.GetB().SetError(cerror.ErrBusy)
+				mb := &Msg_Body{}
+				mb.SetError(cerror.ErrBusy)
+				msg.SetB(mb)
 			}
 			msg.GetH().SetMetadata(nil)
 			msg.GetH().SetTracedata(nil)
@@ -280,8 +283,9 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		if !ok {
 			slog.Error("[crpc.server] path doesn't exist",
 				slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.GetH().GetPath()))
-			msg.GetB().ClearBody()
-			msg.GetB().SetError(cerror.ErrNoapi)
+			mb := &Msg_Body{}
+			mb.SetError(cerror.ErrNoapi)
+			msg.SetB(mb)
 			msg.GetH().SetMetadata(nil)
 			msg.GetH().SetTracedata(nil)
 			msg.GetH().ClearDeadline()
