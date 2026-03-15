@@ -1418,9 +1418,9 @@ func genServiceMethod(plugin *protogen.Plugin, s *protogen.Service, m *protogen.
 		f.P("\tlet opts: RequestInit = {method:", strconv.Quote(emethod[0]), ",headers:h}")
 		if emethod[0] == "POST" || emethod[0] == "PUT" || emethod[0] == "PATCH" {
 			f.P("\topts.body=JSON.stringify(req,jsonreplacer)")
-			f.P("\treturn normal_fetch(baseurl,", pathname, ",'',opts,", m.Output.GoIdent.GoName, ")")
+			f.P("\treturn normal_fetch(timeout,baseurl,", pathname, ",'',opts,", m.Output.GoIdent.GoName, ")")
 		} else {
-			f.P("\treturn normal_fetch(baseurl,", pathname, ",req.toFORM(),opts,", m.Output.GoIdent.GoName, ")")
+			f.P("\treturn normal_fetch(timeout,baseurl,", pathname, ",req.toFORM(),opts,", m.Output.GoIdent.GoName, ")")
 		}
 		f.P("}")
 	} else {
