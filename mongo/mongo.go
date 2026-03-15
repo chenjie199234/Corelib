@@ -45,7 +45,9 @@ type Config struct {
 	//<=0: default 5s
 	DialTimeout ctime.Duration `json:"dial_timeout"`
 	//<=0: no timeout
-	IOTimeout ctime.Duration `json:"io_timeout"`
+	//the v2 driver's SetSocketTimeout() deleted
+	//the v2 driver's SetTimeout() is a trash,it will ignore the operation's option like MaxWaitTime
+	// IOTimeout ctime.Duration `json:"io_timeout"`
 }
 type Client struct {
 	*gmongo.Client
@@ -94,9 +96,9 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	} else {
 		opts = opts.SetConnectTimeout(c.DialTimeout.StdDuration())
 	}
-	if c.IOTimeout > 0 {
-		opts = opts.SetTimeout(c.IOTimeout.StdDuration())
-	}
+	// if c.IOTimeout > 0 {
+	// opts = opts.SetTimeout(c.IOTimeout.StdDuration())
+	// }
 	if c.MongoDBSRV {
 		if len(c.Addrs) != 1 || strings.Contains(c.Addrs[0], ":") || strings.Contains(c.Addrs[0], ",") {
 			return nil, errors.New("when mongodb_srv is true,addrs can only contain 1 element and it must be a host without port and scheme")

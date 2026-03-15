@@ -19,7 +19,6 @@ func Test_Mongo(t *testing.T) {
 		MaxOpen:         256,
 		MaxConnIdletime: ctime.Duration(time.Minute * 5),
 		DialTimeout:     ctime.Duration(time.Second * 5),
-		IOTimeout:       ctime.Duration(time.Second * 5),
 	}
 	_, e := NewMongo(c, nil)
 	if e != nil {
