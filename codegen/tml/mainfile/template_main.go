@@ -40,6 +40,7 @@ type LogHandler struct {
 	slog.Handler
 }
 
+//inject by go build -ldflags "-X"
 var version string
 
 func (l *LogHandler) Handle(ctx context.Context, record slog.Record) error {
