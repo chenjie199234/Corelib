@@ -14,7 +14,7 @@ ENV GOSUMDB='off' \
 RUN mkdir /code
 ADD . /code
 WORKDIR /code
-RUN chmod +x ./cmd.sh & echo "start build" && go mod tidy && ./cmd.sh build && echo "end build"
+RUN echo "start build" && go mod tidy && go build -ldflags="-X 'main.version=$(date -u '+%Y-%m-%d %H:%M:%S')'" main.go && echo "end build"
 
 FROM alpine:3.23.3
 RUN mkdir /root/app
