@@ -40,6 +40,7 @@ message Pingresp{
 	uint64 mem_total=8;
 	double mem_usage=9;
 	string mem_type=10;
+	string version=11;
 }`
 
 type data struct {

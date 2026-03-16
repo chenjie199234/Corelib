@@ -14,6 +14,7 @@ import (
 
 	// "{{.}}/config"
 	"{{.}}/api"
+	"{{.}}/model"
 	statusdao "{{.}}/dao/status"
 	// "{{.}}/ecode"
 
@@ -65,6 +66,7 @@ func (s *Service) Ping(ctx context.Context, in *api.Pingreq) (*api.Pingresp, err
 	resp.SetMemTotal(mem)
 	resp.SetMemUsage(memu)
 	resp.SetMemType(memt)
+	resp.SetVersion(model.Version)
 	return resp, nil
 }
 

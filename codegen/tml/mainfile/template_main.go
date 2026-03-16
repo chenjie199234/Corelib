@@ -21,7 +21,7 @@ import (
 
 	"{{.}}/config"
 	"{{.}}/dao"
-	_ "{{.}}/model"
+	"{{.}}/model"
 	"{{.}}/server/xcrpc"
 	"{{.}}/server/xgrpc"
 	"{{.}}/server/xraw"
@@ -39,6 +39,8 @@ import (
 type LogHandler struct {
 	slog.Handler
 }
+
+var version string
 
 func (l *LogHandler) Handle(ctx context.Context, record slog.Record) error {
 	if record.NumAttrs() > 0 {
@@ -63,6 +65,7 @@ func (l *LogHandler) Handle(ctx context.Context, record slog.Record) error {
 }
 
 func main() {
+	model.Version = version
 	slog.SetDefault(slog.New(&LogHandler{
 		slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			AddSource: true,
