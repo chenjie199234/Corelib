@@ -14,7 +14,7 @@ ENV GOSUMDB='off' \
 RUN mkdir /code
 ADD . /code
 WORKDIR /code
-RUN echo "start build" && go mod tidy && go build -o main && echo "end build"
+RUN chmod +x ./cmd.sh & echo "start build" && go mod tidy && ./cmd.sh build && echo "end build"
 
 FROM alpine:3.23.3
 RUN mkdir /root/app
