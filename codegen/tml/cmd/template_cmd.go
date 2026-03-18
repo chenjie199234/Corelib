@@ -33,11 +33,19 @@ help() {
 }
 
 run(){
+	if ! go mod tidy;then
+		echo "go mod tidy failed"
+		exit 1
+	fi
 	dt=$(date -u '+%Y-%m-%d %H:%M:%S')
 	go run -ldflags="-X 'main.version=${dt}'" main.go
 }
 
 build(){
+	if ! go mod tidy;then
+		echo "go mod tidy failed"
+		exit 1
+	fi
 	dt=$(date -u '+%Y-%m-%d %H:%M:%S')
 	go build -ldflags="-X 'main.version=${dt}'" main.go
 }
@@ -234,11 +242,21 @@ if "%1" == "sub" (
 goto :help
 
 :run
+	go mod tidy
+	if %errorlevel% == 1 (
+		echo "go mod tidy failed"
+		exit /b 1
+	)
 	for /f "delims=" %%i in ('powershell -Command "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'"') do set "dt=%%i"
 	go run -ldflags="-X 'main.version=%dt%'" main.go
 goto :end
 
 :build
+	go mod tidy
+	if %errorlevel% == 1 (
+		echo "go mod tidy failed"
+		exit /b 1
+	)
 	for /f "delims=" %%i in ('powershell -Command "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'"') do set "dt=%%i"
 	go build -ldflags="-X 'main.version=%dt%'" main.go
 goto :end
