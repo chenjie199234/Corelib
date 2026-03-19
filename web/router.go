@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -409,16 +411,68 @@ func (r *Router) notFoundHandler(w http.ResponseWriter, req *http.Request) {
 }
 func (r *Router) srcFileHandler(resp http.ResponseWriter, req *http.Request) {
 	path := req.URL.Path
-	if path == "/" {
-		path = "/index.html"
+	if path == "/" || path == "" {
+		path = "index.html"
+	} else if path[0] == '/' {
+		path = path[1:]
 	}
-	if file, e := r.srcroot.Open(path[1:]); e != nil {
+	if !strings.HasSuffix(path, ".gz") && slices.Contains(req.Header.Values("Accept-Encoding"), "gzip") {
+		//try to serve the pre gzip compressed file
+		//if pre gzip compressed file not exist,we fallback to serve the normal file
+		//if the path to pre gzip compressed file is a dir,we fallback to serve the normal file
+		tmppath := path + ".gz"
+		if file, e := r.srcroot.Open(tmppath); e != nil && !os.IsNotExist(e) {
+			resp.Header().Set("Content-Type", "application/json")
+			resp.WriteHeader(int(cerror.ErrSystem.GetHttpcode()))
+			resp.Write(common.STB(cerror.ErrSystem.Json()))
+			slog.Error("[web.server] open static src file failed",
+				slog.String("cip", realip(req)),
+				slog.String("path", tmppath),
+				slog.String("method", req.Method),
+				slog.String("error", e.Error()))
+			return
+		} else if fileinfo, e := file.Stat(); e != nil {
+			resp.Header().Set("Content-Type", "application/json")
+			resp.WriteHeader(int(cerror.ErrSystem.GetHttpcode()))
+			resp.Write(common.STB(cerror.ErrSystem.Json()))
+			slog.Error("[web.server] get static src file info failed",
+				slog.String("cip", realip(req)),
+				slog.String("path", tmppath),
+				slog.String("method", req.Method),
+				slog.String("error", e.Error()))
+			return
+		} else if fileinfo.Mode().IsRegular() {
+			size, e := file.(io.Seeker).Seek(0, io.SeekEnd)
+			if e != nil {
+				resp.Header().Set("Content-Type", "application/json")
+				resp.WriteHeader(int(cerror.ErrSystem.GetHttpcode()))
+				resp.Write(common.STB(cerror.ErrSystem.Json()))
+				slog.Error("[web.server] get gzip file length failed",
+					slog.String("cip", realip(req)),
+					slog.String("path", tmppath),
+					slog.String("method", req.Method),
+					slog.String("error", e.Error()))
+				return
+			}
+			resp.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+			resp.Header().Set("Content-Encoding", "gzip")
+			index := strings.LastIndex(path, "/")
+			if index == -1 {
+				http.ServeContent(resp, req, path, fileinfo.ModTime(), file.(*os.File))
+			} else {
+				http.ServeContent(resp, req, path[index+1:], fileinfo.ModTime(), file.(*os.File))
+			}
+			file.Close()
+			return
+		}
+	}
+	if file, e := r.srcroot.Open(path); e != nil {
 		resp.Header().Set("Content-Type", "application/json")
 		resp.WriteHeader(int(cerror.ErrSystem.GetHttpcode()))
 		resp.Write(common.STB(cerror.ErrSystem.Json()))
 		slog.Error("[web.server] open static src file failed",
 			slog.String("cip", realip(req)),
-			slog.String("path", req.URL.Path),
+			slog.String("path", path),
 			slog.String("method", req.Method),
 			slog.String("error", e.Error()))
 	} else if fileinfo, e := file.Stat(); e != nil {
@@ -427,7 +481,7 @@ func (r *Router) srcFileHandler(resp http.ResponseWriter, req *http.Request) {
 		resp.Write(common.STB(cerror.ErrSystem.Json()))
 		slog.Error("[web.server] get static src file info failed",
 			slog.String("cip", realip(req)),
-			slog.String("path", req.URL.Path),
+			slog.String("path", path),
 			slog.String("method", req.Method),
 			slog.String("error", e.Error()))
 		file.Close()
@@ -437,7 +491,7 @@ func (r *Router) srcFileHandler(resp http.ResponseWriter, req *http.Request) {
 		resp.Write(common.STB(cerror.ErrNotExist.Json()))
 		slog.Error("[web.server] static src file not exist",
 			slog.String("cip", realip(req)),
-			slog.String("path", req.URL.Path),
+			slog.String("path", path),
 			slog.String("method", req.Method))
 		file.Close()
 	} else {

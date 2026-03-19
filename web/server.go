@@ -1,9 +1,11 @@
 package web
 
 import (
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"errors"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -207,6 +209,7 @@ func NewWebServer(c *ServerConfig, tlsc *tls.Config) (*WebServer, error) {
 }
 
 var ErrSrcPathWrong = errors.New("[web.server] src root path wrong")
+var ErrUncompress = errors.New("[web.server] uncompress gzip file in static root path failed")
 
 func (s *WebServer) NewRouter() (*Router, error) {
 	router := &Router{
@@ -245,9 +248,63 @@ func (s *WebServer) NewRouter() (*Router, error) {
 			}
 			break
 		}
+		//we need to uncompress all gzip files in this dir and it's children dir
+		//to make the client which can't support Accept-Encoding: gzip work
+		if e := ungzip(s.c.SrcRootPath); e != nil {
+			return nil, ErrUncompress
+		}
 		router.srcroot = os.DirFS(s.c.SrcRootPath)
 	}
 	return router, nil
+}
+func ungzip(dir string) error {
+	finfos, e := os.ReadDir(dir)
+	if e != nil {
+		return e
+	}
+	need := make(map[string]*struct{})
+	for _, finfo := range finfos {
+		if finfo.IsDir() {
+			ungzip(finfo.Name())
+		} else if strings.HasSuffix(".gz", finfo.Name()) {
+			need[finfo.Name()] = nil
+
+		} else {
+			//already uncompressed
+			delete(need, finfo.Name()+".gz")
+		}
+	}
+	for fname := range need {
+		f, e := os.Open(fname)
+		if e != nil {
+			return e
+		}
+		//uncompress
+		reader, e := gzip.NewReader(f)
+		if e != nil {
+			return e
+		}
+		writer, e := os.OpenFile(fname[:len(fname)-3], os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0644)
+		if e != nil {
+			return e
+		}
+		if _, e := io.Copy(writer, reader); e != nil {
+			return e
+		}
+		if e := reader.Close(); e != nil {
+			return e
+		}
+		if e := f.Close(); e != nil {
+			return e
+		}
+		if e := writer.Sync(); e != nil {
+			return e
+		}
+		if e := writer.Close(); e != nil {
+			return e
+		}
+	}
+	return nil
 }
 func (s *WebServer) SetRouter(r *Router) {
 	s.s.Handler = r
