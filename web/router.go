@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -416,7 +415,7 @@ func (r *Router) srcFileHandler(resp http.ResponseWriter, req *http.Request) {
 	} else if path[0] == '/' {
 		path = path[1:]
 	}
-	if !strings.HasSuffix(path, ".gz") && slices.Contains(req.Header.Values("Accept-Encoding"), "gzip") {
+	if !strings.HasSuffix(path, ".gz") && strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
 		//try to serve the pre gzip compressed file
 		//if pre gzip compressed file not exist,we fallback to serve the normal file
 		//if the path to pre gzip compressed file is a dir,we fallback to serve the normal file
