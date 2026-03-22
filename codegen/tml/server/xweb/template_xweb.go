@@ -7,6 +7,10 @@ import (
 
 const txt = `package xweb
 
+//Warning!!Don't add comments in this file
+//this file will be updated automaticly when create sub service
+//however,golang's ast package can't handle ast tree with comments well(checked 1.26.0)
+
 import (
 	"crypto/tls"
 	"log/slog"
@@ -24,7 +28,6 @@ import (
 
 var s *web.WebServer
 
-// StartWebServer -
 func StartWebServer() {
 	c := config.GetWebServerConfig()
 	var tlsc *tls.Config
@@ -59,10 +62,10 @@ func StartWebServer() {
 	//this place can register global midwares
 	//r.Use(globalmidwares)
 
-	//you just need to register your service here
-	api.RegisterStatusWebServer(r, service.SvcStatus, mids.AllMids())
 	//example
 	//api.RegisterExampleWebServer(r, service.SvcExample, mids.AllMids())
+	//you need to register your service here
+	api.RegisterStatusWebServer(r, service.SvcStatus, mids.AllMids())
 
 	server.SetRouter(r)
 	if e = server.StartWebServer(":8000"); e != nil && e != web.ErrServerClosed {
@@ -72,30 +75,22 @@ func StartWebServer() {
 	slog.Info("[xweb] server closed")
 }
 
-// UpdateHandlerTimeout -
-// first key path,second key method,value timeout duration
 func UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
-	//avoid race when build/run in -race mode
-	tmps := (*web.WebServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
+	tmps := (*web.WebServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s)))) //avoid race when build/run in -race mode
 	if tmps != nil {
 		tmps.UpdateHandlerTimeout(timeout)
 	}
 }
 
-// UpdateWebPathRewrite -
-// first key method,second key origin url,value rewrite url
 func UpdateWebPathRewrite(rewrite map[string]map[string]string) {
-	//avoid race when build/run in -race mode
-	tmps := (*web.WebServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
+	tmps := (*web.WebServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s)))) //avoid race when build/run in -race mode
 	if tmps != nil {
 		tmps.UpdateHandlerRewrite(rewrite)
 	}
 }
 
-// StopWebServer force - false(graceful),true(not graceful)
 func StopWebServer(force bool) {
-	//avoid race when build/run in -race mode
-	tmps := (*web.WebServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
+	tmps := (*web.WebServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s)))) //avoid race when build/run in -race mode
 	if tmps != nil {
 		tmps.StopWebServer(force)
 	}

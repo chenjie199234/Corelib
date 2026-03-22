@@ -7,6 +7,10 @@ import (
 
 const txt = `package xgrpc
 
+//Warning!!Don't add comments in this file
+//this file will be updated automaticly when create sub service
+//however,golang's ast package can't handle ast tree with comments well(checked 1.26.0)
+
 import (
 	"crypto/tls"
 	"log/slog"
@@ -24,7 +28,6 @@ import (
 
 var s *cgrpc.CGrpcServer
 
-// StartCGrpcServer -
 func StartCGrpcServer() {
 	c := config.GetCGrpcServerConfig()
 	var tlsc *tls.Config
@@ -52,10 +55,10 @@ func StartCGrpcServer() {
 	//this place can register global midwares
 	//server.Use(globalmidwares)
 
-	//you just need to register your service here
-	api.RegisterStatusCGrpcServer(server, service.SvcStatus, mids.AllMids())
 	//example
 	//api.RegisterExampleCGrpcServer(server, service.SvcExample, mids.AllMids())
+	//you need to register your service here
+	api.RegisterStatusCGrpcServer(server, service.SvcStatus, mids.AllMids())
 
 	if e = server.StartCGrpcServer(":10000"); e != nil && e != cgrpc.ErrServerClosed {
 		slog.Error("[xgrpc] start server failed", slog.String("error",e.Error()))
@@ -64,20 +67,15 @@ func StartCGrpcServer() {
 	slog.Info("[xgrpc] server closed")
 }
 
-// UpdateHandlerTimeout -
-// first key path,second key method,value timeout duration
 func UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
-	//avoid race when build/run in -race mode
-	tmps := (*cgrpc.CGrpcServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
+	tmps := (*cgrpc.CGrpcServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s)))) //avoid race when build/run in -race mode
 	if tmps!=nil{
 		tmps.UpdateHandlerTimeout(timeout)
 	}
 }
 
-// StopCGrpcServer force - false(graceful),true(not graceful)
 func StopCGrpcServer(force bool) {
-	//avoid race when build/run in -race mode
-	tmps := (*cgrpc.CGrpcServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
+	tmps := (*cgrpc.CGrpcServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s)))) //avoid race when build/run in -race mode
 	if tmps != nil {
 		tmps.StopCGrpcServer(force)
 	}

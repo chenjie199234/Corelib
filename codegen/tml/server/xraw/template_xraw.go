@@ -21,7 +21,6 @@ import (
 
 var s *stream.Instance
 
-// StartRawServer -
 func StartRawServer() {
 	c := config.GetRawServerConfig()
 	var tlsc *tls.Config
@@ -59,10 +58,8 @@ func StartRawServer() {
 	slog.Info("[xraw] server closed")
 }
 
-// StopRawServer -
 func StopRawServer() {
-	//avoid race when build/run in -race mode
-	tmps := (*stream.Instance)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
+	tmps := (*stream.Instance)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))//avoid race when build/run in -race mode
 	if tmps != nil {
 		tmps.Stop()
 	}

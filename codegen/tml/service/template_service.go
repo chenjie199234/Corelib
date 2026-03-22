@@ -7,25 +7,25 @@ import (
 
 const txt = `package service
 
+//Warning!!Don't add comments in this file
+//this file will be updated automaticly when create sub service
+//however,golang's ast package can't handle ast tree with comments well(checked 1.26.0)
+
 import (
 	"{{.}}/dao"
 	"{{.}}/service/raw"
 	"{{.}}/service/status"
 )
 
-// SvcStatus one specify sub service
 var SvcStatus *status.Service
 
-// SvcRaw one specify sub service
 var SvcRaw *raw.Service
 
-// StartService start the whole service
 func StartService() error {
 	var e error
 	if e = dao.NewApi(); e != nil {
 		return e
 	}
-	//start sub service
 	if SvcStatus, e = status.Start(); e != nil {
 		return e
 	}
@@ -35,9 +35,7 @@ func StartService() error {
 	return nil
 }
 
-// StopService stop the whole service
 func StopService() {
-	//stop sub service
 	SvcStatus.Stop()
 	SvcRaw.Stop()
 }`
