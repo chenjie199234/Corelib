@@ -231,12 +231,12 @@ func createSubProject() {
 	if e := name.SingleCheck(*gensub, false); e != nil {
 		panic(e)
 	}
-	_, e := os.Stat("./api/" + *gensub + ".proto")
+	_, e := os.Stat("./api/" + *appname + "_" + *gensub + ".proto")
 	if e == nil {
-		panic("./api/" + *gensub + ".proto already exist")
+		panic("./api/" + *appname + "_" + *gensub + ".proto already exist")
 	}
 	if !os.IsNotExist(e) {
-		panic("./api/" + *gensub + ".proto check file exist error: " + e.Error())
+		panic("./api/" + *appname + "_" + *gensub + ".proto check file exist error: " + e.Error())
 	}
 	_, e = os.Stat("./service/" + *gensub)
 	if e == nil {
