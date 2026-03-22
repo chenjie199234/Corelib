@@ -7,10 +7,6 @@ import (
 
 const txt = `package xcrpc
 
-//Warning!!Don't add comments in this file
-//this file will be updated automaticly when create sub service
-//however,golang's ast package can't handle ast tree with comments well(checked 1.26.0)
-
 import (
 	"crypto/tls"
 	"log/slog"
@@ -67,15 +63,18 @@ func StartCrpcServer() {
 	slog.Info("[xcrpc] server closed")
 }
 
+//first key:path,second key:method
 func UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
-	tmps := (*crpc.CrpcServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s)))) //avoid race when build/run in -race mode
+	//avoid race when build/run in -race mode
+	tmps := (*crpc.CrpcServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
 	if tmps != nil {
 		tmps.UpdateHandlerTimeout(timeout)
 	}
 }
 
 func StopCrpcServer(force bool) {
-	tmps := (*crpc.CrpcServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s)))) //avoid race when build/run in -race mode
+	//avoid race when build/run in -race mode
+	tmps := (*crpc.CrpcServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
 	if tmps != nil {
 		tmps.StopCrpcServer(force)
 	}

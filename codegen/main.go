@@ -273,9 +273,6 @@ func createSubProject() {
 	//sub model
 	submodel.CreatePathAndFile(*gensub)
 	updateSubProjectService()
-	updateSubProjectXweb()
-	updateSubProjectXcrpc()
-	updateSubProjectXgrpc()
 	fmt.Println("sub service create success!")
 }
 func updateSubProjectService() {
@@ -406,260 +403,265 @@ func updateSubProjectService() {
 		panic(err)
 	}
 }
-func updateSubProjectXweb() {
-	fset := token.NewFileSet()
-	file, e := parser.ParseFile(fset, "./server/xweb/xweb.go", nil, parser.ParseComments)
-	if e != nil {
-		panic("./server/xweb/xweb.go parse failed,error:" + e.Error())
-	}
-	var start *ast.FuncDecl
-	for _, decl := range file.Decls {
-		if f, ok := decl.(*ast.FuncDecl); ok && f.Name.Name == "StartWebServer" {
-			start = f
-			break
+
+/*
+	func updateSubProjectXweb() {
+		fset := token.NewFileSet()
+		file, e := parser.ParseFile(fset, "./server/xweb/xweb.go", nil, parser.ParseComments)
+		if e != nil {
+			panic("./server/xweb/xweb.go parse failed,error:" + e.Error())
 		}
-	}
-	if start == nil || start.Body == nil || len(start.Body.List) == 0 {
-		panic("./server/xweb/xweb.go broken,missing func StartWebServer")
-	}
-	registerStmt := &ast.ExprStmt{
-		// api.RegisterxxxWebServer(r, service.Svcxxx, mids.AllMids())
-		X: &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
-				X:   ast.NewIdent("api"),
-				Sel: ast.NewIdent("Register" + string((*gensub)[0]-32) + (*gensub)[1:] + "WebServer"),
-			},
-			Args: []ast.Expr{
-				ast.NewIdent("r"),
-				&ast.SelectorExpr{
-					X:   ast.NewIdent("service"),
-					Sel: ast.NewIdent("Svc" + string((*gensub)[0]-32) + (*gensub)[1:]),
+		var start *ast.FuncDecl
+		for _, decl := range file.Decls {
+			if f, ok := decl.(*ast.FuncDecl); ok && f.Name.Name == "StartWebServer" {
+				start = f
+				break
+			}
+		}
+		if start == nil || start.Body == nil || len(start.Body.List) == 0 {
+			panic("./server/xweb/xweb.go broken,missing func StartWebServer")
+		}
+		registerStmt := &ast.ExprStmt{
+			// api.RegisterxxxWebServer(r, service.Svcxxx, mids.AllMids())
+			X: &ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   ast.NewIdent("api"),
+					Sel: ast.NewIdent("Register" + string((*gensub)[0]-32) + (*gensub)[1:] + "WebServer"),
 				},
-				&ast.CallExpr{
-					Fun: &ast.SelectorExpr{
-						X:   ast.NewIdent("mids"),
-						Sel: ast.NewIdent("AllMids"),
+				Args: []ast.Expr{
+					ast.NewIdent("r"),
+					&ast.SelectorExpr{
+						X:   ast.NewIdent("service"),
+						Sel: ast.NewIdent("Svc" + string((*gensub)[0]-32) + (*gensub)[1:]),
+					},
+					&ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X:   ast.NewIdent("mids"),
+							Sel: ast.NewIdent("AllMids"),
+						},
 					},
 				},
 			},
-		},
-	}
-	find := false
-	//insert the registerStmt before server.SetRouter(r)
-	for i := len(start.Body.List) - 1; i >= 0; i-- {
-		stmt := start.Body.List[i]
-		exprStmt, ok := stmt.(*ast.ExprStmt)
-		if !ok {
-			continue
 		}
-		call, ok := exprStmt.X.(*ast.CallExpr)
-		if !ok {
-			continue
-		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok {
-			continue
-		}
-		if xIdent, ok := sel.X.(*ast.Ident); !ok || xIdent.Name != "server" {
-			continue
-		}
-		if sel.Sel.Name != "SetRouter" {
-			continue
-		}
-		find = true
-		newlist := make([]ast.Stmt, 0, len(start.Body.List)+1)
-		newlist = append(newlist, start.Body.List[:i]...)
-		newlist = append(newlist, registerStmt)
-		newlist = append(newlist, start.Body.List[i:]...)
-		start.Body.List = newlist
-		break
-	}
-	if !find {
-		panic("./server/xweb/xweb.go borken,missing server.SetRouter() before server.StartWebServer()")
-	}
-
-	var buf bytes.Buffer
-	if e := format.Node(&buf, fset, file); e != nil {
-		panic("format ast tree to go code failed,error:" + e.Error())
-	}
-	if e := os.WriteFile("./server/xweb/xweb.go", buf.Bytes(), 0644); e != nil {
-		panic("write formatted go code from ast tree to file ./server/xweb/xweb.go failed,error:" + e.Error())
-	}
-}
-func updateSubProjectXcrpc() {
-	fset := token.NewFileSet()
-	file, e := parser.ParseFile(fset, "./server/xcrpc/xcrpc.go", nil, parser.ParseComments)
-	if e != nil {
-		panic("./server/xcrpc/xcrpc.go parse failed,error:" + e.Error())
-	}
-	var start *ast.FuncDecl
-	for _, decl := range file.Decls {
-		if f, ok := decl.(*ast.FuncDecl); ok && f.Name.Name == "StartCrpcServer" {
-			start = f
+		find := false
+		//insert the registerStmt before server.SetRouter(r)
+		for i := len(start.Body.List) - 1; i >= 0; i-- {
+			stmt := start.Body.List[i]
+			exprStmt, ok := stmt.(*ast.ExprStmt)
+			if !ok {
+				continue
+			}
+			call, ok := exprStmt.X.(*ast.CallExpr)
+			if !ok {
+				continue
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				continue
+			}
+			if xIdent, ok := sel.X.(*ast.Ident); !ok || xIdent.Name != "server" {
+				continue
+			}
+			if sel.Sel.Name != "SetRouter" {
+				continue
+			}
+			find = true
+			newlist := make([]ast.Stmt, 0, len(start.Body.List)+1)
+			newlist = append(newlist, start.Body.List[:i]...)
+			newlist = append(newlist, registerStmt)
+			newlist = append(newlist, start.Body.List[i:]...)
+			start.Body.List = newlist
 			break
 		}
+		if !find {
+			panic("./server/xweb/xweb.go borken,missing server.SetRouter() before server.StartWebServer()")
+		}
+
+		var buf bytes.Buffer
+		if e := format.Node(&buf, fset, file); e != nil {
+			panic("format ast tree to go code failed,error:" + e.Error())
+		}
+		if e := os.WriteFile("./server/xweb/xweb.go", buf.Bytes(), 0644); e != nil {
+			panic("write formatted go code from ast tree to file ./server/xweb/xweb.go failed,error:" + e.Error())
+		}
 	}
-	if start == nil || start.Body == nil || len(start.Body.List) == 0 {
-		panic("./server/xcrpc/xcrpc.go broken,missing func StartCrpcServer")
-	}
-	registerStmt := &ast.ExprStmt{
-		// api.RegisterxxxCrpcServer(r, service.Svcxxx, mids.AllMids())
-		X: &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
-				X:   ast.NewIdent("api"),
-				Sel: ast.NewIdent("Register" + string((*gensub)[0]-32) + (*gensub)[1:] + "CrpcServer"),
-			},
-			Args: []ast.Expr{
-				ast.NewIdent("server"),
-				&ast.SelectorExpr{
-					X:   ast.NewIdent("service"),
-					Sel: ast.NewIdent("Svc" + string((*gensub)[0]-32) + (*gensub)[1:]),
+
+	func updateSubProjectXcrpc() {
+		fset := token.NewFileSet()
+		file, e := parser.ParseFile(fset, "./server/xcrpc/xcrpc.go", nil, parser.ParseComments)
+		if e != nil {
+			panic("./server/xcrpc/xcrpc.go parse failed,error:" + e.Error())
+		}
+		var start *ast.FuncDecl
+		for _, decl := range file.Decls {
+			if f, ok := decl.(*ast.FuncDecl); ok && f.Name.Name == "StartCrpcServer" {
+				start = f
+				break
+			}
+		}
+		if start == nil || start.Body == nil || len(start.Body.List) == 0 {
+			panic("./server/xcrpc/xcrpc.go broken,missing func StartCrpcServer")
+		}
+		registerStmt := &ast.ExprStmt{
+			// api.RegisterxxxCrpcServer(r, service.Svcxxx, mids.AllMids())
+			X: &ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   ast.NewIdent("api"),
+					Sel: ast.NewIdent("Register" + string((*gensub)[0]-32) + (*gensub)[1:] + "CrpcServer"),
 				},
-				&ast.CallExpr{
-					Fun: &ast.SelectorExpr{
-						X:   ast.NewIdent("mids"),
-						Sel: ast.NewIdent("AllMids"),
+				Args: []ast.Expr{
+					ast.NewIdent("server"),
+					&ast.SelectorExpr{
+						X:   ast.NewIdent("service"),
+						Sel: ast.NewIdent("Svc" + string((*gensub)[0]-32) + (*gensub)[1:]),
+					},
+					&ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X:   ast.NewIdent("mids"),
+							Sel: ast.NewIdent("AllMids"),
+						},
 					},
 				},
 			},
-		},
-	}
-	find := false
-	//insert the registerStmt before server.StartCrpcServer
-	for i := len(start.Body.List) - 1; i >= 0; i-- {
-		stmt := start.Body.List[i]
-		ifStmt, ok := stmt.(*ast.IfStmt)
-		if !ok {
-			continue
 		}
-		initAssign, ok := ifStmt.Init.(*ast.AssignStmt)
-		if !ok || initAssign.Tok != token.ASSIGN {
-			continue
-		}
-		if len(initAssign.Rhs) != 1 {
-			continue
-		}
-		call, ok := initAssign.Rhs[0].(*ast.CallExpr)
-		if !ok {
-			continue
-		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok {
-			continue
-		}
-		if xIdent, ok := sel.X.(*ast.Ident); !ok || xIdent.Name != "server" {
-			continue
-		}
-		if sel.Sel.Name != "StartCrpcServer" {
-			continue
-		}
-		find = true
-		newlist := make([]ast.Stmt, 0, len(start.Body.List)+1)
-		newlist = append(newlist, start.Body.List[:i]...)
-		newlist = append(newlist, registerStmt)
-		newlist = append(newlist, start.Body.List[i:]...)
-		start.Body.List = newlist
-		break
-	}
-	if !find {
-		panic("./server/xcrpc/xcrpc.go borken,missing server.StartCrpcServer()")
-	}
-
-	var buf bytes.Buffer
-	if e := format.Node(&buf, fset, file); e != nil {
-		panic("format ast tree to go code failed,error:" + e.Error())
-	}
-	if e := os.WriteFile("./server/xcrpc/xcrpc.go", buf.Bytes(), 0644); e != nil {
-		panic("write formatted go code from ast tree to file ./server/xcrpc/xcrpc.go failed,error:" + e.Error())
-	}
-}
-func updateSubProjectXgrpc() {
-	fset := token.NewFileSet()
-	file, e := parser.ParseFile(fset, "./server/xgrpc/xgrpc.go", nil, parser.ParseComments)
-	if e != nil {
-		panic("./server/xgrpc/xgrpc.go parse failed,error:" + e.Error())
-	}
-	var start *ast.FuncDecl
-	for _, decl := range file.Decls {
-		if f, ok := decl.(*ast.FuncDecl); ok && f.Name.Name == "StartCGrpcServer" {
-			start = f
+		find := false
+		//insert the registerStmt before server.StartCrpcServer
+		for i := len(start.Body.List) - 1; i >= 0; i-- {
+			stmt := start.Body.List[i]
+			ifStmt, ok := stmt.(*ast.IfStmt)
+			if !ok {
+				continue
+			}
+			initAssign, ok := ifStmt.Init.(*ast.AssignStmt)
+			if !ok || initAssign.Tok != token.ASSIGN {
+				continue
+			}
+			if len(initAssign.Rhs) != 1 {
+				continue
+			}
+			call, ok := initAssign.Rhs[0].(*ast.CallExpr)
+			if !ok {
+				continue
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				continue
+			}
+			if xIdent, ok := sel.X.(*ast.Ident); !ok || xIdent.Name != "server" {
+				continue
+			}
+			if sel.Sel.Name != "StartCrpcServer" {
+				continue
+			}
+			find = true
+			newlist := make([]ast.Stmt, 0, len(start.Body.List)+1)
+			newlist = append(newlist, start.Body.List[:i]...)
+			newlist = append(newlist, registerStmt)
+			newlist = append(newlist, start.Body.List[i:]...)
+			start.Body.List = newlist
 			break
 		}
+		if !find {
+			panic("./server/xcrpc/xcrpc.go borken,missing server.StartCrpcServer()")
+		}
+
+		var buf bytes.Buffer
+		if e := format.Node(&buf, fset, file); e != nil {
+			panic("format ast tree to go code failed,error:" + e.Error())
+		}
+		if e := os.WriteFile("./server/xcrpc/xcrpc.go", buf.Bytes(), 0644); e != nil {
+			panic("write formatted go code from ast tree to file ./server/xcrpc/xcrpc.go failed,error:" + e.Error())
+		}
 	}
-	if start == nil || start.Body == nil || len(start.Body.List) == 0 {
-		panic("./server/xgrpc/xgrpc.go broken,missing func StartCGrpcServer")
-	}
-	registerStmt := &ast.ExprStmt{
-		// api.RegisterxxxCGrpcServer(r, service.Svcxxx, mids.AllMids())
-		X: &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
-				X:   ast.NewIdent("api"),
-				Sel: ast.NewIdent("Register" + string((*gensub)[0]-32) + (*gensub)[1:] + "CGrpcServer"),
-			},
-			Args: []ast.Expr{
-				ast.NewIdent("server"),
-				&ast.SelectorExpr{
-					X:   ast.NewIdent("service"),
-					Sel: ast.NewIdent("Svc" + string((*gensub)[0]-32) + (*gensub)[1:]),
+
+	func updateSubProjectXgrpc() {
+		fset := token.NewFileSet()
+		file, e := parser.ParseFile(fset, "./server/xgrpc/xgrpc.go", nil, parser.ParseComments)
+		if e != nil {
+			panic("./server/xgrpc/xgrpc.go parse failed,error:" + e.Error())
+		}
+		var start *ast.FuncDecl
+		for _, decl := range file.Decls {
+			if f, ok := decl.(*ast.FuncDecl); ok && f.Name.Name == "StartCGrpcServer" {
+				start = f
+				break
+			}
+		}
+		if start == nil || start.Body == nil || len(start.Body.List) == 0 {
+			panic("./server/xgrpc/xgrpc.go broken,missing func StartCGrpcServer")
+		}
+		registerStmt := &ast.ExprStmt{
+			// api.RegisterxxxCGrpcServer(r, service.Svcxxx, mids.AllMids())
+			X: &ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   ast.NewIdent("api"),
+					Sel: ast.NewIdent("Register" + string((*gensub)[0]-32) + (*gensub)[1:] + "CGrpcServer"),
 				},
-				&ast.CallExpr{
-					Fun: &ast.SelectorExpr{
-						X:   ast.NewIdent("mids"),
-						Sel: ast.NewIdent("AllMids"),
+				Args: []ast.Expr{
+					ast.NewIdent("server"),
+					&ast.SelectorExpr{
+						X:   ast.NewIdent("service"),
+						Sel: ast.NewIdent("Svc" + string((*gensub)[0]-32) + (*gensub)[1:]),
+					},
+					&ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X:   ast.NewIdent("mids"),
+							Sel: ast.NewIdent("AllMids"),
+						},
 					},
 				},
 			},
-		},
-	}
-	find := false
-	//insert the registerStmt before server.StartCGrpcServer
-	for i := len(start.Body.List) - 1; i >= 0; i-- {
-		stmt := start.Body.List[i]
-		ifStmt, ok := stmt.(*ast.IfStmt)
-		if !ok {
-			continue
 		}
-		initAssign, ok := ifStmt.Init.(*ast.AssignStmt)
-		if !ok || initAssign.Tok != token.ASSIGN {
-			continue
+		find := false
+		//insert the registerStmt before server.StartCGrpcServer
+		for i := len(start.Body.List) - 1; i >= 0; i-- {
+			stmt := start.Body.List[i]
+			ifStmt, ok := stmt.(*ast.IfStmt)
+			if !ok {
+				continue
+			}
+			initAssign, ok := ifStmt.Init.(*ast.AssignStmt)
+			if !ok || initAssign.Tok != token.ASSIGN {
+				continue
+			}
+			if len(initAssign.Rhs) != 1 {
+				continue
+			}
+			call, ok := initAssign.Rhs[0].(*ast.CallExpr)
+			if !ok {
+				continue
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				continue
+			}
+			if xIdent, ok := sel.X.(*ast.Ident); !ok || xIdent.Name != "server" {
+				continue
+			}
+			if sel.Sel.Name != "StartCGrpcServer" {
+				continue
+			}
+			find = true
+			newlist := make([]ast.Stmt, 0, len(start.Body.List)+1)
+			newlist = append(newlist, start.Body.List[:i]...)
+			newlist = append(newlist, registerStmt)
+			newlist = append(newlist, start.Body.List[i:]...)
+			start.Body.List = newlist
+			break
 		}
-		if len(initAssign.Rhs) != 1 {
-			continue
+		if !find {
+			panic("./server/xgrpc/xgrpc.go borken,missing server.StartCGrpcServer()")
 		}
-		call, ok := initAssign.Rhs[0].(*ast.CallExpr)
-		if !ok {
-			continue
-		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok {
-			continue
-		}
-		if xIdent, ok := sel.X.(*ast.Ident); !ok || xIdent.Name != "server" {
-			continue
-		}
-		if sel.Sel.Name != "StartCGrpcServer" {
-			continue
-		}
-		find = true
-		newlist := make([]ast.Stmt, 0, len(start.Body.List)+1)
-		newlist = append(newlist, start.Body.List[:i]...)
-		newlist = append(newlist, registerStmt)
-		newlist = append(newlist, start.Body.List[i:]...)
-		start.Body.List = newlist
-		break
-	}
-	if !find {
-		panic("./server/xgrpc/xgrpc.go borken,missing server.StartCGrpcServer()")
-	}
 
-	var buf bytes.Buffer
-	if e := format.Node(&buf, fset, file); e != nil {
-		panic("format ast tree to go code failed,error:" + e.Error())
+		var buf bytes.Buffer
+		if e := format.Node(&buf, fset, file); e != nil {
+			panic("format ast tree to go code failed,error:" + e.Error())
+		}
+		if e := os.WriteFile("./server/xgrpc/xgrpc.go", buf.Bytes(), 0644); e != nil {
+			panic("write formatted go code from ast tree to file ./server/xgrpc/xgrpc.go failed,error:" + e.Error())
+		}
 	}
-	if e := os.WriteFile("./server/xgrpc/xgrpc.go", buf.Bytes(), 0644); e != nil {
-		panic("write formatted go code from ast tree to file ./server/xgrpc/xgrpc.go failed,error:" + e.Error())
-	}
-}
+*/
 func createKubernetes() {
 	var input string
 	for len(input) == 0 {
