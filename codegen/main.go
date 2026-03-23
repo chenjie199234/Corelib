@@ -4,10 +4,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"go/ast"
-	"go/format"
-	"go/parser"
-	"go/token"
 	"os"
 	"strings"
 
@@ -276,135 +272,268 @@ func createSubProject() {
 	fmt.Println("sub service create success!")
 }
 func updateSubProjectService() {
-	fset := token.NewFileSet()
-	file, e := parser.ParseFile(fset, "./service/service.go", nil, parser.ParseComments)
+	data, e := os.ReadFile("./service/service.go")
 	if e != nil {
-		panic("./service/service.go parse failed,error:" + e.Error())
+		panic("read ./service/service.go failed,error:" + e.Error())
 	}
-	//import
-	var importDecl *ast.GenDecl
-	for _, decl := range file.Decls {
-		if gen, ok := decl.(*ast.GenDecl); ok && gen.Tok == token.IMPORT {
-			importDecl = gen
+	tmpdata := bytes.ReplaceAll(data, []byte{'\r', '\n'}, []byte{'\n'})
+	windows := len(tmpdata) != len(data)
+	pieces := bytes.Split(tmpdata, []byte{'\n'})
+	find := false
+	updated := false
+	varname := "Svc" + string((*gensub)[0]-32) + (*gensub)[1:]
+	for i := range pieces {
+		tmp := bytes.TrimSpace(bytes.Clone(pieces[i]))
+		//remove the comments
+		tmp, _, _ = bytes.Cut(tmp, []byte{'/', '/'})
+		for {
+			if s := bytes.Index(tmp, []byte{'/', '*'}); s >= 0 {
+				e := bytes.Index(tmp, []byte{'*', '/'})
+				if e < s {
+					break
+				}
+				tmp = append(tmp[:s], tmp[e+2:]...)
+			} else {
+				break
+			}
+		}
+		if find {
+			if bytes.Equal(tmp, []byte{')'}) {
+				newpieces := make([][]byte, 0, len(pieces)+3)
+				newpieces = append(newpieces, pieces[:i]...)
+				newpieces = append(newpieces, []byte("\t\""+*packagename+"/service/"+*gensub+"\""))
+				newpieces = append(newpieces, pieces[i])
+				newpieces = append(newpieces, []byte{})
+				newpieces = append(newpieces, []byte("var "+varname+" *"+*gensub+".Service"))
+				newpieces = append(newpieces, pieces[i+1:]...)
+				pieces = newpieces
+				updated = true
+				break
+			}
+		} else {
+			if bytes.HasPrefix(tmp, []byte("import")) {
+				find = bytes.HasSuffix(tmp, []byte{'('})
+			}
+		}
+	}
+	if !find || !updated {
+		panic("./service/service.go broken,missing import ()")
+	}
+	find = false
+	updated = false
+	for i := range pieces {
+		tmp := bytes.TrimSpace(bytes.Clone(pieces[i]))
+		//remove the comments
+		tmp, _, _ = bytes.Cut(tmp, []byte{'/', '/'})
+		for {
+			if s := bytes.Index(tmp, []byte{'/', '*'}); s >= 0 {
+				e := bytes.Index(tmp, []byte{'*', '/'})
+				if e < s {
+					break
+				}
+				tmp = append(tmp[:s], tmp[e+2:]...)
+			} else {
+				break
+			}
+		}
+		if find {
+			if bytes.Equal(tmp, []byte("return nil")) {
+				newpieces := make([][]byte, 0, len(pieces)+3)
+				newpieces = append(newpieces, pieces[:i]...)
+				newpieces = append(newpieces, []byte("\tif "+varname+", e = "+*gensub+".Start(); e != nil {"))
+				newpieces = append(newpieces, []byte("\t\treturn e"))
+				newpieces = append(newpieces, []byte("\t}"))
+				newpieces = append(newpieces, pieces[i:]...)
+				pieces = newpieces
+				updated = true
+				break
+			}
+		} else {
+			if bytes.HasPrefix(tmp, []byte("func")) {
+				find = bytes.HasPrefix(bytes.TrimSpace(tmp[4:]), []byte("StartService()"))
+			}
+		}
+	}
+	if !find || !updated {
+		panic("./service/service.go broken,func StartService missing or broken")
+	}
+	find = false
+	updated = false
+	for i := range pieces {
+		tmp := bytes.TrimSpace(bytes.Clone(pieces[i]))
+		//remove the comments
+		tmp, _, _ = bytes.Cut(tmp, []byte{'/', '/'})
+		for {
+			if s := bytes.Index(tmp, []byte{'/', '*'}); s >= 0 {
+				e := bytes.Index(tmp, []byte{'*', '/'})
+				if e < s {
+					break
+				}
+				tmp = append(tmp[:s], tmp[e+2:]...)
+			} else {
+				break
+			}
+		}
+		if bytes.HasPrefix(tmp, []byte("func")) {
+			find = bytes.HasPrefix(bytes.TrimSpace(tmp[4:]), []byte("StopService()"))
+		}
+		if find {
+			newpieces := make([][]byte, 0, len(pieces)+1)
+			newpieces = append(newpieces, pieces[:i+1]...)
+			newpieces = append(newpieces, []byte("\t"+varname+".Stop()"))
+			newpieces = append(newpieces, pieces[i+1:]...)
+			pieces = newpieces
+			updated = true
 			break
 		}
 	}
-	if importDecl == nil {
-		panic("./service/service.go broken,missing import()")
+	if !find || !updated {
+		panic("./service/service.go broken,func StopService missing or broken")
 	}
-	newImport := &ast.ImportSpec{
-		Path: &ast.BasicLit{
-			Kind:  token.STRING,
-			Value: `"` + *packagename + "/service/" + *gensub + `"`,
-		},
+	writer, e := os.OpenFile("./service/service.go", os.O_WRONLY|os.O_TRUNC, 0644)
+	if e != nil {
+		panic("write ./service/service.go failed,error:" + e.Error())
 	}
-	importDecl.Specs = append(importDecl.Specs, newImport)
-
-	//var
-	newVar := &ast.GenDecl{
-		Lparen: token.NoPos,
-		Rparen: token.NoPos,
-		Tok:    token.VAR,
-		Specs: []ast.Spec{
-			&ast.ValueSpec{
-				Names: []*ast.Ident{ast.NewIdent("Svc" + string((*gensub)[0]-32) + (*gensub)[1:])},
-				Type: &ast.StarExpr{
-					X: &ast.SelectorExpr{
-						X:   ast.NewIdent(*gensub),   // package name
-						Sel: ast.NewIdent("Service"), // struct name
-					},
-				},
-			},
-		},
+	if windows {
+		_, e = writer.Write(bytes.Join(pieces, []byte{'\r', '\n'}))
+	} else {
+		_, e = writer.Write(bytes.Join(pieces, []byte{'\n'}))
 	}
-	newdescls := make([]ast.Decl, 0, len(file.Decls)+1)
-	for i, decl := range file.Decls {
-		if gen, ok := decl.(*ast.GenDecl); ok && (gen.Tok == token.VAR || gen.Tok == token.TYPE || gen.Tok == token.CONST) {
-			newdescls = append(newdescls, file.Decls[:i]...)
-			newdescls = append(newdescls, newVar)
-			newdescls = append(newdescls, file.Decls[i:]...)
-			file.Decls = newdescls
-			break
-		}
-		if _, ok := decl.(*ast.FuncDecl); ok {
-			newdescls = append(newdescls, file.Decls[:i]...)
-			newdescls = append(newdescls, newVar)
-			newdescls = append(newdescls, file.Decls[i:]...)
-			file.Decls = newdescls
-			break
-		}
-	}
-	//start
-	var startDecl *ast.FuncDecl
-	for _, decl := range file.Decls {
-		if f, ok := decl.(*ast.FuncDecl); ok && f.Name.Name == "StartService" {
-			startDecl = f
-			break
-		}
-	}
-	if startDecl == nil || startDecl.Body == nil || len(startDecl.Body.List) == 0 {
-		panic("./service/service.go broken,missing func StartService")
-	}
-	ifStmt := &ast.IfStmt{
-		// Svcxxx,e := xxx.Start()
-		Init: &ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent("Svc" + string((*gensub)[0]-32) + (*gensub)[1:]), ast.NewIdent("e")},
-			Tok: token.ASSIGN,
-			Rhs: []ast.Expr{
-				&ast.CallExpr{
-					Fun: &ast.SelectorExpr{
-						X:   ast.NewIdent(*gensub),
-						Sel: ast.NewIdent("Start"),
-					},
-				},
-			},
-		},
-		//e != nil
-		Cond: &ast.BinaryExpr{
-			X:  ast.NewIdent("e"),
-			Op: token.NEQ,
-			Y:  ast.NewIdent("nil"),
-		},
-		//return e
-		Body: &ast.BlockStmt{
-			List: []ast.Stmt{&ast.ReturnStmt{
-				Results: []ast.Expr{ast.NewIdent("e")},
-			}},
-		},
-	}
-	startDecl.Body.List = append(startDecl.Body.List[:len(startDecl.Body.List)-1], ifStmt, startDecl.Body.List[len(startDecl.Body.List)-1])
-	//stop
-	var stopDecl *ast.FuncDecl
-	for _, decl := range file.Decls {
-		if f, ok := decl.(*ast.FuncDecl); ok && f.Name.Name == "StopService" {
-			stopDecl = f
-			break
-		}
-	}
-	if stopDecl == nil || stopDecl.Body == nil || len(stopDecl.Body.List) == 0 {
-		panic("./service/service.go broken,missing func StopService")
-	}
-	stopStmt := &ast.ExprStmt{
-		// Svcxxx.Stop()
-		X: &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
-				X:   ast.NewIdent("Svc" + string((*gensub)[0]-32) + (*gensub)[1:]),
-				Sel: ast.NewIdent("Stop"),
-			},
-		},
-	}
-	stopDecl.Body.List = append(stopDecl.Body.List, stopStmt)
-
-	var buf bytes.Buffer
-	if err := format.Node(&buf, fset, file); err != nil {
-		panic(err)
-	}
-	if err := os.WriteFile("./service/service.go", buf.Bytes(), 0644); err != nil {
-		panic(err)
+	if e != nil {
+		panic("write ./service/service.go failed,error:" + e.Error())
 	}
 }
 
 /*
+	func updateSubProjectService() {
+		fset := token.NewFileSet()
+		file, e := parser.ParseFile(fset, "./service/service.go", nil, parser.ParseComments)
+		if e != nil {
+			panic("./service/service.go parse failed,error:" + e.Error())
+		}
+		//import
+		var importDecl *ast.GenDecl
+		for _, decl := range file.Decls {
+			if gen, ok := decl.(*ast.GenDecl); ok && gen.Tok == token.IMPORT {
+				importDecl = gen
+				break
+			}
+		}
+		if importDecl == nil {
+			panic("./service/service.go broken,missing import()")
+		}
+		newImport := &ast.ImportSpec{
+			Path: &ast.BasicLit{
+				Kind:  token.STRING,
+				Value: `"` + *packagename + "/service/" + *gensub + `"`,
+			},
+		}
+		importDecl.Specs = append(importDecl.Specs, newImport)
+
+		//var
+		newVar := &ast.GenDecl{
+			Lparen: token.NoPos,
+			Rparen: token.NoPos,
+			Tok:    token.VAR,
+			Specs: []ast.Spec{
+				&ast.ValueSpec{
+					Names: []*ast.Ident{ast.NewIdent("Svc" + string((*gensub)[0]-32) + (*gensub)[1:])},
+					Type: &ast.StarExpr{
+						X: &ast.SelectorExpr{
+							X:   ast.NewIdent(*gensub),   // package name
+							Sel: ast.NewIdent("Service"), // struct name
+						},
+					},
+				},
+			},
+		}
+		newdescls := make([]ast.Decl, 0, len(file.Decls)+1)
+		for i, decl := range file.Decls {
+			if gen, ok := decl.(*ast.GenDecl); ok && (gen.Tok == token.VAR || gen.Tok == token.TYPE || gen.Tok == token.CONST) {
+				newdescls = append(newdescls, file.Decls[:i]...)
+				newdescls = append(newdescls, newVar)
+				newdescls = append(newdescls, file.Decls[i:]...)
+				file.Decls = newdescls
+				break
+			}
+			if _, ok := decl.(*ast.FuncDecl); ok {
+				newdescls = append(newdescls, file.Decls[:i]...)
+				newdescls = append(newdescls, newVar)
+				newdescls = append(newdescls, file.Decls[i:]...)
+				file.Decls = newdescls
+				break
+			}
+		}
+		//start
+		var startDecl *ast.FuncDecl
+		for _, decl := range file.Decls {
+			if f, ok := decl.(*ast.FuncDecl); ok && f.Name.Name == "StartService" {
+				startDecl = f
+				break
+			}
+		}
+		if startDecl == nil || startDecl.Body == nil || len(startDecl.Body.List) == 0 {
+			panic("./service/service.go broken,missing func StartService")
+		}
+		ifStmt := &ast.IfStmt{
+			// Svcxxx,e := xxx.Start()
+			Init: &ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent("Svc" + string((*gensub)[0]-32) + (*gensub)[1:]), ast.NewIdent("e")},
+				Tok: token.ASSIGN,
+				Rhs: []ast.Expr{
+					&ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X:   ast.NewIdent(*gensub),
+							Sel: ast.NewIdent("Start"),
+						},
+					},
+				},
+			},
+			//e != nil
+			Cond: &ast.BinaryExpr{
+				X:  ast.NewIdent("e"),
+				Op: token.NEQ,
+				Y:  ast.NewIdent("nil"),
+			},
+			//return e
+			Body: &ast.BlockStmt{
+				List: []ast.Stmt{&ast.ReturnStmt{
+					Results: []ast.Expr{ast.NewIdent("e")},
+				}},
+			},
+		}
+		startDecl.Body.List = append(startDecl.Body.List[:len(startDecl.Body.List)-1], ifStmt, startDecl.Body.List[len(startDecl.Body.List)-1])
+		//stop
+		var stopDecl *ast.FuncDecl
+		for _, decl := range file.Decls {
+			if f, ok := decl.(*ast.FuncDecl); ok && f.Name.Name == "StopService" {
+				stopDecl = f
+				break
+			}
+		}
+		if stopDecl == nil || stopDecl.Body == nil || len(stopDecl.Body.List) == 0 {
+			panic("./service/service.go broken,missing func StopService")
+		}
+		stopStmt := &ast.ExprStmt{
+			// Svcxxx.Stop()
+			X: &ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   ast.NewIdent("Svc" + string((*gensub)[0]-32) + (*gensub)[1:]),
+					Sel: ast.NewIdent("Stop"),
+				},
+			},
+		}
+		stopDecl.Body.List = append(stopDecl.Body.List, stopStmt)
+
+		var buf bytes.Buffer
+		if err := format.Node(&buf, fset, file); err != nil {
+			panic(err)
+		}
+		if err := os.WriteFile("./service/service.go", buf.Bytes(), 0644); err != nil {
+			panic(err)
+		}
+	}
+
 	func updateSubProjectXweb() {
 		fset := token.NewFileSet()
 		file, e := parser.ParseFile(fset, "./server/xweb/xweb.go", nil, parser.ParseComments)

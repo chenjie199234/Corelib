@@ -7,10 +7,6 @@ import (
 
 const txt = `package service
 
-//Warning!!Don't add comments in this file
-//this file will be updated automaticly when create sub service
-//however,golang's ast package can't handle ast tree with comments well(checked 1.26.0)
-
 import (
 	"{{.}}/dao"
 	"{{.}}/service/raw"
@@ -26,10 +22,10 @@ func StartService() error {
 	if e = dao.NewApi(); e != nil {
 		return e
 	}
-	if SvcStatus, e = status.Start(); e != nil {
+	if SvcRaw, e = raw.Start(); e != nil {
 		return e
 	}
-	if SvcRaw, e = raw.Start(); e != nil {
+	if SvcStatus, e = status.Start(); e != nil {
 		return e
 	}
 	return nil
