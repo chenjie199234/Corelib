@@ -259,7 +259,7 @@ func defaultErrorParser(httpcode int, httpresp []byte) *cerror.Error {
 // Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
 // Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
 // "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
-// eparser is used to decode the error message returned from the server when http response code is not 2xx
+// eparser is used to decode error message which has different format,it will only be called when http response code is not 2xx
 func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string, eparser ErrorParser) (resp *http.Response, e error) {
 	if eparser == nil {
 		eparser = defaultErrorParser
@@ -270,7 +270,7 @@ func (c *WebClient) Get(ctx context.Context, path, query string, header http.Hea
 // Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
 // Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
 // "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
-// eparser is used to decode the error message returned from the server when http response code is not 2xx
+// eparser is used to decode error message which has different format,it will only be called when http response code is not 2xx
 func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string, eparser ErrorParser) (resp *http.Response, e error) {
 	if eparser == nil {
 		eparser = defaultErrorParser
@@ -281,7 +281,7 @@ func (c *WebClient) Delete(ctx context.Context, path, query string, header http.
 // Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
 // Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
 // "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
-// eparser is used to decode the error message returned from the server when http response code is not 2xx
+// eparser is used to decode error message which has different format,it will only be called when http response code is not 2xx
 func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte, eparser ErrorParser) (resp *http.Response, e error) {
 	if eparser == nil {
 		eparser = defaultErrorParser
@@ -295,7 +295,7 @@ func (c *WebClient) Post(ctx context.Context, path, query string, header http.He
 // Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
 // Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
 // "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
-// eparser is used to decode the error message returned from the server when http response code is not 2xx
+// eparser is used to decode error message which has different format,it will only be called when http response code is not 2xx
 func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte, eparser ErrorParser) (resp *http.Response, e error) {
 	if eparser == nil {
 		eparser = defaultErrorParser
@@ -309,7 +309,7 @@ func (c *WebClient) Put(ctx context.Context, path, query string, header http.Hea
 // Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
 // Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
 // "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
-// eparser is used to decode the error message returned from the server when http response code is not 2xx
+// eparser is used to decode error message which has different format,it will only be called when http response code is not 2xx
 func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte, eparser ErrorParser) (resp *http.Response, e error) {
 	if eparser == nil {
 		eparser = defaultErrorParser
