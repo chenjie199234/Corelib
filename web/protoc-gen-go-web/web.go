@@ -1088,9 +1088,9 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("querystr:=", g.QualifiedGoIdent(commonPackage.Ident("BTS")), "(query)")
 			switch need {
 			case "GET":
-				g.P("r,e:=c.cc.Get(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
+				g.P("r,e:=c.cc.Get(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),nil)")
 			case "DELETE":
-				g.P("r,e:=c.cc.Delete(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx))")
+				g.P("r,e:=c.cc.Delete(ctx,", pathname, ",querystr,header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),nil)")
 			}
 		} else {
 			if method.Desc.IsStreamingServer() {
@@ -1104,11 +1104,11 @@ func genClient(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			g.P("reqd,_:=", g.QualifiedGoIdent(protoPackage.Ident("Marshal")), "(req)")
 			switch need {
 			case "POST":
-				g.P("r,e:=c.cc.Post(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("r,e:=c.cc.Post(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd,nil)")
 			case "PUT":
-				g.P("r,e:=c.cc.Put(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("r,e:=c.cc.Put(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd,nil)")
 			case "PATCH":
-				g.P("r,e:=c.cc.Patch(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd)")
+				g.P("r,e:=c.cc.Patch(ctx,", pathname, ",\"\",header,", g.QualifiedGoIdent(metadataPackage.Ident("GetMetadata")), "(ctx),reqd,nil)")
 			}
 		}
 		g.P("if e != nil {")

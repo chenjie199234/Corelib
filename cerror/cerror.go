@@ -51,6 +51,10 @@ func (this *Error) Json() string {
 	}
 	return this.GetCacheJson()
 }
+func (this *Error) CleanCache() {
+	this.SetCacheText("")
+	this.SetCacheJson("")
+}
 func (this *Error) GRPCStatus() *status.Status {
 	return status.New(codes.Code(this.GetHttpcode()), this.Error())
 }

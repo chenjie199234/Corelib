@@ -245,51 +245,82 @@ func WithForceAddr(ctx context.Context, forceaddr string) context.Context {
 	return context.WithValue(ctx, forceaddrkey{}, forceaddr)
 }
 
-// Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
-// Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
-// "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
-func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (resp *http.Response, e error) {
-	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil)
-}
+type ErrorParser func(httpcode int, httpresp []byte) *cerror.Error
 
-// Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
-// Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
-// "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
-func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string) (resp *http.Response, e error) {
-	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil)
-}
-
-// Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
-// Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
-// "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
-func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
-	if len(body) != 0 {
-		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewReader(body))
+func defaultErrorParser(httpcode int, httpresp []byte) *cerror.Error {
+	if len(httpresp) == 0 {
+		return cerror.MakeCError(-1, int32(httpcode), http.StatusText(httpcode))
 	}
-	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil)
+	ee := cerror.Decode(common.BTS(httpresp))
+	ee.SetHttpcode(int32(httpcode))
+	return ee
 }
 
 // Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
 // Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
 // "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
-func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
-	if len(body) != 0 {
-		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewReader(body))
+// eparser is used to decode the error message returned from the server when http response code is not 2xx
+func (c *WebClient) Get(ctx context.Context, path, query string, header http.Header, metadata map[string]string, eparser ErrorParser) (resp *http.Response, e error) {
+	if eparser == nil {
+		eparser = defaultErrorParser
 	}
-	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil)
+	return c.call(http.MethodGet, ctx, path, query, header, metadata, nil, eparser)
 }
 
 // Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
 // Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
 // "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
-func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte) (resp *http.Response, e error) {
-	if len(body) != 0 {
-		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewReader(body))
+// eparser is used to decode the error message returned from the server when http response code is not 2xx
+func (c *WebClient) Delete(ctx context.Context, path, query string, header http.Header, metadata map[string]string, eparser ErrorParser) (resp *http.Response, e error) {
+	if eparser == nil {
+		eparser = defaultErrorParser
 	}
-	return c.call(http.MethodPatch, ctx, path, query, header, metadata, nil)
+	return c.call(http.MethodDelete, ctx, path, query, header, metadata, nil, eparser)
 }
 
-func (c *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body io.Reader) (*http.Response, error) {
+// Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
+// Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
+// "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
+// eparser is used to decode the error message returned from the server when http response code is not 2xx
+func (c *WebClient) Post(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte, eparser ErrorParser) (resp *http.Response, e error) {
+	if eparser == nil {
+		eparser = defaultErrorParser
+	}
+	if len(body) != 0 {
+		return c.call(http.MethodPost, ctx, path, query, header, metadata, bytes.NewReader(body), eparser)
+	}
+	return c.call(http.MethodPost, ctx, path, query, header, metadata, nil, eparser)
+}
+
+// Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
+// Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
+// "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
+// eparser is used to decode the error message returned from the server when http response code is not 2xx
+func (c *WebClient) Put(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte, eparser ErrorParser) (resp *http.Response, e error) {
+	if eparser == nil {
+		eparser = defaultErrorParser
+	}
+	if len(body) != 0 {
+		return c.call(http.MethodPut, ctx, path, query, header, metadata, bytes.NewReader(body), eparser)
+	}
+	return c.call(http.MethodPut, ctx, path, query, header, metadata, nil, eparser)
+}
+
+// Warning! If you use this to call other's server(unreliable,not in self group),the metadata may leak data,please set it to nil
+// Warning! Don't forget to call the resp.Body.Close(),even you get the io.EOF on the resp.Body
+// "Core-Deadline" "Core-Target" "Core-Self" "Core-Metadata" "Traceparent" "Tracestate" are forbidden in header
+// eparser is used to decode the error message returned from the server when http response code is not 2xx
+func (c *WebClient) Patch(ctx context.Context, path, query string, header http.Header, metadata map[string]string, body []byte, eparser ErrorParser) (resp *http.Response, e error) {
+	if eparser == nil {
+		eparser = defaultErrorParser
+	}
+	if len(body) != 0 {
+		return c.call(http.MethodPatch, ctx, path, query, header, metadata, bytes.NewReader(body), eparser)
+	}
+	return c.call(http.MethodPatch, ctx, path, query, header, metadata, nil, eparser)
+}
+
+func (c *WebClient) call(method string, ctx context.Context, path, query string, header http.Header, metadata map[string]string, body io.Reader, eparser ErrorParser) (*http.Response, error) {
 	if forbiddenHeader(header) {
 		return nil, cerror.ErrReq
 	}
@@ -389,12 +420,8 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			resp.Body.Close()
 			if e != nil {
 				e = cerror.Convert(e)
-			} else if len(respbody) == 0 {
-				e = cerror.MakeCError(-1, int32(resp.StatusCode), http.StatusText(resp.StatusCode))
 			} else {
-				ee := cerror.Decode(common.BTS(respbody))
-				ee.SetHttpcode(int32(resp.StatusCode))
-				e = ee
+				e = eparser(resp.StatusCode, respbody)
 			}
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
