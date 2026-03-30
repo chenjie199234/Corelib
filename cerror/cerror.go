@@ -30,6 +30,18 @@ func MakeCError(code int32, httpcode int32, msg string) *Error {
 	e.SetMsg(msg)
 	return e
 }
+func (this *Error) MarshalJSON() ([]byte, error) {
+	if this == nil {
+		return nil, nil
+	}
+	return common.STB(this.Json()), nil
+}
+func (this *Error) MarshalText() ([]byte, error) {
+	if this == nil {
+		return nil, nil
+	}
+	return common.STB(this.Error()), nil
+}
 func (this *Error) Error() string {
 	if this == nil {
 		return ""
