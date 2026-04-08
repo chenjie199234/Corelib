@@ -5,7 +5,7 @@ import (
 	"text/template"
 )
 
-const docker = `FROM golang:1.26.1 as builder
+const docker = `FROM golang:1.26.2 as builder
 ENV GOSUMDB='off' \
 	GOOS='linux' \
 	GOARCH='amd64' \
