@@ -813,7 +813,7 @@ func createKubernetes() {
 		return
 	}
 	var needservice bool
-	var needingress bool
+	var needgateway bool
 	input = ""
 	for len(input) == 0 {
 		fmt.Printf("need kubernetes service? [y/n]: ")
@@ -836,7 +836,7 @@ func createKubernetes() {
 	if needservice {
 		input = ""
 		for len(input) == 0 {
-			fmt.Printf("need kubernetes ingress? [y/n]: ")
+			fmt.Printf("need kubernetes gateway? [y/n]: ")
 			if _, e := fmt.Scanln(&input); e != nil {
 				if e.Error() == "unexpected newline" {
 					input = ""
@@ -851,7 +851,7 @@ func createKubernetes() {
 			}
 		}
 		if input[0] == 'y' {
-			needingress = true
+			needgateway = true
 		}
 	}
 	if e := os.Remove("./Dockerfile"); e != nil {
@@ -865,7 +865,7 @@ func createKubernetes() {
 		}
 	}
 	fmt.Println("start create kubernetes config.")
-	deploy.CreatePathAndFile(*appname, needservice, needingress)
+	deploy.CreatePathAndFile(*appname, needservice, needgateway)
 	fmt.Println("kubernetes config create success!")
 }
 func createHtml() {

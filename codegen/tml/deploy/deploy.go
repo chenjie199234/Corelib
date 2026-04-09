@@ -137,7 +137,7 @@ spec:
             timeoutSeconds: 1
             periodSeconds: 1
             successThreshold: 1
-            failureThreshold: 3
+            failureThreshold: 5
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -205,37 +205,35 @@ spec:
       protocol: TCP
       port: 8000
   selector:
-    app: {{.AppName}}{{ end }}{{ if .NeedIngress}}
+    app: {{.AppName}}{{ end }}{{ if .NeedGateway}}
 ---
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
 metadata:
-  name: {{.AppName}}-ingress
+  name: {{.AppName}}-route
   namespace: <PROJECT>-<GROUP>
-  labels:
-    app: {{.AppName}}
-  annotations:
-    nginx.ingress.kubernetes.io/use-regex: 'true'
 spec:
+  parentRefs:
+    - name: <PROJECT>-<GROUP>-gateway
+      namespace: <PROJECT>-<GROUP>
+  hostnames:
+    - "<HOST>"
   rules: 
-    - host: <HOST>
-      http:
-        paths:
-          - path: /{{.AppName}}\..*
-            pathType: Prefix
-            backend:
-              service:
-                name: {{.AppName}}
-                port:
-                  number: 8000{{ end }}`
+    - matches:
+      - path:
+          type: RegularExpression
+          value: "^/{{.AppName}}\\.[^/]+/[^/]+$"
+      backendRefs:
+        - name: {{.AppName}}-service
+          port: 8000`
 
 type data struct {
 	AppName     string
 	NeedService bool
-	NeedIngress bool
+	NeedGateway bool
 }
 
-func CreatePathAndFile(appname string, needservice bool, needingress bool) {
+func CreatePathAndFile(appname string, needservice bool, needgateway bool) {
 	dockerfile, e := os.OpenFile("./Dockerfile", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
 		panic("open ./Dockerfile error: " + e.Error())
@@ -253,7 +251,7 @@ func CreatePathAndFile(appname string, needservice bool, needingress bool) {
 	tmp := &data{
 		AppName:     appname,
 		NeedService: needservice,
-		NeedIngress: needingress,
+		NeedGateway: needgateway,
 	}
 	deploymenttemplate, e := template.New("./deployment.yaml").Parse(deployment)
 	if e != nil {
