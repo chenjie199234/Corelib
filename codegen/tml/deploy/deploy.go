@@ -125,19 +125,19 @@ spec:
           startupProbe:
             tcpSocket:
               port: 8000
-            initialDelaySeconds: 5
+            initialDelaySeconds: 0
             timeoutSeconds: 1
-            periodSeconds: 1
+            periodSeconds: 2
             successThreshold: 1
-            failureThreshold: 3
+            failureThreshold: 10
           livenessProbe:
             tcpSocket:
               port: 8000
-            initialDelaySeconds: 0
+            initialDelaySeconds: 3
             timeoutSeconds: 1
-            periodSeconds: 1
+            periodSeconds: 3
             successThreshold: 1
-            failureThreshold: 5
+            failureThreshold: 3
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -212,6 +212,8 @@ kind: HTTPRoute
 metadata:
   name: {{.AppName}}-route
   namespace: <PROJECT>-<GROUP>
+  labels:
+    app: {{.AppName}}
 spec:
   parentRefs:
     - name: <PROJECT>-<GROUP>-gateway
