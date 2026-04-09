@@ -225,7 +225,7 @@ spec:
           value: "^/{{.AppName}}\\.[^/]+/[^/]+$"
       backendRefs:
         - name: {{.AppName}}-service
-          port: 8000`
+          port: 8000{{ end }}`
 
 type data struct {
 	AppName     string
