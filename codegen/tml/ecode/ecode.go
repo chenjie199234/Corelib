@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	ErrServerClosing     = cerror.ErrServerClosing     //1000  // http code 449 Warning!! Client will retry on this error,be careful to use this error
+	ErrServerClosing     = cerror.ErrServerClosing     //1000  // http code 500 Warning!! Client will retry on this error,be careful to use this error
 	ErrDataConflict      = cerror.ErrDataConflict      //9001  // http code 500
 	ErrDataBroken        = cerror.ErrDataBroken        //9002  // http code 500
 	ErrDBDataConflict    = cerror.ErrDBDataConflict    //9101  // http code 500
