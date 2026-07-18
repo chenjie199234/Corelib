@@ -1,142 +1,152 @@
 package lru
 
 import (
+	"container/list"
 	"sync"
 	"time"
 )
 
 // thread unsafe
 type LruCache[T any] struct {
-	maxcap int64
-	curcap int64
-	ttl    time.Duration
-	buf    map[any]*node[T]
-	head   *node[T]
-	tail   *node[T]
-	pool   *sync.Pool
+	mcap uint32
+	ccap uint32
+	ttl  time.Duration
+	bufm map[any]*list.Element
+	bufl *list.List
+	pool *sync.Pool
 }
-type kv[T any] struct {
+type ttlValue[T any] struct {
 	ttl   int64 //unixnano
 	key   any
 	value T
 }
 
-type node[T any] struct {
-	data *kv[T]
-	next *node[T]
-	prev *node[T]
-}
-
 // ttl == 0 means not using expire time
-func New[T any](maxcap int64, ttl time.Duration) *LruCache[T] {
-	if maxcap <= 0 || ttl < 0 {
+func New[T any](maxcap uint32, ttl time.Duration) *LruCache[T] {
+	if maxcap == 0 || ttl < 0 {
 		return nil
 	}
 	return &LruCache[T]{
-		maxcap: maxcap,
-		ttl:    ttl,
-		buf:    make(map[any]*node[T], int(float64(maxcap)*float64(1.3))),
-		pool:   &sync.Pool{},
+		mcap: maxcap,
+		ccap: 0,
+		ttl:  ttl,
+		bufm: make(map[any]*list.Element, maxcap),
+		bufl: list.New(),
+		pool: &sync.Pool{
+			New: func() any { return &ttlValue[T]{} },
+		},
 	}
 }
-func (l *LruCache[T]) refresh(v *node[T]) {
-	if l.head == l.tail || v.prev == nil {
-		//this is the only one element in this lru
-		//or this element is the head
-		//nothing need to do any more
-		return
-	}
-	//this element is not the head
-	//remove the element first
-	v.prev.next = v.next
-	if v.next == nil {
-		//this element is the tail
-		//after remove,it's prev will be the tail
-		l.tail = v.prev
-	} else {
-		//this element is not the tail
-		//is't next need to point to it's prev
-		v.next.prev = v.prev
-	}
-	v.prev = nil
-	v.next = l.head
-	l.head.prev = v
-	l.head = v
-}
-func (l *LruCache[T]) insert(v *node[T]) {
-	//new node always put at the head
-	v.next = l.head
-	if l.head == nil {
-		//no element in thie lru,this new node is the head
-		l.head = v
-	} else {
-		l.head.prev = v
-		l.head = v
-	}
-	if l.tail == nil {
-		//no element in the lru,this new node is the head and the tail
-		l.tail = l.head
-	}
-	if l.curcap == l.maxcap {
-		//this lru is full,delete the tail
-		delete(l.buf, l.tail.data.key)
-		temp := l.tail
-		l.tail = l.tail.prev
-		l.tail.next = nil
-		l.putPool(temp)
-	} else {
-		l.curcap++
-	}
-}
+
 func (l *LruCache[T]) Get(key any) (data T, ok bool) {
-	v, ok := l.buf[key]
+	elm, ok := l.bufm[key]
 	if !ok {
 		return
 	}
+	vv := elm.Value.(*ttlValue[T])
 	if l.ttl != 0 {
 		now := time.Now()
-		if v.data.ttl <= now.UnixNano() {
+		if vv.ttl <= now.UnixNano() {
 			//timeout
+			l.bufl.Remove(elm)
+			delete(l.bufm, key)
+			l.ccap--
+			l.putPool(vv)
 			return
 		}
-		v.data.ttl = now.Add(l.ttl).UnixNano()
+		vv.ttl = now.Add(l.ttl).UnixNano()
+		l.bufl.MoveToFront(elm)
+		//lazy clean,every time remove one element
+		if back := l.bufl.Back(); back != nil && back != elm {
+			if vv := back.Value.(*ttlValue[T]); vv.ttl <= now.UnixNano() {
+				l.bufl.Remove(back)
+				delete(l.bufm, vv.key)
+				l.ccap--
+				l.putPool(vv)
+			}
+		}
+	} else {
+		l.bufl.MoveToFront(elm)
 	}
-	l.refresh(v)
-	return v.data.value, true
+	return vv.value, true
 }
 func (l *LruCache[T]) Set(key any, value T) {
-	if v, ok := l.buf[key]; ok {
-		v.data.value = value
-		if l.ttl > 0 {
-			v.data.ttl = time.Now().Add(l.ttl).UnixNano()
+	if elm, ok := l.bufm[key]; ok {
+		vv := elm.Value.(*ttlValue[T])
+		vv.value = value
+		if l.ttl != 0 {
+			now := time.Now()
+			vv.ttl = now.Add(l.ttl).UnixNano()
+			l.bufl.MoveToFront(elm)
+			//lazy clean,every time remove one element
+			if back := l.bufl.Back(); back != nil && back != elm {
+				if vv := back.Value.(*ttlValue[T]); vv.ttl <= now.UnixNano() {
+					l.bufl.Remove(back)
+					delete(l.bufm, vv.key)
+					l.ccap--
+					l.putPool(vv)
+				}
+			}
+		} else {
+			l.bufl.MoveToFront(elm)
 		}
-		l.refresh(v)
 	} else {
-		v := l.getPool()
-		v.data.key = key
-		v.data.value = value
-		if l.ttl > 0 {
-			v.data.ttl = time.Now().Add(l.ttl).UnixNano()
+		if l.ttl != 0 {
+			//lazy clean,every time remove one element
+			if back := l.bufl.Back(); back != nil {
+				if vv := back.Value.(*ttlValue[T]); vv.ttl <= time.Now().UnixNano() {
+					l.bufl.Remove(back)
+					delete(l.bufm, vv.key)
+					l.ccap--
+					l.putPool(vv)
+				}
+			}
 		}
-		l.buf[key] = v
-		l.insert(v)
+		if l.ccap >= l.mcap {
+			if back := l.bufl.Back(); back != nil {
+				vv := l.bufl.Remove(back).(*ttlValue[T])
+				delete(l.bufm, vv.key)
+				l.ccap--
+				l.putPool(vv)
+			}
+		}
+		vv := l.getPool()
+		vv.key = key
+		vv.value = value
+		if l.ttl != 0 {
+			vv.ttl = time.Now().Add(l.ttl).UnixNano()
+		}
+		l.bufm[key] = l.bufl.PushFront(vv)
+		l.ccap++
 	}
 }
-func (l *LruCache[T]) getPool() *node[T] {
-	n, ok := l.pool.Get().(*node[T])
+func (l *LruCache[T]) Del(key any) {
+	elm, ok := l.bufm[key]
 	if !ok {
-		n = &node[T]{
-			data: &kv[T]{},
-		}
+		return
 	}
-	return n
+	l.bufl.Remove(elm)
+	delete(l.bufm, key)
+	l.ccap--
+	l.putPool(elm.Value.(*ttlValue[T]))
 }
-func (l *LruCache[T]) putPool(n *node[T]) {
-	n.data.ttl = 0
-	n.data.key = ""
-	var tmp T
-	n.data.value = tmp
-	n.next = nil
-	n.prev = nil
-	l.pool.Put(n)
+func (l *LruCache[T]) Len() uint32 {
+	return l.ccap
+}
+func (l *LruCache[T]) Has(key any) bool {
+	elm, ok := l.bufm[key]
+	if l.ttl == 0 || !ok {
+		return ok
+	}
+	return elm.Value.(*ttlValue[T]).ttl > time.Now().UnixNano()
+}
+func (l *LruCache[T]) getPool() *ttlValue[T] {
+	return l.pool.Get().(*ttlValue[T])
+}
+func (l *LruCache[T]) putPool(v *ttlValue[T]) {
+	v.ttl = 0
+	var empty T
+	v.value = empty
+	v.key = nil
+	l.pool.Put(v)
 }

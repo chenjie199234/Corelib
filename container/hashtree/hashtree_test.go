@@ -77,7 +77,7 @@ func test_fixedhashtree(t *testing.T) {
 		3:  {Hstr: []byte("a")},
 		12: {Hstr: []byte("b")},
 	})
-	d, _ := tree1.Different(tree2)
+	d, _ := tree1.Diff(tree2)
 	if len(d) != 3 {
 		t.Fatal("different failed")
 	}
@@ -160,7 +160,7 @@ func test_flexiblehashtree(t *testing.T) {
 		{Hstr: []byte("10")},
 		{Hstr: []byte("11")},
 	})
-	d := tree1.Different(tree2)
+	d := tree1.Diff(tree2)
 	if len(d) != 3 {
 		t.Fatal("different failed")
 	}

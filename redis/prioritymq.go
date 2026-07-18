@@ -2,7 +2,9 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/chenjie199234/Corelib/util/common"
@@ -64,28 +66,39 @@ redis.call("DEL",KEYS[2])
 return 1`)
 }
 
+var ErrName = errors.New("[redis.prioritymq] group,task,channel name can't contain '{' and '}'")
+
 // priority - the bigger the number is ranked previous
 // if priority <0,means this task is interrupted,can't sub,but can pub
-func (c *Client) PriorityMQSetTask(ctx context.Context, group, task string, priority int64) error {
+func (c *Client) PriorityMQSetTask(ctx context.Context, group, task string, priority int8) error {
 	if group == "" || task == "" {
 		panic("[redis.prioritymq.set] group or task missing")
+	}
+	if strings.Contains(group, "{") || strings.Contains(group, "}") {
+		return ErrName
+	}
+	if strings.Contains(task, "{") || strings.Contains(task, "}") {
+		return ErrName
 	}
 	_, e := c.ZAdd(ctx, group, gredis.Z{Score: float64(priority), Member: task}).Result()
 	return e
 }
 
 // return key - task,value - priority
-func (c *Client) PriorityMQGetCurTasks(ctx context.Context, group string) (map[string]int64, error) {
+func (c *Client) PriorityMQGetCurTasks(ctx context.Context, group string) (map[string]int8, error) {
 	if group == "" {
 		panic("[redis.prioritymq.get] group missing")
+	}
+	if strings.Contains(group, "{") || strings.Contains(group, "}") {
+		return nil, ErrName
 	}
 	r, e := c.ZRangeWithScores(ctx, group, 0, -1).Result()
 	if e != nil {
 		return nil, e
 	}
-	result := make(map[string]int64, len(r))
+	result := make(map[string]int8, len(r))
 	for _, v := range r {
-		result[v.Member.(string)] = int64(v.Score)
+		result[v.Member.(string)] = int8(v.Score)
 	}
 	return result, nil
 }
@@ -96,6 +109,17 @@ func (c *Client) PriorityMQGetCurTasks(ctx context.Context, group string) (map[s
 func (c *Client) PriorityMQFinishTaskPub(ctx context.Context, group, task string, usedchannels ...string) (int, error) {
 	if group == "" || task == "" || len(usedchannels) == 0 {
 		panic("[redis.prioritymq.finish] group or task or channel missing")
+	}
+	if strings.Contains(group, "{") || strings.Contains(group, "}") {
+		return 0, ErrName
+	}
+	if strings.Contains(task, "{") || strings.Contains(task, "}") {
+		return 0, ErrName
+	}
+	for _, channel := range usedchannels {
+		if strings.Contains(channel, "{") || strings.Contains(channel, "}") {
+			return 0, ErrName
+		}
 	}
 	keys := make([]string, 0, len(usedchannels)+2)
 	taskkey := "{" + group + "}_" + task
@@ -111,6 +135,15 @@ func (c *Client) PriorityMQPub(ctx context.Context, group, task, channel string,
 	if group == "" || task == "" || channel == "" {
 		panic("[redis.prioritymq.pub] group or task or channel missing")
 	}
+	if strings.Contains(group, "{") || strings.Contains(group, "}") {
+		return ErrName
+	}
+	if strings.Contains(task, "{") || strings.Contains(task, "}") {
+		return ErrName
+	}
+	if strings.Contains(channel, "{") || strings.Contains(channel, "}") {
+		return ErrName
+	}
 	if len(datas) == 0 {
 		return nil
 	}
@@ -123,6 +156,12 @@ func (c *Client) PriorityMQPub(ctx context.Context, group, task, channel string,
 func (c *Client) PriorityMQSub(group, channel string, concurrencynum uint, subhandler func(task string, data []byte)) (func(), error) {
 	if group == "" || channel == "" || concurrencynum == 0 {
 		panic("[redis.prioritymq.sub] group or channel or concurrency num missing")
+	}
+	if strings.Contains(group, "{") || strings.Contains(group, "}") {
+		return nil, ErrName
+	}
+	if strings.Contains(channel, "{") || strings.Contains(channel, "}") {
+		return nil, ErrName
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	for range concurrencynum {
@@ -140,7 +179,8 @@ func (c *Client) PriorityMQSub(group, channel string, concurrencynum uint, subha
 				}
 				tasks, e = c.ZRevRangeByScore(ctx, group, &gredis.ZRangeBy{Min: "0", Max: "+inf"}).Result()
 				if e != nil {
-					slog.ErrorContext(ctx, "[redis.prioritymq.sub] get tasks failed", slog.String("group", group), slog.String("error", e.Error()))
+					slog.ErrorContext(ctx, "[redis.prioritymq.sub] get tasks failed",
+						slog.String("group", group), slog.String("error", e.Error()))
 					continue
 				}
 				if len(tasks) == 0 && ctx.Err() == nil {
@@ -158,7 +198,8 @@ func (c *Client) PriorityMQSub(group, channel string, concurrencynum uint, subha
 				if result, e = c.BLPop(ctx, time.Second, keys...).Result(); e == nil {
 					subhandler(result[0][len(group)+3:len(result[0])-len(channel)-1], common.STB(result[1]))
 				} else if ee, ok := e.(interface{ Timeout() bool }); (!ok || !ee.Timeout()) && e != gredis.Nil {
-					slog.ErrorContext(ctx, "[redis.prioritymq.sub] sub tasks failed", slog.String("group", group), slog.String("channel", channel), slog.String("error", e.Error()))
+					slog.ErrorContext(ctx, "[redis.prioritymq.sub] sub tasks failed",
+						slog.String("group", group), slog.String("channel", channel), slog.String("error", e.Error()))
 				} else {
 					e = nil
 				}

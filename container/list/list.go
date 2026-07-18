@@ -4,43 +4,44 @@ import (
 	"errors"
 	"runtime"
 	"sync/atomic"
-	"unsafe"
 )
 
 // thread safe
 type List[T any] struct {
-	head *node[T]
-	tail *node[T]
+	head atomic.Pointer[node[T]]
+	tail atomic.Pointer[node[T]]
 }
 
 type node[T any] struct {
 	value T
-	next  *node[T]
+	next  atomic.Pointer[node[T]]
 }
 
 func NewList[T any]() *List[T] {
 	tempnode := &node[T]{}
-	return &List[T]{
-		head: tempnode,
-		tail: tempnode,
-	}
+	l := &List[T]{}
+	l.head.Store(tempnode)
+	l.tail.Store(tempnode)
+	return l
 }
 func (l *List[T]) Push(data T) {
-	n := &node[T]{
-		value: data,
-		next:  nil,
-	}
-	temptail := (*node[T])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&l.tail))))
+	n := &node[T]{value: data}
+	temptail := l.tail.Load()
+	trycas := 0
 	for {
-		for atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&temptail.next))) != nil {
-			temptail = (*node[T])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&temptail.next))))
+		for temptail.next.Load() != nil {
+			temptail = temptail.next.Load()
 		}
-		if atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&temptail.next)), nil, unsafe.Pointer(n)) {
+		if temptail.next.CompareAndSwap(nil, n) {
 			break
 		}
-		runtime.Gosched()
+		trycas++
+		if trycas >= 3 {
+			trycas = 0
+			runtime.Gosched()
+		}
 	}
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&l.tail)), unsafe.Pointer(n))
+	l.tail.CompareAndSwap(temptail, n)
 }
 
 var ErrPopEmpty = errors.New("pop empty list")
@@ -48,10 +49,12 @@ var ErrPopCheckFailed = errors.New("pop list check failed")
 
 // check func is used to check whether the next element can be popped,set nil if don't need it
 // if e == ErrPopCheckFailed the data will return but it will not be poped from the list
+// Warning!Data returned when check func failed is thread unsafe,maybe another goroutine already popped this data
 func (l *List[T]) Pop(check func(d T) bool) (data T, e error) {
+	trycas := 0
 	for {
-		oldhead := (*node[T])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&l.head))))
-		oldheadnext := (*node[T])(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&oldhead.next))))
+		oldhead := l.head.Load()
+		oldheadnext := oldhead.next.Load()
 		if oldheadnext == nil {
 			e = ErrPopEmpty
 			return
@@ -61,9 +64,13 @@ func (l *List[T]) Pop(check func(d T) bool) (data T, e error) {
 			e = ErrPopCheckFailed
 			return
 		}
-		if atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&l.head)), unsafe.Pointer(oldhead), unsafe.Pointer(oldhead.next)) {
+		if l.head.CompareAndSwap(oldhead, oldheadnext) {
 			return oldheadnext.value, nil
 		}
-		runtime.Gosched()
+		trycas++
+		if trycas >= 3 {
+			trycas = 0
+			runtime.Gosched()
+		}
 	}
 }

@@ -1,5 +1,9 @@
 package trie
 
+import (
+	"bytes"
+)
+
 // thread unsafe
 type Trie[T any] []*node[T]
 
@@ -52,9 +56,11 @@ func (n *node[T]) Set(str string, value T) {
 				value:    n.value,
 				exist:    n.exist,
 			}
+			for _, child := range oldnode.children {
+				child.parent = oldnode
+			}
 			n.children = make([]*node[T], 0, 2)
-			n.children = append(n.children, oldnode)
-			n.children = append(n.children, newnode)
+			n.children = append(n.children, oldnode, newnode)
 			n.str = str[:i]
 			var empty T
 			n.value = empty
@@ -68,6 +74,9 @@ func (n *node[T]) Set(str string, value T) {
 		str:      n.str[len(str):],
 		value:    n.value,
 		exist:    n.exist,
+	}
+	for _, child := range oldnode.children {
+		child.parent = oldnode
 	}
 	n.children = make([]*node[T], 0, 1)
 	n.children = append(n.children, oldnode)
@@ -107,7 +116,7 @@ func (n *node[T]) Del(str string) (ok bool) {
 		//compress
 		self := n
 		parent := self.parent
-		for {
+		for self != nil && !self.exist {
 			if len(self.children) == 0 && parent != nil {
 				for i, child := range parent.children {
 					if child != self {
@@ -134,6 +143,10 @@ func (n *node[T]) Del(str string) (ok bool) {
 				self.str += child.str
 				self.value = child.value
 				self.exist = child.exist
+				for _, c := range self.children {
+					c.parent = self
+				}
+				continue
 			}
 			break
 		}
@@ -156,17 +169,19 @@ func (n *node[T]) Del(str string) (ok bool) {
 	}
 	return false
 }
-func (n *node[T]) GetAll(prefix string, result map[string]T) {
+func (n *node[T]) GetAll(prefix *bytes.Buffer, result map[string]T) {
 	if result == nil {
 		return
 	}
-	prefix += n.str
+	plen := prefix.Len()
+	prefix.WriteString(n.str)
 	if n.exist {
-		result[prefix] = n.value
+		result[prefix.String()] = n.value
 	}
 	for _, child := range n.children {
 		child.GetAll(prefix, result)
 	}
+	prefix.Truncate(plen)
 }
 
 func NewTrie[T any]() *Trie[T] {
@@ -235,8 +250,9 @@ func (t *Trie[T]) Reset() {
 }
 func (t *Trie[T]) GetAll() map[string]T {
 	result := make(map[string]T)
+	var b bytes.Buffer
 	for _, child := range *t {
-		child.GetAll("", result)
+		child.GetAll(&b, result)
 	}
 	return result
 }

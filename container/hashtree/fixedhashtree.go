@@ -3,27 +3,28 @@ package hashtree
 import (
 	"errors"
 	"hash"
-	"math"
 )
 
 // thread unsafe
-// node's data can be nill
+// node's data can be nil
 type FixedHashtree[T any] hashtree[T]
 
 var ErrLengthConflict = errors.New("length conflict")
 
 func NewFixedHashtree[T any](h hash.Hash, width, tall int) *FixedHashtree[T] {
-	if tall == 0 || width == 0 {
+	if h == nil || tall <= 0 || width <= 0 {
 		return nil
 	}
-	total := 0
-	for i := range tall {
-		total += int(math.Pow(float64(width), float64(i)))
+	all := 0
+	n := 1
+	for range tall {
+		all += n
+		n *= width
 	}
 	instance := &hashtree[T]{
 		encoder: h,
 		width:   width,
-		nodes:   make([]*node[T], total),
+		nodes:   make([]*node[T], all),
 	}
 	for i := range instance.nodes {
 		instance.nodes[i] = &node[T]{
@@ -54,12 +55,11 @@ func (h *FixedHashtree[T]) Reset() {
 func (h *FixedHashtree[T]) ResetSingle(index int) {
 	origin := (*hashtree[T])(h)
 	if index >= origin.NodeNum() || index < 0 {
-		//jump the out of range index
 		return
 	}
 	origin.nodes[index].hstr = nil
 	origin.nodes[index].data = nil
-	origin.ReCaculateSingle(index)
+	origin.ReCalculateSingle(index)
 }
 func (h *FixedHashtree[T]) ResetMulti(indexes []int) {
 	origin := (*hashtree[T])(h)
@@ -71,7 +71,7 @@ func (h *FixedHashtree[T]) ResetMulti(indexes []int) {
 		origin.nodes[index].hstr = nil
 		origin.nodes[index].data = nil
 	}
-	origin.ReCaculateMulti(indexes)
+	origin.ReCalculateMulti(indexes)
 }
 func (h *FixedHashtree[T]) Rebuild(datas []*LeafData[T]) error {
 	origin := (*hashtree[T])(h)
@@ -88,11 +88,10 @@ func (h *FixedHashtree[T]) Rebuild(datas []*LeafData[T]) error {
 func (h *FixedHashtree[T]) SetSingle(index int, data *LeafData[T]) {
 	origin := (*hashtree[T])(h)
 	if index < 0 || index >= origin.NodeNum() {
-		//jump the out of range index
 		return
 	}
 	origin.nodes[index].data = data
-	origin.ReCaculateSingle(index)
+	origin.ReCalculateSingle(index)
 }
 func (h *FixedHashtree[T]) SetMulti(datas map[int]*LeafData[T]) {
 	if len(datas) == 0 {
@@ -108,7 +107,7 @@ func (h *FixedHashtree[T]) SetMulti(datas map[int]*LeafData[T]) {
 		origin.nodes[index].data = data
 		indexes = append(indexes, index)
 	}
-	origin.ReCaculateMulti(indexes)
+	origin.ReCalculateMulti(indexes)
 }
 
 func (h *FixedHashtree[T]) GetSingle(index int) *LeafData[T] {
@@ -130,11 +129,11 @@ func (h *FixedHashtree[T]) GetMulti(indexes []int) map[int]*LeafData[T] {
 	}
 	return r
 }
-func (h *FixedHashtree[T]) Different(other *FixedHashtree[T]) ([]int, error) {
+func (h *FixedHashtree[T]) Diff(other *FixedHashtree[T]) ([]int, error) {
 	originself := (*hashtree[T])(h)
 	originother := (*hashtree[T])(other)
 	if originself.NodeNum() != originother.NodeNum() {
 		return nil, ErrLengthConflict
 	}
-	return originself.Different(originother), nil
+	return diffleaf(originself, originother), nil
 }

@@ -90,9 +90,16 @@ func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header 
 			first = false
 			//deal the response line
 			pieces := bytes.Split(line, []byte{' '})
+			need := 0
 			for i := range pieces {
-				pieces[i] = bytes.TrimSpace(pieces[i])
+				tmp := bytes.TrimSpace(pieces[i])
+				if len(tmp) == 0 {
+					continue
+				}
+				pieces[i] = tmp
+				need++
 			}
+			pieces = pieces[:need]
 			if len(pieces) != 4 {
 				e = ErrResponseLineFormat
 				return

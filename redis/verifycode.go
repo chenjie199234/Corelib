@@ -10,8 +10,9 @@ import (
 	gredis "github.com/redis/go-redis/v9"
 )
 
-var ErrVerifyCodeCheckTimesUsedup = errors.New("all check times used up")
-var ErrVerifyCodeReceiverMissing = errors.New("receiver not exist")
+var ErrMissingExpire = errors.New("expire must > 0")
+var ErrVerifyCodeCheckTimesUsedup = errors.New("all check attempts used up")
+var ErrVerifyCodeReceiverMissing = errors.New("receiver does not exist")
 var ErrVerifyCodeMissing = errors.New("verify code not exist")
 var ErrVerifyCodeWrong = errors.New("verify code wrong")
 var makevcode *gredis.Script
@@ -67,6 +68,9 @@ return tonumber(data[2])`)
 // expire unit is second and it will only be used when new receiver added into this key to share the code
 // in the key's life,different receiver add to this key will get the same code
 func (c *Client) MakeVerifyCode(ctx context.Context, target, action, receiver string, expire uint) (code string, duplicatereceiver bool, e error) {
+	if expire == 0 {
+		return "", false, ErrMissingExpire
+	}
 	key := "verify_code_{" + target + "}_" + action
 	data, e := makevcode.Run(ctx, c, []string{key}, common.MakeRandCode(6), receiver, expire).Slice()
 	if e != nil {

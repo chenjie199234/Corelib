@@ -13,7 +13,7 @@ import (
 // {bloomname_1}_bkdr: redis bitset
 // {bloomname_1}_djb: redis bitset
 // {bloomname_1}_fnv: redis bitset
-// {bloomname_1}_dev: redis bitset
+// {bloomname_1}_dek: redis bitset
 // {bloomname_1}_rs: redis bitset
 // {bloomname_1}_sdbm: redis bitset
 // {bloomname_1}_exist: redis string
@@ -21,7 +21,7 @@ import (
 // {bloomname_n}_bkdr: redis bitset
 // {bloomname_n}_djb: redis bitset
 // {bloomname_n}_fnv: redis bitset
-// {bloomname_n}_dev: redis bitset
+// {bloomname_n}_dek: redis bitset
 // {bloomname_n}_rs: redis bitset
 // {bloomname_n}_sdbm: redis bitset
 // {bloomname_n}_exist: redis string
@@ -68,7 +68,7 @@ local r6=redis.call("SETBIT",KEYS[6],ARGV[6],1)
 if(redis.call("EXISTS",KEYS[7])==0)
 then
 	redis.call("DEL",KEYS[1])
-	redis.call("DEL",kEYS[2])
+	redis.call("DEL",KEYS[2])
 	redis.call("DEL",KEYS[3])
 	redis.call("DEL",KEYS[4])
 	redis.call("DEL",KEYS[5])
@@ -142,6 +142,7 @@ func (c *Client) NewBloom(ctx context.Context, bloomname string, groupnum uint64
 			keyrs := "{" + key + "}_rs"
 			keysdbm := "{" + key + "}_sdbm"
 			keyexist := "{" + key + "}_exist"
+			//pre-allocate memory
 			_, e := initBloom.Run(ctx, c, []string{keybkdr, keydjb, keyfnv, keydek, keyrs, keysdbm, keyexist}, bitnum, expiresecond).Int()
 			return e
 		})

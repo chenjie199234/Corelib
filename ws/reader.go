@@ -73,6 +73,8 @@ func decodeFirstSecond(reader *bufio.Reader) (fin, rsv1, rsv2, rsv3 bool, opcode
 // copy it if you need to keep and reuse
 func Read(reader *bufio.Reader, maxmsglen uint32, mustmask bool, handler func(OPCode, []byte) (readmore bool)) error {
 	code := _CONTINUE
+	//buf[:8] is a cache,used to read some control bytes
+	//buf[8:] is the real message
 	var buf []byte
 	for {
 		fin, _, _, _, curcode, mask, payloadlen, e := decodeFirstSecond(reader)

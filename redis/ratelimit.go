@@ -34,11 +34,14 @@ end
 return 1`)
 }
 
-// return true-all pass,false-at least one busy
+// return true-all pass,false-at least one limited
 // rates: key:source name,value(max rate per period):first element:max rate,second element:period(uint second)
 // If rates have multi key and value pairs,means all source name should pass it's rate check at the same time
 // Warning!In redis cluster mode,multi key should route to the same redis node!Please set the source name carefully
 func (c *Client) RateLimit(ctx context.Context, rates map[string][2]uint64) (bool, error) {
+	if len(rates) == 0 {
+		return true, nil
+	}
 	keys := make([]string, len(rates))
 	values := make([]any, len(rates)*2)
 	i := 0

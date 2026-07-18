@@ -21,7 +21,7 @@ return #ARGV`)
 }
 
 // SubUnicast will sub max 128 datas in one cycle
-// last: wether this is the last data in this cycle
+// last: whether this is the last data in this cycle
 type UnicastHandler func(data []byte, last bool)
 
 // due to go-redis doesn't support to wake up the block cmd actively now

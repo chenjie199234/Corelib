@@ -67,8 +67,14 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 		if path == "" {
 			//the request line
 			pieces := bytes.Split(line, []byte{' '})
+			need := 0
 			for i := range pieces {
-				pieces[i] = bytes.TrimSpace(pieces[i])
+				tmp := bytes.TrimSpace(pieces[i])
+				if len(tmp) == 0 {
+					continue
+				}
+				pieces[i] = tmp
+				need++
 			}
 			if len(pieces) != 3 {
 				e = ErrRequestLineFormat

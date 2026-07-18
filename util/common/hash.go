@@ -25,10 +25,10 @@ func Fnvhash(data []byte, total uint64) uint64 {
 	if total == 1 {
 		return 0
 	}
-	hash := uint64(2166136261)
+	hash := uint64(14695981039346656037)
 	for _, v := range data {
-		hash *= uint64(16777619)
 		hash ^= uint64(v)
+		hash *= uint64(1099511628211)
 	}
 	return hash % total
 }

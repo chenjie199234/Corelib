@@ -14,7 +14,7 @@ import (
 )
 
 // SubBroadcast will sub max 128 datas in one cycle
-// last: wether this is the last data in this cycle
+// last: whether this is the last data in this cycle
 type BroadcastHandler func(data map[string]any, last bool)
 
 // SubBroadcast sub data which is pubbed after the sub action
@@ -40,7 +40,9 @@ func (c *Client) SubBroadcast(broadcast string, shard uint8, handler BroadcastHa
 					if err == gredis.ErrClosed || err == context.Canceled {
 						return
 					}
-					slog.ErrorContext(ctx, "[redis.broadcast.sub] read failed", slog.String("stream", stream))
+					slog.ErrorContext(ctx, "[redis.broadcast.sub] read failed",
+						slog.String("stream", stream),
+						slog.String("error", err.Error()))
 					time.Sleep(time.Millisecond * 100)
 					continue
 				}

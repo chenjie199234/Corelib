@@ -17,10 +17,10 @@ func (d Duration) StdDuration() time.Duration {
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) error {
-	if data[0] == '"' && data[len(data)-1] == '"' {
+	if len(data) >= 2 && data[0] == '"' && data[len(data)-1] == '"' {
 		data = data[1 : len(data)-1]
 	}
-	if len(data) == 0 {
+	if len(data) == 0 || (len(data) == 4 && data[0] == 'n' && data[1] == 'u' && data[2] == 'l' && data[3] == 'l') {
 		*d = Duration(0)
 		return nil
 	}
@@ -37,155 +37,85 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 	return ErrDurationFormatWrong
 }
 func (d Duration) MarshalJSON() ([]byte, error) {
-	if d == 0 {
-		return []byte{'"', '0', 's', '"'}, nil
-	}
-	dd := d.StdDuration()
-	b := make([]byte, 0, 50)
-	b = append(b, '"')
-	//hour
-	if dd/time.Hour > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Hour), 10)
-		b = append(b, 'h')
-		dd = dd % time.Hour
-	}
-	//minute
-	if dd/time.Minute > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Minute), 10)
-		b = append(b, 'm')
-		dd = dd % time.Minute
-	}
-	//second
-	if dd/time.Second > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Second), 10)
-		b = append(b, 's')
-		dd = dd % time.Second
-	}
-	//millisecond
-	if dd/time.Millisecond > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Millisecond), 10)
-		b = append(b, "ms"...)
-		dd = dd % time.Millisecond
-	}
-	//microsecond
-	if dd/time.Microsecond > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Microsecond), 10)
-		b = append(b, "us"...)
-		dd = dd % time.Microsecond
-	}
-	//nanosecond
-	if dd > 0 {
-		b = strconv.AppendInt(b, int64(dd), 10)
-		b = append(b, "ns"...)
-	}
-	b = append(b, '"')
-	return b, nil
+	return d.format(true), nil
 }
 func (d *Duration) UnmarshalText(data []byte) error {
-	if data[0] == '"' && data[len(data)-1] == '"' {
-		data = data[1 : len(data)-1]
-	}
 	if len(data) == 0 {
 		*d = Duration(0)
 		return nil
 	}
-	if data[0] != '"' && data[len(data)-1] != '"' {
-		if temp, e := time.ParseDuration(common.BTS(data)); e == nil {
-			*d = Duration(temp)
-			return nil
-		}
-		if num, e := strconv.ParseInt(common.BTS(data), 10, 64); e == nil {
-			*d = Duration(num)
-			return nil
-		}
+	if temp, e := time.ParseDuration(common.BTS(data)); e == nil {
+		*d = Duration(temp)
+		return nil
+	}
+	if num, e := strconv.ParseInt(common.BTS(data), 10, 64); e == nil {
+		*d = Duration(num)
+		return nil
 	}
 	return ErrDurationFormatWrong
 }
 func (d Duration) MarshalText() ([]byte, error) {
-	if d == 0 {
-		return []byte{'"', '0', 's', '"'}, nil
-	}
-	dd := d.StdDuration()
-	b := make([]byte, 0, 50)
-	b = append(b, '"')
-	//hour
-	if dd/time.Hour > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Hour), 10)
-		b = append(b, 'h')
-		dd = dd % time.Hour
-	}
-	//minute
-	if dd/time.Minute > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Minute), 10)
-		b = append(b, 'm')
-		dd = dd % time.Minute
-	}
-	//second
-	if dd/time.Second > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Second), 10)
-		b = append(b, 's')
-		dd = dd % time.Second
-	}
-	//millisecond
-	if dd/time.Millisecond > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Millisecond), 10)
-		b = append(b, "ms"...)
-		dd = dd % time.Millisecond
-	}
-	//microsecond
-	if dd/time.Microsecond > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Microsecond), 10)
-		b = append(b, "us"...)
-		dd = dd % time.Microsecond
-	}
-	//nanosecond
-	if dd > 0 {
-		b = strconv.AppendInt(b, int64(dd), 10)
-		b = append(b, "ns"...)
-	}
-	b = append(b, '"')
-	return b, nil
+	return d.format(false), nil
 }
 func (d Duration) String() string {
+	return common.BTS(d.format(false))
+}
+func (d Duration) format(quoted bool) []byte {
 	if d == 0 {
-		return "0s"
+		if quoted {
+			return []byte{'"', '0', 's', '"'}
+		}
+		return []byte{'0', 's'}
 	}
-	dd := d.StdDuration()
+	var dd uint64
 	b := make([]byte, 0, 50)
+	if quoted {
+		b = append(b, '"')
+	}
+	if d.StdDuration() < 0 {
+		b = append(b, '-')
+		//prevent overflow when d.StdDuration() == math.MinInt64
+		dd = uint64(-(d.StdDuration() + 1)) + 1
+	} else {
+		dd = uint64(d.StdDuration())
+	}
 	//hour
-	if dd/time.Hour > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Hour), 10)
+	if tmp := dd / uint64(time.Hour); tmp > 0 {
+		b = strconv.AppendUint(b, tmp, 10)
 		b = append(b, 'h')
-		dd = dd % time.Hour
+		dd = dd % uint64(time.Hour)
 	}
 	//minute
-	if dd/time.Minute > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Minute), 10)
+	if tmp := dd / uint64(time.Minute); tmp > 0 {
+		b = strconv.AppendUint(b, tmp, 10)
 		b = append(b, 'm')
-		dd = dd % time.Minute
+		dd = dd % uint64(time.Minute)
 	}
 	//second
-	if dd/time.Second > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Second), 10)
+	if tmp := dd / uint64(time.Second); tmp > 0 {
+		b = strconv.AppendUint(b, tmp, 10)
 		b = append(b, 's')
-		dd = dd % time.Second
+		dd = dd % uint64(time.Second)
 	}
 	//millisecond
-	if dd/time.Millisecond > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Millisecond), 10)
+	if tmp := dd / uint64(time.Millisecond); tmp > 0 {
+		b = strconv.AppendUint(b, tmp, 10)
 		b = append(b, "ms"...)
-		dd = dd % time.Millisecond
+		dd = dd % uint64(time.Millisecond)
 	}
 	//microsecond
-	if dd/time.Microsecond > 0 {
-		b = strconv.AppendInt(b, int64(dd/time.Microsecond), 10)
+	if tmp := dd / uint64(time.Microsecond); tmp > 0 {
+		b = strconv.AppendUint(b, tmp, 10)
 		b = append(b, "us"...)
-		dd = dd % time.Microsecond
+		dd = dd % uint64(time.Microsecond)
 	}
 	//nanosecond
 	if dd > 0 {
-		b = strconv.AppendInt(b, int64(dd), 10)
+		b = strconv.AppendUint(b, dd, 10)
 		b = append(b, "ns"...)
 	}
-	return common.BTS(b)
+	if quoted {
+		b = append(b, '"')
+	}
+	return b
 }

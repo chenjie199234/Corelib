@@ -12,12 +12,12 @@ var data map[uint64]struct{}
 func Test_Id(t *testing.T) {
 	lker := new(sync.Mutex)
 	data = make(map[uint64]struct{}, 1000)
-	New(1)
+	idg := New(1)
 	for i := range 1000 {
 		go func(index int) {
 			for {
 				time.Sleep(time.Millisecond)
-				id, e := GetID()
+				id, e := idg.GetID()
 				if e != nil {
 					panic(e)
 				}

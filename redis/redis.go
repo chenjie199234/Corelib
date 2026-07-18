@@ -134,7 +134,7 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 		})}
 	case "cluster":
 		if len(c.Addrs) == 1 {
-			return nil, errors.New("too less addrs in config for cluster mode")
+			return nil, errors.New("too few addrs in config for cluster mode")
 		}
 		client = &Client{gredis.NewClusterClient(&gredis.ClusterOptions{
 			ClientName:            c.RedisName,
@@ -154,7 +154,7 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 		})}
 	case "ring":
 		if len(c.Addrs) == 1 {
-			return nil, errors.New("too less addrs in config for ring mode")
+			return nil, errors.New("too few addrs in config for ring mode")
 		}
 		addrs := make(map[string]string, len(c.Addrs))
 		for i, addr := range c.Addrs {
@@ -177,7 +177,7 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 		})}
 	case "randomring":
 		if len(c.Addrs) == 1 {
-			return nil, errors.New("too less addrs in config for randomring mode")
+			return nil, errors.New("too few addrs in config for randomring mode")
 		}
 		addrs := make(map[string]string, len(c.Addrs))
 		for i, addr := range c.Addrs {
@@ -291,7 +291,7 @@ func (m *monitor) ProcessPipelineHook(hook gredis.ProcessPipelineHook) gredis.Pr
 		for _, cmd := range cmds {
 			tmp = append(tmp, cmd.FullName())
 		}
-		_, span := otel.Tracer("").Start(
+		_, span := otel.Tracer("Corelib.redis.client").Start(
 			ctx,
 			"call redis",
 			trace.WithSpanKind(trace.SpanKindClient),

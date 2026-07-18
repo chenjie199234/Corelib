@@ -12,6 +12,9 @@ type FlexibleHashtree[T any] hashtree[T]
 var ErrMissingHstr = errors.New("missing hash str")
 
 func NewFlexibleHashtree[T any](h hash.Hash, width int) *FlexibleHashtree[T] {
+	if h == nil || width <= 0 {
+		return nil
+	}
 	instance := &hashtree[T]{
 		encoder: h,
 		width:   width,
@@ -32,8 +35,7 @@ func (h *FlexibleHashtree[T]) Export() []*LeafData[T] {
 	return ((*hashtree[T])(h)).Export()
 }
 func (h *FlexibleHashtree[T]) Reset() {
-	origin := (*hashtree[T])(h)
-	origin.nodes = make([]*node[T], 0, 100)
+	(*hashtree[T])(h).nodes = make([]*node[T], 0, 100)
 }
 func (h *FlexibleHashtree[T]) Rebuild(datas []*LeafData[T]) error {
 	for _, data := range datas {
@@ -62,7 +64,7 @@ func (h *FlexibleHashtree[T]) PushSingle(data *LeafData[T]) error {
 		data: data,
 	}
 	origin.nodes = append(origin.nodes, newnode)
-	origin.ReCaculateSingle(len(origin.nodes) - 1)
+	origin.ReCalculateSingle(len(origin.nodes) - 1)
 	return nil
 }
 func (h *FlexibleHashtree[T]) PushMulti(datas []*LeafData[T]) error {
@@ -84,7 +86,7 @@ func (h *FlexibleHashtree[T]) PushMulti(datas []*LeafData[T]) error {
 		origin.nodes = append(origin.nodes, newnode)
 		indexes = append(indexes, len(origin.nodes)-1)
 	}
-	origin.ReCaculateMulti(indexes)
+	origin.ReCalculateMulti(indexes)
 	return nil
 }
 
@@ -110,8 +112,8 @@ func (h *FlexibleHashtree[T]) GetMulti(indexes []int) map[int]*LeafData[T] {
 	}
 	return r
 }
-func (h *FlexibleHashtree[T]) Different(other *FlexibleHashtree[T]) []int {
+func (h *FlexibleHashtree[T]) Diff(other *FlexibleHashtree[T]) []int {
 	originself := (*hashtree[T])(h)
 	originother := (*hashtree[T])(other)
-	return originself.Different(originother)
+	return diffleaf(originself, originother)
 }
