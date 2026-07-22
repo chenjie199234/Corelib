@@ -56,9 +56,9 @@ func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 		return nil, errors.New("missing master addr in config")
 	}
 	if c.Slaves != nil && len(c.Slaves.Addrs) > 1 {
-		undup := make(map[string]*struct{}, len(c.Slaves.Addrs))
+		undup := make(map[string]struct{}, len(c.Slaves.Addrs))
 		for _, addr := range c.Slaves.Addrs {
-			undup[addr] = nil
+			undup[addr] = struct{}{}
 		}
 		tmp := make([]string, 0, len(undup))
 		for addr := range undup {

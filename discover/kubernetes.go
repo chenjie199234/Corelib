@@ -31,8 +31,8 @@ type KubernetesD struct {
 	cancel        context.CancelFunc
 
 	lker      *sync.RWMutex
-	notices   map[chan *struct{}]*struct{}
-	addrs     map[string]*struct{}
+	notices   map[chan struct{}]struct{}
+	addrs     map[string]struct{}
 	version   string
 	lasterror error
 }
@@ -70,7 +70,7 @@ func NewKubernetesDiscover(targetproject, targetgroup, targetapp, namespace, fie
 		crpcport:      crpcport,
 		cgrpcport:     cgrpcport,
 		webport:       webport,
-		notices:       make(map[chan *struct{}]*struct{}, 1),
+		notices:       make(map[chan struct{}]struct{}, 1),
 		lker:          &sync.RWMutex{},
 	}
 	d.ctx, d.cancel = context.WithCancel(context.Background())
@@ -85,7 +85,7 @@ func (d *KubernetesD) Now() {
 	}
 	for notice := range d.notices {
 		select {
-		case notice <- nil:
+		case notice <- struct{}{}:
 		default:
 		}
 	}
@@ -100,18 +100,18 @@ func (d *KubernetesD) Stop() {
 // don't close the returned channel,it will be closed in cases:
 // 1.the cancel function be called
 // 2.this discover stopped
-func (d *KubernetesD) GetNotice() (notice <-chan *struct{}, cancel func()) {
-	ch := make(chan *struct{}, 1)
+func (d *KubernetesD) GetNotice() (notice <-chan struct{}, cancel func()) {
+	ch := make(chan struct{}, 1)
 	d.lker.Lock()
 	if d.version != "" {
-		ch <- nil
-		d.notices[ch] = nil
+		ch <- struct{}{}
+		d.notices[ch] = struct{}{}
 	} else {
 		select {
 		case <-d.ctx.Done():
 			close(ch)
 		default:
-			d.notices[ch] = nil
+			d.notices[ch] = struct{}{}
 		}
 	}
 	d.lker.Unlock()
@@ -129,7 +129,7 @@ func (d *KubernetesD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, 
 	defer d.lker.RUnlock()
 	r := make(map[string]*RegisterData)
 	reg := &RegisterData{
-		DServers: map[string]*struct{}{"kubernetes": nil},
+		DServers: map[string]struct{}{"kubernetes": {}},
 	}
 	for addr := range d.addrs {
 		switch pt {
@@ -207,7 +207,7 @@ func (d *KubernetesD) list() {
 			d.lasterror = e
 			for notice := range d.notices {
 				select {
-				case notice <- nil:
+				case notice <- struct{}{}:
 				default:
 				}
 			}
@@ -215,7 +215,7 @@ func (d *KubernetesD) list() {
 			time.Sleep(time.Millisecond * 100)
 			continue
 		}
-		addrs := make(map[string]*struct{}, len(pods.Items))
+		addrs := make(map[string]struct{}, len(pods.Items))
 		for _, item := range pods.Items {
 			if item.Status.PodIP == "" {
 				continue
@@ -231,7 +231,7 @@ func (d *KubernetesD) list() {
 				}
 			}
 			if find {
-				addrs[item.Status.PodIP] = nil
+				addrs[item.Status.PodIP] = struct{}{}
 			}
 		}
 		d.lker.Lock()
@@ -240,7 +240,7 @@ func (d *KubernetesD) list() {
 		d.lasterror = nil
 		for notice := range d.notices {
 			select {
-			case notice <- nil:
+			case notice <- struct{}{}:
 			default:
 			}
 		}
@@ -282,7 +282,7 @@ func (d *KubernetesD) watch() {
 			d.lasterror = e
 			for notice := range d.notices {
 				select {
-				case notice <- nil:
+				case notice <- struct{}{}:
 				default:
 				}
 			}
@@ -344,12 +344,12 @@ func (d *KubernetesD) watch() {
 				}
 				if find {
 					d.lker.Lock()
-					d.addrs[pod.Status.PodIP] = nil
+					d.addrs[pod.Status.PodIP] = struct{}{}
 					d.version = pod.ResourceVersion
 					d.lasterror = nil
 					for notice := range d.notices {
 						select {
-						case notice <- nil:
+						case notice <- struct{}{}:
 						default:
 						}
 					}
@@ -366,7 +366,7 @@ func (d *KubernetesD) watch() {
 				d.lasterror = nil
 				for notice := range d.notices {
 					select {
-					case notice <- nil:
+					case notice <- struct{}{}:
 					default:
 					}
 				}
@@ -386,7 +386,7 @@ func (d *KubernetesD) watch() {
 				d.lasterror = e
 				for notice := range d.notices {
 					select {
-					case notice <- nil:
+					case notice <- struct{}{}:
 					default:
 					}
 				}

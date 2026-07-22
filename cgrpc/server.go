@@ -351,7 +351,7 @@ func handler(wctx *ServerContext, span trace.Span, totalhandlers []OutsideHandle
 	}
 }
 func deadlinehandler(wctx *ServerContext, span trace.Span, totalhandlers []OutsideHandler) (earlyreturn bool) {
-	done := make(chan *struct{})
+	done := make(chan struct{})
 	go func() {
 		handler(wctx, span, totalhandlers)
 		close(done)

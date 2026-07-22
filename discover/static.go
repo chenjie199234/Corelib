@@ -15,7 +15,7 @@ import (
 type StaticD struct {
 	target    string
 	lker      *sync.RWMutex
-	notices   map[chan *struct{}]*struct{}
+	notices   map[chan struct{}]struct{}
 	crpcport  int
 	cgrpcport int
 	webport   int
@@ -26,9 +26,9 @@ type StaticD struct {
 
 // addrs' key can be host(no scheme)/ipv4/ipv6
 func NewStaticDiscover(targetproject, targetgroup, targetapp string, addrs []string, crpcport, cgrpcport, webport int) (DI, error) {
-	undup := make(map[string]*struct{}, len(addrs))
+	undup := make(map[string]struct{}, len(addrs))
 	for _, addr := range addrs {
-		undup[addr] = nil
+		undup[addr] = struct{}{}
 	}
 	addrs = make([]string, 0, len(undup))
 	for k := range undup {
@@ -46,7 +46,7 @@ func NewStaticDiscover(targetproject, targetgroup, targetapp string, addrs []str
 		crpcport:  crpcport,
 		cgrpcport: cgrpcport,
 		webport:   webport,
-		notices:   make(map[chan *struct{}]*struct{}),
+		notices:   make(map[chan struct{}]struct{}),
 		lker:      &sync.RWMutex{},
 	}, nil
 }
@@ -56,7 +56,7 @@ func (d *StaticD) Now() {
 	defer d.lker.RUnlock()
 	for notice := range d.notices {
 		select {
-		case notice <- nil:
+		case notice <- struct{}{}:
 		default:
 		}
 	}
@@ -78,14 +78,14 @@ func (d *StaticD) Stop() {
 // don't close the returned channel,it will be closed in cases:
 // 1.the cancel function be called
 // 2.this discover stopped
-func (d *StaticD) GetNotice() (notice <-chan *struct{}, cancel func()) {
-	ch := make(chan *struct{}, 1)
+func (d *StaticD) GetNotice() (notice <-chan struct{}, cancel func()) {
+	ch := make(chan struct{}, 1)
 	d.lker.Lock()
 	if d.lasterror == cerror.ErrDiscoverStopped {
 		close(ch)
 	} else {
-		ch <- nil
-		d.notices[ch] = nil
+		ch <- struct{}{}
+		d.notices[ch] = struct{}{}
 	}
 	d.lker.Unlock()
 	return ch, func() {
@@ -98,9 +98,9 @@ func (d *StaticD) GetNotice() (notice <-chan *struct{}, cancel func()) {
 	}
 }
 func (d *StaticD) UpdateAddrs(addrs []string, crpcport, cgrpcport, webport int) {
-	undup := make(map[string]*struct{}, len(addrs))
+	undup := make(map[string]struct{}, len(addrs))
 	for _, addr := range addrs {
-		undup[addr] = nil
+		undup[addr] = struct{}{}
 	}
 	addrs = make([]string, 0, len(undup))
 	for k := range undup {
@@ -117,7 +117,7 @@ func (d *StaticD) UpdateAddrs(addrs []string, crpcport, cgrpcport, webport int) 
 		d.webport = webport
 		for notice := range d.notices {
 			select {
-			case notice <- nil:
+			case notice <- struct{}{}:
 			default:
 			}
 		}
@@ -128,7 +128,7 @@ func (d *StaticD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, erro
 	defer d.lker.RUnlock()
 	r := make(map[string]*RegisterData)
 	reg := &RegisterData{
-		DServers: map[string]*struct{}{"static": nil},
+		DServers: map[string]struct{}{"static": {}},
 	}
 	for _, addr := range d.addrs {
 		switch pt {

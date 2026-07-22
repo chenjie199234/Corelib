@@ -28,12 +28,12 @@ const (
 
 type Peer struct {
 	uniqueid       string //if this is empty,the uniqueid will be setted with the peer's RemoteAddr(ip:port)
-	blocknotice    chan *struct{}
+	blocknotice    chan struct{}
 	selfMaxMsgLen  atomic.Uint32
 	peerMaxMsgLen  atomic.Uint32
 	peergroup      *group
 	status         atomic.Int32 //1 - working,0 - closed
-	dispatcher     chan *struct{}
+	dispatcher     chan struct{}
 	cr             *bufio.Reader
 	c              net.Conn
 	rawconnectaddr string //only useful when peertype is _PEER_SERVER,this is the server's raw connect addr
@@ -52,15 +52,15 @@ type Peer struct {
 func newPeer(selfMaxMsgLen uint32, peertype int, rawconnectaddr string) *Peer {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &Peer{
-		blocknotice:    make(chan *struct{}),
+		blocknotice:    make(chan struct{}),
 		rawconnectaddr: rawconnectaddr,
 		peertype:       peertype,
-		dispatcher:     make(chan *struct{}, 1),
+		dispatcher:     make(chan struct{}, 1),
 		Context:        ctx,
 		CancelFunc:     cancel,
 	}
 	p.selfMaxMsgLen.Store(selfMaxMsgLen)
-	p.dispatcher <- nil
+	p.dispatcher <- struct{}{}
 	return p
 }
 
@@ -140,7 +140,7 @@ func (p *Peer) getDispatcher(ctx context.Context) error {
 }
 func (p *Peer) putDispatcher() {
 	if p.status.Load() == 1 {
-		p.dispatcher <- nil
+		p.dispatcher <- struct{}{}
 	} else {
 		close(p.dispatcher)
 	}

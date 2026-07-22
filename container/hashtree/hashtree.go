@@ -67,10 +67,10 @@ func (h *hashtree[T]) ReCalculateSingle(index int) {
 }
 func (h *hashtree[T]) ReCalculateMulti(indexes []int) {
 	haszero := false
-	undup := make(map[int]*struct{}, len(indexes))
+	undup := make(map[int]struct{}, len(indexes))
 	for _, index := range indexes {
 		if index > 0 && index < h.NodeNum() {
-			undup[index] = nil
+			undup[index] = struct{}{}
 		} else if index == 0 {
 			haszero = true
 		}
@@ -96,13 +96,13 @@ func (h *hashtree[T]) ReCalculateMulti(indexes []int) {
 			continue
 		}
 		added = append(added, firstp)
-		undup[firstp] = nil
+		undup[firstp] = struct{}{}
 		if firstp > 0 {
 			allp := h.AllParentIndex(firstp)
 			for _, pindex := range allp {
 				if _, ok := undup[pindex]; !ok {
 					added = append(added, pindex)
-					undup[pindex] = nil
+					undup[pindex] = struct{}{}
 				}
 			}
 		}

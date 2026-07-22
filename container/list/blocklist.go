@@ -10,7 +10,7 @@ import (
 var ErrClosed = errors.New("block list closed")
 
 type BlockList[T any] struct {
-	block chan *struct{}
+	block chan struct{}
 	list  *List[T]
 	count int64
 }
@@ -18,7 +18,7 @@ type BlockList[T any] struct {
 // work's like golang's chan
 func NewBlockList[T any]() *BlockList[T] {
 	return &BlockList[T]{
-		block: make(chan *struct{}, 1),
+		block: make(chan struct{}, 1),
 		list:  NewList[T](),
 		count: 0,
 	}
@@ -37,7 +37,7 @@ func (bl *BlockList[T]) Push(data T) (int64, error) {
 	bl.list.Push(data)
 	if oldcount == 0 {
 		select {
-		case bl.block <- nil:
+		case bl.block <- struct{}{}:
 		default:
 		}
 	}
@@ -112,7 +112,7 @@ func (bl *BlockList[T]) Close() {
 		}
 	}
 	select {
-	case bl.block <- nil:
+	case bl.block <- struct{}{}:
 	default:
 	}
 }

@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"io"
 	"net/smtp"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/chenjie199234/Corelib/pool"
+	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/name"
 
@@ -45,7 +47,10 @@ func NewEmail(c *Config) (*Client, error) {
 	}
 	return &Client{
 		c: c,
-		p: pool.NewPool(uint32(c.MaxOpen), func() (*smtp.Client, error) {
+		p: pool.NewPool(uint32(c.MaxOpen), func(ctx context.Context) (*smtp.Client, error) {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			client, e := smtp.Dial(c.Host + ":" + strconv.FormatUint(uint64(c.Port), 10))
 			if e != nil {
 				return nil, e
@@ -86,7 +91,7 @@ func (c *Client) do(ctx context.Context, to []string, subject string, mimetype s
 		),
 	)
 	defer func() {
-		if e == nil {
+		if e != nil {
 			span.SetStatus(codes.Error, e.Error())
 		} else {
 			span.SetStatus(codes.Ok, "")
@@ -94,6 +99,10 @@ func (c *Client) do(ctx context.Context, to []string, subject string, mimetype s
 		span.End()
 	}()
 	for {
+		if ctx.Err() != nil {
+			e = ctx.Err()
+			return
+		}
 		var client *smtp.Client
 		if client, e = c.p.Get(ctx); e != nil {
 			return
@@ -129,13 +138,13 @@ func (c *Client) formemail(to []string, subject string, mimetype string, body []
 	count += len(to) - 1
 	count += 2
 	//mimetype
-	count += 14 + len(mimetype) + 2
+	count += 14 + len(mimetype) + 2 + 35
 	//subject
-	count += 9 + len(subject) + 2
+	count += 9 + len(subject)*2 + 12 + 2
 	//empty line
 	count += 2
 	//body
-	count += len(body)
+	count += len(body) * 2
 
 	buf := make([]byte, 0, count)
 	//from
@@ -150,11 +159,17 @@ func (c *Client) formemail(to []string, subject string, mimetype string, body []
 	buf = append(buf, "Content-Type: "...)
 	buf = append(buf, mimetype...)
 	buf = append(buf, "\r\n"...)
-	//subject
-	buf = append(buf, "Subject: "...)
-	buf = append(buf, subject...)
+	buf = append(buf, "Content-Transfer-Encoding: base64\r\n"...)
+	//subject  RFC 2822/RFC 2047
+	buf = append(buf, "Subject: =?UTF-8?B?"...)
+	buf = append(buf, base64.StdEncoding.EncodeToString(common.STB(subject))...)
+	buf = append(buf, "?="...)
 	buf = append(buf, "\r\n\r\n"...)
-	buf = append(buf, body...)
+	tmpbody := base64.StdEncoding.EncodeToString(body)
+	for i := 0; i < len(tmpbody); i += 76 {
+		buf = append(buf, tmpbody[i:min(i+76, len(tmpbody))]...)
+		buf = append(buf, "\r\n"...)
+	}
 	return buf
 }
 func (c *Client) sendemail(client *smtp.Client, to []string, email []byte) (e error, del bool) {
@@ -176,6 +191,7 @@ func (c *Client) sendemail(client *smtp.Client, to []string, email []byte) (e er
 		return
 	}
 	if _, e = w.Write(email); e != nil {
+		w.Close()
 		return
 	}
 	e = w.Close()

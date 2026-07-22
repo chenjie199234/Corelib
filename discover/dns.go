@@ -23,14 +23,14 @@ type DnsD struct {
 	crpcport  int
 	cgrpcport int
 	webport   int
-	triger    chan *struct{}
+	triger    chan struct{}
 	status    int32 //0 idle,1 discovering
 
 	ctx    context.Context
 	cancel context.CancelFunc
 
 	lker      *sync.RWMutex
-	notices   map[chan *struct{}]*struct{}
+	notices   map[chan struct{}]struct{}
 	addrs     []string
 	version   int64
 	lasterror error
@@ -52,13 +52,13 @@ func NewDNSDiscover(targetproject, targetgroup, targetapp, host string, interval
 		crpcport:  crpcport,
 		cgrpcport: cgrpcport,
 		webport:   webport,
-		triger:    make(chan *struct{}, 1),
+		triger:    make(chan struct{}, 1),
 		status:    1,
 		lker:      &sync.RWMutex{},
-		notices:   make(map[chan *struct{}]*struct{}, 1),
+		notices:   make(map[chan struct{}]struct{}, 1),
 	}
 	d.ctx, d.cancel = context.WithCancel(context.Background())
-	d.triger <- nil
+	d.triger <- struct{}{}
 	go d.run()
 	return d, nil
 }
@@ -68,7 +68,7 @@ func (d *DnsD) Now() {
 		return
 	}
 	select {
-	case d.triger <- nil:
+	case d.triger <- struct{}{}:
 	default:
 	}
 }
@@ -80,18 +80,18 @@ func (d *DnsD) Stop() {
 // 1.the cancel function be called
 // 2.this discover stopped
 // don't forget to call the returned cancel function if u don't need the notice channel
-func (d *DnsD) GetNotice() (notice <-chan *struct{}, cancel func()) {
-	ch := make(chan *struct{}, 1)
+func (d *DnsD) GetNotice() (notice <-chan struct{}, cancel func()) {
+	ch := make(chan struct{}, 1)
 	d.lker.Lock()
 	if d.status == 0 {
-		ch <- nil
-		d.notices[ch] = nil
+		ch <- struct{}{}
+		d.notices[ch] = struct{}{}
 	} else {
 		select {
 		case <-d.ctx.Done():
 			close(ch)
 		default:
-			d.notices[ch] = nil
+			d.notices[ch] = struct{}{}
 		}
 	}
 	d.lker.Unlock()
@@ -110,7 +110,7 @@ func (d *DnsD) GetAddrs(pt PortType) (map[string]*RegisterData, Version, error) 
 	defer d.lker.RUnlock()
 	r := make(map[string]*RegisterData)
 	reg := &RegisterData{
-		DServers: map[string]*struct{}{"dns": nil},
+		DServers: map[string]struct{}{"dns": {}},
 	}
 	for _, addr := range d.addrs {
 		switch pt {
@@ -192,7 +192,7 @@ func (d *DnsD) run() {
 			d.lasterror = e
 			for notice := range d.notices {
 				select {
-				case notice <- nil:
+				case notice <- struct{}{}:
 				default:
 				}
 			}
@@ -209,7 +209,7 @@ func (d *DnsD) run() {
 		d.lasterror = nil
 		for notice := range d.notices {
 			select {
-			case notice <- nil:
+			case notice <- struct{}{}:
 			default:
 			}
 		}

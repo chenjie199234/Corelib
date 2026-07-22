@@ -355,7 +355,7 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler, s
 		} else {
 			//run in async mode
 			wctx.lker = &sync.Mutex{}
-			done := make(chan *struct{})
+			done := make(chan struct{})
 			go func() {
 				internalhandler()
 				close(done)

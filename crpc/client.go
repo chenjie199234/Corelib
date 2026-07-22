@@ -373,11 +373,11 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			//Call with Body,means,this call will only send data once and the data is sended by init
 			rw.closesend()
 		}
-		var stopch chan *struct{}
+		var stopch chan struct{}
 		var tmer *time.Timer
 		if cancelOutSide {
 			//the context can be canceled outside,we need to catch the cancel in goroutine
-			stopch = make(chan *struct{})
+			stopch = make(chan struct{})
 			go func() {
 				select {
 				case <-ctx.Done():

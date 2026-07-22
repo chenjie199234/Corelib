@@ -16,7 +16,7 @@ type CorelibResolver struct {
 	b    Balancer
 	d    discover.DI
 	pt   discover.PortType
-	stop chan *struct{}
+	stop chan struct{}
 }
 
 func NewCorelibResolver(b Balancer, d discover.DI, pt discover.PortType) *CorelibResolver {
@@ -24,7 +24,7 @@ func NewCorelibResolver(b Balancer, d discover.DI, pt discover.PortType) *Coreli
 		b:    b,
 		d:    d,
 		pt:   pt,
-		stop: make(chan *struct{}),
+		stop: make(chan struct{}),
 	}
 }
 func (r *CorelibResolver) Start() {

@@ -60,9 +60,9 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 		c.Addrs = []string{"127.0.0.1:27017"}
 	}
 	if len(c.Addrs) > 1 {
-		undup := make(map[string]*struct{}, len(c.Addrs))
+		undup := make(map[string]struct{}, len(c.Addrs))
 		for _, addr := range c.Addrs {
-			undup[addr] = nil
+			undup[addr] = struct{}{}
 		}
 		tmp := make([]string, 0, len(undup))
 		for addr := range undup {

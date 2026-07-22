@@ -18,7 +18,7 @@ type connmng struct {
 	groupHeartIndex uint64
 	groups          []*group
 	peernum         atomic.Int32
-	delpeerch       chan *struct{}
+	delpeerch       chan struct{}
 	closewait       *sync.WaitGroup
 }
 
@@ -42,7 +42,7 @@ func newconnmng(groupnum uint16, heartprobe, sendidletimeout, recvidletimeout ti
 		heartprobe:      heartprobe,
 		groupHeartIndex: rand.Uint64(),
 		groups:          make([]*group, groupnum),
-		delpeerch:       make(chan *struct{}, 1),
+		delpeerch:       make(chan struct{}, 1),
 		closewait:       &sync.WaitGroup{},
 	}
 	for i := range groupnum {
@@ -109,7 +109,7 @@ func (m *connmng) DelPeer(p *Peer) {
 	close(p.blocknotice)
 	m.peernum.Add(-1)
 	select {
-	case m.delpeerch <- nil:
+	case m.delpeerch <- struct{}{}:
 	default:
 	}
 }
@@ -159,7 +159,7 @@ func (m *connmng) Stop() {
 	}
 	//prevent there are no peers
 	select {
-	case m.delpeerch <- nil:
+	case m.delpeerch <- struct{}{}:
 	default:
 	}
 }

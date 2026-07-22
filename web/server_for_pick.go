@@ -8,7 +8,7 @@ import (
 
 type ServerForPick struct {
 	addr     string
-	dservers map[string]*struct{} //this app registered on which discovery server
+	dservers map[string]struct{} //this app registered on which discovery server
 	closing  atomic.Bool
 
 	Pickinfo *picker.ServerPickInfo

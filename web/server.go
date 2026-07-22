@@ -74,7 +74,7 @@ func (c *ServerConfig) validate() {
 	}
 	//allow origin
 	if len(c.CorsAllowedOrigins) > 0 {
-		undup := make(map[string]*struct{}, len(c.CorsAllowedOrigins))
+		undup := make(map[string]struct{}, len(c.CorsAllowedOrigins))
 		for _, v := range c.CorsAllowedOrigins {
 			if v == "*" {
 				if c.CorsAllowCredentials {
@@ -86,7 +86,7 @@ func (c *ServerConfig) validate() {
 					break
 				}
 			}
-			undup[v] = nil
+			undup[v] = struct{}{}
 		}
 		if undup != nil {
 			c.CorsAllowedOrigins = make([]string, 0, len(undup))
@@ -97,7 +97,7 @@ func (c *ServerConfig) validate() {
 	}
 	//allow header
 	if len(c.CorsAllowedHeaders) > 0 {
-		undup := make(map[string]*struct{}, len(c.CorsAllowedHeaders))
+		undup := make(map[string]struct{}, len(c.CorsAllowedHeaders))
 		for _, v := range c.CorsAllowedHeaders {
 			if v == "*" && !c.CorsAllowCredentials {
 				c.CorsAllowedHeaders = []string{"*"}
@@ -106,7 +106,7 @@ func (c *ServerConfig) validate() {
 			} else if v == "*" {
 				slog.Warn("[web.server] when cors_allow_credentials is true in config,the wildcard '*' in cors_allowed_headers is treated as the literal header name '*',without special semantics")
 			}
-			undup[http.CanonicalHeaderKey(v)] = nil
+			undup[http.CanonicalHeaderKey(v)] = struct{}{}
 		}
 		if undup != nil {
 			c.CorsAllowedHeaders = make([]string, 0, len(undup))
@@ -117,7 +117,7 @@ func (c *ServerConfig) validate() {
 	}
 	//expose header
 	if len(c.CorsExposeHeaders) > 0 {
-		undup := make(map[string]*struct{}, len(c.CorsExposeHeaders))
+		undup := make(map[string]struct{}, len(c.CorsExposeHeaders))
 		for _, v := range c.CorsExposeHeaders {
 			if v == "*" && !c.CorsAllowCredentials {
 				c.CorsExposeHeaders = []string{"*"}
@@ -126,7 +126,7 @@ func (c *ServerConfig) validate() {
 			} else if v == "*" {
 				slog.Warn("[web.server] when cors_allow_credentials is true in config,the wildcard '*' in cors_expose_headers is treated as the literal header name '*',without special semantics")
 			}
-			undup[http.CanonicalHeaderKey(v)] = nil
+			undup[http.CanonicalHeaderKey(v)] = struct{}{}
 		}
 		if undup != nil {
 			c.CorsExposeHeaders = make([]string, 0, len(undup))
@@ -266,12 +266,12 @@ func (s *WebServer) NewRouter() (*Router, error) {
 		if e != nil {
 			return e
 		}
-		need := make(map[string]*struct{})
+		need := make(map[string]struct{})
 		for _, finfo := range finfos {
 			if finfo.IsDir() {
 				ungzip(finfo.Name())
 			} else if strings.HasSuffix(".gz", finfo.Name()) {
-				need[finfo.Name()] = nil
+				need[finfo.Name()] = struct{}{}
 			} else {
 				//already uncompressed
 				delete(need, finfo.Name()+".gz")

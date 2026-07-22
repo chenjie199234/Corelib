@@ -24,14 +24,14 @@ func NeedValidate(message *protogen.Message) bool {
 // check the message's field has pbex or not
 // this will check the nest messages too
 func MessageHasPBEX(message *protogen.Message) bool {
-	checked := make(map[string]*struct{})
+	checked := make(map[string]struct{})
 	return messagecheck(message, checked)
 }
-func messagecheck(message *protogen.Message, checked map[string]*struct{}) bool {
+func messagecheck(message *protogen.Message, checked map[string]struct{}) bool {
 	if _, ok := checked[message.GoIdent.String()]; ok {
 		return false
 	}
-	checked[message.GoIdent.String()] = nil
+	checked[message.GoIdent.String()] = struct{}{}
 	for _, field := range message.Fields {
 		if FieldHasPBEX(field) {
 			return true
@@ -57,14 +57,14 @@ func messagecheck(message *protogen.Message, checked map[string]*struct{}) bool 
 // check the message has enum or not
 // this will check the nest messages too
 func MessageHasEnum(message *protogen.Message) bool {
-	checked := make(map[string]*struct{})
+	checked := make(map[string]struct{})
 	return hasenum(message, checked)
 }
-func hasenum(message *protogen.Message, checked map[string]*struct{}) bool {
+func hasenum(message *protogen.Message, checked map[string]struct{}) bool {
 	if _, ok := checked[message.GoIdent.String()]; ok {
 		return false
 	}
-	checked[message.GoIdent.String()] = nil
+	checked[message.GoIdent.String()] = struct{}{}
 	for _, field := range message.Fields {
 		if field.Enum != nil {
 			return true

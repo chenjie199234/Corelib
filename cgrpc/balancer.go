@@ -148,7 +148,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 	//online or update
 	for _, v := range ss.ResolverState.Endpoints[0].Addresses {
 		addr := v
-		dservers, _ := addr.Attributes.Value("dservers").(map[string]*struct{})
+		dservers, _ := addr.Attributes.Value("dservers").(map[string]struct{})
 		server, ok := b.servers[addr.Addr]
 		if !ok {
 			//this is a new register

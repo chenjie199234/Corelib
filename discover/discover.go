@@ -19,7 +19,7 @@ type DI interface {
 	// notice will be trigered when discover action finished.
 	// don't close the returned channel.
 	// the channel will be closed when this discover stopped or the cancel function be called
-	GetNotice() (notice <-chan *struct{}, cancel func())
+	GetNotice() (notice <-chan struct{}, cancel func())
 	// lasterror will not be nil when the last discover action failed.
 	// addrs and lasterror can both exist,when lasterror is not nil,the addrs is the old addrs.
 	// version can only be int64 or string(should only be used with != or ==)
@@ -31,7 +31,7 @@ type DI interface {
 type RegisterData struct {
 	//app node register on which discovery server.
 	//if this is empty means this app node is offline.
-	DServers map[string]*struct{}
+	DServers map[string]struct{}
 }
 
 func SameVersion(aversion, bversion Version) bool {

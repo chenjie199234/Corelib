@@ -10,7 +10,7 @@ import (
 var ErrClosed = errors.New("block stack closed")
 
 type BlockStack[T any] struct {
-	block chan *struct{}
+	block chan struct{}
 	stack *Stack[T]
 	count int64
 }
@@ -18,7 +18,7 @@ type BlockStack[T any] struct {
 // work's like golang's chan
 func NewBlockStack[T any]() *BlockStack[T] {
 	return &BlockStack[T]{
-		block: make(chan *struct{}, 1),
+		block: make(chan struct{}, 1),
 		stack: NewStack[T](),
 		count: 0,
 	}
@@ -37,7 +37,7 @@ func (bs *BlockStack[T]) Push(data T) (int64, error) {
 	bs.stack.Push(data)
 	if oldcount == 0 {
 		select {
-		case bs.block <- nil:
+		case bs.block <- struct{}{}:
 		default:
 		}
 	}
@@ -111,7 +111,7 @@ func (bs *BlockStack[T]) Close() {
 		}
 	}
 	select {
-	case bs.block <- nil:
+	case bs.block <- struct{}{}:
 	default:
 	}
 }

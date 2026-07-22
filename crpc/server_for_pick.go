@@ -16,7 +16,7 @@ import (
 type ServerForPick struct {
 	callid   uint64 //start from 100
 	addr     string
-	dservers map[string]*struct{} //this app registered on which discovery server
+	dservers map[string]struct{} //this app registered on which discovery server
 	peer     *stream.Peer
 	closing  atomic.Bool
 
@@ -47,7 +47,7 @@ func (s *ServerForPick) caspeer(oldpeer, newpeer *stream.Peer) bool {
 	return atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&s.peer)), unsafe.Pointer(oldpeer), unsafe.Pointer(newpeer))
 }
 
-func (s *ServerForPick) updateRegister(dservers map[string]*struct{}) {
+func (s *ServerForPick) updateRegister(dservers map[string]struct{}) {
 	//unregister on which discovery server
 	dserveroffline := false
 	for dserver := range s.dservers {

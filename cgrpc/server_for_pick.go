@@ -12,7 +12,7 @@ import (
 type ServerForPick struct {
 	addr     string
 	subconn  balancer.SubConn
-	dservers map[string]*struct{} //this app registered on which discovery server
+	dservers map[string]struct{} //this app registered on which discovery server
 	status   int32
 	closing  atomic.Bool
 

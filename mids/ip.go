@@ -8,9 +8,9 @@ import (
 )
 
 type ip struct {
-	white     map[string]*struct{}
+	white     map[string]struct{}
 	whitemask map[uint64]int
-	black     map[string]*struct{}
+	black     map[string]struct{}
 	blackmask map[uint64]int
 }
 
@@ -18,9 +18,9 @@ var ipInstance *ip
 
 func init() {
 	ipInstance = &ip{
-		white:     make(map[string]*struct{}),
+		white:     make(map[string]struct{}),
 		whitemask: make(map[uint64]int),
-		black:     make(map[string]*struct{}),
+		black:     make(map[string]struct{}),
 		blackmask: make(map[uint64]int),
 	}
 }
@@ -28,9 +28,9 @@ func init() {
 // can only support ipv4
 // can support ipv4 mask
 func UpdateIpConfig(white []string, black []string) {
-	w := make(map[string]*struct{})
+	w := make(map[string]struct{})
 	wm := make(map[uint64]int)
-	b := make(map[string]*struct{})
+	b := make(map[string]struct{})
 	bm := make(map[uint64]int)
 	for _, v := range white {
 		if !CheckIpAndMask(v) {
@@ -38,7 +38,7 @@ func UpdateIpConfig(white []string, black []string) {
 			continue
 		}
 		if ipmask := strings.Split(v, "/"); len(ipmask) == 1 {
-			w[v] = nil
+			w[v] = struct{}{}
 		} else {
 			//has mask
 			mask, _ := strconv.Atoi(ipmask[1])
@@ -52,7 +52,7 @@ func UpdateIpConfig(white []string, black []string) {
 			continue
 		}
 		if ipmask := strings.Split(v, "/"); len(ipmask) == 1 {
-			b[v] = nil
+			b[v] = struct{}{}
 		} else {
 			//has mask
 			mask, _ := strconv.Atoi(ipmask[1])
@@ -104,7 +104,7 @@ func BlackIP(ip string) bool {
 
 // true - in
 // false - not in
-func checkip(nomask map[string]*struct{}, mask map[uint64]int, ip string) bool {
+func checkip(nomask map[string]struct{}, mask map[uint64]int, ip string) bool {
 	if _, ok := nomask[ip]; ok {
 		return true
 	}
