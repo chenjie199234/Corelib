@@ -144,7 +144,12 @@ func (c *Client) formemail(to []string, subject string, mimetype string, body []
 	//empty line
 	count += 2
 	//body
-	count += len(body) * 2
+	tmpbody := base64.StdEncoding.EncodeToString(body)
+	pieces := len(tmpbody) / 76
+	if len(tmpbody)%76 > 0 {
+		pieces++
+	}
+	count += len(tmpbody) + pieces*2
 
 	buf := make([]byte, 0, count)
 	//from
@@ -165,7 +170,7 @@ func (c *Client) formemail(to []string, subject string, mimetype string, body []
 	buf = append(buf, base64.StdEncoding.EncodeToString(common.STB(subject))...)
 	buf = append(buf, "?="...)
 	buf = append(buf, "\r\n\r\n"...)
-	tmpbody := base64.StdEncoding.EncodeToString(body)
+	//body
 	for i := 0; i < len(tmpbody); i += 76 {
 		buf = append(buf, tmpbody[i:min(i+76, len(tmpbody))]...)
 		buf = append(buf, "\r\n"...)
