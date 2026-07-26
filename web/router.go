@@ -19,7 +19,6 @@ import (
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/container/trie"
 	"github.com/chenjie199234/Corelib/cotel"
-	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/graceful"
@@ -226,16 +225,11 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler, s
 		if clientname == "" {
 			clientname = "unknown"
 		}
-		ctx, span := otel.Tracer("Corelib.web.server", trace.WithInstrumentationVersion(version.String())).Start(
+		ctx, span := r.s.tracer.Start(
 			otel.GetTextMapPropagator().Extract(req.Context(), propagation.HeaderCarrier(req.Header)),
 			"handle web",
 			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(
-				attribute.String("url.path", path),
-				attribute.String("client.name", clientname),
-				attribute.String("client.ip", peerip),
-			),
-		)
+			trace.WithAttributes(attribute.String("path", path), attribute.String("cname", clientname), attribute.String("cip", peerip)))
 
 		//metadata
 		var md map[string]string
@@ -328,14 +322,13 @@ func (r *Router) insideHandler(method, path string, handlers []OutsideHandler, s
 				}
 				span.End()
 				if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-					mstatus, _ := otel.Meter("Corelib.web.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+					attr := attribute.String("path", path)
 					if wctx.e != nil {
-						mstatus.Record(context.Background(), 1)
+						r.s.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "error")))
 					} else {
-						mstatus.Record(context.Background(), 0)
+						r.s.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "ok")))
 					}
-					mtime, _ := otel.Meter("Corelib.web.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-					mtime.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0)
+					r.s.timeHistogram.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, metric.WithAttributes(attr))
 				}
 				r.s.stop.DoneOne()
 			}()

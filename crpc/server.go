@@ -58,6 +58,10 @@ type CrpcServer struct {
 	handlerTimeout map[string]time.Duration
 	instance       *stream.Instance
 	stop           *graceful.Graceful
+
+	statusCounter metric.Int64Counter
+	timeHistogram metric.Float64Histogram
+	tracer        trace.Tracer
 }
 type client struct {
 	sync.RWMutex
@@ -67,6 +71,14 @@ type client struct {
 // if tlsc is not nil,the tls will be actived
 func NewCrpcServer(c *ServerConfig, tlsc *tls.Config) (*CrpcServer, error) {
 	if e := cotel.Init(); e != nil {
+		return nil, e
+	}
+	sCounter, e := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Int64Counter("crpc.server.path.status", metric.WithUnit("1"))
+	if e != nil {
+		return nil, e
+	}
+	tHistogram, e := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram("crpc.server.path.time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+	if e != nil {
 		return nil, e
 	}
 	if tlsc != nil {
@@ -84,6 +96,9 @@ func NewCrpcServer(c *ServerConfig, tlsc *tls.Config) (*CrpcServer, error) {
 		global:         make([]OutsideHandler, 0, 10),
 		handler:        make(map[string][]OutsideHandler, 10),
 		handlerTimeout: make(map[string]time.Duration),
+		statusCounter:  sCounter,
+		timeHistogram:  tHistogram,
+		tracer:         otel.Tracer("Corelib.crpc.server", trace.WithInstrumentationVersion(version.String())),
 		stop:           graceful.New(),
 	}
 	instancec := &stream.InstanceConfig{
@@ -335,11 +350,11 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		if clientname == "" {
 			clientname = "unknown"
 		}
-		basectx, span := otel.Tracer("Corelib.crpc.server", trace.WithInstrumentationVersion(version.String())).Start(
+		basectx, span := s.tracer.Start(
 			otel.GetTextMapPropagator().Extract(p, propagation.MapCarrier(msg.GetH().GetTracedata())),
 			"handle crpc",
 			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(attribute.String("url.path", msg.GetH().GetPath()), attribute.String("client.name", clientname), attribute.String("client.ip", peerip)))
+			trace.WithAttributes(attribute.String("path", msg.GetH().GetPath()), attribute.String("cname", clientname), attribute.String("cip", peerip)))
 		//metadata
 		if msg.GetH().GetMetadata() == nil {
 			msg.GetH().SetMetadata(map[string]string{"Client-IP": peerip})
@@ -442,14 +457,13 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 				}
 				span.End()
 				if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-					mstatus, _ := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(msg.GetH().GetPath()+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+					attr := attribute.String("path", msg.GetH().GetPath())
 					if workctx.e != nil {
-						mstatus.Record(context.Background(), 1)
+						s.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "error")))
 					} else {
-						mstatus.Record(context.Background(), 0)
+						s.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "ok")))
 					}
-					mtime, _ := otel.Meter("Corelib.crpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(msg.GetH().GetPath()+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-					mtime.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0)
+					s.timeHistogram.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, metric.WithAttributes(attr))
 				}
 				s.stop.DoneOne()
 			}()

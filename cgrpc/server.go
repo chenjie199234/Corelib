@@ -79,11 +79,23 @@ type CGrpcServer struct {
 	statshandler   *sStatsHandler
 	services       map[string]*grpc.ServiceDesc
 	handlerTimeout map[string]time.Duration
+
+	statusCounter metric.Int64Counter
+	timeHistogram metric.Float64Histogram
+	tracer        trace.Tracer
 }
 
 // if tlsc is not nil,the tls will be actived
 func NewCGrpcServer(c *ServerConfig, tlsc *tls.Config) (*CGrpcServer, error) {
 	if e := cotel.Init(); e != nil {
+		return nil, e
+	}
+	sCounter, e := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Int64Counter("cgrpc.server.path.status", metric.WithUnit("1"))
+	if e != nil {
+		return nil, e
+	}
+	tHistogram, e := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram("cgrpc.server.path.time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+	if e != nil {
 		return nil, e
 	}
 	if tlsc != nil {
@@ -102,6 +114,9 @@ func NewCGrpcServer(c *ServerConfig, tlsc *tls.Config) (*CGrpcServer, error) {
 		statshandler:   &sStatsHandler{},
 		services:       make(map[string]*grpc.ServiceDesc),
 		handlerTimeout: make(map[string]time.Duration),
+		statusCounter:  sCounter,
+		timeHistogram:  tHistogram,
+		tracer:         otel.Tracer("Corelib.cgrpc.server", trace.WithInstrumentationVersion(version.String())),
 	}
 	opts := make([]grpc.ServerOption, 0, 10)
 	opts = append(opts, grpc.MaxRecvMsgSize(int(c.MaxMsgLen)))
@@ -241,7 +256,7 @@ func (md wrapmetadata) Keys() []string {
 	return keys
 }
 
-func createwctx(basectx context.Context, path string, sto time.Duration) (*ServerContext, trace.Span, bool, error) {
+func (s *CGrpcServer) createwctx(basectx context.Context, path string, sto time.Duration) (*ServerContext, trace.Span, bool, error) {
 	gmd, ok := gmetadata.FromIncomingContext(basectx)
 	if ok {
 		if data := gmd.Get("Core-Target"); len(data) != 0 && data[0] != name.GetSelfFullName() {
@@ -265,11 +280,11 @@ func createwctx(basectx context.Context, path string, sto time.Duration) (*Serve
 			tracedata["Tracestate"] = data[0]
 		}
 	}
-	basectx, span := otel.Tracer("Corelib.cgrpc.server", trace.WithInstrumentationVersion(version.String())).Start(
+	basectx, span := s.tracer.Start(
 		otel.GetTextMapPropagator().Extract(basectx, wrapmetadata(gmd)),
 		"handle grpc",
 		trace.WithSpanKind(trace.SpanKindServer),
-		trace.WithAttributes(attribute.String("url.path", path), attribute.String("client.name", clientname), attribute.String("client.ip", peerip)))
+		trace.WithAttributes(attribute.String("path", path), attribute.String("cname", clientname), attribute.String("cip", peerip)))
 
 	//metadata
 	var md map[string]string
@@ -311,7 +326,7 @@ func createwctx(basectx context.Context, path string, sto time.Duration) (*Serve
 		peerip:  peerip,
 	}, span, earlyreturn, nil
 }
-func handler(wctx *ServerContext, span trace.Span, totalhandlers []OutsideHandler) {
+func (s *CGrpcServer) handler(wctx *ServerContext, span trace.Span, totalhandlers []OutsideHandler) {
 	defer func() {
 		if e := recover(); e != nil {
 			stack := make([]byte, 1024)
@@ -330,14 +345,13 @@ func handler(wctx *ServerContext, span trace.Span, totalhandlers []OutsideHandle
 		}
 		span.End()
 		if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-			mstatus, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Int64Histogram(wctx.path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+			attr := attribute.String("path", wctx.path)
 			if wctx.e != nil {
-				mstatus.Record(context.Background(), 1)
+				s.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "error")))
 			} else {
-				mstatus.Record(context.Background(), 0)
+				s.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "ok")))
 			}
-			mtime, _ := otel.Meter("Corelib.cgrpc.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram(wctx.path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-			mtime.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0)
+			s.timeHistogram.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, metric.WithAttributes(attr))
 		}
 	}()
 	for _, handler := range totalhandlers {
@@ -350,10 +364,10 @@ func handler(wctx *ServerContext, span trace.Span, totalhandlers []OutsideHandle
 		wctx.Abort(nil)
 	}
 }
-func deadlinehandler(wctx *ServerContext, span trace.Span, totalhandlers []OutsideHandler) (earlyreturn bool) {
+func (s *CGrpcServer) deadlinehandler(wctx *ServerContext, span trace.Span, totalhandlers []OutsideHandler) (earlyreturn bool) {
 	done := make(chan struct{})
 	go func() {
-		handler(wctx, span, totalhandlers)
+		s.handler(wctx, span, totalhandlers)
 		close(done)
 	}()
 	select {
@@ -378,7 +392,7 @@ func (s *CGrpcServer) echohandler(sname, mname string, handlers ...OutsideHandle
 	copy(totalhandlers, s.global)
 	copy(totalhandlers[len(s.global):], handlers)
 	return func(_ any, ctx context.Context, decode func(any) error, _ grpc.UnaryServerInterceptor) (any, error) {
-		wctx, span, earlyreturn, e := createwctx(ctx, path, s.getHandlerTimeout(path))
+		wctx, span, earlyreturn, e := s.createwctx(ctx, path, s.getHandlerTimeout(path))
 		if e != nil {
 			return nil, e
 		}
@@ -388,10 +402,10 @@ func (s *CGrpcServer) echohandler(sname, mname string, handlers ...OutsideHandle
 		wctx.decodefunc = decode
 		if !earlyreturn {
 			//run in sync mode
-			handler(wctx, span, totalhandlers)
+			s.handler(wctx, span, totalhandlers)
 		} else {
 			//run in async mode
-			if deadlinehandler(wctx, span, totalhandlers) {
+			if s.deadlinehandler(wctx, span, totalhandlers) {
 				return nil, cerror.ErrDeadlineExceeded
 			}
 		}
@@ -408,7 +422,7 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 	copy(totalhandlers, s.global)
 	copy(totalhandlers[len(s.global):], handlers)
 	return func(_ any, stream grpc.ServerStream) (err error) {
-		wctx, span, earlyreturn, e := createwctx(stream.Context(), path, s.getHandlerTimeout(path))
+		wctx, span, earlyreturn, e := s.createwctx(stream.Context(), path, s.getHandlerTimeout(path))
 		if e != nil {
 			return e
 		}
@@ -418,10 +432,10 @@ func (s *CGrpcServer) streamhandler(sname, mname string, handlers ...OutsideHand
 		wctx.stream = stream
 		if !earlyreturn {
 			//run in sync mode
-			handler(wctx, span, totalhandlers)
+			s.handler(wctx, span, totalhandlers)
 		} else {
 			//run in async mode
-			if deadlinehandler(wctx, span, totalhandlers) {
+			if s.deadlinehandler(wctx, span, totalhandlers) {
 				return cerror.ErrDeadlineExceeded
 			}
 		}

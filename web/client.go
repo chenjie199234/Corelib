@@ -74,12 +74,24 @@ type WebClient struct {
 	balancer *corelibBalancer
 	discover discover.DI
 
+	statusCounter metric.Int64Counter
+	timeHistogram metric.Float64Histogram
+	tracer        trace.Tracer
+
 	stop *graceful.Graceful
 }
 
 // if tlsc is not nil,the tls will be actived
 func NewWebClient(c *ClientConfig, d discover.DI, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*WebClient, error) {
 	if e := cotel.Init(); e != nil {
+		return nil, e
+	}
+	sCounter, e := otel.Meter("Corelib.web.client", metric.WithInstrumentationVersion(version.String())).Int64Counter("web.client.path.status", metric.WithUnit("1"))
+	if e != nil {
+		return nil, e
+	}
+	tHistogram, e := otel.Meter("Corelib.web.client", metric.WithInstrumentationVersion(version.String())).Float64Histogram("web.client.path.time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+	if e != nil {
 		return nil, e
 	}
 	if tlsc != nil {
@@ -107,6 +119,10 @@ func NewWebClient(c *ClientConfig, d discover.DI, serverproject, servergroup, se
 		dialer:         &net.Dialer{},
 
 		discover: d,
+
+		statusCounter: sCounter,
+		timeHistogram: tHistogram,
+		tracer:        otel.Tracer("Corelib.web.client", trace.WithInstrumentationVersion(version.String())),
 
 		stop: graceful.New(),
 	}
@@ -362,13 +378,8 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		header.Set("Core-Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
 	for {
-		tctx, span := otel.Tracer("Corelib.web.client",
-			trace.WithInstrumentationVersion(version.String())).Start(
-			ctx,
-			"call web",
-			trace.WithSpanKind(trace.SpanKindClient),
-			trace.WithAttributes(attribute.String("url.path", path),
-				attribute.String("server.name", c.serverfullname)))
+		tctx, span := c.tracer.Start(ctx, "call web", trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(attribute.String("path", path), attribute.String("sname", c.serverfullname)))
 		otel.GetTextMapPropagator().Inject(tctx, propagation.HeaderCarrier(header))
 		//pick server
 		server, e := c.balancer.Pick(ctx)
@@ -381,7 +392,7 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			c.stop.DoneOne()
 			return nil, e
 		}
-		span.SetAttributes(attribute.String("server.addr", server.addr))
+		span.SetAttributes(attribute.String("sip", server.addr))
 		var req *http.Request
 		if c.tlsc != nil {
 			req, e = http.NewRequestWithContext(ctx, method, "https://"+server.addr+path+query, body)
@@ -486,12 +497,11 @@ func (b *wrappedbody) clean(e error) {
 }
 
 func (c *WebClient) recordmetric(path string, usetimems float64, err bool) {
-	mstatus, _ := otel.Meter("Corelib.web.client", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+	attr := attribute.String("path", path)
 	if err {
-		mstatus.Record(context.Background(), 1)
+		c.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "error")))
 	} else {
-		mstatus.Record(context.Background(), 0)
+		c.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "ok")))
 	}
-	mtime, _ := otel.Meter("Corelib.web.client", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-	mtime.Record(context.Background(), usetimems)
+	c.timeHistogram.Record(context.Background(), usetimems, metric.WithAttributes(attr))
 }

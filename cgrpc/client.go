@@ -81,12 +81,24 @@ type CGrpcClient struct {
 	balancer *corelibBalancer
 	discover discover.DI
 
+	statusCounter metric.Int64Counter
+	timeHistogram metric.Float64Histogram
+	tracer        trace.Tracer
+
 	stop *graceful.Graceful
 }
 
 // if tlsc is not nil,the tls will be actived
 func NewCGrpcClient(c *ClientConfig, d discover.DI, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*CGrpcClient, error) {
 	if e := cotel.Init(); e != nil {
+		return nil, e
+	}
+	sCounter, e := otel.Meter("Corelib.cgrpc.client", metric.WithInstrumentationVersion(version.String())).Int64Counter("cgrpc.client.path.status", metric.WithUnit("1"))
+	if e != nil {
+		return nil, e
+	}
+	tHistogram, e := otel.Meter("Corelib.cgrpc.client", metric.WithInstrumentationVersion(version.String())).Float64Histogram("cgrpc.client.path.time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+	if e != nil {
 		return nil, e
 	}
 	if tlsc != nil {
@@ -112,6 +124,9 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, serverproject, servergroup, 
 		tlsc:           tlsc,
 		discover:       d,
 		stop:           graceful.New(),
+		statusCounter:  sCounter,
+		timeHistogram:  tHistogram,
+		tracer:         otel.Tracer("Corelib.cgrpc.client", trace.WithInstrumentationVersion(version.String())),
 	}
 	opts := make([]grpc.DialOption, 0, 10)
 	opts = append(opts, grpc.WithDisableRetry())
@@ -202,11 +217,8 @@ func (c *CGrpcClient) Invoke(ctx context.Context, path string, req, reply any, o
 		gmd["Core-Metadata"] = common.BTS(d)
 	}
 	for {
-		ctx, span := otel.Tracer("Corelib.cgrpc.client", trace.WithInstrumentationVersion(version.String())).Start(
-			ctx,
-			"call grpc",
-			trace.WithSpanKind(trace.SpanKindClient),
-			trace.WithAttributes(attribute.String("url.path", path), attribute.String("server.name", c.serverfullname)))
+		ctx, span := c.tracer.Start(ctx, "call grpc", trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(attribute.String("path", path), attribute.String("sname", c.serverfullname)))
 		otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(gmd))
 
 		e := transGrpcError(c.conn.Invoke(gmetadata.NewOutgoingContext(ctx, gmetadata.New(gmd)), path, req, reply), true)
@@ -244,11 +256,8 @@ func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path
 		gmd["Core-Metadata"] = common.BTS(d)
 	}
 	for {
-		ctx, span := otel.Tracer("Corelib.cgrpc.client", trace.WithInstrumentationVersion(version.String())).Start(
-			ctx,
-			"call grpc",
-			trace.WithSpanKind(trace.SpanKindClient),
-			trace.WithAttributes(attribute.String("url.path", path), attribute.String("server.name", c.serverfullname)))
+		ctx, span := c.tracer.Start(ctx, "call grpc", trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(attribute.String("path", path), attribute.String("sname", c.serverfullname)))
 		otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(gmd))
 
 		stream, e := c.conn.NewStream(gmetadata.NewOutgoingContext(ctx, gmetadata.New(gmd)), desc, path, opts...)
@@ -271,15 +280,15 @@ func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path
 		return nil, ee
 	}
 }
+
 func (c *CGrpcClient) recordmetric(path string, usetimems float64, err bool) {
-	mstatus, _ := otel.Meter("Corelib.cgrpc.client", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+	attr := attribute.String("path", path)
 	if err {
-		mstatus.Record(context.Background(), 1)
+		c.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "error")))
 	} else {
-		mstatus.Record(context.Background(), 0)
+		c.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "ok")))
 	}
-	mtime, _ := otel.Meter("Corelib.cgrpc.client", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-	mtime.Record(context.Background(), usetimems)
+	c.timeHistogram.Record(context.Background(), usetimems, metric.WithAttributes(attr))
 }
 
 type ClientStreamWraper struct {

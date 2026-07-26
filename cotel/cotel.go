@@ -31,14 +31,13 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	otrace "go.opentelemetry.io/otel/trace"
 )
 
 var status atomic.Bool
 var tp *trace.TracerProvider
 var mp *metric.MeterProvider
-var needtrace, needmetric bool
+var needmetric bool
 var promRegister *prometheus.Registry
 
 func Init() error {
@@ -49,11 +48,17 @@ func Init() error {
 		return nil
 	}
 	traceenv := strings.TrimSpace(strings.ToLower(os.Getenv("TRACE")))
-	if traceenv != "" && traceenv != "<TRACE>" && traceenv != "log" && traceenv != "otlp" {
+	if traceenv == "<TRACE>" {
+		traceenv = ""
+	}
+	if traceenv != "" && traceenv != "log" && traceenv != "otlphttp" && traceenv != "otlpgrpc" {
 		panic("[cotel] os env TRACE error,must in [\"\",\"log\",\"otlphttp\",\"otlpgrpc\"]")
 	}
 	metricenv := strings.TrimSpace(strings.ToLower(os.Getenv("METRIC")))
-	if metricenv != "" && metricenv != "<METRIC>" && metricenv != "log" && metricenv != "otlp" && metricenv != "prometheus" {
+	if metricenv == "<METRIC>" {
+		metricenv = ""
+	}
+	if metricenv != "" && metricenv != "log" && metricenv != "otlphttp" && metricenv != "otlpgrpc" && metricenv != "prometheus" {
 		panic("[cotel] os env METRIC error,must in [\"\",\"log\",\"otlphttp\",\"otlpgrpc\",\"prometheus\"]")
 	}
 	resources := resource.NewSchemaless(
@@ -67,38 +72,31 @@ func Init() error {
 	topts = append(topts, trace.WithSampler(trace.AlwaysSample()))
 	switch traceenv {
 	case "":
-		//even we don't need the trace,we still need to keep the trace chain
-		//so we can't use the trace.NeverSample()
-		//we use the log exporter but print nothing
-		topts = append(topts, trace.WithSyncer(&slogTraceExporter{}))
-		needtrace = false
+		topts[len(topts)-1] = trace.WithSampler(trace.NeverSample())
 	case "log":
 		topts = append(topts, trace.WithSyncer(&slogTraceExporter{}))
-		needtrace = true
 	case "otlphttp":
 		str1 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")))
 		str2 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")))
 		if (str1 == "" || str1 == "<OTEL_EXPORTER_OTLP_TRACES_ENDPOINT>") && (str2 == "" || str2 == "<OTEL_EXPORTER_OTLP_ENDPOINT>") {
-			panic("[cotel] os env OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT missing,when os env TRACE is otlp...")
+			panic("[cotel] os env OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT missing,when os env TRACE is otlphttp")
 		}
 		exporter, e := otlptrace.New(context.Background(), otlptracehttp.NewClient())
 		if e != nil {
-			panic("[cotel] os env OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT error,when os env TRACE is otlp...")
+			panic("[cotel] create trace otlphttp exporter failed,error: " + e.Error())
 		}
 		topts = append(topts, trace.WithBatcher(exporter))
-		needtrace = true
 	case "otlpgrpc":
 		str1 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")))
 		str2 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")))
 		if (str1 == "" || str1 == "<OTEL_EXPORTER_OTLP_TRACES_ENDPOINT>") && (str2 == "" || str2 == "<OTEL_EXPORTER_OTLP_ENDPOINT>") {
-			panic("[cotel] os env OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT missing,when os env TRACE is otlp...")
+			panic("[cotel] os env OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT missing,when os env TRACE is otlpgrpc")
 		}
 		exporter, e := otlptrace.New(context.Background(), otlptracegrpc.NewClient())
 		if e != nil {
-			panic("[cotel] os env OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT error,when os env TRACE is otlp...")
+			panic("[cotel] create trace otlpgrpc exporter failed,error: " + e.Error())
 		}
 		topts = append(topts, trace.WithBatcher(exporter))
-		needtrace = true
 	}
 	tp = trace.NewTracerProvider(topts...)
 	otel.SetTracerProvider(tp)
@@ -113,11 +111,11 @@ func Init() error {
 		str1 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")))
 		str2 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")))
 		if (str1 == "" || str1 == "<OTEL_EXPORTER_OTLP_METRICS_ENDPOINT>") && (str2 == "" || str2 == "<OTEL_EXPORTER_OTLP_ENDPOINT>") {
-			panic("[cotel] os env OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT missing,when os env METRIC is otlp...")
+			panic("[cotel] os env OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT missing,when os env METRIC is otlphttp")
 		}
 		exporter, e := otlpmetrichttp.New(context.Background())
 		if e != nil {
-			panic("[cotel] os env OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT error,when os env METRIC is otlp...")
+			panic("[cotel] create metric otlphttp exporter failed,error: " + e.Error())
 		}
 		mopts = append(mopts, metric.WithReader(metric.NewPeriodicReader(exporter)))
 		needmetric = true
@@ -125,17 +123,20 @@ func Init() error {
 		str1 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")))
 		str2 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")))
 		if (str1 == "" || str1 == "<OTEL_EXPORTER_OTLP_METRICS_ENDPOINT>") && (str2 == "" || str2 == "<OTEL_EXPORTER_OTLP_ENDPOINT>") {
-			panic("[cotel] os env OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT missing,when os env METRIC is otlp...")
+			panic("[cotel] os env OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT missing,when os env METRIC is otlpgrpc")
 		}
 		exporter, e := otlpmetricgrpc.New(context.Background())
 		if e != nil {
-			panic("[cotel] os env OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT error,when os env METRIC is otlp...")
+			panic("[cotel] create metric otlpgrpc exporter failed,error: " + e.Error())
 		}
 		mopts = append(mopts, metric.WithReader(metric.NewPeriodicReader(exporter)))
 		needmetric = true
 	case "prometheus":
 		promRegister = prometheus.NewRegistry()
-		exporter, _ := oprometheus.New(oprometheus.WithRegisterer(promRegister))
+		exporter, e := oprometheus.New(oprometheus.WithRegisterer(promRegister))
+		if e != nil {
+			panic("[cotel] create metric prometheus exporter failed,error: " + e.Error())
+		}
 		mopts = append(mopts, metric.WithReader(exporter))
 		needmetric = true
 	}
@@ -148,8 +149,9 @@ func Init() error {
 		cpu, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("cpu_usage", ometric.WithUnit("1"))
 		mem, _ := otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).Float64ObservableGauge("mem_usage", ometric.WithUnit("1"))
 		otel.Meter("Corelib.host", ometric.WithInstrumentationVersion(version.String())).RegisterCallback(func(ctx context.Context, s ometric.Observer) error {
-			s.ObserveFloat64(cpu, curcpu)
-			s.ObserveFloat64(mem, float64(curmem)/float64(totalmem)*100.0 /*to percent*/)
+			_, cpuusage, _, _, memusage, _ := GetCpuMemUsage()
+			s.ObserveFloat64(cpu, cpuusage)
+			s.ObserveFloat64(mem, memusage)
 			gcinfo := &debug.GCStats{}
 			debug.ReadGCStats(gcinfo)
 			s.ObserveInt64(gc, gcinfo.PauseTotal.Nanoseconds())
@@ -209,25 +211,24 @@ func (s *slogTraceExporter) ExportSpans(ctx context.Context, spans []trace.ReadO
 	if s.stopped.Load() {
 		return nil
 	}
-	if !needtrace {
-		return nil
-	}
 	if len(spans) == 0 {
 		return nil
 	}
-	stubs := tracetest.SpanStubsFromReadOnlySpans(spans)
-	for _, stub := range stubs {
+	for _, ro := range spans {
+		if ro == nil {
+			continue
+		}
 		slog.Info("trace",
-			slog.String("Name", stub.Name),
-			slog.Any("SpanContext", stub.SpanContext),
-			slog.Any("Parent", stub.Parent),
-			slog.Int("SpanKind", int(stub.SpanKind)),
-			slog.Int("ChildSpanCount", stub.ChildSpanCount),
-			slog.Time("StartTime", stub.StartTime),
-			slog.Time("EndTime", stub.EndTime),
-			slog.Any("Resource", stub.Resource),
-			slog.Any("Attributes", stub.Attributes),
-			slog.Any("Status", stub.Status))
+			slog.String("Name", ro.Name()),
+			slog.Any("SpanContext", ro.SpanContext()),
+			slog.Any("Parent", ro.Parent()),
+			slog.Int("SpanKind", int(ro.SpanKind())),
+			slog.Int("ChildSpanCount", ro.ChildSpanCount()),
+			slog.Time("StartTime", ro.StartTime()),
+			slog.Time("EndTime", ro.EndTime()),
+			slog.Any("Resource", ro.Resource()),
+			slog.Any("Attributes", ro.Attributes()),
+			slog.Any("Status", ro.Status()))
 	}
 	return nil
 }

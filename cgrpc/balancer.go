@@ -332,7 +332,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 			pickinfo.SubConn = server.(*ServerForPick).subconn
 			pickinfo.Done = func(doneinfo balancer.DoneInfo) {
 				e := transGrpcError(doneinfo.Err, false)
-				span.SetAttributes(attribute.String("server.addr", server.(*ServerForPick).addr))
+				span.SetAttributes(attribute.String("sip", server.(*ServerForPick).addr))
 				if e != nil {
 					span.SetStatus(codes.Error, e.Error())
 				} else {

@@ -58,12 +58,24 @@ type CrpcClient struct {
 	balancer *corelibBalancer
 	discover discover.DI
 
+	statusCounter metric.Int64Counter
+	timeHistogram metric.Float64Histogram
+	tracer        trace.Tracer
+
 	stop *graceful.Graceful
 }
 
 // if tlsc is not nil,the tls will be actived
 func NewCrpcClient(c *ClientConfig, d discover.DI, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*CrpcClient, error) {
 	if e := cotel.Init(); e != nil {
+		return nil, e
+	}
+	sCounter, e := otel.Meter("Corelib.crpc.client", metric.WithInstrumentationVersion(version.String())).Int64Counter("crpc.client.path.status", metric.WithUnit("1"))
+	if e != nil {
+		return nil, e
+	}
+	tHistogram, e := otel.Meter("Corelib.crpc.client", metric.WithInstrumentationVersion(version.String())).Float64Histogram("crpc.client.path.time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+	if e != nil {
 		return nil, e
 	}
 	if tlsc != nil {
@@ -88,6 +100,10 @@ func NewCrpcClient(c *ClientConfig, d discover.DI, serverproject, servergroup, s
 		tlsc:           tlsc,
 
 		discover: d,
+
+		statusCounter: sCounter,
+		timeHistogram: tHistogram,
+		tracer:        otel.Tracer("Corelib.crpc.client", trace.WithInstrumentationVersion(version.String())),
 
 		stop: graceful.New(),
 	}
@@ -273,11 +289,8 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 	for {
 		td := make(map[string]string)
 		td["Core-Self"] = name.GetSelfFullName()
-		tctx, span := otel.Tracer("Corelib.crpc.client", trace.WithInstrumentationVersion(version.String())).Start(
-			ctx,
-			"call crpc",
-			trace.WithSpanKind(trace.SpanKindClient),
-			trace.WithAttributes(attribute.String("url.path", path), attribute.String("server.name", c.serverfullname)))
+		tctx, span := c.tracer.Start(ctx, "call crpc", trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(attribute.String("path", path), attribute.String("sname", c.serverfullname)))
 		otel.GetTextMapPropagator().Inject(tctx, propagation.MapCarrier(td))
 		server, e := c.balancer.Pick(ctx)
 		if e != nil {
@@ -292,7 +305,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			}
 			return e
 		}
-		span.SetAttributes(attribute.String("server.addr", server.addr))
+		span.SetAttributes(attribute.String("sip", server.addr))
 		rw := server.createrw(path, deadline, md, td)
 		if e := rw.init(ctx, nil); e != nil {
 			server.delrw(rw.callid)
@@ -426,14 +439,13 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 }
 
 func (c *CrpcClient) recordmetric(path string, usetimems float64, err bool) {
-	mstatus, _ := otel.Meter("Corelib.crpc.client", metric.WithInstrumentationVersion(version.String())).Int64Histogram(path+".status", metric.WithUnit("1"), metric.WithExplicitBucketBoundaries(0))
+	attr := attribute.String("path", path)
 	if err {
-		mstatus.Record(context.Background(), 1)
+		c.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "error")))
 	} else {
-		mstatus.Record(context.Background(), 0)
+		c.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "ok")))
 	}
-	mtime, _ := otel.Meter("Corelib.crpc.client", metric.WithInstrumentationVersion(version.String())).Float64Histogram(path+".time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
-	mtime.Record(context.Background(), usetimems)
+	c.timeHistogram.Record(context.Background(), usetimems, metric.WithAttributes(attr))
 }
 
 type forceaddrkey struct{}

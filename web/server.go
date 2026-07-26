@@ -17,8 +17,13 @@ import (
 
 	"github.com/chenjie199234/Corelib/container/trie"
 	"github.com/chenjie199234/Corelib/cotel"
+	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type OutsideHandler func(*ServerContext)
@@ -150,6 +155,10 @@ type WebServer struct {
 	s              *http.Server
 	handlerTimeout map[string]map[string]time.Duration //first key method,second key path,value timeout,<=0 means no timeout
 	handlerRewrite map[string]map[string]string        //first key method,second key origin url,value new url
+
+	statusCounter metric.Int64Counter
+	timeHistogram metric.Float64Histogram
+	tracer        trace.Tracer
 }
 
 type localport struct{}
@@ -157,6 +166,14 @@ type localport struct{}
 // if tlsc is not nil,the tls will be actived
 func NewWebServer(c *ServerConfig, tlsc *tls.Config) (*WebServer, error) {
 	if e := cotel.Init(); e != nil {
+		return nil, e
+	}
+	sCounter, e := otel.Meter("Corelib.web.server", metric.WithInstrumentationVersion(version.String())).Int64Counter("web.server.path.status", metric.WithUnit("1"))
+	if e != nil {
+		return nil, e
+	}
+	tHistogram, e := otel.Meter("Corelib.web.server", metric.WithInstrumentationVersion(version.String())).Float64Histogram("web.server.path.time", metric.WithUnit("ms"), metric.WithExplicitBucketBoundaries(cotel.TimeBoundaries...))
+	if e != nil {
 		return nil, e
 	}
 	if tlsc != nil {
@@ -177,6 +194,9 @@ func NewWebServer(c *ServerConfig, tlsc *tls.Config) (*WebServer, error) {
 		closetimer:     time.NewTimer(0),
 		handlerTimeout: make(map[string]map[string]time.Duration),
 		handlerRewrite: make(map[string]map[string]string),
+		statusCounter:  sCounter,
+		timeHistogram:  tHistogram,
+		tracer:         otel.Tracer("Corelib.web.server", trace.WithInstrumentationVersion(version.String())),
 	}
 	p := &http.Protocols{}
 	p.SetHTTP2(true)
