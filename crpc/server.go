@@ -6,9 +6,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
+	"maps"
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -36,13 +38,26 @@ type OutsideHandler func(*ServerContext)
 
 type ServerConfig struct {
 	//the default timeout for every rpc call,<=0 means no timeout
-	//if specific path's timeout setted by UpdateHandlerTimeout,this specific path will ignore the GlobalTimeout
+	//if specific path's timeout setted by UpdateHandlerTimeout,this specific path will ignore the DefaultHandlerTimeout
 	//the client's deadline will also effect the rpc call's final deadline
-	GlobalTimeout ctime.Duration `json:"global_timeout"`
-	//time for connection establish(include dial time,handshake time and verify time)
+	DefaultHandlerTimeout ctime.Duration `json:"default_handler_timeout"`
+	//time for connection establish(include dial time,tls handshake time and verify time)
 	//default 3s
 	ConnectTimeout ctime.Duration `json:"connect_timeout"`
-	//connection will be closed if it is not actived after this time,<=0 means no idletimeout,if >0 min is HeartProbe
+	//time for read one complete message,start from read the first byte of the message
+	//this can be used to prevent client's slow send attack
+	//(send a big message,but every time send 1 byte,the connection is alive and works well,attacker can create lots of this kind of connections)
+	//<=0 means no timeout
+	ReadTimeout ctime.Duration `json:"read_timeout"`
+	//time for write one piece of the complete message(big message will split to many pieces to send,one piece's max len is 65536)
+	//the connection's write deadline will be resetted every time start to write a piece of data
+	//this can be used to prevent client's slow read attack
+	//(attacker set tcp a small window,and read slowly,this will block the server's Send action,attacker can create lots of this kind of connections)
+	//<=0 means no timeout
+	WriteTimeout ctime.Duration `json:"write_timeout"`
+	//time for waiting the next message,it will be reset when starting to read next message
+	//expired without next message,the connection will be closed
+	//<=0 means no timeout
 	IdleTimeout ctime.Duration `json:"idle_timeout"`
 	//min 1s,default 5s,3 probe missing means disconnect
 	HeartProbe ctime.Duration `json:"heart_probe"`
@@ -51,18 +66,28 @@ type ServerConfig struct {
 }
 
 type CrpcServer struct {
-	c              *ServerConfig
-	tlsc           *tls.Config
+	c    *ServerConfig
+	tlsc *tls.Config
+
+	lker           sync.Mutex
 	global         []OutsideHandler
-	handler        map[string][]OutsideHandler
+	tmphandler     map[string]*handler
 	handlerTimeout map[string]time.Duration
-	instance       *stream.Instance
-	stop           *graceful.Graceful
+
+	handler  atomic.Pointer[map[string]*handler]
+	instance *stream.Instance
+	stop     *graceful.Graceful
 
 	statusCounter metric.Int64Counter
 	timeHistogram metric.Float64Histogram
 	tracer        trace.Tracer
 }
+
+type handler struct {
+	handlers []OutsideHandler
+	timeout  atomic.Int64
+}
+
 type client struct {
 	sync.RWMutex
 	ctxs map[uint64]*ServerContext
@@ -91,23 +116,22 @@ func NewCrpcServer(c *ServerConfig, tlsc *tls.Config) (*CrpcServer, error) {
 		c = &ServerConfig{}
 	}
 	serverinstance := &CrpcServer{
-		c:              c,
-		tlsc:           tlsc,
-		global:         make([]OutsideHandler, 0, 10),
-		handler:        make(map[string][]OutsideHandler, 10),
-		handlerTimeout: make(map[string]time.Duration),
-		statusCounter:  sCounter,
-		timeHistogram:  tHistogram,
-		tracer:         otel.Tracer("Corelib.crpc.server", trace.WithInstrumentationVersion(version.String())),
-		stop:           graceful.New(),
+		c:             c,
+		tlsc:          tlsc,
+		global:        make([]OutsideHandler, 0, 10),
+		tmphandler:    make(map[string]*handler, 10),
+		statusCounter: sCounter,
+		timeHistogram: tHistogram,
+		tracer:        otel.Tracer("Corelib.crpc.server", trace.WithInstrumentationVersion(version.String())),
+		stop:          graceful.New(),
 	}
 	instancec := &stream.InstanceConfig{
-		RecvIdleTimeout:    c.IdleTimeout.StdDuration(),
 		HeartprobeInterval: c.HeartProbe.StdDuration(),
-		TcpC: &stream.TcpConfig{
-			ConnectTimeout: c.ConnectTimeout.StdDuration(),
-			MaxMsgLen:      c.MaxMsgLen,
-		},
+		ConnectTimeout:     c.ConnectTimeout.StdDuration(),
+		ReadTimeout:        c.ReadTimeout.StdDuration(),
+		WriteTimeout:       c.WriteTimeout.StdDuration(),
+		IdleTimeout:        c.IdleTimeout.StdDuration(),
+		MaxMsgLen:          c.MaxMsgLen,
 	}
 	instancec.VerifyFunc = serverinstance.verifyfunc
 	instancec.OnlineFunc = serverinstance.onlinefunc
@@ -120,6 +144,10 @@ func NewCrpcServer(c *ServerConfig, tlsc *tls.Config) (*CrpcServer, error) {
 var ErrServerClosed = errors.New("[crpc.server] closed")
 
 func (s *CrpcServer) StartCrpcServer(listenaddr string) error {
+	s.lker.Lock()
+	tmp := maps.Clone(s.tmphandler)
+	s.handler.Store(&tmp)
+	s.lker.Unlock()
 	e := s.instance.StartServer(listenaddr, s.tlsc)
 	if e == stream.ErrServerClosed {
 		return ErrServerClosed
@@ -170,10 +198,10 @@ func (s *CrpcServer) tellAllPeerSelfClosed() {
 }
 
 // first key path,second key method,value timeout(if timeout <= 0 means no timeout)
-func (this *CrpcServer) UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
+func (s *CrpcServer) UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
 	tmp := make(map[string]time.Duration)
 	for path := range timeout {
-		for method, to := range timeout[path] {
+		for method, duration := range timeout[path] {
 			if strings.ToUpper(method) != "CRPC" {
 				continue
 			}
@@ -183,29 +211,66 @@ func (this *CrpcServer) UpdateHandlerTimeout(timeout map[string]map[string]ctime
 			if path[0] != '/' {
 				path = "/" + path
 			}
-			tmp[path] = to.StdDuration()
+			tmp[path] = duration.StdDuration()
 		}
 	}
-	this.handlerTimeout = tmp
-}
-
-func (this *CrpcServer) getHandlerTimeout(path string) time.Duration {
-	if t, ok := this.handlerTimeout[path]; ok {
-		return t
+	s.lker.Lock()
+	defer s.lker.Unlock()
+	s.handlerTimeout = tmp
+	for path, duration := range tmp {
+		if h, ok := s.tmphandler[path]; ok {
+			h.timeout.Store(duration.Nanoseconds())
+		}
 	}
-	return this.c.GlobalTimeout.StdDuration()
 }
 
+// Warning!this must be call before RegisterHandler
 func (s *CrpcServer) Use(globalMids ...OutsideHandler) {
+	s.lker.Lock()
+	defer s.lker.Unlock()
 	s.global = append(s.global, globalMids...)
 }
 
 func (s *CrpcServer) RegisterHandler(sname, mname string, handlers ...OutsideHandler) {
 	path := "/" + sname + "/" + mname
-	totalhandlers := make([]OutsideHandler, len(s.global)+len(handlers))
-	copy(totalhandlers, s.global)
-	copy(totalhandlers[len(s.global):], handlers)
-	s.handler[path] = totalhandlers
+	s.lker.Lock()
+	defer s.lker.Unlock()
+	h := &handler{}
+	h.handlers = make([]OutsideHandler, len(s.global)+len(handlers))
+	copy(h.handlers, s.global)
+	copy(h.handlers[len(s.global):], handlers)
+	if s.handlerTimeout == nil {
+		if s.c.DefaultHandlerTimeout > 0 {
+			h.timeout.Store(s.c.DefaultHandlerTimeout.StdDuration().Nanoseconds())
+		}
+	} else if duration, ok := s.handlerTimeout[path]; ok {
+		h.timeout.Store(duration.Nanoseconds())
+	} else if s.c.DefaultHandlerTimeout > 0 {
+		h.timeout.Store(s.c.DefaultHandlerTimeout.StdDuration().Nanoseconds())
+	}
+	s.tmphandler[path] = h
+	if s.handler.Load() != nil {
+		//server already started,we need to update the handler
+		tmp := maps.Clone(s.tmphandler)
+		s.handler.Store(&tmp)
+	} else {
+		//server not started,the handler will be updated when StartServer
+	}
+}
+func (s *CrpcServer) UnregisterHandler(sname, mname string) {
+	path := "/" + sname + "/" + mname
+	s.lker.Lock()
+	defer s.lker.Unlock()
+	if _, ok := s.tmphandler[path]; ok {
+		delete(s.tmphandler, path)
+		if s.handler.Load() != nil {
+			//server already started,we need to update the handler
+			tmp := maps.Clone(s.tmphandler)
+			s.handler.Store(&tmp)
+		} else {
+			//server not started,the handler will be updated when StartServer
+		}
+	}
 }
 
 // return false will close the connection
@@ -294,7 +359,7 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 			}
 			return
 		}
-		handlers, ok := s.handler[msg.GetH().GetPath()]
+		h, ok := (*s.handler.Load())[msg.GetH().GetPath()]
 		if !ok {
 			slog.Error("[crpc.server] path doesn't exist",
 				slog.String("cip", p.GetRealPeerIP()), slog.String("path", msg.GetH().GetPath()))
@@ -350,11 +415,26 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		if clientname == "" {
 			clientname = "unknown"
 		}
-		basectx, span := s.tracer.Start(
-			otel.GetTextMapPropagator().Extract(p, propagation.MapCarrier(msg.GetH().GetTracedata())),
-			"handle crpc",
-			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(attribute.String("path", msg.GetH().GetPath()), attribute.String("cname", clientname), attribute.String("cip", peerip)))
+		var basectx context.Context
+		var span trace.Span
+		if msg.GetH().GetTracedata() != nil {
+			basectx, span = s.tracer.Start(
+				otel.GetTextMapPropagator().Extract(p, propagation.MapCarrier(msg.GetH().GetTracedata())),
+				"handle crpc",
+				trace.WithSpanKind(trace.SpanKindServer),
+				trace.WithAttributes(attribute.String("path", msg.GetH().GetPath()), attribute.String("cname", clientname), attribute.String("cip", peerip)))
+		} else {
+			basectx, span = s.tracer.Start(p, "handle crpc", trace.WithSpanKind(trace.SpanKindServer),
+				trace.WithAttributes(attribute.String("path", msg.GetH().GetPath()), attribute.String("cname", clientname), attribute.String("cip", peerip)))
+		}
+		var stime int64 //only used in metric
+		if cotel.NeedMetric() {
+			if cotel.NeedTrace() {
+				stime = span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+			} else {
+				stime = time.Now().UnixNano()
+			}
+		}
 		//metadata
 		if msg.GetH().GetMetadata() == nil {
 			msg.GetH().SetMetadata(map[string]string{"Client-IP": peerip})
@@ -366,9 +446,9 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		//deadline
 		var dl time.Time
 		var basecancel context.CancelFunc
-		if sto := s.getHandlerTimeout(msg.GetH().GetPath()); sto > 0 {
+		if sto := h.timeout.Load(); sto > 0 {
 			//use server timeout
-			dl = time.Now().Add(sto)
+			dl = time.Now().Add(time.Duration(sto))
 			if msg.GetH().GetDeadline() != 0 && msg.GetH().GetDeadline() < dl.UnixNano() {
 				//use client deadline
 				dl = time.Unix(0, msg.GetH().GetDeadline())
@@ -418,7 +498,9 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 		var tmer *time.Timer
 		if !dl.IsZero() {
 			tmer = time.AfterFunc(time.Until(dl), func() {
-				workctx.closed.Store(true)
+				if !workctx.closed.Swap(true) {
+					return
+				}
 				mb := &Msg_Body{}
 				mb.SetError(cerror.ErrDeadlineExceeded)
 				//the error response shouldn't send failed due to the Context's error
@@ -456,19 +538,25 @@ func (s *CrpcServer) userfunc(p *stream.Peer, data []byte) {
 					span.SetStatus(codes.Ok, "")
 				}
 				span.End()
-				if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+				if cotel.NeedMetric() {
+					var etime int64
+					if cotel.NeedTrace() {
+						etime = span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+					} else {
+						etime = time.Now().UnixNano()
+					}
 					attr := attribute.String("path", msg.GetH().GetPath())
 					if workctx.e != nil {
 						s.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "error")))
 					} else {
 						s.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "ok")))
 					}
-					s.timeHistogram.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, metric.WithAttributes(attr))
+					s.timeHistogram.Record(context.Background(), float64(etime-stime)/1000000.0, metric.WithAttributes(attr))
 				}
 				s.stop.DoneOne()
 			}()
-			for _, handler := range handlers {
-				handler(workctx)
+			for _, hh := range h.handlers {
+				hh(workctx)
 				if workctx.closed.Load() {
 					break
 				}

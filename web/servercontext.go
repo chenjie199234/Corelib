@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -38,6 +39,10 @@ func (c *ServerContext) Web() {
 // ----------------------------------------------- for response------------------------------------------------------
 
 func (c *ServerContext) Redirect(code int, url string) {
+	if c.lker != nil {
+		c.lker.Lock()
+		defer c.lker.Unlock()
+	}
 	if c.responsed.Swap(true) || c.closed.Swap(true) {
 		return
 	}
@@ -100,11 +105,25 @@ func (c *ServerContext) Abort(e error) {
 
 // after Write,this will be useless
 func (c *ServerContext) SetResponseHeader(k, v string) {
+	if c.lker != nil {
+		c.lker.Lock()
+		defer c.lker.Unlock()
+	}
+	if c.closed.Load() || c.responsed.Load() {
+		return
+	}
 	c.w.Header().Set(k, v)
 }
 
 // after Write,this will be useless
 func (c *ServerContext) AddResponseHeader(k, v string) {
+	if c.lker != nil {
+		c.lker.Lock()
+		defer c.lker.Unlock()
+	}
+	if c.closed.Load() || c.responsed.Load() {
+		return
+	}
 	c.w.Header().Add(k, v)
 }
 
@@ -114,15 +133,15 @@ func (c *ServerContext) Write(msg []byte) (int, error) {
 		c.lker.Lock()
 		defer c.lker.Unlock()
 	}
+	if c.closed.Load() {
+		return 0, cerror.ErrClosed
+	}
 	switch c.Context.Err() {
 	case context.DeadlineExceeded:
 		return 0, cerror.ErrDeadlineExceeded
 	case context.Canceled:
 		return 0, cerror.ErrClosed
 	default:
-	}
-	if c.closed.Load() {
-		return 0, cerror.ErrClosed
 	}
 	c.responsed.Store(true)
 	n, e := c.w.Write(msg)
@@ -189,10 +208,10 @@ type NoStreamServerContext interface {
 // --------------------------------------------- server stream context ------------------------------------------
 func NewServerStreamServerContext[resptype any](ctx *ServerContext) *ServerStreamServerContext[resptype] {
 	cctx := &ServerStreamServerContext[resptype]{Context: ctx.Context, sctx: ctx}
-	ctx.responsed.Store(true)
 	ctx.SetResponseHeader("Content-Type", "text/event-stream")
 	ctx.SetResponseHeader("Cache-Control", "no-cache")
 	ctx.SetResponseHeader("Connection", "keep-alive")
+	ctx.responsed.Store(true)
 	ctx.Flush()
 	return cctx
 }
@@ -206,6 +225,9 @@ type ServerStreamServerContext[resptype any] struct {
 // return cerror.ErrClosed means connection closed
 // return cerror.ErrDeadlineExceeded means timeout
 func (c *ServerStreamServerContext[resptype]) Send(id string, resp *resptype) error {
+	if strings.ContainsAny(id, "\r\n") {
+		panic("[" + c.sctx.GetRequest().URL.Path + "] in ServerSentEvent,id field can't contain '\r' '\n'")
+	}
 	var tmp any = resp
 	tmptmp, ok := tmp.(protoreflect.ProtoMessage)
 	if !ok {

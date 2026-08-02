@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/util/ctime"
 
 	gredis "github.com/redis/go-redis/v9"
@@ -44,8 +45,24 @@ type Config struct {
 	MaxConnIdletime ctime.Duration `json:"max_conn_idletime"`
 	//<=0: default 5s
 	DialTimeout ctime.Duration `json:"dial_timeout"`
-	//<=0: no timeout
+	//<=0: no timeout,context's deadline > IOTimeout > context without deadline
 	IOTimeout ctime.Duration `json:"io_timeout"`
+}
+
+func (c *Config) clone() *Config {
+	return &Config{
+		RedisName:          c.RedisName,
+		RedisMode:          c.RedisMode,
+		Addrs:              c.Addrs,
+		UserName:           c.UserName,
+		Password:           c.Password,
+		SentinelMasterName: c.SentinelMasterName,
+		ReadWriteSplit:     c.ReadWriteSplit,
+		MaxOpen:            c.MaxOpen,
+		MaxConnIdletime:    c.MaxConnIdletime,
+		DialTimeout:        c.DialTimeout,
+		IOTimeout:          c.IOTimeout,
+	}
 }
 
 type Client struct {
@@ -60,6 +77,7 @@ func (p _proxys) Get(string) string {
 
 // if tlsc is not nil,the tls will be actived
 func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
+	c = c.clone()
 	if len(c.Addrs) == 0 {
 		c.Addrs = []string{"127.0.0.1:6379"}
 	}
@@ -252,12 +270,14 @@ func (c *Client) GetRingClient() *gredis.Ring {
 type monitor struct {
 	redisname string
 	addr      string
+	tracer    trace.Tracer
 }
 
 func newMonitor(redisname string, addr string) *monitor {
 	return &monitor{
 		redisname: redisname,
 		addr:      addr,
+		tracer:    otel.Tracer("Corelib.redis.client", trace.WithInstrumentationVersion(version.String())),
 	}
 }
 func (m *monitor) DialHook(hook gredis.DialHook) gredis.DialHook {
@@ -265,13 +285,10 @@ func (m *monitor) DialHook(hook gredis.DialHook) gredis.DialHook {
 }
 func (m *monitor) ProcessHook(hook gredis.ProcessHook) gredis.ProcessHook {
 	return func(ctx context.Context, cmd gredis.Cmder) error {
-		_, span := otel.Tracer("Corelib.redis.client").Start(
-			ctx,
-			"call redis",
-			trace.WithSpanKind(trace.SpanKindClient),
+		_, span := m.tracer.Start(ctx, "call redis", trace.WithSpanKind(trace.SpanKindClient),
 			trace.WithAttributes(
-				attribute.String("server.name", m.redisname),
-				attribute.String("server.addr", m.addr),
+				attribute.String("sname", m.redisname),
+				attribute.String("sip", m.addr),
 				attribute.String("redis.cmd", cmd.FullName()),
 			),
 		)
@@ -291,13 +308,10 @@ func (m *monitor) ProcessPipelineHook(hook gredis.ProcessPipelineHook) gredis.Pr
 		for _, cmd := range cmds {
 			tmp = append(tmp, cmd.FullName())
 		}
-		_, span := otel.Tracer("Corelib.redis.client").Start(
-			ctx,
-			"call redis",
-			trace.WithSpanKind(trace.SpanKindClient),
+		_, span := m.tracer.Start(ctx, "call redis", trace.WithSpanKind(trace.SpanKindClient),
 			trace.WithAttributes(
-				attribute.String("server.name", m.redisname),
-				attribute.String("server.addr", m.addr),
+				attribute.String("sname", m.redisname),
+				attribute.String("sip", m.addr),
 				attribute.String("redis.cmds", strings.Join(tmp, ",")),
 			),
 		)

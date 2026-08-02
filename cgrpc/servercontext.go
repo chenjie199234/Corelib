@@ -18,6 +18,7 @@ import (
 type ServerContext struct {
 	context.Context
 	cancel context.CancelFunc
+	stime  int64
 
 	decodefunc func(any) error
 	resp       any
@@ -120,7 +121,7 @@ type NoStreamServerContext interface {
 // ----------------------------------------------- client stream context ---------------------------------------------
 func NewClientStreamServerContext[reqtype any](ctx *ServerContext, validatereq bool) *ClientStreamServerContext[reqtype] {
 	if ctx.stream == nil {
-		return nil
+		panic("[cgrpc.server] can't call NewClientStreamServerContext on a non-stream context")
 	}
 	return &ClientStreamServerContext[reqtype]{
 		validatereq: validatereq,
@@ -175,7 +176,7 @@ func (c *ClientStreamServerContext[reqtype]) GetClientIp() string {
 // ----------------------------------------------- server stream context ---------------------------------------------
 func NewServerStreamServerContext[resptype any](ctx *ServerContext) *ServerStreamServerContext[resptype] {
 	if ctx.stream == nil {
-		return nil
+		panic("[cgrpc.server] can't call NewServerStreamServerContext on a non-stream context")
 	}
 	return &ServerStreamServerContext[resptype]{
 		Context: ctx.Context,
@@ -220,7 +221,7 @@ func (c *ServerStreamServerContext[resptype]) GetClientIp() string {
 // ----------------------------------------------- all stream context ---------------------------------------------
 func NewAllStreamServerContext[reqtype, resptype any](ctx *ServerContext, validatereq bool) *AllStreamServerContext[reqtype, resptype] {
 	if ctx.stream == nil {
-		return nil
+		panic("[cgrpc.server] can't call NewAllStreamServerContext on a non-stream context")
 	}
 	return &AllStreamServerContext[reqtype, resptype]{
 		validatereq: validatereq,

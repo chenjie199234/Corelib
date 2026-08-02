@@ -13,8 +13,9 @@ import (
 
 // Warning! Http header's each line's max length is 256
 // Warning! Doesn't support sub protocol and extension
+//
 // example:
-// ver conn net.Conn
+// var conn net.Conn
 // ... get the client conn
 // ... don't forget to set the timeout on the conn
 // reader := bufio.NewReader(conn)
@@ -73,10 +74,11 @@ func Supgrade(reader *bufio.Reader, writer net.Conn) (path string, header http.H
 				if len(tmp) == 0 {
 					continue
 				}
-				pieces[i] = tmp
+				pieces[need] = tmp
 				need++
 			}
-			if len(pieces) != 3 {
+			pieces = pieces[:need]
+			if len(pieces) != 3 || !bytes.Equal(pieces[0], []byte{'G', 'E', 'T'}) {
 				e = ErrRequestLineFormat
 				return
 			}

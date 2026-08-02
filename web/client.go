@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -36,14 +37,15 @@ import (
 
 type ClientConfig struct {
 	//the default timeout for every web call,<=0 means no timeout
-	//if ctx's Deadline exist and GlobalTimeout > 0,the min(time.Now().Add(GlobalTimeout) ,ctx.Deadline()) will be used as the final deadline
-	//if ctx's Deadline not exist and GlobalTimeout > 0 ,the time.Now().Add(GlobalTimeout) will be used as the final deadline
-	//if ctx's deadline not exist and GlobalTimeout <=0,means no deadline
-	GlobalTimeout ctime.Duration `json:"global_timeout"`
-	//time for connection establish(include dial time,handshake time)
+	//if ctx's Deadline exist and DefaultHandlerTimeout > 0,the min(time.Now().Add(DefaultHandlerTimeout) ,ctx.Deadline()) will be used as the final deadline
+	//if ctx's Deadline not exist and DefaultHandlerTimeout > 0 ,the time.Now().Add(DefaultHandlerTimeout) will be used as the final deadline
+	//if ctx's Deadline not exist and DefaultHandlerTimeout <=0,means no deadline
+	DefaultHandlerTimeout ctime.Duration `json:"default_handler_timeout"`
+	//time for connection establish(include dial time,tls handshake time)
 	//default 3s
 	ConnectTimeout ctime.Duration `json:"connect_timeout"`
-	//connection will be closed if it is not actived after this time,<=0 means no idletimeout
+	//connection will be closed if it is not actived after this time
+	//<=0 means no timeout
 	IdleTimeout ctime.Duration `json:"idle_timeout"`
 	//min 2048,max 65536,unit byte
 	MaxResponseHeader uint `json:"max_response_header"`
@@ -116,7 +118,7 @@ func NewWebClient(c *ClientConfig, d discover.DI, serverproject, servergroup, se
 		serverfullname: serverfullname,
 		c:              c,
 		tlsc:           tlsc,
-		dialer:         &net.Dialer{},
+		dialer:         &net.Dialer{Timeout: c.ConnectTimeout.StdDuration()},
 
 		discover: d,
 
@@ -141,9 +143,6 @@ func NewWebClient(c *ClientConfig, d discover.DI, serverproject, servergroup, se
 			MaxResponseHeaderBytes: int64(c.MaxResponseHeader),
 		},
 	}
-	if c.GlobalTimeout > 0 {
-		client.client.Timeout = c.GlobalTimeout.StdDuration()
-	}
 	client.balancer = newCorelibBalancer(client)
 	client.resolver = resolver.NewCorelibResolver(client.balancer, client.discover, discover.Web)
 	client.resolver.Start()
@@ -152,11 +151,6 @@ func NewWebClient(c *ClientConfig, d discover.DI, serverproject, servergroup, se
 
 // this is for http.Transport
 func (c *WebClient) dial(ctx context.Context, network, addr string) (net.Conn, error) {
-	if c.c.ConnectTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, c.c.ConnectTimeout.StdDuration())
-		defer cancel()
-	}
 	conn, e := c.dialer.DialContext(ctx, network, addr)
 	if e != nil {
 		slog.ErrorContext(ctx, "[web.client] dial failed", slog.String("sname", c.serverfullname), slog.String("sip", addr), slog.String("error", e.Error()))
@@ -168,23 +162,19 @@ func (c *WebClient) dial(ctx context.Context, network, addr string) (net.Conn, e
 
 // this is for http.Transport
 func (c *WebClient) dialtls(ctx context.Context, network, addr string) (net.Conn, error) {
-	host, _, e := net.SplitHostPort(addr)
-	if e != nil {
-		return nil, e
-	}
-	if c.c.ConnectTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, c.c.ConnectTimeout.StdDuration())
-		defer cancel()
-	}
 	conn, e := c.dialer.DialContext(ctx, network, addr)
 	if e != nil {
 		slog.ErrorContext(ctx, "[web.client] dial failed", slog.String("sname", c.serverfullname), slog.String("sip", addr), slog.String("error", e.Error()))
 		return nil, e
 	}
+	index := strings.LastIndex(addr, ":")
+	if index == -1 {
+		index = len(addr)
+	}
+	hostname := addr[:index]
 	tmptlsc := c.tlsc.Clone()
 	if tmptlsc.ServerName == "" {
-		tmptlsc.ServerName = host
+		tmptlsc.ServerName = hostname
 	}
 	tc := tls.Client(conn, tmptlsc)
 	if e = tc.HandshakeContext(ctx); e != nil {
@@ -362,32 +352,37 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 		d, _ := json.Marshal(metadata)
 		header.Set("Core-Metadata", common.BTS(d))
 	}
-	var dl time.Time
-	var ok bool
-	if dl, ok = ctx.Deadline(); ok {
-		if c.c.GlobalTimeout > 0 {
-			clientdl := time.Now().Add(c.c.GlobalTimeout.StdDuration())
-			if dl.After(clientdl) {
-				dl = clientdl
-			}
-		}
-	} else if c.c.GlobalTimeout > 0 {
-		dl = time.Now().Add(c.c.GlobalTimeout.StdDuration())
+	if c.c.DefaultHandlerTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.c.DefaultHandlerTimeout.StdDuration())
+		defer cancel()
 	}
-	if !dl.IsZero() {
+	if dl, ok := ctx.Deadline(); ok {
 		header.Set("Core-Deadline", strconv.FormatInt(dl.UnixNano(), 10))
 	}
 	for {
 		tctx, span := c.tracer.Start(ctx, "call web", trace.WithSpanKind(trace.SpanKindClient),
 			trace.WithAttributes(attribute.String("path", path), attribute.String("sname", c.serverfullname)))
 		otel.GetTextMapPropagator().Inject(tctx, propagation.HeaderCarrier(header))
+		var stime int64 //used in metric and balancer
+		if cotel.NeedTrace() {
+			stime = span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+		} else {
+			stime = time.Now().UnixNano()
+		}
 		//pick server
 		server, e := c.balancer.Pick(ctx)
 		if e != nil {
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
-			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			if cotel.NeedMetric() {
+				var etime int64
+				if cotel.NeedTrace() {
+					etime = span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+				} else {
+					etime = time.Now().UnixNano()
+				}
+				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
 			c.stop.DoneOne()
 			return nil, e
@@ -403,9 +398,14 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			e = cerror.Convert(e.(*url.Error).Unwrap())
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
-			server.GetServerPickInfo().Done(false, 0)
-			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			if cotel.NeedMetric() {
+				var etime int64
+				if cotel.NeedTrace() {
+					etime = span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+				} else {
+					etime = time.Now().UnixNano()
+				}
+				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
 			c.stop.DoneOne()
 			return nil, e
@@ -419,8 +419,14 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
 			server.GetServerPickInfo().Done(false, 0)
-			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			if cotel.NeedMetric() {
+				var etime int64
+				if cotel.NeedTrace() {
+					etime = span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+				} else {
+					etime = time.Now().UnixNano()
+				}
+				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
 			c.stop.DoneOne()
 			return nil, e
@@ -436,10 +442,15 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 			}
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
-			etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
-			stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+			var etime int64
+			if cotel.NeedTrace() {
+				etime = span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+			} else {
+				etime = time.Now().UnixNano()
+			}
 			server.GetServerPickInfo().Done(false, uint64(etime-stime))
 			if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
+				//the server will not handle this call,we can retry this request
 				if !server.closing.Swap(true) {
 					//set the lowest pick priority
 					server.Pickinfo.SetDiscoverServerOffline(0)
@@ -450,19 +461,22 @@ func (c *WebClient) call(method string, ctx context.Context, path, query string,
 				}
 				continue
 			}
+			//only record the real call's metric
 			if cotel.NeedMetric() {
 				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
 			c.stop.DoneOne()
 			return nil, e
 		}
-		resp.Body = &wrappedbody{c: c, path: path, body: resp.Body, span: span}
+		resp.Body = &wrappedbody{s: server, c: c, stime: stime, path: path, body: resp.Body, span: span}
 		return resp, e
 	}
 }
 
 type wrappedbody struct {
+	s       *ServerForPick
 	c       *WebClient
+	stime   int64
 	path    string
 	span    trace.Span
 	body    io.ReadCloser
@@ -481,19 +495,27 @@ func (b *wrappedbody) Close() error {
 	return b.body.Close()
 }
 func (b *wrappedbody) clean(e error) {
-	if !b.cleaned.Swap(true) {
-		b.c.stop.DoneOne()
-		if e == nil || e == io.EOF {
-			b.span.SetStatus(codes.Ok, "")
-		} else {
-			e = cerror.Convert(e)
-			b.span.SetStatus(codes.Error, e.Error())
-		}
-		b.span.End()
-		if ros, ok := b.span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-			b.c.recordmetric(b.path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, false)
-		}
+	if b.cleaned.Swap(true) {
+		return
 	}
+	if e == nil || e == io.EOF {
+		b.span.SetStatus(codes.Ok, "")
+	} else {
+		e = cerror.Convert(e)
+		b.span.SetStatus(codes.Error, e.Error())
+	}
+	b.span.End()
+	var etime int64
+	if cotel.NeedTrace() {
+		etime = b.span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+	} else {
+		etime = time.Now().UnixNano()
+	}
+	b.s.GetServerPickInfo().Done(e == nil, uint64(etime-b.stime))
+	if cotel.NeedMetric() {
+		b.c.recordmetric(b.path, float64(etime-b.stime)/1000000.0, false)
+	}
+	b.c.stop.DoneOne()
 }
 
 func (c *WebClient) recordmetric(path string, usetimems float64, err bool) {

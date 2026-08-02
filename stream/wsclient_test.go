@@ -18,14 +18,15 @@ func Test_Wsclient(t *testing.T) {
 		for range 10000 {
 			tcpclientinstance, _ := NewInstance(&InstanceConfig{
 				HeartprobeInterval: time.Second,
-				TcpC:               &TcpConfig{
-					//MaxMsgLen: 65535,
-				},
-				VerifyFunc:   wsclienthandleVerify,
-				OnlineFunc:   wsclienthandleonline,
-				PingPongFunc: wsclientpingpong,
-				UserdataFunc: wsclienthandleuserdata,
-				OfflineFunc:  wsclienthandleoffline,
+				ConnectTimeout:     time.Second,
+				ReadTimeout:        time.Second,
+				WriteTimeout:       time.Second,
+				IdleTimeout:        0,
+				VerifyFunc:         wsclienthandleVerify,
+				OnlineFunc:         wsclienthandleonline,
+				PingPongFunc:       wsclientpingpong,
+				UserdataFunc:       wsclienthandleuserdata,
+				OfflineFunc:        wsclienthandleoffline,
 			})
 			tcpclientinstance.StartClient("127.0.0.1:9234", true, []byte{'t', 'e', 's', 't', 'c'}, nil)
 			time.Sleep(time.Millisecond)

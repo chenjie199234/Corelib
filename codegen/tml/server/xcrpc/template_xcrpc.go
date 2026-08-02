@@ -11,7 +11,6 @@ import (
 	"crypto/tls"
 	"log/slog"
 	"sync/atomic"
-	"unsafe"
 
 	"{{.}}/api"
 	"{{.}}/config"
@@ -22,7 +21,7 @@ import (
 	"github.com/chenjie199234/Corelib/util/ctime"
 )
 
-var s *crpc.CrpcServer
+var s aotmic.Pointer[crpc.CrpcServer]
 
 func StartCrpcServer() {
 	c := config.GetCrpcServerConfig()
@@ -44,8 +43,7 @@ func StartCrpcServer() {
 		slog.Error("[xcrpc] new server failed", slog.String("error",e.Error()))
 		return
 	}
-	//avoid race when build/run in -race mode
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s)), unsafe.Pointer(server))
+	s.Store(server)
 	UpdateHandlerTimeout(config.AC.HandlerTimeout)
 
 	//this place can register global midwares
@@ -65,16 +63,14 @@ func StartCrpcServer() {
 
 //first key:path,second key:method
 func UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
-	//avoid race when build/run in -race mode
-	tmps := (*crpc.CrpcServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
+	tmps := s.Load()
 	if tmps != nil {
 		tmps.UpdateHandlerTimeout(timeout)
 	}
 }
 
 func StopCrpcServer(force bool) {
-	//avoid race when build/run in -race mode
-	tmps := (*crpc.CrpcServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
+	tmps := s.Load()
 	if tmps != nil {
 		tmps.StopCrpcServer(force)
 	}

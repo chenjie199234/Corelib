@@ -48,7 +48,7 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 	this.listeners = append(this.listeners, tmplistener)
 	this.Unlock()
 	for {
-		p := newPeer(this.c.TcpC.MaxMsgLen, _PEER_CLIENT, "")
+		p := newPeer(this.c, _PEER_CLIENT, "")
 		conn, e := tmplistener.AcceptTCP()
 		if e != nil {
 			if ee, ok := e.(interface{ Temporary() bool }); ok && ee.Temporary() {
@@ -75,8 +75,9 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 			p.c = conn
 		}
 		p.cr = bufio.NewReader(p.c)
-		p.c.SetDeadline(time.Now().Add(this.c.TcpC.ConnectTimeout))
-		ctx, cancel := context.WithTimeout(p, this.c.TcpC.ConnectTimeout)
+		//the config's validate func guarantee the ConnectTimeout always > 0
+		p.c.SetDeadline(time.Now().Add(this.c.ConnectTimeout))
+		ctx, cancel := context.WithTimeout(p, this.c.ConnectTimeout)
 		go func() {
 			defer cancel()
 			if tlsc != nil {
@@ -88,7 +89,7 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 				}
 			}
 			//both raw tcp and websocket use the websocket's data frame format
-			//websocket need the handshake,so the first byte must be G->71->0b01000111
+			//websocket need the handshake,so the first byte must be G(http method GET)->71->0b01000111
 			//if this is a raw tcp connection,the first byte can't be 0b01000111,because the opcode doesn't exist
 			//so we can check the first byte with G to decide the raw tcp or websocket
 			_, header, e := ws.Supgrade(p.cr, p.c)
@@ -110,56 +111,50 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 	//read first verify message from client
 	serververifydata := this.verifypeer(ctx, p)
 	if p.uniqueid == "" {
+		p.CancelFunc()
 		p.c.Close()
 		return
 	}
 	if 4+uint64(len(serververifydata)) > uint64(p.peerMaxMsgLen.Load()) {
 		slog.Error("[Stream.sworker] server response verify data too large", slog.String("cip", p.c.RemoteAddr().String()))
+		p.CancelFunc()
 		p.c.Close()
 		return
 	}
 	if e := this.mng.AddPeer(p); e != nil {
 		slog.Error("[Stream.sworker] add client to connection manager failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+		p.CancelFunc()
 		p.c.Close()
 		return
 	}
 	//verify client success,send self's verify message to client
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, p.selfMaxMsgLen.Load())
-	if len(serververifydata) == 0 {
-		if e := ws.WriteMsg(p.c, buf, true, true, false); e != nil {
+	buf := make([]byte, 4+len(serververifydata))
+	binary.BigEndian.PutUint32(buf, p.config.MaxMsgLen)
+	copy(buf[4:], serververifydata)
+	first := true
+	for len(buf) > 0 {
+		var data []byte
+		if len(buf) > maxPieceLen {
+			data = buf[:maxPieceLen]
+			buf = buf[maxPieceLen:]
+		} else {
+			data = buf
+			buf = nil
+		}
+		//set timeout to 0,current timeout is controlled by ConnectTimeout
+		if e := ws.WriteMsg(p.c, 0, data, buf == nil, first, false); e != nil {
 			slog.Error("[Stream.sworker] write verify data to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 			this.mng.DelPeer(p)
-			p.Close(false)
+			p.CancelFunc()
+			p.c.Close()
 			return
 		}
-	} else if e := ws.WriteMsg(p.c, buf, false, true, false); e != nil {
-		slog.Error("[Stream.sworker] write verify data to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
-		this.mng.DelPeer(p)
-		p.Close(false)
-		return
-	} else {
-		for len(serververifydata) > 0 {
-			var data []byte
-			if len(serververifydata) > maxPieceLen {
-				data = serververifydata[:maxPieceLen]
-				serververifydata = serververifydata[maxPieceLen:]
-			} else {
-				data = serververifydata
-				serververifydata = nil
-			}
-			if e := ws.WriteMsg(p.c, data, serververifydata == nil, false, false); e != nil {
-				slog.Error("[Stream.sworker] write verify data to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
-				this.mng.DelPeer(p)
-				p.c.Close()
-				return
-			}
-			if serververifydata == nil {
-				break
-			}
+		if buf == nil {
+			break
 		}
+		first = false
 	}
-	//verify finished,status set to true
+	//verify finished,status set to 1(working)
 	p.status.Store(1)
 	if this.c.OnlineFunc != nil {
 		if !this.c.OnlineFunc(ctx, p) {
@@ -171,9 +166,9 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 			return
 		}
 	}
-	//after verify,the conntimeout is useless,heartbeat will work for this
+	//after verify,the conntimeout is useless,heartbeattimeout,idletimeout,readtimeout will be used
 	p.c.SetDeadline(time.Time{})
-	go this.handle(p)
+	go p.handle()
 }
 
 // serveraddr: host:port or ip:port
@@ -197,7 +192,8 @@ func (this *Instance) StartClient(serveraddr string, websocket bool, verifydata 
 	if this.mng.Finishing() {
 		return false
 	}
-	dl := time.Now().Add(this.c.TcpC.ConnectTimeout)
+	//the config's validate func guarantee the ConnectTimeout always > 0
+	dl := time.Now().Add(this.c.ConnectTimeout)
 	conn, e := (&net.Dialer{Deadline: dl}).Dial("tcp", serveraddr)
 	if e != nil {
 		slog.Error("[Stream.StartClient] dial failed", slog.String("sip", serveraddr), slog.String("error", e.Error()))
@@ -206,7 +202,7 @@ func (this *Instance) StartClient(serveraddr string, websocket bool, verifydata 
 	//disable system's keep alive probe
 	//use self's heartbeat probe
 	(conn.(*net.TCPConn)).SetKeepAlive(false)
-	p := newPeer(this.c.TcpC.MaxMsgLen, _PEER_SERVER, serveraddr)
+	p := newPeer(this.c, _PEER_SERVER, serveraddr)
 	if tlsc != nil {
 		p.c = tls.Client(conn, tlsc)
 	} else {
@@ -239,47 +235,42 @@ func (this *Instance) StartClient(serveraddr string, websocket bool, verifydata 
 
 func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []byte) bool {
 	//send self's verify message to server
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, p.selfMaxMsgLen.Load())
-	if len(clientverifydata) == 0 {
-		if e := ws.WriteMsg(p.c, buf, true, true, false); e != nil {
+	buf := make([]byte, 4+len(clientverifydata))
+	binary.BigEndian.PutUint32(buf, p.config.MaxMsgLen)
+	copy(buf[4:], clientverifydata)
+	first := true
+	for len(buf) > 0 {
+		var data []byte
+		if len(buf) > maxPieceLen {
+			data = buf[:maxPieceLen]
+			buf = buf[maxPieceLen:]
+		} else {
+			data = buf
+			buf = nil
+		}
+		//set timeout to 0,current timeout is controlled by ConnectTimeout
+		if e := ws.WriteMsg(p.c, 0, data, buf == nil, first, false); e != nil {
 			slog.Error("[Stream.cworker] write verify data to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+			p.CancelFunc()
 			p.c.Close()
 			return false
 		}
-	} else if e := ws.WriteMsg(p.c, buf, false, true, false); e != nil {
-		slog.Error("[Stream.cworker] write verify data to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
-		p.c.Close()
-		return false
-	} else {
-		for len(clientverifydata) > 0 {
-			var data []byte
-			if len(clientverifydata) > maxPieceLen {
-				data = clientverifydata[:maxPieceLen]
-				clientverifydata = clientverifydata[maxPieceLen:]
-			} else {
-				data = clientverifydata
-				clientverifydata = nil
-			}
-			if e := ws.WriteMsg(p.c, data, clientverifydata == nil, false, false); e != nil {
-				slog.Error("[Stream.cworker] write verify data to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
-				p.c.Close()
-				return false
-			}
-			if clientverifydata == nil {
-				break
-			}
+		if buf == nil {
+			break
 		}
+		first = false
 	}
 	//read first verify message from server
 	_ = this.verifypeer(ctx, p)
 	if p.uniqueid == "" {
+		p.CancelFunc()
 		p.c.Close()
 		return false
 	}
 	//verify server success
 	if e := this.mng.AddPeer(p); e != nil {
 		slog.Error("[Stream.cworker] add server to connection manager failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+		p.CancelFunc()
 		p.c.Close()
 		return false
 	}
@@ -295,15 +286,16 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 			return false
 		}
 	}
-	//after verify,the conntimeout is useless,heartbeat will work for this
+	//after verify,the conntimeout is useless,heartbeattimeout,idletimeout,readtimeout will be used
 	p.c.SetDeadline(time.Time{})
-	go this.handle(p)
+	go p.handle()
 	return true
 }
 
 func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 	var response []byte
-	if e := ws.Read(p.cr, p.selfMaxMsgLen.Load(), false, func(opcode ws.OPCode, data []byte) (readmore bool) {
+	//set timeout to 0,current timeout is controlled by ConnectTimeout
+	if e := ws.Read(p.cr, p.c, 0, 0, p.config.MaxMsgLen, false, func(opcode ws.OPCode, data []byte) (readmore bool) {
 		switch {
 		case !opcode.IsControl():
 			if len(data) < 4 {
@@ -325,8 +317,6 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 			}
 			now := time.Now()
 			p.lastactive.Store(now.UnixNano())
-			p.recvidlestart.Store(now.UnixNano())
-			p.sendidlestart.Store(now.UnixNano())
 			p.peerMaxMsgLen.Store(senderMaxRecvMsgLen)
 			r, u, success := this.c.VerifyFunc(ctx, data[4:])
 			if !success {
@@ -349,7 +339,8 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 			//server get a connection from other implement's client which will send a ping before verify
 			//client connect to an other implement's server which will send a ping before verify
 			//write back
-			if e := ws.WritePong(p.c, data, false); e != nil {
+			//set timeout to 0,current timeout is controlled by ConnectTimeout
+			if e := ws.WritePong(p.c, 0, data, false); e != nil {
 				if p.peertype == _PEER_CLIENT {
 					slog.Error("[Stream.verifypeer] write pong to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 				} else {
@@ -375,85 +366,4 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 		}
 	}
 	return response
-}
-func (this *Instance) handle(p *Peer) {
-	defer func() {
-		p.status.Store(0)
-		p.c.Close()
-		if this.c.OfflineFunc != nil {
-			this.c.OfflineFunc(p)
-		}
-		this.mng.DelPeer(p)
-		p.CancelFunc()
-	}()
-	//before handle user data,send first ping,to get the net lag
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, uint64(time.Now().UnixNano()))
-	e := ws.WritePing(p.c, buf, false)
-	if e != nil {
-		if p.peertype == _PEER_CLIENT {
-			slog.Error("[Stream.handle] send first ping to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
-		} else {
-			slog.Error("[Stream.handle] send first ping to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
-		}
-		return
-	}
-	if e = ws.Read(p.cr, p.selfMaxMsgLen.Load(), false, func(opcode ws.OPCode, data []byte) (readmore bool) {
-		switch {
-		case !opcode.IsControl():
-			now := time.Now()
-			p.lastactive.Store(now.UnixNano())
-			p.recvidlestart.Store(now.UnixNano())
-			this.c.UserdataFunc(p, data)
-			return true
-		case opcode.IsPing():
-			p.lastactive.Store(time.Now().UnixNano())
-			//write back
-			if e := ws.WritePong(p.c, data, false); e != nil {
-				if p.peertype == _PEER_CLIENT {
-					slog.Error("[Stream.handle] send pong to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
-				} else {
-					slog.Error("[Stream.handle] send pong to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
-				}
-				return false
-			}
-			if this.c.PingPongFunc != nil {
-				this.c.PingPongFunc(p)
-			}
-			return true
-		case opcode.IsPong():
-			if len(data) != 8 {
-				if p.peertype == _PEER_CLIENT {
-					slog.Error("[Stream.handle] client pong msg format wrong", slog.String("cip", p.c.RemoteAddr().String()))
-				} else {
-					slog.Error("[Stream.handle] server pong msg format wrong", slog.String("sip", p.c.RemoteAddr().String()))
-				}
-				return false
-			}
-			sendtime := binary.BigEndian.Uint64(data)
-			p.lastactive.Store(time.Now().UnixNano())
-			p.netlag.Store(p.lastactive.Load() - int64(sendtime))
-			if p.netlag.Load() < 0 {
-				if p.peertype == _PEER_CLIENT {
-					slog.Error("[Stream.handle] client pong msg broken", slog.String("cip", p.c.RemoteAddr().String()))
-				} else {
-					slog.Error("[Stream.handle] server pong msg broken", slog.String("sip", p.c.RemoteAddr().String()))
-				}
-				return false
-			}
-			if this.c.PingPongFunc != nil {
-				this.c.PingPongFunc(p)
-			}
-			return true
-		default:
-			//close
-			return false
-		}
-	}); e != nil {
-		if p.peertype == _PEER_CLIENT {
-			slog.Error("[Stream.handle] read from client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
-		} else {
-			slog.Error("[Stream.handle] read from server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
-		}
-	}
 }

@@ -17,14 +17,14 @@ func Test_Server(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	serverinstance, _ = NewInstance(&InstanceConfig{
 		HeartprobeInterval: time.Second,
-		RecvIdleTimeout:    30 * time.Second, //30s
-		TcpC:               &TcpConfig{
-			//MaxMsgLen: 6553500,
-		},
-		VerifyFunc:   serverhandleVerify,
-		OnlineFunc:   serverhandleonline,
-		UserdataFunc: serverhandleuserdata,
-		OfflineFunc:  serverhandleoffline,
+		ConnectTimeout:     time.Second,
+		ReadTimeout:        time.Second,
+		WriteTimeout:       time.Second,
+		IdleTimeout:        30 * time.Second, //30s
+		VerifyFunc:         serverhandleVerify,
+		OnlineFunc:         serverhandleonline,
+		UserdataFunc:       serverhandleuserdata,
+		OfflineFunc:        serverhandleoffline,
 	})
 	go serverinstance.StartServer("127.0.0.1:9234", nil)
 	go func() {

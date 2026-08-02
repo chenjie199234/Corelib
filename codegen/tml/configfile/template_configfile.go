@@ -8,6 +8,9 @@ import (
 const source = `{
 	"raw_server":{
 		"connect_timeout":"500ms",
+		"read_timeout":"1s",
+		"write_timeout":"1s",
+		"idle_timeout":"0",
 		"heart_probe":"10s",
 		"group_num":100,
 		"certs":{
@@ -16,7 +19,7 @@ const source = `{
 	"cgrpc_server":{
 		"connect_timeout":"500ms",
 		"idle_timeout":"0",
-		"global_timeout":"500ms",
+		"default_handler_timeout":"500ms",
 		"heart_probe":"10s",
 		"certs":{
 		}
@@ -24,28 +27,32 @@ const source = `{
 	"cgrpc_client":{
 		"connect_timeout":"500ms",
 		"idle_timeout":"0",
-		"global_timeout":"0",
+		"default_handler_timeout":"0",
 		"heart_probe":"10s"
 	},
 	"crpc_server":{
 		"connect_timeout":"500ms",
+		"read_timeout":"1s",
+		"write_timeout":"1s",
 		"idle_timeout":"0",
-		"global_timeout":"500ms",
+		"default_handler_timeout":"500ms",
 		"heart_probe":"10s",
 		"certs":{
 		}
 	},
 	"crpc_client":{
 		"connect_timeout":"500ms",
+		"read_timeout":"1s",
+		"write_timeout":"1s",
 		"idle_timeout":"0",
-		"global_timeout":"0",
+		"default_handler_timeout":"0",
 		"heart_probe":"10s"
 	},
 	"web_server":{
 		"wait_close_mode":0,
 		"wait_close_time":"1s",
-		"connect_timeout":"500ms",
-		"global_timeout":"500ms",
+		"read_timeout":"500ms",
+		"default_handler_timeout":"500ms",
 		"idle_timeout":"5s",
 		"max_request_header":4096,
 		"cors_allowed_origins":["*"],
@@ -59,7 +66,7 @@ const source = `{
 	},
 	"web_client":{
 		"connect_timeout":"500ms",
-		"global_timeout":"0",
+		"default_handler_timeout":"0",
 		"idle_timeout":"5s",
 		"max_response_header":4096
 	},
@@ -75,6 +82,7 @@ const source = `{
 			"replica_set":"",
 			"max_open":256,
 			"max_conn_idletime":"5m",
+			"io_timeout":3s,
 			"dial_timeout":"250ms"
 		}
 	},
@@ -138,7 +146,7 @@ const app = `{
 	},
 	"web_path_rewrite":{
 		"GET":{
-			"/origin/url":"/{{.}}.exampleservice/examplemethod"
+			"/example/origin/url":"/{{.}}.exampleservice/examplemethod"
 		}
 	},
 	"handler_rate":{

@@ -5,7 +5,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
@@ -19,18 +18,19 @@ type corelibBalancer struct {
 	lker             *sync.RWMutex
 	version          discover.Version
 	servers          map[string]*ServerForPick //key server addr
-	picker           *picker.Picker
+	picker           atomic.Pointer[picker.Picker]
 	lastResolveError error
 }
 
 func newCorelibBalancer(c *CrpcClient) *corelibBalancer {
-	return &corelibBalancer{
+	b := &corelibBalancer{
 		c:       c,
 		ww:      waitwake.NewWaitWake(),
 		lker:    &sync.RWMutex{},
 		servers: make(map[string]*ServerForPick),
-		picker:  picker.NewPicker(nil),
 	}
+	b.picker.Store(picker.NewPicker(nil))
+	return b
 }
 
 func (b *corelibBalancer) ResolverError(e error) {
@@ -45,7 +45,7 @@ func (b *corelibBalancer) UpdateDiscovery(all map[string]*discover.RegisterData,
 	b.lastResolveError = nil
 	b.lker.Lock()
 	defer func() {
-		if len(b.servers) == 0 || b.picker.ServerLen() > 0 {
+		if len(b.servers) == 0 || b.picker.Load().ServerLen() > 0 {
 			b.ww.Wake("CALL")
 		}
 		//this is only for ReconnectCheck
@@ -145,8 +145,7 @@ func (b *corelibBalancer) RebuildPicker(serveraddr string, OnOff bool) {
 		}
 	}
 	b.lker.RUnlock()
-	newpicker := picker.NewPicker(tmp)
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&b.picker)), unsafe.Pointer(newpicker))
+	b.picker.Store(picker.NewPicker(tmp))
 	b.ww.Wake("SPECIFIC:" + serveraddr)
 	if OnOff {
 		//when online server,wake the block call
@@ -157,11 +156,10 @@ func (b *corelibBalancer) Pick(ctx context.Context) (server *ServerForPick, e er
 	forceaddr, _ := ctx.Value(forceaddrkey{}).(string)
 	refresh := false
 	for {
-		server := (*picker.Picker)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&b.picker)))).Pick(forceaddr)
+		server := b.picker.Load().Pick(forceaddr)
 		if server != nil {
-			if dl, ok := ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
-				//at least 5ms for net lag and server logic
-				server.GetServerPickInfo().Done(false, 0)
+			if dl, ok := ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(time.Millisecond) {
+				//at least ms for net lag and server logic
 				return nil, cerror.ErrDeadlineExceeded
 			}
 			return server.(*ServerForPick), nil
@@ -195,6 +193,7 @@ func (b *corelibBalancer) Pick(ctx context.Context) (server *ServerForPick, e er
 				refresh = true
 			}
 		} else if s.closing.Load() { //the specific server exist but it is closing
+			b.lker.RUnlock()
 			return nil, cerror.ErrNoSpecificserver
 		} else if e := b.ww.Wait(ctx, "SPECIFIC:"+forceaddr, b.c.resolver.Now, b.lker.RUnlock); e != nil { //the specific server exist but is connecting,we need to wait
 			return nil, cerror.Convert(e)

@@ -9,13 +9,14 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	"github.com/chenjie199234/Corelib/container/trie"
 	"github.com/chenjie199234/Corelib/cotel"
 	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/util/ctime"
@@ -37,18 +38,22 @@ type ServerConfig struct {
 	//when server close,server will wait at least this time before close
 	//min 1s,default 1s
 	WaitCloseTime ctime.Duration `json:"wait_close_time"`
-	//the default timeout for every web call,<=0 means no timeout
-	//if specific path's timeout setted by UpdateHandlerTimeout,this specific path will ignore the GlobalTimeout
+	//the default timeout for every web call,<=0 means no default timeout
+	//if specific path's timeout setted by UpdateHandlerTimeout,this specific path will ignore the DefaultHandlerTimeout
 	//the client's deadline will also effect the web call's final deadline
-	GlobalTimeout ctime.Duration `json:"global_timeout"`
-	//time for connection establish(include dial time,handshake time and read http header time)
-	//default 3s
-	ConnectTimeout ctime.Duration `json:"connect_timeout"`
-	//connection will be closed if it is not actived after this time,<=0 means no idletimeout
+	DefaultHandlerTimeout ctime.Duration `json:"default_handler_timeout"`
+	//time for connection establish,tls handshake and read one complete request
+	//this can be used to prevent client's slow send attack
+	//(send a big message,but every time send 1 byte,the connection is alive and works well,attacker can create lots of this kind of connections)
+	//<=0 means no timeout
+	ReadTimeout ctime.Duration `json:"read_timeout"`
+	//time for waiting the next request,it will be reset when starting to read next message
+	//expired without next message,the connection will be closed
+	//<=0 means no timeout
 	IdleTimeout ctime.Duration `json:"idle_timeout"`
 	//min 2048,max 65536,unit byte
 	MaxRequestHeader     uint     `json:"max_request_header"`
-	CorsAllowedOrigins   []string `json:"cors_allowed_origins"`
+	CorsAllowedOrigins   []string `json:"cors_allowed_origins"` //can only support * or specific origin(can start of wildcard '*')
 	CorsAllowedHeaders   []string `json:"cors_allowed_headers"`
 	CorsExposeHeaders    []string `json:"cors_expose_headers"`
 	CorsAllowCredentials bool     `json:"cors_allow_credentials"`
@@ -63,14 +68,13 @@ func (c *ServerConfig) validate() {
 	if c.WaitCloseTime.StdDuration() < time.Second {
 		c.WaitCloseTime = ctime.Duration(time.Second)
 	}
-	if c.ConnectTimeout <= 0 {
-		c.ConnectTimeout = ctime.Duration(3 * time.Second)
+	if c.DefaultHandlerTimeout < 0 {
+		c.DefaultHandlerTimeout = 0
 	}
-	if c.GlobalTimeout < 0 {
-		c.GlobalTimeout = 0
-	}
-	if c.IdleTimeout < 0 {
-		c.IdleTimeout = 0
+	if c.IdleTimeout <= 0 {
+		//if set server's IdleTimeout to 0,the server's ReadTimeout will be used as the server's IdleTimeout
+		//so we need to set it to negative
+		c.IdleTimeout = -1
 	}
 	if c.MaxRequestHeader < 2048 {
 		c.MaxRequestHeader = 2048
@@ -91,7 +95,38 @@ func (c *ServerConfig) validate() {
 					break
 				}
 			}
-			undup[v] = struct{}{}
+			u, e := url.Parse(v)
+			if e != nil {
+				panic("[web.server] origin: " + v + " in cors_allowed_origins in config is invalid")
+			}
+			if u.Scheme != "http" && u.Scheme != "https" {
+				panic("[web.server] origin: " + v + " in cors_allowed_origins in config is invalid,scheme must be http or https")
+			}
+			si := strings.Index(u.Host, "*")
+			ei := strings.LastIndex(u.Host, "*")
+			if si != -1 && si != ei {
+				panic("[web.server] origin: " + v + " in cors_allowed_origins in config is invalid,host can only has one wildcard '*'")
+			}
+			if si != -1 && si != 0 {
+				panic("[web.server] origin: " + v + " in cors_allowed_origins in config is invalid,wildcard '*' in host must be the first char")
+			}
+			if si != -1 && len(u.Host) > 1 && u.Host[1] != '.' && u.Host[1] != ':' {
+				panic("[web.server] origin: " + v + " in cors_allowed_origins in config is invalid,char '.' must followed with wildcard '*'")
+			}
+			if pstr := u.Port(); pstr != "" {
+				port, e := strconv.Atoi(pstr)
+				if e != nil || port < 1 || port > 65535 {
+					panic("[web.server] origin: " + v + " in cors_allowed_origins in config is invalid,port must be a number in [1,65535]")
+				}
+				//remove the default port
+				if u.Scheme == "http" && port == 80 {
+					u.Host = u.Host[:len(u.Host)-3]
+				}
+				if u.Scheme == "https" && port == 443 {
+					u.Host = u.Host[:len(u.Host)-4]
+				}
+			}
+			undup[strings.ToLower(u.Scheme)+"://"+strings.ToLower(u.Host)] = struct{}{}
 		}
 		if undup != nil {
 			c.CorsAllowedOrigins = make([]string, 0, len(undup))
@@ -151,10 +186,8 @@ type WebServer struct {
 	clientnum int32 //without hijacked
 	stop      *graceful.Graceful
 	//this is used to wait the register remove this instance
-	closetimer     *time.Timer
-	s              *http.Server
-	handlerTimeout map[string]map[string]time.Duration //first key method,second key path,value timeout,<=0 means no timeout
-	handlerRewrite map[string]map[string]string        //first key method,second key origin url,value new url
+	closetimer *time.Timer
+	s          *http.Server
 
 	statusCounter metric.Int64Counter
 	timeHistogram metric.Float64Histogram
@@ -188,27 +221,25 @@ func NewWebServer(c *ServerConfig, tlsc *tls.Config) (*WebServer, error) {
 	c.validate()
 	//new server
 	instance := &WebServer{
-		c:              c,
-		tlsc:           tlsc,
-		stop:           graceful.New(),
-		closetimer:     time.NewTimer(0),
-		handlerTimeout: make(map[string]map[string]time.Duration),
-		handlerRewrite: make(map[string]map[string]string),
-		statusCounter:  sCounter,
-		timeHistogram:  tHistogram,
-		tracer:         otel.Tracer("Corelib.web.server", trace.WithInstrumentationVersion(version.String())),
+		c:             c,
+		tlsc:          tlsc,
+		stop:          graceful.New(),
+		closetimer:    time.NewTimer(0),
+		statusCounter: sCounter,
+		timeHistogram: tHistogram,
+		tracer:        otel.Tracer("Corelib.web.server", trace.WithInstrumentationVersion(version.String())),
 	}
 	p := &http.Protocols{}
 	p.SetHTTP2(true)
 	p.SetUnencryptedHTTP2(true)
 	p.SetHTTP1(true)
 	instance.s = &http.Server{
-		ErrorLog:          slog.NewLogLogger(slog.Default().Handler(), slog.LevelInfo),
-		TLSConfig:         tlsc,
-		ReadHeaderTimeout: c.ConnectTimeout.StdDuration(),
-		IdleTimeout:       c.IdleTimeout.StdDuration(),
-		MaxHeaderBytes:    int(c.MaxRequestHeader),
-		Protocols:         p,
+		ErrorLog:       slog.NewLogLogger(slog.Default().Handler(), slog.LevelInfo),
+		TLSConfig:      tlsc,
+		ReadTimeout:    c.ReadTimeout.StdDuration(),
+		IdleTimeout:    c.IdleTimeout.StdDuration(),
+		MaxHeaderBytes: int(c.MaxRequestHeader),
+		Protocols:      p,
 		ConnState: func(c net.Conn, s http.ConnState) {
 			switch s {
 			case http.StateNew:
@@ -231,24 +262,26 @@ func NewWebServer(c *ServerConfig, tlsc *tls.Config) (*WebServer, error) {
 var ErrSrcPathWrong = errors.New("[web.server] src root path wrong")
 var ErrUncompress = errors.New("[web.server] uncompress gzip file in static root path failed")
 
+// after NewRouter must call server.SetRouter to active this router
+// don't forget to update the timeout and rewrite on the new router
 func (s *WebServer) NewRouter() (*Router, error) {
 	router := &Router{
 		s:          s,
 		globalmids: make([]OutsideHandler, 0, 10),
-		getTree:    trie.NewTrie[http.HandlerFunc](),
-		postTree:   trie.NewTrie[http.HandlerFunc](),
-		putTree:    trie.NewTrie[http.HandlerFunc](),
-		patchTree:  trie.NewTrie[http.HandlerFunc](),
-		deleteTree: trie.NewTrie[http.HandlerFunc](),
+		tmpget:     make(map[string]*handler),
+		tmppost:    make(map[string]*handler),
+		tmppatch:   make(map[string]*handler),
+		tmpput:     make(map[string]*handler),
+		tmpdelete:  make(map[string]*handler),
 	}
 	if s.c.SrcRootPath != "" {
 		p, _ := os.Executable()
-		p = filepath.Dir(p)
 		pp, e := filepath.Abs(s.c.SrcRootPath)
 		if e != nil {
 			return nil, ErrSrcPathWrong
 		}
-		if strings.Contains(p, pp) {
+		rel, e := filepath.Rel(pp, p)
+		if e != nil || !strings.HasPrefix(rel, "..") {
 			return nil, ErrSrcPathWrong
 		}
 		for {
@@ -330,9 +363,13 @@ func (s *WebServer) NewRouter() (*Router, error) {
 		return nil
 	}
 */
+
 func (s *WebServer) SetRouter(r *Router) {
+	if r == nil {
+		panic("[web.server] router missing")
+	}
+	r.rebuild()
 	s.s.Handler = r
-	r.printPath()
 }
 
 var ErrServerClosed = errors.New("[web.server] closed")
@@ -352,10 +389,10 @@ func (s *WebServer) StartWebServer(listenaddr string) error {
 	}
 	if e != nil {
 		if e == http.ErrServerClosed {
-			return ErrServerClosed
+			e = ErrServerClosed
 		}
 	}
-	return nil
+	return e
 }
 func (s *WebServer) GetClientNum() int32 {
 	return s.clientnum
@@ -373,74 +410,4 @@ func (s *WebServer) StopWebServer(force bool) {
 		<-s.closetimer.C
 		s.s.Shutdown(context.Background())
 	}
-}
-
-// first key method,second key origin url,value new url
-func (s *WebServer) UpdateHandlerRewrite(rewrite map[string]map[string]string) {
-	//copy
-	tmp := make(map[string]map[string]string)
-	for method, paths := range rewrite {
-		method = strings.ToUpper(method)
-		if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
-			continue
-		}
-		for originurl, newurl := range paths {
-			if _, ok := tmp[method]; !ok {
-				tmp[method] = make(map[string]string)
-			}
-			if len(originurl) == 0 || originurl[0] != '/' {
-				originurl = "/" + originurl
-			}
-			if len(newurl) == 0 || newurl[0] != '/' {
-				newurl = "/" + newurl
-			}
-			tmp[method][originurl] = cleanPath(newurl)
-		}
-	}
-	s.handlerRewrite = tmp
-}
-func (s *WebServer) getHandlerRewrite(oldpath, method string) (newpath string, ok bool) {
-	rewrite := s.handlerRewrite
-	paths, ok := rewrite[method]
-	if !ok {
-		return
-	}
-	newpath, ok = paths[oldpath]
-	return
-}
-
-// first key path,second method,value timeout(if timeout <= 0 means no timeout)
-func (s *WebServer) UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
-	tmp := make(map[string]map[string]time.Duration)
-	for path := range timeout {
-		for method, to := range timeout[path] {
-			if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
-				continue
-			}
-			if path == "" {
-				continue
-			}
-			if path[0] != '/' {
-				path = "/" + path
-			}
-			if _, ok := tmp[method]; !ok {
-				tmp[method] = make(map[string]time.Duration)
-			}
-			tmp[method][path] = to.StdDuration()
-		}
-	}
-	s.handlerTimeout = tmp
-}
-
-func (s *WebServer) getHandlerTimeout(path, method string) time.Duration {
-	timeout := s.handlerTimeout
-	paths, ok := timeout[method]
-	if !ok {
-		return s.c.GlobalTimeout.StdDuration()
-	}
-	t, ok := paths[path]
-	if !ok {
-		return s.c.GlobalTimeout.StdDuration()
-	}
-	return t
 }

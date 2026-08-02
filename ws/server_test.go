@@ -30,14 +30,14 @@ func Test_Server(t *testing.T) {
 			go func() {
 				for {
 					time.Sleep(time.Second)
-					WritePing(c, []byte("server ping"), false)
+					WritePing(c, 0, []byte("server ping"), false)
 				}
 			}()
-			if e := Read(reader, 1024, true, func(opcode OPCode, data []byte) bool {
+			if e := Read(reader, conn, 0, 0, 1024, true, func(opcode OPCode, data []byte) bool {
 				switch {
 				case opcode.IsPing():
 					fmt.Println(string(data))
-					if e := WritePong(conn, data, false); e != nil {
+					if e := WritePong(conn, 0, data, false); e != nil {
 						panic("write pong error:" + e.Error())
 					}
 				case opcode.IsPong():
@@ -52,7 +52,7 @@ func Test_Server(t *testing.T) {
 						fmt.Println(string(data))
 						panic("msg broken")
 					}
-					if e := WriteMsg(conn, data, true, true, false); e != nil {
+					if e := WriteMsg(conn, 0, data, true, true, false); e != nil {
 						panic("write msg error:" + e.Error())
 					}
 				}

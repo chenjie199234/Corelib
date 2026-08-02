@@ -84,7 +84,7 @@ func (c *SSEContext) Recv() (id, event string, data []byte, err error) {
 			if c.retry < 0 {
 				c.retry = 0
 			}
-		case strings.HasPrefix(common.BTS(line), "data: "):
+		case strings.HasPrefix(common.BTS(line), "data:"):
 			tmp := line[5:]
 			if len(tmp) > 0 && tmp[0] == ' ' {
 				tmp = tmp[1:]
@@ -140,9 +140,11 @@ func (c *ServerStreamSSEContext[resptype]) Recv() (string, string, *resptype, er
 		slog.ErrorContext(c.Context, "["+c.cctx.resp.Request.URL.Path+"] read response failed", slog.String("error", e.Error()))
 		return "", "", nil, e
 	}
-	if e := protojson.Unmarshal(data, m); e != nil {
-		slog.ErrorContext(c.Context, "["+c.cctx.resp.Request.URL.Path+"] decode response failed", slog.String("error", e.Error()))
-		return "", "", nil, e
+	if len(data) > 0 {
+		if e := protojson.Unmarshal(data, m); e != nil {
+			slog.ErrorContext(c.Context, "["+c.cctx.resp.Request.URL.Path+"] decode response failed", slog.String("error", e.Error()))
+			return "", "", nil, e
+		}
 	}
 	return id, event, resp.(*resptype), nil
 }

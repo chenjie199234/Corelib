@@ -11,7 +11,6 @@ import (
 	"crypto/tls"
 	"log/slog"
 	"sync/atomic"
-	"unsafe"
 
 	"{{.}}/api"
 	"{{.}}/config"
@@ -22,7 +21,8 @@ import (
 	"github.com/chenjie199234/Corelib/web/mids"
 )
 
-var s *web.WebServer
+var s atomic.Pointer[web.WebServer]
+var r atomic.Pointer[web.Router]
 
 func StartWebServer() {
 	c := config.GetWebServerConfig()
@@ -44,26 +44,26 @@ func StartWebServer() {
 		slog.Error("[xweb] new server failed", slog.String("error",e.Error()))
 		return
 	}
-	//avoid race when build/run in -race mode
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s)), unsafe.Pointer(server))
-	UpdateHandlerTimeout(config.AC.HandlerTimeout)
-	UpdateWebPathRewrite(config.AC.WebPathRewrite)
+	s.Store(server)
 
-	r, e := server.NewRouter()
+	router, e := server.NewRouter()
 	if e != nil {
 		slog.Error("[xweb] new router failed", slog.String("error",e.Error()))
 		return
 	}
+	r.Store(router)
+	UpdateHandlerTimeout(config.AC.HandlerTimeout)
+	UpdateWebPathRewrite(config.AC.WebPathRewrite)
 
 	//this place can register global midwares
-	//r.Use(globalmidwares)
+	//router.Use(globalmidwares)
 
 	//example
-	//api.RegisterExampleWebServer(r, service.SvcExample, mids.AllMids())
+	//api.RegisterExampleWebServer(router, service.SvcExample, mids.AllMids())
 	//you need to register your service here
-	api.RegisterStatusWebServer(r, service.SvcStatus, mids.AllMids())
+	api.RegisterStatusWebServer(router, service.SvcStatus, mids.AllMids())
 
-	server.SetRouter(r)
+	server.SetRouter(router)
 	if e = server.StartWebServer(":8000"); e != nil && e != web.ErrServerClosed {
 		slog.Error("[xweb] start server failed", slog.String("error",e.Error()))
 		return
@@ -73,25 +73,22 @@ func StartWebServer() {
 
 //first key:path,second key:method
 func UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
-	//avoid race when build/run in -race mode
-	tmps := (*web.WebServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
-	if tmps != nil {
-		tmps.UpdateHandlerTimeout(timeout)
+	tmpr := r.Load()
+	if tmpr != nil {
+		tmpr.UpdateHandlerTimeout(timeout)
 	}
 }
 
 //first key:method,second key:origin url,value:new url
 func UpdateWebPathRewrite(rewrite map[string]map[string]string) {
-	//avoid race when build/run in -race mode
-	tmps := (*web.WebServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
-	if tmps != nil {
-		tmps.UpdateHandlerRewrite(rewrite)
+	tmpr := r.Load()
+	if tmpr != nil {
+		tmpr.UpdateHandlerRewrite(rewrite)
 	}
 }
 
 func StopWebServer(force bool) {
-	//avoid race when build/run in -race mode
-	tmps := (*web.WebServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
+	tmps := s.Load()
 	if tmps != nil {
 		tmps.StopWebServer(force)
 	}

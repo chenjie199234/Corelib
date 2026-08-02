@@ -33,14 +33,23 @@ import (
 
 type ClientConfig struct {
 	//the default timeout for every rpc call,<=0 means no timeout
-	//if ctx's Deadline exist and GlobalTimeout > 0,the min(time.Now().Add(GlobalTimeout) ,ctx.Deadline()) will be used as the final deadline
-	//if ctx's Deadline not exist and GlobalTimeout > 0 ,the time.Now().Add(GlobalTimeout) will be used as the final deadline
-	//if ctx's deadline not exist and GlobalTimeout <=0,means no deadline
-	GlobalTimeout ctime.Duration `json:"global_timeout"`
-	//time for connection establich(include dial time,handshake time and verify time)
+	//if ctx's Deadline exist and DefaultHandlerTimeout > 0,the min(time.Now().Add(DefaultHandlerTimeout) ,ctx.Deadline()) will be used as the final deadline
+	//if ctx's Deadline not exist and DefaultHandlerTimeout > 0 ,the time.Now().Add(DefaultHandlerTimeout) will be used as the final deadline
+	//if ctx's deadline not exist and DefaultHandlerTimeout <=0,means no deadline
+	DefaultHandlerTimeout ctime.Duration `json:"default_handler_timeout"`
+	//time for connection establich(include dial time,tls handshake time and verify time)
 	//default 3s
 	ConnectTimeout ctime.Duration `json:"connect_timeout"`
-	//connection will be closed if it is not actived after this time,<=0 means no idletimeout,if >0 min is HeartProbe
+	//time for read one complete message,start from read the first byte of the message
+	//<=0 means no timeout
+	ReadTimeout ctime.Duration `json:"read_timeout"`
+	//time for write one piece of the complete message(big message will split to many pieces to send,one piece's max len is 65536)
+	//the connection's write deadline will be resetted every time start to write a piece of data
+	//<=0 means no timeout
+	WriteTimeout ctime.Duration `json:"write_timeout"`
+	//time for waiting the next message,it will be reset when starting to read next message
+	//expired without next message,the connection will be closed
+	//<=0 means no timeout
 	IdleTimeout ctime.Duration `json:"idle_timeout"`
 	//min 1s,default 5s,3 probe missing means disconnect
 	HeartProbe ctime.Duration `json:"heart_probe"`
@@ -108,12 +117,12 @@ func NewCrpcClient(c *ClientConfig, d discover.DI, serverproject, servergroup, s
 		stop: graceful.New(),
 	}
 	instancec := &stream.InstanceConfig{
-		RecvIdleTimeout:    c.IdleTimeout.StdDuration(),
 		HeartprobeInterval: c.HeartProbe.StdDuration(),
-		TcpC: &stream.TcpConfig{
-			ConnectTimeout: c.ConnectTimeout.StdDuration(),
-			MaxMsgLen:      c.MaxMsgLen,
-		},
+		ConnectTimeout:     c.ConnectTimeout.StdDuration(),
+		ReadTimeout:        c.ReadTimeout.StdDuration(),
+		WriteTimeout:       c.WriteTimeout.StdDuration(),
+		IdleTimeout:        c.IdleTimeout.StdDuration(),
+		MaxMsgLen:          c.MaxMsgLen,
 	}
 	//tcp instalce
 	instancec.VerifyFunc = client.verifyfunc
@@ -261,7 +270,7 @@ func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 }
 
 // 'in' and 'encoder' are a pair.the 'encoder' describes how the 'in' data be encoded
-// if 'encoder' is not Encoder_UNKNOWN,means,this call will only send once with the data 'in' and all the Send in handler will fail
+// if 'encoder' is not Encoder_UNKNOWN,means,this call will only send once with the data 'in' and all the ctx.Send in handler will fail
 func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder Encoder, handler func(ctx *CallContext) error) error {
 	if _, ok := Encoder_name[int32(encoder)]; !ok {
 		return cerror.ErrReq
@@ -276,9 +285,9 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 
 	cancelOutSide := ctx.Done() != nil
 
-	if c.c.GlobalTimeout > 0 {
+	if c.c.DefaultHandlerTimeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
+		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.DefaultHandlerTimeout.StdDuration()))
 		defer cancel()
 	}
 	var deadline int64
@@ -292,6 +301,12 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 		tctx, span := c.tracer.Start(ctx, "call crpc", trace.WithSpanKind(trace.SpanKindClient),
 			trace.WithAttributes(attribute.String("path", path), attribute.String("sname", c.serverfullname)))
 		otel.GetTextMapPropagator().Inject(tctx, propagation.MapCarrier(td))
+		var stime int64 //used in metric and balancer
+		if cotel.NeedTrace() {
+			stime = span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+		} else {
+			stime = time.Now().UnixNano()
+		}
 		server, e := c.balancer.Pick(ctx)
 		if e != nil {
 			slog.ErrorContext(ctx, "[crpc.client] pick server failed",
@@ -300,8 +315,14 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 				slog.String("error", e.Error()))
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
-			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			if cotel.NeedMetric() {
+				var etime int64
+				if cotel.NeedTrace() {
+					etime = span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+				} else {
+					etime = time.Now().UnixNano()
+				}
+				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
 			return e
 		}
@@ -321,8 +342,15 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 				//send failed,the server will not get the init header,we can retry this request
 				continue
 			}
-			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			//only record the real call's metric
+			if cotel.NeedMetric() {
+				var etime int64
+				if cotel.NeedTrace() {
+					etime = span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+				} else {
+					etime = time.Now().UnixNano()
+				}
+				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
 			return e
 		}
@@ -355,8 +383,15 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 				//the server is closing or already closed,our init request was ignored,we can retry safely
 				continue
 			}
-			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			//only record the real call's metric
+			if cotel.NeedMetric() {
+				var etime int64
+				if cotel.NeedTrace() {
+					etime = span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+				} else {
+					etime = time.Now().UnixNano()
+				}
+				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
 			return e
 		}
@@ -378,8 +413,14 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 					//send failed,the server will not get the init body,we can retry this request
 					continue
 				}
-				if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-					c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+				if cotel.NeedMetric() {
+					var etime int64
+					if cotel.NeedTrace() {
+						etime = span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+					} else {
+						etime = time.Now().UnixNano()
+					}
+					c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 				}
 				return e
 			}
@@ -428,8 +469,12 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			span.SetStatus(codes.Ok, "")
 		}
 		span.End()
-		etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
-		stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+		var etime int64
+		if cotel.NeedTrace() {
+			etime = span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+		} else {
+			etime = time.Now().UnixNano()
+		}
 		server.GetServerPickInfo().Done(rw.peererror == nil, uint64(etime-stime))
 		if cotel.NeedMetric() {
 			c.recordmetric(path, float64(etime-stime)/1000000.0, rw.peererror != nil)

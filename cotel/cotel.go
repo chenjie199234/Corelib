@@ -37,7 +37,7 @@ import (
 var status atomic.Bool
 var tp *trace.TracerProvider
 var mp *metric.MeterProvider
-var needmetric bool
+var needtrace, needmetric bool
 var promRegister *prometheus.Registry
 
 func Init() error {
@@ -73,8 +73,10 @@ func Init() error {
 	switch traceenv {
 	case "":
 		topts[len(topts)-1] = trace.WithSampler(trace.NeverSample())
+		needtrace = false
 	case "log":
 		topts = append(topts, trace.WithSyncer(&slogTraceExporter{}))
+		needtrace = true
 	case "otlphttp":
 		str1 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")))
 		str2 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")))
@@ -86,6 +88,7 @@ func Init() error {
 			panic("[cotel] create trace otlphttp exporter failed,error: " + e.Error())
 		}
 		topts = append(topts, trace.WithBatcher(exporter))
+		needtrace = true
 	case "otlpgrpc":
 		str1 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")))
 		str2 := strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")))
@@ -97,6 +100,7 @@ func Init() error {
 			panic("[cotel] create trace otlpgrpc exporter failed,error: " + e.Error())
 		}
 		topts = append(topts, trace.WithBatcher(exporter))
+		needtrace = true
 	}
 	tp = trace.NewTracerProvider(topts...)
 	otel.SetTracerProvider(tp)
@@ -181,6 +185,9 @@ func Stop() {
 
 func NeedMetric() bool {
 	return needmetric
+}
+func NeedTrace() bool {
+	return needtrace
 }
 
 func GetPrometheusHandler() http.Handler {

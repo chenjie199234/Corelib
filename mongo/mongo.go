@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/util/ctime"
 
 	gbson "go.mongodb.org/mongo-driver/v2/bson"
@@ -44,11 +46,26 @@ type Config struct {
 	MaxConnIdletime ctime.Duration `json:"max_conn_idletime"`
 	//<=0: default 5s
 	DialTimeout ctime.Duration `json:"dial_timeout"`
-	//<=0: no timeout
-	//the v2 driver's SetSocketTimeout() deleted
-	//the v2 driver's SetTimeout() is a trash,it will ignore the operation's option like MaxWaitTime
-	// IOTimeout ctime.Duration `json:"io_timeout"`
+	//<=0: no timeout,context's deadline > IOTimeout > context without deadline
+	IOTimeout ctime.Duration `json:"io_timeout"`
 }
+
+func (c *Config) clone() *Config {
+	return &Config{
+		MongoName:       c.MongoName,
+		MongoDBSRV:      c.MongoDBSRV,
+		Addrs:           c.Addrs,
+		ReplicaSet:      c.ReplicaSet,
+		AuthDB:          c.AuthDB,
+		UserName:        c.UserName,
+		Password:        c.Password,
+		MaxOpen:         c.MaxOpen,
+		MaxConnIdletime: c.MaxConnIdletime,
+		DialTimeout:     c.DialTimeout,
+		IOTimeout:       c.IOTimeout,
+	}
+}
+
 type Client struct {
 	*gmongo.Client
 }
@@ -56,6 +73,7 @@ type Client struct {
 // if MongoDBSRV is true or tlsc is not nil,the tls will be actived
 // the json tag will be supported
 func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
+	c = c.clone()
 	if len(c.Addrs) == 0 {
 		c.Addrs = []string{"127.0.0.1:27017"}
 	}
@@ -96,42 +114,36 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	} else {
 		opts = opts.SetConnectTimeout(c.DialTimeout.StdDuration())
 	}
-	// if c.IOTimeout > 0 {
-	// opts = opts.SetTimeout(c.IOTimeout.StdDuration())
-	// }
+	if c.AuthDB == "" {
+		c.AuthDB = "admin"
+	}
+	if (c.UserName != "") != (c.Password != "") {
+		return nil, errors.New("username and password must both be empty or not")
+	}
+	if c.IOTimeout > 0 {
+		opts = opts.SetTimeout(c.IOTimeout.StdDuration())
+	}
 	if c.MongoDBSRV {
 		if len(c.Addrs) != 1 || strings.Contains(c.Addrs[0], ":") || strings.Contains(c.Addrs[0], ",") {
 			return nil, errors.New("when mongodb_srv is true,addrs can only contain 1 element and it must be a host without port and scheme")
 		}
 		//start the mongodb+srv mode
 		//this will overwrite the above setting if the dns's TXT records have
+		opts = opts.ApplyURI("mongodb+srv://" + c.Addrs[0])
 		if c.UserName != "" && c.Password != "" {
-			if c.AuthDB != "" {
-				//specific the authSource
-				opts = opts.ApplyURI("mongodb+srv://" + c.UserName + ":" + c.Password + "@" + c.Addrs[0] + "/?authSource=" + c.AuthDB)
-			} else {
-				//use the authSource in dns's TXT records or use the default 'admin'
-				opts = opts.ApplyURI("mongodb+srv://" + c.UserName + ":" + c.Password + "@" + c.Addrs[0])
-			}
-		} else {
-			opts = opts.ApplyURI("mongodb+srv://" + c.Addrs[0])
+			opts = opts.SetAuth(goptions.Credential{
+				AuthSource: c.AuthDB,
+				Username:   c.UserName,
+				Password:   c.Password,
+			})
 		}
 	} else {
-		if len(c.Addrs) == 0 {
-			return nil, errors.New("missing addrs")
-		}
 		opts = opts.SetHosts(c.Addrs)
 		if c.UserName != "" && c.Password != "" {
-			if c.AuthDB == "" {
-				c.AuthDB = "admin"
-			}
 			opts = opts.SetAuth(goptions.Credential{
-				AuthMechanism:           "",
-				AuthMechanismProperties: nil,
-				AuthSource:              c.AuthDB,
-				Username:                c.UserName,
-				Password:                c.Password,
-				PasswordSet:             true,
+				AuthSource: c.AuthDB,
+				Username:   c.UserName,
+				Password:   c.Password,
 			})
 		}
 	}
@@ -144,6 +156,7 @@ func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 		return nil, e
 	}
 	if e = client.Ping(context.Background(), greadpref.Primary()); e != nil {
+		client.Disconnect(context.Background())
 		return nil, e
 	}
 	return &Client{client}, nil
@@ -154,12 +167,14 @@ type monitor struct {
 	sync.Mutex
 	mongoname string
 	spans     map[string]trace.Span
+	tracer    trace.Tracer
 }
 
 func newMonitor(mongoname string) *gevent.CommandMonitor {
 	m := &monitor{
 		mongoname: mongoname,
 		spans:     make(map[string]trace.Span),
+		tracer:    otel.Tracer("Corelib.mongo.client", trace.WithInstrumentationVersion(version.String())),
 	}
 	return &gevent.CommandMonitor{
 		Started:   m.Started,
@@ -172,13 +187,10 @@ func (m *monitor) Started(ctx context.Context, evt *gevent.CommandStartedEvent) 
 		return
 	}
 	hostname, port := peerInfo(evt)
-	_, span := otel.Tracer("Corelib.mongo.client").Start(
-		ctx,
-		"call mongodb",
-		trace.WithSpanKind(trace.SpanKindClient),
+	_, span := m.tracer.Start(ctx, "call mongodb", trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
-			attribute.String("server.name", m.mongoname),
-			attribute.String("server.addr", hostname+":"+strconv.Itoa(port)),
+			attribute.String("sname", m.mongoname),
+			attribute.String("sip", hostname+":"+strconv.Itoa(port)),
 			attribute.String("mongo.db", evt.DatabaseName),
 			attribute.String("mongo.col", colInfo(evt)),
 			attribute.String("mongo.cmd", evt.CommandName),
@@ -214,7 +226,10 @@ func (m *monitor) Finished(evt *gevent.CommandFinishedEvent, err error) {
 }
 
 func colInfo(evt *gevent.CommandStartedEvent) string {
-	elt := evt.Command.Index(0)
+	elt, err := evt.Command.IndexErr(0)
+	if err != nil {
+		return "collection unknown"
+	}
 	if key, err := elt.KeyErr(); err == nil && key == evt.CommandName {
 		var v gbson.RawValue
 		if v, err = elt.ValueErr(); err != nil || v.Type != gbson.TypeString {
@@ -224,15 +239,29 @@ func colInfo(evt *gevent.CommandStartedEvent) string {
 	}
 	return "collection unknown"
 }
+
+// peerInfo will parse the hostname and port from the mongo connection ID.
+//
+// ConnectionID is always formatted by the driver as "<address>[-<connection
+// number>]", so the pooled connection number suffix can be stripped by
+// cutting at the first "[-".
+// See https://github.com/open-telemetry/opentelemetry-go-contrib/issues/9370.
 func peerInfo(evt *gevent.CommandStartedEvent) (hostname string, port int) {
-	hostname = evt.ConnectionID
-	port = 27017
-	if idx := strings.IndexByte(hostname, '['); idx >= 0 {
-		hostname = hostname[:idx]
+	defaultMongoPort := 27017
+	host, _, _ := strings.Cut(evt.ConnectionID, "[-")
+	hostname, portStr, err := net.SplitHostPort(host)
+	if err != nil {
+		// If parsing fails, assume default MongoDB port and return the entire host as hostname
+		hostname = host
+		port = defaultMongoPort
+		return hostname, port
 	}
-	if idx := strings.IndexByte(hostname, ':'); idx >= 0 {
-		port, _ = strconv.Atoi(hostname[idx+1:])
-		hostname = hostname[:idx]
+
+	port, err = strconv.Atoi(portStr)
+	if err != nil || port < 1 {
+		// If port parsing fails, fallback to default MongoDB port
+		port = defaultMongoPort
 	}
+
 	return hostname, port
 }

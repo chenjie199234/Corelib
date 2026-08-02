@@ -22,7 +22,7 @@ import (
 	"github.com/chenjie199234/Corelib/util/ctime"
 )
 
-var s *cgrpc.CGrpcServer
+var s atomic.Pointer[cgrpc.CGrpcServer]
 
 func StartCGrpcServer() {
 	c := config.GetCGrpcServerConfig()
@@ -44,8 +44,7 @@ func StartCGrpcServer() {
 		slog.Error("[xgrpc] new server failed", slog.String("error",e.Error()))
 		return
 	}
-	//avoid race when build/run in -race mode
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s)), unsafe.Pointer(server))
+	s.Store(server)
 	UpdateHandlerTimeout(config.AC.HandlerTimeout)
 
 	//this place can register global midwares
@@ -65,16 +64,14 @@ func StartCGrpcServer() {
 
 //first key:path,second key:method
 func UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
-	//avoid race when build/run in -race mode
-	tmps := (*cgrpc.CGrpcServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
+	tmps := s.Load()
 	if tmps!=nil{
 		tmps.UpdateHandlerTimeout(timeout)
 	}
 }
 
 func StopCGrpcServer(force bool) {
-	//avoid race when build/run in -race mode
-	tmps := (*cgrpc.CGrpcServer)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))
+	tmps := s.Load()
 	if tmps != nil {
 		tmps.StopCGrpcServer(force)
 	}

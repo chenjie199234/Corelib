@@ -12,8 +12,6 @@ import (
 )
 
 type connmng struct {
-	sendidletimeout time.Duration
-	recvidletimeout time.Duration
 	heartprobe      time.Duration
 	groupHeartIndex uint64
 	groups          []*group
@@ -24,21 +22,20 @@ type connmng struct {
 
 type group struct {
 	sync.RWMutex
+	mng   *connmng
 	peers map[string]*Peer
 }
 
-func (g *group) checkheart(hearttimeout, sendidletimeout, recvidletimeout time.Duration, now *time.Time) {
+func (g *group) checkheart(now int64) {
 	g.RLock()
 	for _, p := range g.peers {
-		p.checkheart(hearttimeout, sendidletimeout, recvidletimeout, now)
+		p.checkheart(now)
 	}
 	g.RUnlock()
 }
 
-func newconnmng(groupnum uint16, heartprobe, sendidletimeout, recvidletimeout time.Duration) *connmng {
+func newconnmng(groupnum uint16, heartprobe time.Duration) *connmng {
 	mng := &connmng{
-		sendidletimeout: sendidletimeout,
-		recvidletimeout: recvidletimeout,
 		heartprobe:      heartprobe,
 		groupHeartIndex: rand.Uint64(),
 		groups:          make([]*group, groupnum),
@@ -46,7 +43,7 @@ func newconnmng(groupnum uint16, heartprobe, sendidletimeout, recvidletimeout ti
 		closewait:       &sync.WaitGroup{},
 	}
 	for i := range groupnum {
-		mng.groups[i] = &group{peers: make(map[string]*Peer)}
+		mng.groups[i] = &group{mng: mng, peers: make(map[string]*Peer)}
 	}
 	mng.closewait.Go(func() {
 		for {
@@ -67,8 +64,7 @@ func newconnmng(groupnum uint16, heartprobe, sendidletimeout, recvidletimeout ti
 			}
 			newindex := atomic.AddUint64(&mng.groupHeartIndex, 1)
 			g := mng.groups[newindex%uint64(groupnum)]
-			//give 1/3 heartprobe for net lag
-			go g.checkheart(mng.heartprobe*3+mng.heartprobe/3, mng.sendidletimeout, mng.recvidletimeout, &t)
+			go g.checkheart(t.UnixNano())
 		}
 	}()
 	return mng
@@ -90,6 +86,7 @@ func (m *connmng) AddPeer(p *Peer) error {
 		old := m.peernum.Load()
 		if old < 0 {
 			g.Unlock()
+			p.peergroup = nil
 			return errClosing
 		}
 		if m.peernum.CompareAndSwap(old, old+1) {
@@ -100,6 +97,7 @@ func (m *connmng) AddPeer(p *Peer) error {
 	g.Unlock()
 	return nil
 }
+
 func (m *connmng) DelPeer(p *Peer) {
 	uniqueid := p.GetUniqueID()
 	p.peergroup.Lock()
@@ -113,6 +111,7 @@ func (m *connmng) DelPeer(p *Peer) {
 	default:
 	}
 }
+
 func (m *connmng) GetPeer(uniqueid string) *Peer {
 	if uniqueid == "" {
 		return nil
@@ -163,6 +162,7 @@ func (m *connmng) Stop() {
 	default:
 	}
 }
+
 func (m *connmng) GetPeerNum() int32 {
 	peernum := m.peernum.Load()
 	if peernum >= 0 {
@@ -171,12 +171,15 @@ func (m *connmng) GetPeerNum() int32 {
 		return peernum - math.MinInt32
 	}
 }
+
 func (m *connmng) Finishing() bool {
 	return m.peernum.Load() < 0
 }
+
 func (m *connmng) Finished() bool {
 	return m.peernum.Load() == math.MinInt32
 }
+
 func (m *connmng) RangePeers(block bool, handler func(p *Peer)) {
 	if block {
 		wg := sync.WaitGroup{}

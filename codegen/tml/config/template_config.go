@@ -257,6 +257,21 @@ type RawServerConfig struct {
 	Certs map[string]string $json:"certs"$ //key cert path,value private key path,if this is not empty,tls will be used
 	//time for connection establish(include dial time,handshake time and verify time)
 	ConnectTimeout ctime.Duration $json:"connect_timeout"$
+	//time for read one complete message,start from read the first byte of the message
+	//this can be used to prevent client's slow send attack
+	//(send a big message,but every time send 1 byte,the connection is alive and works well,attacker can create lots of this kind of connections)
+	//<=0 means no timeout
+	ReadTimeout ctime.Duration $json:"read_timeout"$
+	//time for write one piece of the complete message(big message will split to many pieces to send,one piece's max len is 65536)
+	//the connection's write deadline will be resetted every time start to write a piece of data
+	//this can be used to prevent client's slow read attack
+	//(attacker set tcp a small window,and read slowly,this will block the server's Send action,attacker can create lots of this kind of connections)
+	//<=0 means no timeout
+	WriteTimeout ctime.Duration $json:"write_timeout"$
+	//time for waiting the next user message,it will be reset when starting to read next message
+	//expired without next message,the connection will be closed
+	//<=0 means no timeout
+	IdleTimeout ctime.Duration $json:"idle_timeout"$
 	//min 1s,default 5s,3 probe missing means disconnect
 	HeartProbe ctime.Duration $json:"heart_probe"$
 	//min 64k,default 64M

@@ -13,7 +13,7 @@ import (
 
 // Warning!this function is only used for generated code,don't use it in any other place
 func transGrpcError(e error, client bool) error {
-	if e == io.EOF {
+	if e == io.EOF || e == nil {
 		return e
 	}
 	if ee, ok := e.(*cerror.Error); ok {
@@ -96,7 +96,11 @@ func transGrpcError(e error, client bool) error {
 		return cerror.MakeCError(-1, http.StatusInternalServerError, s.Message())
 	default:
 		ee := cerror.Decode(s.Message())
-		ee.SetHttpcode(int32(s.Code()))
+		if ee == nil {
+			ee = cerror.MakeCError(-1, int32(s.Code()), s.Message())
+		} else {
+			ee.SetHttpcode(int32(s.Code()))
+		}
 		return ee
 	}
 }

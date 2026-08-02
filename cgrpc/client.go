@@ -37,14 +37,16 @@ import (
 
 type ClientConfig struct {
 	//the default timeout for every rpc call,<=0 means no timeout
-	//if ctx's Deadline exist and GlobalTimeout > 0,the min(time.Now().Add(GlobalTimeout) ,ctx.Deadline()) will be used as the final deadline
-	//if ctx's Deadline not exist and GlobalTimeout > 0 ,the time.Now().Add(GlobalTimeout) will be used as the final deadline
-	//if ctx's deadline not exist and GlobalTimeout <=0,means no deadline
-	GlobalTimeout ctime.Duration `json:"global_timeout"`
-	//time for connection establich(include dial time,handshake time and verify time)
+	//if ctx's Deadline exist and DefaultHandlerTimeout > 0,the min(time.Now().Add(DefaultHandlerTimeout) ,ctx.Deadline()) will be used as the final deadline
+	//if ctx's Deadline not exist and DefaultHandlerTimeout > 0 ,the time.Now().Add(DefaultHandlerTimeout) will be used as the final deadline
+	//if ctx's deadline not exist and DefaultHandlerTimeout<=0,means no deadline
+	DefaultHandlerTimeout ctime.Duration `json:"default_handler_timeout"`
+	//time for connection establich(include dial time,tls handshake time and verify time)
 	//default 3s
 	ConnectTimeout ctime.Duration `json:"connect_timeout"`
-	//connection will be closed if it is not actived after this time,<=0 means no idletimeout
+	//time for waiting the next message,it will be reset when starting to read next message
+	//expired without next message,the connection will be closed
+	//<=0 means no timeout
 	IdleTimeout ctime.Duration `json:"idle_timeout"`
 	//min 1s,default 5s,3 probe missing means disconnect
 	HeartProbe ctime.Duration `json:"heart_probe"`
@@ -189,6 +191,8 @@ var ClientClosed = errors.New("[cgrpc.client] closed")
 
 type forceaddrkey struct{}
 
+type stimekey struct{}
+
 // forceaddr: most of the time this should be empty
 //
 //	if it is not empty,this request will try to transport to this specific addr's server
@@ -204,9 +208,9 @@ func WithForceAddr(ctx context.Context, forceaddr string) context.Context {
 }
 
 func (c *CGrpcClient) Invoke(ctx context.Context, path string, req, reply any, opts ...grpc.CallOption) error {
-	if c.c.GlobalTimeout > 0 {
+	if c.c.DefaultHandlerTimeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
+		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.DefaultHandlerTimeout.StdDuration()))
 		defer cancel()
 	}
 	gmd := make(map[string]string)
@@ -220,31 +224,43 @@ func (c *CGrpcClient) Invoke(ctx context.Context, path string, req, reply any, o
 		ctx, span := c.tracer.Start(ctx, "call grpc", trace.WithSpanKind(trace.SpanKindClient),
 			trace.WithAttributes(attribute.String("path", path), attribute.String("sname", c.serverfullname)))
 		otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(gmd))
-
+		var stime int64 //used in metric and balancer
+		if cotel.NeedTrace() {
+			stime = span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+		} else {
+			stime = time.Now().UnixNano()
+		}
+		ctx = context.WithValue(ctx, stimekey{}, stime)
 		e := transGrpcError(c.conn.Invoke(gmetadata.NewOutgoingContext(ctx, gmetadata.New(gmd)), path, req, reply), true)
 		if e == nil {
 			return nil
+		}
+		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
+			continue
 		}
 		//the span will be ended at the balancer's pick's Done function
 		//but if pick server failed,the Done function will not be called
 		if span.IsRecording() {
 			span.SetStatus(codes.Error, e.Error())
 			span.End()
-			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			if cotel.NeedMetric() {
+				var etime int64
+				if cotel.NeedTrace() {
+					etime = span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+				} else {
+					etime = time.Now().UnixNano()
+				}
+				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
-		}
-		if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
-			continue
 		}
 		return e
 	}
 }
 
 func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	if c.c.GlobalTimeout > 0 {
+	if c.c.DefaultHandlerTimeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.GlobalTimeout.StdDuration()))
+		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(c.c.DefaultHandlerTimeout.StdDuration()))
 		defer cancel()
 	}
 
@@ -259,6 +275,12 @@ func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path
 		ctx, span := c.tracer.Start(ctx, "call grpc", trace.WithSpanKind(trace.SpanKindClient),
 			trace.WithAttributes(attribute.String("path", path), attribute.String("sname", c.serverfullname)))
 		otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(gmd))
+		var stime int64 //used in metric and balancer
+		if cotel.NeedTrace() {
+			stime = span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+		} else {
+			stime = time.Now().UnixNano()
+		}
 
 		stream, e := c.conn.NewStream(gmetadata.NewOutgoingContext(ctx, gmetadata.New(gmd)), desc, path, opts...)
 		ee := transGrpcError(e, true)
@@ -270,8 +292,14 @@ func (c *CGrpcClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, path
 		if span.IsRecording() {
 			span.SetStatus(codes.Error, ee.Error())
 			span.End()
-			if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
-				c.recordmetric(path, float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, true)
+			if cotel.NeedMetric() {
+				var etime int64
+				if cotel.NeedTrace() {
+					etime = span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+				} else {
+					etime = time.Now().UnixNano()
+				}
+				c.recordmetric(path, float64(etime-stime)/1000000.0, true)
 			}
 		}
 		if cerror.Equal(ee, cerror.ErrServerClosing) || cerror.Equal(ee, cerror.ErrTarget) {

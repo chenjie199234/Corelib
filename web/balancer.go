@@ -5,7 +5,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/discover"
@@ -19,18 +18,19 @@ type corelibBalancer struct {
 	lker             *sync.RWMutex
 	version          discover.Version
 	servers          map[string]*ServerForPick //key server addr
-	picker           *picker.Picker
+	picker           atomic.Pointer[picker.Picker]
 	lastResolveError error
 }
 
 func newCorelibBalancer(c *WebClient) *corelibBalancer {
-	return &corelibBalancer{
+	b := &corelibBalancer{
 		c:       c,
 		ww:      waitwake.NewWaitWake(),
 		lker:    &sync.RWMutex{},
 		servers: make(map[string]*ServerForPick),
-		picker:  picker.NewPicker(nil),
 	}
+	b.picker.Store(picker.NewPicker(nil))
+	return b
 }
 func (b *corelibBalancer) ResolverError(e error) {
 	b.lastResolveError = e
@@ -113,18 +113,16 @@ func (b *corelibBalancer) rebuildpicker() {
 			tmp = append(tmp, server)
 		}
 	}
-	newpicker := picker.NewPicker(tmp)
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&b.picker)), unsafe.Pointer(newpicker))
+	b.picker.Store(picker.NewPicker(tmp))
 }
 func (b *corelibBalancer) Pick(ctx context.Context) (*ServerForPick, error) {
 	forceaddr, _ := ctx.Value(forceaddrkey{}).(string)
 	refresh := false
 	for {
-		server := (*picker.Picker)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&b.picker)))).Pick(forceaddr)
+		server := b.picker.Load().Pick(forceaddr)
 		if server != nil {
-			if dl, ok := ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
-				//at least 5ms for net lag and server logic
-				server.GetServerPickInfo().Done(false, 0)
+			if dl, ok := ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(time.Millisecond) {
+				//at least 1ms for net lag and server logic
 				return nil, cerror.ErrDeadlineExceeded
 			}
 			return server.(*ServerForPick), nil

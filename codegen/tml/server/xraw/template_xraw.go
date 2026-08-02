@@ -11,7 +11,6 @@ import (
 	"crypto/tls"
 	"log/slog"
 	"sync/atomic"
-	"unsafe"
 
 	"{{.}}/config"
 	"{{.}}/service"
@@ -19,7 +18,7 @@ import (
 	"github.com/chenjie199234/Corelib/stream"
 )
 
-var s *stream.Instance
+var s atomic.Pointer[stream.Instance]
 
 func StartRawServer() {
 	c := config.GetRawServerConfig()
@@ -37,17 +36,20 @@ func StartRawServer() {
 		tlsc = &tls.Config{Certificates: certificates}
 	}
 	server, _ := stream.NewInstance(&stream.InstanceConfig{
-		TcpC:               &stream.TcpConfig{ConnectTimeout: c.ConnectTimeout.StdDuration(), MaxMsgLen: c.MaxMsgLen},
 		HeartprobeInterval: c.HeartProbe.StdDuration(),
+		ConnectTimeout: 	c.ConnectTimeout.StdDuration(),
+		ReadTimeout:		c.ReadTimeout.StdDuration(),
+		WriteTimeout:		c.WriteTimeout.StdDuration(),
+		IdleTimeout:		c.IdleTimeout.StdDuration(),
 		GroupNum:           c.GroupNum,
+		MaxMsgLen: 			c.MaxMsgLen,
 		VerifyFunc:         service.SvcRaw.RawVerify,
 		OnlineFunc:         service.SvcRaw.RawOnline,
 		PingPongFunc:       service.SvcRaw.RawPingPong,
 		UserdataFunc:       service.SvcRaw.RawUser,
 		OfflineFunc:        service.SvcRaw.RawOffline,
 	})
-	//avoid race when build/run in -race mode
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s)), unsafe.Pointer(server))
+	s.Store(server)
 
 	service.SvcRaw.SetStreamInstance(server)
 
@@ -59,7 +61,7 @@ func StartRawServer() {
 }
 
 func StopRawServer() {
-	tmps := (*stream.Instance)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s))))//avoid race when build/run in -race mode
+	tmps := s.Load()
 	if tmps != nil {
 		tmps.Stop()
 	}

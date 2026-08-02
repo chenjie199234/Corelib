@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"io"
 	"math"
+	"net"
+	"time"
 )
 
 // 0                   1                   2                   3
@@ -37,12 +39,18 @@ func decodeFirstSecond(reader *bufio.Reader) (fin, rsv1, rsv2, rsv3 bool, opcode
 	}
 	if b&_RSV1 > 0 {
 		rsv1 = true
+		e = ErrProtocol
+		return
 	}
 	if b&_RSV2 > 0 {
 		rsv2 = true
+		e = ErrProtocol
+		return
 	}
 	if b&_RSV3 > 0 {
 		rsv3 = true
+		e = ErrProtocol
+		return
 	}
 	opcode = OPCode(b & 0b00001111)
 	if opcode != _CONTINUE && opcode != _TEXT && opcode != _BINARY && opcode != _CLOSE && opcode != _PING && opcode != _PONG {
@@ -67,19 +75,47 @@ func decodeFirstSecond(reader *bufio.Reader) (fin, rsv1, rsv2, rsv3 bool, opcode
 }
 
 // RFC 6455: all message from client to server must be masked
+//
+// idletimeout will not be refreshed if the message is a control message
+// readtimeout start from read the first byte in this message until the whole message be readed
+//
 // Warning!
 // Don't keep and reuse the []byte data in handler
 // It will be changed when next message coming
 // copy it if you need to keep and reuse
-func Read(reader *bufio.Reader, maxmsglen uint32, mustmask bool, handler func(OPCode, []byte) (readmore bool)) error {
+//
+// example:
+// var conn net.Conn
+// ... get the client conn
+// reader := bufio.NewReader(conn)
+// Read(reader, conn)
+func Read(reader *bufio.Reader, conn net.Conn, readtimeout, idletimeout time.Duration, maxmsglen uint32, mustmask bool, handler func(OPCode, []byte) (readmore bool)) error {
+	//clean first
+	conn.SetReadDeadline(time.Time{})
 	code := _CONTINUE
 	//buf[:8] is a cache,used to read some control bytes
 	//buf[8:] is the real message
 	var buf []byte
+	var idleDeadline time.Time
 	for {
+		if idletimeout > 0 {
+			if idleDeadline.IsZero() {
+				idleDeadline = time.Now().Add(idletimeout)
+			}
+			conn.SetReadDeadline(idleDeadline)
+		} else if readtimeout > 0 {
+			//clean the last message's readtimeout
+			conn.SetReadDeadline(time.Time{})
+		}
 		fin, _, _, _, curcode, mask, payloadlen, e := decodeFirstSecond(reader)
 		if e != nil {
 			return e
+		}
+		if readtimeout > 0 {
+			conn.SetReadDeadline(time.Now().Add(readtimeout))
+		} else if idletimeout > 0 {
+			//clean the idletimeout
+			conn.SetReadDeadline(time.Time{})
 		}
 		if mustmask && !mask {
 			return ErrMsgMask
@@ -156,6 +192,7 @@ func Read(reader *bufio.Reader, maxmsglen uint32, mustmask bool, handler func(OP
 				buf = buf[:8]
 			}
 			code = _CONTINUE
+			idleDeadline = time.Time{}
 		}
 	}
 }

@@ -23,11 +23,11 @@ func Test_Client(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		if e := Read(reader, 65535, false, func(opcode OPCode, data []byte) bool {
+		if e := Read(reader, conn, 0, 0, 65535, false, func(opcode OPCode, data []byte) bool {
 			switch {
 			case opcode.IsPing():
 				fmt.Println("server ping:" + string(data))
-				if e := WritePong(conn, data, true); e != nil {
+				if e := WritePong(conn, 0, data, true); e != nil {
 					panic("write pong error:" + e.Error())
 				}
 			case opcode.IsPong():
@@ -52,7 +52,7 @@ func Test_Client(t *testing.T) {
 			time.Sleep(time.Second)
 			data := bytes.Repeat([]byte("a"), 513)
 			for len(data) > 0 {
-				if e := WritePing(conn, []byte("client ping"), true); e != nil {
+				if e := WritePing(conn, 0, []byte("client ping"), true); e != nil {
 					panic("write ping error:" + e.Error())
 				}
 				var piece []byte
@@ -61,7 +61,7 @@ func Test_Client(t *testing.T) {
 				} else {
 					piece = data
 				}
-				if e := WriteMsg(conn, piece, len(data) <= 32, len(data) == 513, true); e != nil {
+				if e := WriteMsg(conn, 0, piece, len(data) <= 32, len(data) == 513, true); e != nil {
 					panic("write msg error:" + e.Error())
 				}
 				if len(data) > 32 {

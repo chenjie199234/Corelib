@@ -40,7 +40,7 @@ type Config struct {
 	MaxConnIdletime ctime.Duration `json:"max_conn_idletime"`
 	//<=0: default 5s
 	DialTimeout ctime.Duration `json:"dial_timeout"`
-	//<=0: no timeout
+	//<=0: no timeout,context's deadline > IOTimeout > context without deadline
 	IOTimeout ctime.Duration `json:"io_timeout"`
 }
 

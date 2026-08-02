@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -27,9 +28,9 @@ const (
 )
 
 type Peer struct {
+	config         *InstanceConfig
 	uniqueid       string //if this is empty,the uniqueid will be setted with the peer's RemoteAddr(ip:port)
 	blocknotice    chan struct{}
-	selfMaxMsgLen  atomic.Uint32
 	peerMaxMsgLen  atomic.Uint32
 	peergroup      *group
 	status         atomic.Int32 //1 - working,0 - closed
@@ -40,8 +41,6 @@ type Peer struct {
 	peertype       int
 	header         http.Header    //if this is not nil,means this is a websocket peer
 	lastactive     atomic.Int64   //unixnano timestamp
-	recvidlestart  atomic.Int64   //unixnano timestamp
-	sendidlestart  atomic.Int64   //unixnano timestamp
 	netlag         atomic.Int64   //unixnano
 	data           unsafe.Pointer //user data
 	context.Context
@@ -49,9 +48,10 @@ type Peer struct {
 }
 
 // rawconnectaddr is only useful when peertype is _PEER_SERVER,this is the server's raw connect addr
-func newPeer(selfMaxMsgLen uint32, peertype int, rawconnectaddr string) *Peer {
+func newPeer(c *InstanceConfig, peertype int, rawconnectaddr string) *Peer {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &Peer{
+		config:         c,
 		blocknotice:    make(chan struct{}),
 		rawconnectaddr: rawconnectaddr,
 		peertype:       peertype,
@@ -59,17 +59,17 @@ func newPeer(selfMaxMsgLen uint32, peertype int, rawconnectaddr string) *Peer {
 		Context:        ctx,
 		CancelFunc:     cancel,
 	}
-	p.selfMaxMsgLen.Store(selfMaxMsgLen)
 	p.dispatcher <- struct{}{}
 	return p
 }
 
-func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time.Time) {
+// now is the currnet timestamp(unit nanosecond)
+func (p *Peer) checkheart(now int64) {
 	if p.status.Load() != 1 {
 		return
 	}
-	now := nowtime.UnixNano()
-	if now-p.lastactive.Load() > int64(heart) {
+	//give 1/3 heartprobe for net lag
+	if now-p.lastactive.Load() > int64(p.config.HeartprobeInterval*3+p.config.HeartprobeInterval/3) {
 		//heartbeat timeout
 		if p.peertype == _PEER_CLIENT {
 			slog.Error("[Stream.checkheart] heart timeout", slog.String("cip", p.c.RemoteAddr().String()))
@@ -79,31 +79,11 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 		p.c.Close()
 		return
 	}
-	if now-p.sendidlestart.Load() > int64(sendidle) {
-		//send idle timeout
-		if p.peertype == _PEER_CLIENT {
-			slog.Error("[Stream.checkheart] send idle timeout", slog.String("cip", p.c.RemoteAddr().String()))
-		} else {
-			slog.Error("[Stream.checkheart] send idle timeout", slog.String("sip", p.c.RemoteAddr().String()))
-		}
-		p.c.Close()
-		return
-	}
-	if recvidle > 0 && now-p.recvidlestart.Load() > int64(recvidle) {
-		//recv idle timeout
-		if p.peertype == _PEER_CLIENT {
-			slog.Error("[Stream.checkheart] recv idle timeout", slog.String("cip", p.c.RemoteAddr().String()))
-		} else {
-			slog.Error("[Stream.checkheart] recv idle timeout", slog.String("sip", p.c.RemoteAddr().String()))
-		}
-		p.c.Close()
-		return
-	}
 	//send heart probe data
 	go func() {
 		buf := make([]byte, 8)
 		binary.BigEndian.PutUint64(buf, uint64(now))
-		if e := ws.WritePing(p.c, buf, false); e != nil {
+		if e := ws.WritePing(p.c, p.config.WriteTimeout, buf, false); e != nil {
 			if p.peertype == _PEER_CLIENT {
 				slog.Error("[Stream.checkheart] write ping to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 			} else {
@@ -112,8 +92,90 @@ func (p *Peer) checkheart(heart, sendidle, recvidle time.Duration, nowtime *time
 			p.c.Close()
 			return
 		}
-		p.sendidlestart.Store(now)
 	}()
+}
+
+func (p *Peer) handle() {
+	defer func() {
+		p.status.Store(0)
+		p.c.Close()
+		if p.config.OfflineFunc != nil {
+			p.config.OfflineFunc(p)
+		}
+		p.peergroup.mng.DelPeer(p)
+		p.CancelFunc()
+	}()
+	//before handle user data,send first ping,to get the net lag
+	if e := p.SendPing(); e != nil {
+		if p.peertype == _PEER_CLIENT {
+			slog.Error("[Stream.handle] send first ping to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+		} else {
+			slog.Error("[Stream.handle] send first ping to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+		}
+		return
+	}
+	if e := ws.Read(p.cr, p.c, p.config.ReadTimeout, p.config.IdleTimeout, p.config.MaxMsgLen, false, func(opcode ws.OPCode, data []byte) (readmore bool) {
+		switch {
+		case !opcode.IsControl():
+			now := time.Now()
+			p.lastactive.Store(now.UnixNano())
+			p.config.UserdataFunc(p, data)
+			return true
+		case opcode.IsPing():
+			now := time.Now()
+			p.lastactive.Store(now.UnixNano())
+			//write back
+			if p.config.WriteTimeout > 0 {
+				p.c.SetWriteDeadline(now.Add(p.config.WriteTimeout))
+			}
+			if e := ws.WritePong(p.c, 0, data, false); e != nil {
+				if p.peertype == _PEER_CLIENT {
+					slog.Error("[Stream.handle] send pong to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+				} else {
+					slog.Error("[Stream.handle] send pong to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+				}
+				return false
+			}
+			if p.config.PingPongFunc != nil {
+				p.config.PingPongFunc(p)
+			}
+			return true
+		case opcode.IsPong():
+			if len(data) != 8 {
+				if p.peertype == _PEER_CLIENT {
+					slog.Error("[Stream.handle] client pong msg format wrong", slog.String("cip", p.c.RemoteAddr().String()))
+				} else {
+					slog.Error("[Stream.handle] server pong msg format wrong", slog.String("sip", p.c.RemoteAddr().String()))
+				}
+				return false
+			}
+			pingtime := binary.BigEndian.Uint64(data)
+			now := time.Now().UnixNano()
+			p.netlag.Store(now - int64(pingtime))
+			if p.netlag.Load() < 0 {
+				if p.peertype == _PEER_CLIENT {
+					slog.Error("[Stream.handle] client pong msg broken", slog.String("cip", p.c.RemoteAddr().String()))
+				} else {
+					slog.Error("[Stream.handle] server pong msg broken", slog.String("sip", p.c.RemoteAddr().String()))
+				}
+				return false
+			}
+			p.lastactive.Store(now)
+			if p.config.PingPongFunc != nil {
+				p.config.PingPongFunc(p)
+			}
+			return true
+		default:
+			//close
+			return false
+		}
+	}); e != nil {
+		if p.peertype == _PEER_CLIENT {
+			slog.Error("[Stream.handle] read from client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+		} else {
+			slog.Error("[Stream.handle] read from server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+		}
+	}
 }
 
 func (p *Peer) getDispatcher(ctx context.Context) error {
@@ -138,6 +200,7 @@ func (p *Peer) getDispatcher(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
 func (p *Peer) putDispatcher() {
 	if p.status.Load() == 1 {
 		p.dispatcher <- struct{}{}
@@ -149,7 +212,7 @@ func (p *Peer) putDispatcher() {
 type BeforeSend func(*Peer)
 type AfterSend func(*Peer, error)
 
-// SendMessage will return ErrMsgLarge/ErrConnClosed/context.Canceled/context.DeadlineExceeded
+// SendMessage will return ErrMsgLarge/ErrConnClosed/context.Canceled/context.DeadlineExceeded/os.ErrDeadlineExceeded
 // there may be lots of goroutines calling this function at the same time,but only one goroutine can be actived once,other needs to be block and wait
 // the bs(before send) will be called before the caller is ready to send the data(it is not block now)
 // the as(after send) will be called after finish the send
@@ -168,7 +231,10 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 		bs(p)
 	}
 	if len(userdata) <= maxPieceLen {
-		if e := ws.WriteMsg(p.c, userdata, true, true, false); e != nil {
+		if p.config.WriteTimeout > 0 {
+			p.c.SetWriteDeadline(time.Now().Add(p.config.WriteTimeout))
+		}
+		if e := ws.WriteMsg(p.c, 0, userdata, true, true, false); e != nil {
 			if p.peertype == _PEER_CLIENT {
 				slog.ErrorContext(ctx, "[Stream.SendMessage] write to client failed",
 					slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
@@ -180,9 +246,11 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 			if as != nil {
 				as(p, e)
 			}
+			if errors.Is(e, os.ErrDeadlineExceeded) {
+				return os.ErrDeadlineExceeded
+			}
 			return ErrConnClosed
 		}
-		p.sendidlestart.Store(time.Now().UnixNano())
 	} else {
 		for i := 0; i < len(userdata); i += maxPieceLen {
 			var data []byte
@@ -191,7 +259,10 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 			} else {
 				data = userdata[i:]
 			}
-			if e := ws.WriteMsg(p.c, data, i+maxPieceLen >= len(userdata), i == 0, false); e != nil {
+			if p.config.WriteTimeout > 0 {
+				p.c.SetWriteDeadline(time.Now().Add(p.config.WriteTimeout))
+			}
+			if e := ws.WriteMsg(p.c, 0, data, i+maxPieceLen >= len(userdata), i == 0, false); e != nil {
 				if p.peertype == _PEER_CLIENT {
 					slog.ErrorContext(ctx, "[Stream.SendMessage] write to client failed",
 						slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
@@ -203,9 +274,11 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 				if as != nil {
 					as(p, e)
 				}
+				if errors.Is(e, os.ErrDeadlineExceeded) {
+					return os.ErrDeadlineExceeded
+				}
 				return ErrConnClosed
 			}
-			p.sendidlestart.Store(time.Now().UnixNano())
 		}
 	}
 	if as != nil {
@@ -213,14 +286,22 @@ func (p *Peer) SendMessage(ctx context.Context, userdata []byte, bs BeforeSend, 
 	}
 	return nil
 }
+
+// SendPing will return ErrConnClosed/os.ErrDeadlineExceeded
 func (p *Peer) SendPing() error {
 	buf := make([]byte, 8)
 	now := time.Now()
 	binary.BigEndian.PutUint64(buf, uint64(now.UnixNano()))
-	if e := ws.WritePing(p.c, buf, false); e != nil {
-		return e
+	if p.config.WriteTimeout > 0 {
+		//reset the write deadline
+		p.c.SetWriteDeadline(now.Add(p.config.WriteTimeout))
 	}
-	p.sendidlestart.Store(now.UnixNano())
+	if e := ws.WritePing(p.c, 0, buf, false); e != nil {
+		if errors.Is(e, os.ErrDeadlineExceeded) {
+			return os.ErrDeadlineExceeded
+		}
+		return ErrConnClosed
+	}
 	return nil
 }
 

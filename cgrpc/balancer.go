@@ -6,7 +6,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/cerror"
 	"github.com/chenjie199234/Corelib/cotel"
@@ -92,8 +91,8 @@ func (b *balancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptio
 		ww:      waitwake.NewWaitWake(),
 		lker:    &sync.RWMutex{},
 		servers: make(map[string]*ServerForPick),
-		picker:  picker.NewPicker(nil),
 	}
+	b.c.balancer.picker.Store(picker.NewPicker(nil))
 	cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: b.c.balancer})
 	return b.c.balancer
 }
@@ -108,7 +107,7 @@ type corelibBalancer struct {
 	ww               *waitwake.WaitWake
 	lker             *sync.RWMutex
 	servers          map[string]*ServerForPick
-	picker           *picker.Picker
+	picker           atomic.Pointer[picker.Picker]
 	lastResolveError error
 }
 
@@ -120,7 +119,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 		if len(b.servers) == 0 {
 			b.ww.Wake("CALL")
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: b})
-		} else if b.picker.ServerLen() > 0 {
+		} else if b.picker.Load().ServerLen() > 0 {
 			b.ww.Wake("CALL")
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: b})
 		} else {
@@ -167,7 +166,7 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 					defer func() {
 						if len(b.servers) == 0 {
 							b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: b})
-						} else if b.picker.ServerLen() > 0 {
+						} else if b.picker.Load().ServerLen() > 0 {
 							b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: b})
 						} else {
 							b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: b})
@@ -260,7 +259,9 @@ func (b *corelibBalancer) UpdateClientConnState(ss balancer.ClientConnState) err
 }
 
 func (b *corelibBalancer) ResolverError(e error) {
+	b.lker.Lock()
 	b.lastResolveError = e
+	b.lker.Unlock()
 	b.ww.Wake("CALL")
 }
 
@@ -274,8 +275,10 @@ func (b *corelibBalancer) Close() {
 		slog.Info("[cgrpc.client] offline", slog.String("sname", b.c.serverfullname), slog.String("sip", server.addr))
 	}
 	b.servers = make(map[string]*ServerForPick)
+	b.lker.Lock()
 	b.lastResolveError = cerror.ErrClientClosing
-	b.picker = picker.NewPicker(nil)
+	b.lker.Unlock()
+	b.picker.Store(picker.NewPicker(nil))
 	b.ww.Wake("CALL")
 }
 
@@ -294,8 +297,7 @@ func (b *corelibBalancer) rebuildpicker(serveraddr string, OnOff bool) {
 		}
 	}
 	b.lker.RUnlock()
-	newpicker := picker.NewPicker(tmp)
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&b.picker)), unsafe.Pointer(newpicker))
+	b.picker.Store(picker.NewPicker(tmp))
 	b.ww.Wake("SPECIFIC:" + serveraddr)
 	if OnOff {
 		//when online server,wake the block call
@@ -318,14 +320,14 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 		}
 	}()
 	span := trace.SpanFromContext(info.Ctx)
+	stime := info.Ctx.Value(stimekey{}).(int64)
 	forceaddr, _ := info.Ctx.Value(forceaddrkey{}).(string)
 	refresh := false
 	for {
-		server := (*picker.Picker)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&b.picker)))).Pick(forceaddr)
+		server := b.picker.Load().Pick(forceaddr)
 		if server != nil {
-			if dl, ok := info.Ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(5*time.Millisecond) {
-				//at least 5ms for net lag and server logic
-				server.GetServerPickInfo().Done(false, 0)
+			if dl, ok := info.Ctx.Deadline(); ok && dl.UnixNano() <= time.Now().UnixNano()+int64(time.Millisecond) {
+				//at least 1ms for net lag and server logic
 				e = cerror.ErrDeadlineExceeded
 				return
 			}
@@ -339,14 +341,16 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 					span.SetStatus(codes.Ok, "")
 				}
 				span.End()
-				etime := span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
-				stime := span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
-				server.GetServerPickInfo().Done(e == nil, uint64(etime-stime))
-				if cotel.NeedMetric() {
-					b.c.recordmetric(info.FullMethodName, float64(etime-stime)/1000000.0, e != nil)
+				var etime int64
+				if cotel.NeedTrace() {
+					etime = span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+				} else {
+					etime = time.Now().UnixNano()
 				}
-				// monitor.GrpcClientMonitor(b.c.server, "GRPC", info.FullMethodName, e, uint64(span.GetEnd()-span.GetStart()))
+				server.GetServerPickInfo().Done(e == nil, uint64(etime-stime))
 				if cerror.Equal(e, cerror.ErrServerClosing) || cerror.Equal(e, cerror.ErrTarget) {
+					//server will not handle this call,we can retry this request
+					//the retry will happened in Client's Invoke or NewStream function
 					if !server.(*ServerForPick).closing.Swap(true) {
 						//set the lowest pick priority
 						server.(*ServerForPick).Pickinfo.SetDiscoverServerOffline(0)
@@ -355,6 +359,9 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 						//triger discover
 						b.c.resolver.Now()
 					}
+				} else if cotel.NeedMetric() {
+					//only record the real call's metric
+					b.c.recordmetric(info.FullMethodName, float64(etime-stime)/1000000.0, e != nil)
 				}
 				b.c.stop.DoneOne()
 			}
@@ -362,7 +369,9 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 		}
 		if forceaddr == "" {
 			if refresh {
+				b.lker.RLock()
 				e = b.lastResolveError
+				b.lker.RUnlock()
 				if e == nil {
 					e = cerror.ErrNoserver
 				}
@@ -391,8 +400,8 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 		s, ok := b.servers[forceaddr]
 		if !ok { //the specific server not exist
 			if refresh {
-				b.lker.RUnlock()
 				e = b.lastResolveError
+				b.lker.RUnlock()
 				if e == nil {
 					e = cerror.ErrNoSpecificserver
 				}
@@ -404,6 +413,7 @@ func (b *corelibBalancer) Pick(info balancer.PickInfo) (pickinfo balancer.PickRe
 				refresh = true
 			}
 		} else if s.closing.Load() { //the specific server exist but it is closing
+			b.lker.RUnlock()
 			e = cerror.ErrNoSpecificserver
 			return
 		} else if err := b.ww.Wait(info.Ctx, "SPECIFIC:"+forceaddr, b.c.resolver.Now, b.lker.RUnlock); err != nil { //the specific server exist but is connecting,we need to wait

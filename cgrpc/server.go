@@ -41,11 +41,13 @@ type ServerConfig struct {
 	//the default timeout for every rpc call,<=0 means no timeout
 	//if specific path's timeout setted by UpdateHandlerTimeout,this specific path will ignore the GlobalTimeout
 	//the client's deadline will also effect the rpc call's final deadline
-	GlobalTimeout ctime.Duration `json:"global_timeout"`
-	//time for connection establish(include dial time,handshake time and verify time)
+	DefaultHandlerTimeout ctime.Duration `json:"default_handler_timeout"`
+	//time for connection establish(include dial time,tls handshake time and verify time)
 	//default 3s
 	ConnectTimeout ctime.Duration `json:"connect_timeout"`
-	//connection will be closed if it is not actived after this time,<=0 means no idletimeout
+	//time for waiting the next message,it will be reset when starting to read next message
+	//expired without next message,the connection will be closed
+	//<=0 means no timeout
 	IdleTimeout ctime.Duration `json:"idle_timeout"`
 	//min 1s,default 5s,3 probe missing means disconnect
 	HeartProbe ctime.Duration `json:"heart_probe"`
@@ -78,7 +80,7 @@ type CGrpcServer struct {
 	server         *grpc.Server
 	statshandler   *sStatsHandler
 	services       map[string]*grpc.ServiceDesc
-	handlerTimeout map[string]time.Duration
+	handlerTimeout atomic.Pointer[map[string]time.Duration]
 
 	statusCounter metric.Int64Counter
 	timeHistogram metric.Float64Histogram
@@ -109,14 +111,13 @@ func NewCGrpcServer(c *ServerConfig, tlsc *tls.Config) (*CGrpcServer, error) {
 	}
 	c.validate()
 	serverinstance := &CGrpcServer{
-		c:              c,
-		global:         make([]OutsideHandler, 0),
-		statshandler:   &sStatsHandler{},
-		services:       make(map[string]*grpc.ServiceDesc),
-		handlerTimeout: make(map[string]time.Duration),
-		statusCounter:  sCounter,
-		timeHistogram:  tHistogram,
-		tracer:         otel.Tracer("Corelib.cgrpc.server", trace.WithInstrumentationVersion(version.String())),
+		c:             c,
+		global:        make([]OutsideHandler, 0),
+		statshandler:  &sStatsHandler{},
+		services:      make(map[string]*grpc.ServiceDesc),
+		statusCounter: sCounter,
+		timeHistogram: tHistogram,
+		tracer:        otel.Tracer("Corelib.cgrpc.server", trace.WithInstrumentationVersion(version.String())),
 	}
 	opts := make([]grpc.ServerOption, 0, 10)
 	opts = append(opts, grpc.MaxRecvMsgSize(int(c.MaxMsgLen)))
@@ -132,7 +133,7 @@ func NewCGrpcServer(c *ServerConfig, tlsc *tls.Config) (*CGrpcServer, error) {
 	opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{
 		MaxConnectionIdle: c.IdleTimeout.StdDuration(),
 		Time:              c.HeartProbe.StdDuration(),
-		Timeout:           c.HeartProbe.StdDuration() * 3,
+		Timeout:           c.HeartProbe.StdDuration()*3 + c.HeartProbe.StdDuration()/3, //give 1/3 HeartProbe for netlag
 	}))
 	opts = append(opts, grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: time.Minute, PermitWithoutStream: true}))
 	if tlsc != nil {
@@ -176,7 +177,7 @@ func (s *CGrpcServer) StopCGrpcServer(force bool) {
 	}
 }
 
-// first key path,second key method,value timeout(if timeout <= 0 means no timeout)
+// first key path,second key method(must be GRPC),value timeout(if timeout <= 0 means no timeout)
 func (this *CGrpcServer) UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
 	tmp := make(map[string]time.Duration)
 	for path := range timeout {
@@ -193,14 +194,18 @@ func (this *CGrpcServer) UpdateHandlerTimeout(timeout map[string]map[string]ctim
 			tmp[path] = to.StdDuration()
 		}
 	}
-	this.handlerTimeout = tmp
+	this.handlerTimeout.Store(&tmp)
 }
 
 func (this *CGrpcServer) getHandlerTimeout(path string) time.Duration {
-	if t, ok := this.handlerTimeout[path]; ok {
+	tmp := this.handlerTimeout.Load()
+	if tmp == nil {
+		return this.c.DefaultHandlerTimeout.StdDuration()
+	}
+	if t, ok := (*tmp)[path]; ok {
 		return t
 	}
-	return this.c.GlobalTimeout.StdDuration()
+	return this.c.DefaultHandlerTimeout.StdDuration()
 }
 
 // thread unsafe
@@ -208,7 +213,7 @@ func (s *CGrpcServer) Use(globalMids ...OutsideHandler) {
 	s.global = append(s.global, globalMids...)
 }
 
-// thread unsafe
+// thread unsafe,this must be called before StartCGrpcServer
 func (s *CGrpcServer) RegisterHandler(sname, mname string, clientstream, serverstream bool, handlers ...OutsideHandler) {
 	service, ok := s.services[sname]
 	if !ok {
@@ -280,11 +285,26 @@ func (s *CGrpcServer) createwctx(basectx context.Context, path string, sto time.
 			tracedata["Tracestate"] = data[0]
 		}
 	}
-	basectx, span := s.tracer.Start(
-		otel.GetTextMapPropagator().Extract(basectx, wrapmetadata(gmd)),
-		"handle grpc",
-		trace.WithSpanKind(trace.SpanKindServer),
-		trace.WithAttributes(attribute.String("path", path), attribute.String("cname", clientname), attribute.String("cip", peerip)))
+	var span trace.Span
+	if ok {
+		basectx, span = s.tracer.Start(
+			otel.GetTextMapPropagator().Extract(basectx, wrapmetadata(gmd)),
+			"handle grpc",
+			trace.WithSpanKind(trace.SpanKindServer),
+			trace.WithAttributes(attribute.String("path", path), attribute.String("cname", clientname), attribute.String("cip", peerip)))
+	} else {
+		basectx, span = s.tracer.Start(basectx, "handle grpc", trace.WithSpanKind(trace.SpanKindServer),
+			trace.WithAttributes(attribute.String("path", path), attribute.String("cname", clientname), attribute.String("cip", peerip)))
+	}
+
+	var stime int64 //only used in metric
+	if cotel.NeedMetric() {
+		if cotel.NeedTrace() {
+			stime = span.(sdktrace.ReadOnlySpan).StartTime().UnixNano()
+		} else {
+			stime = time.Now().UnixNano()
+		}
+	}
 
 	//metadata
 	var md map[string]string
@@ -322,6 +342,7 @@ func (s *CGrpcServer) createwctx(basectx context.Context, path string, sto time.
 	return &ServerContext{
 		Context: basectx,
 		cancel:  basecancel,
+		stime:   stime,
 		path:    path,
 		peerip:  peerip,
 	}, span, earlyreturn, nil
@@ -344,14 +365,20 @@ func (s *CGrpcServer) handler(wctx *ServerContext, span trace.Span, totalhandler
 			span.SetStatus(codes.Ok, "")
 		}
 		span.End()
-		if ros, ok := span.(sdktrace.ReadOnlySpan); ok && cotel.NeedMetric() {
+		if cotel.NeedMetric() {
+			var etime int64
+			if cotel.NeedTrace() {
+				etime = span.(sdktrace.ReadOnlySpan).EndTime().UnixNano()
+			} else {
+				etime = time.Now().UnixNano()
+			}
 			attr := attribute.String("path", wctx.path)
 			if wctx.e != nil {
 				s.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "error")))
 			} else {
 				s.statusCounter.Add(context.Background(), 1, metric.WithAttributes(attr, attribute.String("status", "ok")))
 			}
-			s.timeHistogram.Record(context.Background(), float64(ros.EndTime().UnixNano()-ros.StartTime().UnixNano())/1000000.0, metric.WithAttributes(attr))
+			s.timeHistogram.Record(context.Background(), float64(etime-wctx.stime)/1000000.0, metric.WithAttributes(attr))
 		}
 	}()
 	for _, handler := range totalhandlers {
@@ -448,20 +475,22 @@ func peerip(ctx context.Context) string {
 		return ""
 	}
 	peerip := ""
-	if ok {
-		if forward := gmd.Get("X-Forwarded-For"); len(forward) > 0 && len(forward[0]) > 0 {
-			peerip = strings.TrimSpace(strings.Split(forward[0], ",")[0])
-		} else if realip := gmd.Get("X-Real-Ip"); len(realip) > 0 && len(realip[0]) > 0 {
-			peerip = strings.TrimSpace(realip[0])
-		}
+	if forward := gmd.Get("X-Forwarded-For"); len(forward) > 0 && len(forward[0]) > 0 {
+		peerip = strings.TrimSpace(strings.Split(forward[0], ",")[0])
+	} else if realip := gmd.Get("X-Real-Ip"); len(realip) > 0 && len(realip[0]) > 0 {
+		peerip = strings.TrimSpace(realip[0])
 	}
 	if peerip == "" {
 		p, ok := peer.FromContext(ctx)
 		if !ok {
 			return ""
 		}
-		remoteaddr := p.Addr.String()
-		peerip = remoteaddr[:strings.LastIndex(remoteaddr, ":")]
+		host, _, e := net.SplitHostPort(p.Addr.String())
+		if e != nil {
+			peerip = p.Addr.String()
+		} else {
+			peerip = host
+		}
 	}
 	return peerip
 }

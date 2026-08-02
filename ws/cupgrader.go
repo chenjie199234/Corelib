@@ -13,13 +13,20 @@ import (
 )
 
 // doesn't support sub protocol and extension
-// ver conn net.Conn
+//
+// example:
+// var conn net.Conn
 // ... get the server conn
 // ... don't forget to set the timeout on the conn
 // reader := bufio.NewReader(conn)
 // Cupgrade(reader, conn)
 func Cupgrade(reader *bufio.Reader, writer net.Conn, host, path string) (header http.Header, e error) {
-	buf := make([]byte, 0, 150+len(host)+len(path))
+	var buf []byte
+	if len(host)+len(path)+150 < 256 {
+		buf = make([]byte, 0, 256)
+	} else {
+		buf = make([]byte, 0, 150+len(host)+len(path))
+	}
 	buf = append(buf, "GET "...)
 	if path == "" {
 		buf = append(buf, "/ HTTP/1.1\r\n"...)
