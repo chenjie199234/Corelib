@@ -67,6 +67,8 @@ func (c *cdb) queryRowContext(ctx context.Context, query string, args ...any) *s
 		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	r := c.db.QueryRowContext(ctx, query, args...)
+	//we don't care about the row's scan error,that's the user's error
+	//we only care about the error like: syntax error,network error ...
 	if r.Err() != nil {
 		span.SetStatus(codes.Error, r.Err().Error())
 	} else {
@@ -285,6 +287,8 @@ func (t *Tx) QueryRowContext(ctx context.Context, query string, args ...any) *sq
 		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	r := t.t.QueryRowContext(ctx, query, args...)
+	//we don't care about the row's scan error,that's the user's error
+	//we only care about the error like: syntax error,network error ...
 	if r.Err() != nil {
 		span.SetStatus(codes.Error, r.Err().Error())
 	} else {
@@ -475,6 +479,8 @@ func (s *Stmt) QueryRowContext(ctx context.Context, args ...any) *sql.Row {
 		span.SetAttributes(attribute.String("mysql.role", "slave"))
 	}
 	r := stmt.QueryRowContext(ctx, args...)
+	//we don't care about the row's scan error,that's the user's error
+	//we only care about the error like: syntax error,network error ...
 	if r.Err() != nil {
 		span.SetStatus(codes.Error, r.Err().Error())
 	} else {
