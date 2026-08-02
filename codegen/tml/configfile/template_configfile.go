@@ -82,7 +82,7 @@ const source = `{
 			"replica_set":"",
 			"max_open":256,
 			"max_conn_idletime":"5m",
-			"io_timeout":3s,
+			"io_timeout":"3s",
 			"dial_timeout":"250ms"
 		}
 	},
