@@ -234,6 +234,7 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 		})
 	}
 	if _, e := client.Ping(context.Background()).Result(); e != nil {
+		client.Close()
 		return nil, e
 	}
 	return client, nil

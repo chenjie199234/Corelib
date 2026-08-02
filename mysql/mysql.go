@@ -8,9 +8,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/util/ctime"
 
 	gmysql "github.com/go-sql-driver/mysql"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Config struct {
@@ -34,6 +37,14 @@ type Config struct {
 	//default utf8mb4_unicode_ci
 	Collation string `json:"collation"`
 	ParseTime bool   `json:"parse_time"`
+	//false: Prepare has no effect.for every Query or Exec,client will assemble the sql and send once to get the result,server needs to analyse‌ every sql
+	//  advantage: only need to send once,reduce the network cost
+	//  disadvantage: server needs to analyse every sql,waste the server's cpu
+	//true: every Query or Exec needs to Prepare sql first,then use the Prepare result(*stmt) to send params to get the Query or Exec result,finally needs to close the Prepare
+	//  advantage: we can call Prepare alone,then keep the Prepare result(*stmt) and reuse it with different params,server only need to analyse sql once,this can reduce the server's cpu
+	//  disadvantage: 1.if you use Query or Exec directly,there are three network cost,one for Prepare,one for send params,one for close,and server still needs to analyse every sql,waste server's cpu
+	//                2.if you use Prepare alone to reuse the Prepare result(*stmt),the *stmt will occupy one connection until it be closed
+	ServerSidePrepare bool `json:"server_side_prepare"`
 	//0: default 100
 	MaxOpen uint16 `json:"max_open"`
 	//<=0: no idletime
@@ -93,14 +104,16 @@ func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 	}
 	gmysqlc.CheckConnLiveness = true
 	gmysqlc.ParseTime = c.ParseTime
+	//driver's default(false) is UsePrepare(true)
+	gmysqlc.InterpolateParams = !c.ServerSidePrepare
 
-	var e error
 	client := &Client{
 		mysqlname: c.MysqlName,
 		master:    make([]*cdb, 0, 1),
 		slave:     make([]*cdb, 0, 5),
 	}
 	lker := &sync.Mutex{}
+	var e error
 	wg := sync.WaitGroup{}
 	wg.Go(func() {
 		tmpc := gmysqlc.Clone()
@@ -112,11 +125,14 @@ func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 		}
 		connector, err := gmysql.NewConnector(tmpc)
 		if err != nil {
+			lker.Lock()
 			e = err
+			lker.Unlock()
 			return
 		}
 		tmpdb := sql.OpenDB(connector)
 		tmpdb.SetMaxOpenConns(int(c.MaxOpen))
+		tmpdb.SetMaxIdleConns(int(c.MaxOpen))
 		tmpdb.SetConnMaxIdleTime(c.MaxConnIdletime.StdDuration())
 		lker.Lock()
 		client.master = append(client.master, &cdb{db: tmpdb, master: true, addr: c.Master.Addr, name: c.MysqlName})
@@ -135,11 +151,14 @@ func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 				}
 				connector, err := gmysql.NewConnector(tmpc)
 				if err != nil {
+					lker.Lock()
 					e = err
+					lker.Unlock()
 					return
 				}
 				tmpdb := sql.OpenDB(connector)
 				tmpdb.SetMaxOpenConns(int(c.MaxOpen))
+				tmpdb.SetMaxIdleConns(int(c.MaxOpen))
 				tmpdb.SetConnMaxIdleTime(c.MaxConnIdletime.StdDuration())
 				lker.Lock()
 				client.slave = append(client.slave, &cdb{db: tmpdb, master: false, addr: addr, name: c.MysqlName})
@@ -153,19 +172,39 @@ func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 	}
 	wg.Go(func() {
 		if err := client.master.PingContext(context.Background()); err != nil {
+			lker.Lock()
 			e = err
+			lker.Unlock()
 		}
 	})
 	wg.Go(func() {
 		if err := client.slave.PingContext(context.Background()); err != nil {
+			lker.Lock()
 			e = err
+			lker.Unlock()
 		}
 	})
 	wg.Wait()
+	if e != nil {
+		wg.Go(func() { client.master.Close() })
+		wg.Go(func() { client.slave.Close() })
+		wg.Wait()
+	} else {
+		tracer := otel.Tracer("Corelib.mysql.client", trace.WithInstrumentationVersion(version.String()))
+		for _, v := range client.master {
+			v.tracer = tracer
+		}
+		for _, v := range client.slave {
+			v.tracer = tracer
+		}
+	}
 	return client, e
 }
 
 func (c *Client) Master() Operator {
+	if len(c.master) == 0 {
+		panic("mysql:" + c.mysqlname + " doesn't exist master")
+	}
 	return c.master
 }
 func (c *Client) Slave() Operator {
@@ -175,16 +214,21 @@ func (c *Client) Slave() Operator {
 	return c.slave
 }
 func (c *Client) PingContext(ctx context.Context) error {
+	lker := sync.Mutex{}
 	var e error
 	wg := &sync.WaitGroup{}
 	wg.Go(func() {
 		if err := c.master.PingContext(ctx); err != nil {
+			lker.Lock()
 			e = err
+			lker.Unlock()
 		}
 	})
 	wg.Go(func() {
 		if err := c.slave.PingContext(ctx); err != nil {
+			lker.Lock()
 			e = err
+			lker.Unlock()
 		}
 	})
 	wg.Wait()

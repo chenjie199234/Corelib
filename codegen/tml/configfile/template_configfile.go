@@ -106,7 +106,8 @@ const source = `{
 			"dial_timeout":"250ms",
 			"charset":"",
 			"collation":"",
-			"parse_time":true
+			"parse_time":true,
+			"server_side_prepare":false
 		}
 	},
 	"redis":{
