@@ -625,8 +625,10 @@ func (o Operator) PrepareContext(ctx context.Context, query string) (*Stmt, erro
 			if stmt == nil {
 				continue
 			}
-			go stmt.Close()
+			s := stmt
+			wg.Go(func() { s.Close() })
 		}
+		wg.Wait()
 		return nil, e
 	}
 	return &Stmt{query: query, stmts: stmts}, nil
