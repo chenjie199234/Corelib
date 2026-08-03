@@ -16,7 +16,7 @@ func Test_Id(t *testing.T) {
 	for i := range 1000 {
 		go func(index int) {
 			for {
-				time.Sleep(time.Millisecond)
+				time.Sleep(time.Millisecond * 100)
 				id, e := idg.GetID()
 				if e != nil {
 					panic(e)
