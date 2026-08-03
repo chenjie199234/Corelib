@@ -21,7 +21,7 @@ import (
 	"github.com/chenjie199234/Corelib/util/ctime"
 )
 
-var s aotmic.Pointer[crpc.CrpcServer]
+var s atomic.Pointer[crpc.CrpcServer]
 
 func StartCrpcServer() {
 	c := config.GetCrpcServerConfig()

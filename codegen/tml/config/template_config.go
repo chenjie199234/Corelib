@@ -407,6 +407,9 @@ func initraw() {
 	if sc.RawServer == nil {
 		sc.RawServer = &RawServerConfig{
 			ConnectTimeout: ctime.Duration(time.Millisecond * 500),
+			ReadTimeout:    ctime.Duration(time.Second),
+			WriteTimeout:   ctime.Duration(time.Second),
+			IdleTimeout:    0,
 			HeartProbe:     ctime.Duration(time.Second * 5),
 		}
 	} else {
@@ -419,18 +422,15 @@ func initgrpcserver() {
 	if sc.CGrpcServer == nil {
 		sc.CGrpcServer = &CGrpcServerConfig{
 			ServerConfig: &cgrpc.ServerConfig{
-				ConnectTimeout: ctime.Duration(time.Millisecond * 500),
-				GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-				HeartProbe:     ctime.Duration(time.Second * 5),
-				IdleTimeout:    0,
+				ConnectTimeout:        ctime.Duration(time.Millisecond * 500),
+				DefaultHandlerTimeout: ctime.Duration(time.Millisecond * 500),
+				HeartProbe:            ctime.Duration(time.Second * 5),
+				IdleTimeout:           0,
 			},
 		}
 	} else {
 		if sc.CGrpcServer.ConnectTimeout <= 0 {
 			sc.CGrpcServer.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
-		}
-		if sc.CGrpcServer.HeartProbe <= 0 {
-			sc.CGrpcServer.HeartProbe = ctime.Duration(time.Second * 5)
 		}
 	}
 }
@@ -438,18 +438,15 @@ func initgrpcclient() {
 	if sc.CGrpcClient == nil {
 		sc.CGrpcClient = &CGrpcClientConfig{
 			ClientConfig: &cgrpc.ClientConfig{
-				ConnectTimeout: ctime.Duration(time.Millisecond * 500),
-				GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-				HeartProbe:     ctime.Duration(time.Second* 5),
-				IdleTimeout:    0,
+				ConnectTimeout:        ctime.Duration(time.Millisecond * 500),
+				DefaultHandlerTimeout: ctime.Duration(time.Millisecond * 500),
+				HeartProbe:            ctime.Duration(time.Second * 5),
+				IdleTimeout:           0,
 			},
 		}
 	} else {
 		if sc.CGrpcClient.ConnectTimeout <= 0 {
 			sc.CGrpcClient.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
-		}
-		if sc.CGrpcClient.HeartProbe <= 0 {
-			sc.CGrpcClient.HeartProbe = ctime.Duration(time.Second * 5)
 		}
 	}
 }
@@ -457,18 +454,17 @@ func initcrpcserver() {
 	if sc.CrpcServer == nil {
 		sc.CrpcServer = &CrpcServerConfig{
 			ServerConfig: &crpc.ServerConfig{
-				ConnectTimeout: ctime.Duration(time.Millisecond * 500),
-				GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-				HeartProbe:     ctime.Duration(time.Second * 5),
-				IdleTimeout:    0,
+				ConnectTimeout:        ctime.Duration(time.Millisecond * 500),
+				DefaultHandlerTimeout: ctime.Duration(time.Millisecond * 500),
+				ReadTimeout:           ctime.Duration(time.Second),
+				WriteTimeout:          ctime.Duration(time.Second),
+				IdleTimeout:           0,
+				HeartProbe:            ctime.Duration(time.Second * 5),
 			},
 		}
 	} else {
 		if sc.CrpcServer.ConnectTimeout <= 0 {
 			sc.CrpcServer.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
-		}
-		if sc.CrpcServer.HeartProbe <= 0 {
-			sc.CrpcServer.HeartProbe = ctime.Duration(time.Second * 5)
 		}
 	}
 }
@@ -476,18 +472,17 @@ func initcrpcclient() {
 	if sc.CrpcClient == nil {
 		sc.CrpcClient = &CrpcClientConfig{
 			ClientConfig: &crpc.ClientConfig{
-				ConnectTimeout: ctime.Duration(time.Millisecond * 500),
-				GlobalTimeout:  ctime.Duration(time.Millisecond * 500),
-				HeartProbe:     ctime.Duration(time.Second * 5),
-				IdleTimeout:    0,
+				ConnectTimeout:        ctime.Duration(time.Millisecond * 500),
+				DefaultHandlerTimeout: ctime.Duration(time.Millisecond * 500),
+				ReadTimeout:           ctime.Duration(time.Second),
+				WriteTimeout:          ctime.Duration(time.Second),
+				IdleTimeout:           0,
+				HeartProbe:            ctime.Duration(time.Second * 5),
 			},
 		}
 	} else {
 		if sc.CrpcClient.ConnectTimeout <= 0 {
 			sc.CrpcClient.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
-		}
-		if sc.CrpcClient.HeartProbe <= 0 {
-			sc.CrpcClient.HeartProbe = ctime.Duration(time.Second * 5)
 		}
 	}
 }
@@ -495,18 +490,18 @@ func initwebserver() {
 	if sc.WebServer == nil {
 		sc.WebServer = &WebServerConfig{
 			ServerConfig: &web.ServerConfig{
-				WaitCloseMode:        0,
-				WaitCloseTime:        ctime.Duration(time.Second),
-				ConnectTimeout:       ctime.Duration(time.Millisecond * 500),
-				GlobalTimeout:        ctime.Duration(time.Millisecond * 500),
-				IdleTimeout:          ctime.Duration(time.Second * 5),
-				MaxRequestHeader:     2048,
-				CorsAllowedOrigins:   []string{"*"},
-				CorsAllowedHeaders:   []string{"*"},
-				CorsExposeHeaders:    []string{"*"},
-				CorsAllowCredentials: false,
-				CorsMaxAge:           ctime.Duration(time.Minute * 30),
-				SrcRootPath:          "./src",
+				WaitCloseMode:         0,
+				WaitCloseTime:         ctime.Duration(time.Second),
+				ReadTimeout:           ctime.Duration(time.Millisecond * 500),
+				DefaultHandlerTimeout: ctime.Duration(time.Millisecond * 500),
+				IdleTimeout:           ctime.Duration(time.Second * 5),
+				MaxRequestHeader:      2048,
+				CorsAllowedOrigins:    []string{"*"},
+				CorsAllowedHeaders:    []string{"*"},
+				CorsExposeHeaders:     []string{"*"},
+				CorsAllowCredentials:  false,
+				CorsMaxAge:            ctime.Duration(time.Minute * 30),
+				SrcRootPath:           "./src",
 			},
 		}
 	} else {
@@ -514,11 +509,8 @@ func initwebserver() {
 			slog.Error("[config.initwebserver] wait_close_mode must be 0 or 1")
 			os.Exit(1)
 		}
-		if sc.WebServer.ConnectTimeout <= 0 {
-			sc.WebServer.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
-		}
-		if sc.WebServer.IdleTimeout <= 0 {
-			sc.WebServer.IdleTimeout = ctime.Duration(time.Second * 5)
+		if sc.WebServer.ReadTimeout <= 0 {
+			sc.WebServer.ReadTimeout = ctime.Duration(time.Millisecond * 500)
 		}
 	}
 }
@@ -526,18 +518,15 @@ func initwebclient() {
 	if sc.WebClient == nil {
 		sc.WebClient = &WebClientConfig{
 			ClientConfig: &web.ClientConfig{
-				ConnectTimeout:    ctime.Duration(time.Millisecond * 500),
-				GlobalTimeout:     ctime.Duration(time.Millisecond * 500),
-				IdleTimeout:       ctime.Duration(time.Second * 5),
-				MaxResponseHeader: 4096,
+				ConnectTimeout:        ctime.Duration(time.Millisecond * 500),
+				DefaultHandlerTimeout: ctime.Duration(time.Millisecond * 500),
+				IdleTimeout:           ctime.Duration(time.Second * 5),
+				MaxResponseHeader:     4096,
 			},
 		}
 	} else {
 		if sc.WebClient.ConnectTimeout <= 0 {
 			sc.WebClient.ConnectTimeout = ctime.Duration(time.Millisecond * 500)
-		}
-		if sc.WebClient.IdleTimeout <= 0 {
-			sc.WebClient.IdleTimeout = ctime.Duration(time.Second * 5)
 		}
 	}
 }

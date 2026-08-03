@@ -22,6 +22,7 @@ import (
 	"github.com/chenjie199234/Corelib/cotel"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/util/common"
+	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/name"
 
@@ -503,7 +504,7 @@ func (r *Router) UpdateHandlerRewrite(rewrite map[string]map[string]string) {
 }
 
 // first key path,second method,value timeout(if timeout <= 0 means no timeout)
-func (r *Router) UpdateHandlerTimeout(timeout map[string]map[string]time.Duration) {
+func (r *Router) UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
 	r.lker.Lock()
 	defer r.lker.Unlock()
 	tmp := make(map[string]map[string]time.Duration)
@@ -514,9 +515,9 @@ func (r *Router) UpdateHandlerTimeout(timeout map[string]map[string]time.Duratio
 		}
 		vv := make(map[string]time.Duration)
 		tmp[method] = vv
-		for url, t := range v {
+		for url, duration := range v {
 			url = cleanPath(url)
-			vv[url] = t
+			vv[url] = duration.StdDuration()
 		}
 	}
 	old := r.handlertimeout

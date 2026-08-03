@@ -11,7 +11,6 @@ import (
 	"crypto/tls"
 	"log/slog"
 	"sync/atomic"
-	"unsafe"
 
 	"{{.}}/api"
 	"{{.}}/config"
