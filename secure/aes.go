@@ -11,39 +11,41 @@ import (
 )
 
 func AesEncrypt(password string, plaintxt []byte) (string, error) {
-	if len(password) > 32 {
-		return "", cerror.ErrPasswordLength
-	}
-	var s []byte
-	if len(password) < 32 {
-		s = Padding(common.STB(password), 32)
-	} else {
-		s = common.STB(password)
-	}
-	block, _ := aes.NewCipher(s)
+	salt := make([]byte, 32)
+	rand.Read(salt)
+	h := GetSha256()
+	h.Write(salt)
+	h.Write(common.STB(password))
+	key := h.Sum(nil)
+	PutSha256(h)
+	block, _ := aes.NewCipher(key)
 	aead, _ := cipher.NewGCM(block)
 	nonce := make([]byte, aead.NonceSize())
 	rand.Read(nonce)
 	ciphertext := aead.Seal(nil, nonce, plaintxt, nil)
-	return hex.EncodeToString(append(nonce, ciphertext...)), nil
+	tmp := make([]byte, len(salt)+len(nonce)+len(ciphertext))
+	copy(tmp, salt)
+	copy(tmp[32:], nonce)
+	copy(tmp[32+len(nonce):], ciphertext)
+	return hex.EncodeToString(tmp), nil
 }
 func AesDecrypt(password string, ciphertxt string) ([]byte, error) {
-	if len(password) > 32 {
-		return nil, cerror.ErrPasswordLength
-	}
 	tmp, e := hex.DecodeString(ciphertxt)
 	if e != nil {
 		return nil, cerror.ErrDataBroken
 	}
-	var s []byte
-	if len(password) < 32 {
-		s = Padding(common.STB(password), 32)
-	} else {
-		s = common.STB(password)
+	if len(tmp) < 32 {
+		return nil, cerror.ErrDataBroken
 	}
-	block, _ := aes.NewCipher(s)
+	h := GetSha256()
+	h.Write(tmp[:32])
+	h.Write(common.STB(password))
+	key := h.Sum(nil)
+	PutSha256(h)
+	tmp = tmp[32:]
+	block, _ := aes.NewCipher(key)
 	aead, _ := cipher.NewGCM(block)
-	if len(tmp) < aead.NonceSize() {
+	if len(tmp) < aead.NonceSize()+aead.Overhead() {
 		return nil, cerror.ErrDataBroken
 	}
 	plaintext, e := aead.Open(nil, tmp[:aead.NonceSize()], tmp[aead.NonceSize():], nil)
