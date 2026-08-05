@@ -38,11 +38,11 @@ type PathRateRule struct {
 	RateType string `json:"rate_type"` //path,token,session
 }
 
-func UpdateRateRedisInstance(c *redis.Client) (old *redis.Client) {
+func UpdateRateRedisInstance(c *redis.Client) {
 	if c == nil {
 		slog.Warn("[rate] redis missing,all rate check will be failed")
 	}
-	return rateinstance.c.Swap(c)
+	rateinstance.c.Store(c)
 }
 
 // key path

@@ -14,11 +14,11 @@ import (
 
 var sessionredis atomic.Pointer[redis.Client]
 
-func UpdateSessionRedisInstance(c *redis.Client) (old *redis.Client) {
+func UpdateSessionRedisInstance(c *redis.Client) {
 	if c == nil {
 		slog.Warn("[session] redis missing,all session event will be failed")
 	}
-	return sessionredis.Swap(c)
+	sessionredis.Store(c)
 }
 
 // return empty means make session failed
