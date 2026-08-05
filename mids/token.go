@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/chenjie199234/Corelib/secure"
@@ -19,10 +20,13 @@ type Token struct {
 	End       uint64 `json:"e"` //timestamp,unit is second
 }
 
-var tokensecret string
+var tokensecret atomic.Value
 
+func init() {
+	tokensecret.Store("")
+}
 func UpdateTokenConfig(secret string) {
-	tokensecret = secret
+	tokensecret.Store(secret)
 }
 
 // return empty means make token failed
@@ -39,7 +43,7 @@ func MakeToken(ctx context.Context, puber, deployenv, runenv, userid, data strin
 		Start:     uint64(start.Unix()),
 		End:       uint64(end.Unix()),
 	})
-	tokenstr, e := secure.AesEncrypt(tokensecret, t)
+	tokenstr, e := secure.AesEncrypt(tokensecret.Load().(string), t)
 	if e != nil {
 		slog.ErrorContext(ctx, "[token.make] failed", slog.String("error", e.Error()))
 		return ""
@@ -47,7 +51,7 @@ func MakeToken(ctx context.Context, puber, deployenv, runenv, userid, data strin
 	return tokenstr
 }
 func VerifyToken(ctx context.Context, tokenstr string) *Token {
-	plaintext, e := secure.AesDecrypt(tokensecret, tokenstr)
+	plaintext, e := secure.AesDecrypt(tokensecret.Load().(string), tokenstr)
 	if e != nil {
 		return nil
 	}

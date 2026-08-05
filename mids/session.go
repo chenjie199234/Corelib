@@ -8,27 +8,23 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/redis"
 )
 
-var sessionredis *redis.Client
+var sessionredis atomic.Pointer[redis.Client]
 
-func UpdateSessionRedisInstance(c *redis.Client) {
+func UpdateSessionRedisInstance(c *redis.Client) (old *redis.Client) {
 	if c == nil {
 		slog.Warn("[session] redis missing,all session event will be failed")
 	}
-	oldp := (*redis.Client)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&sessionredis)), unsafe.Pointer(c)))
-	if oldp != nil {
-		oldp.Close()
-	}
+	return sessionredis.Swap(c)
 }
 
 // return empty means make session failed
 // user should put the return data in web's Session header or metadata's Session field
 func MakeSession(ctx context.Context, userid, data string, expire time.Duration) string {
-	redisclient := sessionredis
+	redisclient := sessionredis.Load()
 	if redisclient == nil {
 		slog.ErrorContext(ctx, "[session.make] redis missing")
 		return ""
@@ -44,7 +40,7 @@ func MakeSession(ctx context.Context, userid, data string, expire time.Duration)
 }
 
 func CleanSession(ctx context.Context, userid string) bool {
-	redisclient := sessionredis
+	redisclient := sessionredis.Load()
 	if redisclient == nil {
 		slog.ErrorContext(ctx, "[session.clean] redis missing")
 		return false
@@ -57,7 +53,7 @@ func CleanSession(ctx context.Context, userid string) bool {
 }
 
 func ExtendSession(ctx context.Context, userid string, expire time.Duration) bool {
-	redisclient := sessionredis
+	redisclient := sessionredis.Load()
 	if redisclient == nil {
 		slog.ErrorContext(ctx, "[session.extend] redis missing")
 		return false
@@ -70,7 +66,7 @@ func ExtendSession(ctx context.Context, userid string, expire time.Duration) boo
 }
 
 func VerifySession(ctx context.Context, sessionstr string) (string, string, bool) {
-	redisclient := sessionredis
+	redisclient := sessionredis.Load()
 	if redisclient == nil {
 		slog.ErrorContext(ctx, "[session.verify] redis missing")
 		return "", "", false

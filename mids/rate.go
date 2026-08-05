@@ -6,21 +6,20 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"unsafe"
 
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/redis"
 )
 
 type rate struct {
-	c     *redis.Client
-	grpc  map[string][][3]any //key path
-	crpc  map[string][][3]any //key path
-	get   map[string][][3]any //key path
-	post  map[string][][3]any //key path
-	put   map[string][][3]any //key path
-	patch map[string][][3]any //key path
-	del   map[string][][3]any //key path
+	c     atomic.Pointer[redis.Client]
+	grpc  atomic.Pointer[map[string][][3]any] //key path
+	crpc  atomic.Pointer[map[string][][3]any] //key path
+	get   atomic.Pointer[map[string][][3]any] //key path
+	post  atomic.Pointer[map[string][][3]any] //key path
+	put   atomic.Pointer[map[string][][3]any] //key path
+	patch atomic.Pointer[map[string][][3]any] //key path
+	del   atomic.Pointer[map[string][][3]any] //key path
 }
 
 var rateinstance *rate
@@ -39,14 +38,11 @@ type PathRateRule struct {
 	RateType string `json:"rate_type"` //path,token,session
 }
 
-func UpdateRateRedisInstance(c *redis.Client) {
+func UpdateRateRedisInstance(c *redis.Client) (old *redis.Client) {
 	if c == nil {
 		slog.Warn("[rate] redis missing,all rate check will be failed")
 	}
-	oldp := (*redis.Client)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&rateinstance.c)), unsafe.Pointer(c)))
-	if oldp != nil {
-		oldp.Close()
-	}
+	return rateinstance.c.Swap(c)
 }
 
 // key path
@@ -65,6 +61,9 @@ func UpdateRateConfig(c MultiPathRateConfigs) {
 			path = "/" + path
 		}
 		for _, pathraterule := range pathraterules {
+			if pathraterule == nil {
+				continue
+			}
 			if pathraterule.RateType != "path" && pathraterule.RateType != "token" && pathraterule.RateType != "session" {
 				slog.Error("[rate] rate config's rate_type must be path/token/session", slog.String("path", path), slog.String("rate_type", pathraterule.RateType))
 				return
@@ -115,17 +114,17 @@ func UpdateRateConfig(c MultiPathRateConfigs) {
 			}
 		}
 	}
-	rateinstance.grpc = grpc
-	rateinstance.crpc = crpc
-	rateinstance.get = get
-	rateinstance.post = post
-	rateinstance.put = put
-	rateinstance.patch = patch
-	rateinstance.del = del
+	rateinstance.grpc.Store(&grpc)
+	rateinstance.crpc.Store(&crpc)
+	rateinstance.get.Store(&get)
+	rateinstance.post.Store(&post)
+	rateinstance.put.Store(&put)
+	rateinstance.patch.Store(&patch)
+	rateinstance.del.Store(&del)
 }
 
 func checkrate(ctx context.Context, infos [][3]any) bool {
-	redisclient := rateinstance.c
+	redisclient := rateinstance.c.Load()
 	if redisclient == nil {
 		slog.ErrorContext(ctx, "[rate] redis missing")
 		return false
@@ -139,7 +138,14 @@ func checkrate(ctx context.Context, infos [][3]any) bool {
 				slog.ErrorContext(ctx, "[rate] missing token when check token's rate,make sure the token midware is before the rate midware")
 				return false
 			}
-			rates[info[0].(string)+"_"+token] = [2]uint64{info[1].(uint64), info[2].(uint64)}
+			if exist, ok := rates[info[0].(string)+"_"+token]; ok {
+				//same rule on the path method and period,use the smaller one
+				if exist[0] > info[1].(uint64) {
+					rates[info[0].(string)+"_"+token] = [2]uint64{info[1].(uint64), info[2].(uint64)}
+				}
+			} else {
+				rates[info[0].(string)+"_"+token] = [2]uint64{info[1].(uint64), info[2].(uint64)}
+			}
 		} else if strings.HasPrefix(info[0].(string), "session_rate") {
 			md := metadata.GetMetadata(ctx)
 			session, ok := md["Session-User"]
@@ -147,7 +153,19 @@ func checkrate(ctx context.Context, infos [][3]any) bool {
 				slog.ErrorContext(ctx, "[rate] missing session when check session's rate,make sure the session midware is before the rate midware")
 				return false
 			}
-			rates[info[0].(string)+"_"+session] = [2]uint64{info[1].(uint64), info[2].(uint64)}
+			if exist, ok := rates[info[0].(string)+"_"+session]; ok {
+				//same rule on the path method and period,use the smaller one
+				if exist[0] > info[1].(uint64) {
+					rates[info[0].(string)+"_"+session] = [2]uint64{info[1].(uint64), info[2].(uint64)}
+				}
+			} else {
+				rates[info[0].(string)+"_"+session] = [2]uint64{info[1].(uint64), info[2].(uint64)}
+			}
+		} else if exist, ok := rates[info[0].(string)]; ok {
+			//same rule on the path method and period,use the smaller one
+			if exist[0] > info[1].(uint64) {
+				rates[info[0].(string)] = [2]uint64{info[1].(uint64), info[2].(uint64)}
+			}
 		} else {
 			rates[info[0].(string)] = [2]uint64{info[1].(uint64), info[2].(uint64)}
 		}
@@ -159,93 +177,120 @@ func checkrate(ctx context.Context, infos [][3]any) bool {
 	return pass
 }
 
-func GrpcRate(ctx context.Context, path string) bool {
-	if rateinstance.grpc == nil {
+// call this func means this path must pass the rate check
+// missing config of this path means can't pass the check
+func GrpcRate(ctx context.Context, path string) (pass bool) {
+	tmp := rateinstance.grpc.Load()
+	if tmp == nil {
 		slog.ErrorContext(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
 		return false
 	}
-	infos, ok := rateinstance.grpc[path]
+	infos, ok := (*tmp)[path]
 	if !ok {
-		//missing config
+		//this path need rate limiter,but we can't find the rate config
 		return false
 	}
 	return checkrate(ctx, infos)
 }
-func CrpcRate(ctx context.Context, path string) bool {
-	if rateinstance.crpc == nil {
+
+// call this func means this path must pass the rate check
+// missing config of this path means can't pass the check
+func CrpcRate(ctx context.Context, path string) (pass bool) {
+	tmp := rateinstance.crpc.Load()
+	if tmp == nil {
 		slog.ErrorContext(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
 		return false
 	}
-	infos, ok := rateinstance.crpc[path]
+	infos, ok := (*tmp)[path]
 	if !ok {
-		//missing config
+		//this path need rate limiter,but we can't find the rate config
 		return false
 	}
 	return checkrate(ctx, infos)
 }
-func HttpGetRate(ctx context.Context, path string) bool {
-	if rateinstance.get == nil {
+
+// call this func means this path must pass the rate check
+// missing config of this path means can't pass the check
+func HttpGetRate(ctx context.Context, path string) (pass bool) {
+	tmp := rateinstance.get.Load()
+	if tmp == nil {
 		slog.ErrorContext(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
 		return false
 	}
-	infos, ok := rateinstance.get[path]
+	infos, ok := (*tmp)[path]
 	if !ok {
-		//missing config
+		//this path need rate limiter,but we can't find the rate config
 		return false
 	}
 	return checkrate(ctx, infos)
 }
-func HttpPostRate(ctx context.Context, path string) bool {
-	if rateinstance.post == nil {
+
+// call this func means this path must pass the rate check
+// missing config of this path means can't pass the check
+func HttpPostRate(ctx context.Context, path string) (pass bool) {
+	tmp := rateinstance.post.Load()
+	if tmp == nil {
 		slog.ErrorContext(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
 		return false
 	}
-	infos, ok := rateinstance.post[path]
+	infos, ok := (*tmp)[path]
 	if !ok {
-		//missing config
+		//this path need rate limiter,but we can't find the rate config
 		return false
 	}
 	return checkrate(ctx, infos)
 }
-func HttpPutRate(ctx context.Context, path string) bool {
-	if rateinstance.put == nil {
+
+// call this func means this path must pass the rate check
+// missing config of this path means can't pass the check
+func HttpPutRate(ctx context.Context, path string) (pass bool) {
+	tmp := rateinstance.put.Load()
+	if tmp == nil {
 		slog.ErrorContext(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
 		return false
 	}
-	infos, ok := rateinstance.put[path]
+	infos, ok := (*tmp)[path]
 	if !ok {
-		//missing config
+		//this path need rate limiter,but we can't find the rate config
 		return false
 	}
 	return checkrate(ctx, infos)
 }
-func HttpPatchRate(ctx context.Context, path string) bool {
-	if rateinstance.patch == nil {
+
+// call this func means this path must pass the rate check
+// missing config of this path means can't pass the check
+func HttpPatchRate(ctx context.Context, path string) (pass bool) {
+	tmp := rateinstance.patch.Load()
+	if tmp == nil {
 		slog.ErrorContext(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
 		return false
 	}
-	infos, ok := rateinstance.patch[path]
+	infos, ok := (*tmp)[path]
 	if !ok {
-		//missing config
+		//this path need rate limiter,but we can't find the rate config
 		return false
 	}
 	return checkrate(ctx, infos)
 }
-func HttpDelRate(ctx context.Context, path string) bool {
-	if rateinstance.del == nil {
+
+// call this func means this path must pass the rate check
+// missing config of this path means can't pass the check
+func HttpDelRate(ctx context.Context, path string) (pass bool) {
+	tmp := rateinstance.del.Load()
+	if tmp == nil {
 		slog.ErrorContext(ctx, "[rate] missing init,please use UpdateRateConfig first")
 		//didn't update the config
 		return false
 	}
-	infos, ok := rateinstance.del[path]
+	infos, ok := (*tmp)[path]
 	if !ok {
-		//missing config
+		//this path need rate limiter,but we can't find the rate config
 		return false
 	}
 	return checkrate(ctx, infos)

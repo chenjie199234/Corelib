@@ -4,16 +4,17 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"sync/atomic"
 )
 
 // key path,value accesskey
-var grpcAccess map[string][]string
-var crpcAccess map[string][]string
-var getAccess map[string][]string
-var postAccess map[string][]string
-var putAccess map[string][]string
-var patchAccess map[string][]string
-var delAccess map[string][]string
+var grpcAccess atomic.Pointer[map[string][]string]
+var crpcAccess atomic.Pointer[map[string][]string]
+var getAccess atomic.Pointer[map[string][]string]
+var postAccess atomic.Pointer[map[string][]string]
+var putAccess atomic.Pointer[map[string][]string]
+var patchAccess atomic.Pointer[map[string][]string]
+var delAccess atomic.Pointer[map[string][]string]
 
 type MultiPathAccessConfigs map[string]SinglePathAccessConfig //map's key:path
 type SinglePathAccessConfig []*PathAccessRule                 //one path can have multi access rule
@@ -38,6 +39,9 @@ func UpdateAccessConfig(c MultiPathAccessConfigs) {
 			path = "/" + path
 		}
 		for _, pathaccessrule := range pathaccessrules {
+			if pathaccessrule == nil {
+				continue
+			}
 			for _, method := range pathaccessrule.Methods {
 				switch strings.ToUpper(strings.TrimSpace(method)) {
 				case "GRPC":
@@ -79,38 +83,38 @@ func UpdateAccessConfig(c MultiPathAccessConfigs) {
 			}
 		}
 	}
-	grpcAccess = tmpgrpc
-	crpcAccess = tmpcrpc
-	getAccess = tmpget
-	postAccess = tmppost
-	putAccess = tmpput
-	patchAccess = tmppatch
-	delAccess = tmpdel
+	grpcAccess.Store(&tmpgrpc)
+	crpcAccess.Store(&tmpcrpc)
+	getAccess.Store(&tmpget)
+	postAccess.Store(&tmppost)
+	putAccess.Store(&tmpput)
+	patchAccess.Store(&tmppatch)
+	delAccess.Store(&tmpdel)
 }
 func VerifyAccessKey(ctx context.Context, method, path, accesskey string) bool {
-	var tmp map[string][]string
+	var tmp *map[string][]string
 	switch strings.ToUpper(method) {
 	case "GRPC":
-		tmp = grpcAccess
+		tmp = grpcAccess.Load()
 	case "CRPC":
-		tmp = crpcAccess
+		tmp = crpcAccess.Load()
 	case "GET":
-		tmp = getAccess
+		tmp = getAccess.Load()
 	case "POST":
-		tmp = postAccess
+		tmp = postAccess.Load()
 	case "PUT":
-		tmp = putAccess
+		tmp = putAccess.Load()
 	case "PATCH":
-		tmp = patchAccess
+		tmp = patchAccess.Load()
 	case "DELETE":
-		tmp = delAccess
+		tmp = delAccess.Load()
 	default:
 		return false
 	}
 	if tmp == nil {
 		return false
 	}
-	accesses, ok := tmp[path]
+	accesses, ok := (*tmp)[path]
 	if !ok {
 		return false
 	}
