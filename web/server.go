@@ -196,7 +196,7 @@ type WebServer struct {
 
 type localport struct{}
 
-// if tlsc is not nil,the tls will be actived
+// if tlsc is not nil,the tls will be activated
 func NewWebServer(c *ServerConfig, tlsc *tls.Config) (*WebServer, error) {
 	if e := cotel.Init(); e != nil {
 		return nil, e

@@ -93,7 +93,7 @@ type client struct {
 	ctxs map[uint64]*ServerContext
 }
 
-// if tlsc is not nil,the tls will be actived
+// if tlsc is not nil,the tls will be activated
 func NewCrpcServer(c *ServerConfig, tlsc *tls.Config) (*CrpcServer, error) {
 	if e := cotel.Init(); e != nil {
 		return nil, e

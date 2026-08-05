@@ -61,7 +61,7 @@ type Client struct {
 	slave     Operator
 }
 
-// if tlsc is not nil,the tls will be actived
+// if tlsc is not nil,the tls will be activated
 func NewMysql(c *Config, tlsc *tls.Config) (*Client, error) {
 	if c.Master == nil || c.Master.Addr == "" {
 		return nil, errors.New("missing master addr in config")

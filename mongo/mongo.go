@@ -70,7 +70,7 @@ type Client struct {
 	*gmongo.Client
 }
 
-// if MongoDBSRV is true or tlsc is not nil,the tls will be actived
+// if MongoDBSRV is true or tlsc is not nil,the tls will be activated
 // the json tag will be supported
 func NewMongo(c *Config, tlsc *tls.Config) (*Client, error) {
 	c = c.clone()

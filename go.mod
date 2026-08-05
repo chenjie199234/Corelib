@@ -5,8 +5,8 @@ go 1.26.5
 require (
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/prometheus/client_golang v1.24.1
-	github.com/redis/go-redis/v9 v9.21.0
-	github.com/shirou/gopsutil/v4 v4.26.6
+	github.com/redis/go-redis/v9 v9.22.0
+	github.com/shirou/gopsutil/v4 v4.26.7
 	go.mongodb.org/mongo-driver/v2 v2.8.0
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.45.0
@@ -32,7 +32,7 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/ebitengine/purego v0.10.0 // indirect
+	github.com/ebitengine/purego v0.10.2 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect

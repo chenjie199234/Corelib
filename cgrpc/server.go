@@ -87,7 +87,7 @@ type CGrpcServer struct {
 	tracer        trace.Tracer
 }
 
-// if tlsc is not nil,the tls will be actived
+// if tlsc is not nil,the tls will be activated
 func NewCGrpcServer(c *ServerConfig, tlsc *tls.Config) (*CGrpcServer, error) {
 	if e := cotel.Init(); e != nil {
 		return nil, e

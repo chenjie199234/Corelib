@@ -83,7 +83,7 @@ type WebClient struct {
 	stop *graceful.Graceful
 }
 
-// if tlsc is not nil,the tls will be actived
+// if tlsc is not nil,the tls will be activated
 func NewWebClient(c *ClientConfig, d discover.DI, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*WebClient, error) {
 	if e := cotel.Init(); e != nil {
 		return nil, e

@@ -74,7 +74,7 @@ type CrpcClient struct {
 	stop *graceful.Graceful
 }
 
-// if tlsc is not nil,the tls will be actived
+// if tlsc is not nil,the tls will be activated
 func NewCrpcClient(c *ClientConfig, d discover.DI, serverproject, servergroup, serverapp string, tlsc *tls.Config) (*CrpcClient, error) {
 	if e := cotel.Init(); e != nil {
 		return nil, e

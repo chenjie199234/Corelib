@@ -23,7 +23,7 @@ var ErrServerClosed = errors.New("[Stream.server] closed")
 // 3.both raw tcp and websocket use websocket's data frame format to communicate with the client
 // 4.websocket need websocket's handshake,raw tcp doesn't need
 // 5.client's message can be masked or not masked,both can be supported
-// 6.if tlsc is not nil,the tls will be actived
+// 6.if tlsc is not nil,the tls will be activated
 func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 	if tlsc != nil {
 		if len(tlsc.Certificates) == 0 && tlsc.GetCertificate == nil && tlsc.GetConfigForClient == nil {
@@ -173,7 +173,7 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 
 // serveraddr: host:port or ip:port
 // 1.both raw tcp and websocket use websocket's data frame format to communicate with the server
-// 2.if tlsc is not nil,the tls will be actived
+// 2.if tlsc is not nil,the tls will be activated
 func (this *Instance) StartClient(serveraddr string, websocket bool, verifydata []byte, tlsc *tls.Config) bool {
 	if 4+uint64(len(verifydata)) > uint64(math.MaxUint32) {
 		slog.Error("[Stream.StartClient] client verify data too large")

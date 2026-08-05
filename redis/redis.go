@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -26,8 +25,6 @@ type Config struct {
 	//	Warning!Sentinel node and Redis node must use the same auth setting and tls setting
 	//cluster: see redis's cluster mode(https://redis.io/docs/reference/cluster-spec/)
 	//ring: see go-redis's ring mode(https://github.com/redis/go-redis)
-	//randomring: this is the ring mode without consistent hash,redis cmds will route randomly
-	//	when connect to multi proxys for one cluster,this mode is useful
 	RedisMode string `json:"redis_mode"`
 	//only support tcp socket,ip:port or host:port
 	Addrs []string `json:"addrs"`
@@ -66,16 +63,11 @@ func (c *Config) clone() *Config {
 }
 
 type Client struct {
+	readwritesplit bool
 	gredis.UniversalClient
 }
 
-type _proxys []string
-
-func (p _proxys) Get(string) string {
-	return p[rand.Intn(len(p))]
-}
-
-// if tlsc is not nil,the tls will be actived
+// if tlsc is not nil,the tls will be activated
 func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 	c = c.clone()
 	if len(c.Addrs) == 0 {
@@ -107,12 +99,12 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 		c.IOTimeout = -1
 	}
 	var client *Client
-	switch c.RedisMode {
+	switch strings.ToLower(c.RedisMode) {
 	case "direct":
 		if len(c.Addrs) != 1 {
 			return nil, errors.New("too many addrs in config for direct mode")
 		}
-		client = &Client{gredis.NewClient(&gredis.Options{
+		rdb := gredis.NewClient(&gredis.Options{
 			ClientName:            c.RedisName,
 			Addr:                  c.Addrs[0],
 			Username:              c.UserName,
@@ -126,12 +118,13 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 			MinIdleConns:          1,
 			ConnMaxIdleTime:       c.MaxConnIdletime.StdDuration(),
 			TLSConfig:             tlsc,
-		})}
+		})
+		client = &Client{c.ReadWriteSplit, rdb}
 	case "sentinel":
 		if c.SentinelMasterName == "" {
 			return nil, errors.New("missing sentinel_master_name in config for sentinel mode")
 		}
-		client = &Client{gredis.NewFailoverClusterClient(&gredis.FailoverOptions{
+		rdb := gredis.NewFailoverClusterClient(&gredis.FailoverOptions{
 			ClientName:            c.RedisName,
 			MasterName:            c.SentinelMasterName,
 			SentinelAddrs:         c.Addrs,
@@ -149,12 +142,13 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 			MinIdleConns:          1,
 			ConnMaxIdleTime:       c.MaxConnIdletime.StdDuration(),
 			TLSConfig:             tlsc,
-		})}
+		})
+		client = &Client{c.ReadWriteSplit, rdb}
 	case "cluster":
 		if len(c.Addrs) == 1 {
 			return nil, errors.New("too few addrs in config for cluster mode")
 		}
-		client = &Client{gredis.NewClusterClient(&gredis.ClusterOptions{
+		rdb := gredis.NewClusterClient(&gredis.ClusterOptions{
 			ClientName:            c.RedisName,
 			Addrs:                 c.Addrs,
 			RouteRandomly:         c.ReadWriteSplit,
@@ -169,7 +163,8 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 			MinIdleConns:          1,
 			ConnMaxIdleTime:       c.MaxConnIdletime.StdDuration(),
 			TLSConfig:             tlsc,
-		})}
+		})
+		client = &Client{c.ReadWriteSplit, rdb}
 	case "ring":
 		if len(c.Addrs) == 1 {
 			return nil, errors.New("too few addrs in config for ring mode")
@@ -178,7 +173,7 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 		for i, addr := range c.Addrs {
 			addrs["node"+strconv.Itoa(i+1)] = addr
 		}
-		client = &Client{gredis.NewRing(&gredis.RingOptions{
+		rdb := gredis.NewRing(&gredis.RingOptions{
 			ClientName:            c.RedisName,
 			Addrs:                 addrs,
 			Username:              c.UserName,
@@ -192,38 +187,14 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 			MinIdleConns:          1,
 			ConnMaxIdleTime:       c.MaxConnIdletime.StdDuration(),
 			TLSConfig:             tlsc,
-		})}
-	case "randomring":
-		if len(c.Addrs) == 1 {
-			return nil, errors.New("too few addrs in config for randomring mode")
-		}
-		addrs := make(map[string]string, len(c.Addrs))
-		for i, addr := range c.Addrs {
-			addrs["node"+strconv.Itoa(i+1)] = addr
-		}
-		client = &Client{gredis.NewRing(&gredis.RingOptions{
-			ClientName:            c.RedisName,
-			Addrs:                 addrs,
-			NewConsistentHash:     func(proxys []string) gredis.ConsistentHash { return _proxys(proxys) },
-			Username:              c.UserName,
-			Password:              c.Password,
-			DialTimeout:           c.DialTimeout.StdDuration(),
-			ReadTimeout:           c.IOTimeout.StdDuration(),
-			WriteTimeout:          c.IOTimeout.StdDuration(),
-			ContextTimeoutEnabled: true,
-			PoolSize:              int(c.MaxOpen),
-			MaxActiveConns:        int(c.MaxOpen),
-			MinIdleConns:          1,
-			ConnMaxIdleTime:       c.MaxConnIdletime.StdDuration(),
-			TLSConfig:             tlsc,
-		})}
+		})
+		client = &Client{false, rdb}
 	default:
 		return nil, errors.New("unknown redis mode")
 	}
 	switch rdb := client.UniversalClient.(type) {
 	case *gredis.Client:
-		opts := rdb.Options()
-		rdb.AddHook(newMonitor(c.RedisName, opts.Addr))
+		rdb.AddHook(newMonitor(c.RedisName, rdb.Options().Addr))
 	case *gredis.ClusterClient:
 		rdb.OnNewNode(func(srdb *gredis.Client) {
 			srdb.AddHook(newMonitor(c.RedisName, srdb.Options().Addr))
@@ -233,11 +204,40 @@ func NewRedis(c *Config, tlsc *tls.Config) (*Client, error) {
 			srdb.AddHook(newMonitor(c.RedisName, srdb.Options().Addr))
 		})
 	}
-	if _, e := client.Ping(context.Background()).Result(); e != nil {
+	if e := client.PingContext(context.Background()); e != nil {
 		client.Close()
 		return nil, e
 	}
 	return client, nil
+}
+
+func (c *Client) PingContext(ctx context.Context) error {
+	switch rdb := c.UniversalClient.(type) {
+	case *gredis.Client:
+		return rdb.Ping(ctx).Err()
+	case *gredis.ClusterClient:
+		if e := rdb.ForEachMaster(ctx, func(ctx context.Context, srdb *gredis.Client) error {
+			return srdb.Ping(ctx).Err()
+		}); e != nil {
+			return e
+		}
+		if c.readwritesplit {
+			if e := rdb.ForEachSlave(ctx, func(ctx context.Context, srdb *gredis.Client) error {
+				return srdb.Ping(ctx).Err()
+			}); e != nil {
+				return e
+			}
+		}
+	case *gredis.Ring:
+		if e := rdb.ForEachShard(ctx, func(ctx context.Context, srdb *gredis.Client) error {
+			return srdb.Ping(ctx).Err()
+		}); e != nil {
+			return e
+		}
+	default:
+		//this is impossible,in NewClient,only these types can be returned
+	}
+	return nil
 }
 
 // only when the redis mode is direct
@@ -290,7 +290,7 @@ func (m *monitor) ProcessHook(hook gredis.ProcessHook) gredis.ProcessHook {
 			trace.WithAttributes(
 				attribute.String("sname", m.redisname),
 				attribute.String("sip", m.addr),
-				attribute.String("redis.cmd", cmd.FullName()),
+				attribute.String("redis.cmd", cmd.Name()),
 			),
 		)
 		e := hook(ctx, cmd)
@@ -307,7 +307,7 @@ func (m *monitor) ProcessPipelineHook(hook gredis.ProcessPipelineHook) gredis.Pr
 	return func(ctx context.Context, cmds []gredis.Cmder) error {
 		tmp := make([]string, 0, len(cmds))
 		for _, cmd := range cmds {
-			tmp = append(tmp, cmd.FullName())
+			tmp = append(tmp, cmd.Name())
 		}
 		_, span := m.tracer.Start(ctx, "call redis", trace.WithSpanKind(trace.SpanKindClient),
 			trace.WithAttributes(
