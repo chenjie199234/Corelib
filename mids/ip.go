@@ -1,37 +1,35 @@
 package mids
 
 import (
-	"math/big"
+	"encoding/binary"
 	"net"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 type ip struct {
-	white     map[string]struct{}
-	whitemask map[uint64]int
-	black     map[string]struct{}
-	blackmask map[uint64]int
+	white atomic.Pointer[whiteblack]
+	black atomic.Pointer[whiteblack]
+}
+type whiteblack struct {
+	nomask  map[string]struct{} //key ipv4
+	hasmask map[uint32]int      //key ipv4,value subnet mask
 }
 
 var ipInstance *ip
 
 func init() {
-	ipInstance = &ip{
-		white:     make(map[string]struct{}),
-		whitemask: make(map[uint64]int),
-		black:     make(map[string]struct{}),
-		blackmask: make(map[uint64]int),
-	}
+	ipInstance = &ip{}
 }
 
 // can only support ipv4
-// can support ipv4 mask
+// can support ipv4 subnet mask
 func UpdateIpConfig(white []string, black []string) {
 	w := make(map[string]struct{})
-	wm := make(map[uint64]int)
+	wm := make(map[uint32]int)
 	b := make(map[string]struct{})
-	bm := make(map[uint64]int)
+	bm := make(map[uint32]int)
 	for _, v := range white {
 		if !CheckIpAndMask(v) {
 			//skip illegal
@@ -42,8 +40,12 @@ func UpdateIpConfig(white []string, black []string) {
 		} else {
 			//has mask
 			mask, _ := strconv.Atoi(ipmask[1])
-			self := big.NewInt(0).SetBytes(net.ParseIP(ipmask[0]).To4()).Uint64()
-			wm[self] = mask
+			if mask == 0 {
+				w[v] = struct{}{}
+			} else {
+				self := binary.BigEndian.Uint32(net.ParseIP(ipmask[0]).To4())
+				wm[self] = mask
+			}
 		}
 	}
 	for _, v := range black {
@@ -56,14 +58,22 @@ func UpdateIpConfig(white []string, black []string) {
 		} else {
 			//has mask
 			mask, _ := strconv.Atoi(ipmask[1])
-			self := big.NewInt(0).SetBytes(net.ParseIP(ipmask[0]).To4()).Uint64()
-			bm[self] = mask
+			if mask == 0 {
+				b[v] = struct{}{}
+			} else {
+				self := binary.BigEndian.Uint32(net.ParseIP(ipmask[0]).To4())
+				bm[self] = mask
+			}
 		}
 	}
-	ipInstance.white = w
-	ipInstance.whitemask = wm
-	ipInstance.black = b
-	ipInstance.blackmask = bm
+	ipInstance.white.Store(&whiteblack{
+		nomask:  w,
+		hasmask: wm,
+	})
+	ipInstance.black.Store(&whiteblack{
+		nomask:  b,
+		hasmask: bm,
+	})
 }
 
 func CheckIpAndMask(ip string) bool {
@@ -73,7 +83,7 @@ func CheckIpAndMask(ip string) bool {
 	ipmask := strings.Split(ip, "/")
 	if len(ipmask) == 2 {
 		mask, e := strconv.Atoi(ipmask[1])
-		if e != nil || mask > 32 || mask <= 0 {
+		if e != nil || mask > 32 || mask < 0 {
 			return false
 		}
 	}
@@ -92,24 +102,47 @@ func CheckIpAndMask(ip string) bool {
 
 // true - in white ip list
 // false - not in white ip list
-func WhiteIP(ip string) bool {
-	return checkip(ipInstance.white, ipInstance.whitemask, ip)
+func WhiteIP(ip string) (pass bool) {
+	w := ipInstance.white.Load()
+	if w == nil {
+		//require white ip check,but the config missing
+		return false
+	}
+	if _, ok := w.nomask[ip]; ok {
+		return true
+	}
+	tmp := net.ParseIP(ip).To4()
+	if tmp == nil {
+		//illegal ip
+		return false
+	}
+	target := binary.BigEndian.Uint32(tmp)
+	for self, mask := range w.hasmask {
+		if (self>>(32-mask))<<(32-mask) == (target>>(32-mask))<<(32-mask) {
+			return true
+		}
+	}
+	return false
 }
 
 // true - in black ip list
 // false - not in black ip list
-func BlackIP(ip string) bool {
-	return checkip(ipInstance.black, ipInstance.blackmask, ip)
-}
-
-// true - in
-// false - not in
-func checkip(nomask map[string]struct{}, mask map[uint64]int, ip string) bool {
-	if _, ok := nomask[ip]; ok {
+func BlackIP(ip string) (block bool) {
+	b := ipInstance.black.Load()
+	if b == nil {
+		//require black ip check,but the config missing
 		return true
 	}
-	for self, mask := range mask {
-		target := big.NewInt(0).SetBytes(net.ParseIP(ip).To4()).Uint64()
+	if _, ok := b.nomask[ip]; ok {
+		return true
+	}
+	tmp := net.ParseIP(ip).To4()
+	if tmp == nil {
+		//illegal ip
+		return true
+	}
+	target := binary.BigEndian.Uint32(tmp)
+	for self, mask := range b.hasmask {
 		if (self>>(32-mask))<<(32-mask) == (target>>(32-mask))<<(32-mask) {
 			return true
 		}
