@@ -16,8 +16,8 @@ require (
 	github.com/chenjie199234/admin main
 	github.com/chenjie199234/Corelib %s
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/go-sql-driver/mysql v1.9.3
-	github.com/redis/go-redis/v9 v9.21.0
+	github.com/go-sql-driver/mysql v1.10.0
+	github.com/redis/go-redis/v9 v9.22.0
 	go.mongodb.org/mongo-driver/v2 v2.8.0
 	google.golang.org/grpc v1.83.0
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
