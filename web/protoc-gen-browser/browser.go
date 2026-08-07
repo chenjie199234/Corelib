@@ -3,13 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-
-	// "math"
-	// "regexp"
-	// "slices"
 	"strconv"
-
-	// "sort"
 	"strings"
 
 	"github.com/chenjie199234/Corelib/internal/version"
@@ -17,7 +11,6 @@ import (
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
-	// "google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
 )

@@ -2257,10 +2257,10 @@ func strpbex(field *protogen.Field, fop *descriptorpb.FieldOptions, g *protogen.
 		}
 	}
 	isbytes := ""
-	if field.Desc.IsMap() && !mapkv && field.Message.Fields[1].Desc.Kind() == protoreflect.FloatKind {
+	if field.Desc.IsMap() && !mapkv && field.Message.Fields[1].Desc.Kind() == protoreflect.BytesKind {
 		isbytes = "'s utf8 encode value"
 	}
-	if !field.Desc.IsMap() && field.Desc.Kind() == protoreflect.FloatKind {
+	if !field.Desc.IsMap() && field.Desc.Kind() == protoreflect.BytesKind {
 		isbytes = "'s utf8 encode value"
 	}
 	indent := "\t\t"

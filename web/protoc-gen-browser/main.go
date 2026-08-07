@@ -83,8 +83,10 @@ func main() {
 						services[s] = make(map[*protogen.Method]*struct{})
 					}
 					services[s][m] = nil
-					prepare_input(simple, m.Input, msgs, enums)
-					prepare_output(m.Output, msgs, enums)
+					visited := make(map[*protogen.Message]struct{})
+					prepare_input(simple, m.Input, visited, msgs, enums)
+					visited = make(map[*protogen.Message]struct{})
+					prepare_output(m.Output, visited, msgs, enums)
 				}
 			}
 		}
@@ -123,7 +125,7 @@ func main() {
 		return nil
 	})
 }
-func prepare_input(simple bool, m *protogen.Message, msgs map[*protogen.Message][]bool, enums map[*protogen.Enum]*struct{}) {
+func prepare_input(simple bool, m *protogen.Message, visited map[*protogen.Message]struct{}, msgs map[*protogen.Message][]bool, enums map[*protogen.Enum]*struct{}) {
 	status, ok := msgs[m]
 	if !ok {
 		status = []bool{false, false, false}
@@ -134,9 +136,10 @@ func prepare_input(simple bool, m *protogen.Message, msgs map[*protogen.Message]
 	} else {
 		status[1] = true //toJSON
 	}
-	if ok {
+	if _, ok := visited[m]; ok {
 		return
 	}
+	visited[m] = struct{}{}
 	for _, f := range m.Fields {
 		switch f.Desc.Kind() {
 		case protoreflect.EnumKind:
@@ -145,17 +148,17 @@ func prepare_input(simple bool, m *protogen.Message, msgs map[*protogen.Message]
 			if f.Desc.IsMap() {
 				switch f.Message.Fields[1].Desc.Kind() {
 				case protoreflect.MessageKind:
-					prepare_input(simple, f.Message.Fields[1].Message, msgs, enums)
+					prepare_input(simple, f.Message.Fields[1].Message, visited, msgs, enums)
 				case protoreflect.EnumKind:
 					enums[f.Message.Fields[1].Enum] = nil
 				}
 			} else {
-				prepare_input(simple, f.Message, msgs, enums)
+				prepare_input(simple, f.Message, visited, msgs, enums)
 			}
 		}
 	}
 }
-func prepare_output(m *protogen.Message, msgs map[*protogen.Message][]bool, enums map[*protogen.Enum]*struct{}) {
+func prepare_output(m *protogen.Message, visited map[*protogen.Message]struct{}, msgs map[*protogen.Message][]bool, enums map[*protogen.Enum]*struct{}) {
 	status, ok := msgs[m]
 	if !ok {
 		status = []bool{false, false, true}
@@ -163,9 +166,10 @@ func prepare_output(m *protogen.Message, msgs map[*protogen.Message][]bool, enum
 	} else {
 		status[2] = true
 	}
-	if ok {
+	if _, ok := visited[m]; ok {
 		return
 	}
+	visited[m] = struct{}{}
 	for _, f := range m.Fields {
 		switch f.Desc.Kind() {
 		case protoreflect.EnumKind:
@@ -174,12 +178,12 @@ func prepare_output(m *protogen.Message, msgs map[*protogen.Message][]bool, enum
 			if f.Desc.IsMap() {
 				switch f.Message.Fields[1].Desc.Kind() {
 				case protoreflect.MessageKind:
-					prepare_output(f.Message.Fields[1].Message, msgs, enums)
+					prepare_output(f.Message.Fields[1].Message, visited, msgs, enums)
 				case protoreflect.EnumKind:
 					enums[f.Message.Fields[1].Enum] = nil
 				}
 			} else {
-				prepare_output(f.Message, msgs, enums)
+				prepare_output(f.Message, visited, msgs, enums)
 			}
 		}
 	}
