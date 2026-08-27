@@ -10,7 +10,7 @@ import (
 
 const txt = `module {{.}}
 
-go 1.26.6
+go 1.26.7
 
 require (
 	github.com/chenjie199234/admin main
@@ -18,8 +18,8 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/redis/go-redis/v9 v9.22.0
-	go.mongodb.org/mongo-driver/v2 v2.8.0
-	google.golang.org/grpc v1.83.1
+	go.mongodb.org/mongo-driver/v2 v2.8.2
+	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
 )`
 
