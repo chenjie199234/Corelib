@@ -10,20 +10,25 @@
 	go install
 
 ## 使用
+### 0.查询版本:
+    终端运行 codegen -v
 ### 1.生成项目:
-	终端运行 codegen -d path/to/create/the/project(default is current work dir) -n "project's name"
+	终端运行 codegen -n "project name" [-p "package name,must be app name or end with app name"]
 ### 2.查看帮助:
-	linux/mac: 	终端切换工作目录到项目目录,执行 ./cmd.sh
-	windows: 	终端切换工作目录到项目目录,执行 ./cmd.bat
+	linux/mac: 	项目内: ./cmd.sh
+	windows: 	项目内: ./cmd.bat
 ### 3.解析proto文件生成桩文件:
-	linux/max: 	终端切换工作目录到项目目录,执行 ./cmd.sh pb
-	windows: 	终端切换工作目录到项目目录,执行 ./cmd.bat pb
+	linux/max: 	项目内: ./cmd.sh pb
+	windows: 	项目内: ./cmd.bat pb
 ### 4.创建子服务
-	linux/mac: 	终端切换工作目录到项目目录,执行 ./cmd.sh sub "sub service name"
-	windows: 	终端切换工作目录到项目目录,执行 ./cmd.bat sub "sub service name"
+	linux/mac: 	项目内: ./cmd.sh sub "sub service name"
+	windows: 	项目内: ./cmd.bat sub "sub service name"
 ### 5.更新kuberneters配置
-	linux/mac: 	终端切换工作目录到项目目录,执行 ./cmd.sh kube
-	windows: 	终端切换工作目录到项目目录,执行 ./cmd.bat kube
+	linux/mac: 	项目内: ./cmd.sh kube
+	windows: 	项目内: ./cmd.bat kube
+### 6.创建新的web项目
+    linux/max:  项目内: ./cmd.sh html
+    windows:    项目内: ./cmd.bat html
 
 ## Features
 - [X] Code Generation
