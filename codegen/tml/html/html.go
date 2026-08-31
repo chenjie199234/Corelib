@@ -85,7 +85,7 @@ import path from "path"
 export default defineConfig({
   resolve: {
     alias: {
-      '@api': path.resolve(__dirname, '../api')
+      '@api': path.resolve(import.meta.dirname, '../api')
     }
   }
 })`
