@@ -49,18 +49,18 @@ const tsc = `{
     "paths":{
       "@api/*":["../api/*"]
     },
-    "target": "ES2020",
-    "useDefineForClassFields": true,
-    "module": "ESNext",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-	"types": ["vite/client"],
+
+    "target": "es2023",
+    "module": "esnext",
+    "lib": ["es2023", "DOM"],
+    "types": ["vite/client"],
+    "allowArbitraryExtensions": true,
     "skipLibCheck": true,
 
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
-    "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
     "noEmitOnError": true,
