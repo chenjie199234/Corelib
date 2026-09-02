@@ -40,9 +40,6 @@ type LogHandler struct {
 	slog.Handler
 }
 
-//inject by go build -ldflags "-X"
-var version string
-
 func (l *LogHandler) Handle(ctx context.Context, record slog.Record) error {
 	if record.NumAttrs() > 0 {
 		attrs := make([]slog.Attr, 0, record.NumAttrs())
@@ -64,6 +61,9 @@ func (l *LogHandler) Handle(ctx context.Context, record slog.Record) error {
 	}
 	return l.Handler.Handle(ctx, record)
 }
+
+//inject by go build -ldflags "-X"
+var version string
 
 func main() {
 	model.Version = version
