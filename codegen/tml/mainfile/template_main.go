@@ -62,7 +62,7 @@ func (l *LogHandler) Handle(ctx context.Context, record slog.Record) error {
 	return l.Handler.Handle(ctx, record)
 }
 
-//inject by go build -ldflags "-X"
+// inject by go build -ldflags "-X"
 var version string
 
 func main() {
@@ -129,7 +129,7 @@ func main() {
 	}
 	//start the whole business service
 	if e := service.StartService(); e != nil {
-		slog.Error("[main] start service failed", slog.String("error",e.Error()))
+		slog.Error("[main] start service failed", slog.String("error", e.Error()))
 		return
 	}
 	//start low level net service
@@ -165,9 +165,9 @@ func main() {
 	})
 	//this is the server for pprof and prometheus(if METRIC env is prometheus)
 	//this server should not be exposed to the public internet
-	pserver := &http.Server{Addr:":6060"}
-	wg.Go(func(){
-		if h:=cotel.GetPrometheusHandler();h!=nil{
+	pserver := &http.Server{Addr: ":6060"}
+	wg.Go(func() {
+		if h := cotel.GetPrometheusHandler(); h != nil {
 			http.Handle("/metrics", h)
 		}
 		pserver.ListenAndServe()
@@ -193,8 +193,8 @@ func main() {
 	wg.Go(func() {
 		xraw.StopRawServer()
 	})
-	wg.Go(func(){
-	  pserver.Shutdown(context.Background())
+	wg.Go(func() {
+		pserver.Shutdown(context.Background())
 	})
 	wg.Wait()
 }`

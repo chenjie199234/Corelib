@@ -10,7 +10,6 @@ const txt = `package raw
 import (
 	"context"
 	"sync/atomic"
-	"unsafe"
 	// "log/slog"
 
 	// "{{.}}/config"
@@ -27,7 +26,7 @@ type Service struct {
 	stop *graceful.Graceful
 
 	rawDao   *rawdao.Dao
-	instance *stream.Instance
+	instance atomic.Pointer[stream.Instance]
 }
 
 // Start -
@@ -41,35 +40,29 @@ func Start() (*Service, error) {
 }
 
 func (s *Service) SetStreamInstance(instance *stream.Instance) {
-	//avoid race when build/run in -race mode
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s.instance)), unsafe.Pointer(instance))
+	s.instance.Store(instance)
 }
 
 func (s *Service) RawVerify(ctx context.Context, peerVerifyData []byte) (response []byte, uniqueid string, success bool) {
-	//avoid race when build/run in -race mode
-	// instance := (*stream.Instance)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.instance))))
+	// instance := s.instance.Load()
 	return nil, "", false
 }
 
 func (s *Service) RawOnline(ctx context.Context, p *stream.Peer) (success bool) {
-	//avoid race when build/run in -race mode
-	// instance := (*stream.Instance)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.instance))))
+	// instance := s.instance.Load()
 	return false
 }
 
 func (s *Service) RawPingPong(p *stream.Peer) {
-	//avoid race when build/run in -race mode
-	// instance := (*stream.Instance)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.instance))))
+	// instance := s.instance.Load()
 }
 
 func (s *Service) RawUser(p *stream.Peer, userdata []byte) {
-	//avoid race when build/run in -race mode
-	// instance := (*stream.Instance)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.instance))))
+	// instance := s.instance.Load()
 }
 
 func (s *Service) RawOffline(p *stream.Peer) {
-	//avoid race when build/run in -race mode
-	// instance := (*stream.Instance)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.instance))))
+	// instance := s.instance.Load()
 }
 
 // Stop -

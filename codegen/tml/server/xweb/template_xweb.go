@@ -32,8 +32,8 @@ func StartWebServer() {
 		for cert, key := range c.Certs {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
-				slog.Error("[xweb] load cert failed:", slog.String("cert", cert), slog.String("key", key), slog.String("error",e.Error()))
-				return 
+				slog.Error("[xweb] load cert failed:", slog.String("cert", cert), slog.String("key", key), slog.String("error", e.Error()))
+				return
 			}
 			certificates = append(certificates, temp)
 		}
@@ -41,14 +41,14 @@ func StartWebServer() {
 	}
 	server, e := web.NewWebServer(c.ServerConfig, tlsc)
 	if e != nil {
-		slog.Error("[xweb] new server failed", slog.String("error",e.Error()))
+		slog.Error("[xweb] new server failed", slog.String("error", e.Error()))
 		return
 	}
 	s.Store(server)
 
 	router, e := server.NewRouter()
 	if e != nil {
-		slog.Error("[xweb] new router failed", slog.String("error",e.Error()))
+		slog.Error("[xweb] new router failed", slog.String("error", e.Error()))
 		return
 	}
 	r.Store(router)
@@ -65,13 +65,13 @@ func StartWebServer() {
 
 	server.SetRouter(router)
 	if e = server.StartWebServer(":8000"); e != nil && e != web.ErrServerClosed {
-		slog.Error("[xweb] start server failed", slog.String("error",e.Error()))
+		slog.Error("[xweb] start server failed", slog.String("error", e.Error()))
 		return
 	}
 	slog.Info("[xweb] server closed")
 }
 
-//first key:path,second key:method
+// first key:path,second key:method
 func UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
 	tmpr := r.Load()
 	if tmpr != nil {
@@ -79,7 +79,7 @@ func UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
 	}
 }
 
-//first key:method,second key:origin url,value:new url
+// first key:method,second key:origin url,value:new url
 func UpdateWebPathRewrite(rewrite map[string]map[string]string) {
 	tmpr := r.Load()
 	if tmpr != nil {

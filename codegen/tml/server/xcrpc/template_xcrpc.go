@@ -31,7 +31,7 @@ func StartCrpcServer() {
 		for cert, key := range c.Certs {
 			temp, e := tls.LoadX509KeyPair(cert, key)
 			if e != nil {
-				slog.Error("[xcrpc] load cert failed:", slog.String("cert", cert), slog.String("key", key), slog.String("error",e.Error()))
+				slog.Error("[xcrpc] load cert failed:", slog.String("cert", cert), slog.String("key", key), slog.String("error", e.Error()))
 				return 
 			}
 			certificates = append(certificates, temp)
@@ -40,7 +40,7 @@ func StartCrpcServer() {
 	}
 	server, e := crpc.NewCrpcServer(c.ServerConfig, tlsc)
 	if e != nil {
-		slog.Error("[xcrpc] new server failed", slog.String("error",e.Error()))
+		slog.Error("[xcrpc] new server failed", slog.String("error", e.Error()))
 		return
 	}
 	s.Store(server)
@@ -55,13 +55,13 @@ func StartCrpcServer() {
 	api.RegisterStatusCrpcServer(server, service.SvcStatus, mids.AllMids())
 
 	if e = server.StartCrpcServer(":9000"); e != nil && e != crpc.ErrServerClosed {
-		slog.Error("[xcrpc] start server failed", slog.String("error",e.Error()))
+		slog.Error("[xcrpc] start server failed", slog.String("error", e.Error()))
 		return
 	}
 	slog.Info("[xcrpc] server closed")
 }
 
-//first key:path,second key:method
+// first key:path,second key:method
 func UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
 	tmps := s.Load()
 	if tmps != nil {
