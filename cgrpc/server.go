@@ -180,9 +180,9 @@ func (s *CGrpcServer) StopCGrpcServer(force bool) {
 // first key path,second key method(must be GRPC),value timeout(if timeout <= 0 means no timeout)
 func (this *CGrpcServer) UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
 	tmp := make(map[string]time.Duration)
-	for path := range timeout {
-		for method, to := range timeout[path] {
-			if method != "GRPC" {
+	for path, v := range timeout {
+		for method, to := range v {
+			if strings.ToUpper(method) != "GRPC" {
 				continue
 			}
 			if path == "" {

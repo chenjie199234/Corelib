@@ -44,7 +44,6 @@ func StartCGrpcServer() {
 		return
 	}
 	s.Store(server)
-	UpdateHandlerTimeout(config.AC.HandlerTimeout)
 
 	//this place can register global midwares
 	//server.Use(globalmidwares)
@@ -53,6 +52,9 @@ func StartCGrpcServer() {
 	//api.RegisterExampleCGrpcServer(server, service.SvcExample, mids.AllMids())
 	//you need to register your service here
 	api.RegisterStatusCGrpcServer(server, service.SvcStatus, mids.AllMids())
+
+	//path must be registered before this
+	UpdateHandlerTimeout(config.AC.HandlerTimeout)
 
 	if e = server.StartCGrpcServer(":10000"); e != nil && e != cgrpc.ErrServerClosed {
 		slog.Error("[xgrpc] start server failed", slog.String("error", e.Error()))

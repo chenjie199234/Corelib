@@ -508,16 +508,24 @@ func (r *Router) UpdateHandlerTimeout(timeout map[string]map[string]ctime.Durati
 	r.lker.Lock()
 	defer r.lker.Unlock()
 	tmp := make(map[string]map[string]time.Duration)
-	for method, v := range timeout {
-		method = strings.ToUpper(method)
-		if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
+	for path, v := range timeout {
+		if path == "" {
 			continue
 		}
-		vv := make(map[string]time.Duration)
-		tmp[method] = vv
-		for url, duration := range v {
-			url = cleanPath(url)
-			vv[url] = duration.StdDuration()
+		for method, to := range v {
+			method = strings.ToUpper(method)
+			if method != http.MethodGet && method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
+				continue
+			}
+			vv, ok := tmp[method]
+			if !ok {
+				vv = make(map[string]time.Duration)
+				tmp[method] = vv
+			}
+			if path[0] != '/' {
+				path = "/" + path
+			}
+			vv[path] = to.StdDuration()
 		}
 	}
 	old := r.handlertimeout

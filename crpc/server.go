@@ -200,8 +200,8 @@ func (s *CrpcServer) tellAllPeerSelfClosed() {
 // first key path,second key method,value timeout(if timeout <= 0 means no timeout)
 func (s *CrpcServer) UpdateHandlerTimeout(timeout map[string]map[string]ctime.Duration) {
 	tmp := make(map[string]time.Duration)
-	for path := range timeout {
-		for method, duration := range timeout[path] {
+	for path, v := range timeout {
+		for method, duration := range v {
 			if strings.ToUpper(method) != "CRPC" {
 				continue
 			}

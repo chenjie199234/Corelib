@@ -44,7 +44,6 @@ func StartCrpcServer() {
 		return
 	}
 	s.Store(server)
-	UpdateHandlerTimeout(config.AC.HandlerTimeout)
 
 	//this place can register global midwares
 	//server.Use(globalmidwares)
@@ -53,6 +52,9 @@ func StartCrpcServer() {
 	//api.RegisterExampleCrpcServer(server, service.SvcExample,mids.AllMids())
 	//you need to register your service here
 	api.RegisterStatusCrpcServer(server, service.SvcStatus, mids.AllMids())
+
+	//path must be registered before this
+	UpdateHandlerTimeout(config.AC.HandlerTimeout)
 
 	if e = server.StartCrpcServer(":9000"); e != nil && e != crpc.ErrServerClosed {
 		slog.Error("[xcrpc] start server failed", slog.String("error", e.Error()))
