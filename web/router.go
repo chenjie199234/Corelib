@@ -153,13 +153,6 @@ func (h *handler) handle(resp http.ResponseWriter, req *http.Request) {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, dl)
 		defer cancel()
-		//reset the write deadline on the raw socket
-		respc := http.NewResponseController(resp)
-		respc.SetWriteDeadline(dl)
-	} else {
-		//reset the write deadline on the raw socket
-		respc := http.NewResponseController(resp)
-		respc.SetWriteDeadline(time.Time{})
 	}
 
 	//logic
