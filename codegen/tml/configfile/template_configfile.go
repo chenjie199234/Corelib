@@ -55,6 +55,7 @@ const source = `{
 		"default_handler_timeout":"500ms",
 		"idle_timeout":"5s",
 		"max_request_header":4096,
+		"max_request_body":"65536",
 		"cors_allowed_origins":["*"],
 		"cors_allowed_headers":["*"],
 		"cors_expose_headers":["*"],

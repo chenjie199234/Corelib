@@ -51,8 +51,10 @@ type ServerConfig struct {
 	//expired without next message,the connection will be closed
 	//<=0 means no timeout
 	IdleTimeout ctime.Duration `json:"idle_timeout"`
-	//min 2048,max 65536,unit byte
-	MaxRequestHeader     uint     `json:"max_request_header"`
+	//min 2048(2k),max 16384(16k),unit byte
+	MaxRequestHeader uint `json:"max_request_header"`
+	//0 means no limit
+	MaxRequestBody       uint     `json:"max_request_body"`
 	CorsAllowedOrigins   []string `json:"cors_allowed_origins"` //can only support * or specific origin(can start of wildcard '*')
 	CorsAllowedHeaders   []string `json:"cors_allowed_headers"`
 	CorsExposeHeaders    []string `json:"cors_expose_headers"`
@@ -78,8 +80,8 @@ func (c *ServerConfig) validate() {
 	}
 	if c.MaxRequestHeader < 2048 {
 		c.MaxRequestHeader = 2048
-	} else if c.MaxRequestHeader > 65536 {
-		c.MaxRequestHeader = 65536
+	} else if c.MaxRequestHeader > 16384 {
+		c.MaxRequestHeader = 16384
 	}
 	//allow origin
 	if len(c.CorsAllowedOrigins) > 0 {

@@ -45,6 +45,9 @@ type handler struct {
 }
 
 func (h *handler) handle(resp http.ResponseWriter, req *http.Request) {
+	if h.r.s.c.MaxBody > 0 {
+		req.Body = http.MaxBytesReader(resp, req.Body, int64(h.r.s.c.MaxBody))
+	}
 	//target
 	if target := req.Header.Get("Core-Target"); target != "" && target != name.GetSelfFullName() {
 		resp.Header().Set("Content-Type", "application/json")
