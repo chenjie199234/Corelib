@@ -262,6 +262,15 @@ func (h *handler) handle(resp http.ResponseWriter, req *http.Request) {
 			}
 		case <-done:
 		}
+		//for timeout handler:give 10ms to send the timeout error
+		//for normal handler:
+		tmpdl := time.Now().Add(10 * time.Millisecond)
+		respc := http.NewResponseController(resp)
+		if dl.After(tmpdl) {
+			respc.SetWriteDeadline(dl)
+		} else {
+			respc.SetWriteDeadline(tmpdl)
+		}
 	}
 }
 
