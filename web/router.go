@@ -45,8 +45,8 @@ type handler struct {
 }
 
 func (h *handler) handle(resp http.ResponseWriter, req *http.Request) {
-	if h.r.s.c.MaxBody > 0 {
-		req.Body = http.MaxBytesReader(resp, req.Body, int64(h.r.s.c.MaxBody))
+	if h.r.s.c.MaxRequestBody > 0 {
+		req.Body = http.MaxBytesReader(resp, req.Body, int64(h.r.s.c.MaxRequestBody))
 	}
 	//target
 	if target := req.Header.Get("Core-Target"); target != "" && target != name.GetSelfFullName() {
