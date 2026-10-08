@@ -75,12 +75,44 @@ func AddMetadata(ctx context.Context, key, value string) context.Context {
 	md[key] = value
 	return ctx
 }
+
+// one specific k-v pair in metadata which will be used in this lib
+func AddToken(ctx context.Context, token string) context.Context {
+	return AddMetadata(ctx, "Token", token)
+}
+
+// one specific k-v pair in medatada which will be used in this lib
+func AddSession(ctx context.Context, session string) context.Context {
+	return AddMetadata(ctx, "Session", session)
+}
+
+// one specific k-v pair in metadata which will be used in this lib
+func AddAccessKey(ctx context.Context, accesskey string) context.Context {
+	return AddMetadata(ctx, "Access-Key", accesskey)
+}
+
 func DelMetadata(ctx context.Context, key string) {
 	md := GetMetadata(ctx)
 	if md != nil {
 		delete(md, key)
 	}
 }
+
+// one specific key in metadata which will be used in this lib
+func DelToken(ctx context.Context) {
+	DelMetadata(ctx, "Token")
+}
+
+// one specific key in metadata which will be used in this lib
+func DelSession(ctx context.Context) {
+	DelMetadata(ctx, "Session")
+}
+
+// one specific key in metadata which will be used in this lib
+func DelAccessKey(ctx context.Context) {
+	DelMetadata(ctx, "Access-Key")
+}
+
 func HasMetadata(ctx context.Context, key string) bool {
 	md := GetMetadata(ctx)
 	var ok bool
@@ -88,4 +120,19 @@ func HasMetadata(ctx context.Context, key string) bool {
 		_, ok = md[key]
 	}
 	return ok
+}
+
+// one specific key in metadata which will be used in this lib
+func HasToken(ctx context.Context) bool {
+	return HasMetadata(ctx, "Token")
+}
+
+// one specific key in metadata which will be used in this lib
+func HasSession(ctx context.Context) bool {
+	return HasMetadata(ctx, "Session")
+}
+
+// one specific key in metadata which will be used in this lib
+func HasAccessKey(ctx context.Context) bool {
+	return HasMetadata(ctx, "Access-Key")
 }
