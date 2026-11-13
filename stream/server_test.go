@@ -40,7 +40,7 @@ func Test_Server(t *testing.T) {
 	}()
 	http.ListenAndServe(":8080", nil)
 }
-func serverhandleVerify(ctx context.Context, peerVerifyData []byte) ([]byte, string, bool) {
+func serverhandleVerify(ctx context.Context, ip string, peerVerifyData []byte) ([]byte, string, bool) {
 	if !bytes.Equal([]byte{'t', 'e', 's', 't', 'c'}, peerVerifyData) {
 		fmt.Println("verify error")
 		return nil, "", false

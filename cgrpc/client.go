@@ -54,6 +54,16 @@ type ClientConfig struct {
 	MaxMsgLen uint32 `json:"max_msg_len"`
 }
 
+func (c *ClientConfig) Clone() *ClientConfig {
+	return &ClientConfig{
+		DefaultHandlerTimeout: c.DefaultHandlerTimeout,
+		ConnectTimeout:        c.ConnectTimeout,
+		IdleTimeout:           c.IdleTimeout,
+		HeartProbe:            c.HeartProbe,
+		MaxMsgLen:             c.MaxMsgLen,
+	}
+}
+
 func (c *ClientConfig) validate() {
 	if c.ConnectTimeout <= 0 {
 		c.ConnectTimeout = ctime.Duration(time.Second * 3)
@@ -112,6 +122,8 @@ func NewCGrpcClient(c *ClientConfig, d discover.DI, serverproject, servergroup, 
 	}
 	if c == nil {
 		c = &ClientConfig{}
+	} else {
+		c = c.Clone()
 	}
 	c.validate()
 	if d == nil {

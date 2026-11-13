@@ -33,3 +33,7 @@ message Msg {
 	Header h=1;
 	Body b=2;
 }
+message Verify {
+    string sname=1;//only from client to server
+    bytes vdata=2;
+}

@@ -34,7 +34,7 @@ func Test_Wsclient(t *testing.T) {
 	}()
 	http.ListenAndServe(":8082", nil)
 }
-func wsclienthandleVerify(_ context.Context, peerVerifyData []byte) ([]byte, string, bool) {
+func wsclienthandleVerify(_ context.Context, ip string, peerVerifyData []byte) ([]byte, string, bool) {
 	if !bytes.Equal([]byte{'t', 'e', 's', 't'}, peerVerifyData) {
 		fmt.Println("verify error")
 		return nil, "", false

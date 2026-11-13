@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -64,6 +65,24 @@ type ServerConfig struct {
 	//static source files(.html .js .css...)'s root path,empty means no static source file
 	//this path can't be the parent of the executable file's parent dir
 	SrcRootPath string `json:"src_root_path"`
+}
+
+func (c *ServerConfig) Clone() *ServerConfig {
+	return &ServerConfig{
+		WaitCloseMode:         c.WaitCloseMode,
+		WaitCloseTime:         c.WaitCloseTime,
+		DefaultHandlerTimeout: c.DefaultHandlerTimeout,
+		ReadTimeout:           c.ReadTimeout,
+		IdleTimeout:           c.IdleTimeout,
+		MaxRequestHeader:      c.MaxRequestHeader,
+		MaxRequestBody:        c.MaxRequestBody,
+		CorsAllowedOrigins:    slices.Clone(c.CorsAllowedOrigins),
+		CorsAllowedHeaders:    slices.Clone(c.CorsAllowedHeaders),
+		CorsExposeHeaders:     slices.Clone(c.CorsExposeHeaders),
+		CorsAllowCredentials:  c.CorsAllowCredentials,
+		CorsMaxAge:            c.CorsMaxAge,
+		SrcRootPath:           c.SrcRootPath,
+	}
 }
 
 func (c *ServerConfig) validate() {
@@ -219,6 +238,8 @@ func NewWebServer(c *ServerConfig, tlsc *tls.Config) (*WebServer, error) {
 	}
 	if c == nil {
 		c = &ServerConfig{}
+	} else {
+		c = c.Clone()
 	}
 	c.validate()
 	//new server

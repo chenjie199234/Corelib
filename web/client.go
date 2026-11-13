@@ -51,6 +51,15 @@ type ClientConfig struct {
 	MaxResponseHeader uint `json:"max_response_header"`
 }
 
+func (c *ClientConfig) Clone() *ClientConfig {
+	return &ClientConfig{
+		DefaultHandlerTimeout: c.DefaultHandlerTimeout,
+		ConnectTimeout:        c.ConnectTimeout,
+		IdleTimeout:           c.IdleTimeout,
+		MaxResponseHeader:     c.MaxResponseHeader,
+	}
+}
+
 func (c *ClientConfig) validate() {
 	if c.ConnectTimeout <= 0 {
 		c.ConnectTimeout = ctime.Duration(time.Second * 3)
@@ -111,6 +120,8 @@ func NewWebClient(c *ClientConfig, d discover.DI, serverproject, servergroup, se
 	}
 	if c == nil {
 		c = &ClientConfig{}
+	} else {
+		c = c.Clone()
 	}
 	c.validate()
 

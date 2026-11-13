@@ -19,7 +19,6 @@ import (
 	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/stream"
-	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/name"
@@ -63,6 +62,26 @@ type ServerConfig struct {
 	HeartProbe ctime.Duration `json:"heart_probe"`
 	//min 64k,default 64M
 	MaxMsgLen uint32 `json:"max_msg_len"`
+
+	//Before two peers can communicate,they need to verify each other first
+	//server's response will write back to the client for client to verify the server
+	//if uniqueid is empty,the peer's RemoteAddr(ip:port) will be used as the uniqueid
+	//if success is false,the connection will not be established
+	//Warning!!!Don't reuse the data in 'peerVerifyData',it will change when this function return,if you want to use it,copy it first
+	SpecificVerifyFunc func(ctx context.Context, peerVerifyData []byte) (response []byte, uniqueid string, success bool) `json:"-"`
+}
+
+func (c *ServerConfig) Clone() *ServerConfig {
+	return &ServerConfig{
+		DefaultHandlerTimeout: c.DefaultHandlerTimeout,
+		ConnectTimeout:        c.ConnectTimeout,
+		ReadTimeout:           c.ReadTimeout,
+		WriteTimeout:          c.WriteTimeout,
+		IdleTimeout:           c.IdleTimeout,
+		HeartProbe:            c.HeartProbe,
+		MaxMsgLen:             c.MaxMsgLen,
+		SpecificVerifyFunc:    c.SpecificVerifyFunc,
+	}
 }
 
 type CrpcServer struct {
@@ -114,6 +133,8 @@ func NewCrpcServer(c *ServerConfig, tlsc *tls.Config) (*CrpcServer, error) {
 	}
 	if c == nil {
 		c = &ServerConfig{}
+	} else {
+		c = c.Clone()
 	}
 	serverinstance := &CrpcServer{
 		c:             c,
@@ -274,13 +295,22 @@ func (s *CrpcServer) UnregisterHandler(sname, mname string) {
 }
 
 // return false will close the connection
-func (s *CrpcServer) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]byte, string, bool) {
+func (s *CrpcServer) verifyfunc(ctx context.Context, ip string, peerVerifyData []byte) ([]byte, string, bool) {
 	if s.stop.Closing() {
 		//self closing
 		return nil, "", false
 	}
-	if common.BTS(peerVerifyData) != name.GetSelfFullName() {
+	v := &Verify{}
+	if e := proto.Unmarshal(peerVerifyData, v); e != nil {
+		slog.Error("[crpc.server] client's verify msg format wrong", slog.String("cip", ip), slog.String("error", e.Error()))
 		return nil, "", false
+	}
+	if v.GetSname() != name.GetSelfFullName() {
+		return nil, "", false
+	}
+	if s.c.SpecificVerifyFunc != nil {
+		//use the specific verify func
+		return s.c.SpecificVerifyFunc(ctx, v.GetVdata())
 	}
 	return nil, "", true
 }

@@ -211,6 +211,117 @@ func (b0 Msg_builder) Build() *Msg {
 	return m0
 }
 
+type Verify struct {
+	state                  protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Sname       *string                `protobuf:"bytes,1,opt,name=sname"`
+	xxx_hidden_Vdata       []byte                 `protobuf:"bytes,2,opt,name=vdata"`
+	XXX_raceDetectHookData protoimpl.RaceDetectHookData
+	XXX_presence           [1]uint32
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *Verify) Reset() {
+	*x = Verify{}
+	mi := &file_crpc_msg_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Verify) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Verify) ProtoMessage() {}
+
+func (x *Verify) ProtoReflect() protoreflect.Message {
+	mi := &file_crpc_msg_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+func (x *Verify) GetSname() string {
+	if x != nil {
+		if x.xxx_hidden_Sname != nil {
+			return *x.xxx_hidden_Sname
+		}
+		return ""
+	}
+	return ""
+}
+
+func (x *Verify) GetVdata() []byte {
+	if x != nil {
+		return x.xxx_hidden_Vdata
+	}
+	return nil
+}
+
+func (x *Verify) SetSname(v string) {
+	x.xxx_hidden_Sname = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 2)
+}
+
+func (x *Verify) SetVdata(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Vdata = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 2)
+}
+
+func (x *Verify) HasSname() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
+}
+
+func (x *Verify) HasVdata() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
+}
+
+func (x *Verify) ClearSname() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
+	x.xxx_hidden_Sname = nil
+}
+
+func (x *Verify) ClearVdata() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 1)
+	x.xxx_hidden_Vdata = nil
+}
+
+type Verify_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Sname *string
+	Vdata []byte
+}
+
+func (b0 Verify_builder) Build() *Verify {
+	m0 := &Verify{}
+	b, x := &b0, m0
+	_, _ = b, x
+	if b.Sname != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 2)
+		x.xxx_hidden_Sname = b.Sname
+	}
+	if b.Vdata != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 2)
+		x.xxx_hidden_Vdata = b.Vdata
+	}
+	return m0
+}
+
 type Msg_Header struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Callid      uint64                 `protobuf:"varint,1,opt,name=callid"`
@@ -227,7 +338,7 @@ type Msg_Header struct {
 
 func (x *Msg_Header) Reset() {
 	*x = Msg_Header{}
-	mi := &file_crpc_msg_proto_msgTypes[1]
+	mi := &file_crpc_msg_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -239,7 +350,7 @@ func (x *Msg_Header) String() string {
 func (*Msg_Header) ProtoMessage() {}
 
 func (x *Msg_Header) ProtoReflect() protoreflect.Message {
-	mi := &file_crpc_msg_proto_msgTypes[1]
+	mi := &file_crpc_msg_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -422,7 +533,7 @@ type Msg_Body struct {
 
 func (x *Msg_Body) Reset() {
 	*x = Msg_Body{}
-	mi := &file_crpc_msg_proto_msgTypes[2]
+	mi := &file_crpc_msg_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -434,7 +545,7 @@ func (x *Msg_Body) String() string {
 func (*Msg_Body) ProtoMessage() {}
 
 func (x *Msg_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_crpc_msg_proto_msgTypes[2]
+	mi := &file_crpc_msg_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -568,7 +679,10 @@ const file_crpc_msg_proto_rawDesc = "" +
 	"\x04Body\x12\x12\n" +
 	"\x04body\x18\x01 \x01(\fR\x04body\x120\n" +
 	"\fbody_encoder\x18\x02 \x01(\x0e2\r.crpc.EncoderR\vbodyEncoder\x12#\n" +
-	"\x05error\x18\x03 \x01(\v2\r.cerror.ErrorR\x05error*d\n" +
+	"\x05error\x18\x03 \x01(\v2\r.cerror.ErrorR\x05error\"4\n" +
+	"\x06Verify\x12\x14\n" +
+	"\x05sname\x18\x01 \x01(\tR\x05sname\x12\x14\n" +
+	"\x05vdata\x18\x02 \x01(\fR\x05vdata*d\n" +
 	"\aMsgType\x12\b\n" +
 	"\x04INIT\x10\x00\x12\x10\n" +
 	"\fINIT_SUCCESS\x10\x01\x12\b\n" +
@@ -584,25 +698,26 @@ const file_crpc_msg_proto_rawDesc = "" +
 	"\x04JSON\x10\x02B,Z*github.com/chenjie199234/Corelib/crpc;crpcb\beditionsp\xe9\a"
 
 var file_crpc_msg_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_crpc_msg_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_crpc_msg_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_crpc_msg_proto_goTypes = []any{
 	(MsgType)(0),         // 0: crpc.MsgType
 	(Encoder)(0),         // 1: crpc.Encoder
 	(*Msg)(nil),          // 2: crpc.Msg
-	(*Msg_Header)(nil),   // 3: crpc.Msg.Header
-	(*Msg_Body)(nil),     // 4: crpc.Msg.Body
-	nil,                  // 5: crpc.Msg.Header.MetadataEntry
-	nil,                  // 6: crpc.Msg.Header.TracedataEntry
-	(*cerror.Error)(nil), // 7: cerror.Error
+	(*Verify)(nil),       // 3: crpc.Verify
+	(*Msg_Header)(nil),   // 4: crpc.Msg.Header
+	(*Msg_Body)(nil),     // 5: crpc.Msg.Body
+	nil,                  // 6: crpc.Msg.Header.MetadataEntry
+	nil,                  // 7: crpc.Msg.Header.TracedataEntry
+	(*cerror.Error)(nil), // 8: cerror.Error
 }
 var file_crpc_msg_proto_depIdxs = []int32{
-	3, // 0: crpc.Msg.h:type_name -> crpc.Msg.Header
-	4, // 1: crpc.Msg.b:type_name -> crpc.Msg.Body
+	4, // 0: crpc.Msg.h:type_name -> crpc.Msg.Header
+	5, // 1: crpc.Msg.b:type_name -> crpc.Msg.Body
 	0, // 2: crpc.Msg.Header.type:type_name -> crpc.MsgType
-	5, // 3: crpc.Msg.Header.metadata:type_name -> crpc.Msg.Header.MetadataEntry
-	6, // 4: crpc.Msg.Header.tracedata:type_name -> crpc.Msg.Header.TracedataEntry
+	6, // 3: crpc.Msg.Header.metadata:type_name -> crpc.Msg.Header.MetadataEntry
+	7, // 4: crpc.Msg.Header.tracedata:type_name -> crpc.Msg.Header.TracedataEntry
 	1, // 5: crpc.Msg.Body.body_encoder:type_name -> crpc.Encoder
-	7, // 6: crpc.Msg.Body.error:type_name -> cerror.Error
+	8, // 6: crpc.Msg.Body.error:type_name -> cerror.Error
 	7, // [7:7] is the sub-list for method output_type
 	7, // [7:7] is the sub-list for method input_type
 	7, // [7:7] is the sub-list for extension type_name
@@ -621,7 +736,7 @@ func file_crpc_msg_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_crpc_msg_proto_rawDesc), len(file_crpc_msg_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

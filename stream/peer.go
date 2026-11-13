@@ -345,7 +345,7 @@ func (p *Peer) GetRemoteAddr() string {
 	return p.c.RemoteAddr().String()
 }
 
-// this may be different with the RemoteAddr only when this is a websocket peer
+// this may be different with the RemoteAddr only when there is a proxy
 func (p *Peer) GetRealPeerIP() string {
 	var ip string
 	if p.header != nil {

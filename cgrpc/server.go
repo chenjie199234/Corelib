@@ -55,6 +55,16 @@ type ServerConfig struct {
 	MaxMsgLen uint32 `json:"max_msg_len"`
 }
 
+func (c *ServerConfig) Clone() *ServerConfig {
+	return &ServerConfig{
+		DefaultHandlerTimeout: c.DefaultHandlerTimeout,
+		ConnectTimeout:        c.ConnectTimeout,
+		IdleTimeout:           c.IdleTimeout,
+		HeartProbe:            c.HeartProbe,
+		MaxMsgLen:             c.MaxMsgLen,
+	}
+}
+
 func (c *ServerConfig) validate() {
 	if c.ConnectTimeout <= 0 {
 		c.ConnectTimeout = ctime.Duration(3 * time.Second)
@@ -108,6 +118,8 @@ func NewCGrpcServer(c *ServerConfig, tlsc *tls.Config) (*CGrpcServer, error) {
 	}
 	if c == nil {
 		c = &ServerConfig{}
+	} else {
+		c = c.Clone()
 	}
 	c.validate()
 	serverinstance := &CGrpcServer{

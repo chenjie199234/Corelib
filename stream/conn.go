@@ -83,7 +83,8 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 			if tlsc != nil {
 				//tls handshake
 				if e := p.c.(*tls.Conn).HandshakeContext(ctx); e != nil {
-					slog.Error("[Stream.StartServer] tls handshake failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+					slog.Error("[Stream.StartServer] tls handshake failed",
+						slog.String("cip", p.GetRealPeerIP()), slog.String("error", e.Error()))
 					p.c.Close()
 					return
 				}
@@ -94,7 +95,8 @@ func (this *Instance) StartServer(listenaddr string, tlsc *tls.Config) error {
 			//so we can check the first byte with G to decide the raw tcp or websocket
 			_, header, e := ws.Supgrade(p.cr, p.c)
 			if e != nil && e != ws.ErrNotWS {
-				slog.Error("[Stream.StartServer] upgrade websocket failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+				slog.Error("[Stream.StartServer] upgrade websocket failed",
+					slog.String("cip", p.GetRealPeerIP()), slog.String("error", e.Error()))
 				p.c.Close()
 				return
 			}
@@ -116,13 +118,14 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 		return
 	}
 	if 4+uint64(len(serververifydata)) > uint64(p.peerMaxMsgLen.Load()) {
-		slog.Error("[Stream.sworker] server response verify data too large", slog.String("cip", p.c.RemoteAddr().String()))
+		slog.Error("[Stream.sworker] server response verify data too large", slog.String("cip", p.GetRealPeerIP()))
 		p.CancelFunc()
 		p.c.Close()
 		return
 	}
 	if e := this.mng.AddPeer(p); e != nil {
-		slog.Error("[Stream.sworker] add client to connection manager failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+		slog.Error("[Stream.sworker] add client to connection manager failed",
+			slog.String("cip", p.GetRealPeerIP()), slog.String("error", e.Error()))
 		p.CancelFunc()
 		p.c.Close()
 		return
@@ -143,7 +146,8 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 		}
 		//set timeout to 0,current timeout is controlled by ConnectTimeout
 		if e := ws.WriteMsg(p.c, 0, data, buf == nil, first, false); e != nil {
-			slog.Error("[Stream.sworker] write verify data to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+			slog.Error("[Stream.sworker] write verify data to client failed",
+				slog.String("cip", p.GetRealPeerIP()), slog.String("error", e.Error()))
 			this.mng.DelPeer(p)
 			p.CancelFunc()
 			p.c.Close()
@@ -158,7 +162,7 @@ func (this *Instance) sworker(ctx context.Context, p *Peer) {
 	p.status.Store(1)
 	if this.c.OnlineFunc != nil {
 		if !this.c.OnlineFunc(ctx, p) {
-			slog.Error("[Stream.sworker] online failed", slog.String("cip", p.c.RemoteAddr().String()))
+			slog.Error("[Stream.sworker] online failed", slog.String("cip", p.GetRealPeerIP()))
 			p.status.Store(0)
 			this.mng.DelPeer(p)
 			p.CancelFunc()
@@ -250,7 +254,8 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 		}
 		//set timeout to 0,current timeout is controlled by ConnectTimeout
 		if e := ws.WriteMsg(p.c, 0, data, buf == nil, first, false); e != nil {
-			slog.Error("[Stream.cworker] write verify data to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+			slog.Error("[Stream.cworker] write verify data to server failed",
+				slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 			p.CancelFunc()
 			p.c.Close()
 			return false
@@ -269,7 +274,8 @@ func (this *Instance) cworker(ctx context.Context, p *Peer, clientverifydata []b
 	}
 	//verify server success
 	if e := this.mng.AddPeer(p); e != nil {
-		slog.Error("[Stream.cworker] add server to connection manager failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+		slog.Error("[Stream.cworker] add server to connection manager failed",
+			slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 		p.CancelFunc()
 		p.c.Close()
 		return false
@@ -300,7 +306,7 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 		case !opcode.IsControl():
 			if len(data) < 4 {
 				if p.peertype == _PEER_CLIENT {
-					slog.Error("[Stream.verifypeer] client verify data format wrong", slog.String("cip", p.c.RemoteAddr().String()))
+					slog.Error("[Stream.verifypeer] client verify data format wrong", slog.String("cip", p.GetRealPeerIP()))
 				} else {
 					slog.Error("[Stream.verifypeer] server verify data format wrong", slog.String("sip", p.c.RemoteAddr().String()))
 				}
@@ -309,7 +315,7 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 			senderMaxRecvMsgLen := binary.BigEndian.Uint32(data[:4])
 			if senderMaxRecvMsgLen < 65536 {
 				if p.peertype == _PEER_CLIENT {
-					slog.Error("[Stream.verifypeer] client maxmsglen too small", slog.String("cip", p.c.RemoteAddr().String()))
+					slog.Error("[Stream.verifypeer] client maxmsglen too small", slog.String("cip", p.GetRealPeerIP()))
 				} else {
 					slog.Error("[Stream.verifypeer] server maxmsglen too small", slog.String("sip", p.c.RemoteAddr().String()))
 				}
@@ -318,10 +324,17 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 			now := time.Now()
 			p.lastactive.Store(now.UnixNano())
 			p.peerMaxMsgLen.Store(senderMaxRecvMsgLen)
-			r, u, success := this.c.VerifyFunc(ctx, data[4:])
+			var r []byte
+			var u string
+			var success bool
+			if p.peertype == _PEER_CLIENT {
+				r, u, success = this.c.VerifyFunc(ctx, p.GetRealPeerIP(), data[4:])
+			} else {
+				r, u, success = this.c.VerifyFunc(ctx, p.c.RemoteAddr().String(), data[4:])
+			}
 			if !success {
 				if p.peertype == _PEER_CLIENT {
-					slog.Error("[Stream.verifypeer] verify client failed", slog.String("cip", p.c.RemoteAddr().String()))
+					slog.Error("[Stream.verifypeer] verify client failed", slog.String("cip", p.GetRealPeerIP()))
 				} else {
 					slog.Error("[Stream.verifypeer] verify server failed", slog.String("sip", p.c.RemoteAddr().String()))
 				}
@@ -342,9 +355,11 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 			//set timeout to 0,current timeout is controlled by ConnectTimeout
 			if e := ws.WritePong(p.c, 0, data, false); e != nil {
 				if p.peertype == _PEER_CLIENT {
-					slog.Error("[Stream.verifypeer] write pong to client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+					slog.Error("[Stream.verifypeer] write pong to client failed",
+						slog.String("cip", p.GetRealPeerIP()), slog.String("error", e.Error()))
 				} else {
-					slog.Error("[Stream.verifypeer] write pong to server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+					slog.Error("[Stream.verifypeer] write pong to server failed",
+						slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 				}
 				return false
 			}
@@ -360,9 +375,11 @@ func (this *Instance) verifypeer(ctx context.Context, p *Peer) []byte {
 		}
 	}); e != nil {
 		if p.peertype == _PEER_CLIENT {
-			slog.Error("[Stream.verifypeer] read from client failed", slog.String("cip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+			slog.Error("[Stream.verifypeer] read from client failed",
+				slog.String("cip", p.GetRealPeerIP()), slog.String("error", e.Error()))
 		} else {
-			slog.Error("[Stream.verifypeer] read from server failed", slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
+			slog.Error("[Stream.verifypeer] read from server failed",
+				slog.String("sip", p.c.RemoteAddr().String()), slog.String("error", e.Error()))
 		}
 	}
 	return response

@@ -14,7 +14,6 @@ import (
 )
 
 const (
-	// ioPackage        = protogen.GoImportPath("io")
 	contextPackage   = protogen.GoImportPath("context")
 	slogPackage      = protogen.GoImportPath("log/slog")
 	protoPackage     = protogen.GoImportPath("google.golang.org/protobuf/proto")

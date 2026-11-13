@@ -16,7 +16,6 @@ import (
 	"github.com/chenjie199234/Corelib/internal/version"
 	"github.com/chenjie199234/Corelib/metadata"
 	"github.com/chenjie199234/Corelib/stream"
-	"github.com/chenjie199234/Corelib/util/common"
 	"github.com/chenjie199234/Corelib/util/ctime"
 	"github.com/chenjie199234/Corelib/util/graceful"
 	"github.com/chenjie199234/Corelib/util/name"
@@ -55,6 +54,29 @@ type ClientConfig struct {
 	HeartProbe ctime.Duration `json:"heart_probe"`
 	//min 64k,default 64M
 	MaxMsgLen uint32 `json:"max_msg_len"`
+
+	//Before two peers can communicate,they need to verify each other first
+	//client's response is useless and it will be dropped,you can just return nil
+	//if uniqueid is empty,the peer's RemoteAddr(ip:port) will be used as the uniqueid
+	//if success is false,the connection will not be established
+	//Warning!!!Don't reuse the data in 'peerVerifyData',it will change when this function return,if you want to use it,copy it first
+	SpecificVerifyFunc func(ctx context.Context, peerVerifyData []byte) (response []byte, uniqueid string, success bool) `json:"-"`
+	//this is useful only when the SpecificVerifyFunc is not nil
+	SpecificVerifyData func() []byte `json:"-"`
+}
+
+func (c *ClientConfig) Clone() *ClientConfig {
+	return &ClientConfig{
+		DefaultHandlerTimeout: c.DefaultHandlerTimeout,
+		ConnectTimeout:        c.ConnectTimeout,
+		ReadTimeout:           c.ReadTimeout,
+		WriteTimeout:          c.WriteTimeout,
+		IdleTimeout:           c.IdleTimeout,
+		HeartProbe:            c.HeartProbe,
+		MaxMsgLen:             c.MaxMsgLen,
+		SpecificVerifyFunc:    c.SpecificVerifyFunc,
+		SpecificVerifyData:    c.SpecificVerifyData,
+	}
 }
 
 type CrpcClient struct {
@@ -96,6 +118,8 @@ func NewCrpcClient(c *ClientConfig, d discover.DI, serverproject, servergroup, s
 	}
 	if c == nil {
 		c = &ClientConfig{}
+	} else {
+		c = c.Clone()
 	}
 	if d == nil {
 		return nil, errors.New("[crpc.client] missing discover")
@@ -170,13 +194,30 @@ func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 		//can't reconnect to server
 		return
 	}
-	if !c.instance.StartClient(server.addr, false, common.STB(c.serverfullname), c.tlsc) {
+	v := Verify_builder{
+		Sname: &c.serverfullname,
+	}
+	if c.c.SpecificVerifyFunc != nil && c.c.SpecificVerifyData != nil {
+		v.Vdata = c.c.SpecificVerifyData()
+	}
+	vdata, _ := proto.Marshal(v.Build())
+	if !c.instance.StartClient(server.addr, false, vdata, c.tlsc) {
 		go c.start(server, true)
 	}
 }
 
-func (c *CrpcClient) verifyfunc(ctx context.Context, peerVerifyData []byte) ([]byte, string, bool) {
-	//verify success
+func (c *CrpcClient) verifyfunc(ctx context.Context, ip string, peerVerifyData []byte) ([]byte, string, bool) {
+	v := &Verify{}
+	if e := proto.Unmarshal(peerVerifyData, v); e != nil {
+		slog.Error("[crpc.client] server's verify msg format wrong",
+			slog.String("sname", c.serverfullname), slog.String("sip", ip), slog.String("error", e.Error()))
+		return nil, "", false
+	}
+	//server's verify msg will only contain vdata
+	if c.c.SpecificVerifyFunc != nil {
+		//use the specific verify func
+		return c.c.SpecificVerifyFunc(ctx, v.GetVdata())
+	}
 	return nil, "", true
 }
 
@@ -190,7 +231,7 @@ func (c *CrpcClient) onlinefunc(ctx context.Context, p *stream.Peer) bool {
 	server.setpeer(p)
 	server.closing.Store(false)
 	c.balancer.RebuildPicker(server.addr, true)
-	slog.Info("[crpc.client] online", slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
+	slog.Info("[crpc.client] online", slog.String("sname", c.serverfullname), slog.String("sip", p.GetRemoteAddr()))
 	return true
 }
 
@@ -199,7 +240,8 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 	msg := &Msg{}
 	if e := proto.Unmarshal(data, msg); e != nil {
 		//this is impossible
-		slog.Error("[crpc.client] userdata format wrong", slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
+		slog.Error("[crpc.client] userdata format wrong",
+			slog.String("sname", c.serverfullname), slog.String("sip", p.GetRemoteAddr()))
 		return
 	}
 	switch msg.GetH().GetType() {
@@ -262,7 +304,7 @@ func (c *CrpcClient) userfunc(p *stream.Peer, data []byte) {
 
 func (c *CrpcClient) offlinefunc(p *stream.Peer) {
 	server := (*ServerForPick)(p.GetData())
-	slog.Info("[crpc.client] offline", slog.String("sname", c.serverfullname), slog.String("sip", server.addr))
+	slog.Info("[crpc.client] offline", slog.String("sname", c.serverfullname), slog.String("sip", p.GetRemoteAddr()))
 	server.setpeer(nil)
 	c.balancer.RebuildPicker(server.addr, false)
 	server.cleanrw()
@@ -326,13 +368,13 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 			}
 			return e
 		}
-		span.SetAttributes(attribute.String("sip", server.addr))
+		span.SetAttributes(attribute.String("sip", server.peer.GetRemoteAddr()))
 		rw := server.createrw(path, deadline, md, td)
 		if e := rw.init(ctx, nil); e != nil {
 			server.delrw(rw.callid)
 			slog.ErrorContext(ctx, "[crpc.client] send init header failed",
 				slog.String("sname", c.serverfullname),
-				slog.String("sip", server.addr),
+				slog.String("sip", server.peer.GetRemoteAddr()),
 				slog.String("path", path),
 				slog.String("error", e.Error()))
 			span.SetStatus(codes.Error, e.Error())
@@ -403,7 +445,7 @@ func (c *CrpcClient) Call(ctx context.Context, path string, in []byte, encoder E
 				server.delrw(rw.callid)
 				slog.ErrorContext(ctx, "[crpc.client] send init body failed",
 					slog.String("sname", c.serverfullname),
-					slog.String("sip", server.addr),
+					slog.String("sip", server.peer.GetRemoteAddr()),
 					slog.String("path", path),
 					slog.String("error", e.Error()))
 				span.SetStatus(codes.Error, e.Error())
