@@ -295,14 +295,14 @@ func (s *CrpcServer) UnregisterHandler(sname, mname string) {
 }
 
 // return false will close the connection
-func (s *CrpcServer) verifyfunc(ctx context.Context, ip string, peerVerifyData []byte) ([]byte, string, bool) {
+func (s *CrpcServer) verifyfunc(ctx context.Context, peerip string, peerVerifyData []byte) ([]byte, string, bool) {
 	if s.stop.Closing() {
 		//self closing
 		return nil, "", false
 	}
 	v := &Verify{}
 	if e := proto.Unmarshal(peerVerifyData, v); e != nil {
-		slog.Error("[crpc.server] client's verify msg format wrong", slog.String("cip", ip), slog.String("error", e.Error()))
+		slog.Error("[crpc.server] client's verify msg format wrong", slog.String("cip", peerip), slog.String("error", e.Error()))
 		return nil, "", false
 	}
 	if v.GetSname() != name.GetSelfFullName() {

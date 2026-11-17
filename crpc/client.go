@@ -206,11 +206,11 @@ func (c *CrpcClient) start(server *ServerForPick, reconnect bool) {
 	}
 }
 
-func (c *CrpcClient) verifyfunc(ctx context.Context, ip string, peerVerifyData []byte) ([]byte, string, bool) {
+func (c *CrpcClient) verifyfunc(ctx context.Context, peerip string, peerVerifyData []byte) ([]byte, string, bool) {
 	v := &Verify{}
 	if e := proto.Unmarshal(peerVerifyData, v); e != nil {
 		slog.Error("[crpc.client] server's verify msg format wrong",
-			slog.String("sname", c.serverfullname), slog.String("sip", ip), slog.String("error", e.Error()))
+			slog.String("sname", c.serverfullname), slog.String("sip", peerip), slog.String("error", e.Error()))
 		return nil, "", false
 	}
 	//server's verify msg will only contain vdata
