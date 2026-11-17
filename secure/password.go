@@ -9,7 +9,7 @@ import (
 	"github.com/chenjie199234/Corelib/util/common"
 )
 
-func SignPassword(password string) (string, error) {
+func SignPassword(password string) string {
 	cache := make([]byte, 64)
 	//this is the salt for password
 	rand.Read(cache[:32])
@@ -19,7 +19,7 @@ func SignPassword(password string) (string, error) {
 	sign := h.Sum(nil)
 	PutSha256(h)
 	copy(cache[32:], sign)
-	return hex.EncodeToString(cache), nil
+	return hex.EncodeToString(cache)
 }
 func CheckPasswordSign(password, sign string) error {
 	tmp, e := hex.DecodeString(sign)
