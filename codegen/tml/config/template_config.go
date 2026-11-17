@@ -772,7 +772,7 @@ func GetMongo(mongoname string) *mongo.Client {
 	return mongos[mongoname]
 }
 
-// GetMysql get a mysql db client by db's instance name
+// GetMysql get a mysql client by db's instance name
 // return nil means not exist
 func GetMysql(mysqlname string) *mysql.Client {
 	return mysqls[mysqlname]
@@ -784,7 +784,7 @@ func GetRedis(redisname string) *redis.Client {
 	return rediss[redisname]
 }
 
-// GetEmail get a redis client by email's instance name
+// GetEmail get a email client by email's instance name
 // return nil means not exist
 func GetEmail(emailname string) *email.Client {
 	return emails[emailname]
