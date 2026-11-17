@@ -298,8 +298,8 @@ func genServer(file *protogen.File, service *protogen.Service, g *protogen.Gener
 			continue
 		}
 		var mids []string
-		if proto.HasExtension(mop, pbex.E_CgrpcMidwares) {
-			mids = proto.GetExtension(mop, pbex.E_CgrpcMidwares).([]string)
+		if proto.HasExtension(mop, pbex.E_GrpcMidwares) {
+			mids = proto.GetExtension(mop, pbex.E_GrpcMidwares).([]string)
 		}
 		fname := "_" + service.GoName + "_" + method.GoName + "_" + "CGrpcHandler(svc." + method.GoName + ")"
 		if len(mids) > 0 {

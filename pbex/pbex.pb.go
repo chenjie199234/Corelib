@@ -50,8 +50,8 @@ var file_pbex_pbex_proto_extTypes = []protoimpl.ExtensionInfo{
 		ExtendedType:  (*descriptorpb.MethodOptions)(nil),
 		ExtensionType: ([]string)(nil),
 		Field:         150004,
-		Name:          "pbex.cgrpc_midwares",
-		Tag:           "bytes,150004,rep,name=cgrpc_midwares",
+		Name:          "pbex.grpc_midwares",
+		Tag:           "bytes,150004,rep,name=grpc_midwares",
 		Filename:      "pbex/pbex.proto",
 	},
 	{
@@ -864,8 +864,8 @@ var (
 	E_WebMidwares = &file_pbex_pbex_proto_extTypes[1]
 	// repeated string crpc_midwares = 150003;
 	E_CrpcMidwares = &file_pbex_pbex_proto_extTypes[2]
-	// repeated string cgrpc_midwares = 150004;
-	E_CgrpcMidwares = &file_pbex_pbex_proto_extTypes[3]
+	// repeated string grpc_midwares = 150004;
+	E_GrpcMidwares = &file_pbex_pbex_proto_extTypes[3]
 )
 
 // Extension fields to descriptorpb.FieldOptions.
@@ -1115,8 +1115,8 @@ const file_pbex_pbex_proto_rawDesc = "" +
 	"\x0fpbex/pbex.proto\x12\x04pbex\x1a google/protobuf/descriptor.proto:8\n" +
 	"\x06method\x12\x1e.google.protobuf.MethodOptions\x18\xf1\x93\t \x03(\tR\x06method:C\n" +
 	"\fweb_midwares\x12\x1e.google.protobuf.MethodOptions\x18\xf2\x93\t \x03(\tR\vwebMidwares:E\n" +
-	"\rcrpc_midwares\x12\x1e.google.protobuf.MethodOptions\x18\xf3\x93\t \x03(\tR\fcrpcMidwares:G\n" +
-	"\x0ecgrpc_midwares\x12\x1e.google.protobuf.MethodOptions\x18\xf4\x93\t \x03(\tR\rcgrpcMidwares:G\n" +
+	"\rcrpc_midwares\x12\x1e.google.protobuf.MethodOptions\x18\xf3\x93\t \x03(\tR\fcrpcMidwares:E\n" +
+	"\rgrpc_midwares\x12\x1e.google.protobuf.MethodOptions\x18\xf4\x93\t \x03(\tR\fgrpcMidwares:G\n" +
 	"\x0fmessage_not_nil\x12\x1d.google.protobuf.FieldOptions\x18\x80\xe2\t \x01(\bR\rmessageNotNil:N\n" +
 	"\x13map_repeated_len_eq\x12\x1d.google.protobuf.FieldOptions\x18\x81\xe2\t \x01(\x04R\x10mapRepeatedLenEq:U\n" +
 	"\x17map_repeated_len_not_eq\x12\x1d.google.protobuf.FieldOptions\x18\x82\xe2\t \x01(\x04R\x13mapRepeatedLenNotEq:N\n" +
@@ -1228,7 +1228,7 @@ var file_pbex_pbex_proto_depIdxs = []int32{
 	0,   // 0: pbex.method:extendee -> google.protobuf.MethodOptions
 	0,   // 1: pbex.web_midwares:extendee -> google.protobuf.MethodOptions
 	0,   // 2: pbex.crpc_midwares:extendee -> google.protobuf.MethodOptions
-	0,   // 3: pbex.cgrpc_midwares:extendee -> google.protobuf.MethodOptions
+	0,   // 3: pbex.grpc_midwares:extendee -> google.protobuf.MethodOptions
 	1,   // 4: pbex.message_not_nil:extendee -> google.protobuf.FieldOptions
 	1,   // 5: pbex.map_repeated_len_eq:extendee -> google.protobuf.FieldOptions
 	1,   // 6: pbex.map_repeated_len_not_eq:extendee -> google.protobuf.FieldOptions
