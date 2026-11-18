@@ -43,7 +43,7 @@ func (s *Service) SetStreamInstance(instance *stream.Instance) {
 	s.instance.Store(instance)
 }
 
-func (s *Service) RawVerify(ctx context.Context, peerVerifyData []byte) (response []byte, uniqueid string, success bool) {
+func (s *Service) RawVerify(ctx context.Context, peerip string, peerVerifyData []byte) (response []byte, uniqueid string, success bool) {
 	// instance := s.instance.Load()
 	return nil, "", false
 }
