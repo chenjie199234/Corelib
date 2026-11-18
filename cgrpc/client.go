@@ -3,7 +3,7 @@ package cgrpc
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"time"
 

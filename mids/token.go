@@ -2,7 +2,7 @@ package mids
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"sync/atomic"
 	"time"
